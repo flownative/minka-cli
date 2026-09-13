@@ -227,7 +227,10 @@ oben ab.
 ## Offene Punkte
 
 - Das Token `minka-cli-smoke` liegt in `~/.config/minka/config.json`.
-  Widerrufen, sobald das Agentenkonto im Minka-Projekt ist.
+  Widerrufen beim Umstieg auf das Dogfooding zur internen Alpha. Das
+  Agentenkonto „Claude (Robert)" ist schon Mitglied im Minka-Projekt.
+- Die Doku-Abweichung zum unbekannten Nachbarn beim Verschieben prüft
+  minka-8a im Paket API-5.
 - Nachziehen, wenn in Minka committet: API-5 (`cards delete` o. ä.) und die
   Allowlist `h2`/`h3`/`code`/`hr`. Dann `internal/markdown` und
   `internal/richtext` anpassen.
