@@ -9,12 +9,11 @@ lokale Instanz geprüft, Befunde des Reviews eingearbeitet.
 
 **Die CLI ruht auf diesem Stand** (Roberts Priorität, über minka-8a): Das
 Dogfooding in Minka wartet auf eine interne Alpha. Neue Features gibt es nur
-auf neuen Auftrag. Nachgezogen wird, sobald in Minka committet ist:
+auf neuen Auftrag. Nachgezogen wird API-5 `DELETE /cards/{id}` (Papierkorb),
+sobald es in Minka committet ist.
 
-- API-5 `DELETE /cards/{id}` (Papierkorb)
-- die erweiterte Allowlist `h2`/`h3`/`code`/`hr` (E-060)
-
-API-Stand, gegen den gebaut ist: Minka `c691ac2` (API-1 bis API-3).
+API-Stand, gegen den gebaut ist: Minka `c691ac2` (API-1 bis API-3), dazu die
+erweiterte Allowlist aus `1f46b37` (E-060).
 
 Befehle:
 
@@ -79,12 +78,11 @@ Auf Roberts Wunsch folgen die Konventionen **basecamp-cli**. Den Umfang
     zusätzlich im Pfad escaped.
   - Timeout 30 s, Antworten höchstens 16 MB.
 - **Markdown → HTML** (goldmark), nur Elemente der Server-Allowlist:
-  - `#` wird `h1`, tiefere Überschriften werden fette Absätze.
-  - Inline-Code behält seine Backticks.
-  - Code-Blöcke werden `pre`.
+  - `#` bis `###` werden `h1` bis `h3`, tiefere Überschriften `h3`.
+  - Inline-Code wird `code`, Code-Blöcke werden `pre > code` (ohne Sprache).
+  - `---` wird `hr`.
   - Tabellen werden ausgerichteter Text in `pre`.
   - Bilder werden Links, ein Bild in einem Link wird nur sein Label.
-  - `---` fällt weg.
   - Rohes HTML im Markdown wird sichtbarer Text.
   - Links mit anderen Zielen als http, https, mailto, tel und relativen URLs
     werden Klartext. Das ist dieselbe Regel wie `RichText::isSafeUrl` auf dem
@@ -135,7 +133,9 @@ genannte Test wird rot. Zuletzt am 13.09.2026 nach dem Review ausgeführt:
 | Nur UUIDs als ID | `TestValuesThatAreNoIDsAreRefusedBeforeSending` |
 | Redirects nicht verfolgt | `TestARedirectIsNotFollowed` |
 | Schreibfehler nicht retryable (HTTP und Netzwerk) | `TestAFailedWriteTellsToReadBackBeforeRetrying`, `TestFailuresHaveACodeAndAnExitCodePerClass` |
-| Allowlist (h2, rohes Inline-HTML) | `TestOnlyElementsTheServerKeepsAreWritten` |
+| Allowlist (Überschrift ab Ebene 4, rohes Inline-HTML, Code-Block unescaped) | `TestOnlyElementsTheServerKeepsAreWritten` |
+| Inline-Code escaped | `TestConversions` |
+| Backticks im Inline-Code (HTML → Markdown) | `TestMarkdownOfADescriptionConvertsBackToTheSameHTML` |
 | Link-Schemata wie der Server, kein `//` | `TestConversions` |
 | Kein Bild-Link im Link | `TestConversions` |
 | Leeres Markdown löscht keine Beschreibung | `TestMarkdownWithNothingMinkaKeepsDoesNotRemoveTheDescription` |
@@ -231,9 +231,11 @@ oben ab.
   Agentenkonto „Claude (Robert)" ist schon Mitglied im Minka-Projekt.
 - Die Doku-Abweichung zum unbekannten Nachbarn beim Verschieben prüft
   minka-8a im Paket API-5.
-- Nachziehen, wenn in Minka committet: API-5 (`cards delete` o. ä.) und die
-  Allowlist `h2`/`h3`/`code`/`hr`. Dann `internal/markdown` und
-  `internal/richtext` anpassen.
+- Nachziehen, wenn in Minka committet: API-5 (`cards delete` o. ä.).
+- Die Allowlist nach E-060 ist am 13.09.2026 auch live geprüft: Die
+  Smoke-Karte bekam `#` bis `####`, Inline-Code, `---` und einen Code-Block.
+  Der Server speichert `h1`–`h3`, `code`, `hr` und `pre > code` wie gesendet,
+  und `cards show` → `cards edit` ergibt dasselbe HTML.
 - Später vielleicht:
   - Keychain statt Datei
   - `.minka.json` im Repository mit Standard-Board
@@ -244,9 +246,10 @@ oben ab.
 
 Gemeldet am 13.09.2026. Wie minka-8a sie behandelt:
 
-1. **Allowlist erweitern** (`h2`/`h3`, `code` inline, `hr`): kommt als
-   kleines Minka-Paket (E-060). Tabellen, `ol[start]` und Checklisten folgen
-   später mit Lexxy (U3).
+1. **Allowlist erweitern** (`h2`/`h3`, `code` inline, `hr`): erledigt in
+   Minka `1f46b37` (E-060), in der CLI umgesetzt. Tabellen, `ol[start]` und
+   Checklisten folgen später mit Lexxy (U3). Bis dahin verliert der
+   Web-Editor `hr` beim Speichern.
 2. **Falsche HTTP-Methode** als JSON-404/405 statt Flows HTML-404: bleibt
    Schuld, nicht vor dem Dogfooding.
 3. **Karten entfernen** (`DELETE /cards/{id}` → Papierkorb): API-5.

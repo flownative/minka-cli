@@ -41,7 +41,7 @@ func ToMarkdown(fragment string) string {
 
 func isBlock(name string) bool {
 	switch name {
-	case "p", "div", "h1", "h2", "h3", "h4", "h5", "h6", "blockquote", "pre", "ul", "ol", "li":
+	case "p", "div", "h1", "h2", "h3", "h4", "h5", "h6", "hr", "blockquote", "pre", "ul", "ol", "li":
 		return true
 	}
 	return false
@@ -103,8 +103,14 @@ func joinParts(parts []part, inListItem bool) string {
 
 func block(n *html.Node) string {
 	switch n.Data {
-	case "h1", "h2", "h3", "h4", "h5", "h6":
+	case "h1":
 		return "# " + paragraphLines(inlineChildren(n))
+	case "h2":
+		return "## " + paragraphLines(inlineChildren(n))
+	case "h3", "h4", "h5", "h6":
+		return "### " + paragraphLines(inlineChildren(n))
+	case "hr":
+		return "---"
 	case "blockquote":
 		return prefixLines(blocks(children(n)), "> ", "> ")
 	case "pre":
@@ -140,6 +146,10 @@ func inline(n *html.Node) string {
 	case html.ElementNode:
 	default:
 		return ""
+	}
+
+	if n.Data == "code" {
+		return inlineCode(strings.ReplaceAll(textContent(n), "\n", " "))
 	}
 
 	content := inlineChildren(n)
@@ -257,8 +267,26 @@ func linkDestination(href string) string {
 
 // codeFence is a fence longer than any run of backticks in the content.
 func codeFence(content string) string {
+	return strings.Repeat("`", max(3, longestBacktickRun(content)+1))
+}
+
+// inlineCode wraps code in more backticks than it contains itself. Code that
+// starts or ends with a backtick gets a space inside the delimiters, which
+// Markdown removes again.
+func inlineCode(code string) string {
+	if code == "" {
+		return ""
+	}
+	delimiter := strings.Repeat("`", longestBacktickRun(code)+1)
+	if strings.HasPrefix(code, "`") || strings.HasSuffix(code, "`") {
+		return delimiter + " " + code + " " + delimiter
+	}
+	return delimiter + code + delimiter
+}
+
+func longestBacktickRun(s string) int {
 	longest, run := 0, 0
-	for _, r := range content {
+	for _, r := range s {
 		if r == '`' {
 			run++
 			longest = max(longest, run)
@@ -266,7 +294,7 @@ func codeFence(content string) string {
 			run = 0
 		}
 	}
-	return strings.Repeat("`", max(3, longest+1))
+	return longest
 }
 
 func children(n *html.Node) []*html.Node {

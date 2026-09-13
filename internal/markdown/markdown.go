@@ -33,10 +33,14 @@ var AllowedElements = map[string][]string{
 	"a":          {"href"},
 	"blockquote": nil,
 	"br":         nil,
+	"code":       nil,
 	"del":        nil,
 	"div":        nil,
 	"em":         nil,
 	"h1":         nil,
+	"h2":         nil,
+	"h3":         nil,
+	"hr":         nil,
 	"li":         nil,
 	"ol":         nil,
 	"p":          nil,
@@ -46,10 +50,9 @@ var AllowedElements = map[string][]string{
 }
 
 const (
-	WarningHeadings    = "headings below level 1 are sent as bold paragraphs, Minka keeps one heading level"
+	WarningHeadings    = "headings below level 3 are sent as level 3, Minka keeps three heading levels"
 	WarningImages      = "images are not supported and are sent as links"
 	WarningTables      = "tables are not supported and are sent as preformatted text"
-	WarningRules       = "horizontal rules are not supported and were left out"
 	WarningRawHTML     = "HTML inside Markdown is sent as visible text; use --description-format html to send HTML"
 	WarningListStart   = "ordered lists always start at 1 in Minka"
 	WarningUnsafeLinks = "links Minka does not keep (only http, https, mailto, tel and relative URLs) were sent as plain text"
@@ -95,14 +98,11 @@ func (c *converter) visit(node ast.Node, entering bool) (ast.WalkStatus, error) 
 	case *ast.Document, *ast.TextBlock:
 		// Only their children produce output.
 	case *ast.Heading:
-		if n.Level == 1 {
-			c.tag(entering, "h1")
-		} else if entering {
+		level := min(n.Level, 3)
+		if entering && n.Level > 3 {
 			c.warn(WarningHeadings)
-			c.write("<p><strong>")
-		} else {
-			c.write("</strong></p>\n")
 		}
+		c.tag(entering, fmt.Sprintf("h%d", level))
 	case *ast.Paragraph:
 		c.tag(entering, "p")
 	case *ast.Blockquote:
@@ -120,12 +120,12 @@ func (c *converter) visit(node ast.Node, entering bool) (ast.WalkStatus, error) 
 		c.tag(entering, "li")
 	case *ast.FencedCodeBlock:
 		if entering {
-			c.preformatted(n.Lines())
+			c.preformatted(n.Lines(), true)
 		}
 		return ast.WalkSkipChildren, nil
 	case *ast.CodeBlock:
 		if entering {
-			c.preformatted(n.Lines())
+			c.preformatted(n.Lines(), true)
 		}
 		return ast.WalkSkipChildren, nil
 	case *ast.HTMLBlock:
@@ -135,12 +135,12 @@ func (c *converter) visit(node ast.Node, entering bool) (ast.WalkStatus, error) 
 			if n.HasClosure() {
 				lines.Append(n.ClosureLine)
 			}
-			c.preformatted(lines)
+			c.preformatted(lines, false)
 		}
 		return ast.WalkSkipChildren, nil
 	case *ast.ThematicBreak:
 		if entering {
-			c.warn(WarningRules)
+			c.write("<hr>\n")
 		}
 	case *ast.Text:
 		if entering {
@@ -151,12 +151,10 @@ func (c *converter) visit(node ast.Node, entering bool) (ast.WalkStatus, error) 
 			c.writer.RawWrite(c.w, n.Value)
 		}
 	case *ast.CodeSpan:
-		// Minka has no inline code. The backticks stay, so the reader still
-		// sees what was code.
 		if entering {
-			c.write("`")
+			c.write("<code>")
 			c.writer.RawWrite(c.w, bytes.ReplaceAll(plainText(n, c.source), []byte("\n"), []byte(" ")))
-			c.write("`")
+			c.write("</code>")
 		}
 		return ast.WalkSkipChildren, nil
 	case *ast.Emphasis:
@@ -262,15 +260,25 @@ func (c *converter) text(n *ast.Text) {
 	}
 }
 
-func (c *converter) preformatted(lines *text.Segments) {
+// preformatted writes lines into a pre element, for a code block with code
+// inside, the way Markdown writes one.
+func (c *converter) preformatted(lines *text.Segments, code bool) {
 	var content bytes.Buffer
 	for i := 0; i < lines.Len(); i++ {
 		segment := lines.At(i)
 		content.Write(segment.Value(c.source))
 	}
-	c.write("<pre>")
+	if code {
+		c.write("<pre><code>")
+	} else {
+		c.write("<pre>")
+	}
 	c.writer.RawWrite(c.w, bytes.TrimRight(content.Bytes(), "\n"))
-	c.write("</pre>\n")
+	if code {
+		c.write("</code></pre>\n")
+	} else {
+		c.write("</pre>\n")
+	}
 }
 
 func (c *converter) openLink(destination []byte) {

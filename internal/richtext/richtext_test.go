@@ -17,6 +17,10 @@ func TestToMarkdown(t *testing.T) {
 		{"plain text as the server stores it", "<div>line one<br>line two</div>", "line one\\\nline two"},
 		{"paragraphs", "<p>a</p><p>b</p>", "a\n\nb"},
 		{"heading", "<h1>Title</h1><p>text</p>", "# Title\n\ntext"},
+		{"lower headings", "<h2>a</h2><h3>b</h3>", "## a\n\n### b"},
+		{"rule", "<p>a</p><hr><p>b</p>", "a\n\n---\n\nb"},
+		{"inline code", "<p><code>x *y*</code> and <code>a`b</code> and <code>`c</code></p>", "`x *y*` and ``a`b`` and `` `c ``"},
+		{"code block", "<pre><code>a &lt;b&gt;\n</code></pre>", "```\na <b>\n```"},
 		{"inline", "<p><strong>b</strong> <em>i</em> <del>d</del></p>", "**b** *i* ~~d~~"},
 		{"spaces at the edge of inline elements", "<p>a<strong> b </strong>c</p>", "a **b** c"},
 		{"links", `<p><a href="https://example.com">site</a> <a href="https://x.y">https://x.y</a> <a href="/rel">/rel</a> <a href="/a b">x</a></p>`, "[site](https://example.com) <https://x.y> [/rel](/rel) [x](</a b>)"},
@@ -46,6 +50,7 @@ func TestMarkdownOfADescriptionConvertsBackToTheSameHTML(t *testing.T) {
 		"Text with \\*stars\\*, \\_under\\_, snake_case, a \\`tick\\`, \\[brackets\\] and \\<angle>.  \nAfter a hard break.",
 		"\\# not a heading\\\n\\- not a list\\\n1\\. not a list either\\\n\\> not a quote",
 		"AT&T \\&copy; ~~gone~~ and [a path](/projects/x)",
+		"## Second\n\n### Third\n\n---\n\nUse `a <b>` and `` c`d `` and `` `e ``.\n\n```go\nfunc main() {}\n```",
 	}
 
 	for _, source := range sources {
