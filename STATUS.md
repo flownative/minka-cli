@@ -9,11 +9,10 @@ lokale Instanz geprüft, Befunde des Reviews eingearbeitet.
 
 **Die CLI ruht auf diesem Stand** (Roberts Priorität, über minka-8a): Das
 Dogfooding in Minka wartet auf eine interne Alpha. Neue Features gibt es nur
-auf neuen Auftrag. Nachgezogen wird API-5 `DELETE /cards/{id}` (Papierkorb),
-sobald es in Minka committet ist.
+auf neuen Auftrag.
 
-API-Stand, gegen den gebaut ist: Minka `c691ac2` (API-1 bis API-3), dazu die
-erweiterte Allowlist aus `1f46b37` (E-060).
+API-Stand, gegen den gebaut ist: Minka `60c7257` (API-1 bis API-5, mit der
+erweiterten Allowlist aus E-060).
 
 Befehle:
 
@@ -22,7 +21,7 @@ minka auth login|status|logout
 minka me
 minka projects list
 minka boards list <projectId> | show <boardId>
-minka cards show|create|edit|move|done
+minka cards show|create|edit|move|done|delete
 minka comments create <cardId> <text|->
 minka commands            Katalog aller Befehle mit Flags
 minka version
@@ -107,6 +106,10 @@ Auf Roberts Wunsch folgen die Konventionen **basecamp-cli**. Den Umfang
     würde die Karte sonst still nach oben legen.
   - Done nimmt keine Platzierung an, denn es ist nach Abschluss sortiert.
 - **`cards done`** ist idempotent.
+- **`cards delete`** (Alias `trash`) legt die Karte in den Papierkorb. Das ist
+  bewusst nicht idempotent: Ein zweites Löschen gibt Exit 2 wie die API, denn
+  eine Karte im Papierkorb sieht aus wie eine, die es nie gab. Eine
+  Rückfrage gibt es nicht, weil Agenten nicht interaktiv arbeiten.
 
 ## Tests
 
@@ -143,6 +146,7 @@ genannte Test wird rot. Zuletzt am 13.09.2026 nach dem Review ausgeführt:
 | Warnungen bei `--quiet` auf stderr | `TestQuietPrintsWarningsToStderr` |
 | stdin nicht vom Terminal | `TestTextIsNotReadFromATerminal` |
 | `cards done` idempotent | `TestDoneCompletesACardOnlyOnce` |
+| 204 ohne Rumpf ist Erfolg | `TestAnEmptyAnswerIsASuccess` (api), `TestDeleteMovesACardToTheTrash` |
 | Nachbar in Zielspalte geprüft | `TestMoveNextToACardOutsideTheTargetColumnIsRefused` |
 | Done ohne Platzierung | `TestDoneTakesNoPlacement` |
 | Anlegen in Done/Not now auch per ID abgelehnt | `TestCreateInNotNowOrDoneIsRefusedHoweverTheColumnIsGiven` |
@@ -220,18 +224,19 @@ Bewusst nicht gemacht:
 - Keine Warnung für die Sprache eines Code-Blocks, die wegfällt.
 - `tokenSource` bleibt ein String.
 
-An minka-8a gemeldet: Die Fehlertabelle in `authorization.md` nennt 404 für
-einen unbekannten Nachbarn. `Gap::nextTo` legt die Karte in dem Fall aber
-oben ab.
+An minka-8a gemeldet: Die Fehlertabelle in `authorization.md` nannte 404 für
+einen unbekannten Nachbarn. In Minka `60c7257` ist die Doku korrigiert: Fehlt
+der Vorgänger, entscheidet der Nachfolger, fehlen beide, geht die Karte nach
+oben; 404 nur bei einer ungültigen ID. Der Fake folgte dem schon.
 
 ## Offene Punkte
 
 - Das Token `minka-cli-smoke` liegt in `~/.config/minka/config.json`.
   Widerrufen beim Umstieg auf das Dogfooding zur internen Alpha. Das
   Agentenkonto „Claude (Robert)" ist schon Mitglied im Minka-Projekt.
-- Die Doku-Abweichung zum unbekannten Nachbarn beim Verschieben prüft
-  minka-8a im Paket API-5.
-- Nachziehen, wenn in Minka committet: API-5 (`cards delete` o. ä.).
+- `cards delete` ist am 13.09.2026 live geprüft: Eine frisch angelegte
+  Karte kam in den Papierkorb, danach gaben `cards show` und ein zweites
+  `cards delete` Exit 2, und das Board listet sie nicht mehr.
 - Die Allowlist nach E-060 ist am 13.09.2026 auch live geprüft: Die
   Smoke-Karte bekam `#` bis `####`, Inline-Code, `---` und einen Code-Block.
   Der Server speichert `h1`–`h3`, `code`, `hr` und `pre > code` wie gesendet,
@@ -252,6 +257,7 @@ Gemeldet am 13.09.2026. Wie minka-8a sie behandelt:
    Web-Editor `hr` beim Speichern.
 2. **Falsche HTTP-Methode** als JSON-404/405 statt Flows HTML-404: bleibt
    Schuld, nicht vor dem Dogfooding.
-3. **Karten entfernen** (`DELETE /cards/{id}` → Papierkorb): API-5.
+3. **Karten entfernen** (`DELETE /cards/{id}` → Papierkorb): erledigt in
+   Minka `60c7257`, in der CLI `cards delete`.
 4. **Done über 25 Karten hinaus lesen** (Blättern): später, wenn das
    Dogfooding es braucht.

@@ -22,12 +22,13 @@ become plain text.
 Use --description - to read it from stdin.`
 
 func (a *app) newCardsCmd() *cobra.Command {
-	return group("cards", "Show, create, edit, move and complete cards",
+	return group("cards", "Show, create, edit, move, complete and delete cards",
 		a.newCardsShowCmd(),
 		a.newCardsCreateCmd(),
 		a.newCardsEditCmd(),
 		a.newCardsMoveCmd(),
 		a.newCardsDoneCmd(),
+		a.newCardsDeleteCmd(),
 	)
 }
 
@@ -366,6 +367,41 @@ is already done stays as it is. To reopen a card, move it out of Done.`,
 				breadcrumbs: cardBreadcrumbs(moved.Value.ID),
 				text: func(w io.Writer) {
 					fmt.Fprintf(w, "Completed card %s: %s\n%s\n", moved.Value.ID, moved.Value.Title, moved.Value.AppURL)
+				},
+			})
+		},
+	}
+}
+
+func (a *app) newCardsDeleteCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:     "delete <cardId>",
+		Aliases: []string{"trash"},
+		Short:   "Move a card to the trash",
+		Long: `Moves a card to the trash, as removing it on the web does.
+
+A card in the trash reads like one that never existed. Showing, moving,
+commenting on or deleting it again exits with 2 (not_found), so a repeated
+delete is not a success.`,
+		Args: requireArgs("cardId"),
+		RunE: func(_ *cobra.Command, args []string) error {
+			s, err := a.session()
+			if err != nil {
+				return err
+			}
+			if err := s.client.DeleteCard(a.ctx, args[0]); err != nil {
+				e := s.fail(err)
+				if e.Code == CodeNotFound {
+					e.Hint = "It does not exist, is already in the trash, or belongs to a project you are not a member of."
+				}
+				return e
+			}
+
+			return a.ok(success{
+				data:    map[string]any{"id": args[0], "deleted": true},
+				summary: "Moved card " + args[0] + " to the trash",
+				text: func(w io.Writer) {
+					fmt.Fprintf(w, "Moved card %s to the trash.\n", args[0])
 				},
 			})
 		},
