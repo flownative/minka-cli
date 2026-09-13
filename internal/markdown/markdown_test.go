@@ -12,6 +12,7 @@ import (
 const everything = "# Title\n\n" +
 	"## Sub heading\n\n" +
 	"### Third level\n\n" +
+	"#### Fourth level\n\n" +
 	"Some *emphasis*, **strong**, ***both***, ~~gone~~ and `inline code`.\n" +
 	"A soft break  \nand a hard break.\n\n" +
 	"> A quote\n> with two lines\n\n" +
@@ -67,11 +68,14 @@ func TestConversions(t *testing.T) {
 		{"empty", "  \n\n ", "", nil},
 		{"paragraph", "Hello", "<p>Hello</p>", nil},
 		{"h1 stays", "# Title", "<h1>Title</h1>", nil},
-		{"h2 becomes bold", "## Sub", "<p><strong>Sub</strong></p>", []string{WarningHeadings}},
+		{"h2", "## Sub", "<h2>Sub</h2>", nil},
+		{"h3", "### Sub", "<h3>Sub</h3>", nil},
+		{"h4 becomes h3", "#### Deep", "<h3>Deep</h3>", []string{WarningHeadings}},
 		{"emphasis", "*a* **b** ~~c~~", "<p><em>a</em> <strong>b</strong> <del>c</del></p>", nil},
-		{"inline code keeps backticks", "run `make <x>`", "<p>run `make &lt;x&gt;`</p>", nil},
+		{"inline code", "run `make <x>`", "<p>run <code>make &lt;x&gt;</code></p>", nil},
 		{"hard break", "a  \nb", "<p>a<br>b</p>", nil},
-		{"code block", "```\n<b>x</b>\n```", "<pre>&lt;b&gt;x&lt;/b&gt;</pre>", nil},
+		{"code block", "```go\n<b>x</b>\n```", "<pre><code>&lt;b&gt;x&lt;/b&gt;</code></pre>", nil},
+		{"indented code block", "    a < b", "<pre><code>a &lt; b</code></pre>", nil},
 		{"tight list", "- a\n- b", "<ul>\n<li>a</li>\n<li>b</li>\n</ul>", nil},
 		{"ordered list start", "3. a", "<ol>\n<li>a</li>\n</ol>", []string{WarningListStart}},
 		{"quote", "> q", "<blockquote>\n<p>q</p>\n</blockquote>", nil},
@@ -86,7 +90,7 @@ func TestConversions(t *testing.T) {
 		{"image inside a link", "[![alt](https://i.example/p.png)](https://example.com)", `<p><a href="https://example.com">alt</a></p>`, []string{WarningImages}},
 		{"link reference definition only", "[x]: https://example.com", "", nil},
 		{"image", "![alt](https://example.com/i.png)", `<p><a href="https://example.com/i.png">alt</a></p>`, []string{WarningImages}},
-		{"rule", "a\n\n---\n\nb", "<p>a</p>\n<p>b</p>", []string{WarningRules}},
+		{"rule", "a\n\n---\n\nb", "<p>a</p>\n<hr>\n<p>b</p>", nil},
 		{"inline html is text", "a <b>b</b>", "<p>a &lt;b&gt;b&lt;/b&gt;</p>", []string{WarningRawHTML}},
 		{"html block is text", "<div>x</div>", "<pre>&lt;div&gt;x&lt;/div&gt;</pre>", []string{WarningRawHTML}},
 		{"entities and escapes", `AT&T \*x\* &amp;`, "<p>AT&amp;T *x* &amp;</p>", nil},
@@ -108,7 +112,7 @@ func TestConversions(t *testing.T) {
 }
 
 func TestEachWarningIsGivenOnce(t *testing.T) {
-	result := ToHTML("## a\n\n## b\n\n### c")
+	result := ToHTML("#### a\n\n#### b\n\n##### c")
 	if !slices.Equal(result.Warnings, []string{WarningHeadings}) {
 		t.Errorf("got %q", result.Warnings)
 	}

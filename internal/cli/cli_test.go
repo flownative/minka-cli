@@ -318,13 +318,13 @@ func TestProjectsListShowsOnlyTheProjectsOfThePerson(t *testing.T) {
 
 func TestCreateSendsMarkdownAsHTMLAndLandsInTriage(t *testing.T) {
 	e := newTestEnv(t)
-	description := "# Heading\n\n## Sub\n\nSome *emphasis* and `code`."
+	description := "# Heading\n\n#### Deep\n\nSome *emphasis* and `code`."
 
 	env, r := e.runJSON("", "cards", "create", "--board", e.fixture.Board.ID, "--title", "Neue Karte „mit“ Umlauten", "--description", description)
 	expectCode(t, r, ExitOK)
 
 	body := e.lastWriteBody()
-	wantHTML := "<h1>Heading</h1>\n<p><strong>Sub</strong></p>\n<p>Some <em>emphasis</em> and `code`.</p>"
+	wantHTML := "<h1>Heading</h1>\n<h3>Deep</h3>\n<p>Some <em>emphasis</em> and <code>code</code>.</p>"
 	if body["description"] != wantHTML {
 		t.Errorf("description sent\n got: %q\nwant: %q", body["description"], wantHTML)
 	}
@@ -345,7 +345,7 @@ func TestCreateSendsMarkdownAsHTMLAndLandsInTriage(t *testing.T) {
 
 func TestWarningsGoToStderrInTextOutput(t *testing.T) {
 	e := newTestEnv(t)
-	r := e.run("", "cards", "create", "--board", e.fixture.Board.ID, "--title", "x", "--description", "## Sub", "--styled")
+	r := e.run("", "cards", "create", "--board", e.fixture.Board.ID, "--title", "x", "--description", "#### Deep", "--styled")
 	expectCode(t, r, ExitOK)
 	if !strings.Contains(r.stderr, "Warning: "+markdown.WarningHeadings) {
 		t.Errorf("stderr: %q", r.stderr)
@@ -815,7 +815,7 @@ func TestAFailedWriteTellsToReadBackBeforeRetrying(t *testing.T) {
 
 func TestQuietPrintsWarningsToStderr(t *testing.T) {
 	e := newTestEnv(t)
-	r := e.run("", "cards", "create", "--board", e.fixture.Board.ID, "--title", "x", "--description", "## Sub", "--quiet")
+	r := e.run("", "cards", "create", "--board", e.fixture.Board.ID, "--title", "x", "--description", "#### Deep", "--quiet")
 	expectCode(t, r, ExitOK)
 	if !strings.Contains(r.stderr, "Warning: "+markdown.WarningHeadings) {
 		t.Errorf("stderr %q", r.stderr)
@@ -838,7 +838,7 @@ func TestCreateInNotNowOrDoneIsRefusedHoweverTheColumnIsGiven(t *testing.T) {
 
 func TestMarkdownWithNothingMinkaKeepsDoesNotRemoveTheDescription(t *testing.T) {
 	e := newTestEnv(t)
-	for _, description := range []string{"---", "[x]: https://example.com"} {
+	for _, description := range []string{"[x]: https://example.com", "[a]: /a\n[b]: /b"} {
 		_, r := e.runJSON("", "cards", "edit", e.fixture.CardInTriage.ID, "--description", description)
 		expectCode(t, r, ExitUsage)
 	}

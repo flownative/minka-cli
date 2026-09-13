@@ -14,11 +14,11 @@ const columnHelp = `A column is given by its ID, by its type (triage, not_now, d
 title, such as "Doing".`
 
 const descriptionHelp = `The description is Markdown by default and is sent as HTML. Minka keeps
-paragraphs, one heading level, bold, italic, strikethrough, links, lists,
-quotes and code blocks. Other formatting is converted and reported as a
-warning: lower headings become bold paragraphs, tables become preformatted
-text, images become links, horizontal rules and links Minka does not keep are
-left out. Inline code keeps its backticks.
+paragraphs, three heading levels, bold, italic, strikethrough, inline code,
+links, lists, quotes, code blocks and horizontal rules. Other formatting is
+converted and reported as a warning: deeper headings become level 3, tables
+become preformatted text, images become links, links Minka does not keep
+become plain text.
 Use --description - to read it from stdin.`
 
 func (a *app) newCardsCmd() *cobra.Command {
