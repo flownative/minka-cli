@@ -106,10 +106,12 @@ Auf Roberts Wunsch folgen die Konventionen **basecamp-cli**. Den Umfang
     würde die Karte sonst still nach oben legen.
   - Done nimmt keine Platzierung an, denn es ist nach Abschluss sortiert.
 - **`cards done`** ist idempotent.
-- **`cards delete`** (Alias `trash`) legt die Karte in den Papierkorb. Das ist
-  bewusst nicht idempotent: Ein zweites Löschen gibt Exit 2 wie die API, denn
-  eine Karte im Papierkorb sieht aus wie eine, die es nie gab. Eine
-  Rückfrage gibt es nicht, weil Agenten nicht interaktiv arbeiten.
+- **`cards delete`** (Alias `trash`) legt die Karte in den Papierkorb. Wie
+  jedes DELETE ist das idempotent, die Wirkung auf dem Server bleibt gleich.
+  Nur die Antwort unterscheidet sich: Ein zweites Löschen gibt 404 und damit
+  Exit 2 statt Exit 0, denn eine Karte im Papierkorb sieht aus wie eine, die
+  es nie gab. Eine Rückfrage gibt es nicht, weil Agenten nicht interaktiv
+  arbeiten.
 
 ## Tests
 
@@ -234,6 +236,10 @@ oben; 404 nur bei einer ungültigen ID. Der Fake folgte dem schon.
 - Das Token `minka-cli-smoke` liegt in `~/.config/minka/config.json`.
   Widerrufen beim Umstieg auf das Dogfooding zur internen Alpha. Das
   Agentenkonto „Claude (Robert)" ist schon Mitglied im Minka-Projekt.
+- Nach der Alpha-Vorbereitung erzeugt Minka neue IDs als UUID v7, weiter als
+  UUID-String. Die ID-Prüfung der CLI (`uuidPattern` in `internal/cli/root.go`)
+  prüft keine Version und passt damit. Nachsehen, wenn minka-8a den Commit
+  meldet.
 - `cards delete` ist am 13.09.2026 live geprüft: Eine frisch angelegte
   Karte kam in den Papierkorb, danach gaben `cards show` und ein zweites
   `cards delete` Exit 2, und das Board listet sie nicht mehr.
