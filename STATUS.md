@@ -1,0 +1,251 @@
+# Status
+
+Stand: 13.09.2026
+
+## Wo wir stehen
+
+**MVP fertig und reviewt.** Gegen den Fake getestet, im Smoke-Lauf gegen die
+lokale Instanz geprüft, Befunde des Reviews eingearbeitet.
+
+**Die CLI ruht auf diesem Stand** (Roberts Priorität, über minka-8a): Das
+Dogfooding in Minka wartet auf eine interne Alpha. Neue Features gibt es nur
+auf neuen Auftrag. Nachgezogen wird, sobald in Minka committet ist:
+
+- API-5 `DELETE /cards/{id}` (Papierkorb)
+- die erweiterte Allowlist `h2`/`h3`/`code`/`hr` (E-060)
+
+API-Stand, gegen den gebaut ist: Minka `c691ac2` (API-1 bis API-3).
+
+Befehle:
+
+```
+minka auth login|status|logout
+minka me
+minka projects list
+minka boards list <projectId> | show <boardId>
+minka cards show|create|edit|move|done
+minka comments create <cardId> <text|->
+minka commands            Katalog aller Befehle mit Flags
+minka version
+```
+
+## Entscheidungen
+
+Auf Roberts Wunsch folgen die Konventionen **basecamp-cli**. Den Umfang
+übernehmen wir nicht, die Prinzipien schon. Mit minka-8a abgestimmt.
+
+- **Ausgabe:** Auf einem Terminal Text, sonst JSON. `--json` gibt eine Hülle
+  `{ok, data, summary, notice, breadcrumbs}` aus, `--quiet` nur `data`,
+  `--styled` erzwingt Text. `data` ist die API-Ressource unverändert, als
+  rohes JSON durchgereicht. Warnungen stehen bei `--json` in `notice`, sonst
+  auf stderr.
+- **Fehler:** `{ok: false, error, code, retryable, hint, meta: {apiCode,
+  httpStatus}}`. Den Minka-Fallcode liefert `meta.apiCode`. `retryable` ist
+  nur bei lesenden Requests wahr. Ein fehlgeschlagener Schreibvorgang kann
+  schon angekommen sein, der Hint rät dann zum Nachlesen.
+- **Exit-Codes wie basecamp-cli:**
+
+  | Exit | Bedeutung |
+  |------|-----------|
+  | 0 | ok |
+  | 1 | Aufruf oder Config-Datei |
+  | 2 | nicht gefunden |
+  | 3 | nicht angemeldet |
+  | 4 | verboten (Minka liefert nie 403) |
+  | 6 | Netzwerk |
+  | 7 | API/Server |
+  | 8 | mehrdeutig |
+  | 9 | Validierung |
+
+- **Befehlsnamen** als Plural-Gruppe plus Aktion (`cards move`).
+- **Anmeldung:**
+  - Das Token kommt nie über ein Flag, sondern verdeckt vom Terminal oder mit
+    `--with-token` von stdin. Stdin darf dafür kein Terminal sein, das Token
+    muss einzeilig sein und ist auf 4096 Bytes begrenzt.
+  - Vor dem Speichern wird es gegen `/me` geprüft.
+  - Die Config-Datei wird mit 0600 im Verzeichnis 0700 gespeichert, atomar
+    mit fsync. Ein Symlink bleibt erhalten.
+  - Eine Config, die andere lesen können, wird abgelehnt.
+- **Ein Token geht nur an seinen Host.** `MINKA_TOKEN` gilt nur zusammen mit
+  `MINKA_HOST` und nur für diesen Host. Bei `--host` mit einem anderen Host
+  kommt das Token aus der Config.
+- **Host:**
+  - `https://` wird ergänzt, `/api/v1` und Standardports entfernt.
+  - `http://` gilt nur für Loopback.
+  - Andere Pfade werden abgelehnt.
+- **HTTP:**
+  - Redirects werden nie verfolgt.
+  - IDs werden lokal als UUID geprüft (sonst Exit 1 ohne Request) und
+    zusätzlich im Pfad escaped.
+  - Timeout 30 s, Antworten höchstens 16 MB.
+- **Markdown → HTML** (goldmark), nur Elemente der Server-Allowlist:
+  - `#` wird `h1`, tiefere Überschriften werden fette Absätze.
+  - Inline-Code behält seine Backticks.
+  - Code-Blöcke werden `pre`.
+  - Tabellen werden ausgerichteter Text in `pre`.
+  - Bilder werden Links, ein Bild in einem Link wird nur sein Label.
+  - `---` fällt weg.
+  - Rohes HTML im Markdown wird sichtbarer Text.
+  - Links mit anderen Zielen als http, https, mailto, tel und relativen URLs
+    werden Klartext. Das ist dieselbe Regel wie `RichText::isSafeUrl` auf dem
+    Server.
+  - Markdown, das Text enthält, aber nichts, was Minka behält, wird
+    abgelehnt, statt die Beschreibung zu löschen. Löschen geht mit
+    `--description ""`.
+- **HTML → Markdown** für `cards show` im Text: Text wird escaped, `<br>`
+  wird ein harter Umbruch. Zurückgeschickt entsteht dasselbe HTML.
+- **Kommentare** sind Klartext, ohne Umwandlung.
+- **Eingabe über stdin:** `-` liest von stdin, höchstens 1 MB. Ein Terminal
+  als stdin wird abgelehnt.
+- **`--column`** nimmt eine ID, einen Typ (`triage`, `not_now`, `done`) oder
+  einen Titel an. Passt der Wert auf mehrere Spalten, gibt es Exit 8 mit den
+  Kandidaten, auch wenn ein Typname zugleich Titel einer anderen Spalte ist.
+- **`cards create`** in Not now oder Done wird in der CLI abgelehnt, auch per
+  ID.
+- **`cards move`:**
+  - `--after X` wird zu `previousCardId`, `--before Y` zu `nextCardId`.
+  - Ohne Platzierung geht die Karte nach oben.
+  - Ein Nachbar, der nicht in der Zielspalte liegt, wird abgelehnt. Der Server
+    würde die Karte sonst still nach oben legen.
+  - Done nimmt keine Platzierung an, denn es ist nach Abschluss sortiert.
+- **`cards done`** ist idempotent.
+
+## Tests
+
+`make check` (gofmt, go vet, `go test ./...`) ist grün. Getestet wird gegen
+`internal/fakeapi`, einen In-Memory-Nachbau des API-Vertrags: dieselben
+Codes, dieselbe Prüfreihenfolge und dasselbe `trim` wie PHP, Done nach
+Abschluss sortiert.
+
+### Sabotagebeweise
+
+Schutz in einer Kopie des Codes herausgenommen, der Code kompiliert, der
+genannte Test wird rot. Zuletzt am 13.09.2026 nach dem Review ausgeführt:
+
+| Schutz | Test |
+|---|---|
+| Config-Datei 0600 | `TestSaveWritesAFileOnlyItsOwnerCanRead` |
+| Für andere lesbare Config abgelehnt | `TestAConfigFileOthersCanReadIsNotUsed` |
+| Symlink der Config bleibt | `TestSaveKeepsASymlinkedConfigFileALink` |
+| `http://` nur für Loopback | `TestNormalizeHost` |
+| `MINKA_TOKEN` nur an `MINKA_HOST` | `TestTheEnvironmentTokenIsOnlySentToItsHost` |
+| Token einzeilig | `TestLoginRefusesATokenThatIsNotOneLine` |
+| Abgelehntes Token nicht gespeichert | `TestLoginWithARefusedTokenSavesNothing` |
+| ID im Pfad escaped | `TestIdentifiersAreEscapedInThePath` (api) |
+| Nur UUIDs als ID | `TestValuesThatAreNoIDsAreRefusedBeforeSending` |
+| Redirects nicht verfolgt | `TestARedirectIsNotFollowed` |
+| Schreibfehler nicht retryable (HTTP und Netzwerk) | `TestAFailedWriteTellsToReadBackBeforeRetrying`, `TestFailuresHaveACodeAndAnExitCodePerClass` |
+| Allowlist (h2, rohes Inline-HTML) | `TestOnlyElementsTheServerKeepsAreWritten` |
+| Link-Schemata wie der Server, kein `//` | `TestConversions` |
+| Kein Bild-Link im Link | `TestConversions` |
+| Leeres Markdown löscht keine Beschreibung | `TestMarkdownWithNothingMinkaKeepsDoesNotRemoveTheDescription` |
+| `--description-format` immer geprüft | `TestTheDescriptionFormatIsCheckedWithoutADescription` |
+| Warnungen bei `--quiet` auf stderr | `TestQuietPrintsWarningsToStderr` |
+| stdin nicht vom Terminal | `TestTextIsNotReadFromATerminal` |
+| `cards done` idempotent | `TestDoneCompletesACardOnlyOnce` |
+| Nachbar in Zielspalte geprüft | `TestMoveNextToACardOutsideTheTargetColumnIsRefused` |
+| Done ohne Platzierung | `TestDoneTakesNoPlacement` |
+| Anlegen in Done/Not now auch per ID abgelehnt | `TestCreateInNotNowOrDoneIsRefusedHoweverTheColumnIsGiven` |
+| Typname und gleicher Titel mehrdeutig | `TestATypeThatIsAlsoTheTitleOfAnotherColumnIsAmbiguous` |
+| HTML → Markdown: Zeilenanfänge escaped, `<br>` hart | `TestTextWithoutMarkupStaysText` |
+
+### Smoke-Lauf gegen die lokale Instanz
+
+Am 13.09.2026, vor dem Review, mit dem Token `minka-cli-smoke` (Bruno), Board
+„API-3 Abnahme" in „Test-Projekt". Angelegte Karte:
+`dca9e204-b744-4cd9-abcc-64e338822df1`, liegt in Done und bleibt dort (das
+Test-Board ist dafür da).
+
+Grün:
+
+- `auth login --with-token`, `auth status`, `me`, `projects list`,
+  `boards list`, `boards show`.
+- `cards create` mit Markdown von stdin, Umlauten und Anführungszeichen.
+- `cards show`, `cards edit`, `cards move --column triage --top`,
+  `comments create -` mit Umbruch und Tab.
+- `cards done` zweimal, beim zweiten Mal ohne Move.
+
+Fehlerfälle live:
+
+| Fall | Exit | Code |
+|---|---|---|
+| unbekannte Karte | 2 | |
+| Tab im Titel | 9 | `cardTitleHasControlCharacters` |
+| Steuerzeichen im Kommentar | 9 | `commentHasControlCharacters` |
+| falsches Token | 3 | |
+| unbekannte Spalte | 1 | |
+| Anlegen in Done | 1 | |
+
+Live nicht geprüft, weil das Board keine Arbeitsspalte hat:
+`--column <Titel>`, `--after`, `--before`, `--bottom`. Gegen den Fake sind
+sie getestet.
+
+## Review
+
+Ein Reviewer-Agent, der nichts ändert, hat am 13.09.2026 29 Befunde gemeldet,
+keinen Blocker.
+
+Eingearbeitet:
+
+- Token-Bindung an den Host
+- Retry-Semantik
+- Warnungen bei `--quiet`
+- Link-Regel des Servers
+- verschachtelte Links
+- leeres Markdown
+- Typ- und Titel-Mehrdeutigkeit
+- HTML → Markdown (Escaping, harte Umbrüche, Leerzeichen an Inline-Grenzen,
+  Code-Fences)
+- CLAUDE.md
+- Nachbar-Test
+- Fake näher an PHP (`\r`, `trim`, Prüfreihenfolge, Meldungen, Done-Sortierung,
+  angehängter Müll im JSON, Flow-Formularargumente)
+- UUID-Prüfung
+- Anlegen per Spalten-ID
+- Done ohne Platzierung
+- toter Code
+- Logout-Meldung
+- `--description-format`
+- Host-Helfer
+- 401-Hint bei `MINKA_TOKEN`
+- stdin vom Terminal
+- Symlink, fsync und Standardport in der Config
+- fehlende Tests
+
+Bewusst nicht gemacht:
+
+- Die Beschreibungslänge prüft der Fake am gesendeten Text, der Server am
+  bereinigten HTML. Das spielt nur bei Markup eine Rolle, das der Server
+  entfernt.
+- Keine Warnung für die Sprache eines Code-Blocks, die wegfällt.
+- `tokenSource` bleibt ein String.
+
+An minka-8a gemeldet: Die Fehlertabelle in `authorization.md` nennt 404 für
+einen unbekannten Nachbarn. `Gap::nextTo` legt die Karte in dem Fall aber
+oben ab.
+
+## Offene Punkte
+
+- Das Token `minka-cli-smoke` liegt in `~/.config/minka/config.json`.
+  Widerrufen, sobald das Agentenkonto im Minka-Projekt ist.
+- Nachziehen, wenn in Minka committet: API-5 (`cards delete` o. ä.) und die
+  Allowlist `h2`/`h3`/`code`/`hr`. Dann `internal/markdown` und
+  `internal/richtext` anpassen.
+- Später vielleicht:
+  - Keychain statt Datei
+  - `.minka.json` im Repository mit Standard-Board
+  - `--help --agent`
+  - Installation für andere
+
+## Wünsche an die API (an minka-8a)
+
+Gemeldet am 13.09.2026. Wie minka-8a sie behandelt:
+
+1. **Allowlist erweitern** (`h2`/`h3`, `code` inline, `hr`): kommt als
+   kleines Minka-Paket (E-060). Tabellen, `ol[start]` und Checklisten folgen
+   später mit Lexxy (U3).
+2. **Falsche HTTP-Methode** als JSON-404/405 statt Flows HTML-404: bleibt
+   Schuld, nicht vor dem Dogfooding.
+3. **Karten entfernen** (`DELETE /cards/{id}` → Papierkorb): API-5.
+4. **Done über 25 Karten hinaus lesen** (Blättern): später, wenn das
+   Dogfooding es braucht.
