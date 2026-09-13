@@ -381,8 +381,8 @@ func (a *app) newCardsDeleteCmd() *cobra.Command {
 		Long: `Moves a card to the trash, as removing it on the web does.
 
 A card in the trash reads like one that never existed. Showing, moving,
-commenting on or deleting it again exits with 2 (not_found), so a repeated
-delete is not a success.`,
+commenting on or deleting it again exits with 2 (not_found). Deleting twice
+leaves the card in the trash all the same; only the second exit code differs.`,
 		Args: requireArgs("cardId"),
 		RunE: func(_ *cobra.Command, args []string) error {
 			s, err := a.session()
