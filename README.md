@@ -33,6 +33,7 @@ minka boards show <boardId>
 minka cards create --board <boardId> --title "Fix the login" --description - < notes.md
 minka cards move <cardId> --column Doing --bottom
 minka cards done <cardId>
+minka cards delete <cardId>
 minka comments create <cardId> "Done in abc1234"
 minka commands        # every command with its flags
 ```

@@ -178,6 +178,7 @@ func New(t testing.TB) (*Server, *Fixture) {
 	mux.HandleFunc("PATCH /api/v1/cards/{cardId}", s.authenticated(s.updateCard))
 	mux.HandleFunc("POST /api/v1/cards/{cardId}/moves", s.authenticated(s.moveCard))
 	mux.HandleFunc("POST /api/v1/cards/{cardId}/comments", s.authenticated(s.writeComment))
+	mux.HandleFunc("DELETE /api/v1/cards/{cardId}", s.authenticated(s.removeCard))
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		// Flow answers an unknown path or a wrong method with an HTML page.
 		w.Header().Set("Content-Type", "text/html")
@@ -490,6 +491,21 @@ func (s *Server) moveCard(w http.ResponseWriter, r *http.Request, person *Person
 		card.CompletedByID = ""
 	}
 	writeJSON(w, http.StatusOK, s.cardResource(board, to, card))
+}
+
+// removeCard moves a card to the trash. The fake forgets it, which reads the
+// same: every later request for it is 404.
+func (s *Server) removeCard(w http.ResponseWriter, r *http.Request, person *Person) {
+	_, column, card := s.visibleCard(r.PathValue("cardId"), person)
+	if card == nil {
+		notFound(w)
+		return
+	}
+	column.Cards = slices.DeleteFunc(column.Cards, func(c *Card) bool { return c == card })
+
+	// The server sends its JSON Content-Type along with the empty 204.
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (s *Server) writeComment(w http.ResponseWriter, r *http.Request, person *Person) {

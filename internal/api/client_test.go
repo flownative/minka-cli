@@ -48,3 +48,20 @@ func TestErrorsNameTheMethodOfTheRequest(t *testing.T) {
 		t.Errorf("got %#v", err)
 	}
 }
+
+func TestAnEmptyAnswerIsASuccess(t *testing.T) {
+	var method, path string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		method, path = r.Method, r.URL.EscapedPath()
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer server.Close()
+
+	if err := New(server.URL, "minka_pat_x", "").DeleteCard(context.Background(), "a/b"); err != nil {
+		t.Errorf("got %v", err)
+	}
+	if method != http.MethodDelete || path != "/api/v1/cards/a%2Fb" {
+		t.Errorf("request %s %s", method, path)
+	}
+}

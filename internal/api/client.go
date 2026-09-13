@@ -111,6 +111,13 @@ func (c *Client) MoveCard(ctx context.Context, cardID string, input MoveCardInpu
 	return request[Card](ctx, c, http.MethodPost, "/cards/"+url.PathEscape(cardID)+"/moves", input)
 }
 
+// DeleteCard moves a card to the trash. A card already in the trash answers
+// like one that never existed.
+func (c *Client) DeleteCard(ctx context.Context, cardID string) error {
+	_, err := request[struct{}](ctx, c, http.MethodDelete, "/cards/"+url.PathEscape(cardID), nil)
+	return err
+}
+
 func (c *Client) WriteComment(ctx context.Context, cardID string, body string) (Result[Comment], error) {
 	return request[Comment](ctx, c, http.MethodPost, "/cards/"+url.PathEscape(cardID)+"/comments", map[string]string{"body": body})
 }
@@ -158,6 +165,11 @@ func request[T any](ctx context.Context, c *Client, method, path string, body an
 		apiErr := errorFromResponse(resp.StatusCode, raw)
 		apiErr.Method = method
 		return result, apiErr
+	}
+
+	// A 204 has no body, whatever its Content-Type says.
+	if resp.StatusCode == http.StatusNoContent {
+		return result, nil
 	}
 
 	if err := json.Unmarshal(raw, &result.Value); err != nil {

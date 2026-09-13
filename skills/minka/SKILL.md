@@ -29,6 +29,9 @@ when stdout is not a terminal, so an agent gets structured output by default.
   reached the server. A 404 (`not_found`) means the thing does not exist or
   belongs to a project the token's person is not in.
 - `minka cards done` is safe to repeat: a card already in Done is left alone.
+- `minka cards delete` moves a card to the trash and is not repeatable: a
+  card in the trash reads like one that never existed, so a second delete
+  exits 2. Delete only cards you created or were asked to remove.
 
 ## Output modes
 
@@ -85,6 +88,7 @@ minka cards create --board <boardId> --title "Title" [--column <column>] [--desc
 minka cards edit <cardId> [--title "New"] [--description - < body.md] --json
 minka cards move <cardId> --column <column> [--top | --bottom | --after <cardId> | --before <cardId>] --json
 minka cards done <cardId> --json
+minka cards delete <cardId> --json
 minka comments create <cardId> - --json < comment.txt
 ```
 

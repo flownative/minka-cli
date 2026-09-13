@@ -748,7 +748,7 @@ func TestTheCatalogListsEveryCommandWithItsFlags(t *testing.T) {
 	for _, cmd := range catalog.Commands {
 		byName[cmd.Command] = cmd
 	}
-	for _, name := range []string{"minka auth login", "minka me", "minka projects list", "minka boards list", "minka boards show", "minka cards show", "minka cards create", "minka cards edit", "minka cards move", "minka cards done", "minka comments create"} {
+	for _, name := range []string{"minka auth login", "minka me", "minka projects list", "minka boards list", "minka boards show", "minka cards show", "minka cards create", "minka cards edit", "minka cards move", "minka cards done", "minka cards delete", "minka comments create"} {
 		if _, ok := byName[name]; !ok {
 			t.Errorf("catalog misses %q", name)
 		}
@@ -943,4 +943,43 @@ func TestACommentWithWindowsLineEndingsIsAccepted(t *testing.T) {
 	e := newTestEnv(t)
 	_, r := e.runJSON("one\r\ntwo", "comments", "create", e.fixture.CardInTriage.ID, "-")
 	expectCode(t, r, ExitOK)
+}
+
+func TestDeleteMovesACardToTheTrash(t *testing.T) {
+	e := newTestEnv(t)
+	id := e.fixture.CardInTriage.ID
+
+	env, r := e.runJSON("", "cards", "delete", id)
+	expectCode(t, r, ExitOK)
+	if data := decode(t, env.Data); data["id"] != id || data["deleted"] != true {
+		t.Errorf("data %s", env.Data)
+	}
+	writes := e.server.WritingRequests()
+	if len(writes) != 1 || writes[0].Method != http.MethodDelete || writes[0].Path != "/api/v1/cards/"+id || len(writes[0].Body) != 0 {
+		t.Errorf("requests %+v", writes)
+	}
+
+	_, r = e.runJSON("", "cards", "show", id)
+	expectCode(t, r, ExitNotFound)
+
+	env, r = e.runJSON("", "cards", "delete", id)
+	expectCode(t, r, ExitNotFound)
+	if env.Code != CodeNotFound || !strings.Contains(env.Hint, "trash") {
+		t.Errorf("envelope %+v", env)
+	}
+}
+
+func TestDeletingACardOfAnotherProjectIsNotFound(t *testing.T) {
+	e := newTestEnv(t)
+	_, r := e.runJSON("", "cards", "delete", e.fixture.OtherCard.ID)
+	expectCode(t, r, ExitNotFound)
+}
+
+func TestTrashIsAnotherNameForDelete(t *testing.T) {
+	e := newTestEnv(t)
+	r := e.run("", "cards", "trash", e.fixture.CardInTriage.ID, "--styled")
+	expectCode(t, r, ExitOK)
+	if !strings.Contains(r.stdout, "to the trash") {
+		t.Errorf("stdout %q", r.stdout)
+	}
 }
