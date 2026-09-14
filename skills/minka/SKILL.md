@@ -67,8 +67,8 @@ Validation codes in `meta.apiCode`: `cardTitleMissing`, `cardTitleTooLong`,
 `cardTitleHasControlCharacters` (a title is one line: no line breaks or tabs),
 `cardDescriptionTooLong`, `cardDescriptionNotReadable`, `commentMissing`,
 `commentTooLong`, `commentHasControlCharacters` (line breaks and tabs are
-fine), `nothingToChange`, `columnIdMissing`, `malformedBody`,
-`unsupportedMediaType`.
+fine), `cardDueDateNotADate`, `personNotAProjectMember`, `personIdMissing`,
+`nothingToChange`, `columnIdMissing`, `malformedBody`, `unsupportedMediaType`.
 
 Minka answers everything you may not see with 404, never 403, so exit 4 is
 not expected in practice.
@@ -86,8 +86,8 @@ minka projects list --json
 minka boards list <projectId> --json
 minka boards show <boardId> --json
 minka cards show <cardId> --json
-minka cards create --board <boardId> --title "Title" [--column <column>] [--description - < body.md] --json
-minka cards edit <cardId> [--title "New"] [--description - < body.md] --json
+minka cards create --board <boardId> --title "Title" [--column <column>] [--assignee <person>]... [--due YYYY-MM-DD] [--description - < body.md] --json
+minka cards edit <cardId> [--title "New"] [--due YYYY-MM-DD] [--description - < body.md] --json
 minka cards move <cardId> --column <column> [--top | --bottom | --after <cardId> | --before <cardId>] --json
 minka cards done <cardId> --json
 minka cards delete <cardId> --json
@@ -126,10 +126,20 @@ such as `Doing`.
 - Assigning somebody who is assigned already succeeds, and the summary says
   so. Taking off somebody who is not assigned succeeds as well, and people who
   left the project can still be taken off.
-- `cards create --assignee <person>` (repeatable) looks the people up before
-  the card exists and assigns them right after creating it. If an assignment
-  fails then, the error names the created card and the command to repeat.
+- `cards create --assignee <person>` (repeatable) looks the people up first
+  and creates the card together with them in one request. Somebody outside
+  the project leaves no card behind (exit 9, `personNotAProjectMember`).
 - New cards go to the top of their column.
+
+## Due dates
+
+- A card carries `dueOn` as `YYYY-MM-DD`, or null. It is a day, with no time
+  and no zone.
+- Set it with `cards create --due YYYY-MM-DD` or `cards edit --due YYYY-MM-DD`;
+  remove it with `cards edit --due ""`. Relative words such as `tomorrow` are
+  not understood: compute the day yourself.
+- A text that is no existing day (`2026-02-30`, `28.09.2026`, `2026-9-8`)
+  exits 9 with `meta.apiCode` `cardDueDateNotADate`.
 
 ## Descriptions and comments
 

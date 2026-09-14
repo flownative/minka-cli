@@ -71,8 +71,8 @@ den Fake anpassen, dann die CLI.
 
 Die API ist „intern, instabil". Fragen, Widersprüche und Wünsche an die API
 gehen per Nachricht an die Minka-Koordinator-Session, nicht als Änderung ins
-Minka-Repository. Bis 14.09.2026 war das `minka-8a`, danach übernimmt ein
-Nachfolger, der sich meldet. Nachrichten über API-Änderungen mit dem Code
+Minka-Repository. Bis 14.09.2026 war das `minka-8a`, seitdem ist es
+`minka-63`. Nachrichten über API-Änderungen mit dem Code
 abgleichen: Maßgeblich sind Controller, Resources und Tests im Commit.
 
 ## Regeln gegenüber dem Minka-Repository

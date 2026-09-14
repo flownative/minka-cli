@@ -71,6 +71,7 @@ type Card struct {
 	CompletedAt   *time.Time
 	CompletedByID string
 	AssigneeIDs   []string // in the order they were assigned
+	DueOn         *string  // YYYY-MM-DD, nil for none
 	Comments      []*Comment
 }
 
@@ -342,7 +343,7 @@ func (s *Server) board(w http.ResponseWriter, r *http.Request, person *Person) {
 				"commentCount": len(card.Comments), "createdAt": timestamp(card.CreatedAt),
 				"creator": s.personReference(card.CreatorID), "completedAt": timestampOrNil(card.CompletedAt),
 				"completedBy": s.personReferenceOrNil(card.CompletedByID), "assignees": s.assigneeReferences(card),
-				"appUrl": s.cardURL(board, card),
+				"dueOn": card.DueOn, "appUrl": s.cardURL(board, card),
 			})
 		}
 		columns = append(columns, map[string]any{
@@ -375,6 +376,20 @@ func (s *Server) addCard(w http.ResponseWriter, r *http.Request, person *Person)
 	if !ok1 || !ok2 || !ok3 || !validTitle(w, deref(title)) || (description != nil && !validDescription(w, *description)) {
 		return
 	}
+	dueOn, ok := stringField(w, fields, "dueOn")
+	if !ok || !validDueDate(w, dueOn) {
+		return
+	}
+	assigneeIDs, ok := stringListField(w, fields, "assigneeIds")
+	if !ok {
+		return
+	}
+	for _, id := range assigneeIDs {
+		if !uuidPattern.MatchString(id) {
+			notAProjectMember(w)
+			return
+		}
+	}
 
 	board := s.visibleBoard(r.PathValue("boardId"), person)
 	if board == nil {
@@ -392,7 +407,21 @@ func (s *Server) addCard(w http.ResponseWriter, r *http.Request, person *Person)
 		return
 	}
 
-	card := &Card{ID: newID(), Title: phpTrim(*title), Description: phpTrim(deref(description)), CreatedAt: s.now, CreatorID: person.ID}
+	// Card and people are one transaction: somebody outside the project
+	// leaves no card behind.
+	for _, id := range assigneeIDs {
+		if !slices.Contains(s.visibleProject(board.ProjectID, person).MemberIDs, id) {
+			notAProjectMember(w)
+			return
+		}
+	}
+
+	card := &Card{ID: newID(), Title: phpTrim(*title), Description: phpTrim(deref(description)), CreatedAt: s.now, CreatorID: person.ID, DueOn: dueDate(dueOn)}
+	for _, id := range assigneeIDs {
+		if !slices.Contains(card.AssigneeIDs, id) {
+			card.AssigneeIDs = append(card.AssigneeIDs, id)
+		}
+	}
 	column.Cards = append([]*Card{card}, column.Cards...)
 	w.Header().Set("Location", s.URL+"/api/v1/cards/"+card.ID)
 	writeJSON(w, http.StatusCreated, s.cardResource(board, column, card))
@@ -408,11 +437,17 @@ func (s *Server) updateCard(w http.ResponseWriter, r *http.Request, person *Pers
 	if !ok1 || !ok2 {
 		return
 	}
-	if title == nil && description == nil {
-		unprocessable(w, "nothingToChange", "The body names neither a title nor a description.")
+	// A due date of null removes it, so the field counts as named even then.
+	_, dueDateNamed := fields["dueOn"]
+	if title == nil && description == nil && !dueDateNamed {
+		unprocessable(w, "nothingToChange", "The body names neither a title nor a description nor a due date.")
 		return
 	}
 	if title != nil && !validTitle(w, *title) || description != nil && !validDescription(w, *description) {
+		return
+	}
+	dueOn, ok := stringField(w, fields, "dueOn")
+	if !ok || !validDueDate(w, dueOn) {
 		return
 	}
 
@@ -426,6 +461,9 @@ func (s *Server) updateCard(w http.ResponseWriter, r *http.Request, person *Pers
 	}
 	if description != nil {
 		card.Description = phpTrim(*description)
+	}
+	if dueDateNamed {
+		card.DueOn = dueDate(dueOn)
 	}
 	writeJSON(w, http.StatusOK, s.cardResource(board, column, card))
 }
@@ -674,8 +712,8 @@ func (s *Server) cardResource(board *Board, column *Column, card *Card) map[stri
 		"commentCount": len(card.Comments), "createdAt": timestamp(card.CreatedAt),
 		"creator": s.personReference(card.CreatorID), "completedAt": timestampOrNil(card.CompletedAt),
 		"completedBy": s.personReferenceOrNil(card.CompletedByID), "assignees": s.assigneeReferences(card),
-		"comments": comments,
-		"appUrl":   s.cardURL(board, card),
+		"dueOn": card.DueOn, "comments": comments,
+		"appUrl": s.cardURL(board, card),
 	}
 }
 
@@ -819,6 +857,53 @@ func timestampOrNil(t *time.Time) any {
 		return nil
 	}
 	return timestamp(*t)
+}
+
+// validDueDate accepts no date at all, an empty one, or a day that exists,
+// written as YYYY-MM-DD. 2026-02-30 and 2026-9-8 are refused.
+func validDueDate(w http.ResponseWriter, value *string) bool {
+	date := phpTrim(deref(value))
+	if date == "" {
+		return true
+	}
+	if strings.IndexFunc(date, unicode.IsControl) < 0 {
+		if day, err := time.Parse("2006-01-02", date); err == nil && day.Format("2006-01-02") == date {
+			return true
+		}
+	}
+	unprocessable(w, "cardDueDateNotADate", "A due date is a day written as YYYY-MM-DD.")
+	return false
+}
+
+// dueDate is how a checked due date is stored: nil where the text names none.
+func dueDate(value *string) *string {
+	date := phpTrim(deref(value))
+	if date == "" {
+		return nil
+	}
+	return &date
+}
+
+func stringListField(w http.ResponseWriter, fields map[string]any, name string) ([]string, bool) {
+	value, present := fields[name]
+	if !present || value == nil {
+		return nil, true
+	}
+	list, ok := value.([]any)
+	if !ok {
+		malformed(w, fmt.Sprintf("The field %q has to be a list.", name))
+		return nil, false
+	}
+	texts := make([]string, 0, len(list))
+	for _, entry := range list {
+		text, ok := entry.(string)
+		if !ok {
+			malformed(w, fmt.Sprintf("The field %q has to be a list of strings.", name))
+			return nil, false
+		}
+		texts = append(texts, text)
+	}
+	return texts, true
 }
 
 // phpTrim trims like PHP's trim(), which the server uses: it removes NUL and
