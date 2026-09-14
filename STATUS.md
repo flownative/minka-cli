@@ -290,8 +290,19 @@ oben; 404 nur bei einer ungültigen ID. Der Fake folgte dem schon.
   Schritt einer anderen Karte oder auf eine ungültige Schritt-ID gibt bewusst
   204 (E-067), 404 nur für eine fremde Karte.
 - Umbenennen und Umsortieren von Schritten gibt es in der API noch nicht.
-- Projekte haben seit Minka `ccd0439` Chat-Werkzeuge (`type=chat`), aber noch
-  keine API; die kommt mit Chat-3. `boards list` zeigt nur Boards.
+- Projekte haben seit Minka `ccd0439` Chat-Werkzeuge (`type=chat`).
+  `boards list` zeigt nur Boards.
+- Die Chat-API gibt es auf dem Minka-Branch `chat` (`cf5e129` in
+  `/Users/robert/Sites/minka-2`). Dort läuft noch ein Review. Die CLI zieht
+  erst nach, wenn minka-63 den Commit auf main meldet, weil sich der Vertrag
+  noch verschieben kann.
+
+  Stand der Ankündigung:
+  - `GET /projects/{p}/chats`
+  - `GET /chats/{c}/messages` mit `after`, `before` und `limit`
+  - `POST`, `PATCH` und `DELETE` auf Nachrichten, `POST /chats/{c}/read`
+  - Nachrichten sind Klartext, ohne Markdown-Umwandlung
+  - Fehlercodes `chatMessage…` und `chatReadSeqMissing`
 
 - Spaltenfarben (`color` an Spalten) kommen mit Minka M2-2d, nur lesend. Die
   JSON-Ausgabe reicht sie ungeändert durch. Ob die Textausgabe sie zeigt,
