@@ -140,7 +140,8 @@ such as `Doing`.
 ## Steps
 
 - A card read by itself carries `steps` as `{id, title, completed}` in the
-  order it shows them. The board does not list steps; read the card.
+  order it shows them. The board carries only `stepCount` and
+  `completedStepCount` per card; read the card for the steps themselves.
 - `<step>` is a step ID, its position starting at 1, or its text
   (case-insensitive; a number always means a position; a text on two steps
   gives exit 8 with the positions).

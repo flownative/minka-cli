@@ -351,6 +351,7 @@ func (s *Server) board(w http.ResponseWriter, r *http.Request, person *Person) {
 		for _, card := range listed {
 			cards = append(cards, map[string]any{
 				"id": card.ID, "title": card.Title, "hasDescription": card.Description != "",
+				"stepCount": len(card.Steps), "completedStepCount": completedStepCount(card),
 				"commentCount": len(card.Comments), "createdAt": timestamp(card.CreatedAt),
 				"creator": s.personReference(card.CreatorID), "completedAt": timestampOrNil(card.CompletedAt),
 				"completedBy": s.personReferenceOrNil(card.CompletedByID), "assignees": s.assigneeReferences(card),
@@ -687,6 +688,16 @@ func (s *Server) removeStep(w http.ResponseWriter, r *http.Request, person *Pers
 
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func completedStepCount(card *Card) int {
+	completed := 0
+	for _, step := range card.Steps {
+		if step.Completed {
+			completed++
+		}
+	}
+	return completed
 }
 
 func stepResources(card *Card) []any {

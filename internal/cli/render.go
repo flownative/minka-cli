@@ -36,6 +36,9 @@ func renderBoard(w io.Writer, board api.Board) {
 			if card.CommentCount > 0 {
 				details = append(details, plural(card.CommentCount, "comment", "comments"))
 			}
+			if card.StepCount > 0 {
+				details = append(details, fmt.Sprintf("steps %d/%d", card.CompletedStepCount, card.StepCount))
+			}
 			if len(card.Assignees) > 0 {
 				details = append(details, "assigned to "+assigneeNames(card.Assignees))
 			}

@@ -1393,3 +1393,24 @@ func TestStepsAppearOnTheCard(t *testing.T) {
 		}
 	}
 }
+
+func TestTheBoardSaysHowFarTheStepsHaveGot(t *testing.T) {
+	e := newTestEnv(t)
+	withSteps(e)
+
+	env, r := e.runJSON("", "boards", "show", e.fixture.Board.ID)
+	expectCode(t, r, ExitOK)
+	var board api.Board
+	if err := json.Unmarshal(env.Data, &board); err != nil {
+		t.Fatal(err)
+	}
+	if card := board.Columns[0].Cards[0]; card.StepCount != 3 || card.CompletedStepCount != 1 {
+		t.Errorf("card %+v", card)
+	}
+
+	r = e.run("", "boards", "show", e.fixture.Board.ID, "--styled")
+	expectCode(t, r, ExitOK)
+	if !strings.Contains(r.stdout, "steps 1/3") {
+		t.Errorf("board:\n%s", r.stdout)
+	}
+}
