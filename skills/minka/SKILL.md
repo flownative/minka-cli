@@ -60,7 +60,7 @@ Errors: `{"ok": false, "error", "code", "retryable", "hint", "meta": {"apiCode",
 | 4 | `forbidden` | account may not use the API (403) |
 | 6 | `network` | host unreachable, timeout (retryable) |
 | 7 | `api_error` | server error or unexpected answer (5xx retryable) |
-| 8 | `ambiguous` | a column title matches more than one column |
+| 8 | `ambiguous` | a column, person or step given by name matches more than one |
 | 9 | `validation` | the server refused the input, see `meta.apiCode` |
 
 Validation codes in `meta.apiCode`: `cardTitleMissing`, `cardTitleTooLong`,
@@ -68,6 +68,7 @@ Validation codes in `meta.apiCode`: `cardTitleMissing`, `cardTitleTooLong`,
 `cardDescriptionTooLong`, `cardDescriptionNotReadable`, `commentMissing`,
 `commentTooLong`, `commentHasControlCharacters` (line breaks and tabs are
 fine), `cardDueDateNotADate`, `personNotAProjectMember`, `personIdMissing`,
+`stepMissing`, `stepTooLong`, `stepHasControlCharacters`, `stepCompletedMissing`,
 `nothingToChange`, `columnIdMissing`, `malformedBody`, `unsupportedMediaType`.
 
 Minka answers everything you may not see with 404, never 403, so exit 4 is
@@ -94,6 +95,11 @@ minka cards delete <cardId> --json
 minka people list <projectId> --json
 minka cards assign <cardId> <person> --json
 minka cards unassign <cardId> <person> --json
+minka steps list <cardId> --json
+minka steps create <cardId> "Text" --json
+minka steps complete <cardId> <step> --json
+minka steps reopen <cardId> <step> --json
+minka steps delete <cardId> <step> --json
 minka comments create <cardId> - --json < comment.txt
 ```
 
@@ -130,6 +136,19 @@ such as `Doing`.
   and creates the card together with them in one request. Somebody outside
   the project leaves no card behind (exit 9, `personNotAProjectMember`).
 - New cards go to the top of their column.
+
+## Steps
+
+- A card read by itself carries `steps` as `{id, title, completed}` in the
+  order it shows them. The board does not list steps; read the card.
+- `<step>` is a step ID, its position starting at 1, or its text
+  (case-insensitive; a number always means a position; a text on two steps
+  gives exit 8 with the positions).
+- `steps create` adds a step at the end. A step is one line of at most 500
+  characters: `stepMissing`, `stepTooLong` and `stepHasControlCharacters` exit 9.
+- Completing a completed step, reopening an open one and deleting a step that
+  is gone all succeed. Deleting does not ask.
+- Renaming and reordering steps are not possible through the API yet.
 
 ## Due dates
 

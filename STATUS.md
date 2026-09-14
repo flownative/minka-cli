@@ -11,10 +11,10 @@ lokale Instanz geprüft, Befunde des Reviews eingearbeitet.
 Dogfooding in Minka wartet auf eine interne Alpha. Neue Features gibt es nur
 auf neuen Auftrag.
 
-API-Stand, gegen den gebaut ist: Minka `ca8282f` (API-1 bis API-5,
+API-Stand, gegen den gebaut ist: Minka `ee39f45` (API-1 bis API-5,
 erweiterte Allowlist aus E-060, Zuständige an Karten, neue Karten oben in der
-Spalte, Fälligkeitsdatum, Zuständige und Datum beim Anlegen). Koordination in
-Minka: `minka-63`.
+Spalte, Fälligkeitsdatum, Zuständige und Datum beim Anlegen, Schritte).
+Koordination in Minka: `minka-63`.
 
 Befehle:
 
@@ -25,6 +25,7 @@ minka projects list
 minka boards list <projectId> | show <boardId>
 minka people list <projectId>
 minka cards show|create|edit|move|assign|unassign|done|delete
+minka steps list|create|complete|reopen|delete
 minka comments create <cardId> <text|->
 minka commands            Katalog aller Befehle mit Flags
 minka version
@@ -129,6 +130,18 @@ Auf Roberts Wunsch folgen die Konventionen **basecamp-cli**. Den Umfang
   - `cards create --assignee` (wiederholbar) löst alle Personen vor dem
     Anlegen auf und schickt sie als `assigneeIds` im selben Request. Karte
     und Zuständige entstehen in einer Transaktion.
+- **Schritte:**
+  - Die Gruppe `steps` hat `list`, `create`, `complete`, `reopen` und
+    `delete`.
+  - Ein Schritt wird über ID, Position ab 1 oder Text angegeben. Eine Zahl
+    ist immer eine Position. Ein Text auf zwei Schritten ergibt Exit 8 mit den
+    Positionen.
+  - Die API liefert Schritte nur an der einzelnen Karte, nicht im Board.
+    Deshalb liest jeder Befehl mit Schritt-Angabe zuerst die Karte.
+  - Wiederholtes Abhaken, Öffnen und Löschen ist kein Fehler; die
+    Zusammenfassung sagt, ob sich etwas geändert hat.
+  - `steps list` gibt als `data` die Liste `steps` aus der Karte unverändert
+    aus.
 - **Fälligkeitsdatum:**
   - `--due YYYY-MM-DD` gibt es bei `cards create` und `cards edit`,
     `cards edit --due ""` entfernt es.
@@ -182,6 +195,10 @@ genannte Test wird rot. Zuletzt am 13.09.2026 nach dem Review ausgeführt:
 | Zuständige im selben Create-Request | `TestCreateAssignsThePeopleItFoundBeforeCreating` |
 | `--due` beim Anlegen gesendet | `TestCreateWithADueDate` |
 | `--due ""` entfernt das Datum, ohne andere Felder | `TestEditSetsAndRemovesTheDueDate` |
+| Schritt über Position, Text oder ID | `TestCompleteAndReopenFindTheStepByPositionTextOrID` |
+| Text auf zwei Schritten mehrdeutig | `TestAStepTextOfTwoStepsIsAmbiguous` |
+| Position außerhalb der Liste abgelehnt | `TestAPositionOutsideTheListIsRefused` |
+| Schritt-ID im Pfad escaped | `TestIdentifiersAreEscapedInThePath` (api) |
 | 204 ohne Rumpf ist Erfolg | `TestAnEmptyAnswerIsASuccess` (api), `TestDeleteMovesACardToTheTrash` |
 | Nachbar in Zielspalte geprüft | `TestMoveNextToACardOutsideTheTargetColumnIsRefused` |
 | Done ohne Platzierung | `TestDoneTakesNoPlacement` |
@@ -267,6 +284,16 @@ oben; 404 nur bei einer ungültigen ID. Der Fake folgte dem schon.
 
 ## Offene Punkte
 
+- Schritte (`ee39f45`) sind gebaut, während in Minka noch ein Review läuft.
+  minka-63 meldet, falls sich der Vertrag noch ändert.
+- Gegenüber der Nachricht zu `ee39f45` gilt laut Code:
+  - Das Board listet keine Schritte.
+  - `DELETE` auf einen Schritt einer anderen Karte oder auf eine ungültige
+    Schritt-ID gibt 204, nicht 404. 404 gibt es nur für eine fremde Karte.
+- Umbenennen und Umsortieren von Schritten gibt es in der API noch nicht.
+- Projekte haben seit Minka `ccd0439` Chat-Werkzeuge (`type=chat`), aber noch
+  keine API; die kommt mit Chat-3. `boards list` zeigt nur Boards.
+
 - Spaltenfarben (`color` an Spalten) kommen mit Minka M2-2d, nur lesend. Die
   JSON-Ausgabe reicht sie ungeändert durch. Ob die Textausgabe sie zeigt,
   wird entschieden, wenn der Commit da ist.
@@ -274,6 +301,14 @@ oben; 404 nur bei einer ungültigen ID. Der Fake folgte dem schon.
 - Das Token `minka-cli-smoke` liegt in `~/.config/minka/config.json`.
   Widerrufen beim Umstieg auf das Dogfooding zur internen Alpha. Das
   Agentenkonto „Claude (Robert)" ist schon Mitglied im Minka-Projekt.
+- Schritte sind am 14.09.2026 live geprüft (Minka `ee39f45`):
+  - Anlegen, auch über stdin, und die leere Liste funktionieren.
+  - Abhaken per Position, doppeltes Abhaken meldet „already", Öffnen per Text
+    funktioniert.
+  - Ein Text auf zwei Schritten endet mit Exit 8, eine Position außerhalb der
+    Liste mit Exit 1, ein Tab im Schritt mit Exit 9 `stepHasControlCharacters`.
+  - Löschen per Position funktioniert, und `cards show` zeigt „Steps (0/2)".
+  - Die Testkarte ist wieder gelöscht.
 - Fälligkeitsdatum und Anlegen mit Zuständigen sind am 14.09.2026 live
   geprüft:
   - `cards create --assignee me --due 2026-09-28` legte Karte, Person und

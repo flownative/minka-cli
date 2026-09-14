@@ -131,6 +131,24 @@ func (c *Client) UnassignCard(ctx context.Context, cardID, personID string) erro
 	return err
 }
 
+// AddStep adds a step at the end of the list of a card.
+func (c *Client) AddStep(ctx context.Context, cardID, title string) (Result[Card], error) {
+	return request[Card](ctx, c, http.MethodPost, "/cards/"+url.PathEscape(cardID)+"/steps", map[string]string{"title": title})
+}
+
+// SetStepCompleted ticks a step off or opens it again. A step that stands that
+// way already succeeds as well.
+func (c *Client) SetStepCompleted(ctx context.Context, cardID, stepID string, completed bool) (Result[Card], error) {
+	return request[Card](ctx, c, http.MethodPatch, "/cards/"+url.PathEscape(cardID)+"/steps/"+url.PathEscape(stepID), map[string]bool{"completed": completed})
+}
+
+// DeleteStep removes a step from a card. A step that is not on the card
+// succeeds as well.
+func (c *Client) DeleteStep(ctx context.Context, cardID, stepID string) error {
+	_, err := request[struct{}](ctx, c, http.MethodDelete, "/cards/"+url.PathEscape(cardID)+"/steps/"+url.PathEscape(stepID), nil)
+	return err
+}
+
 // DeleteCard moves a card to the trash. A card already in the trash answers
 // like one that never existed.
 func (c *Client) DeleteCard(ctx context.Context, cardID string) error {

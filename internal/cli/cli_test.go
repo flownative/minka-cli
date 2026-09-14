@@ -749,7 +749,7 @@ func TestTheCatalogListsEveryCommandWithItsFlags(t *testing.T) {
 	for _, cmd := range catalog.Commands {
 		byName[cmd.Command] = cmd
 	}
-	for _, name := range []string{"minka auth login", "minka me", "minka projects list", "minka boards list", "minka boards show", "minka cards show", "minka cards create", "minka cards edit", "minka cards move", "minka cards done", "minka cards delete", "minka cards assign", "minka cards unassign", "minka people list", "minka comments create"} {
+	for _, name := range []string{"minka auth login", "minka me", "minka projects list", "minka boards list", "minka boards show", "minka cards show", "minka cards create", "minka cards edit", "minka cards move", "minka cards done", "minka cards delete", "minka cards assign", "minka cards unassign", "minka people list", "minka steps list", "minka steps create", "minka steps complete", "minka steps reopen", "minka steps delete", "minka comments create"} {
 		if _, ok := byName[name]; !ok {
 			t.Errorf("catalog misses %q", name)
 		}
@@ -1235,5 +1235,161 @@ func TestTheDueDateAppearsInTheTextOutput(t *testing.T) {
 	expectCode(t, r, ExitOK)
 	if !strings.Contains(r.stdout, "Due: 2026-09-28") {
 		t.Errorf("card:\n%s", r.stdout)
+	}
+}
+
+// withSteps gives the card in Triage three steps, two of them with the same
+// text.
+func withSteps(e *testEnv) []*fakeapi.Step {
+	steps := []*fakeapi.Step{
+		{ID: "55555555-5555-4555-8555-555555555551", Title: "Call the caterer"},
+		{ID: "55555555-5555-4555-8555-555555555552", Title: "Book the tent", Completed: true},
+		{ID: "55555555-5555-4555-8555-555555555553", Title: "Book the tent"},
+	}
+	e.fixture.CardInTriage.Steps = steps
+	return steps
+}
+
+func TestStepsListShowsTheStepsInOrder(t *testing.T) {
+	e := newTestEnv(t)
+	withSteps(e)
+
+	env, r := e.runJSON("", "steps", "list", e.fixture.CardInTriage.ID)
+	expectCode(t, r, ExitOK)
+	var steps []api.Step
+	if err := json.Unmarshal(env.Data, &steps); err != nil || len(steps) != 3 || !steps[1].Completed || steps[0].Title != "Call the caterer" {
+		t.Errorf("data %s", env.Data)
+	}
+	if !strings.Contains(env.Summary, "1 of 3 steps") {
+		t.Errorf("summary %q", env.Summary)
+	}
+
+	r = e.run("", "steps", "list", e.fixture.CardInTriage.ID, "--styled")
+	expectCode(t, r, ExitOK)
+	if !strings.Contains(r.stdout, "2. [x] Book the tent") {
+		t.Errorf("text:\n%s", r.stdout)
+	}
+}
+
+func TestStepsCreateAddsAStepAtTheEnd(t *testing.T) {
+	e := newTestEnv(t)
+	withSteps(e)
+
+	env, r := e.runJSON("", "steps", "create", e.fixture.CardInTriage.ID, "Zeltverleih anrufen")
+	expectCode(t, r, ExitOK)
+	if body := e.lastWriteBody(); len(body) != 1 || body["title"] != "Zeltverleih anrufen" {
+		t.Errorf("body sent %v", body)
+	}
+	var card api.Card
+	if err := json.Unmarshal(env.Data, &card); err != nil || len(card.Steps) != 4 || card.Steps[3].Title != "Zeltverleih anrufen" {
+		t.Errorf("card %s", env.Data)
+	}
+
+	_, r = e.runJSON("Aufbau\n", "steps", "create", e.fixture.CardInTriage.ID, "-")
+	expectCode(t, r, ExitOK)
+	if got := e.lastWriteBody()["title"]; got != "Aufbau\n" {
+		t.Errorf("title sent %q", got)
+	}
+}
+
+func TestAStepThatIsNoLineIsRefused(t *testing.T) {
+	e := newTestEnv(t)
+	for value, code := range map[string]string{
+		"   ":                    "stepMissing",
+		strings.Repeat("ä", 501): "stepTooLong",
+		"first\tsecond":          "stepHasControlCharacters",
+	} {
+		env, r := e.runJSON("", "steps", "create", e.fixture.CardInTriage.ID, value)
+		expectCode(t, r, ExitValidation)
+		if env.Meta["apiCode"] != code {
+			t.Errorf("%q: meta %v, want %s", value, env.Meta, code)
+		}
+	}
+	if n := len(e.fixture.CardInTriage.Steps); n != 0 {
+		t.Errorf("%d steps added", n)
+	}
+}
+
+func TestCompleteAndReopenFindTheStepByPositionTextOrID(t *testing.T) {
+	e := newTestEnv(t)
+	steps := withSteps(e)
+	card := e.fixture.CardInTriage.ID
+
+	_, r := e.runJSON("", "steps", "complete", card, "1")
+	expectCode(t, r, ExitOK)
+	writes := e.server.WritingRequests()
+	if last := writes[len(writes)-1]; last.Method != http.MethodPatch || last.Path != "/api/v1/cards/"+card+"/steps/"+steps[0].ID {
+		t.Errorf("request %s %s", last.Method, last.Path)
+	}
+	if body := e.lastWriteBody(); len(body) != 1 || body["completed"] != true || !steps[0].Completed {
+		t.Errorf("body sent %v", body)
+	}
+
+	env, r := e.runJSON("", "steps", "complete", card, "call THE caterer")
+	expectCode(t, r, ExitOK)
+	if !strings.Contains(env.Summary, "already") {
+		t.Errorf("summary %q", env.Summary)
+	}
+
+	_, r = e.runJSON("", "steps", "reopen", card, steps[1].ID)
+	expectCode(t, r, ExitOK)
+	if body := e.lastWriteBody(); body["completed"] != false || steps[1].Completed {
+		t.Errorf("body sent %v", body)
+	}
+}
+
+func TestAStepTextOfTwoStepsIsAmbiguous(t *testing.T) {
+	e := newTestEnv(t)
+	withSteps(e)
+
+	env, r := e.runJSON("", "steps", "complete", e.fixture.CardInTriage.ID, "book the tent")
+	expectCode(t, r, ExitAmbiguous)
+	if !strings.Contains(env.Error, "2 and 3") {
+		t.Errorf("error %q", env.Error)
+	}
+	if n := len(e.server.WritingRequests()); n != 0 {
+		t.Errorf("%d requests written", n)
+	}
+}
+
+func TestAPositionOutsideTheListIsRefused(t *testing.T) {
+	e := newTestEnv(t)
+	withSteps(e)
+	for _, position := range []string{"0", "4", "-1"} {
+		_, r := e.runJSON("", "steps", "delete", e.fixture.CardInTriage.ID, position)
+		expectCode(t, r, ExitUsage)
+	}
+	if n := len(e.server.WritingRequests()); n != 0 {
+		t.Errorf("%d requests written", n)
+	}
+}
+
+func TestStepsDeleteRemovesAStep(t *testing.T) {
+	e := newTestEnv(t)
+	// The fake removes the step from the same slice, so its ID is taken first.
+	removedID := withSteps(e)[1].ID
+	card := e.fixture.CardInTriage
+
+	env, r := e.runJSON("", "steps", "delete", card.ID, "2")
+	expectCode(t, r, ExitOK)
+	writes := e.server.WritingRequests()
+	if len(writes) != 1 || writes[0].Method != http.MethodDelete || writes[0].Path != "/api/v1/cards/"+card.ID+"/steps/"+removedID {
+		t.Errorf("requests %+v", writes)
+	}
+	if len(card.Steps) != 2 || decode(t, env.Data)["wasOnCard"] != true {
+		t.Errorf("steps %v, data %s", card.Steps, env.Data)
+	}
+}
+
+func TestStepsAppearOnTheCard(t *testing.T) {
+	e := newTestEnv(t)
+	withSteps(e)
+
+	r := e.run("", "cards", "show", e.fixture.CardInTriage.ID, "--styled")
+	expectCode(t, r, ExitOK)
+	for _, want := range []string{"## Steps (1/3)", "1. [ ] Call the caterer", "2. [x] Book the tent"} {
+		if !strings.Contains(r.stdout, want) {
+			t.Errorf("missing %q in:\n%s", want, r.stdout)
+		}
 	}
 }

@@ -98,8 +98,15 @@ type Card struct {
 	CompletedBy  *PersonReference  `json:"completedBy"`
 	Assignees    []PersonReference `json:"assignees"` // in the order they were assigned
 	DueOn        *string           `json:"dueOn"`     // the day it is due as YYYY-MM-DD, nil for a card without one
+	Steps        []Step            `json:"steps"`     // in the order the card shows them; only a single card carries them
 	Comments     []Comment         `json:"comments"`
 	AppURL       string            `json:"appUrl"`
+}
+
+type Step struct {
+	ID        string `json:"id"`
+	Title     string `json:"title"`
+	Completed bool   `json:"completed"`
 }
 
 type Comment struct {
