@@ -74,6 +74,13 @@ func renderCard(w io.Writer, card api.Card) {
 	}
 	fmt.Fprintf(w, "URL: %s\n", card.AppURL)
 
+	if len(card.Steps) > 0 {
+		fmt.Fprintf(w, "\n## Steps (%d/%d)\n\n", completedSteps(card.Steps), len(card.Steps))
+		for i, step := range card.Steps {
+			fmt.Fprintln(w, stepLine(i, step))
+		}
+	}
+
 	if description := richtext.ToMarkdown(card.Description); description != "" {
 		fmt.Fprintf(w, "\n## Description\n\n%s\n", description)
 	}

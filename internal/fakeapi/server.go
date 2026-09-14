@@ -30,6 +30,7 @@ const (
 	maxTitleLength       = 200
 	maxDescriptionLength = 10000
 	maxCommentLength     = 10000
+	maxStepLength        = 500
 )
 
 var uuidPattern = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
@@ -72,7 +73,14 @@ type Card struct {
 	CompletedByID string
 	AssigneeIDs   []string // in the order they were assigned
 	DueOn         *string  // YYYY-MM-DD, nil for none
+	Steps         []*Step
 	Comments      []*Comment
+}
+
+type Step struct {
+	ID        string
+	Title     string
+	Completed bool
 }
 
 type Comment struct {
@@ -187,6 +195,9 @@ func New(t testing.TB) (*Server, *Fixture) {
 	mux.HandleFunc("GET /api/v1/projects/{projectId}/people", s.authenticated(s.people))
 	mux.HandleFunc("POST /api/v1/cards/{cardId}/assignees", s.authenticated(s.assignCard))
 	mux.HandleFunc("DELETE /api/v1/cards/{cardId}/assignees/{personId}", s.authenticated(s.unassignCard))
+	mux.HandleFunc("POST /api/v1/cards/{cardId}/steps", s.authenticated(s.addStep))
+	mux.HandleFunc("PATCH /api/v1/cards/{cardId}/steps/{stepId}", s.authenticated(s.updateStep))
+	mux.HandleFunc("DELETE /api/v1/cards/{cardId}/steps/{stepId}", s.authenticated(s.removeStep))
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		// Flow answers an unknown path or a wrong method with an HTML page.
 		w.Header().Set("Content-Type", "text/html")
@@ -606,6 +617,86 @@ func (s *Server) unassignCard(w http.ResponseWriter, r *http.Request, person *Pe
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// addStep puts a step at the end of the list. The line is checked before the
+// card is looked up, in the order the server checks it.
+func (s *Server) addStep(w http.ResponseWriter, r *http.Request, person *Person) {
+	fields, ok := readBody(w, r)
+	if !ok {
+		return
+	}
+	title, ok := stringField(w, fields, "title")
+	if !ok {
+		return
+	}
+	text := phpTrim(deref(title))
+	switch {
+	case utf8.RuneCountInString(text) > maxStepLength:
+		unprocessable(w, "stepTooLong", "The line of a step is too long.")
+		return
+	case strings.IndexFunc(text, unicode.IsControl) >= 0:
+		unprocessable(w, "stepHasControlCharacters", "The line of a step must not contain control characters.")
+		return
+	case text == "":
+		unprocessable(w, "stepMissing", "A step needs a line of text.")
+		return
+	}
+
+	board, column, card := s.visibleCard(r.PathValue("cardId"), person)
+	if card == nil {
+		notFound(w)
+		return
+	}
+	card.Steps = append(card.Steps, &Step{ID: newID(), Title: text})
+	writeJSON(w, http.StatusCreated, s.cardResource(board, column, card))
+}
+
+func (s *Server) updateStep(w http.ResponseWriter, r *http.Request, person *Person) {
+	fields, ok := readBody(w, r)
+	if !ok {
+		return
+	}
+	completed, isFlag := fields["completed"].(bool)
+	if !isFlag {
+		unprocessable(w, "stepCompletedMissing", `Changing a step needs the field "completed" as true or false.`)
+		return
+	}
+
+	board, column, card := s.visibleCard(r.PathValue("cardId"), person)
+	if card == nil {
+		notFound(w)
+		return
+	}
+	index := slices.IndexFunc(card.Steps, func(step *Step) bool { return step.ID == r.PathValue("stepId") })
+	if index < 0 {
+		notFound(w)
+		return
+	}
+	card.Steps[index].Completed = completed
+	writeJSON(w, http.StatusOK, s.cardResource(board, column, card))
+}
+
+// removeStep answers 204 for a step that is not on the card as well, but 404
+// for a card the person may not see.
+func (s *Server) removeStep(w http.ResponseWriter, r *http.Request, person *Person) {
+	_, _, card := s.visibleCard(r.PathValue("cardId"), person)
+	if card == nil {
+		notFound(w)
+		return
+	}
+	card.Steps = slices.DeleteFunc(card.Steps, func(step *Step) bool { return step.ID == r.PathValue("stepId") })
+
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func stepResources(card *Card) []any {
+	list := []any{}
+	for _, step := range card.Steps {
+		list = append(list, map[string]any{"id": step.ID, "title": step.Title, "completed": step.Completed})
+	}
+	return list
+}
+
 func notAProjectMember(w http.ResponseWriter) {
 	unprocessable(w, "personNotAProjectMember", "Only a member of the project of the card can be assigned to it.")
 }
@@ -712,7 +803,7 @@ func (s *Server) cardResource(board *Board, column *Column, card *Card) map[stri
 		"commentCount": len(card.Comments), "createdAt": timestamp(card.CreatedAt),
 		"creator": s.personReference(card.CreatorID), "completedAt": timestampOrNil(card.CompletedAt),
 		"completedBy": s.personReferenceOrNil(card.CompletedByID), "assignees": s.assigneeReferences(card),
-		"dueOn": card.DueOn, "comments": comments,
+		"dueOn": card.DueOn, "steps": stepResources(card), "comments": comments,
 		"appUrl": s.cardURL(board, card),
 	}
 }
