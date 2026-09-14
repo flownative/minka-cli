@@ -11,8 +11,9 @@ lokale Instanz geprüft, Befunde des Reviews eingearbeitet.
 Dogfooding in Minka wartet auf eine interne Alpha. Neue Features gibt es nur
 auf neuen Auftrag.
 
-API-Stand, gegen den gebaut ist: Minka `60c7257` (API-1 bis API-5, mit der
-erweiterten Allowlist aus E-060).
+API-Stand, gegen den gebaut ist: Minka `92f10e1` (API-1 bis API-5,
+erweiterte Allowlist aus E-060, Zuständige an Karten, neue Karten oben in der
+Spalte).
 
 Befehle:
 
@@ -21,7 +22,8 @@ minka auth login|status|logout
 minka me
 minka projects list
 minka boards list <projectId> | show <boardId>
-minka cards show|create|edit|move|done|delete
+minka people list <projectId>
+minka cards show|create|edit|move|assign|unassign|done|delete
 minka comments create <cardId> <text|->
 minka commands            Katalog aller Befehle mit Flags
 minka version
@@ -112,6 +114,22 @@ Auf Roberts Wunsch folgen die Konventionen **basecamp-cli**. Den Umfang
   Exit 2 statt Exit 0, denn eine Karte im Papierkorb sieht aus wie eine, die
   es nie gab. Eine Rückfrage gibt es nicht, weil Agenten nicht interaktiv
   arbeiten.
+- **Zuständige:**
+  - `cards assign` und `cards unassign` nehmen je eine Person: ID, `me`,
+    E-Mail-Adresse oder Namen. Ein Name muss genau eine Person treffen, ohne
+    Rücksicht auf Groß- und Kleinschreibung; zwei Treffer ergeben Exit 8.
+  - Aufgelöst wird gegen die Mitglieder des Projekts, beim Abnehmen zuerst
+    gegen die Zuständigen der Karte, damit auch Ausgeschiedene gehen.
+  - Eine UUID, die niemand in der Liste trägt, geht unverändert an den
+    Server, der mit `personNotAProjectMember` begründet.
+  - Doppeltes Zuweisen und Abnehmen ist kein Fehler. Die Zusammenfassung sagt,
+    ob sich etwas geändert hat (201 oder 200 beim Zuweisen, `wasAssigned`
+    beim Abnehmen).
+  - `cards create --assignee` (wiederholbar) löst alle Personen vor dem
+    Anlegen auf und weist sie danach einzeln zu. Die API nimmt beim Anlegen
+    keine Zuständigen an, also ist das keine Transaktion. Scheitert eine
+    Zuweisung, nennt der Fehler die angelegte Karte und den Befehl zum
+    Wiederholen.
 
 ## Tests
 
@@ -148,6 +166,13 @@ genannte Test wird rot. Zuletzt am 13.09.2026 nach dem Review ausgeführt:
 | Warnungen bei `--quiet` auf stderr | `TestQuietPrintsWarningsToStderr` |
 | stdin nicht vom Terminal | `TestTextIsNotReadFromATerminal` |
 | `cards done` idempotent | `TestDoneCompletesACardOnlyOnce` |
+| Name ohne Treffer geht nicht an den Server | `TestSomebodyOutsideTheProjectIsNotAssigned`, `TestCreateAssignsThePeopleItFoundBeforeCreating` |
+| Zwei Personen mit gleichem Namen mehrdeutig | `TestANameOfTwoPeopleIsAmbiguous` |
+| Abnehmen findet Ausgeschiedene über die Zuständigen | `TestUnassignFindsSomebodyWhoLeftTheProject` |
+| Personen-ID im Pfad escaped | `TestIdentifiersAreEscapedInThePath` (api) |
+| Schon zugewiesen wird gemeldet (200 statt 201) | `TestAssigningTwiceSucceedsAndSaysSo` |
+| E-Mail-Adresse als Person | `TestAssignFindsThePersonByIDMeEmailOrName` |
+| Personen vor dem Anlegen aufgelöst | `TestCreateAssignsThePeopleItFoundBeforeCreating` |
 | 204 ohne Rumpf ist Erfolg | `TestAnEmptyAnswerIsASuccess` (api), `TestDeleteMovesACardToTheTrash` |
 | Nachbar in Zielspalte geprüft | `TestMoveNextToACardOutsideTheTargetColumnIsRefused` |
 | Done ohne Platzierung | `TestDoneTakesNoPlacement` |
@@ -233,13 +258,29 @@ oben; 404 nur bei einer ungültigen ID. Der Fake folgte dem schon.
 
 ## Offene Punkte
 
+- Die Nachricht zu `92f10e1` weicht vom Code ab, gebaut ist gegen den Code:
+  - Zuständige tragen nur `id` und `name`, keine Initialen.
+  - `POST /boards/{b}/cards` nimmt über die API keine Zuständigen an. Das kann
+    nur der Web-Dialog.
+
+  Das ist an die Minka-Koordination gemeldet. Nimmt die API sie später an,
+  schickt `cards create --assignee` sie im Anlegen mit.
+
 - Das Token `minka-cli-smoke` liegt in `~/.config/minka/config.json`.
   Widerrufen beim Umstieg auf das Dogfooding zur internen Alpha. Das
   Agentenkonto „Claude (Robert)" ist schon Mitglied im Minka-Projekt.
-- Nach der Alpha-Vorbereitung erzeugt Minka neue IDs als UUID v7, weiter als
-  UUID-String. Die ID-Prüfung der CLI (`uuidPattern` in `internal/cli/root.go`)
-  prüft keine Version und passt damit. Nachsehen, wenn minka-8a den Commit
-  meldet.
+- Zuständige sind am 14.09.2026 live geprüft:
+  - `people list` für „Test-Projekt" funktioniert. Dort heißen zwei
+    Mitglieder „Live", der Fall „Name mehrdeutig" ist also real.
+  - `cards create --assignee me` weist zu, und die neue Karte lag oben in
+    Triage.
+  - Doppeltes Zuweisen meldet „already", Abnehmen und doppeltes Abnehmen
+    melden sich richtig.
+  - Eine fremde UUID endet mit Exit 9 `personNotAProjectMember`, ein
+    unbekannter Name mit Exit 1.
+  - Die Testkarte ist wieder gelöscht.
+  - Die ID der neuen Karte war schon eine UUID v7 und ging problemlos durch
+    die ID-Prüfung.
 - `cards delete` ist am 13.09.2026 live geprüft: Eine frisch angelegte
   Karte kam in den Papierkorb, danach gaben `cards show` und ein zweites
   `cards delete` Exit 2, und das Board listet sie nicht mehr.

@@ -22,11 +22,13 @@ become plain text.
 Use --description - to read it from stdin.`
 
 func (a *app) newCardsCmd() *cobra.Command {
-	return group("cards", "Show, create, edit, move, complete and delete cards",
+	return group("cards", "Show, create, edit, move, assign, complete and delete cards",
 		a.newCardsShowCmd(),
 		a.newCardsCreateCmd(),
 		a.newCardsEditCmd(),
 		a.newCardsMoveCmd(),
+		a.newCardsAssignCmd(),
+		a.newCardsUnassignCmd(),
 		a.newCardsDoneCmd(),
 		a.newCardsDeleteCmd(),
 	)
@@ -62,12 +64,17 @@ into the same HTML; in JSON it is the HTML the server stores.`,
 
 func (a *app) newCardsCreateCmd() *cobra.Command {
 	var boardID, column, title, description, descriptionFormat string
+	var assignees []string
 
 	cmd := &cobra.Command{
 		Use:   "create",
 		Short: "Create a card on a board",
 		Long: "Creates a card in Triage, or in the column given with --column.\n" +
-			"Not now and Done take no new cards.\n\n" + columnHelp + "\n\n" + descriptionHelp,
+			"Not now and Done take no new cards. A new card goes to the top of its column.\n\n" +
+			columnHelp + "\n\n" + descriptionHelp + "\n\n" +
+			"--assignee assigns a member of the project right after the card is created,\n" +
+			"and can be given more than once. The people are looked up before the card\n" +
+			"is created. " + personHelp,
 		Example: `  minka cards create --board 0199... --title "Fix the login"
   minka cards create --board 0199... --column Doing --title "Review" --description - < notes.md`,
 		Args: requireArgs(),
@@ -95,12 +102,23 @@ func (a *app) newCardsCreateCmd() *cobra.Command {
 				return err
 			}
 
-			if cmd.Flags().Changed("column") {
-				board, err := s.client.Board(a.ctx, boardID)
+			var board *api.Board
+			if cmd.Flags().Changed("column") || len(assignees) > 0 {
+				result, err := s.client.Board(a.ctx, boardID)
 				if err != nil {
 					return s.fail(err)
 				}
-				target, err := resolveColumn(board.Value, column)
+				board = &result.Value
+			}
+
+			// A name that matches nobody is refused before a card exists.
+			people, err := a.resolveMembers(s, board, assignees)
+			if err != nil {
+				return err
+			}
+
+			if cmd.Flags().Changed("column") {
+				target, err := resolveColumn(*board, column)
 				if err != nil {
 					return err
 				}
@@ -117,6 +135,18 @@ func (a *app) newCardsCreateCmd() *cobra.Command {
 			card, err := s.client.CreateCard(a.ctx, boardID, input)
 			if err != nil {
 				return s.fail(err)
+			}
+			// The API creates a card without assignees, so they follow one
+			// request each.
+			for _, person := range people {
+				assigned, err := s.client.AssignCard(a.ctx, card.Value.ID, person.ID)
+				if err != nil {
+					e := s.fail(err)
+					e.Message = fmt.Sprintf("card %s was created, but assigning %s failed: %s", card.Value.ID, nameOf(person, nil), e.Message)
+					e.Hint = "Assign again with: minka cards assign " + card.Value.ID + " " + person.ID
+					return e
+				}
+				card = assigned
 			}
 
 			return a.ok(success{
@@ -135,6 +165,7 @@ func (a *app) newCardsCreateCmd() *cobra.Command {
 	flags.StringVar(&boardID, "board", "", "ID of the board")
 	flags.StringVar(&title, "title", "", "Title of the card")
 	flags.StringVar(&column, "column", "", "Column for the card (default: Triage)")
+	flags.StringArrayVar(&assignees, "assignee", nil, "Person to assign: ID, me, e-mail address or name (repeatable)")
 	flags.StringVar(&description, "description", "", "Description, or - to read it from stdin")
 	flags.StringVar(&descriptionFormat, "description-format", "markdown", "Format of the description: markdown or html")
 	_ = cmd.MarkFlagRequired("board")

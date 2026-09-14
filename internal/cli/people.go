@@ -1,0 +1,292 @@
+package cli
+
+import (
+	"fmt"
+	"io"
+	"net/http"
+	"strings"
+	"text/tabwriter"
+
+	"github.com/flownative/minka-cli/internal/api"
+	"github.com/spf13/cobra"
+)
+
+const personHelp = `A person is given by ID, as "me", by e-mail address or by name. A name has to
+match exactly one person, ignoring case.`
+
+func (a *app) newPeopleCmd() *cobra.Command {
+	return group("people", "List the members of a project", a.newPeopleListCmd())
+}
+
+func (a *app) newPeopleListCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "list <projectId>",
+		Short: "List the members of a project, the people its cards can be assigned to",
+		Args:  requireArgs("projectId"),
+		RunE: func(_ *cobra.Command, args []string) error {
+			s, err := a.session()
+			if err != nil {
+				return err
+			}
+			people, err := s.client.People(a.ctx, args[0])
+			if err != nil {
+				return s.fail(err)
+			}
+
+			return a.ok(success{
+				data:    people.Raw,
+				summary: plural(len(people.Value), "person", "people"),
+				breadcrumbs: []Breadcrumb{
+					{Action: "assign", Cmd: "minka cards assign <cardId> <person>", Description: "Assign a member to a card"},
+				},
+				text: func(w io.Writer) {
+					if len(people.Value) == 0 {
+						fmt.Fprintln(w, "No people.")
+						return
+					}
+					table := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
+					fmt.Fprintln(table, "ID\tNAME\tE-MAIL")
+					for _, person := range people.Value {
+						fmt.Fprintf(table, "%s\t%s\t%s\n", person.ID, person.Name, person.EmailAddress)
+					}
+					_ = table.Flush()
+				},
+			})
+		},
+	}
+}
+
+func (a *app) newCardsAssignCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "assign <cardId> <person>",
+		Short: "Assign a member of the project to a card",
+		Long: `Assigns one person to a card. Only members of the project of the card can be
+assigned. Assigning somebody who is assigned already changes nothing and
+succeeds.
+
+` + personHelp,
+		Example: `  minka cards assign 0199... me
+  minka cards assign 0199... anke@example.com`,
+		Args: requireArgs("cardId", "person"),
+		RunE: func(_ *cobra.Command, args []string) error {
+			s, err := a.session()
+			if err != nil {
+				return err
+			}
+			card, err := s.client.Card(a.ctx, args[0])
+			if err != nil {
+				return s.fail(err)
+			}
+			members, err := s.client.People(a.ctx, card.Value.ProjectID)
+			if err != nil {
+				return s.fail(err)
+			}
+			person, err := resolvePerson(args[1], members.Value, a.meID(s))
+			if err != nil {
+				return err
+			}
+
+			assigned, err := s.client.AssignCard(a.ctx, card.Value.ID, person.ID)
+			if err != nil {
+				return s.fail(err)
+			}
+
+			name := nameOf(person, assigned.Value.Assignees)
+			summary := fmt.Sprintf("Assigned %s to card %s", name, assigned.Value.Title)
+			if assigned.StatusCode == http.StatusOK {
+				summary = fmt.Sprintf("%s was assigned to card %s already", name, assigned.Value.Title)
+			}
+			return a.ok(success{
+				data:        assigned.Raw,
+				summary:     summary,
+				breadcrumbs: cardBreadcrumbs(assigned.Value.ID),
+				text: func(w io.Writer) {
+					fmt.Fprintf(w, "%s.\n%s\n", summary, assigned.Value.AppURL)
+				},
+			})
+		},
+	}
+}
+
+func (a *app) newCardsUnassignCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "unassign <cardId> <person>",
+		Short: "Take a person off a card",
+		Long: `Takes one person off a card. Taking off somebody who is not assigned changes
+nothing and succeeds. Somebody who left the project can still be taken off.
+
+` + personHelp,
+		Example: `  minka cards unassign 0199... me`,
+		Args:    requireArgs("cardId", "person"),
+		RunE: func(_ *cobra.Command, args []string) error {
+			s, err := a.session()
+			if err != nil {
+				return err
+			}
+			card, err := s.client.Card(a.ctx, args[0])
+			if err != nil {
+				return s.fail(err)
+			}
+			members, err := s.client.People(a.ctx, card.Value.ProjectID)
+			if err != nil {
+				return s.fail(err)
+			}
+
+			// The assignees come first: they include people who left the project.
+			candidates := make([]api.ProjectMember, 0, len(card.Value.Assignees)+len(members.Value))
+			known := map[string]bool{}
+			for _, assignee := range card.Value.Assignees {
+				candidates = append(candidates, api.ProjectMember{ID: assignee.ID, Name: assignee.Name})
+				known[assignee.ID] = true
+			}
+			for _, member := range members.Value {
+				if !known[member.ID] {
+					candidates = append(candidates, member)
+				}
+			}
+			person, err := resolvePerson(args[1], candidates, a.meID(s))
+			if err != nil {
+				return err
+			}
+
+			if err := s.client.UnassignCard(a.ctx, card.Value.ID, person.ID); err != nil {
+				return s.fail(err)
+			}
+
+			wasAssigned := false
+			for _, assignee := range card.Value.Assignees {
+				wasAssigned = wasAssigned || assignee.ID == person.ID
+			}
+			name := nameOf(person, card.Value.Assignees)
+			summary := fmt.Sprintf("Took %s off card %s", name, card.Value.Title)
+			if !wasAssigned {
+				summary = fmt.Sprintf("%s was not assigned to card %s", name, card.Value.Title)
+			}
+			return a.ok(success{
+				data:        map[string]any{"cardId": card.Value.ID, "personId": person.ID, "wasAssigned": wasAssigned},
+				summary:     summary,
+				breadcrumbs: cardBreadcrumbs(card.Value.ID),
+				text: func(w io.Writer) {
+					fmt.Fprintf(w, "%s.\n%s\n", summary, card.Value.AppURL)
+				},
+			})
+		},
+	}
+}
+
+// resolveMembers finds the people to assign to a new card on a board, before
+// the card is created.
+func (a *app) resolveMembers(s *session, board *api.Board, values []string) ([]api.ProjectMember, error) {
+	if len(values) == 0 {
+		return nil, nil
+	}
+	members, err := s.client.People(a.ctx, board.ProjectID)
+	if err != nil {
+		return nil, s.fail(err)
+	}
+
+	var resolved []api.ProjectMember
+	seen := map[string]bool{}
+	for _, value := range values {
+		person, err := resolvePerson(value, members.Value, a.meID(s))
+		if err != nil {
+			return nil, err
+		}
+		if !seen[person.ID] {
+			seen[person.ID] = true
+			resolved = append(resolved, person)
+		}
+	}
+	return resolved, nil
+}
+
+// meID returns a lookup of the ID of the person of the token, which asks the
+// server only when "me" is used.
+func (a *app) meID(s *session) func() (string, error) {
+	return func() (string, error) {
+		me, err := s.client.Me(a.ctx)
+		if err != nil {
+			return "", s.fail(err)
+		}
+		return me.Value.ID, nil
+	}
+}
+
+// resolvePerson finds a person among candidates by ID, "me", e-mail address or
+// name. An ID that matches no candidate is passed on, so the server says why
+// it refuses it.
+func resolvePerson(value string, candidates []api.ProjectMember, me func() (string, error)) (api.ProjectMember, error) {
+	wanted := strings.TrimSpace(value)
+	if strings.EqualFold(wanted, "me") {
+		id, err := me()
+		if err != nil {
+			return api.ProjectMember{}, err
+		}
+		wanted = id
+	}
+
+	for _, candidate := range candidates {
+		if candidate.ID == wanted || (candidate.EmailAddress != "" && strings.EqualFold(candidate.EmailAddress, wanted)) {
+			return candidate, nil
+		}
+	}
+
+	var matches []api.ProjectMember
+	for _, candidate := range candidates {
+		if strings.EqualFold(candidate.Name, wanted) {
+			matches = append(matches, candidate)
+		}
+	}
+	switch {
+	case len(matches) == 1:
+		return matches[0], nil
+	case len(matches) > 1:
+		return api.ProjectMember{}, &Error{
+			Code:    CodeAmbiguous,
+			Message: fmt.Sprintf("%q matches %d people", value, len(matches)),
+			Hint:    "Give the ID or the e-mail address. Candidates: " + describePeople(matches),
+		}
+	case uuidPattern.MatchString(wanted):
+		return api.ProjectMember{ID: wanted}, nil
+	default:
+		return api.ProjectMember{}, &Error{
+			Code:    CodeUsage,
+			Message: fmt.Sprintf("nobody in the project matches %q", value),
+			Hint:    "People: " + describePeople(candidates),
+		}
+	}
+}
+
+func describePeople(people []api.ProjectMember) string {
+	var names []string
+	for _, person := range people {
+		if person.EmailAddress != "" {
+			names = append(names, fmt.Sprintf("%s <%s> (%s)", person.Name, person.EmailAddress, person.ID))
+		} else {
+			names = append(names, fmt.Sprintf("%s (%s)", person.Name, person.ID))
+		}
+	}
+	return strings.Join(names, "; ")
+}
+
+// nameOf is the name of a person, taken from a list of assignees when the
+// person was given only by ID.
+func nameOf(person api.ProjectMember, assignees []api.PersonReference) string {
+	if person.Name != "" {
+		return person.Name
+	}
+	for _, assignee := range assignees {
+		if assignee.ID == person.ID {
+			return assignee.Name
+		}
+	}
+	return person.ID
+}
+
+func assigneeNames(assignees []api.PersonReference) string {
+	names := make([]string, len(assignees))
+	for i, assignee := range assignees {
+		names[i] = assignee.Name
+	}
+	return strings.Join(names, ", ")
+}

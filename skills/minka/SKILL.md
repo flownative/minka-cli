@@ -91,6 +91,9 @@ minka cards edit <cardId> [--title "New"] [--description - < body.md] --json
 minka cards move <cardId> --column <column> [--top | --bottom | --after <cardId> | --before <cardId>] --json
 minka cards done <cardId> --json
 minka cards delete <cardId> --json
+minka people list <projectId> --json
+minka cards assign <cardId> <person> --json
+minka cards unassign <cardId> <person> --json
 minka comments create <cardId> - --json < comment.txt
 ```
 
@@ -110,6 +113,23 @@ such as `Doing`.
   (exit 8); the hint lists the candidate IDs.
 - Done lists only the 25 cards completed last; `cardCount` counts all.
   Read an older card by its ID.
+
+## People and assignments
+
+- A card has any number of assignees, listed in `assignees` as `{id, name}`
+  in the order they were assigned.
+- `<person>` is an ID, `me`, an e-mail address or a name (case-insensitive,
+  it has to match one person; two people with that name give exit 8).
+- Only members of the card's project can be assigned; `minka people list
+  <projectId>` shows them. A UUID of somebody else gives exit 9 with
+  `meta.apiCode` `personNotAProjectMember`.
+- Assigning somebody who is assigned already succeeds, and the summary says
+  so. Taking off somebody who is not assigned succeeds as well, and people who
+  left the project can still be taken off.
+- `cards create --assignee <person>` (repeatable) looks the people up before
+  the card exists and assigns them right after creating it. If an assignment
+  fails then, the error names the created card and the command to repeat.
+- New cards go to the top of their column.
 
 ## Descriptions and comments
 

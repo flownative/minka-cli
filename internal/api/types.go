@@ -58,15 +58,22 @@ type Column struct {
 }
 
 type BoardCard struct {
-	ID             string           `json:"id"`
-	Title          string           `json:"title"`
-	HasDescription bool             `json:"hasDescription"`
-	CommentCount   int              `json:"commentCount"`
-	CreatedAt      string           `json:"createdAt"`
-	Creator        PersonReference  `json:"creator"`
-	CompletedAt    *string          `json:"completedAt"`
-	CompletedBy    *PersonReference `json:"completedBy"`
-	AppURL         string           `json:"appUrl"`
+	ID             string            `json:"id"`
+	Title          string            `json:"title"`
+	HasDescription bool              `json:"hasDescription"`
+	CommentCount   int               `json:"commentCount"`
+	CreatedAt      string            `json:"createdAt"`
+	Creator        PersonReference   `json:"creator"`
+	CompletedAt    *string           `json:"completedAt"`
+	CompletedBy    *PersonReference  `json:"completedBy"`
+	Assignees      []PersonReference `json:"assignees"` // in the order they were assigned
+	AppURL         string            `json:"appUrl"`
+}
+
+type ProjectMember struct {
+	ID           string `json:"id"`
+	Name         string `json:"name"` // the e-mail address until the person gives a name
+	EmailAddress string `json:"emailAddress"`
 }
 
 type ColumnReference struct {
@@ -77,19 +84,20 @@ type ColumnReference struct {
 }
 
 type Card struct {
-	ID           string           `json:"id"`
-	ProjectID    string           `json:"projectId"`
-	BoardID      string           `json:"boardId"`
-	Title        string           `json:"title"`
-	Description  string           `json:"description"` // sanitized HTML, empty when the card has none
-	Column       ColumnReference  `json:"column"`
-	CommentCount int              `json:"commentCount"`
-	CreatedAt    string           `json:"createdAt"`
-	Creator      PersonReference  `json:"creator"`
-	CompletedAt  *string          `json:"completedAt"`
-	CompletedBy  *PersonReference `json:"completedBy"`
-	Comments     []Comment        `json:"comments"`
-	AppURL       string           `json:"appUrl"`
+	ID           string            `json:"id"`
+	ProjectID    string            `json:"projectId"`
+	BoardID      string            `json:"boardId"`
+	Title        string            `json:"title"`
+	Description  string            `json:"description"` // sanitized HTML, empty when the card has none
+	Column       ColumnReference   `json:"column"`
+	CommentCount int               `json:"commentCount"`
+	CreatedAt    string            `json:"createdAt"`
+	Creator      PersonReference   `json:"creator"`
+	CompletedAt  *string           `json:"completedAt"`
+	CompletedBy  *PersonReference  `json:"completedBy"`
+	Assignees    []PersonReference `json:"assignees"` // in the order they were assigned
+	Comments     []Comment         `json:"comments"`
+	AppURL       string            `json:"appUrl"`
 }
 
 type Comment struct {

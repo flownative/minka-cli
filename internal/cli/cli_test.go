@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/flownative/minka-cli/internal/api"
 	"github.com/flownative/minka-cli/internal/config"
 	"github.com/flownative/minka-cli/internal/fakeapi"
 	"github.com/flownative/minka-cli/internal/markdown"
@@ -748,7 +749,7 @@ func TestTheCatalogListsEveryCommandWithItsFlags(t *testing.T) {
 	for _, cmd := range catalog.Commands {
 		byName[cmd.Command] = cmd
 	}
-	for _, name := range []string{"minka auth login", "minka me", "minka projects list", "minka boards list", "minka boards show", "minka cards show", "minka cards create", "minka cards edit", "minka cards move", "minka cards done", "minka cards delete", "minka comments create"} {
+	for _, name := range []string{"minka auth login", "minka me", "minka projects list", "minka boards list", "minka boards show", "minka cards show", "minka cards create", "minka cards edit", "minka cards move", "minka cards done", "minka cards delete", "minka cards assign", "minka cards unassign", "minka people list", "minka comments create"} {
 		if _, ok := byName[name]; !ok {
 			t.Errorf("catalog misses %q", name)
 		}
@@ -981,5 +982,171 @@ func TestTrashIsAnotherNameForDelete(t *testing.T) {
 	expectCode(t, r, ExitOK)
 	if !strings.Contains(r.stdout, "to the trash") {
 		t.Errorf("stdout %q", r.stdout)
+	}
+}
+
+func TestPeopleListShowsTheMembersOfAProject(t *testing.T) {
+	e := newTestEnv(t)
+	env, r := e.runJSON("", "people", "list", e.fixture.Project.ID)
+	expectCode(t, r, ExitOK)
+
+	var people []api.ProjectMember
+	if err := json.Unmarshal(env.Data, &people); err != nil {
+		t.Fatal(err)
+	}
+	var names []string
+	for _, person := range people {
+		names = append(names, person.Name)
+	}
+	if got := strings.Join(names, ","); got != "Bruno,Anke,Claude (Bruno)" {
+		t.Errorf("people %q", got)
+	}
+
+	_, r = e.runJSON("", "people", "list", e.fixture.OtherProject.ID)
+	expectCode(t, r, ExitNotFound)
+}
+
+func TestAssignFindsThePersonByIDMeEmailOrName(t *testing.T) {
+	tests := map[string]func(f *fakeapi.Fixture) (string, string){
+		"me":     func(f *fakeapi.Fixture) (string, string) { return "me", f.Bruno.ID },
+		"e-mail": func(f *fakeapi.Fixture) (string, string) { return "Anke@Example.com", f.Anke.ID },
+		"name":   func(f *fakeapi.Fixture) (string, string) { return "anke", f.Anke.ID },
+		"ID":     func(f *fakeapi.Fixture) (string, string) { return f.Anke.ID, f.Anke.ID },
+	}
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			e := newTestEnv(t)
+			value, want := test(e.fixture)
+
+			env, r := e.runJSON("", "cards", "assign", e.fixture.CardInTriage.ID, value)
+			expectCode(t, r, ExitOK)
+			if got := e.lastWriteBody()["personId"]; got != want {
+				t.Errorf("personId sent %v, want %s", got, want)
+			}
+			var card api.Card
+			if err := json.Unmarshal(env.Data, &card); err != nil || len(card.Assignees) != 1 || card.Assignees[0].ID != want {
+				t.Errorf("card %s", env.Data)
+			}
+		})
+	}
+}
+
+func TestAssigningTwiceSucceedsAndSaysSo(t *testing.T) {
+	e := newTestEnv(t)
+	expectCode(t, e.run("", "cards", "assign", e.fixture.CardInTriage.ID, "me", "--json"), ExitOK)
+
+	env, r := e.runJSON("", "cards", "assign", e.fixture.CardInTriage.ID, "me")
+	expectCode(t, r, ExitOK)
+	if !strings.Contains(env.Summary, "already") {
+		t.Errorf("summary %q", env.Summary)
+	}
+}
+
+func TestSomebodyOutsideTheProjectIsNotAssigned(t *testing.T) {
+	e := newTestEnv(t)
+
+	env, r := e.runJSON("", "cards", "assign", e.fixture.CardInTriage.ID, e.fixture.Stranger.ID)
+	expectCode(t, r, ExitValidation)
+	if env.Meta["apiCode"] != "personNotAProjectMember" {
+		t.Errorf("meta %v", env.Meta)
+	}
+
+	before := len(e.server.WritingRequests())
+	_, r = e.runJSON("", "cards", "assign", e.fixture.CardInTriage.ID, "Stranger")
+	expectCode(t, r, ExitUsage)
+	if n := len(e.server.WritingRequests()); n != before {
+		t.Errorf("%d assignments sent for a name nobody in the project has", n-before)
+	}
+}
+
+func TestANameOfTwoPeopleIsAmbiguous(t *testing.T) {
+	e := newTestEnv(t)
+	other := &fakeapi.Person{ID: "44444444-4444-4444-8444-444444444444", Name: "Anke", Email: "anke2@example.com"}
+	e.server.People[other.ID] = other
+	e.fixture.Project.MemberIDs = append(e.fixture.Project.MemberIDs, other.ID)
+
+	env, r := e.runJSON("", "cards", "assign", e.fixture.CardInTriage.ID, "Anke")
+	expectCode(t, r, ExitAmbiguous)
+	if !strings.Contains(env.Hint, other.ID) || !strings.Contains(env.Hint, e.fixture.Anke.ID) {
+		t.Errorf("hint %q", env.Hint)
+	}
+	if n := len(e.server.WritingRequests()); n != 0 {
+		t.Errorf("%d assignments sent", n)
+	}
+}
+
+func TestUnassignTakesSomebodyOffAndSucceedsAgain(t *testing.T) {
+	e := newTestEnv(t)
+	card := e.fixture.CardInTriage
+	card.AssigneeIDs = []string{e.fixture.Anke.ID}
+
+	env, r := e.runJSON("", "cards", "unassign", card.ID, "anke")
+	expectCode(t, r, ExitOK)
+	writes := e.server.WritingRequests()
+	if len(writes) != 1 || writes[0].Method != http.MethodDelete || writes[0].Path != "/api/v1/cards/"+card.ID+"/assignees/"+e.fixture.Anke.ID {
+		t.Errorf("requests %+v", writes)
+	}
+	if data := decode(t, env.Data); data["wasAssigned"] != true || len(card.AssigneeIDs) != 0 {
+		t.Errorf("data %s, assignees %v", env.Data, card.AssigneeIDs)
+	}
+
+	env, r = e.runJSON("", "cards", "unassign", card.ID, "anke")
+	expectCode(t, r, ExitOK)
+	if !strings.Contains(env.Summary, "was not assigned") {
+		t.Errorf("summary %q", env.Summary)
+	}
+}
+
+func TestUnassignFindsSomebodyWhoLeftTheProject(t *testing.T) {
+	e := newTestEnv(t)
+	former := &fakeapi.Person{ID: "33333333-3333-4333-8333-333333333333", Name: "Former", Email: "former@example.com"}
+	e.server.People[former.ID] = former
+	e.fixture.CardInTriage.AssigneeIDs = []string{former.ID}
+
+	_, r := e.runJSON("", "cards", "unassign", e.fixture.CardInTriage.ID, "former")
+	expectCode(t, r, ExitOK)
+	if writes := e.server.WritingRequests(); len(writes) != 1 || !strings.HasSuffix(writes[0].Path, "/assignees/"+former.ID) {
+		t.Errorf("requests %+v", writes)
+	}
+}
+
+func TestCreateAssignsThePeopleItFoundBeforeCreating(t *testing.T) {
+	e := newTestEnv(t)
+	env, r := e.runJSON("", "cards", "create", "--board", e.fixture.Board.ID, "--title", "x", "--assignee", "me", "--assignee", "anke@example.com", "--assignee", "Bruno")
+	expectCode(t, r, ExitOK)
+
+	var paths []string
+	for _, request := range e.server.WritingRequests() {
+		paths = append(paths, request.Method+" "+request.Path)
+	}
+	if len(paths) != 3 || !strings.HasSuffix(paths[0], "/cards") || !strings.HasSuffix(paths[1], "/assignees") || !strings.HasSuffix(paths[2], "/assignees") {
+		t.Errorf("requests %v", paths)
+	}
+	var card api.Card
+	if err := json.Unmarshal(env.Data, &card); err != nil || len(card.Assignees) != 2 {
+		t.Errorf("card %s", env.Data)
+	}
+
+	e = newTestEnv(t)
+	_, r = e.runJSON("", "cards", "create", "--board", e.fixture.Board.ID, "--title", "x", "--assignee", "Nobody")
+	expectCode(t, r, ExitUsage)
+	if n := len(e.server.WritingRequests()); n != 0 {
+		t.Errorf("%d requests written for a person nobody matches", n)
+	}
+}
+
+func TestAssigneesAppearInTheTextOutput(t *testing.T) {
+	e := newTestEnv(t)
+	e.fixture.CardInTriage.AssigneeIDs = []string{e.fixture.Anke.ID, e.fixture.Bruno.ID}
+
+	r := e.run("", "boards", "show", e.fixture.Board.ID, "--styled")
+	expectCode(t, r, ExitOK)
+	if !strings.Contains(r.stdout, "assigned to Anke, Bruno") {
+		t.Errorf("board:\n%s", r.stdout)
+	}
+	r = e.run("", "cards", "show", e.fixture.CardInTriage.ID, "--styled")
+	expectCode(t, r, ExitOK)
+	if !strings.Contains(r.stdout, "Assigned to: Anke, Bruno") {
+		t.Errorf("card:\n%s", r.stdout)
 	}
 }
