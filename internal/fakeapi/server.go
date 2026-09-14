@@ -70,6 +70,7 @@ type Card struct {
 	CreatorID     string
 	CompletedAt   *time.Time
 	CompletedByID string
+	AssigneeIDs   []string // in the order they were assigned
 	Comments      []*Comment
 }
 
@@ -108,6 +109,8 @@ type Fixture struct {
 	Token         string
 	StrangerToken string
 	Bruno         *Person
+	Anke          *Person // a member of the project besides Bruno
+	Stranger      *Person // no member of the project
 	Agent         *Person
 	Project       *Project
 	Board         *Board
@@ -135,14 +138,15 @@ func New(t testing.TB) (*Server, *Fixture) {
 	bruno := &Person{ID: newID(), Name: "Bruno", Email: "bruno@example.com"}
 	stranger := &Person{ID: newID(), Name: "Stranger", Email: "stranger@example.com"}
 	agent := &Person{ID: newID(), Name: "Claude (Bruno)", Email: "claude-bruno@agents.invalid", PrincipalID: bruno.ID}
-	for _, p := range []*Person{bruno, stranger, agent} {
+	anke := &Person{ID: newID(), Name: "Anke", Email: "anke@example.com"}
+	for _, p := range []*Person{bruno, anke, stranger, agent} {
 		s.People[p.ID] = p
 	}
 	s.Tokens["minka_pat_bruno"] = bruno.ID
 	s.Tokens["minka_pat_stranger"] = stranger.ID
 	s.Tokens["minka_pat_agent"] = agent.ID
 
-	project := &Project{ID: newID(), Name: "Test-Projekt", Description: "For trying things", MemberIDs: []string{bruno.ID, agent.ID}}
+	project := &Project{ID: newID(), Name: "Test-Projekt", Description: "For trying things", MemberIDs: []string{bruno.ID, anke.ID, agent.ID}}
 	triage := &Column{ID: newID(), Type: "triage"}
 	doingTitle := "Doing"
 	doing := &Column{ID: newID(), Type: "column", CustomTitle: &doingTitle}
@@ -179,6 +183,9 @@ func New(t testing.TB) (*Server, *Fixture) {
 	mux.HandleFunc("POST /api/v1/cards/{cardId}/moves", s.authenticated(s.moveCard))
 	mux.HandleFunc("POST /api/v1/cards/{cardId}/comments", s.authenticated(s.writeComment))
 	mux.HandleFunc("DELETE /api/v1/cards/{cardId}", s.authenticated(s.removeCard))
+	mux.HandleFunc("GET /api/v1/projects/{projectId}/people", s.authenticated(s.people))
+	mux.HandleFunc("POST /api/v1/cards/{cardId}/assignees", s.authenticated(s.assignCard))
+	mux.HandleFunc("DELETE /api/v1/cards/{cardId}/assignees/{personId}", s.authenticated(s.unassignCard))
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		// Flow answers an unknown path or a wrong method with an HTML page.
 		w.Header().Set("Content-Type", "text/html")
@@ -191,7 +198,7 @@ func New(t testing.TB) (*Server, *Fixture) {
 
 	return s, &Fixture{
 		Token: "minka_pat_bruno", StrangerToken: "minka_pat_stranger",
-		Bruno: bruno, Agent: agent, Project: project, Board: board,
+		Bruno: bruno, Anke: anke, Stranger: stranger, Agent: agent, Project: project, Board: board,
 		Triage: triage, Doing: doing, NotNow: notNow, Done: done,
 		CardInTriage: cardInTriage, CardInDoing: cardInDoing,
 		OtherProject: otherProject, OtherBoard: otherBoard, OtherCard: otherCard,
@@ -334,7 +341,8 @@ func (s *Server) board(w http.ResponseWriter, r *http.Request, person *Person) {
 				"id": card.ID, "title": card.Title, "hasDescription": card.Description != "",
 				"commentCount": len(card.Comments), "createdAt": timestamp(card.CreatedAt),
 				"creator": s.personReference(card.CreatorID), "completedAt": timestampOrNil(card.CompletedAt),
-				"completedBy": s.personReferenceOrNil(card.CompletedByID), "appUrl": s.cardURL(board, card),
+				"completedBy": s.personReferenceOrNil(card.CompletedByID), "assignees": s.assigneeReferences(card),
+				"appUrl": s.cardURL(board, card),
 			})
 		}
 		columns = append(columns, map[string]any{
@@ -493,6 +501,85 @@ func (s *Server) moveCard(w http.ResponseWriter, r *http.Request, person *Person
 	writeJSON(w, http.StatusOK, s.cardResource(board, to, card))
 }
 
+func (s *Server) people(w http.ResponseWriter, r *http.Request, person *Person) {
+	project := s.visibleProject(r.PathValue("projectId"), person)
+	if project == nil {
+		notFound(w)
+		return
+	}
+	list := []any{}
+	for _, id := range project.MemberIDs {
+		member := s.People[id]
+		list = append(list, map[string]any{"id": member.ID, "name": member.Name, "emailAddress": member.Email})
+	}
+	writeJSON(w, http.StatusOK, list)
+}
+
+// assignCard checks the body before it looks up the card, as the server does:
+// a person that is no ID is refused like a person outside the project.
+func (s *Server) assignCard(w http.ResponseWriter, r *http.Request, person *Person) {
+	fields, ok := readBody(w, r)
+	if !ok {
+		return
+	}
+	personID, ok := stringField(w, fields, "personId")
+	if !ok {
+		return
+	}
+	if personID == nil || strings.TrimSpace(*personID) == "" {
+		unprocessable(w, "personIdMissing", "An assignment needs the person to assign.")
+		return
+	}
+	if !uuidPattern.MatchString(*personID) {
+		notAProjectMember(w)
+		return
+	}
+
+	board, column, card := s.visibleCard(r.PathValue("cardId"), person)
+	if card == nil {
+		notFound(w)
+		return
+	}
+	if project := s.visibleProject(board.ProjectID, person); !slices.Contains(project.MemberIDs, *personID) {
+		notAProjectMember(w)
+		return
+	}
+
+	status := http.StatusOK
+	if !slices.Contains(card.AssigneeIDs, *personID) {
+		card.AssigneeIDs = append(card.AssigneeIDs, *personID)
+		status = http.StatusCreated
+	}
+	writeJSON(w, status, s.cardResource(board, column, card))
+}
+
+// unassignCard takes somebody off a card without asking about membership, so
+// a person who left the project can still be taken off.
+func (s *Server) unassignCard(w http.ResponseWriter, r *http.Request, person *Person) {
+	_, _, card := s.visibleCard(r.PathValue("cardId"), person)
+	personID := r.PathValue("personId")
+	if card == nil || !uuidPattern.MatchString(personID) {
+		notFound(w)
+		return
+	}
+	card.AssigneeIDs = slices.DeleteFunc(card.AssigneeIDs, func(id string) bool { return id == personID })
+
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func notAProjectMember(w http.ResponseWriter) {
+	unprocessable(w, "personNotAProjectMember", "Only a member of the project of the card can be assigned to it.")
+}
+
+func (s *Server) assigneeReferences(card *Card) []any {
+	list := []any{}
+	for _, id := range card.AssigneeIDs {
+		list = append(list, s.personReference(id))
+	}
+	return list
+}
+
 // removeCard moves a card to the trash. The fake forgets it, which reads the
 // same: every later request for it is 404.
 func (s *Server) removeCard(w http.ResponseWriter, r *http.Request, person *Person) {
@@ -586,8 +673,9 @@ func (s *Server) cardResource(board *Board, column *Column, card *Card) map[stri
 		"column":       map[string]any{"id": column.ID, "type": column.Type, "title": columnTitle(column), "customTitle": column.CustomTitle},
 		"commentCount": len(card.Comments), "createdAt": timestamp(card.CreatedAt),
 		"creator": s.personReference(card.CreatorID), "completedAt": timestampOrNil(card.CompletedAt),
-		"completedBy": s.personReferenceOrNil(card.CompletedByID), "comments": comments,
-		"appUrl": s.cardURL(board, card),
+		"completedBy": s.personReferenceOrNil(card.CompletedByID), "assignees": s.assigneeReferences(card),
+		"comments": comments,
+		"appUrl":   s.cardURL(board, card),
 	}
 }
 

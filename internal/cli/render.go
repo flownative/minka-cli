@@ -36,6 +36,9 @@ func renderBoard(w io.Writer, board api.Board) {
 			if card.CommentCount > 0 {
 				details = append(details, plural(card.CommentCount, "comment", "comments"))
 			}
+			if len(card.Assignees) > 0 {
+				details = append(details, "assigned to "+assigneeNames(card.Assignees))
+			}
 			if card.CompletedAt != nil {
 				details = append(details, "completed "+formatTime(*card.CompletedAt))
 			}
@@ -53,6 +56,9 @@ func renderCard(w io.Writer, card api.Card) {
 	fmt.Fprintf(w, "Card: %s\nBoard: %s\nProject: %s\n", card.ID, card.BoardID, card.ProjectID)
 	fmt.Fprintf(w, "Column: %s (%s, %s)\n", card.Column.Title, card.Column.Type, card.Column.ID)
 	fmt.Fprintf(w, "Created: %s by %s\n", formatTime(card.CreatedAt), card.Creator.Name)
+	if len(card.Assignees) > 0 {
+		fmt.Fprintf(w, "Assigned to: %s\n", assigneeNames(card.Assignees))
+	}
 	if card.CompletedAt != nil {
 		by := ""
 		if card.CompletedBy != nil {

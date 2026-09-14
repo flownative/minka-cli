@@ -47,8 +47,9 @@ func New(host, token, userAgent string) *Client {
 // The raw JSON is what the CLI prints for --json, so that fields the server
 // adds reach a client without a change here.
 type Result[T any] struct {
-	Value T
-	Raw   json.RawMessage
+	Value      T
+	Raw        json.RawMessage
+	StatusCode int
 }
 
 // Error is an answer of the server that is not a success.
@@ -111,6 +112,25 @@ func (c *Client) MoveCard(ctx context.Context, cardID string, input MoveCardInpu
 	return request[Card](ctx, c, http.MethodPost, "/cards/"+url.PathEscape(cardID)+"/moves", input)
 }
 
+// People lists the members of a project, the people its cards can be
+// assigned to.
+func (c *Client) People(ctx context.Context, projectID string) (Result[[]ProjectMember], error) {
+	return request[[]ProjectMember](ctx, c, http.MethodGet, "/projects/"+url.PathEscape(projectID)+"/people", nil)
+}
+
+// AssignCard assigns a member of the project to a card. The status code of the
+// result is 201 for a new assignment and 200 for one that existed already.
+func (c *Client) AssignCard(ctx context.Context, cardID, personID string) (Result[Card], error) {
+	return request[Card](ctx, c, http.MethodPost, "/cards/"+url.PathEscape(cardID)+"/assignees", map[string]string{"personId": personID})
+}
+
+// UnassignCard takes a person off a card. It succeeds as well for somebody
+// who is not assigned.
+func (c *Client) UnassignCard(ctx context.Context, cardID, personID string) error {
+	_, err := request[struct{}](ctx, c, http.MethodDelete, "/cards/"+url.PathEscape(cardID)+"/assignees/"+url.PathEscape(personID), nil)
+	return err
+}
+
 // DeleteCard moves a card to the trash. A card already in the trash answers
 // like one that never existed.
 func (c *Client) DeleteCard(ctx context.Context, cardID string) error {
@@ -166,6 +186,8 @@ func request[T any](ctx context.Context, c *Client, method, path string, body an
 		apiErr.Method = method
 		return result, apiErr
 	}
+
+	result.StatusCode = resp.StatusCode
 
 	// A 204 has no body, whatever its Content-Type says.
 	if resp.StatusCode == http.StatusNoContent {
