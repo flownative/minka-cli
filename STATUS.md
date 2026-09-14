@@ -11,9 +11,10 @@ lokale Instanz geprüft, Befunde des Reviews eingearbeitet.
 Dogfooding in Minka wartet auf eine interne Alpha. Neue Features gibt es nur
 auf neuen Auftrag.
 
-API-Stand, gegen den gebaut ist: Minka `92f10e1` (API-1 bis API-5,
+API-Stand, gegen den gebaut ist: Minka `ca8282f` (API-1 bis API-5,
 erweiterte Allowlist aus E-060, Zuständige an Karten, neue Karten oben in der
-Spalte).
+Spalte, Fälligkeitsdatum, Zuständige und Datum beim Anlegen). Koordination in
+Minka: `minka-63`.
 
 Befehle:
 
@@ -126,10 +127,15 @@ Auf Roberts Wunsch folgen die Konventionen **basecamp-cli**. Den Umfang
     ob sich etwas geändert hat (201 oder 200 beim Zuweisen, `wasAssigned`
     beim Abnehmen).
   - `cards create --assignee` (wiederholbar) löst alle Personen vor dem
-    Anlegen auf und weist sie danach einzeln zu. Die API nimmt beim Anlegen
-    keine Zuständigen an, also ist das keine Transaktion. Scheitert eine
-    Zuweisung, nennt der Fehler die angelegte Karte und den Befehl zum
-    Wiederholen.
+    Anlegen auf und schickt sie als `assigneeIds` im selben Request. Karte
+    und Zuständige entstehen in einer Transaktion.
+- **Fälligkeitsdatum:**
+  - `--due YYYY-MM-DD` gibt es bei `cards create` und `cards edit`,
+    `cards edit --due ""` entfernt es.
+  - Die CLI prüft das Datum nicht selbst. Der Server antwortet mit
+    `cardDueDateNotADate`, das ergibt Exit 9.
+  - Relative Angaben wie `tomorrow` gibt es bewusst nicht. „Heute" hängt von
+    der Zeitzone ab, und die Installation legt den Tag in ihrer eigenen aus.
 
 ## Tests
 
@@ -173,6 +179,9 @@ genannte Test wird rot. Zuletzt am 13.09.2026 nach dem Review ausgeführt:
 | Schon zugewiesen wird gemeldet (200 statt 201) | `TestAssigningTwiceSucceedsAndSaysSo` |
 | E-Mail-Adresse als Person | `TestAssignFindsThePersonByIDMeEmailOrName` |
 | Personen vor dem Anlegen aufgelöst | `TestCreateAssignsThePeopleItFoundBeforeCreating` |
+| Zuständige im selben Create-Request | `TestCreateAssignsThePeopleItFoundBeforeCreating` |
+| `--due` beim Anlegen gesendet | `TestCreateWithADueDate` |
+| `--due ""` entfernt das Datum, ohne andere Felder | `TestEditSetsAndRemovesTheDueDate` |
 | 204 ohne Rumpf ist Erfolg | `TestAnEmptyAnswerIsASuccess` (api), `TestDeleteMovesACardToTheTrash` |
 | Nachbar in Zielspalte geprüft | `TestMoveNextToACardOutsideTheTargetColumnIsRefused` |
 | Done ohne Platzierung | `TestDoneTakesNoPlacement` |
@@ -258,17 +267,22 @@ oben; 404 nur bei einer ungültigen ID. Der Fake folgte dem schon.
 
 ## Offene Punkte
 
-- Die Nachricht zu `92f10e1` weicht vom Code ab, gebaut ist gegen den Code:
-  - Zuständige tragen nur `id` und `name`, keine Initialen.
-  - `POST /boards/{b}/cards` nimmt über die API keine Zuständigen an. Das kann
-    nur der Web-Dialog.
-
-  Das ist an die Minka-Koordination gemeldet. Nimmt die API sie später an,
-  schickt `cards create --assignee` sie im Anlegen mit.
+- Spaltenfarben (`color` an Spalten) kommen mit Minka M2-2d, nur lesend. Die
+  JSON-Ausgabe reicht sie ungeändert durch. Ob die Textausgabe sie zeigt,
+  wird entschieden, wenn der Commit da ist.
 
 - Das Token `minka-cli-smoke` liegt in `~/.config/minka/config.json`.
   Widerrufen beim Umstieg auf das Dogfooding zur internen Alpha. Das
   Agentenkonto „Claude (Robert)" ist schon Mitglied im Minka-Projekt.
+- Fälligkeitsdatum und Anlegen mit Zuständigen sind am 14.09.2026 live
+  geprüft:
+  - `cards create --assignee me --due 2026-09-28` legte Karte, Person und
+    Datum in einem Request an, und das Board zeigt beides.
+  - `--due` ändern, dasselbe Datum noch einmal und `--due ""` funktionieren.
+  - `2026-02-30` endet mit Exit 9 `cardDueDateNotADate`.
+  - Ein Nicht-Mitglied beim Anlegen endet mit Exit 9, das Board hatte danach
+    genauso viele Karten wie vorher.
+  - Die Testkarte ist wieder gelöscht.
 - Zuständige sind am 14.09.2026 live geprüft:
   - `people list` für „Test-Projekt" funktioniert. Dort heißen zwei
     Mitglieder „Live", der Fall „Name mehrdeutig" ist also real.

@@ -39,6 +39,9 @@ func renderBoard(w io.Writer, board api.Board) {
 			if len(card.Assignees) > 0 {
 				details = append(details, "assigned to "+assigneeNames(card.Assignees))
 			}
+			if card.DueOn != nil {
+				details = append(details, "due "+*card.DueOn)
+			}
 			if card.CompletedAt != nil {
 				details = append(details, "completed "+formatTime(*card.CompletedAt))
 			}
@@ -58,6 +61,9 @@ func renderCard(w io.Writer, card api.Card) {
 	fmt.Fprintf(w, "Created: %s by %s\n", formatTime(card.CreatedAt), card.Creator.Name)
 	if len(card.Assignees) > 0 {
 		fmt.Fprintf(w, "Assigned to: %s\n", assigneeNames(card.Assignees))
+	}
+	if card.DueOn != nil {
+		fmt.Fprintf(w, "Due: %s\n", *card.DueOn)
 	}
 	if card.CompletedAt != nil {
 		by := ""

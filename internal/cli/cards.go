@@ -63,7 +63,7 @@ into the same HTML; in JSON it is the HTML the server stores.`,
 }
 
 func (a *app) newCardsCreateCmd() *cobra.Command {
-	var boardID, column, title, description, descriptionFormat string
+	var boardID, column, title, description, descriptionFormat, due string
 	var assignees []string
 
 	cmd := &cobra.Command{
@@ -72,9 +72,9 @@ func (a *app) newCardsCreateCmd() *cobra.Command {
 		Long: "Creates a card in Triage, or in the column given with --column.\n" +
 			"Not now and Done take no new cards. A new card goes to the top of its column.\n\n" +
 			columnHelp + "\n\n" + descriptionHelp + "\n\n" +
-			"--assignee assigns a member of the project right after the card is created,\n" +
-			"and can be given more than once. The people are looked up before the card\n" +
-			"is created. " + personHelp,
+			"--assignee assigns a member of the project and can be given more than once.\n" +
+			"The card is created together with its people, or not at all. " + personHelp + "\n\n" +
+			"--due sets the day the card is due, as YYYY-MM-DD.",
 		Example: `  minka cards create --board 0199... --title "Fix the login"
   minka cards create --board 0199... --column Doing --title "Review" --description - < notes.md`,
 		Args: requireArgs(),
@@ -132,21 +132,16 @@ func (a *app) newCardsCreateCmd() *cobra.Command {
 				input.ColumnID = &target.ID
 			}
 
+			for _, person := range people {
+				input.AssigneeIDs = append(input.AssigneeIDs, person.ID)
+			}
+			if cmd.Flags().Changed("due") {
+				input.DueOn = &due
+			}
+
 			card, err := s.client.CreateCard(a.ctx, boardID, input)
 			if err != nil {
 				return s.fail(err)
-			}
-			// The API creates a card without assignees, so they follow one
-			// request each.
-			for _, person := range people {
-				assigned, err := s.client.AssignCard(a.ctx, card.Value.ID, person.ID)
-				if err != nil {
-					e := s.fail(err)
-					e.Message = fmt.Sprintf("card %s was created, but assigning %s failed: %s", card.Value.ID, nameOf(person, nil), e.Message)
-					e.Hint = "Assign again with: minka cards assign " + card.Value.ID + " " + person.ID
-					return e
-				}
-				card = assigned
 			}
 
 			return a.ok(success{
@@ -166,6 +161,7 @@ func (a *app) newCardsCreateCmd() *cobra.Command {
 	flags.StringVar(&title, "title", "", "Title of the card")
 	flags.StringVar(&column, "column", "", "Column for the card (default: Triage)")
 	flags.StringArrayVar(&assignees, "assignee", nil, "Person to assign: ID, me, e-mail address or name (repeatable)")
+	flags.StringVar(&due, "due", "", "Day the card is due, as YYYY-MM-DD")
 	flags.StringVar(&description, "description", "", "Description, or - to read it from stdin")
 	flags.StringVar(&descriptionFormat, "description-format", "markdown", "Format of the description: markdown or html")
 	_ = cmd.MarkFlagRequired("board")
@@ -175,12 +171,13 @@ func (a *app) newCardsCreateCmd() *cobra.Command {
 }
 
 func (a *app) newCardsEditCmd() *cobra.Command {
-	var title, description, descriptionFormat string
+	var title, description, descriptionFormat, due string
 
 	cmd := &cobra.Command{
 		Use:   "edit <cardId>",
-		Short: "Rename a card or change its description",
-		Long: "Changes the title, the description or both. An empty description removes it.\n\n" +
+		Short: "Rename a card, change its description or its due date",
+		Long: "Changes the title, the description, the due date or several of them. An\n" +
+			"empty description or due date removes it. A due date is written as YYYY-MM-DD.\n\n" +
 			descriptionHelp,
 		Example: `  minka cards edit 0199... --title "Fix the login form"
   minka cards edit 0199... --description - < notes.md
@@ -204,8 +201,11 @@ func (a *app) newCardsEditCmd() *cobra.Command {
 				input.Description = &html
 				notices = warnings
 			}
-			if input.Title == nil && input.Description == nil {
-				return usageErrorf(cmd, "nothing to change, give --title, --description or both")
+			if cmd.Flags().Changed("due") {
+				input.DueOn = &due
+			}
+			if input.Title == nil && input.Description == nil && input.DueOn == nil {
+				return usageErrorf(cmd, "nothing to change, give --title, --description or --due")
 			}
 
 			s, err := a.session()
@@ -232,6 +232,7 @@ func (a *app) newCardsEditCmd() *cobra.Command {
 	flags := cmd.Flags()
 	flags.StringVar(&title, "title", "", "New title")
 	flags.StringVar(&description, "description", "", "New description, - to read it from stdin, empty to remove it")
+	flags.StringVar(&due, "due", "", "Day the card is due as YYYY-MM-DD, empty to remove it")
 	flags.StringVar(&descriptionFormat, "description-format", "markdown", "Format of the description: markdown or html")
 
 	return cmd

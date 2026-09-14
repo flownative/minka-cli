@@ -67,6 +67,7 @@ type BoardCard struct {
 	CompletedAt    *string           `json:"completedAt"`
 	CompletedBy    *PersonReference  `json:"completedBy"`
 	Assignees      []PersonReference `json:"assignees"` // in the order they were assigned
+	DueOn          *string           `json:"dueOn"`     // the day it is due as YYYY-MM-DD, nil for a card without one
 	AppURL         string            `json:"appUrl"`
 }
 
@@ -96,6 +97,7 @@ type Card struct {
 	CompletedAt  *string           `json:"completedAt"`
 	CompletedBy  *PersonReference  `json:"completedBy"`
 	Assignees    []PersonReference `json:"assignees"` // in the order they were assigned
+	DueOn        *string           `json:"dueOn"`     // the day it is due as YYYY-MM-DD, nil for a card without one
 	Comments     []Comment         `json:"comments"`
 	AppURL       string            `json:"appUrl"`
 }
@@ -108,15 +110,20 @@ type Comment struct {
 	EditedAt  *string         `json:"editedAt"`
 }
 
+// CreateCardInput creates a card with its description, due date and people in
+// one transaction.
 type CreateCardInput struct {
-	Title       string  `json:"title"`
-	ColumnID    *string `json:"columnId,omitempty"`    // nil lands the card in Triage
-	Description *string `json:"description,omitempty"` // HTML
+	Title       string   `json:"title"`
+	ColumnID    *string  `json:"columnId,omitempty"`    // nil lands the card in Triage
+	Description *string  `json:"description,omitempty"` // HTML
+	DueOn       *string  `json:"dueOn,omitempty"`       // YYYY-MM-DD
+	AssigneeIDs []string `json:"assigneeIds,omitempty"` // members of the project
 }
 
 type UpdateCardInput struct {
 	Title       *string `json:"title,omitempty"`
 	Description *string `json:"description,omitempty"` // HTML; an empty string removes the description
+	DueOn       *string `json:"dueOn,omitempty"`       // YYYY-MM-DD; an empty string removes the due date
 }
 
 // MoveCardInput names a column and either a position or one neighbour. Without

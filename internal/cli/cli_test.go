@@ -1115,12 +1115,13 @@ func TestCreateAssignsThePeopleItFoundBeforeCreating(t *testing.T) {
 	env, r := e.runJSON("", "cards", "create", "--board", e.fixture.Board.ID, "--title", "x", "--assignee", "me", "--assignee", "anke@example.com", "--assignee", "Bruno")
 	expectCode(t, r, ExitOK)
 
-	var paths []string
-	for _, request := range e.server.WritingRequests() {
-		paths = append(paths, request.Method+" "+request.Path)
+	writes := e.server.WritingRequests()
+	if len(writes) != 1 || !strings.HasSuffix(writes[0].Path, "/cards") {
+		t.Fatalf("requests %+v", writes)
 	}
-	if len(paths) != 3 || !strings.HasSuffix(paths[0], "/cards") || !strings.HasSuffix(paths[1], "/assignees") || !strings.HasSuffix(paths[2], "/assignees") {
-		t.Errorf("requests %v", paths)
+	ids, _ := e.lastWriteBody()["assigneeIds"].([]any)
+	if len(ids) != 2 || ids[0] != e.fixture.Bruno.ID || ids[1] != e.fixture.Anke.ID {
+		t.Errorf("assigneeIds sent %v", ids)
 	}
 	var card api.Card
 	if err := json.Unmarshal(env.Data, &card); err != nil || len(card.Assignees) != 2 {
@@ -1147,6 +1148,92 @@ func TestAssigneesAppearInTheTextOutput(t *testing.T) {
 	r = e.run("", "cards", "show", e.fixture.CardInTriage.ID, "--styled")
 	expectCode(t, r, ExitOK)
 	if !strings.Contains(r.stdout, "Assigned to: Anke, Bruno") {
+		t.Errorf("card:\n%s", r.stdout)
+	}
+}
+
+func TestCreateWithADueDate(t *testing.T) {
+	e := newTestEnv(t)
+	env, r := e.runJSON("", "cards", "create", "--board", e.fixture.Board.ID, "--title", "x", "--due", "2026-09-28")
+	expectCode(t, r, ExitOK)
+	if got := e.lastWriteBody()["dueOn"]; got != "2026-09-28" {
+		t.Errorf("dueOn sent %v", got)
+	}
+	if decode(t, env.Data)["dueOn"] != "2026-09-28" {
+		t.Errorf("card %s", env.Data)
+	}
+
+	_, r = e.runJSON("", "cards", "create", "--board", e.fixture.Board.ID, "--title", "y")
+	expectCode(t, r, ExitOK)
+	if _, sent := e.lastWriteBody()["dueOn"]; sent {
+		t.Error("dueOn sent without --due")
+	}
+}
+
+func TestCreateWithSomebodyOutsideTheProjectLeavesNoCard(t *testing.T) {
+	e := newTestEnv(t)
+	before := len(e.fixture.Triage.Cards)
+
+	env, r := e.runJSON("", "cards", "create", "--board", e.fixture.Board.ID, "--title", "x", "--assignee", "me", "--assignee", e.fixture.Stranger.ID)
+	expectCode(t, r, ExitValidation)
+	if env.Meta["apiCode"] != "personNotAProjectMember" {
+		t.Errorf("meta %v", env.Meta)
+	}
+	if n := len(e.fixture.Triage.Cards); n != before {
+		t.Errorf("%d cards in Triage, want %d", n, before)
+	}
+}
+
+func TestEditSetsAndRemovesTheDueDate(t *testing.T) {
+	e := newTestEnv(t)
+	id := e.fixture.CardInTriage.ID
+
+	env, r := e.runJSON("", "cards", "edit", id, "--due", "2026-09-28")
+	expectCode(t, r, ExitOK)
+	if body := e.lastWriteBody(); len(body) != 1 || body["dueOn"] != "2026-09-28" {
+		t.Errorf("body sent %v", body)
+	}
+	if decode(t, env.Data)["dueOn"] != "2026-09-28" {
+		t.Errorf("card %s", env.Data)
+	}
+
+	env, r = e.runJSON("", "cards", "edit", id, "--due", "")
+	expectCode(t, r, ExitOK)
+	if body := e.lastWriteBody(); len(body) != 1 || body["dueOn"] != "" {
+		t.Errorf("body sent %v", body)
+	}
+	if card := decode(t, env.Data); card["dueOn"] != nil {
+		t.Errorf("due date not removed: %s", env.Data)
+	}
+}
+
+func TestADueDateThatIsNoDayIsRefused(t *testing.T) {
+	e := newTestEnv(t)
+	for _, value := range []string{"2026-02-30", "28.09.2026", "tomorrow", "2026-9-8"} {
+		env, r := e.runJSON("", "cards", "edit", e.fixture.CardInTriage.ID, "--due", value)
+		expectCode(t, r, ExitValidation)
+		if env.Meta["apiCode"] != "cardDueDateNotADate" {
+			t.Errorf("%s: meta %v", value, env.Meta)
+		}
+	}
+	if e.fixture.CardInTriage.DueOn != nil {
+		t.Errorf("due date set to %q", *e.fixture.CardInTriage.DueOn)
+	}
+}
+
+func TestTheDueDateAppearsInTheTextOutput(t *testing.T) {
+	e := newTestEnv(t)
+	due := "2026-09-28"
+	e.fixture.CardInTriage.DueOn = &due
+
+	r := e.run("", "boards", "show", e.fixture.Board.ID, "--styled")
+	expectCode(t, r, ExitOK)
+	if !strings.Contains(r.stdout, "due 2026-09-28") {
+		t.Errorf("board:\n%s", r.stdout)
+	}
+	r = e.run("", "cards", "show", e.fixture.CardInTriage.ID, "--styled")
+	expectCode(t, r, ExitOK)
+	if !strings.Contains(r.stdout, "Due: 2026-09-28") {
 		t.Errorf("card:\n%s", r.stdout)
 	}
 }
