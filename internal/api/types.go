@@ -58,17 +58,19 @@ type Column struct {
 }
 
 type BoardCard struct {
-	ID             string            `json:"id"`
-	Title          string            `json:"title"`
-	HasDescription bool              `json:"hasDescription"`
-	CommentCount   int               `json:"commentCount"`
-	CreatedAt      string            `json:"createdAt"`
-	Creator        PersonReference   `json:"creator"`
-	CompletedAt    *string           `json:"completedAt"`
-	CompletedBy    *PersonReference  `json:"completedBy"`
-	Assignees      []PersonReference `json:"assignees"` // in the order they were assigned
-	DueOn          *string           `json:"dueOn"`     // the day it is due as YYYY-MM-DD, nil for a card without one
-	AppURL         string            `json:"appUrl"`
+	ID                 string            `json:"id"`
+	Title              string            `json:"title"`
+	HasDescription     bool              `json:"hasDescription"`
+	CommentCount       int               `json:"commentCount"`
+	StepCount          int               `json:"stepCount"` // the steps themselves come only with the single card
+	CompletedStepCount int               `json:"completedStepCount"`
+	CreatedAt          string            `json:"createdAt"`
+	Creator            PersonReference   `json:"creator"`
+	CompletedAt        *string           `json:"completedAt"`
+	CompletedBy        *PersonReference  `json:"completedBy"`
+	Assignees          []PersonReference `json:"assignees"` // in the order they were assigned
+	DueOn              *string           `json:"dueOn"`     // the day it is due as YYYY-MM-DD, nil for a card without one
+	AppURL             string            `json:"appUrl"`
 }
 
 type ProjectMember struct {

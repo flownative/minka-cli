@@ -11,7 +11,7 @@ lokale Instanz geprüft, Befunde des Reviews eingearbeitet.
 Dogfooding in Minka wartet auf eine interne Alpha. Neue Features gibt es nur
 auf neuen Auftrag.
 
-API-Stand, gegen den gebaut ist: Minka `ee39f45` (API-1 bis API-5,
+API-Stand, gegen den gebaut ist: Minka `51b44e6` (API-1 bis API-5,
 erweiterte Allowlist aus E-060, Zuständige an Karten, neue Karten oben in der
 Spalte, Fälligkeitsdatum, Zuständige und Datum beim Anlegen, Schritte).
 Koordination in Minka: `minka-63`.
@@ -136,8 +136,9 @@ Auf Roberts Wunsch folgen die Konventionen **basecamp-cli**. Den Umfang
   - Ein Schritt wird über ID, Position ab 1 oder Text angegeben. Eine Zahl
     ist immer eine Position. Ein Text auf zwei Schritten ergibt Exit 8 mit den
     Positionen.
-  - Die API liefert Schritte nur an der einzelnen Karte, nicht im Board.
-    Deshalb liest jeder Befehl mit Schritt-Angabe zuerst die Karte.
+  - Die API liefert die Schritte nur an der einzelnen Karte, das Board nur
+    `stepCount` und `completedStepCount`. `boards show` zeigt daraus
+    „steps 1/3", und jeder Befehl mit Schritt-Angabe liest zuerst die Karte.
   - Wiederholtes Abhaken, Öffnen und Löschen ist kein Fehler; die
     Zusammenfassung sagt, ob sich etwas geändert hat.
   - `steps list` gibt als `data` die Liste `steps` aus der Karte unverändert
@@ -284,12 +285,10 @@ oben; 404 nur bei einer ungültigen ID. Der Fake folgte dem schon.
 
 ## Offene Punkte
 
-- Schritte (`ee39f45`) sind gebaut, während in Minka noch ein Review läuft.
-  minka-63 meldet, falls sich der Vertrag noch ändert.
-- Gegenüber der Nachricht zu `ee39f45` gilt laut Code:
-  - Das Board listet keine Schritte.
-  - `DELETE` auf einen Schritt einer anderen Karte oder auf eine ungültige
-    Schritt-ID gibt 204, nicht 404. 404 gibt es nur für eine fremde Karte.
+- Das Review der Schritte in Minka ist mit `51b44e6` abgeschlossen. Das Board
+  liefert je Karte `stepCount` und `completedStepCount`. `DELETE` auf einen
+  Schritt einer anderen Karte oder auf eine ungültige Schritt-ID gibt bewusst
+  204 (E-067), 404 nur für eine fremde Karte.
 - Umbenennen und Umsortieren von Schritten gibt es in der API noch nicht.
 - Projekte haben seit Minka `ccd0439` Chat-Werkzeuge (`type=chat`), aber noch
   keine API; die kommt mit Chat-3. `boards list` zeigt nur Boards.
