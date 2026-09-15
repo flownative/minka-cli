@@ -521,17 +521,56 @@ func TestDoneCompletesACardOnlyOnce(t *testing.T) {
 	}
 }
 
-func TestCommentIsSentAsPlainText(t *testing.T) {
+func TestACommentIsSentAsHTMLWithItsLineBreaks(t *testing.T) {
 	e := newTestEnv(t)
-	text := "**Not** <b>rendered</b> & kept"
+	text := "**Bold** and <b>raw</b> & kept\nsecond line"
 
 	env, r := e.runJSON("", "comments", "create", e.fixture.CardInTriage.ID, text)
 	expectCode(t, r, ExitOK)
-	if body := e.lastWriteBody(); len(body) != 1 || body["body"] != text {
+	want := "<p><strong>Bold</strong> and &lt;b&gt;raw&lt;/b&gt; &amp; kept<br>second line</p>"
+	if body := e.lastWriteBody(); len(body) != 1 || body["body"] != want {
 		t.Errorf("body sent %v", body)
 	}
-	if decode(t, env.Data)["body"] != text {
-		t.Errorf("comment %s", env.Data)
+	if !strings.Contains(env.Notice, markdown.WarningRawHTML) {
+		t.Errorf("notice %q", env.Notice)
+	}
+}
+
+func TestACommentInHTMLIsSentAsItIs(t *testing.T) {
+	e := newTestEnv(t)
+	_, r := e.runJSON("", "comments", "create", e.fixture.CardInTriage.ID, "<p>as <em>is</em></p>", "--format", "html")
+	expectCode(t, r, ExitOK)
+	if got := e.lastWriteBody()["body"]; got != "<p>as <em>is</em></p>" {
+		t.Errorf("body sent %q", got)
+	}
+
+	_, r = e.runJSON("", "comments", "create", e.fixture.CardInTriage.ID, "x", "--format", "text")
+	expectCode(t, r, ExitUsage)
+}
+
+func TestACommentWithNothingMinkaKeepsIsRefused(t *testing.T) {
+	e := newTestEnv(t)
+	_, r := e.runJSON("", "comments", "create", e.fixture.CardInTriage.ID, "[x]: https://example.com")
+	expectCode(t, r, ExitUsage)
+	if n := len(e.server.Requests()); n != 0 {
+		t.Errorf("%d requests sent", n)
+	}
+}
+
+func TestCommentsShowAsMarkdownAndOldPlainOnesAsTheyAre(t *testing.T) {
+	e := newTestEnv(t)
+	card := e.fixture.CardInTriage
+	card.Comments = append(card.Comments,
+		&fakeapi.Comment{ID: "66666666-6666-4666-8666-666666666661", AuthorID: e.fixture.Anke.ID, Body: "<p><strong>Rich</strong><br>two</p>"},
+		&fakeapi.Comment{ID: "66666666-6666-4666-8666-666666666662", AuthorID: e.fixture.Anke.ID, Body: "old *plain* text\nwith a < sign"},
+	)
+
+	r := e.run("", "cards", "show", card.ID, "--styled")
+	expectCode(t, r, ExitOK)
+	for _, want := range []string{"First comment", "**Rich**\\\ntwo", "old *plain* text\nwith a < sign"} {
+		if !strings.Contains(r.stdout, want) {
+			t.Errorf("missing %q in:\n%s", want, r.stdout)
+		}
 	}
 }
 
@@ -539,7 +578,7 @@ func TestCommentFromStdin(t *testing.T) {
 	e := newTestEnv(t)
 	_, r := e.runJSON("Zwei\nZeilen\n", "comments", "create", e.fixture.CardInTriage.ID, "-")
 	expectCode(t, r, ExitOK)
-	if got := e.lastWriteBody()["body"]; got != "Zwei\nZeilen\n" {
+	if got := e.lastWriteBody()["body"]; got != "<p>Zwei<br>Zeilen</p>" {
 		t.Errorf("body sent %q", got)
 	}
 }

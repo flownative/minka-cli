@@ -100,7 +100,12 @@ Auf Roberts Wunsch folgen die Konventionen **basecamp-cli**. Den Umfang
     `--description ""`.
 - **HTML → Markdown** für `cards show` im Text: Text wird escaped, `<br>`
   wird ein harter Umbruch. Zurückgeschickt entsteht dasselbe HTML.
-- **Kommentare** sind Klartext, ohne Umwandlung.
+- **Kommentare** sind seit Minka `c7c4d1b` Rich Text wie Beschreibungen.
+  `comments create` wandelt Markdown um und behält dabei jeden Zeilenumbruch
+  (`markdown.KeepLineBreaks`), damit Klartext so ankommt, wie er getippt
+  wurde. `--format html` schickt HTML unverändert. `cards show` zeigt
+  HTML-Kommentare als Markdown; ältere Kommentare ohne Markup liefert der
+  Server als Klartext, sie werden unverändert gezeigt.
 - **Eingabe über stdin:** `-` liest von stdin, höchstens 1 MB. Ein Terminal
   als stdin wird abgelehnt.
 - **`--column`** nimmt eine ID, einen Typ (`triage`, `not_now`, `done`) oder
@@ -209,6 +214,9 @@ genannte Test wird rot. Zuletzt am 13.09.2026 nach dem Review ausgeführt:
 | `ol start` und Link-Titel escaped | `TestConversions` |
 | `|` in Tabellenzellen escaped (HTML → Markdown) | `TestToMarkdown` |
 | Listenstart und tiefe Überschriften im Rückweg | `TestMarkdownOfADescriptionConvertsBackToTheSameHTML` |
+| Kommentare behalten Zeilenumbrüche | `TestACommentIsSentAsHTMLWithItsLineBreaks`, `TestKeepLineBreaksKeepsEveryLine` |
+| Alte Klartext-Kommentare unverändert, HTML als Markdown | `TestCommentsShowAsMarkdownAndOldPlainOnesAsTheyAre`, `TestCarriesMarkup` |
+| `--format` geprüft, leeres Ergebnis abgelehnt | `TestACommentInHTMLIsSentAsItIs`, `TestACommentWithNothingMinkaKeepsIsRefused` |
 | 204 ohne Rumpf ist Erfolg | `TestAnEmptyAnswerIsASuccess` (api), `TestDeleteMovesACardToTheTrash` |
 | Nachbar in Zielspalte geprüft | `TestMoveNextToACardOutsideTheTargetColumnIsRefused` |
 | Done ohne Platzierung | `TestDoneTakesNoPlacement` |
@@ -320,6 +328,12 @@ oben; 404 nur bei einer ungültigen ID. Der Fake folgte dem schon.
 - Das Token `minka-cli-smoke` liegt in `~/.config/minka/config.json`.
   Widerrufen beim Umstieg auf das Dogfooding zur internen Alpha. Das
   Agentenkonto „Claude (Robert)" ist schon Mitglied im Minka-Projekt.
+- Kommentare als Rich Text (Minka `c7c4d1b`) sind am 15.09.2026 live geprüft:
+  - Markdown mit Zeilenumbruch, Inline-Code und Liste speichert der Server so,
+    wie die CLI es schickt; `--format html` bleibt unverändert.
+  - `cards show` zeigt beide als Markdown. Der alte Klartext-Kommentar der
+    Smoke-Karte kommt als Klartext zurück und wird unverändert gezeigt.
+  - Die Testkarte ist wieder gelöscht.
 - Die erweiterte Allowlist (Minka `72d0639`) ist am 15.09.2026 live geprüft:
   - `h4`, `h6`, ein Link mit Titel, `ol start="3"`, `pre data-language="go"`
     und eine Tabelle mit `|` in einer Zelle speichert der Server so, wie die

@@ -97,9 +97,20 @@ var markdownParser = goldmark.New(
 	goldmark.WithExtensions(extension.Strikethrough, extension.Table, extension.Linkify),
 ).Parser()
 
+// Option changes how ToHTML converts.
+type Option func(*converter)
+
+// KeepLineBreaks turns every line break into a break in the text, as a comment
+// box does, instead of joining the lines of a paragraph.
+func KeepLineBreaks() Option {
+	return func(c *converter) {
+		c.keepLineBreaks = true
+	}
+}
+
 // ToHTML converts Markdown into rich text HTML. Blank input gives an empty
 // string, which removes a description.
-func ToHTML(source string) Result {
+func ToHTML(source string, options ...Option) Result {
 	if strings.TrimSpace(source) == "" {
 		return Result{}
 	}
@@ -109,6 +120,9 @@ func ToHTML(source string) Result {
 
 	var out bytes.Buffer
 	c := &converter{source: src, w: bufio.NewWriter(&out), writer: ghtml.DefaultWriter}
+	for _, option := range options {
+		option(c)
+	}
 	_ = ast.Walk(document, c.visit)
 	_ = c.w.Flush()
 
@@ -121,6 +135,8 @@ type converter struct {
 	writer    ghtml.Writer
 	warnings  []string
 	linkDepth int // greater than 0 inside a link, where no further link may start
+
+	keepLineBreaks bool
 }
 
 func (c *converter) visit(node ast.Node, entering bool) (ast.WalkStatus, error) {
@@ -301,9 +317,10 @@ func (c *converter) text(n *ast.Text) {
 	} else {
 		c.writer.Write(c.w, value)
 	}
-	if n.HardLineBreak() {
+	switch {
+	case n.HardLineBreak(), n.SoftLineBreak() && c.keepLineBreaks:
 		c.write("<br>")
-	} else if n.SoftLineBreak() {
+	case n.SoftLineBreak():
 		c.write("\n")
 	}
 }

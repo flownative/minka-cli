@@ -95,7 +95,11 @@ func renderCard(w io.Writer, card api.Card) {
 			if comment.EditedAt != nil {
 				edited = ", edited"
 			}
-			fmt.Fprintf(w, "\n### %s, %s%s\n\n%s\n", comment.Author.Name, formatTime(comment.CreatedAt), edited, comment.Body)
+			body := comment.Body
+			if richtext.CarriesMarkup(body) {
+				body = richtext.ToMarkdown(body)
+			}
+			fmt.Fprintf(w, "\n### %s, %s%s\n\n%s\n", comment.Author.Name, formatTime(comment.CreatedAt), edited, body)
 		}
 	}
 }
