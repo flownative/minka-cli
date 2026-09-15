@@ -1791,7 +1791,8 @@ func TestSomebodyOnTheCardIsFoundByEmailAddress(t *testing.T) {
 func TestADescriptionWithAttachmentsIsNotReplacedUnlessAsked(t *testing.T) {
 	e := newTestEnv(t)
 	card := e.fixture.CardInTriage
-	card.Description = `<p>Plan</p><figure class="attachment attachment--image"><img src="https://minka.example/f/1.png" alt="Plan"></figure>`
+	source := `<p>Plan</p><action-text-attachment sgid="abc" content-type="image/png" url="https://minka.example/f/1.png" filename="plan.png"></action-text-attachment>`
+	card.Description = source
 
 	env, r := e.runJSON("", "cards", "edit", card.ID, "--description", "new text")
 	expectCode(t, r, ExitUsage)
@@ -1804,6 +1805,18 @@ func TestADescriptionWithAttachmentsIsNotReplacedUnlessAsked(t *testing.T) {
 
 	_, r = e.runJSON("", "cards", "edit", card.ID, "--title", "only the title")
 	expectCode(t, r, ExitOK)
+
+	changed := `<p>Plan, changed</p><action-text-attachment sgid="abc" content-type="image/png" url="https://minka.example/f/1.png" filename="plan.png"></action-text-attachment>`
+	env, r = e.runJSON(changed, "cards", "edit", card.ID, "--description", "-", "--description-format", "html")
+	expectCode(t, r, ExitOK)
+	if card.Description != changed || env.Notice != "" {
+		t.Errorf("description %q, notice %q", card.Description, env.Notice)
+	}
+
+	r = e.run("", "cards", "show", card.ID, "--styled")
+	if !strings.Contains(r.stdout, "![plan.png](https://minka.example/f/1.png)") {
+		t.Errorf("card:\n%s", r.stdout)
+	}
 
 	env, r = e.runJSON("", "cards", "edit", card.ID, "--description", "new text", "--drop-attachments")
 	expectCode(t, r, ExitOK)

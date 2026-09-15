@@ -87,7 +87,7 @@ func renderCard(w io.Writer, card api.Card) {
 		}
 	}
 
-	if description := richtext.ToMarkdown(card.Description); description != "" {
+	if description := richtext.ToMarkdown(firstNonEmpty(card.DescriptionSource, card.Description)); description != "" {
 		fmt.Fprintf(w, "\n## Description\n\n%s\n", description)
 	}
 
@@ -98,7 +98,7 @@ func renderCard(w io.Writer, card api.Card) {
 			if comment.EditedAt != nil {
 				edited = ", edited"
 			}
-			body := comment.Body
+			body := firstNonEmpty(comment.BodySource, comment.Body)
 			if richtext.CarriesMarkup(body) {
 				body = richtext.ToMarkdown(body)
 			}
@@ -123,6 +123,17 @@ func formatTime(value string) string {
 		return value
 	}
 	return t.Local().Format("2006-01-02 15:04")
+}
+
+// firstNonEmpty prefers the source of a text, which carries the addresses of
+// its files, and falls back to the stored text for a server that sends none.
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if value != "" {
+			return value
+		}
+	}
+	return ""
 }
 
 func plural(n int, one, many string) string {

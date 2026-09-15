@@ -25,6 +25,10 @@ func TestToMarkdown(t *testing.T) {
 		{"link with a title", `<p><a href="https://example.com" title="Home">site</a> <a href="https://x.y" title="X">https://x.y</a></p>`, `[site](https://example.com "Home") [https://x.y](https://x.y "X")`},
 		{"table", `<figure class="lexxy-content__table-wrapper"><table><tbody><tr><th>a</th><th>b|c</th></tr><tr><td>1</td></tr></tbody></table></figure>`, "| a | b\\|c |\n| --- | --- |\n| 1 |  |"},
 		{"attachment as the server serves it", `<figure class="attachment attachment--image"><img src="https://minka.example/f/1.png" alt="Plan" width="800"><figcaption>Der Plan</figcaption></figure>`, "![Plan](https://minka.example/f/1.png)\n\nDer Plan"},
+		{"mention", `<p>Hallo <action-text-attachment sgid="x" content-type="application/vnd.minka.person" content="@Anke"></action-text-attachment></p>`, "Hallo @Anke"},
+		{"picture in the source", `<action-text-attachment sgid="x" content-type="image/png" url="https://minka.example/f/zelt.png" filename="zelt.png"></action-text-attachment>`, "![zelt.png](https://minka.example/f/zelt.png)"},
+		{"file in the source", `<p><action-text-attachment sgid="x" content-type="application/pdf" url="https://minka.example/f/plan.pdf" filename="plan.pdf"></action-text-attachment></p>`, "[plan.pdf](https://minka.example/f/plan.pdf)"},
+		{"stored attachment without an address", `<action-text-attachment sgid="x" caption="Das Zelt"></action-text-attachment>`, "\\[Das Zelt\\]"},
 		{"marks Markdown has no syntax for", "<p><u>u</u> <s>s</s> <i>i</i> x<sub>2</sub> <mark>m</mark></p>", "u ~~s~~ *i* x2 m"},
 		{"rule", "<p>a</p><hr><p>b</p>", "a\n\n---\n\nb"},
 		{"inline code", "<p><code>x *y*</code> and <code>a`b</code> and <code>`c</code></p>", "`x *y*` and ``a`b`` and `` `c ``"},
@@ -105,6 +109,7 @@ func TestCarriesMarkup(t *testing.T) {
 		"text</strong >":             true,
 		"<p title=\"never closed":    false,
 		"<I>shouting</I>":            true,
+		`<action-text-attachment sgid="x" content-type="application/vnd.minka.person" content="@Anke"></action-text-attachment>`: true,
 	} {
 		if got := CarriesMarkup(value); got != want {
 			t.Errorf("CarriesMarkup(%q) = %v", value, got)
