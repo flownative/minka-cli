@@ -788,7 +788,7 @@ func TestTheCatalogListsEveryCommandWithItsFlags(t *testing.T) {
 	for _, cmd := range catalog.Commands {
 		byName[cmd.Command] = cmd
 	}
-	for _, name := range []string{"minka auth login", "minka me", "minka projects list", "minka boards list", "minka boards show", "minka cards show", "minka cards create", "minka cards edit", "minka cards move", "minka cards done", "minka cards delete", "minka cards assign", "minka cards unassign", "minka people list", "minka steps list", "minka steps create", "minka steps complete", "minka steps reopen", "minka steps delete", "minka comments create", "minka chats list", "minka chats mark-read", "minka messages list", "minka messages create", "minka messages edit", "minka messages delete"} {
+	for _, name := range []string{"minka auth login", "minka me", "minka projects list", "minka boards list", "minka boards show", "minka cards show", "minka cards create", "minka cards edit", "minka cards move", "minka cards done", "minka cards delete", "minka cards assign", "minka cards unassign", "minka people list", "minka steps list", "minka steps create", "minka steps complete", "minka steps reopen", "minka steps delete", "minka comments create", "minka chats list", "minka chats mark-read", "minka messages list", "minka messages create", "minka messages edit", "minka messages delete", "minka cards subscribe", "minka cards unsubscribe"} {
 		if _, ok := byName[name]; !ok {
 			t.Errorf("catalog misses %q", name)
 		}
@@ -1705,5 +1705,85 @@ func TestAMessageInAnUnknownFormatOrWithNothingMinkaKeepsIsRefused(t *testing.T)
 	expectCode(t, r, ExitUsage)
 	if n := len(e.server.Requests()); n != 0 {
 		t.Errorf("%d requests sent", n)
+	}
+}
+
+func TestSubscribeAndUnsubscribeAPerson(t *testing.T) {
+	e := newTestEnv(t)
+	card := e.fixture.CardInTriage
+	bruno := e.fixture.Bruno
+
+	env, r := e.runJSON("", "cards", "subscribe", card.ID, "me")
+	expectCode(t, r, ExitOK)
+	writes := e.server.WritingRequests()
+	if last := writes[len(writes)-1]; last.Method != http.MethodPost || last.Path != "/api/v1/cards/"+card.ID+"/subscribers/"+bruno.ID {
+		t.Errorf("request %s %s", last.Method, last.Path)
+	}
+	var got api.Card
+	if err := json.Unmarshal(env.Data, &got); err != nil || !hasPerson(got.Subscribers, bruno.ID) {
+		t.Errorf("card %s", env.Data)
+	}
+
+	env, r = e.runJSON("", "cards", "subscribe", card.ID, "me")
+	expectCode(t, r, ExitOK)
+	if !strings.Contains(env.Summary, "already") {
+		t.Errorf("summary %q", env.Summary)
+	}
+
+	env, r = e.runJSON("", "cards", "unsubscribe", card.ID, "bruno@example.com")
+	expectCode(t, r, ExitOK)
+	writes = e.server.WritingRequests()
+	if last := writes[len(writes)-1]; last.Method != http.MethodDelete || last.Path != "/api/v1/cards/"+card.ID+"/subscribers/"+bruno.ID {
+		t.Errorf("request %s %s", last.Method, last.Path)
+	}
+	if decode(t, env.Data)["wasSubscribed"] != true || len(card.SubscriberIDs) != 0 {
+		t.Errorf("data %s, subscribers %v", env.Data, card.SubscriberIDs)
+	}
+
+	env, r = e.runJSON("", "cards", "unsubscribe", card.ID, "me")
+	expectCode(t, r, ExitOK)
+	if decode(t, env.Data)["wasSubscribed"] != false {
+		t.Errorf("data %s", env.Data)
+	}
+}
+
+func TestSomebodyOutsideTheProjectIsNotSubscribed(t *testing.T) {
+	e := newTestEnv(t)
+	card := e.fixture.CardInTriage.ID
+
+	env, r := e.runJSON("", "cards", "subscribe", card, e.fixture.Stranger.ID)
+	expectCode(t, r, ExitValidation)
+	if env.Meta["apiCode"] != "personNotAProjectMember" {
+		t.Errorf("meta %v", env.Meta)
+	}
+
+	before := len(e.server.WritingRequests())
+	_, r = e.runJSON("", "cards", "subscribe", card, "Stranger")
+	expectCode(t, r, ExitUsage)
+	if n := len(e.server.WritingRequests()); n != before {
+		t.Errorf("%d requests written for a name nobody in the project has", n-before)
+	}
+}
+
+func TestSubscribersAppearOnTheCard(t *testing.T) {
+	e := newTestEnv(t)
+	e.fixture.CardInTriage.SubscriberIDs = []string{e.fixture.Bruno.ID, e.fixture.Anke.ID}
+
+	r := e.run("", "cards", "show", e.fixture.CardInTriage.ID, "--styled")
+	expectCode(t, r, ExitOK)
+	if !strings.Contains(r.stdout, "Subscribers: Anke, Bruno") {
+		t.Errorf("card:\n%s", r.stdout)
+	}
+}
+
+func TestSomebodyOnTheCardIsFoundByEmailAddress(t *testing.T) {
+	e := newTestEnv(t)
+	card := e.fixture.CardInTriage
+	card.AssigneeIDs = []string{e.fixture.Anke.ID}
+
+	_, r := e.runJSON("", "cards", "unassign", card.ID, "anke@example.com")
+	expectCode(t, r, ExitOK)
+	if writes := e.server.WritingRequests(); len(writes) != 1 || !strings.HasSuffix(writes[0].Path, "/assignees/"+e.fixture.Anke.ID) {
+		t.Errorf("requests %+v", writes)
 	}
 }

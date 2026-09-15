@@ -65,6 +65,9 @@ func renderCard(w io.Writer, card api.Card) {
 	if len(card.Assignees) > 0 {
 		fmt.Fprintf(w, "Assigned to: %s\n", assigneeNames(card.Assignees))
 	}
+	if len(card.Subscribers) > 0 {
+		fmt.Fprintf(w, "Subscribers: %s\n", assigneeNames(card.Subscribers))
+	}
 	if card.DueOn != nil {
 		fmt.Fprintf(w, "Due: %s\n", *card.DueOn)
 	}

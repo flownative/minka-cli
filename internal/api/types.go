@@ -98,9 +98,10 @@ type Card struct {
 	Creator      PersonReference   `json:"creator"`
 	CompletedAt  *string           `json:"completedAt"`
 	CompletedBy  *PersonReference  `json:"completedBy"`
-	Assignees    []PersonReference `json:"assignees"` // in the order they were assigned
-	DueOn        *string           `json:"dueOn"`     // the day it is due as YYYY-MM-DD, nil for a card without one
-	Steps        []Step            `json:"steps"`     // in the order the card shows them; only a single card carries them
+	Assignees    []PersonReference `json:"assignees"`   // in the order they were assigned
+	DueOn        *string           `json:"dueOn"`       // the day it is due as YYYY-MM-DD, nil for a card without one
+	Steps        []Step            `json:"steps"`       // in the order the card shows them; only a single card carries them
+	Subscribers  []PersonReference `json:"subscribers"` // everybody the card notifies, by name; only a single card carries them
 	Comments     []Comment         `json:"comments"`
 	AppURL       string            `json:"appUrl"`
 }

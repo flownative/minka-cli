@@ -27,6 +27,7 @@ func TestIdentifiersAreEscapedInThePath(t *testing.T) {
 	_ = client.DeleteStep(context.Background(), "c", "../s")
 	_, _ = client.Messages(context.Background(), "x/y", MessagesQuery{})
 	_ = client.DeleteMessage(context.Background(), "c", "../m")
+	_ = client.Unsubscribe(context.Background(), "c", "../p")
 
 	want := []string{
 		"/api/v1/cards/..%2Fme",
@@ -38,6 +39,7 @@ func TestIdentifiersAreEscapedInThePath(t *testing.T) {
 		"/api/v1/cards/c/steps/..%2Fs",
 		"/api/v1/chats/x%2Fy/messages",
 		"/api/v1/chats/c/messages/..%2Fm",
+		"/api/v1/cards/c/subscribers/..%2Fp",
 	}
 	if !slices.Equal(paths, want) {
 		t.Errorf("paths\n got: %q\nwant: %q", paths, want)
