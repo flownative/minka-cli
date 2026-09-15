@@ -220,6 +220,18 @@ func (c *Client) DeleteCard(ctx context.Context, cardID string) error {
 	return err
 }
 
+// EditComment changes a comment of the person of the token.
+func (c *Client) EditComment(ctx context.Context, cardID, commentID, body string) (Result[Comment], error) {
+	return request[Comment](ctx, c, http.MethodPatch, "/cards/"+url.PathEscape(cardID)+"/comments/"+url.PathEscape(commentID), map[string]string{"body": body})
+}
+
+// DeleteComment removes a comment of the person of the token. A removed comment
+// leaves nothing behind, so removing it again answers 404.
+func (c *Client) DeleteComment(ctx context.Context, cardID, commentID string) error {
+	_, err := request[struct{}](ctx, c, http.MethodDelete, "/cards/"+url.PathEscape(cardID)+"/comments/"+url.PathEscape(commentID), nil)
+	return err
+}
+
 func (c *Client) WriteComment(ctx context.Context, cardID string, body string) (Result[Comment], error) {
 	return request[Comment](ctx, c, http.MethodPost, "/cards/"+url.PathEscape(cardID)+"/comments", map[string]string{"body": body})
 }
