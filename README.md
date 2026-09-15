@@ -37,6 +37,7 @@ minka cards delete <cardId>
 minka cards assign <cardId> me
 minka people list <projectId>
 minka comments create <cardId> "Done in abc1234"
+minka messages list <chatId>
 minka commands        # every command with its flags
 ```
 

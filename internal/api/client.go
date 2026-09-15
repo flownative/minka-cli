@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -146,6 +147,55 @@ func (c *Client) SetStepCompleted(ctx context.Context, cardID, stepID string, co
 // succeeds as well.
 func (c *Client) DeleteStep(ctx context.Context, cardID, stepID string) error {
 	_, err := request[struct{}](ctx, c, http.MethodDelete, "/cards/"+url.PathEscape(cardID)+"/steps/"+url.PathEscape(stepID), nil)
+	return err
+}
+
+func (c *Client) Chats(ctx context.Context, projectID string) (Result[[]Chat], error) {
+	return request[[]Chat](ctx, c, http.MethodGet, "/projects/"+url.PathEscape(projectID)+"/chats", nil)
+}
+
+// Messages reads messages of a chat, oldest first.
+func (c *Client) Messages(ctx context.Context, chatID string, query MessagesQuery) (Result[[]ChatMessage], error) {
+	values := url.Values{}
+	if query.Before != nil {
+		values.Set("before", strconv.Itoa(*query.Before))
+	}
+	if query.After != nil {
+		values.Set("after", strconv.Itoa(*query.After))
+	}
+	if query.Limit != nil {
+		values.Set("limit", strconv.Itoa(*query.Limit))
+	}
+	path := "/chats/" + url.PathEscape(chatID) + "/messages"
+	if encoded := values.Encode(); encoded != "" {
+		path += "?" + encoded
+	}
+	return request[[]ChatMessage](ctx, c, http.MethodGet, path, nil)
+}
+
+// PostMessage writes a message in a chat. With a client message ID, sending
+// the same one again answers with status 200 and the message written before.
+func (c *Client) PostMessage(ctx context.Context, chatID, body, clientMessageID string) (Result[ChatMessage], error) {
+	fields := map[string]string{"body": body}
+	if clientMessageID != "" {
+		fields["clientMessageId"] = clientMessageID
+	}
+	return request[ChatMessage](ctx, c, http.MethodPost, "/chats/"+url.PathEscape(chatID)+"/messages", fields)
+}
+
+func (c *Client) EditMessage(ctx context.Context, chatID, messageID, body string) (Result[ChatMessage], error) {
+	return request[ChatMessage](ctx, c, http.MethodPatch, "/chats/"+url.PathEscape(chatID)+"/messages/"+url.PathEscape(messageID), map[string]string{"body": body})
+}
+
+// DeleteMessage removes a message. Removing a removed message succeeds as well.
+func (c *Client) DeleteMessage(ctx context.Context, chatID, messageID string) error {
+	_, err := request[struct{}](ctx, c, http.MethodDelete, "/chats/"+url.PathEscape(chatID)+"/messages/"+url.PathEscape(messageID), nil)
+	return err
+}
+
+// MarkChatRead notes how far a chat has been read. The mark only grows.
+func (c *Client) MarkChatRead(ctx context.Context, chatID string, seq int) error {
+	_, err := request[struct{}](ctx, c, http.MethodPost, "/chats/"+url.PathEscape(chatID)+"/read", map[string]int{"seq": seq})
 	return err
 }
 

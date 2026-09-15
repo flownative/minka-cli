@@ -1,19 +1,19 @@
 # Status
 
-Stand: 13.09.2026
+Stand: 15.09.2026
 
 ## Wo wir stehen
 
 **MVP fertig und reviewt.** Gegen den Fake getestet, im Smoke-Lauf gegen die
 lokale Instanz geprüft, Befunde des Reviews eingearbeitet.
 
-**Die CLI ruht auf diesem Stand** (Roberts Priorität, über minka-8a): Das
-Dogfooding in Minka wartet auf eine interne Alpha. Neue Features gibt es nur
-auf neuen Auftrag.
+**Die CLI zieht API-Änderungen nach**, die die Minka-Koordination meldet oder
+die beim Abgleich mit dem Code auffallen. Das Dogfooding in Minka wartet auf
+eine interne Alpha.
 
-API-Stand, gegen den gebaut ist: Minka `51b44e6` (API-1 bis API-5,
+API-Stand, gegen den gebaut ist: Minka `f9cc6f5` (API-1 bis API-5,
 erweiterte Allowlist aus E-060, Zuständige an Karten, neue Karten oben in der
-Spalte, Fälligkeitsdatum, Zuständige und Datum beim Anlegen, Schritte).
+Spalte, Fälligkeitsdatum, Zuständige und Datum beim Anlegen, Schritte, erweiterte Allowlist aus `72d0639`, Kommentare als Rich Text, Chat).
 Koordination in Minka: `minka-63`.
 
 Befehle:
@@ -27,6 +27,8 @@ minka people list <projectId>
 minka cards show|create|edit|move|assign|unassign|done|delete
 minka steps list|create|complete|reopen|delete
 minka comments create <cardId> <text|->
+minka chats list <projectId> | mark-read <chatId>
+minka messages list|create|edit|delete <chatId> ...
 minka commands            Katalog aller Befehle mit Flags
 minka version
 ```
@@ -153,6 +155,20 @@ Auf Roberts Wunsch folgen die Konventionen **basecamp-cli**. Den Umfang
     Zusammenfassung sagt, ob sich etwas geändert hat.
   - `steps list` gibt als `data` die Liste `steps` aus der Karte unverändert
     aus.
+- **Chat:**
+  - `chats list` und `chats mark-read`, dazu `messages list`, `create`, `edit`
+    und `delete`.
+  - `messages list` blättert mit `--before <seq>` zurück und holt mit
+    `--after <changeSeq>` alles Geänderte nach. `--before` und `--after`
+    zusammen sind ein Aufruffehler.
+  - Nachrichten sind Klartext, ohne Markdown-Umwandlung.
+  - `--client-message-id` macht erneutes Senden sicher. Mit ihr gilt ein
+    fehlgeschlagenes Senden (Netzwerk oder 5xx) als `retryable`, ohne sie
+    nicht.
+  - `chats mark-read` ohne `--seq` liest die letzte Nachricht und markiert
+    bis dahin.
+  - Eine fremde Nachricht zu ändern oder zu entfernen ergibt 404; der Hint
+    sagt, dass nur die Autorin darf.
 - **Fälligkeitsdatum:**
   - `--due YYYY-MM-DD` gibt es bei `cards create` und `cards edit`,
     `cards edit --due ""` entfernt es.
@@ -217,6 +233,13 @@ genannte Test wird rot. Zuletzt am 13.09.2026 nach dem Review ausgeführt:
 | Kommentare behalten Zeilenumbrüche | `TestACommentIsSentAsHTMLWithItsLineBreaks`, `TestKeepLineBreaksKeepsEveryLine` |
 | Alte Klartext-Kommentare unverändert, HTML als Markdown | `TestCommentsShowAsMarkdownAndOldPlainOnesAsTheyAre`, `TestCarriesMarkup` |
 | `--format` geprüft, leeres Ergebnis abgelehnt | `TestACommentInHTMLIsSentAsItIs`, `TestACommentWithNothingMinkaKeepsIsRefused` |
+| `--before` und `--after` nicht zusammen | `TestMessagesListRefusesWhatIsNoPage` |
+| `--before` als `before` gesendet | `TestMessagesListReadsBackAndCatchesUp` |
+| Senden mit `--client-message-id` retryable, ID geprüft | `TestAFailedPostCanBeSentAgainWithItsClientMessageID`, `TestMessagesCreateRefusesWhatIsNoMessage` |
+| Schon geschrieben wird gemeldet (200) | `TestMessagesCreateWritesOncePerClientMessageID` |
+| `mark-read` ohne `--seq` nimmt die letzte Nachricht | `TestMarkReadUsesTheLastMessageUnlessToldOtherwise` |
+| Hint „nur die Autorin“ bei 404 | `TestOnlyTheAuthorChangesOrRemovesAMessage` |
+| Nachrichten-ID im Pfad escaped | `TestIdentifiersAreEscapedInThePath` (api) |
 | 204 ohne Rumpf ist Erfolg | `TestAnEmptyAnswerIsASuccess` (api), `TestDeleteMovesACardToTheTrash` |
 | Nachbar in Zielspalte geprüft | `TestMoveNextToACardOutsideTheTargetColumnIsRefused` |
 | Done ohne Platzierung | `TestDoneTakesNoPlacement` |
@@ -309,17 +332,11 @@ oben; 404 nur bei einer ungültigen ID. Der Fake folgte dem schon.
 - Umbenennen und Umsortieren von Schritten gibt es in der API noch nicht.
 - Projekte haben seit Minka `ccd0439` Chat-Werkzeuge (`type=chat`).
   `boards list` zeigt nur Boards.
-- Die Chat-API gibt es auf dem Minka-Branch `chat` (`cf5e129` in
-  `/Users/robert/Sites/minka-2`). Dort läuft noch ein Review. Die CLI zieht
-  erst nach, wenn minka-63 den Commit auf main meldet, weil sich der Vertrag
-  noch verschieben kann.
-
-  Stand der Ankündigung:
-  - `GET /projects/{p}/chats`
-  - `GET /chats/{c}/messages` mit `after`, `before` und `limit`
-  - `POST`, `PATCH` und `DELETE` auf Nachrichten, `POST /chats/{c}/read`
-  - Nachrichten sind Klartext, ohne Markdown-Umwandlung
-  - Fehlercodes `chatMessage…` und `chatReadSeqMissing`
+- Chat-Nachrichten sollen HTML annehmen, sobald Lexxy im Chat ankommt. Dann
+  bekommt `messages create` wie `comments create` eine Markdown-Umwandlung.
+- Die erweiterte Allowlist (`72d0639`) und Kommentare als Rich Text
+  (`c7c4d1b`) kamen ohne Nachricht der Minka-Koordination; beides fiel beim
+  Abgleich mit dem Code auf. Ist an minka-63 gemeldet.
 
 - Spaltenfarben (`color` an Spalten) kommen mit Minka M2-2d, nur lesend. Die
   JSON-Ausgabe reicht sie ungeändert durch. Ob die Textausgabe sie zeigt,
@@ -328,6 +345,14 @@ oben; 404 nur bei einer ungültigen ID. Der Fake folgte dem schon.
 - Das Token `minka-cli-smoke` liegt in `~/.config/minka/config.json`.
   Widerrufen beim Umstieg auf das Dogfooding zur internen Alpha. Das
   Agentenkonto „Claude (Robert)" ist schon Mitglied im Minka-Projekt.
+- Die Chat-API (Minka `f9cc6f5`) ist am 15.09.2026 nur lesend live geprüft:
+  - `chats list` für „Test-Projekt“ zeigt die Chats „Chat1 Abnahme“ und
+    „Sommerfest“.
+  - `messages list` mit `--limit`, `--before` und `--after` funktioniert,
+    `--limit 0` endet mit Exit 9 `chatMessagesLimitNotANumber`.
+  - Schreibend (`create`, `edit`, `delete`, `mark-read`) ist live noch nicht
+    geprüft, weil bisher nur das Board „API-3 Abnahme“ für Schreibtests
+    freigegeben ist. Die Frage nach einem Test-Chat ist an minka-63 gestellt.
 - Kommentare als Rich Text (Minka `c7c4d1b`) sind am 15.09.2026 live geprüft:
   - Markdown mit Zeilenumbruch, Inline-Code und Liste speichert der Server so,
     wie die CLI es schickt; `--format html` bleibt unverändert.

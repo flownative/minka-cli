@@ -119,6 +119,33 @@ type Comment struct {
 	EditedAt  *string         `json:"editedAt"`
 }
 
+type Chat struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	UnreadCount int    `json:"unreadCount"` // counts own and removed messages as well
+	AppURL      string `json:"appUrl"`
+}
+
+type ChatMessage struct {
+	ID        string          `json:"id"`
+	Seq       int             `json:"seq"`       // the place in the transcript, which never changes
+	ChangeSeq int             `json:"changeSeq"` // raised with every change of the message
+	Author    PersonReference `json:"author"`
+	BodyHTML  string          `json:"bodyHtml"` // empty for a removed message
+	BodyText  string          `json:"bodyText"` // empty for a removed message
+	CreatedAt string          `json:"createdAt"`
+	EditedAt  *string         `json:"editedAt"`
+	Removed   bool            `json:"removed"`
+}
+
+// MessagesQuery chooses the messages of a chat. Without Before and After it is
+// the end of the transcript.
+type MessagesQuery struct {
+	Before *int // messages with a seq below this one
+	After  *int // messages that changed after this changeSeq
+	Limit  *int // at most this many, the server allows up to 200
+}
+
 // CreateCardInput creates a card with its description, due date and people in
 // one transaction.
 type CreateCardInput struct {

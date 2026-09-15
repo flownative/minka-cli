@@ -10,11 +10,14 @@ import (
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
+	"html"
 	"io"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -31,6 +34,7 @@ const (
 	maxDescriptionLength = 10000
 	maxCommentLength     = 10000
 	maxStepLength        = 500
+	maxChatMessageLength = 10000
 )
 
 var uuidPattern = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
@@ -93,8 +97,57 @@ type Comment struct {
 type RecordedRequest struct {
 	Method string
 	Path   string // escaped, as it arrived
+	Query  string // the raw query string
 	Header http.Header
 	Body   []byte
+}
+
+type Chat struct {
+	ID        string
+	ProjectID string
+	Name      string
+	Messages  []*ChatMessage // in the order of the transcript
+	ReadMarks map[string]int // person ID → the seq read up to
+
+	lastChangeSeq int
+}
+
+type ChatMessage struct {
+	ID              string
+	Seq             int
+	ChangeSeq       int
+	AuthorID        string
+	BodyText        string
+	BodyHTML        string
+	ClientMessageID string
+	CreatedAt       time.Time
+	EditedAt        *time.Time
+	Removed         bool
+}
+
+func (c *Chat) post(authorID, text, clientMessageID string, now time.Time) *ChatMessage {
+	c.lastChangeSeq++
+	message := &ChatMessage{
+		ID: newID(), Seq: len(c.Messages) + 1, ChangeSeq: c.lastChangeSeq, AuthorID: authorID,
+		BodyText: text, BodyHTML: chatHTML(text), ClientMessageID: clientMessageID, CreatedAt: now,
+	}
+	c.Messages = append(c.Messages, message)
+	return message
+}
+
+func (c *Chat) unread(personID string) int {
+	unread := 0
+	for _, message := range c.Messages {
+		if message.Seq > c.ReadMarks[personID] {
+			unread++
+		}
+	}
+	return unread
+}
+
+// chatHTML is a simple stand-in for the markup the server makes of chat text.
+func chatHTML(text string) string {
+	return "<p>" + strings.ReplaceAll(html.EscapeString(text), "\n", "<br>") + "</p>"
 }
 
 // Server is a running fake. The fields are its data; tests may change them
@@ -106,6 +159,7 @@ type Server struct {
 	Tokens   map[string]string // token → person ID
 	Projects []*Project
 	Boards   []*Board
+	Chats    []*Chat
 
 	mu       sync.Mutex
 	requests []RecordedRequest
@@ -132,6 +186,8 @@ type Fixture struct {
 	OtherProject  *Project
 	OtherBoard    *Board
 	OtherCard     *Card
+	Chat          *Chat // three messages by Bruno, Anke and Bruno; Bruno has read the first
+	OtherChat     *Chat
 }
 
 // New starts a fake with a small fixture: Bruno is a member of one project
@@ -181,6 +237,14 @@ func New(t testing.TB) (*Server, *Fixture) {
 	s.Projects = []*Project{project, otherProject}
 	s.Boards = []*Board{board, otherBoard}
 
+	chat := &Chat{ID: newID(), ProjectID: project.ID, Name: "Planung", ReadMarks: map[string]int{bruno.ID: 1}}
+	chat.post(bruno.ID, "Hallo", "", s.now)
+	chat.post(anke.ID, "Zelt ist bestellt", "", s.now)
+	chat.post(bruno.ID, "Danke", "", s.now)
+	otherChat := &Chat{ID: newID(), ProjectID: otherProject.ID, Name: "Secret chat", ReadMarks: map[string]int{}}
+	otherChat.post(stranger.ID, "Psst", "", s.now)
+	s.Chats = []*Chat{chat, otherChat}
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v1/me", s.authenticated(s.me))
 	mux.HandleFunc("GET /api/v1/projects", s.authenticated(s.projects))
@@ -198,6 +262,12 @@ func New(t testing.TB) (*Server, *Fixture) {
 	mux.HandleFunc("POST /api/v1/cards/{cardId}/steps", s.authenticated(s.addStep))
 	mux.HandleFunc("PATCH /api/v1/cards/{cardId}/steps/{stepId}", s.authenticated(s.updateStep))
 	mux.HandleFunc("DELETE /api/v1/cards/{cardId}/steps/{stepId}", s.authenticated(s.removeStep))
+	mux.HandleFunc("GET /api/v1/projects/{projectId}/chats", s.authenticated(s.chats))
+	mux.HandleFunc("GET /api/v1/chats/{chatId}/messages", s.authenticated(s.messages))
+	mux.HandleFunc("POST /api/v1/chats/{chatId}/messages", s.authenticated(s.postMessage))
+	mux.HandleFunc("PATCH /api/v1/chats/{chatId}/messages/{messageId}", s.authenticated(s.editMessage))
+	mux.HandleFunc("DELETE /api/v1/chats/{chatId}/messages/{messageId}", s.authenticated(s.removeMessage))
+	mux.HandleFunc("POST /api/v1/chats/{chatId}/read", s.authenticated(s.markChatRead))
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		// Flow answers an unknown path or a wrong method with an HTML page.
 		w.Header().Set("Content-Type", "text/html")
@@ -214,6 +284,7 @@ func New(t testing.TB) (*Server, *Fixture) {
 		Triage: triage, Doing: doing, NotNow: notNow, Done: done,
 		CardInTriage: cardInTriage, CardInDoing: cardInDoing,
 		OtherProject: otherProject, OtherBoard: otherBoard, OtherCard: otherCard,
+		Chat: chat, OtherChat: otherChat,
 	}
 }
 
@@ -249,7 +320,7 @@ func (s *Server) recording(next http.Handler) http.Handler {
 		r.Body = io.NopCloser(strings.NewReader(string(body)))
 
 		s.mu.Lock()
-		s.requests = append(s.requests, RecordedRequest{Method: r.Method, Path: r.URL.EscapedPath(), Header: r.Header.Clone(), Body: body})
+		s.requests = append(s.requests, RecordedRequest{Method: r.Method, Path: r.URL.EscapedPath(), Query: r.URL.RawQuery, Header: r.Header.Clone(), Body: body})
 		failWith := s.failWith
 		s.failWith = 0
 		s.mu.Unlock()
@@ -706,6 +777,241 @@ func stepResources(card *Card) []any {
 		list = append(list, map[string]any{"id": step.ID, "title": step.Title, "completed": step.Completed})
 	}
 	return list
+}
+
+var messageNumber = regexp.MustCompile(`^[0-9]{1,18}$`)
+
+func (s *Server) chats(w http.ResponseWriter, r *http.Request, person *Person) {
+	project := s.visibleProject(r.PathValue("projectId"), person)
+	if project == nil {
+		notFound(w)
+		return
+	}
+	list := []any{}
+	for _, chat := range s.Chats {
+		if chat.ProjectID == project.ID {
+			list = append(list, map[string]any{
+				"id": chat.ID, "name": chat.Name, "unreadCount": chat.unread(person.ID),
+				"appUrl": s.URL + "/projects/" + project.ID + "/chats/" + chat.ID,
+			})
+		}
+	}
+	writeJSON(w, http.StatusOK, list)
+}
+
+func (s *Server) visibleChat(id string, person *Person) *Chat {
+	for _, chat := range s.Chats {
+		if chat.ID == id && s.visibleProject(chat.ProjectID, person) != nil {
+			return chat
+		}
+	}
+	return nil
+}
+
+// messages pages the way the server does: before a seq, after a changeSeq,
+// or the end of the transcript, always oldest first.
+func (s *Server) messages(w http.ResponseWriter, r *http.Request, person *Person) {
+	chat := s.visibleChat(r.PathValue("chatId"), person)
+	if chat == nil {
+		notFound(w)
+		return
+	}
+	query := r.URL.Query()
+	wanted := 50
+	if limit := query.Get("limit"); limit != "" {
+		number, err := strconv.Atoi(limit)
+		if !messageNumber.MatchString(limit) || err != nil || number < 1 {
+			unprocessable(w, "chatMessagesLimitNotANumber", "The number of messages asked for has to be a whole number of at least one.")
+			return
+		}
+		wanted = min(number, 200)
+	}
+	last := func(messages []*ChatMessage) []*ChatMessage {
+		return messages[max(0, len(messages)-wanted):]
+	}
+
+	var page []*ChatMessage
+	switch {
+	case query.Get("before") != "":
+		before, err := strconv.Atoi(query.Get("before"))
+		if !messageNumber.MatchString(query.Get("before")) || err != nil {
+			notFound(w)
+			return
+		}
+		for _, message := range chat.Messages {
+			if message.Seq < before {
+				page = append(page, message)
+			}
+		}
+		page = last(page)
+	case query.Get("after") != "":
+		after, err := strconv.Atoi(query.Get("after"))
+		if !messageNumber.MatchString(query.Get("after")) || err != nil {
+			notFound(w)
+			return
+		}
+		for _, message := range chat.Messages {
+			if message.ChangeSeq > after {
+				page = append(page, message)
+			}
+		}
+		slices.SortFunc(page, func(a, b *ChatMessage) int { return a.ChangeSeq - b.ChangeSeq })
+		page = page[:min(len(page), wanted)]
+		slices.SortFunc(page, func(a, b *ChatMessage) int { return a.Seq - b.Seq })
+	default:
+		page = last(chat.Messages)
+	}
+
+	list := []any{}
+	for _, message := range page {
+		list = append(list, s.chatMessageResource(message))
+	}
+	writeJSON(w, http.StatusOK, list)
+}
+
+func validChatText(w http.ResponseWriter, text string) bool {
+	switch {
+	case utf8.RuneCountInString(text) > maxChatMessageLength:
+		unprocessable(w, "chatMessageTooLong", "The message is too long.")
+	case strings.IndexFunc(text, func(r rune) bool { return unicode.IsControl(r) && r != '\t' && r != '\n' && r != '\r' }) >= 0:
+		unprocessable(w, "chatMessageHasControlCharacters", "A chat message must not contain control characters other than line breaks and tabs.")
+	case text == "":
+		unprocessable(w, "chatMessageMissing", "A chat message needs a body.")
+	default:
+		return true
+	}
+	return false
+}
+
+func (s *Server) postMessage(w http.ResponseWriter, r *http.Request, person *Person) {
+	fields, ok := readBody(w, r)
+	if !ok {
+		return
+	}
+	body, ok := stringField(w, fields, "body")
+	if !ok {
+		return
+	}
+	text := phpTrim(deref(body))
+	if !validChatText(w, text) {
+		return
+	}
+	clientMessageID, ok := stringField(w, fields, "clientMessageId")
+	if !ok {
+		return
+	}
+	if deref(clientMessageID) != "" && !uuidPattern.MatchString(*clientMessageID) {
+		unprocessable(w, "chatMessageDraftNotAnIdentifier", "The name of the draft has to be a UUID.")
+		return
+	}
+
+	chat := s.visibleChat(r.PathValue("chatId"), person)
+	if chat == nil {
+		notFound(w)
+		return
+	}
+	if deref(clientMessageID) != "" {
+		for _, message := range chat.Messages {
+			if message.ClientMessageID == *clientMessageID && message.AuthorID == person.ID {
+				writeJSON(w, http.StatusOK, s.chatMessageResource(message))
+				return
+			}
+		}
+	}
+	writeJSON(w, http.StatusCreated, s.chatMessageResource(chat.post(person.ID, text, deref(clientMessageID), s.now)))
+}
+
+// authoredMessage is the message of this chat that the person wrote and has
+// not removed, as the server's statements find it.
+func authoredMessage(chat *Chat, messageID string, person *Person) *ChatMessage {
+	for _, message := range chat.Messages {
+		if message.ID == messageID && message.AuthorID == person.ID {
+			return message
+		}
+	}
+	return nil
+}
+
+func (s *Server) editMessage(w http.ResponseWriter, r *http.Request, person *Person) {
+	fields, ok := readBody(w, r)
+	if !ok {
+		return
+	}
+	body, ok := stringField(w, fields, "body")
+	if !ok {
+		return
+	}
+	text := phpTrim(deref(body))
+	if !validChatText(w, text) {
+		return
+	}
+	chat := s.visibleChat(r.PathValue("chatId"), person)
+	if chat == nil {
+		notFound(w)
+		return
+	}
+	message := authoredMessage(chat, r.PathValue("messageId"), person)
+	if message == nil || message.Removed {
+		notFound(w)
+		return
+	}
+	if message.BodyText != text {
+		now := s.now
+		chat.lastChangeSeq++
+		message.BodyText, message.BodyHTML, message.EditedAt, message.ChangeSeq = text, chatHTML(text), &now, chat.lastChangeSeq
+	}
+	writeJSON(w, http.StatusOK, s.chatMessageResource(message))
+}
+
+func (s *Server) removeMessage(w http.ResponseWriter, r *http.Request, person *Person) {
+	chat := s.visibleChat(r.PathValue("chatId"), person)
+	if chat == nil {
+		notFound(w)
+		return
+	}
+	message := authoredMessage(chat, r.PathValue("messageId"), person)
+	if message == nil {
+		notFound(w)
+		return
+	}
+	if !message.Removed {
+		chat.lastChangeSeq++
+		message.Removed, message.BodyText, message.BodyHTML, message.ChangeSeq = true, "", "", chat.lastChangeSeq
+	}
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// markChatRead keeps the highest mark and never one beyond the last message.
+func (s *Server) markChatRead(w http.ResponseWriter, r *http.Request, person *Person) {
+	fields, ok := readBody(w, r)
+	if !ok {
+		return
+	}
+	value, isNumber := fields["seq"].(float64)
+	if !isNumber || value < 0 || value != math.Trunc(value) {
+		unprocessable(w, "chatReadSeqMissing", "The number a chat has been read up to has to be a whole number of at least zero.")
+		return
+	}
+	chat := s.visibleChat(r.PathValue("chatId"), person)
+	if chat == nil {
+		notFound(w)
+		return
+	}
+	seq := min(int(value), len(chat.Messages))
+	if seq > chat.ReadMarks[person.ID] {
+		chat.ReadMarks[person.ID] = seq
+	}
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) chatMessageResource(message *ChatMessage) map[string]any {
+	return map[string]any{
+		"id": message.ID, "seq": message.Seq, "changeSeq": message.ChangeSeq,
+		"author": s.personReference(message.AuthorID), "bodyHtml": message.BodyHTML, "bodyText": message.BodyText,
+		"createdAt": timestamp(message.CreatedAt), "editedAt": timestampOrNil(message.EditedAt), "removed": message.Removed,
+	}
 }
 
 func notAProjectMember(w http.ResponseWriter) {
