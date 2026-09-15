@@ -163,17 +163,16 @@ such as `Doing`.
 
 ## Descriptions and comments
 
-- Descriptions are Markdown by default and sent as HTML. Minka keeps
-  paragraphs, headings `#` to `###`, bold, italic, strikethrough, inline code,
-  links, lists, quotes, code blocks and horizontal rules. Deeper headings
-  become level 3, tables become preformatted text, images become links, links
+- Descriptions are Markdown by default and sent as HTML. Minka keeps every
+  heading level, bold, italic, strikethrough, inline code, links with titles,
+  lists (numbered ones also from another start), quotes, code blocks with
+  their language, tables and horizontal rules. Images become links, links
   other than http, https, mailto, tel and relative ones become plain text.
   These changes are reported in `notice`, and on stderr for text output and
-  `--quiet`. The language of a code block is not kept.
+  `--quiet`.
 - Markdown that holds text but nothing Minka keeps (only link reference
   definitions, for example) is refused, so it cannot remove a description by
   accident. To remove a description, give `--description ""`.
-- Saving a description in the web editor currently drops horizontal rules.
 - `--description-format html` sends HTML as it is; the server sanitizes it.
 - `cards show --styled` prints the description as Markdown, which can be edited
   and sent back with `cards edit --description -`.

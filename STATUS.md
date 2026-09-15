@@ -80,11 +80,16 @@ Auf Roberts Wunsch folgen die Konventionen **basecamp-cli**. Den Umfang
   - IDs werden lokal als UUID geprüft (sonst Exit 1 ohne Request) und
     zusätzlich im Pfad escaped.
   - Timeout 30 s, Antworten höchstens 16 MB.
-- **Markdown → HTML** (goldmark), nur Elemente der Server-Allowlist:
-  - `#` bis `###` werden `h1` bis `h3`, tiefere Überschriften `h3`.
-  - Inline-Code wird `code`, Code-Blöcke werden `pre > code` (ohne Sprache).
+- **Markdown → HTML** (goldmark), nur Elemente und Attributwerte der
+  Server-Allowlist, Stand Minka `72d0639`:
+  - Überschriften aller sechs Ebenen, `ol start`, Link-Titel bis 200 Zeichen.
+  - Inline-Code wird `code`. Code-Blöcke werden `pre > code`, mit
+    `data-language`, wenn die Sprache dem Muster des Servers entspricht.
   - `---` wird `hr`.
-  - Tabellen werden ausgerichteter Text in `pre`.
+  - Tabellen werden so geschrieben, wie der Editor sie schreibt:
+    `figure.lexxy-content__table-wrapper > table > tbody`, Kopfzellen
+    `th.lexxy-content__table-cell--header`. Die Spaltenausrichtung geht
+    verloren.
   - Bilder werden Links, ein Bild in einem Link wird nur sein Label.
   - Rohes HTML im Markdown wird sichtbarer Text.
   - Links mit anderen Zielen als http, https, mailto, tel und relativen URLs
@@ -200,6 +205,10 @@ genannte Test wird rot. Zuletzt am 13.09.2026 nach dem Review ausgeführt:
 | Text auf zwei Schritten mehrdeutig | `TestAStepTextOfTwoStepsIsAmbiguous` |
 | Position außerhalb der Liste abgelehnt | `TestAPositionOutsideTheListIsRefused` |
 | Schritt-ID im Pfad escaped | `TestIdentifiersAreEscapedInThePath` (api) |
+| Code-Sprache, `th`-Klasse, kein `thead` (Allowlist) | `TestOnlyElementsTheServerKeepsAreWritten` |
+| `ol start` und Link-Titel escaped | `TestConversions` |
+| `|` in Tabellenzellen escaped (HTML → Markdown) | `TestToMarkdown` |
+| Listenstart und tiefe Überschriften im Rückweg | `TestMarkdownOfADescriptionConvertsBackToTheSameHTML` |
 | 204 ohne Rumpf ist Erfolg | `TestAnEmptyAnswerIsASuccess` (api), `TestDeleteMovesACardToTheTrash` |
 | Nachbar in Zielspalte geprüft | `TestMoveNextToACardOutsideTheTargetColumnIsRefused` |
 | Done ohne Platzierung | `TestDoneTakesNoPlacement` |
@@ -311,6 +320,12 @@ oben; 404 nur bei einer ungültigen ID. Der Fake folgte dem schon.
 - Das Token `minka-cli-smoke` liegt in `~/.config/minka/config.json`.
   Widerrufen beim Umstieg auf das Dogfooding zur internen Alpha. Das
   Agentenkonto „Claude (Robert)" ist schon Mitglied im Minka-Projekt.
+- Die erweiterte Allowlist (Minka `72d0639`) ist am 15.09.2026 live geprüft:
+  - `h4`, `h6`, ein Link mit Titel, `ol start="3"`, `pre data-language="go"`
+    und eine Tabelle mit `|` in einer Zelle speichert der Server so, wie die
+    CLI sie schickt. Er ergänzt nur `rel="noopener"` an externen Links.
+  - `cards show` → `cards edit` ergibt dasselbe HTML.
+  - Die Testkarte ist wieder gelöscht.
 - Schritte sind am 14.09.2026 live geprüft (Minka `ee39f45`):
   - Anlegen, auch über stdin, und die leere Liste funktionieren.
   - Abhaken per Position, doppeltes Abhaken meldet „already", Öffnen per Text
