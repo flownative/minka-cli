@@ -71,7 +71,7 @@ Validation codes in `meta.apiCode`: `cardTitleMissing`, `cardTitleTooLong`,
 fine), `commentNotReadable`, `cardDueDateNotADate`, `personNotAProjectMember`, `personIdMissing`,
 `stepMissing`, `stepTooLong`, `stepHasControlCharacters`, `stepCompletedMissing`,
 `chatMessageMissing`, `chatMessageTooLong`, `chatMessageHasControlCharacters`,
-`chatMessageDraftNotAnIdentifier`, `chatMessagesLimitNotANumber`,
+`chatMessageNotReadable`, `chatMessageDraftNotAnIdentifier`, `chatMessagesLimitNotANumber`,
 `chatReadSeqMissing`, `nothingToChange`, `columnIdMissing`, `malformedBody`,
 `unsupportedMediaType`.
 
@@ -182,8 +182,10 @@ such as `Doing`.
   - Catch up with `--after <changeSeq>`: new messages, edits and removals in
     one answer. Keep the highest `changeSeq` you have seen.
   - A removed message comes with `removed: true` and empty text.
-- `messages create` writes plain text: line breaks are kept, addresses become
-  links. Always pass `--client-message-id` with a UUID of your own: sending it
+- `messages create` and `messages edit` take Markdown by default and send it
+  as HTML, keeping every line break, as comments do. `--format text` sends the
+  text as it is (the server keeps it as plain text with line breaks and
+  links), `--format html` sends HTML. Always pass `--client-message-id` with a UUID of your own: sending it
   again then writes nothing new, and a failed send is `retryable`.
 - `messages edit` and `messages delete` only work on your own messages;
   somebody else's exits 2. Deleting twice succeeds.

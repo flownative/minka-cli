@@ -1545,7 +1545,7 @@ func TestMessagesCreateWritesOncePerClientMessageID(t *testing.T) {
 
 	env, r := e.runJSON("", "messages", "create", chat.ID, "Zelt kommt um 9", "--client-message-id", id)
 	expectCode(t, r, ExitOK)
-	if body := e.lastWriteBody(); len(body) != 2 || body["body"] != "Zelt kommt um 9" || body["clientMessageId"] != id {
+	if body := e.lastWriteBody(); len(body) != 2 || body["body"] != "<p>Zelt kommt um 9</p>" || body["clientMessageId"] != id {
 		t.Errorf("body sent %v", body)
 	}
 	if decode(t, env.Data)["seq"] != float64(4) {
@@ -1664,5 +1664,46 @@ func TestMessagesAsText(t *testing.T) {
 		if !strings.Contains(r.stdout, want) {
 			t.Errorf("missing %q in:\n%s", want, r.stdout)
 		}
+	}
+}
+
+func TestAMessageIsSentAsMarkdownTextOrHTML(t *testing.T) {
+	e := newTestEnv(t)
+	chat := e.fixture.Chat
+
+	for _, test := range []struct {
+		args []string
+		body string
+	}{
+		{[]string{"**Zelt** ist\nbestellt: https://example.com"}, `<p><strong>Zelt</strong> ist<br>bestellt: <a href="https://example.com">https://example.com</a></p>`},
+		{[]string{"**as typed**\nsecond", "--format", "text"}, "**as typed**\nsecond"},
+		{[]string{"<p>as <em>is</em></p>", "--format", "html"}, "<p>as <em>is</em></p>"},
+	} {
+		_, r := e.runJSON("", append([]string{"messages", "create", chat.ID}, test.args...)...)
+		expectCode(t, r, ExitOK)
+		if got := e.lastWriteBody()["body"]; got != test.body {
+			t.Errorf("%v: body sent %q, want %q", test.args, got, test.body)
+		}
+	}
+
+	_, r := e.runJSON("", "messages", "edit", chat.ID, chat.Messages[0].ID, "*neu*")
+	expectCode(t, r, ExitOK)
+	if got := e.lastWriteBody()["body"]; got != "<p><em>neu</em></p>" {
+		t.Errorf("edit sent %q", got)
+	}
+}
+
+func TestAMessageInAnUnknownFormatOrWithNothingMinkaKeepsIsRefused(t *testing.T) {
+	e := newTestEnv(t)
+	chat := e.fixture.Chat
+
+	_, r := e.runJSON("", "messages", "create", chat.ID, "x", "--format", "rtf")
+	expectCode(t, r, ExitUsage)
+	_, r = e.runJSON("", "messages", "edit", chat.ID, chat.Messages[0].ID, "x", "--format", "rtf")
+	expectCode(t, r, ExitUsage)
+	_, r = e.runJSON("", "messages", "create", chat.ID, "[x]: https://example.com")
+	expectCode(t, r, ExitUsage)
+	if n := len(e.server.Requests()); n != 0 {
+		t.Errorf("%d requests sent", n)
 	}
 }
