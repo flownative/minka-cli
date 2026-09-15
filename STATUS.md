@@ -11,7 +11,7 @@ lokale Instanz geprüft, Befunde des Reviews eingearbeitet.
 die beim Abgleich mit dem Code auffallen. Das Dogfooding in Minka wartet auf
 eine interne Alpha.
 
-API-Stand, gegen den gebaut ist: Minka `f9cc6f5` (API-1 bis API-5,
+API-Stand, gegen den gebaut ist: Minka `4f5629f` (API-1 bis API-5,
 erweiterte Allowlist aus E-060, Zuständige an Karten, neue Karten oben in der
 Spalte, Fälligkeitsdatum, Zuständige und Datum beim Anlegen, Schritte, erweiterte Allowlist aus `72d0639`, Kommentare als Rich Text, Chat).
 Koordination in Minka: `minka-63`.
@@ -100,6 +100,11 @@ Auf Roberts Wunsch folgen die Konventionen **basecamp-cli**. Den Umfang
   - Markdown, das Text enthält, aber nichts, was Minka behält, wird
     abgelehnt, statt die Beschreibung zu löschen. Löschen geht mit
     `--description ""`.
+- **Klartext oder Markup:** `richtext.CarriesMarkup` folgt der Regel des
+  Servers aus Minka `4f5629f`. Markup ist nur ein Tag eines bedienten
+  Elements, der bis zur schließenden spitzen Klammer ausgeschrieben ist.
+  `"a<i und b<s"` bleibt Klartext. Links, die mit `\\` oder `/\` beginnen,
+  gelten wie `//host` als unsicher.
 - **HTML → Markdown** für `cards show` im Text: Text wird escaped, `<br>`
   wird ein harter Umbruch. Zurückgeschickt entsteht dasselbe HTML.
 - **Kommentare** sind seit Minka `c7c4d1b` Rich Text wie Beschreibungen.
@@ -241,6 +246,7 @@ genannte Test wird rot. Zuletzt am 13.09.2026 nach dem Review ausgeführt:
 | Hint „nur die Autorin“ bei 404 | `TestOnlyTheAuthorChangesOrRemovesAMessage` |
 | Nachrichten-ID im Pfad escaped | `TestIdentifiersAreEscapedInThePath` (api) |
 | Link mit `\\host` wie `//host` abgelehnt | `TestConversions` |
+| Klartext-Erkennung nach der Regel des Servers | `TestCarriesMarkup` |
 | 204 ohne Rumpf ist Erfolg | `TestAnEmptyAnswerIsASuccess` (api), `TestDeleteMovesACardToTheTrash` |
 | Nachbar in Zielspalte geprüft | `TestMoveNextToACardOutsideTheTargetColumnIsRefused` |
 | Done ohne Platzierung | `TestDoneTakesNoPlacement` |
@@ -334,12 +340,6 @@ oben; 404 nur bei einer ungültigen ID. Der Fake folgte dem schon.
 - Projekte haben seit Minka `ccd0439` Chat-Werkzeuge (`type=chat`).
   `boards list` zeigt nur Boards.
 - Angekündigt von minka-63, noch nicht auf main:
-  - **Fixup RichText (Review B2):** Die Klartext-Erkennung verlangt echte
-    Tag-Form und fällt bei jedem Verlust auf Klartext zurück, sodass
-    `"a<i und b<s"` als Klartext heil bleibt. Danach `richtext.CarriesMarkup`
-    an die Regel des Servers angleichen; heute hält die CLI `<i ` schon für
-    Markup. Ein Link mit `\\host` wird abgelehnt wie `//host`; das setzt
-    `markdown.isSafeURL` schon um.
   - **Chat-4:** Nachrichten nehmen bereinigtes HTML an, Klartext bleibt
     bytegleich, und `bodyText` wird aus dem HTML abgeleitet. Dann bekommt
     `messages create` wie `comments create` eine Markdown-Umwandlung.
