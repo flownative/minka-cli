@@ -84,8 +84,10 @@ Testdatenbank, und andere Agenten testen parallel darin.
 
 Erlaubt: lesen, `beach exec ./flow token:create|token:list|token:revoke`,
 Live-Aufrufe gegen `https://minka.localbeach.net`. **Geschrieben wird live nur
-im Board „API-3 Abnahme" im Projekt „Test-Projekt"** (oder einem Board
-„CLI Abnahme", falls Robert es anlegt). Nichts löschen.
+im Board „API-3 Abnahme" und im Chat „Chat1 Abnahme", beide im Projekt
+„Test-Projekt".** Der Chat „Sommerfest" dort ist Roberts Demo und bleibt
+unberührt. Gelöscht werden nur Karten und Nachrichten, die ein Test selbst
+angelegt hat.
 
 Tokens stehen nie im Repository, in Commits, Tests oder Logs, nur in der
 Konfigurationsdatei der CLI (`~/.config/minka/config.json`, 0600). Für
