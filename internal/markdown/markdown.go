@@ -400,6 +400,11 @@ var urlSchemes = map[string]bool{"http": true, "https": true, "mailto": true, "t
 // empty and no protocol-relative ones. The server removes any other href, and
 // the link would disappear without a warning.
 func isSafeURL(destination []byte) bool {
+	// A browser reads a backslash at the start of a URL as a slash, so "\\host"
+	// leaves Minka just as "//host" does.
+	if raw := strings.ReplaceAll(urlIgnoredCharacters.ReplaceAllString(string(destination), ""), `\`, "/"); strings.HasPrefix(raw, "//") {
+		return false
+	}
 	candidate := strings.ToLower(urlIgnoredCharacters.ReplaceAllString(string(util.URLEscape(destination, true)), ""))
 	if candidate == "" || strings.HasPrefix(candidate, "//") {
 		return false

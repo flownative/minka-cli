@@ -85,6 +85,7 @@ func TestConversions(t *testing.T) {
 		{"unsafe link", "[x](javascript:alert(1))", "<p>x</p>", []string{WarningUnsafeLinks}},
 		{"ftp link", "[x](ftp://a/b)", "<p>x</p>", []string{WarningUnsafeLinks}},
 		{"protocol-relative link", "[x](//evil.example)", "<p>x</p>", []string{WarningUnsafeLinks}},
+		{"protocol-relative link with backslashes", `[x](\\\\evil.example) [y](/\\evil.example)`, "<p>x y</p>", []string{WarningUnsafeLinks}},
 		{"empty link", "[x]()", "<p>x</p>", []string{WarningUnsafeLinks}},
 		{"relative links", "[a](docs/a) [b](/b) [c](#c) [d](mailto:d@example.com) [e](tel:+49)", `<p><a href="docs/a">a</a> <a href="/b">b</a> <a href="#c">c</a> <a href="mailto:d@example.com">d</a> <a href="tel:+49">e</a></p>`, nil},
 		{"data image", "![x](data:image/png;base64,AAAA)", "<p>x</p>", []string{WarningImages, WarningUnsafeLinks}},

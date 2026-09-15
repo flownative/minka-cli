@@ -240,6 +240,7 @@ genannte Test wird rot. Zuletzt am 13.09.2026 nach dem Review ausgeführt:
 | `mark-read` ohne `--seq` nimmt die letzte Nachricht | `TestMarkReadUsesTheLastMessageUnlessToldOtherwise` |
 | Hint „nur die Autorin“ bei 404 | `TestOnlyTheAuthorChangesOrRemovesAMessage` |
 | Nachrichten-ID im Pfad escaped | `TestIdentifiersAreEscapedInThePath` (api) |
+| Link mit `\\host` wie `//host` abgelehnt | `TestConversions` |
 | 204 ohne Rumpf ist Erfolg | `TestAnEmptyAnswerIsASuccess` (api), `TestDeleteMovesACardToTheTrash` |
 | Nachbar in Zielspalte geprüft | `TestMoveNextToACardOutsideTheTargetColumnIsRefused` |
 | Done ohne Platzierung | `TestDoneTakesNoPlacement` |
@@ -332,8 +333,16 @@ oben; 404 nur bei einer ungültigen ID. Der Fake folgte dem schon.
 - Umbenennen und Umsortieren von Schritten gibt es in der API noch nicht.
 - Projekte haben seit Minka `ccd0439` Chat-Werkzeuge (`type=chat`).
   `boards list` zeigt nur Boards.
-- Chat-Nachrichten sollen HTML annehmen, sobald Lexxy im Chat ankommt. Dann
-  bekommt `messages create` wie `comments create` eine Markdown-Umwandlung.
+- Angekündigt von minka-63, noch nicht auf main:
+  - **Fixup RichText (Review B2):** Die Klartext-Erkennung verlangt echte
+    Tag-Form und fällt bei jedem Verlust auf Klartext zurück, sodass
+    `"a<i und b<s"` als Klartext heil bleibt. Danach `richtext.CarriesMarkup`
+    an die Regel des Servers angleichen; heute hält die CLI `<i ` schon für
+    Markup. Ein Link mit `\\host` wird abgelehnt wie `//host`; das setzt
+    `markdown.isSafeURL` schon um.
+  - **Chat-4:** Nachrichten nehmen bereinigtes HTML an, Klartext bleibt
+    bytegleich, und `bodyText` wird aus dem HTML abgeleitet. Dann bekommt
+    `messages create` wie `comments create` eine Markdown-Umwandlung.
 - Die erweiterte Allowlist (`72d0639`) und Kommentare als Rich Text
   (`c7c4d1b`) kamen ohne Nachricht der Minka-Koordination; beides fiel beim
   Abgleich mit dem Code auf. Ist an minka-63 gemeldet.
@@ -345,14 +354,19 @@ oben; 404 nur bei einer ungültigen ID. Der Fake folgte dem schon.
 - Das Token `minka-cli-smoke` liegt in `~/.config/minka/config.json`.
   Widerrufen beim Umstieg auf das Dogfooding zur internen Alpha. Das
   Agentenkonto „Claude (Robert)" ist schon Mitglied im Minka-Projekt.
-- Die Chat-API (Minka `f9cc6f5`) ist am 15.09.2026 nur lesend live geprüft:
-  - `chats list` für „Test-Projekt“ zeigt die Chats „Chat1 Abnahme“ und
-    „Sommerfest“.
+- Die Chat-API (Minka `f9cc6f5`) ist am 15.09.2026 live geprüft, schreibend im
+  Chat „Chat1 Abnahme“ in „Test-Projekt“, von minka-63 dafür freigegeben:
+  - `chats list` zeigt die Chats mit ungelesenen Nachrichten.
   - `messages list` mit `--limit`, `--before` und `--after` funktioniert,
     `--limit 0` endet mit Exit 9 `chatMessagesLimitNotANumber`.
-  - Schreibend (`create`, `edit`, `delete`, `mark-read`) ist live noch nicht
-    geprüft, weil bisher nur das Board „API-3 Abnahme“ für Schreibtests
-    freigegeben ist. Die Frage nach einem Test-Chat ist an minka-63 gestellt.
+  - `messages create` mit `--client-message-id` schreibt die Nachricht; ein
+    zweites Senden mit derselben ID liefert dieselbe Nachricht.
+  - Zeilenumbruch und Autolink kommen im `bodyHtml` an.
+  - `messages edit` erhöht `changeSeq`, und `--after` holt die Änderung nach.
+  - `messages delete` zweimal ergibt beide Male Exit 0; die Nachricht steht
+    danach als „removed“ im Verlauf.
+  - `chats mark-read` setzt die ungelesenen Nachrichten auf 0.
+  - Eine leere Nachricht endet mit Exit 9 `chatMessageMissing`.
 - Kommentare als Rich Text (Minka `c7c4d1b`) sind am 15.09.2026 live geprüft:
   - Markdown mit Zeilenumbruch, Inline-Code und Liste speichert der Server so,
     wie die CLI es schickt; `--format html` bleibt unverändert.
