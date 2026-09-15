@@ -129,7 +129,7 @@ func (c *Chat) post(authorID, text, clientMessageID string, now time.Time) *Chat
 	c.lastChangeSeq++
 	message := &ChatMessage{
 		ID: newID(), Seq: len(c.Messages) + 1, ChangeSeq: c.lastChangeSeq, AuthorID: authorID,
-		BodyText: text, BodyHTML: chatHTML(text), ClientMessageID: clientMessageID, CreatedAt: now,
+		BodyText: chatText(text), BodyHTML: chatHTML(text), ClientMessageID: clientMessageID, CreatedAt: now,
 	}
 	c.Messages = append(c.Messages, message)
 	return message
@@ -145,9 +145,24 @@ func (c *Chat) unread(personID string) int {
 	return unread
 }
 
-// chatHTML is a simple stand-in for the markup the server makes of chat text.
+var tagForm = regexp.MustCompile(`<[a-zA-Z/][^<>]*>`)
+
+// chatHTML is a simple stand-in for the markup the server makes of chat text:
+// markup is kept as sent, plain text is escaped into a paragraph.
 func chatHTML(text string) string {
+	if tagForm.MatchString(text) {
+		return text
+	}
 	return "<p>" + strings.ReplaceAll(html.EscapeString(text), "\n", "<br>") + "</p>"
+}
+
+// chatText is a simple stand-in for the plain text the server derives from the
+// markup of a message.
+func chatText(text string) string {
+	if !tagForm.MatchString(text) {
+		return text
+	}
+	return html.UnescapeString(tagForm.ReplaceAllString(strings.ReplaceAll(text, "<br>", "\n"), ""))
 }
 
 // Server is a running fake. The fields are its data; tests may change them
@@ -955,10 +970,10 @@ func (s *Server) editMessage(w http.ResponseWriter, r *http.Request, person *Per
 		notFound(w)
 		return
 	}
-	if message.BodyText != text {
+	if message.BodyHTML != chatHTML(text) {
 		now := s.now
 		chat.lastChangeSeq++
-		message.BodyText, message.BodyHTML, message.EditedAt, message.ChangeSeq = text, chatHTML(text), &now, chat.lastChangeSeq
+		message.BodyText, message.BodyHTML, message.EditedAt, message.ChangeSeq = chatText(text), chatHTML(text), &now, chat.lastChangeSeq
 	}
 	writeJSON(w, http.StatusOK, s.chatMessageResource(message))
 }

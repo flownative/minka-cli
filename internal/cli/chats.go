@@ -4,9 +4,11 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"text/tabwriter"
 
 	"github.com/flownative/minka-cli/internal/api"
+	"github.com/flownative/minka-cli/internal/markdown"
 	"github.com/spf13/cobra"
 )
 
@@ -196,14 +198,37 @@ come, up to 200. A removed message comes along with removed: true and no text.`,
 	return cmd
 }
 
+const messageFormatHelp = `The text is Markdown by default and is sent as HTML, the way a comment is:
+every line break is kept, and addresses become links. --format text sends the
+text as it is, and the server keeps it as plain text with paragraphs, line
+breaks and links. --format html sends HTML as it is; the server reduces it to
+what it keeps. Give - as the text to read it from stdin.`
+
+// messageBody turns the text of a chat message into what is sent.
+func messageBody(cmd *cobra.Command, text, format string) (string, []string, error) {
+	switch format {
+	case "text", "html":
+		return text, nil, nil
+	case "markdown":
+		result := markdown.ToHTML(text, markdown.KeepLineBreaks())
+		if result.HTML == "" && strings.TrimSpace(text) != "" {
+			return "", nil, &Error{Code: CodeUsage, Message: "the message has nothing Minka keeps"}
+		}
+		return result.HTML, result.Warnings, nil
+	default:
+		return "", nil, usageErrorf(cmd, "--format is markdown, text or html, not %q", format)
+	}
+}
+
 func (a *app) newMessagesCreateCmd() *cobra.Command {
-	var clientMessageID string
+	var clientMessageID, format string
 
 	cmd := &cobra.Command{
 		Use:   "create <chatId> <text|->",
 		Short: "Write a message in a chat",
-		Long: `Writes a message in a chat. The text is plain text: line breaks are kept and
-addresses become links. Give - as the text to read it from stdin.
+		Long: `Writes a message in a chat.
+
+` + messageFormatHelp + `
 
 --client-message-id names the message with a UUID of your own. The same one
 sent again writes nothing new and answers with the message written before, so
@@ -215,7 +240,14 @@ a message whose sending failed can be sent again without appearing twice.`,
 			if clientMessageID != "" && !uuidPattern.MatchString(clientMessageID) {
 				return usageErrorf(cmd, "--client-message-id has to be a UUID")
 			}
+			if _, _, err := messageBody(cmd, "", format); err != nil {
+				return err
+			}
 			text, err := a.readValue("the message", args[1])
+			if err != nil {
+				return err
+			}
+			body, notices, err := messageBody(cmd, text, format)
 			if err != nil {
 				return err
 			}
@@ -224,7 +256,7 @@ a message whose sending failed can be sent again without appearing twice.`,
 			if err != nil {
 				return err
 			}
-			message, err := s.client.PostMessage(a.ctx, args[0], text, clientMessageID)
+			message, err := s.client.PostMessage(a.ctx, args[0], body, clientMessageID)
 			if err != nil {
 				e := s.fail(err)
 				switch {
@@ -244,24 +276,37 @@ a message whose sending failed can be sent again without appearing twice.`,
 			return a.ok(success{
 				data:    message.Raw,
 				summary: summary,
+				notices: notices,
 				text:    func(w io.Writer) { fmt.Fprintf(w, "%s.\n", summary) },
 			})
 		},
 	}
 	cmd.Flags().StringVar(&clientMessageID, "client-message-id", "", "A UUID that makes sending this message again safe")
+	cmd.Flags().StringVar(&format, "format", "markdown", "Format of the text: markdown, text or html")
 
 	return cmd
 }
 
 func (a *app) newMessagesEditCmd() *cobra.Command {
-	return &cobra.Command{
+	var format string
+
+	cmd := &cobra.Command{
 		Use:   "edit <chatId> <messageId> <text|->",
 		Short: "Change a message you wrote",
 		Long: `Changes the text of a message. Only its author can. Sending the text it has
-already changes nothing. Give - as the text to read it from stdin.`,
+already changes nothing.
+
+` + messageFormatHelp,
 		Args: requireArgs("chatId", "messageId", "text"),
-		RunE: func(_ *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if _, _, err := messageBody(cmd, "", format); err != nil {
+				return err
+			}
 			text, err := a.readValue("the message", args[2])
+			if err != nil {
+				return err
+			}
+			body, notices, err := messageBody(cmd, text, format)
 			if err != nil {
 				return err
 			}
@@ -269,7 +314,7 @@ already changes nothing. Give - as the text to read it from stdin.`,
 			if err != nil {
 				return err
 			}
-			message, err := s.client.EditMessage(a.ctx, args[0], args[1], text)
+			message, err := s.client.EditMessage(a.ctx, args[0], args[1], body)
 			if err != nil {
 				e := s.fail(err)
 				if e.Code == CodeNotFound {
@@ -282,10 +327,14 @@ already changes nothing. Give - as the text to read it from stdin.`,
 			return a.ok(success{
 				data:    message.Raw,
 				summary: summary,
+				notices: notices,
 				text:    func(w io.Writer) { fmt.Fprintf(w, "%s.\n", summary) },
 			})
 		},
 	}
+	cmd.Flags().StringVar(&format, "format", "markdown", "Format of the text: markdown, text or html")
+
+	return cmd
 }
 
 func (a *app) newMessagesDeleteCmd() *cobra.Command {

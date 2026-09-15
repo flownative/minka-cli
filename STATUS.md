@@ -11,7 +11,7 @@ lokale Instanz geprüft, Befunde des Reviews eingearbeitet.
 die beim Abgleich mit dem Code auffallen. Das Dogfooding in Minka wartet auf
 eine interne Alpha.
 
-API-Stand, gegen den gebaut ist: Minka `4f5629f` (API-1 bis API-5,
+API-Stand, gegen den gebaut ist: Minka `a8eeb7a` (API-1 bis API-5,
 erweiterte Allowlist aus E-060, Zuständige an Karten, neue Karten oben in der
 Spalte, Fälligkeitsdatum, Zuständige und Datum beim Anlegen, Schritte, erweiterte Allowlist aus `72d0639`, Kommentare als Rich Text, Chat).
 Koordination in Minka: `minka-63`.
@@ -166,7 +166,11 @@ Auf Roberts Wunsch folgen die Konventionen **basecamp-cli**. Den Umfang
   - `messages list` blättert mit `--before <seq>` zurück und holt mit
     `--after <changeSeq>` alles Geänderte nach. `--before` und `--after`
     zusammen sind ein Aufruffehler.
-  - Nachrichten sind Klartext, ohne Markdown-Umwandlung.
+  - Nachrichten sind seit Minka `a8eeb7a` Rich Text. `messages create` und
+    `messages edit` wandeln Markdown um wie `comments create` und behalten
+    jeden Zeilenumbruch. `--format text` schickt den Text unverändert, der
+    Server macht daraus Absätze, Umbrüche und Links. `--format html` schickt
+    HTML.
   - `--client-message-id` macht erneutes Senden sicher. Mit ihr gilt ein
     fehlgeschlagenes Senden (Netzwerk oder 5xx) als `retryable`, ohne sie
     nicht.
@@ -247,6 +251,8 @@ genannte Test wird rot. Zuletzt am 13.09.2026 nach dem Review ausgeführt:
 | Nachrichten-ID im Pfad escaped | `TestIdentifiersAreEscapedInThePath` (api) |
 | Link mit `\\host` wie `//host` abgelehnt | `TestConversions` |
 | Klartext-Erkennung nach der Regel des Servers | `TestCarriesMarkup` |
+| Chat-Nachrichten: Markdown mit Zeilenumbrüchen, `text` und `html` unverändert, auch beim Ändern | `TestAMessageIsSentAsMarkdownTextOrHTML` |
+| Chat-Format geprüft, leeres Ergebnis abgelehnt | `TestAMessageInAnUnknownFormatOrWithNothingMinkaKeepsIsRefused` |
 | 204 ohne Rumpf ist Erfolg | `TestAnEmptyAnswerIsASuccess` (api), `TestDeleteMovesACardToTheTrash` |
 | Nachbar in Zielspalte geprüft | `TestMoveNextToACardOutsideTheTargetColumnIsRefused` |
 | Done ohne Platzierung | `TestDoneTakesNoPlacement` |
@@ -339,10 +345,6 @@ oben; 404 nur bei einer ungültigen ID. Der Fake folgte dem schon.
 - Umbenennen und Umsortieren von Schritten gibt es in der API noch nicht.
 - Projekte haben seit Minka `ccd0439` Chat-Werkzeuge (`type=chat`).
   `boards list` zeigt nur Boards.
-- Angekündigt von minka-63, noch nicht auf main:
-  - **Chat-4:** Nachrichten nehmen bereinigtes HTML an, Klartext bleibt
-    bytegleich, und `bodyText` wird aus dem HTML abgeleitet. Dann bekommt
-    `messages create` wie `comments create` eine Markdown-Umwandlung.
 - Die erweiterte Allowlist (`72d0639`) und Kommentare als Rich Text
   (`c7c4d1b`) kamen ohne Nachricht der Minka-Koordination; beides fiel beim
   Abgleich mit dem Code auf. Ist an minka-63 gemeldet.
@@ -354,6 +356,16 @@ oben; 404 nur bei einer ungültigen ID. Der Fake folgte dem schon.
 - Das Token `minka-cli-smoke` liegt in `~/.config/minka/config.json`.
   Widerrufen beim Umstieg auf das Dogfooding zur internen Alpha. Das
   Agentenkonto „Claude (Robert)" ist schon Mitglied im Minka-Projekt.
+- Chat-Nachrichten als Rich Text (Minka `a8eeb7a`) sind am 15.09.2026 live
+  geprüft, im Chat „Chat1 Abnahme“:
+  - Markdown mit Umbruch, Inline-Code, Link und Tabelle kommt als HTML an.
+  - `--format text` macht der Server zu Absatz, Umbruch und Link.
+  - `--format html` mit `mark` behält die Palettenfarbe und entfernt
+    `script`.
+  - `bodyText` wird aus dem HTML abgeleitet, auch beim Ändern.
+  - Nur `<hr>` endet mit Exit 9 `chatMessageMissing`.
+  - Die Testnachrichten sind wieder entfernt, der Chat ist als gelesen
+    markiert.
 - Die Chat-API (Minka `f9cc6f5`) ist am 15.09.2026 live geprüft, schreibend im
   Chat „Chat1 Abnahme“ in „Test-Projekt“, von minka-63 dafür freigegeben:
   - `chats list` zeigt die Chats mit ungelesenen Nachrichten.
