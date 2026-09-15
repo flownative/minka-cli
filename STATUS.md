@@ -11,7 +11,7 @@ lokale Instanz geprüft, Befunde des Reviews eingearbeitet.
 die beim Abgleich mit dem Code auffallen. Das Dogfooding in Minka wartet auf
 eine interne Alpha.
 
-API-Stand, gegen den gebaut ist: Minka `e610aac` (API-1 bis API-5,
+API-Stand, gegen den gebaut ist: Minka `268065d` (API-1 bis API-5,
 erweiterte Allowlist aus E-060, Zuständige an Karten, neue Karten oben in der
 Spalte, Fälligkeitsdatum, Zuständige und Datum beim Anlegen, Schritte, erweiterte Allowlist aus `72d0639`, Kommentare als Rich Text, Chat, Abonnenten).
 Koordination in Minka: `minka-63`.
@@ -264,7 +264,10 @@ genannte Test wird rot. Zuletzt am 13.09.2026 nach dem Review ausgeführt:
 | Chat-Format geprüft, leeres Ergebnis abgelehnt | `TestAMessageInAnUnknownFormatOrWithNothingMinkaKeepsIsRefused` |
 | Person auf der Karte behält ihre E-Mail-Adresse (auch bei `unassign`) | `TestSomebodyOnTheCardIsFoundByEmailAddress`, `TestSubscribeAndUnsubscribeAPerson` |
 | Schon abonniert und `wasSubscribed` aus dem Stand vor dem Aufruf | `TestSubscribeAndUnsubscribeAPerson` |
-| Beschreibung mit Anhängen nur mit `--drop-attachments` ersetzt | `TestADescriptionWithAttachmentsIsNotReplacedUnlessAsked`, `TestHasAttachments` |
+| Beschreibung mit Anhängen oder Erwähnungen: Markdown nur mit `--drop-attachments`, Quelle als HTML erlaubt | `TestADescriptionWithAttachmentsIsNotReplacedUnlessAsked`, `TestHasAttachments` |
+| Kartenansicht liest die Quelle, nicht die gespeicherte Fassung | `TestADescriptionWithAttachmentsIsNotReplacedUnlessAsked` |
+| Erwähnung als `@Name`, Bild als Markdown-Bild | `TestToMarkdown` |
+| `action-text-attachment` gilt als Markup | `TestCarriesMarkup` |
 | Abonnenten in der Kartenansicht | `TestSubscribersAppearOnTheCard` |
 | Personen-ID bei Abonnenten im Pfad escaped | `TestIdentifiersAreEscapedInThePath` (api) |
 | Angehängtes Bild als Markdown-Bild | `TestToMarkdown` |
@@ -356,16 +359,24 @@ oben; 404 nur bei einer ungültigen ID. Der Fake folgte dem schon.
 - Uploads (`POST /projects/{p}/uploads`, `PUT`) gibt es in der API, das
   Anhängen an Karten noch nicht. Uploads gehören laut Briefing nicht zum
   Umfang der CLI; minka-63 meldet, wenn Anhängen per API kommt.
-- Beschreibungen und Kommentare können Bilder und Dateien enthalten, die im
-  Web angehängt wurden. Der Server liefert sie als `figure > img` oder Link,
-  `cards show` zeigt ein Bild als Markdown-Bild.
-- Laut minka-63 verliert eine Beschreibung ihre Anhänge, wenn ein PATCH das
-  gespeicherte `action-text-attachment[sgid]` nicht mitschickt, und das kann
-  ein Client heute nicht. `cards edit --description` lehnt deshalb eine Karte
-  mit Anhängen ab, außer mit `--drop-attachments`. minka-63 plant eine
-  Bearbeitungsform des Textes mit frischen `sgid`s in der Karten- und
-  Kommentar-Ressource; wenn sie kommt, schickt die CLI die Anhänge mit und die
-  Sperre entfällt. Kommentare bearbeitet die CLI nicht.
+- Seit Minka `268065d` kommt jeder Text zweimal: gespeichert und als Quelle
+  (`descriptionSource`, `bodySource`). Dateien und Erwähnungen stehen darin
+  als `action-text-attachment` mit frischer Signatur, `url`, `filename` und
+  `content-type`. Die frühere Auskunft, die API liefere `figure`/`img`, hat
+  minka-63 korrigiert.
+  - `cards show` zeigt Beschreibung und Kommentare aus der Quelle: ein Bild
+    als Markdown-Bild, eine Datei als Link, eine Erwähnung als `@Name`.
+  - Markdown kann Dateien und Erwähnungen nicht halten. `cards edit
+    --description` lehnt deshalb eine neue Beschreibung ab, die sie verlieren
+    würde, außer mit `--drop-attachments`. Wer die Quelle als HTML
+    zurückschickt (`--description-format html`), behält sie.
+  - Kommentare lassen sich über die API noch nicht bearbeiten. Chat-Nachrichten
+    schon; `messages edit` hat keine Sperre, weil der Chat keine einzelne
+    Nachricht liefert. Wer eine Nachricht mit Erwähnungen ändert, schickt
+    `bodySource` mit `--format html`.
+  - Erwähnungen schreiben kann die CLI nicht: Der Vorschlags-Endpunkt
+    `GET /projects/{p}/mentions` liefert ein HTML-Fragment. Eine JSON-Fassung
+    wäre bei minka-63 zu erbitten, wenn Agenten Personen erwähnen sollen.
 
 - Das Review der Schritte in Minka ist mit `51b44e6` abgeschlossen. Das Board
   liefert je Karte `stepCount` und `completedStepCount`. `DELETE` auf einen
@@ -385,6 +396,12 @@ oben; 404 nur bei einer ungültigen ID. Der Fake folgte dem schon.
 - Das Token `minka-cli-smoke` liegt in `~/.config/minka/config.json`.
   Widerrufen beim Umstieg auf das Dogfooding zur internen Alpha. Das
   Agentenkonto „Claude (Robert)" ist schon Mitglied im Minka-Projekt.
+- Die Quellfelder (Minka `268065d`) sind am 16.09.2026 nur lesend live
+  geprüft: `descriptionSource` an der Smoke-Karte, `bodySource` an ihrem
+  Kommentar und an Chat-Nachrichten kommen an. Eine Karte mit Anhängen oder
+  Erwähnungen gibt es für Bruno nicht, und die API kann keine anlegen. Die
+  Darstellung von Anhängen und Erwähnungen und die Sperre in `cards edit` sind
+  deshalb nur gegen den Fake getestet.
 - Abonnenten (Minka `e610aac`) sind am 15.09.2026 live geprüft, an einer
   Testkarte im Board „API-3 Abnahme“:
   - Wer eine Karte anlegt, ist abonniert. `subscribe me` meldet „already“.

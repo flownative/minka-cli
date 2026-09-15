@@ -35,6 +35,7 @@ var servedMarkup = func() *regexp.Regexp {
 		names = append(names, name)
 	}
 	alternatives := strings.Join(names, "|")
+	alternatives += "|action-text-attachment"
 	return regexp.MustCompile(`(?i)<(?:` + alternatives + `)(?:\s[^<>]*)?/?>|</(?:` + alternatives + `)\s*>`)
 }()
 
@@ -237,6 +238,8 @@ func inline(n *html.Node) string {
 		return wrapInline(content, "*")
 	case "del", "s":
 		return wrapInline(content, "~~")
+	case "action-text-attachment":
+		return attachment(n)
 	case "img":
 		// A picture Minka serves for an attachment. Markdown can show it, but
 		// the Markdown conversion sends an image back as a link.
@@ -266,6 +269,33 @@ func inline(n *html.Node) string {
 	}
 
 	return content
+}
+
+// attachment shows a file or a mention that stands in a text. Markdown has no
+// form that keeps one, so the view is for reading only.
+func attachment(n *html.Node) string {
+	if attribute(n, "content-type") == "application/vnd.minka.person" {
+		if content := strings.TrimSpace(attribute(n, "content")); content != "" {
+			return escapeText(content)
+		}
+		return "@"
+	}
+	name := attribute(n, "filename")
+	if name == "" {
+		name = attribute(n, "caption")
+	}
+	if name == "" {
+		name = "attachment"
+	}
+	url := attribute(n, "url")
+	switch {
+	case url == "":
+		return escapeText("[" + name + "]")
+	case strings.HasPrefix(attribute(n, "content-type"), "image/"):
+		return "![" + escapeText(name) + "](" + linkDestination(url) + ")"
+	default:
+		return "[" + escapeText(name) + "](" + linkDestination(url) + ")"
+	}
 }
 
 // table renders a table as a Markdown table. The first row is the header,

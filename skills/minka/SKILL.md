@@ -214,13 +214,16 @@ such as `Doing`.
   definitions, for example) is refused, so it cannot remove a description by
   accident. To remove a description, give `--description ""`.
 - `--description-format html` sends HTML as it is; the server sanitizes it.
-- Pictures and files attached on the web come in the served HTML as
-  `<figure>` with `<img>` or a link; `cards show --styled` shows a picture as
-  a Markdown image. Files cannot be attached through the CLI.
-- A description with attachments cannot be sent back with them: the server
-  drops every attachment a new description does not carry. `cards edit
-  --description` therefore refuses such a card (exit 1) unless
-  `--drop-attachments` is given. Change those descriptions on the web.
+- Every text comes twice: stored (`description`, `body`, `bodyHtml`) and as
+  its source (`descriptionSource`, `bodySource`). Files and mentions stand in
+  the source as `<action-text-attachment>` elements with fresh signatures and
+  their `url`, `filename` and `content-type`. `cards show --styled` shows a
+  picture as a Markdown image, a file as a link and a mention as `@Name`.
+- Markdown cannot hold files or mentions. To change a description that has
+  them, take `descriptionSource` from `minka cards show <cardId> --quiet`,
+  change it and send it back with `cards edit --description - --description-format html`.
+  A new description that would drop them is refused (exit 1) unless
+  `--drop-attachments` is given. Files cannot be uploaded through the CLI.
 - `cards show --styled` prints the description as Markdown, which can be edited
   and sent back with `cards edit --description -`.
 - Comments are rich text like descriptions. `comments create` converts

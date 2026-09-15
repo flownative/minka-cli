@@ -1031,7 +1031,7 @@ func (s *Server) markChatRead(w http.ResponseWriter, r *http.Request, person *Pe
 func (s *Server) chatMessageResource(message *ChatMessage) map[string]any {
 	return map[string]any{
 		"id": message.ID, "seq": message.Seq, "changeSeq": message.ChangeSeq,
-		"author": s.personReference(message.AuthorID), "bodyHtml": message.BodyHTML, "bodyText": message.BodyText,
+		"author": s.personReference(message.AuthorID), "bodyHtml": message.BodyHTML, "bodyText": message.BodyText, "bodySource": message.BodyHTML,
 		"createdAt": timestamp(message.CreatedAt), "editedAt": timestampOrNil(message.EditedAt), "removed": message.Removed,
 	}
 }
@@ -1198,7 +1198,7 @@ func (s *Server) cardResource(board *Board, column *Column, card *Card) map[stri
 	}
 	return map[string]any{
 		"id": card.ID, "projectId": board.ProjectID, "boardId": board.ID, "title": card.Title,
-		"description":  card.Description,
+		"description": card.Description, "descriptionSource": card.Description,
 		"column":       map[string]any{"id": column.ID, "type": column.Type, "title": columnTitle(column), "customTitle": column.CustomTitle},
 		"commentCount": len(card.Comments), "createdAt": timestamp(card.CreatedAt),
 		"creator": s.personReference(card.CreatorID), "completedAt": timestampOrNil(card.CompletedAt),
@@ -1211,7 +1211,7 @@ func (s *Server) cardResource(board *Board, column *Column, card *Card) map[stri
 
 func (s *Server) commentResource(comment *Comment) map[string]any {
 	return map[string]any{
-		"id": comment.ID, "author": s.personReference(comment.AuthorID), "body": comment.Body,
+		"id": comment.ID, "author": s.personReference(comment.AuthorID), "body": comment.Body, "bodySource": comment.Body,
 		"createdAt": timestamp(comment.CreatedAt), "editedAt": nil,
 	}
 }

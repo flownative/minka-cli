@@ -181,9 +181,11 @@ func (a *app) newCardsEditCmd() *cobra.Command {
 		Long: "Changes the title, the description, the due date or several of them. An\n" +
 			"empty description or due date removes it. A due date is written as YYYY-MM-DD.\n\n" +
 			descriptionHelp + "\n\n" +
-			"A description with pictures or files attached on the web cannot be sent back\n" +
-			"with them: the server drops every attachment a new description does not carry.\n" +
-			"Changing such a description is refused unless --drop-attachments is given.",
+			"Files and mentions stand in a description as action-text-attachment elements,\n" +
+			"which Markdown cannot hold. To keep them, take descriptionSource from\n" +
+			"cards show --json, change it and send it back with --description-format html.\n" +
+			"A new description that would drop them is refused unless --drop-attachments\n" +
+			"is given.",
 		Example: `  minka cards edit 0199... --title "Fix the login form"
   minka cards edit 0199... --description - < notes.md
   minka cards edit 0199... --description ""`,
@@ -222,15 +224,18 @@ func (a *app) newCardsEditCmd() *cobra.Command {
 				if err != nil {
 					return s.fail(err)
 				}
-				if richtext.HasAttachments(current.Value.Description) {
+				// Files and mentions stand in the text as elements Markdown cannot
+				// hold, so only a description that carries them keeps them.
+				existing := firstNonEmpty(current.Value.DescriptionSource, current.Value.Description)
+				if richtext.HasAttachments(existing) && !richtext.HasAttachments(*input.Description) {
 					if !dropAttachments {
 						return &Error{
 							Code:    CodeUsage,
-							Message: "the description has attachments, and a new description would drop them",
-							Hint:    "Change the attachments on the web, or give --drop-attachments to replace the description without them.",
+							Message: "the description has attachments or mentions, and the new description would drop them",
+							Hint:    "Change descriptionSource from cards show --json and send it back with --description-format html, or give --drop-attachments.",
 						}
 					}
-					notices = append(notices, "the attachments of the description were dropped")
+					notices = append(notices, "the attachments and mentions of the description were dropped")
 				}
 			}
 			card, err := s.client.UpdateCard(a.ctx, args[0], input)

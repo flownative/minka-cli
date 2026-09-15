@@ -87,23 +87,26 @@ type ColumnReference struct {
 }
 
 type Card struct {
-	ID           string            `json:"id"`
-	ProjectID    string            `json:"projectId"`
-	BoardID      string            `json:"boardId"`
-	Title        string            `json:"title"`
-	Description  string            `json:"description"` // sanitized HTML, empty when the card has none
-	Column       ColumnReference   `json:"column"`
-	CommentCount int               `json:"commentCount"`
-	CreatedAt    string            `json:"createdAt"`
-	Creator      PersonReference   `json:"creator"`
-	CompletedAt  *string           `json:"completedAt"`
-	CompletedBy  *PersonReference  `json:"completedBy"`
-	Assignees    []PersonReference `json:"assignees"`   // in the order they were assigned
-	DueOn        *string           `json:"dueOn"`       // the day it is due as YYYY-MM-DD, nil for a card without one
-	Steps        []Step            `json:"steps"`       // in the order the card shows them; only a single card carries them
-	Subscribers  []PersonReference `json:"subscribers"` // everybody the card notifies, by name; only a single card carries them
-	Comments     []Comment         `json:"comments"`
-	AppURL       string            `json:"appUrl"`
+	ID          string `json:"id"`
+	ProjectID   string `json:"projectId"`
+	BoardID     string `json:"boardId"`
+	Title       string `json:"title"`
+	Description string `json:"description"` // the stored HTML, empty when the card has none
+	// DescriptionSource is the description as the editor opens it: attachments
+	// and mentions freshly signed. Sending it back keeps them.
+	DescriptionSource string            `json:"descriptionSource"`
+	Column            ColumnReference   `json:"column"`
+	CommentCount      int               `json:"commentCount"`
+	CreatedAt         string            `json:"createdAt"`
+	Creator           PersonReference   `json:"creator"`
+	CompletedAt       *string           `json:"completedAt"`
+	CompletedBy       *PersonReference  `json:"completedBy"`
+	Assignees         []PersonReference `json:"assignees"`   // in the order they were assigned
+	DueOn             *string           `json:"dueOn"`       // the day it is due as YYYY-MM-DD, nil for a card without one
+	Steps             []Step            `json:"steps"`       // in the order the card shows them; only a single card carries them
+	Subscribers       []PersonReference `json:"subscribers"` // everybody the card notifies, by name; only a single card carries them
+	Comments          []Comment         `json:"comments"`
+	AppURL            string            `json:"appUrl"`
 }
 
 type Step struct {
@@ -113,11 +116,12 @@ type Step struct {
 }
 
 type Comment struct {
-	ID        string          `json:"id"`
-	Author    PersonReference `json:"author"`
-	Body      string          `json:"body"` // plain text
-	CreatedAt string          `json:"createdAt"`
-	EditedAt  *string         `json:"editedAt"`
+	ID         string          `json:"id"`
+	Author     PersonReference `json:"author"`
+	Body       string          `json:"body"`       // the stored HTML; plain text for comments written before the editor
+	BodySource string          `json:"bodySource"` // the body as the editor opens it
+	CreatedAt  string          `json:"createdAt"`
+	EditedAt   *string         `json:"editedAt"`
 }
 
 type Chat struct {
@@ -128,15 +132,16 @@ type Chat struct {
 }
 
 type ChatMessage struct {
-	ID        string          `json:"id"`
-	Seq       int             `json:"seq"`       // the place in the transcript, which never changes
-	ChangeSeq int             `json:"changeSeq"` // raised with every change of the message
-	Author    PersonReference `json:"author"`
-	BodyHTML  string          `json:"bodyHtml"` // empty for a removed message
-	BodyText  string          `json:"bodyText"` // empty for a removed message
-	CreatedAt string          `json:"createdAt"`
-	EditedAt  *string         `json:"editedAt"`
-	Removed   bool            `json:"removed"`
+	ID         string          `json:"id"`
+	Seq        int             `json:"seq"`       // the place in the transcript, which never changes
+	ChangeSeq  int             `json:"changeSeq"` // raised with every change of the message
+	Author     PersonReference `json:"author"`
+	BodyHTML   string          `json:"bodyHtml"`   // empty for a removed message
+	BodyText   string          `json:"bodyText"`   // empty for a removed message
+	BodySource string          `json:"bodySource"` // the body as the editor opens it, empty for a removed message
+	CreatedAt  string          `json:"createdAt"`
+	EditedAt   *string         `json:"editedAt"`
+	Removed    bool            `json:"removed"`
 }
 
 // MessagesQuery chooses the messages of a chat. Without Before and After it is
