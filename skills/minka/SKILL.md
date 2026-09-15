@@ -107,6 +107,8 @@ minka steps complete <cardId> <step> --json
 minka steps reopen <cardId> <step> --json
 minka steps delete <cardId> <step> --json
 minka comments create <cardId> - --json < comment.txt
+minka comments edit <cardId> <commentId> - [--format html] --json < comment.txt
+minka comments delete <cardId> <commentId> --json
 minka chats list <projectId> --json
 minka messages list <chatId> [--before <seq> | --after <changeSeq>] [--limit <n>] --json
 minka messages create <chatId> - [--client-message-id <uuid>] --json < message.txt
@@ -231,6 +233,12 @@ such as `Doing`.
   `--format html` sends HTML as it is. `cards show --styled` shows comments as
   Markdown; older comments without markup come back as plain text and are
   shown as they are.
+- `comments edit <cardId> <commentId>` and `comments delete` work on your own
+  comments only; somebody else's exits 2. A removed comment leaves nothing
+  behind, so a second delete exits 2 as well. Like `cards edit`, `comments
+  edit` refuses a new text that would drop attachments or mentions unless
+  `--drop-attachments` is given; send the comment's `bodySource` back with
+  `--format html` to keep them.
 
 ## Common workflows
 

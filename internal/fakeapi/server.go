@@ -94,6 +94,7 @@ type Comment struct {
 	AuthorID  string
 	Body      string
 	CreatedAt time.Time
+	EditedAt  *time.Time
 }
 
 type RecordedRequest struct {
@@ -272,6 +273,8 @@ func New(t testing.TB) (*Server, *Fixture) {
 	mux.HandleFunc("PATCH /api/v1/cards/{cardId}", s.authenticated(s.updateCard))
 	mux.HandleFunc("POST /api/v1/cards/{cardId}/moves", s.authenticated(s.moveCard))
 	mux.HandleFunc("POST /api/v1/cards/{cardId}/comments", s.authenticated(s.writeComment))
+	mux.HandleFunc("PATCH /api/v1/cards/{cardId}/comments/{commentId}", s.authenticated(s.editComment))
+	mux.HandleFunc("DELETE /api/v1/cards/{cardId}/comments/{commentId}", s.authenticated(s.removeComment))
 	mux.HandleFunc("DELETE /api/v1/cards/{cardId}", s.authenticated(s.removeCard))
 	mux.HandleFunc("GET /api/v1/projects/{projectId}/people", s.authenticated(s.people))
 	mux.HandleFunc("POST /api/v1/cards/{cardId}/assignees", s.authenticated(s.assignCard))
@@ -1095,6 +1098,79 @@ func (s *Server) unsubscribeFromCard(w http.ResponseWriter, r *http.Request, per
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// ownComment is the comment of the card the person wrote, as the server finds
+// it: anything else is not there.
+func ownComment(card *Card, commentID string, person *Person) *Comment {
+	for _, comment := range card.Comments {
+		if comment.ID == commentID && comment.AuthorID == person.ID {
+			return comment
+		}
+	}
+	return nil
+}
+
+// editComment looks up card and comment before it checks the text, in the
+// order the server does.
+func (s *Server) editComment(w http.ResponseWriter, r *http.Request, person *Person) {
+	fields, ok := readBody(w, r)
+	if !ok {
+		return
+	}
+	_, _, card := s.visibleCard(r.PathValue("cardId"), person)
+	if card == nil {
+		notFound(w)
+		return
+	}
+	comment := ownComment(card, r.PathValue("commentId"), person)
+	if comment == nil {
+		notFound(w)
+		return
+	}
+	body, ok := stringField(w, fields, "body")
+	if !ok {
+		return
+	}
+	text := phpTrim(deref(body))
+	switch {
+	case strings.IndexFunc(text, isCommentControl) >= 0:
+		unprocessable(w, "commentHasControlCharacters", "A comment must not contain control characters other than line breaks and tabs.")
+		return
+	case utf8.RuneCountInString(text) > maxCommentLength:
+		unprocessable(w, "commentTooLong", "The comment is too long.")
+		return
+	case text == "":
+		unprocessable(w, "commentMissing", "A comment needs a body.")
+		return
+	}
+	if comment.Body != text {
+		now := s.now
+		comment.Body, comment.EditedAt = text, &now
+	}
+	writeJSON(w, http.StatusOK, s.commentResource(comment))
+}
+
+// isCommentControl is a control character a comment may not hold: all of
+// them but line breaks and tabs.
+func isCommentControl(r rune) bool {
+	return unicode.IsControl(r) && r != 9 && r != 10 && r != 13
+}
+
+func (s *Server) removeComment(w http.ResponseWriter, r *http.Request, person *Person) {
+	_, _, card := s.visibleCard(r.PathValue("cardId"), person)
+	if card == nil {
+		notFound(w)
+		return
+	}
+	comment := ownComment(card, r.PathValue("commentId"), person)
+	if comment == nil {
+		notFound(w)
+		return
+	}
+	card.Comments = slices.DeleteFunc(card.Comments, func(c *Comment) bool { return c == comment })
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func notAProjectMember(w http.ResponseWriter) {
 	unprocessable(w, "personNotAProjectMember", "Only a member of the project of the card can be named on it.")
 }
@@ -1212,7 +1288,7 @@ func (s *Server) cardResource(board *Board, column *Column, card *Card) map[stri
 func (s *Server) commentResource(comment *Comment) map[string]any {
 	return map[string]any{
 		"id": comment.ID, "author": s.personReference(comment.AuthorID), "body": comment.Body, "bodySource": comment.Body,
-		"createdAt": timestamp(comment.CreatedAt), "editedAt": nil,
+		"createdAt": timestamp(comment.CreatedAt), "editedAt": timestampOrNil(comment.EditedAt),
 	}
 }
 

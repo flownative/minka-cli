@@ -11,7 +11,7 @@ lokale Instanz geprüft, Befunde des Reviews eingearbeitet.
 die beim Abgleich mit dem Code auffallen. Das Dogfooding in Minka wartet auf
 eine interne Alpha.
 
-API-Stand, gegen den gebaut ist: Minka `268065d` (API-1 bis API-5,
+API-Stand, gegen den gebaut ist: Minka `6694096` (API-1 bis API-5,
 erweiterte Allowlist aus E-060, Zuständige an Karten, neue Karten oben in der
 Spalte, Fälligkeitsdatum, Zuständige und Datum beim Anlegen, Schritte, erweiterte Allowlist aus `72d0639`, Kommentare als Rich Text, Chat, Abonnenten).
 Koordination in Minka: `minka-63`.
@@ -26,7 +26,7 @@ minka boards list <projectId> | show <boardId>
 minka people list <projectId>
 minka cards show|create|edit|move|assign|unassign|subscribe|unsubscribe|done|delete
 minka steps list|create|complete|reopen|delete
-minka comments create <cardId> <text|->
+minka comments create|edit|delete <cardId> ...
 minka chats list <projectId> | mark-read <chatId>
 minka messages list|create|edit|delete <chatId> ...
 minka commands            Katalog aller Befehle mit Flags
@@ -277,6 +277,10 @@ genannte Test wird rot. Zuletzt am 13.09.2026 nach dem Review ausgeführt:
 | Anlegen in Done/Not now auch per ID abgelehnt | `TestCreateInNotNowOrDoneIsRefusedHoweverTheColumnIsGiven` |
 | Typname und gleicher Titel mehrdeutig | `TestATypeThatIsAlsoTheTitleOfAnotherColumnIsAmbiguous` |
 | HTML → Markdown: Zeilenanfänge escaped, `<br>` hart | `TestTextWithoutMarkupStaysText` |
+| Kommentar mit Anhängen: neuer Text nur mit `--drop-attachments`, Quelle als HTML erlaubt | `TestACommentWithAttachmentsIsNotReplacedUnlessAsked` |
+| `comments edit` sendet HTML, nicht das Markdown | `TestOnlyTheAuthorChangesOrRemovesAComment` |
+| Hinweis „nur der Autor“ bei 404 | `TestOnlyTheAuthorChangesOrRemovesAComment` |
+| Kommentar-ID im Pfad escaped | `TestIdentifiersAreEscapedInThePath` (api) |
 
 ### Smoke-Lauf gegen die lokale Instanz
 
@@ -370,8 +374,10 @@ oben; 404 nur bei einer ungültigen ID. Der Fake folgte dem schon.
     --description` lehnt deshalb eine neue Beschreibung ab, die sie verlieren
     würde, außer mit `--drop-attachments`. Wer die Quelle als HTML
     zurückschickt (`--description-format html`), behält sie.
-  - Kommentare lassen sich über die API noch nicht bearbeiten. Chat-Nachrichten
-    schon; `messages edit` hat keine Sperre, weil der Chat keine einzelne
+  - `comments edit` hat dieselbe Sperre wie `cards edit`: Ein neuer Text, der
+    Anhänge oder Erwähnungen des Kommentars verlieren würde, braucht
+    `--drop-attachments`; die `bodySource` als HTML zurückgeschickt kommt
+    durch. Chat-Nachrichten dagegen: `messages edit` hat keine Sperre, weil der Chat keine einzelne
     Nachricht liefert. Wer eine Nachricht mit Erwähnungen ändert, schickt
     `bodySource` mit `--format html`.
   - Erwähnungen schreiben kann die CLI nicht: Der Vorschlags-Endpunkt
@@ -396,6 +402,12 @@ oben; 404 nur bei einer ungültigen ID. Der Fake folgte dem schon.
 - Das Token `minka-cli-smoke` liegt in `~/.config/minka/config.json`.
   Widerrufen beim Umstieg auf das Dogfooding zur internen Alpha. Das
   Agentenkonto „Claude (Robert)" ist schon Mitglied im Minka-Projekt.
+- Kommentare ändern und entfernen (Minka `6694096`) sind am 16.09.2026 live
+  geprüft, an einer Testkarte im Board „API-3 Abnahme“: Markdown mit
+  Zeilenumbruch kommt als `<strong>` und `<br>` an, `editedAt` ist gesetzt, die
+  Textansicht zeigt „edited“. Eine unbekannte Kommentar-ID endet mit Exit 2 und
+  dem Autor-Hinweis, das zweite `delete` ebenso. Testkarte danach gelöscht.
+  Die Sperre bei Anhängen ist nur gegen den Fake getestet.
 - Die Quellfelder (Minka `268065d`) sind am 16.09.2026 nur lesend live
   geprüft: `descriptionSource` an der Smoke-Karte, `bodySource` an ihrem
   Kommentar und an Chat-Nachrichten kommen an. Eine Karte mit Anhängen oder

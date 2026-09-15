@@ -788,7 +788,7 @@ func TestTheCatalogListsEveryCommandWithItsFlags(t *testing.T) {
 	for _, cmd := range catalog.Commands {
 		byName[cmd.Command] = cmd
 	}
-	for _, name := range []string{"minka auth login", "minka me", "minka projects list", "minka boards list", "minka boards show", "minka cards show", "minka cards create", "minka cards edit", "minka cards move", "minka cards done", "minka cards delete", "minka cards assign", "minka cards unassign", "minka people list", "minka steps list", "minka steps create", "minka steps complete", "minka steps reopen", "minka steps delete", "minka comments create", "minka chats list", "minka chats mark-read", "minka messages list", "minka messages create", "minka messages edit", "minka messages delete", "minka cards subscribe", "minka cards unsubscribe"} {
+	for _, name := range []string{"minka auth login", "minka me", "minka projects list", "minka boards list", "minka boards show", "minka cards show", "minka cards create", "minka cards edit", "minka cards move", "minka cards done", "minka cards delete", "minka cards assign", "minka cards unassign", "minka people list", "minka steps list", "minka steps create", "minka steps complete", "minka steps reopen", "minka steps delete", "minka comments create", "minka chats list", "minka chats mark-read", "minka messages list", "minka messages create", "minka messages edit", "minka messages delete", "minka cards subscribe", "minka cards unsubscribe", "minka comments edit", "minka comments delete"} {
 		if _, ok := byName[name]; !ok {
 			t.Errorf("catalog misses %q", name)
 		}
@@ -1822,5 +1822,68 @@ func TestADescriptionWithAttachmentsIsNotReplacedUnlessAsked(t *testing.T) {
 	expectCode(t, r, ExitOK)
 	if !strings.Contains(env.Notice, "attachments") || card.Description != "<p>new text</p>" {
 		t.Errorf("notice %q, description %q", env.Notice, card.Description)
+	}
+}
+
+func TestOnlyTheAuthorChangesOrRemovesAComment(t *testing.T) {
+	e := newTestEnv(t)
+	card := e.fixture.CardInTriage
+	own := card.Comments[0]
+	others := &fakeapi.Comment{ID: "88888888-8888-4888-8888-888888888888", AuthorID: e.fixture.Anke.ID, Body: "<p>Ankes</p>"}
+	card.Comments = append(card.Comments, others)
+
+	env, r := e.runJSON("", "comments", "edit", card.ID, own.ID, "*geändert*\nzweite Zeile")
+	expectCode(t, r, ExitOK)
+	writes := e.server.WritingRequests()
+	if last := writes[len(writes)-1]; last.Method != http.MethodPatch || last.Path != "/api/v1/cards/"+card.ID+"/comments/"+own.ID {
+		t.Errorf("request %s %s", last.Method, last.Path)
+	}
+	if body := e.lastWriteBody(); body["body"] != "<p><em>geändert</em><br>zweite Zeile</p>" {
+		t.Errorf("body sent %v", body)
+	}
+	if comment := decode(t, env.Data); comment["editedAt"] == nil {
+		t.Errorf("comment %s", env.Data)
+	}
+
+	env, r = e.runJSON("", "comments", "edit", card.ID, others.ID, "Nein")
+	expectCode(t, r, ExitNotFound)
+	if !strings.Contains(env.Hint, "author") {
+		t.Errorf("hint %q", env.Hint)
+	}
+
+	_, r = e.runJSON("", "comments", "delete", card.ID, own.ID)
+	expectCode(t, r, ExitOK)
+	_, r = e.runJSON("", "comments", "delete", card.ID, own.ID)
+	expectCode(t, r, ExitNotFound)
+	_, r = e.runJSON("", "comments", "delete", card.ID, others.ID)
+	expectCode(t, r, ExitNotFound)
+	if len(card.Comments) != 1 || card.Comments[0] != others {
+		t.Errorf("comments left %v", card.Comments)
+	}
+}
+
+func TestACommentWithAttachmentsIsNotReplacedUnlessAsked(t *testing.T) {
+	e := newTestEnv(t)
+	card := e.fixture.CardInTriage
+	own := card.Comments[0]
+	own.Body = `<p>Hallo <action-text-attachment sgid="x" content-type="application/vnd.minka.person" content="@Anke"></action-text-attachment></p>`
+
+	env, r := e.runJSON("", "comments", "edit", card.ID, own.ID, "Hallo Anke")
+	expectCode(t, r, ExitUsage)
+	if !strings.Contains(env.Hint, "--drop-attachments") {
+		t.Errorf("hint %q", env.Hint)
+	}
+	if n := len(e.server.WritingRequests()); n != 0 {
+		t.Errorf("%d writes sent", n)
+	}
+
+	changed := `<p>Hallo nochmal <action-text-attachment sgid="x" content-type="application/vnd.minka.person" content="@Anke"></action-text-attachment></p>`
+	_, r = e.runJSON(changed, "comments", "edit", card.ID, own.ID, "-", "--format", "html")
+	expectCode(t, r, ExitOK)
+
+	env, r = e.runJSON("", "comments", "edit", card.ID, own.ID, "Hallo", "--drop-attachments")
+	expectCode(t, r, ExitOK)
+	if !strings.Contains(env.Notice, "attachments") {
+		t.Errorf("notice %q", env.Notice)
 	}
 }
