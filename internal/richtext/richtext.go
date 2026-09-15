@@ -26,17 +26,21 @@ var (
 	entityReference   = regexp.MustCompile(`^&#?[A-Za-z0-9]+;`)
 )
 
+// servedMarkup is the server's rule for a value that holds markup: a tag of a
+// served element written out to its closing angle bracket. "a<i und b<s" is
+// plain text, although i and s are served elements.
 var servedMarkup = func() *regexp.Regexp {
 	names := make([]string, 0, len(markdown.AllowedElements))
 	for name := range markdown.AllowedElements {
 		names = append(names, name)
 	}
-	return regexp.MustCompile(`(?i)</?(?:` + strings.Join(names, "|") + `)[\s/>]`)
+	alternatives := strings.Join(names, "|")
+	return regexp.MustCompile(`(?i)<(?:` + alternatives + `)(?:\s[^<>]*)?/?>|</(?:` + alternatives + `)\s*>`)
 }()
 
-// CarriesMarkup reports whether a value opens an element the server serves.
-// The server keeps a value without one as plain text, as it does with comments
-// written before the editor, and such a value is shown as it is.
+// CarriesMarkup reports whether a value holds a tag of an element the server
+// serves. The server keeps a value without one as plain text, as it does with
+// comments written before the editor, and such a value is shown as it is.
 func CarriesMarkup(value string) bool {
 	return servedMarkup.MatchString(value)
 }

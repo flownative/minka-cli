@@ -99,6 +99,11 @@ func TestCarriesMarkup(t *testing.T) {
 		"a < b and <notanelement> x": false,
 		"<pre>":                      true,
 		"<abbr>x</abbr>":             false,
+		"wenn a<i und b<s dann":      false,
+		"<p class=\"x\">text</p>":    true,
+		"text</strong >":             true,
+		"<p title=\"never closed":    false,
+		"<I>shouting</I>":            true,
 	} {
 		if got := CarriesMarkup(value); got != want {
 			t.Errorf("CarriesMarkup(%q) = %v", value, got)
