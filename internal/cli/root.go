@@ -153,6 +153,8 @@ only used for the host in $MINKA_HOST.`,
 		a.newCardsCmd(),
 		a.newStepsCmd(),
 		a.newCommentsCmd(),
+		a.newChatsCmd(),
+		a.newMessagesCmd(),
 		a.newCommandsCmd(root),
 		a.newVersionCmd(),
 	)

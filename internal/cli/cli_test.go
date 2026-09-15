@@ -788,7 +788,7 @@ func TestTheCatalogListsEveryCommandWithItsFlags(t *testing.T) {
 	for _, cmd := range catalog.Commands {
 		byName[cmd.Command] = cmd
 	}
-	for _, name := range []string{"minka auth login", "minka me", "minka projects list", "minka boards list", "minka boards show", "minka cards show", "minka cards create", "minka cards edit", "minka cards move", "minka cards done", "minka cards delete", "minka cards assign", "minka cards unassign", "minka people list", "minka steps list", "minka steps create", "minka steps complete", "minka steps reopen", "minka steps delete", "minka comments create"} {
+	for _, name := range []string{"minka auth login", "minka me", "minka projects list", "minka boards list", "minka boards show", "minka cards show", "minka cards create", "minka cards edit", "minka cards move", "minka cards done", "minka cards delete", "minka cards assign", "minka cards unassign", "minka people list", "minka steps list", "minka steps create", "minka steps complete", "minka steps reopen", "minka steps delete", "minka comments create", "minka chats list", "minka chats mark-read", "minka messages list", "minka messages create", "minka messages edit", "minka messages delete"} {
 		if _, ok := byName[name]; !ok {
 			t.Errorf("catalog misses %q", name)
 		}
@@ -1451,5 +1451,218 @@ func TestTheBoardSaysHowFarTheStepsHaveGot(t *testing.T) {
 	expectCode(t, r, ExitOK)
 	if !strings.Contains(r.stdout, "steps 1/3") {
 		t.Errorf("board:\n%s", r.stdout)
+	}
+}
+
+func messageSeqs(t *testing.T, raw json.RawMessage) []int {
+	t.Helper()
+	var messages []api.ChatMessage
+	if err := json.Unmarshal(raw, &messages); err != nil {
+		t.Fatalf("data is no list of messages: %v: %s", err, raw)
+	}
+	seqs := make([]int, len(messages))
+	for i, message := range messages {
+		seqs[i] = message.Seq
+	}
+	return seqs
+}
+
+func sameInts(a, b []int) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func TestChatsListShowsWhatIsUnread(t *testing.T) {
+	e := newTestEnv(t)
+
+	env, r := e.runJSON("", "chats", "list", e.fixture.Project.ID)
+	expectCode(t, r, ExitOK)
+	var chats []api.Chat
+	if err := json.Unmarshal(env.Data, &chats); err != nil || len(chats) != 1 || chats[0].Name != "Planung" || chats[0].UnreadCount != 2 {
+		t.Errorf("data %s", env.Data)
+	}
+
+	_, r = e.runJSON("", "chats", "list", e.fixture.OtherProject.ID)
+	expectCode(t, r, ExitNotFound)
+}
+
+func TestMessagesListReadsBackAndCatchesUp(t *testing.T) {
+	e := newTestEnv(t)
+	chat := e.fixture.Chat.ID
+
+	for _, test := range []struct {
+		args  []string
+		query string
+		seqs  []int
+	}{
+		{nil, "", []int{1, 2, 3}},
+		{[]string{"--limit", "2"}, "limit=2", []int{2, 3}},
+		{[]string{"--before", "3", "--limit", "1"}, "before=3&limit=1", []int{2}},
+		{[]string{"--after", "2"}, "after=2", []int{3}},
+	} {
+		env, r := e.runJSON("", append([]string{"messages", "list", chat}, test.args...)...)
+		expectCode(t, r, ExitOK)
+		if got := messageSeqs(t, env.Data); !sameInts(got, test.seqs) {
+			t.Errorf("%v: seqs %v, want %v", test.args, got, test.seqs)
+		}
+		requests := e.server.Requests()
+		if got := requests[len(requests)-1].Query; got != test.query {
+			t.Errorf("%v: query %q, want %q", test.args, got, test.query)
+		}
+	}
+}
+
+func TestMessagesListRefusesWhatIsNoPage(t *testing.T) {
+	e := newTestEnv(t)
+
+	_, r := e.runJSON("", "messages", "list", e.fixture.Chat.ID, "--before", "3", "--after", "1")
+	expectCode(t, r, ExitUsage)
+	if n := len(e.server.Requests()); n != 0 {
+		t.Errorf("%d requests sent", n)
+	}
+
+	env, r := e.runJSON("", "messages", "list", e.fixture.Chat.ID, "--limit", "0")
+	expectCode(t, r, ExitValidation)
+	if env.Meta["apiCode"] != "chatMessagesLimitNotANumber" {
+		t.Errorf("meta %v", env.Meta)
+	}
+
+	_, r = e.runJSON("", "messages", "list", e.fixture.OtherChat.ID)
+	expectCode(t, r, ExitNotFound)
+}
+
+func TestMessagesCreateWritesOncePerClientMessageID(t *testing.T) {
+	e := newTestEnv(t)
+	chat := e.fixture.Chat
+	id := "77777777-7777-4777-8777-777777777777"
+
+	env, r := e.runJSON("", "messages", "create", chat.ID, "Zelt kommt um 9", "--client-message-id", id)
+	expectCode(t, r, ExitOK)
+	if body := e.lastWriteBody(); len(body) != 2 || body["body"] != "Zelt kommt um 9" || body["clientMessageId"] != id {
+		t.Errorf("body sent %v", body)
+	}
+	if decode(t, env.Data)["seq"] != float64(4) {
+		t.Errorf("message %s", env.Data)
+	}
+
+	env, r = e.runJSON("", "messages", "create", chat.ID, "Zelt kommt um 9", "--client-message-id", id)
+	expectCode(t, r, ExitOK)
+	if !strings.Contains(env.Summary, "already") || len(chat.Messages) != 4 {
+		t.Errorf("summary %q, %d messages", env.Summary, len(chat.Messages))
+	}
+
+	_, r = e.runJSON("", "messages", "create", chat.ID, "ohne Namen")
+	expectCode(t, r, ExitOK)
+	if _, sent := e.lastWriteBody()["clientMessageId"]; sent {
+		t.Error("clientMessageId sent without --client-message-id")
+	}
+}
+
+func TestMessagesCreateRefusesWhatIsNoMessage(t *testing.T) {
+	e := newTestEnv(t)
+
+	env, r := e.runJSON("", "messages", "create", e.fixture.Chat.ID, "   ")
+	expectCode(t, r, ExitValidation)
+	if env.Meta["apiCode"] != "chatMessageMissing" {
+		t.Errorf("meta %v", env.Meta)
+	}
+
+	_, r = e.runJSON("", "messages", "create", e.fixture.Chat.ID, "x", "--client-message-id", "gestern")
+	expectCode(t, r, ExitUsage)
+}
+
+func TestAFailedPostCanBeSentAgainWithItsClientMessageID(t *testing.T) {
+	e := newTestEnv(t)
+
+	e.server.FailNextWith(http.StatusBadGateway)
+	env, r := e.runJSON("", "messages", "create", e.fixture.Chat.ID, "x", "--client-message-id", "77777777-7777-4777-8777-777777777777")
+	expectCode(t, r, ExitAPI)
+	if !env.Retryable || !strings.Contains(env.Hint, "same --client-message-id") {
+		t.Errorf("envelope %+v", env)
+	}
+
+	e.server.FailNextWith(http.StatusBadGateway)
+	env, r = e.runJSON("", "messages", "create", e.fixture.Chat.ID, "x")
+	expectCode(t, r, ExitAPI)
+	if env.Retryable {
+		t.Errorf("envelope %+v", env)
+	}
+}
+
+func TestOnlyTheAuthorChangesOrRemovesAMessage(t *testing.T) {
+	e := newTestEnv(t)
+	chat := e.fixture.Chat
+	own, others := chat.Messages[0], chat.Messages[1]
+
+	env, r := e.runJSON("", "messages", "edit", chat.ID, own.ID, "Hallo zusammen")
+	expectCode(t, r, ExitOK)
+	if message := decode(t, env.Data); message["bodyText"] != "Hallo zusammen" || message["editedAt"] == nil {
+		t.Errorf("message %s", env.Data)
+	}
+
+	env, r = e.runJSON("", "messages", "edit", chat.ID, others.ID, "Nein")
+	expectCode(t, r, ExitNotFound)
+	if !strings.Contains(env.Hint, "author") {
+		t.Errorf("hint %q", env.Hint)
+	}
+
+	_, r = e.runJSON("", "messages", "delete", chat.ID, own.ID)
+	expectCode(t, r, ExitOK)
+	_, r = e.runJSON("", "messages", "delete", chat.ID, own.ID)
+	expectCode(t, r, ExitOK)
+	if !own.Removed {
+		t.Error("own message not removed")
+	}
+
+	_, r = e.runJSON("", "messages", "delete", chat.ID, others.ID)
+	expectCode(t, r, ExitNotFound)
+	if others.Removed {
+		t.Error("a message of somebody else was removed")
+	}
+}
+
+func TestMarkReadUsesTheLastMessageUnlessToldOtherwise(t *testing.T) {
+	e := newTestEnv(t)
+	chat := e.fixture.Chat
+
+	_, r := e.runJSON("", "chats", "mark-read", chat.ID)
+	expectCode(t, r, ExitOK)
+	if body := e.lastWriteBody(); body["seq"] != float64(3) {
+		t.Errorf("body sent %v", body)
+	}
+	if mark := chat.ReadMarks[e.fixture.Bruno.ID]; mark != 3 {
+		t.Errorf("read mark %d", mark)
+	}
+
+	e = newTestEnv(t)
+	chat = e.fixture.Chat
+	_, r = e.runJSON("", "chats", "mark-read", chat.ID, "--seq", "2")
+	expectCode(t, r, ExitOK)
+	if body := e.lastWriteBody(); body["seq"] != float64(2) || chat.ReadMarks[e.fixture.Bruno.ID] != 2 {
+		t.Errorf("body sent %v, mark %d", body, chat.ReadMarks[e.fixture.Bruno.ID])
+	}
+	if n := len(e.server.Requests()); n != 1 {
+		t.Errorf("%d requests, want only the mark", n)
+	}
+}
+
+func TestMessagesAsText(t *testing.T) {
+	e := newTestEnv(t)
+	chat := e.fixture.Chat
+	chat.Messages[2].Removed, chat.Messages[2].BodyText = true, ""
+
+	r := e.run("", "messages", "list", chat.ID, "--styled")
+	expectCode(t, r, ExitOK)
+	for _, want := range []string{"#2 Anke", "Zelt ist bestellt", "#3 Bruno", "(removed)"} {
+		if !strings.Contains(r.stdout, want) {
+			t.Errorf("missing %q in:\n%s", want, r.stdout)
+		}
 	}
 }

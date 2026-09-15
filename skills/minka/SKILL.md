@@ -3,7 +3,8 @@ name: minka
 description: >
   Work with a Minka instance through the minka CLI: list projects and boards,
   read a board with its columns and cards, show a card with description and
-  comments, create and edit cards, move and complete them, comment on them.
+  comments, create and edit cards, move and complete them, comment on them,
+  read and write chat messages.
   Use for any task on a Minka board, such as tracking development tasks.
 ---
 
@@ -69,7 +70,10 @@ Validation codes in `meta.apiCode`: `cardTitleMissing`, `cardTitleTooLong`,
 `commentTooLong`, `commentHasControlCharacters` (line breaks and tabs are
 fine), `commentNotReadable`, `cardDueDateNotADate`, `personNotAProjectMember`, `personIdMissing`,
 `stepMissing`, `stepTooLong`, `stepHasControlCharacters`, `stepCompletedMissing`,
-`nothingToChange`, `columnIdMissing`, `malformedBody`, `unsupportedMediaType`.
+`chatMessageMissing`, `chatMessageTooLong`, `chatMessageHasControlCharacters`,
+`chatMessageDraftNotAnIdentifier`, `chatMessagesLimitNotANumber`,
+`chatReadSeqMissing`, `nothingToChange`, `columnIdMissing`, `malformedBody`,
+`unsupportedMediaType`.
 
 Minka answers everything you may not see with 404, never 403, so exit 4 is
 not expected in practice.
@@ -101,6 +105,12 @@ minka steps complete <cardId> <step> --json
 minka steps reopen <cardId> <step> --json
 minka steps delete <cardId> <step> --json
 minka comments create <cardId> - --json < comment.txt
+minka chats list <projectId> --json
+minka messages list <chatId> [--before <seq> | --after <changeSeq>] [--limit <n>] --json
+minka messages create <chatId> - [--client-message-id <uuid>] --json < message.txt
+minka messages edit <chatId> <messageId> - --json < message.txt
+minka messages delete <chatId> <messageId> --json
+minka chats mark-read <chatId> [--seq <seq>] --json
 ```
 
 `<column>` is a column ID, a type (`triage`, `not_now`, `done`) or a title
@@ -160,6 +170,25 @@ such as `Doing`.
   not understood: compute the day yourself.
 - A text that is no existing day (`2026-02-30`, `28.09.2026`, `2026-9-8`)
   exits 9 with `meta.apiCode` `cardDueDateNotADate`.
+
+## Chats
+
+- `chats list <projectId>` gives `{id, name, unreadCount, appUrl}`.
+  `unreadCount` counts own and removed messages as well.
+- `messages list <chatId>` gives messages oldest first as `{id, seq,
+  changeSeq, author, bodyHtml, bodyText, createdAt, editedAt, removed}`, the
+  latest 50 by default, `--limit` up to 200.
+  - Read back with `--before <seq>` (messages in front of that one).
+  - Catch up with `--after <changeSeq>`: new messages, edits and removals in
+    one answer. Keep the highest `changeSeq` you have seen.
+  - A removed message comes with `removed: true` and empty text.
+- `messages create` writes plain text: line breaks are kept, addresses become
+  links. Always pass `--client-message-id` with a UUID of your own: sending it
+  again then writes nothing new, and a failed send is `retryable`.
+- `messages edit` and `messages delete` only work on your own messages;
+  somebody else's exits 2. Deleting twice succeeds.
+- `chats mark-read <chatId>` marks the chat read up to its last message, or up
+  to `--seq`. The mark only grows.
 
 ## Descriptions and comments
 
