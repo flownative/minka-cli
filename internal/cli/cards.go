@@ -7,6 +7,7 @@ import (
 
 	"github.com/flownative/minka-cli/internal/api"
 	"github.com/flownative/minka-cli/internal/markdown"
+	"github.com/flownative/minka-cli/internal/richtext"
 	"github.com/spf13/cobra"
 )
 
@@ -172,13 +173,17 @@ func (a *app) newCardsCreateCmd() *cobra.Command {
 
 func (a *app) newCardsEditCmd() *cobra.Command {
 	var title, description, descriptionFormat, due string
+	var dropAttachments bool
 
 	cmd := &cobra.Command{
 		Use:   "edit <cardId>",
 		Short: "Rename a card, change its description or its due date",
 		Long: "Changes the title, the description, the due date or several of them. An\n" +
 			"empty description or due date removes it. A due date is written as YYYY-MM-DD.\n\n" +
-			descriptionHelp,
+			descriptionHelp + "\n\n" +
+			"A description with pictures or files attached on the web cannot be sent back\n" +
+			"with them: the server drops every attachment a new description does not carry.\n" +
+			"Changing such a description is refused unless --drop-attachments is given.",
 		Example: `  minka cards edit 0199... --title "Fix the login form"
   minka cards edit 0199... --description - < notes.md
   minka cards edit 0199... --description ""`,
@@ -212,6 +217,22 @@ func (a *app) newCardsEditCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			if input.Description != nil {
+				current, err := s.client.Card(a.ctx, args[0])
+				if err != nil {
+					return s.fail(err)
+				}
+				if richtext.HasAttachments(current.Value.Description) {
+					if !dropAttachments {
+						return &Error{
+							Code:    CodeUsage,
+							Message: "the description has attachments, and a new description would drop them",
+							Hint:    "Change the attachments on the web, or give --drop-attachments to replace the description without them.",
+						}
+					}
+					notices = append(notices, "the attachments of the description were dropped")
+				}
+			}
 			card, err := s.client.UpdateCard(a.ctx, args[0], input)
 			if err != nil {
 				return s.fail(err)
@@ -234,6 +255,7 @@ func (a *app) newCardsEditCmd() *cobra.Command {
 	flags.StringVar(&description, "description", "", "New description, - to read it from stdin, empty to remove it")
 	flags.StringVar(&due, "due", "", "Day the card is due as YYYY-MM-DD, empty to remove it")
 	flags.StringVar(&descriptionFormat, "description-format", "markdown", "Format of the description: markdown or html")
+	flags.BoolVar(&dropAttachments, "drop-attachments", false, "Replace a description that has attachments, which drops them")
 
 	return cmd
 }

@@ -1787,3 +1787,27 @@ func TestSomebodyOnTheCardIsFoundByEmailAddress(t *testing.T) {
 		t.Errorf("requests %+v", writes)
 	}
 }
+
+func TestADescriptionWithAttachmentsIsNotReplacedUnlessAsked(t *testing.T) {
+	e := newTestEnv(t)
+	card := e.fixture.CardInTriage
+	card.Description = `<p>Plan</p><figure class="attachment attachment--image"><img src="https://minka.example/f/1.png" alt="Plan"></figure>`
+
+	env, r := e.runJSON("", "cards", "edit", card.ID, "--description", "new text")
+	expectCode(t, r, ExitUsage)
+	if !strings.Contains(env.Hint, "--drop-attachments") {
+		t.Errorf("hint %q", env.Hint)
+	}
+	if n := len(e.server.WritingRequests()); n != 0 {
+		t.Errorf("%d writes sent", n)
+	}
+
+	_, r = e.runJSON("", "cards", "edit", card.ID, "--title", "only the title")
+	expectCode(t, r, ExitOK)
+
+	env, r = e.runJSON("", "cards", "edit", card.ID, "--description", "new text", "--drop-attachments")
+	expectCode(t, r, ExitOK)
+	if !strings.Contains(env.Notice, "attachments") || card.Description != "<p>new text</p>" {
+		t.Errorf("notice %q, description %q", env.Notice, card.Description)
+	}
+}

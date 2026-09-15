@@ -45,6 +45,55 @@ func CarriesMarkup(value string) bool {
 	return servedMarkup.MatchString(value)
 }
 
+// HasAttachments reports whether served rich text shows a picture or a file
+// attached on the web. The server serves an attachment as a figure with the
+// class "attachment", an img or a link to download; a text sent back without
+// the attachment element it stores drops the attachment.
+func HasAttachments(served string) bool {
+	if strings.TrimSpace(served) == "" {
+		return false
+	}
+	context := &html.Node{Type: html.ElementNode, Data: "body", DataAtom: atom.Body}
+	nodes, err := html.ParseFragment(strings.NewReader(served), context)
+	if err != nil {
+		return true
+	}
+	var found func(*html.Node) bool
+	found = func(n *html.Node) bool {
+		if n.Type == html.ElementNode {
+			switch {
+			case n.Data == "img", n.Data == "action-text-attachment":
+				return true
+			case n.Data == "a" && hasAttribute(n, "download"):
+				return true
+			case n.Data == "figure" && strings.Contains(" "+attribute(n, "class")+" ", " attachment "):
+				return true
+			}
+		}
+		for _, child := range children(n) {
+			if found(child) {
+				return true
+			}
+		}
+		return false
+	}
+	for _, n := range nodes {
+		if found(n) {
+			return true
+		}
+	}
+	return false
+}
+
+func hasAttribute(n *html.Node, name string) bool {
+	for _, attr := range n.Attr {
+		if attr.Key == name {
+			return true
+		}
+	}
+	return false
+}
+
 // ToMarkdown converts rich text HTML into Markdown. HTML that cannot be
 // parsed is returned unchanged.
 func ToMarkdown(fragment string) string {

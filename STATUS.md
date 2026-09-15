@@ -264,6 +264,7 @@ genannte Test wird rot. Zuletzt am 13.09.2026 nach dem Review ausgeführt:
 | Chat-Format geprüft, leeres Ergebnis abgelehnt | `TestAMessageInAnUnknownFormatOrWithNothingMinkaKeepsIsRefused` |
 | Person auf der Karte behält ihre E-Mail-Adresse (auch bei `unassign`) | `TestSomebodyOnTheCardIsFoundByEmailAddress`, `TestSubscribeAndUnsubscribeAPerson` |
 | Schon abonniert und `wasSubscribed` aus dem Stand vor dem Aufruf | `TestSubscribeAndUnsubscribeAPerson` |
+| Beschreibung mit Anhängen nur mit `--drop-attachments` ersetzt | `TestADescriptionWithAttachmentsIsNotReplacedUnlessAsked`, `TestHasAttachments` |
 | Abonnenten in der Kartenansicht | `TestSubscribersAppearOnTheCard` |
 | Personen-ID bei Abonnenten im Pfad escaped | `TestIdentifiersAreEscapedInThePath` (api) |
 | Angehängtes Bild als Markdown-Bild | `TestToMarkdown` |
@@ -357,9 +358,14 @@ oben; 404 nur bei einer ungültigen ID. Der Fake folgte dem schon.
   Umfang der CLI; minka-63 meldet, wenn Anhängen per API kommt.
 - Beschreibungen und Kommentare können Bilder und Dateien enthalten, die im
   Web angehängt wurden. Der Server liefert sie als `figure > img` oder Link,
-  `cards show` zeigt ein Bild als Markdown-Bild. Nicht geprüft ist, ob eine
-  Beschreibung mit Anhängen, die über `cards edit --description` neu
-  geschrieben wird, ihre Anhänge behält. Die Frage ist an minka-63 gestellt.
+  `cards show` zeigt ein Bild als Markdown-Bild.
+- Laut minka-63 verliert eine Beschreibung ihre Anhänge, wenn ein PATCH das
+  gespeicherte `action-text-attachment[sgid]` nicht mitschickt, und das kann
+  ein Client heute nicht. `cards edit --description` lehnt deshalb eine Karte
+  mit Anhängen ab, außer mit `--drop-attachments`. minka-63 plant eine
+  Bearbeitungsform des Textes mit frischen `sgid`s in der Karten- und
+  Kommentar-Ressource; wenn sie kommt, schickt die CLI die Anhänge mit und die
+  Sperre entfällt. Kommentare bearbeitet die CLI nicht.
 
 - Das Review der Schritte in Minka ist mit `51b44e6` abgeschlossen. Das Board
   liefert je Karte `stepCount` und `completedStepCount`. `DELETE` auf einen

@@ -217,6 +217,10 @@ such as `Doing`.
 - Pictures and files attached on the web come in the served HTML as
   `<figure>` with `<img>` or a link; `cards show --styled` shows a picture as
   a Markdown image. Files cannot be attached through the CLI.
+- A description with attachments cannot be sent back with them: the server
+  drops every attachment a new description does not carry. `cards edit
+  --description` therefore refuses such a card (exit 1) unless
+  `--drop-attachments` is given. Change those descriptions on the web.
 - `cards show --styled` prints the description as Markdown, which can be edited
   and sent back with `cards edit --description -`.
 - Comments are rich text like descriptions. `comments create` converts
