@@ -18,6 +18,13 @@ func TestToMarkdown(t *testing.T) {
 		{"paragraphs", "<p>a</p><p>b</p>", "a\n\nb"},
 		{"heading", "<h1>Title</h1><p>text</p>", "# Title\n\ntext"},
 		{"lower headings", "<h2>a</h2><h3>b</h3>", "## a\n\n### b"},
+		{"deep headings", "<h4>a</h4><h6>b</h6>", "#### a\n\n###### b"},
+		{"ordered list starting elsewhere", `<ol start="3"><li>x</li><li>y</li></ol>`, "3. x\n4. y"},
+		{"code block with a language", `<pre data-language="go"><code>x</code></pre>`, "```go\nx\n```"},
+		{"code block with a language that is none", `<pre data-language="a b"><code>x</code></pre>`, "```\nx\n```"},
+		{"link with a title", `<p><a href="https://example.com" title="Home">site</a> <a href="https://x.y" title="X">https://x.y</a></p>`, `[site](https://example.com "Home") [https://x.y](https://x.y "X")`},
+		{"table", `<figure class="lexxy-content__table-wrapper"><table><tbody><tr><th>a</th><th>b|c</th></tr><tr><td>1</td></tr></tbody></table></figure>`, "| a | b\\|c |\n| --- | --- |\n| 1 |  |"},
+		{"marks Markdown has no syntax for", "<p><u>u</u> <s>s</s> <i>i</i> x<sub>2</sub> <mark>m</mark></p>", "u ~~s~~ *i* x2 m"},
 		{"rule", "<p>a</p><hr><p>b</p>", "a\n\n---\n\nb"},
 		{"inline code", "<p><code>x *y*</code> and <code>a`b</code> and <code>`c</code></p>", "`x *y*` and ``a`b`` and `` `c ``"},
 		{"code block", "<pre><code>a &lt;b&gt;\n</code></pre>", "```\na <b>\n```"},
@@ -50,6 +57,7 @@ func TestMarkdownOfADescriptionConvertsBackToTheSameHTML(t *testing.T) {
 		"Text with \\*stars\\*, \\_under\\_, snake_case, a \\`tick\\`, \\[brackets\\] and \\<angle>.  \nAfter a hard break.",
 		"\\# not a heading\\\n\\- not a list\\\n1\\. not a list either\\\n\\> not a quote",
 		"AT&T \\&copy; ~~gone~~ and [a path](/projects/x)",
+		"#### Four\n\n##### Five\n\n1. one\n\ntext\n\n3. three\n4. four\n\n| a | *b* |\n| --- | --- |\n| 1 | [x](https://example.com \"T\") |\n| 2 |  |",
 		"## Second\n\n### Third\n\n---\n\nUse `a <b>` and `` c`d `` and `` `e ``.\n\n```go\nfunc main() {}\n```",
 	}
 

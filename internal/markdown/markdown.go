@@ -1,17 +1,17 @@
-// Package markdown converts Markdown into the HTML that Minka keeps in a card
-// description.
+// Package markdown converts Markdown into the HTML that Minka keeps in rich
+// text, such as a card description or a comment.
 //
-// The server reduces every description to a short list of elements (see
-// AllowedElements) and silently unwraps everything else. The converter
-// therefore only writes elements from that list and says in a warning what it
-// had to change, instead of letting the server drop formatting unseen.
+// The server reduces every value to a list of elements and attributes (see
+// AllowedElements and AttributePatterns) and silently unwraps everything else.
+// The converter therefore only writes what is on that list and says in a
+// warning what it had to change, instead of letting the server drop formatting
+// unseen.
 package markdown
 
 import (
 	"bufio"
 	"bytes"
 	"fmt"
-	"html"
 	"regexp"
 	"strings"
 	"unicode/utf8"
@@ -26,35 +26,65 @@ import (
 	"github.com/yuin/goldmark/util"
 )
 
-// AllowedElements are the elements the server keeps in a description, each
-// with the attributes it may carry. Anything the converter writes has to be
-// in here.
+// AllowedElements are the elements the server keeps in rich text, each with
+// the attributes it may carry.
 var AllowedElements = map[string][]string{
-	"a":          {"href"},
+	"a":          {"href", "title"},
 	"blockquote": nil,
 	"br":         nil,
 	"code":       nil,
 	"del":        nil,
 	"div":        nil,
 	"em":         nil,
+	"figure":     {"class"},
 	"h1":         nil,
 	"h2":         nil,
 	"h3":         nil,
+	"h4":         nil,
+	"h5":         nil,
+	"h6":         nil,
 	"hr":         nil,
-	"li":         nil,
-	"ol":         nil,
+	"i":          nil,
+	"li":         {"value"},
+	"mark":       {"style"},
+	"ol":         {"start"},
 	"p":          nil,
-	"pre":        nil,
+	"pre":        {"data-language", "data-highlight-language"},
+	"s":          nil,
 	"strong":     nil,
+	"sub":        nil,
+	"sup":        nil,
+	"table":      nil,
+	"tbody":      nil,
+	"td":         nil,
+	"th":         {"class"},
+	"tr":         nil,
+	"u":          nil,
 	"ul":         nil,
 }
 
+// AttributePatterns are the values the server accepts for the attributes that
+// are checked, keyed "element.attribute". Any other value is removed.
+var AttributePatterns = map[string]*regexp.Regexp{
+	"figure.class":                regexp.MustCompile(`^lexxy-content__table-wrapper$`),
+	"li.value":                    regexp.MustCompile(`^-?\d{1,9}$`),
+	"ol.start":                    regexp.MustCompile(`^-?\d{1,9}$`),
+	"pre.data-language":           regexp.MustCompile(`^[a-z0-9+#-]{1,32}$`),
+	"pre.data-highlight-language": regexp.MustCompile(`^[a-z0-9+#-]{1,32}$`),
+	"th.class":                    regexp.MustCompile(`^lexxy-content__table-cell--header$`),
+}
+
+// The class names the editor writes for a table, so that it can edit a table
+// written here.
 const (
-	WarningHeadings    = "headings below level 3 are sent as level 3, Minka keeps three heading levels"
+	tableWrapperClass = "lexxy-content__table-wrapper"
+	headerCellClass   = "lexxy-content__table-cell--header"
+	maxLinkTitle      = 200
+)
+
+const (
 	WarningImages      = "images are not supported and are sent as links"
-	WarningTables      = "tables are not supported and are sent as preformatted text"
-	WarningRawHTML     = "HTML inside Markdown is sent as visible text; use --description-format html to send HTML"
-	WarningListStart   = "ordered lists always start at 1 in Minka"
+	WarningRawHTML     = "HTML inside Markdown is sent as visible text; use --description-format html or --format html to send HTML"
 	WarningUnsafeLinks = "links Minka does not keep (only http, https, mailto, tel and relative URLs) were sent as plain text"
 )
 
@@ -67,7 +97,7 @@ var markdownParser = goldmark.New(
 	goldmark.WithExtensions(extension.Strikethrough, extension.Table, extension.Linkify),
 ).Parser()
 
-// ToHTML converts Markdown into description HTML. Blank input gives an empty
+// ToHTML converts Markdown into rich text HTML. Blank input gives an empty
 // string, which removes a description.
 func ToHTML(source string) Result {
 	if strings.TrimSpace(source) == "" {
@@ -98,34 +128,36 @@ func (c *converter) visit(node ast.Node, entering bool) (ast.WalkStatus, error) 
 	case *ast.Document, *ast.TextBlock:
 		// Only their children produce output.
 	case *ast.Heading:
-		level := min(n.Level, 3)
-		if entering && n.Level > 3 {
-			c.warn(WarningHeadings)
-		}
-		c.tag(entering, fmt.Sprintf("h%d", level))
+		c.tag(entering, fmt.Sprintf("h%d", n.Level))
 	case *ast.Paragraph:
 		c.tag(entering, "p")
 	case *ast.Blockquote:
 		c.containerTag(entering, "blockquote")
 	case *ast.List:
-		name := "ul"
-		if n.IsOrdered() {
-			name = "ol"
-			if entering && n.Start != 1 {
-				c.warn(WarningListStart)
-			}
+		switch {
+		case !n.IsOrdered():
+			c.containerTag(entering, "ul")
+		case !entering:
+			c.write("</ol>\n")
+		case n.Start != 1 && AttributePatterns["ol.start"].MatchString(fmt.Sprint(n.Start)):
+			c.write(fmt.Sprintf("<ol start=\"%d\">\n", n.Start))
+		default:
+			c.write("<ol>\n")
 		}
-		c.containerTag(entering, name)
 	case *ast.ListItem:
 		c.tag(entering, "li")
 	case *ast.FencedCodeBlock:
 		if entering {
-			c.preformatted(n.Lines(), true)
+			open := "<pre><code>"
+			if language := strings.ToLower(string(n.Language(c.source))); AttributePatterns["pre.data-language"].MatchString(language) {
+				open = `<pre data-language="` + language + `"><code>`
+			}
+			c.preformatted(n.Lines(), open, "</code></pre>")
 		}
 		return ast.WalkSkipChildren, nil
 	case *ast.CodeBlock:
 		if entering {
-			c.preformatted(n.Lines(), true)
+			c.preformatted(n.Lines(), "<pre><code>", "</code></pre>")
 		}
 		return ast.WalkSkipChildren, nil
 	case *ast.HTMLBlock:
@@ -135,7 +167,7 @@ func (c *converter) visit(node ast.Node, entering bool) (ast.WalkStatus, error) 
 			if n.HasClosure() {
 				lines.Append(n.ClosureLine)
 			}
-			c.preformatted(lines, false)
+			c.preformatted(lines, "<pre>", "</pre>")
 		}
 		return ast.WalkSkipChildren, nil
 	case *ast.ThematicBreak:
@@ -165,6 +197,28 @@ func (c *converter) visit(node ast.Node, entering bool) (ast.WalkStatus, error) 
 		c.inlineTag(entering, name)
 	case *east.Strikethrough:
 		c.inlineTag(entering, "del")
+	case *east.Table:
+		if entering {
+			c.write(`<figure class="` + tableWrapperClass + `"><table><tbody>` + "\n")
+		} else {
+			c.write("</tbody></table></figure>\n")
+		}
+	case *east.TableHeader, *east.TableRow:
+		if entering {
+			c.write("<tr>")
+		} else {
+			c.write("</tr>\n")
+		}
+	case *east.TableCell:
+		_, inHeader := n.Parent().(*east.TableHeader)
+		switch {
+		case inHeader && entering:
+			c.write(`<th class="` + headerCellClass + `">`)
+		case inHeader:
+			c.write("</th>")
+		default:
+			c.inlineTag(entering, "td")
+		}
 	case *ast.Link:
 		if !isSafeURL(n.Destination) {
 			if entering {
@@ -173,7 +227,7 @@ func (c *converter) visit(node ast.Node, entering bool) (ast.WalkStatus, error) 
 			return ast.WalkContinue, nil
 		}
 		if entering {
-			c.openLink(n.Destination)
+			c.openLink(n.Destination, n.Title)
 			c.linkDepth++
 		} else {
 			c.write("</a>")
@@ -196,12 +250,6 @@ func (c *converter) visit(node ast.Node, entering bool) (ast.WalkStatus, error) 
 				segment := n.Segments.At(i)
 				c.writer.RawWrite(c.w, segment.Value(c.source))
 			}
-		}
-		return ast.WalkSkipChildren, nil
-	case *east.Table:
-		if entering {
-			c.warn(WarningTables)
-			c.table(n)
 		}
 		return ast.WalkSkipChildren, nil
 	}
@@ -260,31 +308,30 @@ func (c *converter) text(n *ast.Text) {
 	}
 }
 
-// preformatted writes lines into a pre element, for a code block with code
-// inside, the way Markdown writes one.
-func (c *converter) preformatted(lines *text.Segments, code bool) {
+// preformatted writes lines between the given tags, escaped.
+func (c *converter) preformatted(lines *text.Segments, open, close string) {
 	var content bytes.Buffer
 	for i := 0; i < lines.Len(); i++ {
 		segment := lines.At(i)
 		content.Write(segment.Value(c.source))
 	}
-	if code {
-		c.write("<pre><code>")
-	} else {
-		c.write("<pre>")
-	}
+	c.write(open)
 	c.writer.RawWrite(c.w, bytes.TrimRight(content.Bytes(), "\n"))
-	if code {
-		c.write("</code></pre>\n")
-	} else {
-		c.write("</pre>\n")
-	}
+	c.write(close + "\n")
 }
 
-func (c *converter) openLink(destination []byte) {
+// openLink writes the start of a link. A title longer than the server keeps is
+// left out.
+func (c *converter) openLink(destination, title []byte) {
 	c.write(`<a href="`)
 	_, _ = c.w.Write(util.EscapeHTML(util.URLEscape(destination, true)))
-	c.write(`">`)
+	c.write(`"`)
+	if len(title) > 0 && utf8.RuneCount(title) <= maxLinkTitle {
+		c.write(` title="`)
+		c.writer.RawWrite(c.w, title)
+		c.write(`"`)
+	}
+	c.write(`>`)
 }
 
 func (c *converter) autoLink(n *ast.AutoLink) {
@@ -300,7 +347,7 @@ func (c *converter) autoLink(n *ast.AutoLink) {
 		c.writer.RawWrite(c.w, label)
 		return
 	}
-	c.openLink(destination)
+	c.openLink(destination, nil)
 	c.writer.RawWrite(c.w, label)
 	c.write("</a>")
 }
@@ -322,50 +369,9 @@ func (c *converter) image(n *ast.Image) {
 		c.writer.RawWrite(c.w, label)
 		return
 	}
-	c.openLink(n.Destination)
+	c.openLink(n.Destination, nil)
 	c.writer.RawWrite(c.w, label)
 	c.write("</a>")
-}
-
-// table writes a table as aligned plain text in a pre element, the closest
-// form the server keeps.
-func (c *converter) table(table *east.Table) {
-	var rows [][]string
-	for row := table.FirstChild(); row != nil; row = row.NextSibling() {
-		var cells []string
-		for cell := row.FirstChild(); cell != nil; cell = cell.NextSibling() {
-			cells = append(cells, strings.TrimSpace(string(plainText(cell, c.source))))
-		}
-		rows = append(rows, cells)
-	}
-
-	var widths []int
-	for _, cells := range rows {
-		for i, cell := range cells {
-			if i >= len(widths) {
-				widths = append(widths, 0)
-			}
-			widths[i] = max(widths[i], utf8.RuneCountInString(cell))
-		}
-	}
-
-	var lines []string
-	for r, cells := range rows {
-		padded := make([]string, len(cells))
-		for i, cell := range cells {
-			padded[i] = cell + strings.Repeat(" ", widths[i]-utf8.RuneCountInString(cell))
-		}
-		lines = append(lines, strings.TrimRight(strings.Join(padded, " | "), " "))
-		if r == 0 {
-			separators := make([]string, len(widths))
-			for i, width := range widths {
-				separators[i] = strings.Repeat("-", width)
-			}
-			lines = append(lines, strings.Join(separators, "-|-"))
-		}
-	}
-
-	c.write(fmt.Sprintf("<pre>%s</pre>\n", html.EscapeString(strings.Join(lines, "\n"))))
 }
 
 var urlIgnoredCharacters = regexp.MustCompile(`[\x00-\x20\x7f]`)

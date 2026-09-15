@@ -319,13 +319,13 @@ func TestProjectsListShowsOnlyTheProjectsOfThePerson(t *testing.T) {
 
 func TestCreateSendsMarkdownAsHTMLAndLandsInTriage(t *testing.T) {
 	e := newTestEnv(t)
-	description := "# Heading\n\n#### Deep\n\nSome *emphasis* and `code`."
+	description := "# Heading\n\n![i](https://example.com/i.png)\n\nSome *emphasis* and `code`."
 
 	env, r := e.runJSON("", "cards", "create", "--board", e.fixture.Board.ID, "--title", "Neue Karte „mit“ Umlauten", "--description", description)
 	expectCode(t, r, ExitOK)
 
 	body := e.lastWriteBody()
-	wantHTML := "<h1>Heading</h1>\n<h3>Deep</h3>\n<p>Some <em>emphasis</em> and <code>code</code>.</p>"
+	wantHTML := "<h1>Heading</h1>\n<p><a href=\"https://example.com/i.png\">i</a></p>\n<p>Some <em>emphasis</em> and <code>code</code>.</p>"
 	if body["description"] != wantHTML {
 		t.Errorf("description sent\n got: %q\nwant: %q", body["description"], wantHTML)
 	}
@@ -335,7 +335,7 @@ func TestCreateSendsMarkdownAsHTMLAndLandsInTriage(t *testing.T) {
 	if _, present := body["columnId"]; present {
 		t.Error("columnId sent without --column")
 	}
-	if !strings.Contains(env.Notice, markdown.WarningHeadings) {
+	if !strings.Contains(env.Notice, markdown.WarningImages) {
 		t.Errorf("notice %q", env.Notice)
 	}
 	card := decode(t, env.Data)
@@ -346,9 +346,9 @@ func TestCreateSendsMarkdownAsHTMLAndLandsInTriage(t *testing.T) {
 
 func TestWarningsGoToStderrInTextOutput(t *testing.T) {
 	e := newTestEnv(t)
-	r := e.run("", "cards", "create", "--board", e.fixture.Board.ID, "--title", "x", "--description", "#### Deep", "--styled")
+	r := e.run("", "cards", "create", "--board", e.fixture.Board.ID, "--title", "x", "--description", "![i](https://example.com/i.png)", "--styled")
 	expectCode(t, r, ExitOK)
-	if !strings.Contains(r.stderr, "Warning: "+markdown.WarningHeadings) {
+	if !strings.Contains(r.stderr, "Warning: "+markdown.WarningImages) {
 		t.Errorf("stderr: %q", r.stderr)
 	}
 	if strings.Contains(r.stdout, "Warning") {
@@ -816,9 +816,9 @@ func TestAFailedWriteTellsToReadBackBeforeRetrying(t *testing.T) {
 
 func TestQuietPrintsWarningsToStderr(t *testing.T) {
 	e := newTestEnv(t)
-	r := e.run("", "cards", "create", "--board", e.fixture.Board.ID, "--title", "x", "--description", "#### Deep", "--quiet")
+	r := e.run("", "cards", "create", "--board", e.fixture.Board.ID, "--title", "x", "--description", "![i](https://example.com/i.png)", "--quiet")
 	expectCode(t, r, ExitOK)
-	if !strings.Contains(r.stderr, "Warning: "+markdown.WarningHeadings) {
+	if !strings.Contains(r.stderr, "Warning: "+markdown.WarningImages) {
 		t.Errorf("stderr %q", r.stderr)
 	}
 	if card := decode(t, json.RawMessage(r.stdout)); card["title"] != "x" {

@@ -1,5 +1,5 @@
-// Package richtext turns the HTML of a card description back into Markdown
-// for reading in a terminal.
+// Package richtext turns the rich text HTML of a card description or a comment
+// back into Markdown for reading in a terminal.
 //
 // The result is meant for people and agents who read a card and may edit it:
 // fed back through the markdown package it gives the same elements again.
@@ -11,9 +11,11 @@ package richtext
 import (
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 	"unicode"
 
+	"github.com/flownative/minka-cli/internal/markdown"
 	"golang.org/x/net/html"
 	"golang.org/x/net/html/atom"
 )
@@ -41,7 +43,7 @@ func ToMarkdown(fragment string) string {
 
 func isBlock(name string) bool {
 	switch name {
-	case "p", "div", "h1", "h2", "h3", "h4", "h5", "h6", "hr", "blockquote", "pre", "ul", "ol", "li":
+	case "p", "div", "h1", "h2", "h3", "h4", "h5", "h6", "hr", "blockquote", "pre", "ul", "ol", "li", "table", "figure":
 		return true
 	}
 	return false
@@ -103,23 +105,28 @@ func joinParts(parts []part, inListItem bool) string {
 
 func block(n *html.Node) string {
 	switch n.Data {
-	case "h1":
-		return "# " + paragraphLines(inlineChildren(n))
-	case "h2":
-		return "## " + paragraphLines(inlineChildren(n))
-	case "h3", "h4", "h5", "h6":
-		return "### " + paragraphLines(inlineChildren(n))
+	case "h1", "h2", "h3", "h4", "h5", "h6":
+		return strings.Repeat("#", int(n.Data[1]-'0')) + " " + paragraphLines(inlineChildren(n))
 	case "hr":
 		return "---"
+	case "table":
+		return table(n)
 	case "blockquote":
 		return prefixLines(blocks(children(n)), "> ", "> ")
 	case "pre":
 		content := strings.TrimRight(textContent(n), "\n")
 		fence := codeFence(content)
-		return fence + "\n" + content + "\n" + fence
+		language := attribute(n, "data-language")
+		if !markdown.AttributePatterns["pre.data-language"].MatchString(language) {
+			language = ""
+		}
+		return fence + language + "\n" + content + "\n" + fence
 	case "ul", "ol":
 		var items []string
 		number := 1
+		if start, err := strconv.Atoi(attribute(n, "start")); n.Data == "ol" && err == nil && start >= 0 {
+			number = start
+		}
 		for _, item := range children(n) {
 			if item.Type != html.ElementNode || item.Data != "li" {
 				continue
@@ -164,20 +171,76 @@ func inline(n *html.Node) string {
 		return wrapInline(content, "~~")
 	case "a":
 		href := attribute(n, "href")
+		title := attribute(n, "title")
 		label := strings.TrimSpace(content)
+		destination := linkDestination(href)
+		if title != "" {
+			destination += ` "` + strings.ReplaceAll(title, `"`, `\"`) + `"`
+		}
 		switch {
 		case href == "":
 			return content
-		case (label == "" || label == escapeText(href)) && (strings.HasPrefix(href, "https://") || strings.HasPrefix(href, "http://")):
+		case title == "" && (label == "" || label == escapeText(href)) && (strings.HasPrefix(href, "https://") || strings.HasPrefix(href, "http://")):
 			return "<" + href + ">"
 		case label == "":
-			return "[" + escapeText(href) + "](" + linkDestination(href) + ")"
+			return "[" + escapeText(href) + "](" + destination + ")"
 		default:
-			return "[" + label + "](" + linkDestination(href) + ")"
+			return "[" + label + "](" + destination + ")"
 		}
 	}
 
 	return content
+}
+
+// table renders a table as a Markdown table. The first row is the header,
+// which is how the editor writes a table as well.
+func table(n *html.Node) string {
+	var rows [][]string
+	var collect func(*html.Node)
+	collect = func(node *html.Node) {
+		for _, child := range children(node) {
+			if child.Type != html.ElementNode {
+				continue
+			}
+			switch child.Data {
+			case "tr":
+				var cells []string
+				for _, cell := range children(child) {
+					if cell.Type == html.ElementNode && (cell.Data == "td" || cell.Data == "th") {
+						text := strings.ReplaceAll(paragraphLines(inlineChildren(cell)), "\\\n", " ")
+						cells = append(cells, strings.ReplaceAll(text, "|", `\|`))
+					}
+				}
+				rows = append(rows, cells)
+			case "thead", "tbody", "tfoot":
+				collect(child)
+			}
+		}
+	}
+	collect(n)
+	if len(rows) == 0 {
+		return ""
+	}
+
+	columns := 0
+	for _, row := range rows {
+		columns = max(columns, len(row))
+	}
+	line := func(cells []string) string {
+		padded := make([]string, columns)
+		copy(padded, cells)
+		return "| " + strings.Join(padded, " | ") + " |"
+	}
+	separator := make([]string, columns)
+	for i := range separator {
+		separator[i] = "---"
+	}
+
+	lines := []string{line(rows[0]), line(separator)}
+	for _, row := range rows[1:] {
+		lines = append(lines, line(row))
+	}
+	return strings.Join(lines, "\n")
 }
 
 func inlineChildren(n *html.Node) string {
