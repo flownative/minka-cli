@@ -111,3 +111,21 @@ func TestCarriesMarkup(t *testing.T) {
 		}
 	}
 }
+
+func TestHasAttachments(t *testing.T) {
+	for served, want := range map[string]bool{
+		"":            false,
+		"<p>text</p>": false,
+		`<figure class="lexxy-content__table-wrapper"><table><tbody><tr><td>x</td></tr></tbody></table></figure>`: false,
+		`<figure class="attachment attachment--image"><img src="/f/1" alt="Plan"></figure>`:                       true,
+		`<figure class="attachment attachment--file"><a href="/f/2" download="plan.pdf">plan.pdf</a></figure>`:    true,
+		`<p>see <img src="/f/3"></p>`:                                true,
+		`<p><a href="/f/4" download="plan.pdf">plan.pdf</a></p>`:     true,
+		`<action-text-attachment sgid="x"></action-text-attachment>`: true,
+		`<p><a href="https://example.com">link</a></p>`:              false,
+	} {
+		if got := HasAttachments(served); got != want {
+			t.Errorf("HasAttachments(%q) = %v", served, got)
+		}
+	}
+}
