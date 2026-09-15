@@ -132,19 +132,7 @@ nothing and succeeds. Somebody who left the project can still be taken off.
 				return s.fail(err)
 			}
 
-			// The assignees come first: they include people who left the project.
-			candidates := make([]api.ProjectMember, 0, len(card.Value.Assignees)+len(members.Value))
-			known := map[string]bool{}
-			for _, assignee := range card.Value.Assignees {
-				candidates = append(candidates, api.ProjectMember{ID: assignee.ID, Name: assignee.Name})
-				known[assignee.ID] = true
-			}
-			for _, member := range members.Value {
-				if !known[member.ID] {
-					candidates = append(candidates, member)
-				}
-			}
-			person, err := resolvePerson(args[1], candidates, a.meID(s))
+			person, err := resolvePerson(args[1], peopleOnCardFirst(card.Value.Assignees, members.Value), a.meID(s))
 			if err != nil {
 				return err
 			}
@@ -172,6 +160,42 @@ nothing and succeeds. Somebody who left the project can still be taken off.
 			})
 		},
 	}
+}
+
+// peopleOnCardFirst lists the people named on a card before the other members
+// of its project, each once, so that somebody who left the project is still
+// found. A person who is still a member keeps the e-mail address the member
+// list has for them.
+func peopleOnCardFirst(onCard []api.PersonReference, members []api.ProjectMember) []api.ProjectMember {
+	memberByID := make(map[string]api.ProjectMember, len(members))
+	for _, member := range members {
+		memberByID[member.ID] = member
+	}
+	candidates := make([]api.ProjectMember, 0, len(onCard)+len(members))
+	known := map[string]bool{}
+	for _, person := range onCard {
+		candidate, isMember := memberByID[person.ID]
+		if !isMember {
+			candidate = api.ProjectMember{ID: person.ID, Name: person.Name}
+		}
+		candidates = append(candidates, candidate)
+		known[person.ID] = true
+	}
+	for _, member := range members {
+		if !known[member.ID] {
+			candidates = append(candidates, member)
+		}
+	}
+	return candidates
+}
+
+func hasPerson(people []api.PersonReference, id string) bool {
+	for _, person := range people {
+		if person.ID == id {
+			return true
+		}
+	}
+	return false
 }
 
 // resolveMembers finds the people to assign to a new card on a board, before

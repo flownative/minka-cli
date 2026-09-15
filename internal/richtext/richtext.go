@@ -62,7 +62,7 @@ func ToMarkdown(fragment string) string {
 
 func isBlock(name string) bool {
 	switch name {
-	case "p", "div", "h1", "h2", "h3", "h4", "h5", "h6", "hr", "blockquote", "pre", "ul", "ol", "li", "table", "figure":
+	case "p", "div", "h1", "h2", "h3", "h4", "h5", "h6", "hr", "blockquote", "pre", "ul", "ol", "li", "table", "figure", "figcaption":
 		return true
 	}
 	return false
@@ -188,6 +188,14 @@ func inline(n *html.Node) string {
 		return wrapInline(content, "*")
 	case "del", "s":
 		return wrapInline(content, "~~")
+	case "img":
+		// A picture Minka serves for an attachment. Markdown can show it, but
+		// the Markdown conversion sends an image back as a link.
+		alt := escapeText(attribute(n, "alt"))
+		if src := attribute(n, "src"); src != "" {
+			return "![" + alt + "](" + linkDestination(src) + ")"
+		}
+		return alt
 	case "a":
 		href := attribute(n, "href")
 		title := attribute(n, "title")

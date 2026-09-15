@@ -24,6 +24,7 @@ func TestToMarkdown(t *testing.T) {
 		{"code block with a language that is none", `<pre data-language="a b"><code>x</code></pre>`, "```\nx\n```"},
 		{"link with a title", `<p><a href="https://example.com" title="Home">site</a> <a href="https://x.y" title="X">https://x.y</a></p>`, `[site](https://example.com "Home") [https://x.y](https://x.y "X")`},
 		{"table", `<figure class="lexxy-content__table-wrapper"><table><tbody><tr><th>a</th><th>b|c</th></tr><tr><td>1</td></tr></tbody></table></figure>`, "| a | b\\|c |\n| --- | --- |\n| 1 |  |"},
+		{"attachment as the server serves it", `<figure class="attachment attachment--image"><img src="https://minka.example/f/1.png" alt="Plan" width="800"><figcaption>Der Plan</figcaption></figure>`, "![Plan](https://minka.example/f/1.png)\n\nDer Plan"},
 		{"marks Markdown has no syntax for", "<p><u>u</u> <s>s</s> <i>i</i> x<sub>2</sub> <mark>m</mark></p>", "u ~~s~~ *i* x2 m"},
 		{"rule", "<p>a</p><hr><p>b</p>", "a\n\n---\n\nb"},
 		{"inline code", "<p><code>x *y*</code> and <code>a`b</code> and <code>`c</code></p>", "`x *y*` and ``a`b`` and `` `c ``"},

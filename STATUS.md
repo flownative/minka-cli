@@ -11,9 +11,9 @@ lokale Instanz geprüft, Befunde des Reviews eingearbeitet.
 die beim Abgleich mit dem Code auffallen. Das Dogfooding in Minka wartet auf
 eine interne Alpha.
 
-API-Stand, gegen den gebaut ist: Minka `a8eeb7a` (API-1 bis API-5,
+API-Stand, gegen den gebaut ist: Minka `e610aac` (API-1 bis API-5,
 erweiterte Allowlist aus E-060, Zuständige an Karten, neue Karten oben in der
-Spalte, Fälligkeitsdatum, Zuständige und Datum beim Anlegen, Schritte, erweiterte Allowlist aus `72d0639`, Kommentare als Rich Text, Chat).
+Spalte, Fälligkeitsdatum, Zuständige und Datum beim Anlegen, Schritte, erweiterte Allowlist aus `72d0639`, Kommentare als Rich Text, Chat, Abonnenten).
 Koordination in Minka: `minka-63`.
 
 Befehle:
@@ -24,7 +24,7 @@ minka me
 minka projects list
 minka boards list <projectId> | show <boardId>
 minka people list <projectId>
-minka cards show|create|edit|move|assign|unassign|done|delete
+minka cards show|create|edit|move|assign|unassign|subscribe|unsubscribe|done|delete
 minka steps list|create|complete|reopen|delete
 minka comments create <cardId> <text|->
 minka chats list <projectId> | mark-read <chatId>
@@ -147,6 +147,15 @@ Auf Roberts Wunsch folgen die Konventionen **basecamp-cli**. Den Umfang
   - `cards create --assignee` (wiederholbar) löst alle Personen vor dem
     Anlegen auf und schickt sie als `assigneeIds` im selben Request. Karte
     und Zuständige entstehen in einer Transaktion.
+- **Abonnenten:**
+  - `cards subscribe` und `cards unsubscribe` lösen die Person auf wie
+    `cards assign`. Beim Abmelden kommen die Abonnenten der Karte zuerst in
+    die Kandidaten; der Server verlangt aber auch dafür ein Mitglied des
+    Projekts.
+  - Ob sich etwas geändert hat, sagt die Zusammenfassung, verglichen mit der
+    Karte vor dem Aufruf (`wasSubscribed` beim Abmelden).
+  - Die Kartenansicht zeigt „Subscribers:“. Das Board liefert keine
+    Abonnenten.
 - **Schritte:**
   - Die Gruppe `steps` hat `list`, `create`, `complete`, `reopen` und
     `delete`.
@@ -253,6 +262,11 @@ genannte Test wird rot. Zuletzt am 13.09.2026 nach dem Review ausgeführt:
 | Klartext-Erkennung nach der Regel des Servers | `TestCarriesMarkup` |
 | Chat-Nachrichten: Markdown mit Zeilenumbrüchen, `text` und `html` unverändert, auch beim Ändern | `TestAMessageIsSentAsMarkdownTextOrHTML` |
 | Chat-Format geprüft, leeres Ergebnis abgelehnt | `TestAMessageInAnUnknownFormatOrWithNothingMinkaKeepsIsRefused` |
+| Person auf der Karte behält ihre E-Mail-Adresse (auch bei `unassign`) | `TestSomebodyOnTheCardIsFoundByEmailAddress`, `TestSubscribeAndUnsubscribeAPerson` |
+| Schon abonniert und `wasSubscribed` aus dem Stand vor dem Aufruf | `TestSubscribeAndUnsubscribeAPerson` |
+| Abonnenten in der Kartenansicht | `TestSubscribersAppearOnTheCard` |
+| Personen-ID bei Abonnenten im Pfad escaped | `TestIdentifiersAreEscapedInThePath` (api) |
+| Angehängtes Bild als Markdown-Bild | `TestToMarkdown` |
 | 204 ohne Rumpf ist Erfolg | `TestAnEmptyAnswerIsASuccess` (api), `TestDeleteMovesACardToTheTrash` |
 | Nachbar in Zielspalte geprüft | `TestMoveNextToACardOutsideTheTargetColumnIsRefused` |
 | Done ohne Platzierung | `TestDoneTakesNoPlacement` |
@@ -338,6 +352,15 @@ oben; 404 nur bei einer ungültigen ID. Der Fake folgte dem schon.
 
 ## Offene Punkte
 
+- Uploads (`POST /projects/{p}/uploads`, `PUT`) gibt es in der API, das
+  Anhängen an Karten noch nicht. Uploads gehören laut Briefing nicht zum
+  Umfang der CLI; minka-63 meldet, wenn Anhängen per API kommt.
+- Beschreibungen und Kommentare können Bilder und Dateien enthalten, die im
+  Web angehängt wurden. Der Server liefert sie als `figure > img` oder Link,
+  `cards show` zeigt ein Bild als Markdown-Bild. Nicht geprüft ist, ob eine
+  Beschreibung mit Anhängen, die über `cards edit --description` neu
+  geschrieben wird, ihre Anhänge behält. Die Frage ist an minka-63 gestellt.
+
 - Das Review der Schritte in Minka ist mit `51b44e6` abgeschlossen. Das Board
   liefert je Karte `stepCount` und `completedStepCount`. `DELETE` auf einen
   Schritt einer anderen Karte oder auf eine ungültige Schritt-ID gibt bewusst
@@ -356,6 +379,15 @@ oben; 404 nur bei einer ungültigen ID. Der Fake folgte dem schon.
 - Das Token `minka-cli-smoke` liegt in `~/.config/minka/config.json`.
   Widerrufen beim Umstieg auf das Dogfooding zur internen Alpha. Das
   Agentenkonto „Claude (Robert)" ist schon Mitglied im Minka-Projekt.
+- Abonnenten (Minka `e610aac`) sind am 15.09.2026 live geprüft, an einer
+  Testkarte im Board „API-3 Abnahme“:
+  - Wer eine Karte anlegt, ist abonniert. `subscribe me` meldet „already“.
+  - Clara per E-Mail-Adresse kommt dazu.
+  - „Live“ ist mehrdeutig (Exit 8), eine fremde UUID endet mit Exit 9
+    `personNotAProjectMember`.
+  - `unsubscribe me` zweimal meldet erst `wasSubscribed: true`, dann „not
+    subscribed“. Ein Kommentar danach setzt Bruno nicht zurück auf die Liste.
+  - Die Testkarte ist wieder gelöscht.
 - Chat-Nachrichten als Rich Text (Minka `a8eeb7a`) sind am 15.09.2026 live
   geprüft, im Chat „Chat1 Abnahme“:
   - Markdown mit Umbruch, Inline-Code, Link und Tabelle kommt als HTML an.

@@ -99,6 +99,8 @@ minka cards delete <cardId> --json
 minka people list <projectId> --json
 minka cards assign <cardId> <person> --json
 minka cards unassign <cardId> <person> --json
+minka cards subscribe <cardId> <person> --json
+minka cards unsubscribe <cardId> <person> --json
 minka steps list <cardId> --json
 minka steps create <cardId> "Text" --json
 minka steps complete <cardId> <step> --json
@@ -146,6 +148,13 @@ such as `Doing`.
   and creates the card together with them in one request. Somebody outside
   the project leaves no card behind (exit 9, `personNotAProjectMember`).
 - New cards go to the top of their column.
+- A card read by itself carries `subscribers` as `{id, name}`, sorted by
+  name: the people it notifies about comments, its due date and completion.
+  Minka subscribes people by itself when they create a card, are assigned or
+  comment. `cards subscribe <cardId> <person>` adds somebody, `cards
+  unsubscribe` takes somebody off and keeps Minka from adding them again.
+  Both succeed when nothing changes; only project members can be named
+  (`personNotAProjectMember`, exit 9).
 
 ## Steps
 
@@ -205,6 +214,9 @@ such as `Doing`.
   definitions, for example) is refused, so it cannot remove a description by
   accident. To remove a description, give `--description ""`.
 - `--description-format html` sends HTML as it is; the server sanitizes it.
+- Pictures and files attached on the web come in the served HTML as
+  `<figure>` with `<img>` or a link; `cards show --styled` shows a picture as
+  a Markdown image. Files cannot be attached through the CLI.
 - `cards show --styled` prints the description as Markdown, which can be edited
   and sent back with `cards edit --description -`.
 - Comments are rich text like descriptions. `comments create` converts

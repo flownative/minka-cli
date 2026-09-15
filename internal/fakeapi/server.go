@@ -76,6 +76,8 @@ type Card struct {
 	CompletedAt   *time.Time
 	CompletedByID string
 	AssigneeIDs   []string // in the order they were assigned
+	SubscriberIDs []string
+	OffIDs        []string // people who took themselves off and are not put back by Minka
 	DueOn         *string  // YYYY-MM-DD, nil for none
 	Steps         []*Step
 	Comments      []*Comment
@@ -277,6 +279,8 @@ func New(t testing.TB) (*Server, *Fixture) {
 	mux.HandleFunc("POST /api/v1/cards/{cardId}/steps", s.authenticated(s.addStep))
 	mux.HandleFunc("PATCH /api/v1/cards/{cardId}/steps/{stepId}", s.authenticated(s.updateStep))
 	mux.HandleFunc("DELETE /api/v1/cards/{cardId}/steps/{stepId}", s.authenticated(s.removeStep))
+	mux.HandleFunc("POST /api/v1/cards/{cardId}/subscribers/{personId}", s.authenticated(s.subscribeToCard))
+	mux.HandleFunc("DELETE /api/v1/cards/{cardId}/subscribers/{personId}", s.authenticated(s.unsubscribeFromCard))
 	mux.HandleFunc("GET /api/v1/projects/{projectId}/chats", s.authenticated(s.chats))
 	mux.HandleFunc("GET /api/v1/chats/{chatId}/messages", s.authenticated(s.messages))
 	mux.HandleFunc("POST /api/v1/chats/{chatId}/messages", s.authenticated(s.postMessage))
@@ -515,9 +519,11 @@ func (s *Server) addCard(w http.ResponseWriter, r *http.Request, person *Person)
 	}
 
 	card := &Card{ID: newID(), Title: phpTrim(*title), Description: phpTrim(deref(description)), CreatedAt: s.now, CreatorID: person.ID, DueOn: dueDate(dueOn)}
+	card.subscribe(person.ID)
 	for _, id := range assigneeIDs {
 		if !slices.Contains(card.AssigneeIDs, id) {
 			card.AssigneeIDs = append(card.AssigneeIDs, id)
+			card.subscribe(id)
 		}
 	}
 	column.Cards = append([]*Card{card}, column.Cards...)
@@ -684,6 +690,7 @@ func (s *Server) assignCard(w http.ResponseWriter, r *http.Request, person *Pers
 	status := http.StatusOK
 	if !slices.Contains(card.AssigneeIDs, *personID) {
 		card.AssigneeIDs = append(card.AssigneeIDs, *personID)
+		card.subscribe(*personID)
 		status = http.StatusCreated
 	}
 	writeJSON(w, status, s.cardResource(board, column, card))
@@ -1029,8 +1036,67 @@ func (s *Server) chatMessageResource(message *ChatMessage) map[string]any {
 	}
 }
 
+// subscribe puts a person on the list the way Minka does on its own: not
+// somebody who took themselves off it.
+func (c *Card) subscribe(personID string) {
+	if !slices.Contains(c.OffIDs, personID) && !slices.Contains(c.SubscriberIDs, personID) {
+		c.SubscriberIDs = append(c.SubscriberIDs, personID)
+	}
+}
+
+func (s *Server) subscriberReferences(card *Card) []any {
+	ids := slices.Clone(card.SubscriberIDs)
+	slices.SortFunc(ids, func(a, b string) int { return strings.Compare(s.People[a].Name, s.People[b].Name) })
+	list := []any{}
+	for _, id := range ids {
+		list = append(list, s.personReference(id))
+	}
+	return list
+}
+
+// namedMember is the person of the path if they are a member of the project
+// of the card, which the server asks both on and off the list.
+func (s *Server) namedMember(board *Board, personID string, person *Person) bool {
+	return uuidPattern.MatchString(personID) && slices.Contains(s.visibleProject(board.ProjectID, person).MemberIDs, personID)
+}
+
+func (s *Server) subscribeToCard(w http.ResponseWriter, r *http.Request, person *Person) {
+	board, column, card := s.visibleCard(r.PathValue("cardId"), person)
+	if card == nil {
+		notFound(w)
+		return
+	}
+	personID := r.PathValue("personId")
+	if !s.namedMember(board, personID, person) {
+		notAProjectMember(w)
+		return
+	}
+	card.OffIDs = slices.DeleteFunc(card.OffIDs, func(id string) bool { return id == personID })
+	card.subscribe(personID)
+	writeJSON(w, http.StatusOK, s.cardResource(board, column, card))
+}
+
+func (s *Server) unsubscribeFromCard(w http.ResponseWriter, r *http.Request, person *Person) {
+	board, _, card := s.visibleCard(r.PathValue("cardId"), person)
+	if card == nil {
+		notFound(w)
+		return
+	}
+	personID := r.PathValue("personId")
+	if !s.namedMember(board, personID, person) {
+		notAProjectMember(w)
+		return
+	}
+	card.SubscriberIDs = slices.DeleteFunc(card.SubscriberIDs, func(id string) bool { return id == personID })
+	if !slices.Contains(card.OffIDs, personID) {
+		card.OffIDs = append(card.OffIDs, personID)
+	}
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func notAProjectMember(w http.ResponseWriter) {
-	unprocessable(w, "personNotAProjectMember", "Only a member of the project of the card can be assigned to it.")
+	unprocessable(w, "personNotAProjectMember", "Only a member of the project of the card can be named on it.")
 }
 
 func (s *Server) assigneeReferences(card *Card) []any {
@@ -1086,6 +1152,7 @@ func (s *Server) writeComment(w http.ResponseWriter, r *http.Request, person *Pe
 		return
 	}
 	comment := &Comment{ID: newID(), AuthorID: person.ID, Body: text, CreatedAt: s.now}
+	card.subscribe(person.ID)
 	card.Comments = append(card.Comments, comment)
 	writeJSON(w, http.StatusCreated, s.commentResource(comment))
 }
@@ -1136,8 +1203,9 @@ func (s *Server) cardResource(board *Board, column *Column, card *Card) map[stri
 		"commentCount": len(card.Comments), "createdAt": timestamp(card.CreatedAt),
 		"creator": s.personReference(card.CreatorID), "completedAt": timestampOrNil(card.CompletedAt),
 		"completedBy": s.personReferenceOrNil(card.CompletedByID), "assignees": s.assigneeReferences(card),
-		"dueOn": card.DueOn, "steps": stepResources(card), "comments": comments,
-		"appUrl": s.cardURL(board, card),
+		"dueOn": card.DueOn, "steps": stepResources(card), "subscribers": s.subscriberReferences(card),
+		"comments": comments,
+		"appUrl":   s.cardURL(board, card),
 	}
 }
 

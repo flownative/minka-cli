@@ -27,6 +27,8 @@ func (a *app) newCardsCmd() *cobra.Command {
 		a.newCardsMoveCmd(),
 		a.newCardsAssignCmd(),
 		a.newCardsUnassignCmd(),
+		a.newCardsSubscribeCmd(),
+		a.newCardsUnsubscribeCmd(),
 		a.newCardsDoneCmd(),
 		a.newCardsDeleteCmd(),
 	)

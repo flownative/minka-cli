@@ -113,6 +113,20 @@ func (c *Client) MoveCard(ctx context.Context, cardID string, input MoveCardInpu
 	return request[Card](ctx, c, http.MethodPost, "/cards/"+url.PathEscape(cardID)+"/moves", input)
 }
 
+// Subscribe puts a member of the project on the list of people a card
+// notifies. Somebody on the list already succeeds as well.
+func (c *Client) Subscribe(ctx context.Context, cardID, personID string) (Result[Card], error) {
+	return request[Card](ctx, c, http.MethodPost, "/cards/"+url.PathEscape(cardID)+"/subscribers/"+url.PathEscape(personID), nil)
+}
+
+// Unsubscribe takes a person off the list of people a card notifies, and keeps
+// Minka from putting them back by itself. Somebody not on the list succeeds as
+// well.
+func (c *Client) Unsubscribe(ctx context.Context, cardID, personID string) error {
+	_, err := request[struct{}](ctx, c, http.MethodDelete, "/cards/"+url.PathEscape(cardID)+"/subscribers/"+url.PathEscape(personID), nil)
+	return err
+}
+
 // People lists the members of a project, the people its cards can be
 // assigned to.
 func (c *Client) People(ctx context.Context, projectID string) (Result[[]ProjectMember], error) {
