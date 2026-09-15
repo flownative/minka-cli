@@ -126,3 +126,12 @@ func TestEachWarningIsGivenOnce(t *testing.T) {
 		t.Errorf("got %q", result.Warnings)
 	}
 }
+
+func TestKeepLineBreaksKeepsEveryLine(t *testing.T) {
+	if got := ToHTML("one\ntwo\n\nthree", KeepLineBreaks()).HTML; got != "<p>one<br>two</p>\n<p>three</p>" {
+		t.Errorf("with KeepLineBreaks: %q", got)
+	}
+	if got := ToHTML("one\ntwo").HTML; got != "<p>one\ntwo</p>" {
+		t.Errorf("without: %q", got)
+	}
+}

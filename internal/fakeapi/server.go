@@ -744,13 +744,14 @@ func (s *Server) writeComment(w http.ResponseWriter, r *http.Request, person *Pe
 	if !ok {
 		return
 	}
+	// The server stores the comment as rich text; the fake keeps what was sent.
 	text := phpTrim(deref(body))
-	if utf8.RuneCountInString(text) > maxCommentLength {
-		unprocessable(w, "commentTooLong", "The comment is too long.")
-		return
-	}
 	if strings.IndexFunc(text, func(r rune) bool { return unicode.IsControl(r) && r != '\t' && r != '\n' && r != '\r' }) >= 0 {
 		unprocessable(w, "commentHasControlCharacters", "A comment must not contain control characters other than line breaks and tabs.")
+		return
+	}
+	if utf8.RuneCountInString(text) > maxCommentLength {
+		unprocessable(w, "commentTooLong", "The comment is too long.")
 		return
 	}
 	if text == "" {

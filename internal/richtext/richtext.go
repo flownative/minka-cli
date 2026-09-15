@@ -26,7 +26,22 @@ var (
 	entityReference   = regexp.MustCompile(`^&#?[A-Za-z0-9]+;`)
 )
 
-// ToMarkdown converts description HTML into Markdown. HTML that cannot be
+var servedMarkup = func() *regexp.Regexp {
+	names := make([]string, 0, len(markdown.AllowedElements))
+	for name := range markdown.AllowedElements {
+		names = append(names, name)
+	}
+	return regexp.MustCompile(`(?i)</?(?:` + strings.Join(names, "|") + `)[\s/>]`)
+}()
+
+// CarriesMarkup reports whether a value opens an element the server serves.
+// The server keeps a value without one as plain text, as it does with comments
+// written before the editor, and such a value is shown as it is.
+func CarriesMarkup(value string) bool {
+	return servedMarkup.MatchString(value)
+}
+
+// ToMarkdown converts rich text HTML into Markdown. HTML that cannot be
 // parsed is returned unchanged.
 func ToMarkdown(fragment string) string {
 	if strings.TrimSpace(fragment) == "" {

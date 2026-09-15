@@ -89,3 +89,19 @@ func TestTextWithoutMarkupStaysText(t *testing.T) {
 		t.Errorf("line break lost: %q", back)
 	}
 }
+
+func TestCarriesMarkup(t *testing.T) {
+	for value, want := range map[string]bool{
+		"<p>text</p>":                true,
+		"<div>a<br>b</div>":          true,
+		"text with <br/> in it":      true,
+		"plain text":                 false,
+		"a < b and <notanelement> x": false,
+		"<pre>":                      true,
+		"<abbr>x</abbr>":             false,
+	} {
+		if got := CarriesMarkup(value); got != want {
+			t.Errorf("CarriesMarkup(%q) = %v", value, got)
+		}
+	}
+}

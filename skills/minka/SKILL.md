@@ -67,7 +67,7 @@ Validation codes in `meta.apiCode`: `cardTitleMissing`, `cardTitleTooLong`,
 `cardTitleHasControlCharacters` (a title is one line: no line breaks or tabs),
 `cardDescriptionTooLong`, `cardDescriptionNotReadable`, `commentMissing`,
 `commentTooLong`, `commentHasControlCharacters` (line breaks and tabs are
-fine), `cardDueDateNotADate`, `personNotAProjectMember`, `personIdMissing`,
+fine), `commentNotReadable`, `cardDueDateNotADate`, `personNotAProjectMember`, `personIdMissing`,
 `stepMissing`, `stepTooLong`, `stepHasControlCharacters`, `stepCompletedMissing`,
 `nothingToChange`, `columnIdMissing`, `malformedBody`, `unsupportedMediaType`.
 
@@ -176,8 +176,11 @@ such as `Doing`.
 - `--description-format html` sends HTML as it is; the server sanitizes it.
 - `cards show --styled` prints the description as Markdown, which can be edited
   and sent back with `cards edit --description -`.
-- Comments are plain text. Markdown in a comment is kept as typed, not
-  rendered.
+- Comments are rich text like descriptions. `comments create` converts
+  Markdown and keeps every line break, so plain text arrives as typed;
+  `--format html` sends HTML as it is. `cards show --styled` shows comments as
+  Markdown; older comments without markup come back as plain text and are
+  shown as they are.
 
 ## Common workflows
 
