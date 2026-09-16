@@ -127,7 +127,7 @@ type Comment struct {
 type Chat struct {
 	ID          string `json:"id"`
 	Name        string `json:"name"`
-	UnreadCount int    `json:"unreadCount"` // counts own and removed messages as well
+	UnreadCount int    `json:"unreadCount"` // counts own messages, never removed ones
 	AppURL      string `json:"appUrl"`
 }
 
@@ -141,7 +141,7 @@ type ChatMessage struct {
 	BodySource string          `json:"bodySource"` // the body as the editor opens it, empty for a removed message
 	CreatedAt  string          `json:"createdAt"`
 	EditedAt   *string         `json:"editedAt"`
-	Removed    bool            `json:"removed"`
+	Removed    bool            `json:"removed"` // true only in an answer to After: the message is gone
 }
 
 // MessagesQuery chooses the messages of a chat. Without Before and After it is
