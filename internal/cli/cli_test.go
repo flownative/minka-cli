@@ -774,6 +774,51 @@ func TestAGroupWithoutSubcommandShowsHelp(t *testing.T) {
 	}
 }
 
+// Naming somebody in a text needs markup only the server can make, and it
+// comes with the people of the circle the text belongs to.
+func TestThePeopleOfACircleCarryTheirMention(t *testing.T) {
+	e := newTestEnv(t)
+
+	env, r := e.runJSON("", "people", "list", e.fixture.Project.ID)
+	expectCode(t, r, ExitOK)
+	var members []api.ProjectMember
+	if err := json.Unmarshal(env.Data, &members); err != nil {
+		t.Fatal(err)
+	}
+	if len(members) == 0 {
+		t.Fatalf("people %s", env.Data)
+	}
+	for _, member := range members {
+		if member.Mention.Handle == "" || !strings.Contains(member.Mention.Markup, "@"+member.Name) ||
+			!strings.Contains(member.Mention.Markup, `content-type="application/vnd.minka.person"`) {
+			t.Errorf("mention of %s: %+v", member.Name, member.Mention)
+		}
+	}
+
+	// Named in a comment, the markup travels to the server as it stands.
+	anke := members[1]
+	_, r = e.runJSON(anke.Mention.Markup+" schaust du?", "comments", "create", e.fixture.CardInTriage.ID, "-", "--format", "html")
+	expectCode(t, r, ExitOK)
+	if body := e.lastWriteBody()["body"]; body != anke.Mention.Markup+" schaust du?" {
+		t.Errorf("body sent %v", body)
+	}
+
+	// The two of a conversation carry mentions of their own conversation.
+	env, r = e.runJSON("", "conversations", "people", e.fixture.Conversation.ID)
+	expectCode(t, r, ExitOK)
+	var partners []api.ProjectMember
+	if err := json.Unmarshal(env.Data, &partners); err != nil {
+		t.Fatal(err)
+	}
+	if len(partners) != 2 || !strings.Contains(partners[0].Mention.Handle, e.fixture.Conversation.ID) {
+		t.Errorf("people of the conversation %s", env.Data)
+	}
+
+	e.vars["MINKA_TOKEN"] = e.fixture.StrangerToken
+	_, r = e.runJSON("", "conversations", "people", e.fixture.Conversation.ID)
+	expectCode(t, r, ExitNotFound)
+}
+
 // What people said about a comment or a message stands under it, counted
 // together, and nothing stands there when nobody said anything.
 func TestReactionsStandUnderACommentAndAMessage(t *testing.T) {
@@ -1184,7 +1229,7 @@ func TestTheCatalogListsEveryCommandWithItsFlags(t *testing.T) {
 	for _, cmd := range catalog.Commands {
 		byName[cmd.Command] = cmd
 	}
-	for _, name := range []string{"minka auth login", "minka me", "minka projects list", "minka boards list", "minka boards show", "minka cards show", "minka cards create", "minka cards edit", "minka cards move", "minka cards done", "minka cards delete", "minka cards assign", "minka cards unassign", "minka people list", "minka steps list", "minka steps create", "minka steps complete", "minka steps reopen", "minka steps delete", "minka comments create", "minka chats list", "minka chats mark-read", "minka messages list", "minka messages create", "minka messages edit", "minka messages delete", "minka cards subscribe", "minka cards unsubscribe", "minka comments edit", "minka comments delete", "minka uploads create", "minka cards mine", "minka cards restore", "minka conversations list", "minka conversations with"} {
+	for _, name := range []string{"minka auth login", "minka me", "minka projects list", "minka boards list", "minka boards show", "minka cards show", "minka cards create", "minka cards edit", "minka cards move", "minka cards done", "minka cards delete", "minka cards assign", "minka cards unassign", "minka people list", "minka steps list", "minka steps create", "minka steps complete", "minka steps reopen", "minka steps delete", "minka comments create", "minka chats list", "minka chats mark-read", "minka messages list", "minka messages create", "minka messages edit", "minka messages delete", "minka cards subscribe", "minka cards unsubscribe", "minka comments edit", "minka comments delete", "minka uploads create", "minka cards mine", "minka cards restore", "minka conversations list", "minka conversations with", "minka conversations people"} {
 		if _, ok := byName[name]; !ok {
 			t.Errorf("catalog misses %q", name)
 		}

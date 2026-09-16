@@ -144,9 +144,15 @@ func (c *Client) Unsubscribe(ctx context.Context, cardID, personID string) error
 }
 
 // People lists the members of a project, the people its cards can be
-// assigned to.
+// assigned to and its texts may name.
 func (c *Client) People(ctx context.Context, projectID string) (Result[[]ProjectMember], error) {
 	return request[[]ProjectMember](ctx, c, http.MethodGet, "/projects/"+url.PathEscape(projectID)+"/people", nil)
+}
+
+// ConversationPeople lists the two people of a private conversation, the ones
+// its messages may name.
+func (c *Client) ConversationPeople(ctx context.Context, conversationID string) (Result[[]ProjectMember], error) {
+	return request[[]ProjectMember](ctx, c, http.MethodGet, "/messages/"+url.PathEscape(conversationID)+"/people", nil)
 }
 
 // AssignCard assigns a member of the project to a card. The status code of the

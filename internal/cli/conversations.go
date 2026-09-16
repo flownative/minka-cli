@@ -11,13 +11,15 @@ import (
 const conversationHelp = `A conversation is a private talk between two people, without a project. Its ID
 is a chat ID: read it with messages list, write in it with messages create,
 change and remove with messages edit and messages delete, and note how far it
-is read with chats mark-read. Files and mentions are for projects; a private
-message is text.`
+is read with chats mark-read. Files and mentions work there too: upload with
+uploads create --conversation, and name the other person with the markup from
+conversations people.`
 
 func (a *app) newConversationsCmd() *cobra.Command {
-	return group("conversations", "List private conversations and begin one",
+	return group("conversations", "List private conversations, begin one and see who is in it",
 		a.newConversationsListCmd(),
 		a.newConversationsWithCmd(),
+		a.newConversationsPeopleCmd(),
 	)
 }
 

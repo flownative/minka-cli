@@ -329,6 +329,7 @@ func New(t testing.TB) (*Server, *Fixture) {
 	mux.HandleFunc("DELETE /api/v1/cards/{cardId}", s.authenticated(s.removeCard))
 	mux.HandleFunc("POST /api/v1/cards/{cardId}/restore", s.authenticated(s.restoreCard))
 	mux.HandleFunc("GET /api/v1/projects/{projectId}/people", s.authenticated(s.people))
+	mux.HandleFunc("GET /api/v1/messages/{conversationId}/people", s.authenticated(s.conversationPeople))
 	mux.HandleFunc("POST /api/v1/cards/{cardId}/assignees", s.authenticated(s.assignCard))
 	mux.HandleFunc("DELETE /api/v1/cards/{cardId}/assignees/{personId}", s.authenticated(s.unassignCard))
 	mux.HandleFunc("POST /api/v1/cards/{cardId}/steps", s.authenticated(s.addStep))
@@ -768,10 +769,37 @@ func (s *Server) people(w http.ResponseWriter, r *http.Request, person *Person) 
 		notFound(w)
 		return
 	}
+	s.writePeople(w, project.ID, project.MemberIDs)
+}
+
+// conversationPeople lists the two of a private conversation, with mentions
+// that hold in that conversation. Somebody outside it finds nothing there.
+func (s *Server) conversationPeople(w http.ResponseWriter, r *http.Request, person *Person) {
+	conversation := s.visibleChat(r.PathValue("conversationId"), person)
+	if conversation == nil || !conversation.isConversation() {
+		notFound(w)
+		return
+	}
+	s.writePeople(w, "conversation:"+conversation.ID, conversation.Partners)
+}
+
+// writePeople hands out the people of one circle, each with the mention that
+// names them in a text of that circle and of no other.
+func (s *Server) writePeople(w http.ResponseWriter, circle string, memberIDs []string) {
 	list := []any{}
-	for _, id := range project.MemberIDs {
+	for _, id := range memberIDs {
 		member := s.People[id]
-		list = append(list, map[string]any{"id": member.ID, "name": member.Name, "emailAddress": member.Email})
+		handle := "sgid-person-" + circle + "-" + member.ID
+		list = append(list, map[string]any{
+			"id": member.ID, "name": member.Name, "emailAddress": member.Email,
+			"mention": map[string]any{
+				"handle": handle,
+				"markup": fmt.Sprintf(
+					`<action-text-attachment sgid=%q content-type="application/vnd.minka.person" content="@%s"></action-text-attachment>`,
+					handle, member.Name,
+				),
+			},
+		})
 	}
 	writeJSON(w, http.StatusOK, list)
 }
