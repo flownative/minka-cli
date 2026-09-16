@@ -25,6 +25,7 @@ minka projects list
 minka boards list <projectId> | show <boardId>
 minka people list <projectId>
 minka cards mine
+minka cards restore <cardId>
 minka cards show|create|edit|move|assign|unassign|subscribe|unsubscribe|done|delete
 minka steps list|create|complete|reopen|delete
 minka comments create|edit|delete <cardId> ...
@@ -285,6 +286,10 @@ genannte Test wird rot. Zuletzt am 13.09.2026 nach dem Review ausgeführt:
 | Karten in Done zählen nicht zu den eigenen | `TestMyCardsComeFromEveryProjectInTheOrderOfThePage` |
 | Karte ohne Fälligkeit steht hinten | `TestMyCardsComeFromEveryProjectInTheOrderOfThePage` |
 | Projekt- und Board-Name an der Karte | `TestMyCardsComeFromEveryProjectInTheOrderOfThePage` |
+| Karten-ID bei `restore` im Pfad escaped | `TestIdentifiersAreEscapedInThePath` (api) |
+| Zurückgeholte Karte steht oben in ihrer Spalte | `TestACardComesBackFromTheTrashOnce` |
+| Zweites `restore` endet mit Exit 2 samt Hinweis | `TestACardComesBackFromTheTrashOnce` |
+| Fremde Karte bleibt im Papierkorb | `TestACardComesBackFromTheTrashOnce` |
 | Dateiname eines Uploads in der Query escaped | `TestTheNameOfAnUploadedFileIsEscapedInTheQuery` (api) |
 | Projekt-ID eines Uploads im Pfad escaped | `TestIdentifiersAreEscapedInThePath` (api) |
 | Medientyp aus dem Dateinamen, nicht nur aus den Bytes | `TestAFileIsUploadedAsItIsAndComesBackAsAnAttachment` |
@@ -440,6 +445,11 @@ oben; 404 nur bei einer ungültigen ID. Der Fake folgte dem schon.
 - Das Token `minka-cli-smoke` liegt in `~/.config/minka/config.json`.
   Widerrufen beim Umstieg auf das Dogfooding zur internen Alpha. Das
   Agentenkonto „Claude (Robert)" ist schon Mitglied im Minka-Projekt.
+- `cards restore` (Minka `20d5e44`, E-102) ist am 16.09.2026 live geprüft, an
+  einer Testkarte im Board „API-3 Abnahme“: Nach `cards delete` ist die Karte
+  weg (Exit 2), `cards restore` holt sie zurück nach Triage, das zweite
+  `restore` endet mit Exit 2 und dem Hinweis, eine unbekannte ID ebenso.
+  Testkarte danach wieder gelöscht.
 - `cards mine` (Minka `a91a133`, E-101) ist am 16.09.2026 live geprüft: Eine
   eigene Karte mit Fälligkeit in der Vergangenheit steht in der Liste als
   „overdue“, nach `cards done` ist sie draußen. Dabei ist ein Fehler in Minka

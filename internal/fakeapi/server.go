@@ -115,6 +115,13 @@ type Chat struct {
 	lastChangeSeq int
 }
 
+// TrashedCard is a card that was taken off a board, together with the column
+// it hung in, which is where a restore puts it back.
+type TrashedCard struct {
+	Card   *Card
+	Column *Column
+}
+
 // MaxUploadBytes is what Minka takes for one file.
 const MaxUploadBytes = 50 << 20
 
@@ -199,6 +206,7 @@ type Server struct {
 	Boards   []*Board
 	Chats    []*Chat
 	Uploads  []*Upload
+	Trash    []*TrashedCard
 
 	mu       sync.Mutex
 	requests []RecordedRequest
@@ -298,6 +306,7 @@ func New(t testing.TB) (*Server, *Fixture) {
 	mux.HandleFunc("PATCH /api/v1/cards/{cardId}/comments/{commentId}", s.authenticated(s.editComment))
 	mux.HandleFunc("DELETE /api/v1/cards/{cardId}/comments/{commentId}", s.authenticated(s.removeComment))
 	mux.HandleFunc("DELETE /api/v1/cards/{cardId}", s.authenticated(s.removeCard))
+	mux.HandleFunc("POST /api/v1/cards/{cardId}/restore", s.authenticated(s.restoreCard))
 	mux.HandleFunc("GET /api/v1/projects/{projectId}/people", s.authenticated(s.people))
 	mux.HandleFunc("POST /api/v1/cards/{cardId}/assignees", s.authenticated(s.assignCard))
 	mux.HandleFunc("DELETE /api/v1/cards/{cardId}/assignees/{personId}", s.authenticated(s.unassignCard))
@@ -1366,10 +1375,41 @@ func (s *Server) removeCard(w http.ResponseWriter, r *http.Request, person *Pers
 		return
 	}
 	column.Cards = slices.DeleteFunc(column.Cards, func(c *Card) bool { return c == card })
+	s.Trash = append(s.Trash, &TrashedCard{Card: card, Column: column})
 
 	// The server sends its JSON Content-Type along with the empty 204.
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// restoreCard puts a card of the trash back on top of the column it was taken
+// from. A card that is not in the trash is a card at an address that has
+// nothing, which a second restore is as well.
+func (s *Server) restoreCard(w http.ResponseWriter, r *http.Request, person *Person) {
+	index := slices.IndexFunc(s.Trash, func(t *TrashedCard) bool { return t.Card.ID == r.PathValue("cardId") })
+	if index < 0 {
+		notFound(w)
+		return
+	}
+	trashed := s.Trash[index]
+	board := s.boardOfColumn(trashed.Column)
+	if board == nil || s.visibleProject(board.ProjectID, person) == nil {
+		notFound(w)
+		return
+	}
+
+	s.Trash = slices.Delete(s.Trash, index, index+1)
+	trashed.Column.Cards = append([]*Card{trashed.Card}, trashed.Column.Cards...)
+	writeJSON(w, http.StatusOK, s.cardResource(board, trashed.Column, trashed.Card))
+}
+
+func (s *Server) boardOfColumn(column *Column) *Board {
+	for _, board := range s.Boards {
+		if slices.Contains(board.Columns, column) {
+			return board
+		}
+	}
+	return nil
 }
 
 func (s *Server) writeComment(w http.ResponseWriter, r *http.Request, person *Person) {

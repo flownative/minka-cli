@@ -236,6 +236,12 @@ func (c *Client) DeleteCard(ctx context.Context, cardID string) error {
 	return err
 }
 
+// RestoreCard takes a card out of the trash and puts it back on top of its
+// column. A card that is not in the trash answers like one that never existed.
+func (c *Client) RestoreCard(ctx context.Context, cardID string) (Result[Card], error) {
+	return request[Card](ctx, c, http.MethodPost, "/cards/"+url.PathEscape(cardID)+"/restore", nil)
+}
+
 // EditComment changes a comment of the person of the token.
 func (c *Client) EditComment(ctx context.Context, cardID, commentID, body string) (Result[Comment], error) {
 	return request[Comment](ctx, c, http.MethodPatch, "/cards/"+url.PathEscape(cardID)+"/comments/"+url.PathEscape(commentID), map[string]string{"body": body})
