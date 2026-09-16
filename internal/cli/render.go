@@ -57,6 +57,54 @@ func renderBoard(w io.Writer, board api.Board) {
 	}
 }
 
+// dayFormat is the way Minka writes a day.
+const dayFormat = "2006-01-02"
+
+// renderMyCards lists cards of several projects, in the order the server sent
+// them, under a heading for every board they hang on.
+func renderMyCards(w io.Writer, cards []api.Card, today string) {
+	if len(cards) == 0 {
+		fmt.Fprintln(w, "No cards.")
+		return
+	}
+
+	heading := ""
+	for _, card := range cards {
+		if where := card.Project.Name + " / " + card.Board.Title; where != heading {
+			if heading != "" {
+				fmt.Fprintln(w)
+			}
+			heading = where
+			fmt.Fprintf(w, "## %s\n", where)
+		}
+		details := []string{card.Column.Title}
+		if card.DueOn != nil {
+			due := "due " + *card.DueOn
+			if *card.DueOn < today {
+				due += ", overdue"
+			}
+			details = append(details, due)
+		}
+		if card.CommentCount > 0 {
+			details = append(details, plural(card.CommentCount, "comment", "comments"))
+		}
+		if open := openSteps(card.Steps); open > 0 {
+			details = append(details, fmt.Sprintf("steps %d/%d", len(card.Steps)-open, len(card.Steps)))
+		}
+		fmt.Fprintf(w, "- %s  %s (%s)\n", card.ID, card.Title, strings.Join(details, ", "))
+	}
+}
+
+func openSteps(steps []api.Step) int {
+	open := 0
+	for _, step := range steps {
+		if !step.Completed {
+			open++
+		}
+	}
+	return open
+}
+
 func renderCard(w io.Writer, card api.Card) {
 	fmt.Fprintf(w, "# %s\n", card.Title)
 	fmt.Fprintf(w, "Card: %s\nBoard: %s\nProject: %s\n", card.ID, card.BoardID, card.ProjectID)

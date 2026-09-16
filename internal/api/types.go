@@ -87,11 +87,13 @@ type ColumnReference struct {
 }
 
 type Card struct {
-	ID          string `json:"id"`
-	ProjectID   string `json:"projectId"`
-	BoardID     string `json:"boardId"`
-	Title       string `json:"title"`
-	Description string `json:"description"` // the stored HTML, empty when the card has none
+	ID          string           `json:"id"`
+	ProjectID   string           `json:"projectId"`
+	BoardID     string           `json:"boardId"`
+	Project     ProjectReference `json:"project"`
+	Board       BoardReference   `json:"board"`
+	Title       string           `json:"title"`
+	Description string           `json:"description"` // the stored HTML, empty when the card has none
 	// DescriptionSource is the description as the editor opens it: attachments
 	// and mentions freshly signed. Sending it back keeps them.
 	DescriptionSource string            `json:"descriptionSource"`
@@ -129,6 +131,18 @@ type Chat struct {
 	Name        string `json:"name"`
 	UnreadCount int    `json:"unreadCount"` // counts own messages, never removed ones
 	AppURL      string `json:"appUrl"`
+}
+
+// ProjectReference and BoardReference say where a card hangs, which matters
+// for a list that crosses projects.
+type ProjectReference struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+type BoardReference struct {
+	ID    string `json:"id"`
+	Title string `json:"title"`
 }
 
 type ChatMessage struct {

@@ -24,6 +24,7 @@ minka me
 minka projects list
 minka boards list <projectId> | show <boardId>
 minka people list <projectId>
+minka cards mine
 minka cards show|create|edit|move|assign|unassign|subscribe|unsubscribe|done|delete
 minka steps list|create|complete|reopen|delete
 minka comments create|edit|delete <cardId> ...
@@ -279,6 +280,11 @@ genannte Test wird rot. Zuletzt am 13.09.2026 nach dem Review ausgeführt:
 | Typname und gleicher Titel mehrdeutig | `TestATypeThatIsAlsoTheTitleOfAnotherColumnIsAmbiguous` |
 | HTML → Markdown: Zeilenanfänge escaped, `<br>` hart | `TestTextWithoutMarkupStaysText` |
 | Entfernte Chat-Nachricht nicht im Verlauf | `TestARemovedMessageIsGoneFromTheTranscript` |
+| `cards mine` liest /me/cards ohne Query | `TestMyCardsComeFromEveryProjectInTheOrderOfThePage` |
+| Überfällige Karte als „overdue“ gezeigt | `TestMyCardsComeFromEveryProjectInTheOrderOfThePage` |
+| Karten in Done zählen nicht zu den eigenen | `TestMyCardsComeFromEveryProjectInTheOrderOfThePage` |
+| Karte ohne Fälligkeit steht hinten | `TestMyCardsComeFromEveryProjectInTheOrderOfThePage` |
+| Projekt- und Board-Name an der Karte | `TestMyCardsComeFromEveryProjectInTheOrderOfThePage` |
 | Dateiname eines Uploads in der Query escaped | `TestTheNameOfAnUploadedFileIsEscapedInTheQuery` (api) |
 | Projekt-ID eines Uploads im Pfad escaped | `TestIdentifiersAreEscapedInThePath` (api) |
 | Medientyp aus dem Dateinamen, nicht nur aus den Bytes | `TestAFileIsUploadedAsItIsAndComesBackAsAnAttachment` |
@@ -434,6 +440,13 @@ oben; 404 nur bei einer ungültigen ID. Der Fake folgte dem schon.
 - Das Token `minka-cli-smoke` liegt in `~/.config/minka/config.json`.
   Widerrufen beim Umstieg auf das Dogfooding zur internen Alpha. Das
   Agentenkonto „Claude (Robert)" ist schon Mitglied im Minka-Projekt.
+- `cards mine` (Minka `a91a133`, E-101) ist am 16.09.2026 live geprüft: Eine
+  eigene Karte mit Fälligkeit in der Vergangenheit steht in der Liste als
+  „overdue“, nach `cards done` ist sie draußen. Dabei ist ein Fehler in Minka
+  aufgefallen: `DELETE /api/v1/cards/{id}` auf eine Karte in Done antwortet
+  mit 500 (`DbalCardRepository::moveToTrash`, Exception 1789508136). An
+  minka-c2 gemeldet; die Testkarte ließ sich nach einem `cards move --column
+  triage` löschen.
 - Uploads (Minka `30a19d2`) sind am 16.09.2026 live geprüft, im Test-Projekt:
   Ein PNG kommt als `kind: image` zurück, eine CSV-Datei als `kind: file` mit
   `contentType: text/csv`. Das `attachmentSource` aus der Antwort, unverändert

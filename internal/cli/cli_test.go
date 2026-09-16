@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/flownative/minka-cli/internal/api"
 	"github.com/flownative/minka-cli/internal/config"
@@ -773,6 +774,58 @@ func TestAGroupWithoutSubcommandShowsHelp(t *testing.T) {
 	}
 }
 
+// The cards somebody is responsible for come from every project at once, in
+// the order of the page: by project, then by due date with the ones without a
+// date last.
+func TestMyCardsComeFromEveryProjectInTheOrderOfThePage(t *testing.T) {
+	e := newTestEnv(t)
+	fixture := e.fixture
+	yesterday := time.Now().AddDate(0, 0, -1).Format("2006-01-02")
+	tomorrow := time.Now().AddDate(0, 0, 1).Format("2006-01-02")
+	fixture.CardInTriage.AssigneeIDs = []string{fixture.Bruno.ID}
+	fixture.CardInTriage.DueOn = &tomorrow
+	fixture.CardInDoing.AssigneeIDs = []string{fixture.Bruno.ID}
+	fixture.CardInDoing.DueOn = &yesterday
+	// A card without a due date stands behind every card that has one.
+	undated := fixture.Doing.Cards[1]
+	undated.AssigneeIDs = []string{fixture.Bruno.ID}
+	// A card in Done and a card of somebody else are not somebody's work.
+	done := &fakeapi.Card{ID: fixture.Done.ID + "-card", Title: "Done already", AssigneeIDs: []string{fixture.Bruno.ID}}
+	fixture.Done.Cards = append(fixture.Done.Cards, done)
+	fixture.OtherCard.AssigneeIDs = []string{fixture.Bruno.ID}
+
+	env, r := e.runJSON("", "cards", "mine")
+	expectCode(t, r, ExitOK)
+	var cards []api.Card
+	if err := json.Unmarshal(env.Data, &cards); err != nil {
+		t.Fatalf("data is not a list of cards: %v: %s", err, env.Data)
+	}
+	var titles []string
+	for _, card := range cards {
+		titles = append(titles, card.Title)
+	}
+	if strings.Join(titles, ", ") != "Review the API, Write the CLI, "+undated.Title {
+		t.Errorf("cards %v", titles)
+	}
+	if cards[0].Project.Name != fixture.Project.Name || cards[0].Board.Title != fixture.Board.Title {
+		t.Errorf("card %+v", cards[0])
+	}
+	if env.Summary != "3 cards" {
+		t.Errorf("summary %q", env.Summary)
+	}
+	if request := e.server.Requests()[0]; request.Path != "/api/v1/me/cards" || request.Query != "" {
+		t.Errorf("request %s?%s", request.Path, request.Query)
+	}
+
+	r = e.run("", "cards", "mine", "--styled")
+	expectCode(t, r, ExitOK)
+	for _, want := range []string{"## Test-Projekt / API-3 Abnahme", "Review the API (Doing, due " + yesterday + ", overdue)", "Write the CLI (Triage, due " + tomorrow + ", 1 comment)"} {
+		if !strings.Contains(r.stdout, want) {
+			t.Errorf("missing %q in:\n%s", want, r.stdout)
+		}
+	}
+}
+
 // A file travels as its own bytes, with what it is called in the query and
 // what it is in the header, and comes back as the attachment for a text.
 func TestAFileIsUploadedAsItIsAndComesBackAsAnAttachment(t *testing.T) {
@@ -915,7 +968,7 @@ func TestTheCatalogListsEveryCommandWithItsFlags(t *testing.T) {
 	for _, cmd := range catalog.Commands {
 		byName[cmd.Command] = cmd
 	}
-	for _, name := range []string{"minka auth login", "minka me", "minka projects list", "minka boards list", "minka boards show", "minka cards show", "minka cards create", "minka cards edit", "minka cards move", "minka cards done", "minka cards delete", "minka cards assign", "minka cards unassign", "minka people list", "minka steps list", "minka steps create", "minka steps complete", "minka steps reopen", "minka steps delete", "minka comments create", "minka chats list", "minka chats mark-read", "minka messages list", "minka messages create", "minka messages edit", "minka messages delete", "minka cards subscribe", "minka cards unsubscribe", "minka comments edit", "minka comments delete", "minka uploads create"} {
+	for _, name := range []string{"minka auth login", "minka me", "minka projects list", "minka boards list", "minka boards show", "minka cards show", "minka cards create", "minka cards edit", "minka cards move", "minka cards done", "minka cards delete", "minka cards assign", "minka cards unassign", "minka people list", "minka steps list", "minka steps create", "minka steps complete", "minka steps reopen", "minka steps delete", "minka comments create", "minka chats list", "minka chats mark-read", "minka messages list", "minka messages create", "minka messages edit", "minka messages delete", "minka cards subscribe", "minka cards unsubscribe", "minka comments edit", "minka comments delete", "minka uploads create", "minka cards mine"} {
 		if _, ok := byName[name]; !ok {
 			t.Errorf("catalog misses %q", name)
 		}

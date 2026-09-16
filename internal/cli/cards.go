@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"time"
 
 	"github.com/flownative/minka-cli/internal/api"
 	"github.com/flownative/minka-cli/internal/markdown"
@@ -22,6 +23,7 @@ Use --description - to read it from stdin.`
 
 func (a *app) newCardsCmd() *cobra.Command {
 	return group("cards", "Show, create, edit, move, assign, complete and delete cards",
+		a.newCardsMineCmd(),
 		a.newCardsShowCmd(),
 		a.newCardsCreateCmd(),
 		a.newCardsEditCmd(),
@@ -33,6 +35,43 @@ func (a *app) newCardsCmd() *cobra.Command {
 		a.newCardsDoneCmd(),
 		a.newCardsDeleteCmd(),
 	)
+}
+
+func (a *app) newCardsMineCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "mine",
+		Short: "List the cards you are responsible for, across all projects",
+		Long: `Lists the cards the account of the token is assigned to, in every project it is
+a member of. Cards in Done, cards in the trash and cards of a project that was
+left are not among them.
+
+The order is the one the web page has: projects by name, and inside a project
+the cards by due date, the overdue ones first and those without a date last.
+Every card names the project and the board it hangs on.`,
+		Args: requireArgs(),
+		RunE: func(_ *cobra.Command, _ []string) error {
+			s, err := a.session()
+			if err != nil {
+				return err
+			}
+			cards, err := s.client.MyCards(a.ctx)
+			if err != nil {
+				return s.fail(err)
+			}
+
+			return a.ok(success{
+				data:    cards.Raw,
+				summary: plural(len(cards.Value), "card", "cards"),
+				breadcrumbs: []Breadcrumb{
+					{Action: "show", Cmd: "minka cards show <cardId>", Description: "Read a card with its description and comments"},
+					{Action: "done", Cmd: "minka cards done <cardId>", Description: "Move a card to Done"},
+				},
+				text: func(w io.Writer) {
+					renderMyCards(w, cards.Value, time.Now().Format(dayFormat))
+				},
+			})
+		},
+	}
 }
 
 func (a *app) newCardsShowCmd() *cobra.Command {
