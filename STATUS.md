@@ -14,7 +14,7 @@ eine interne Alpha.
 API-Stand, gegen den gebaut ist: Minka `6694096` (API-1 bis API-5,
 erweiterte Allowlist aus E-060, Zuständige an Karten, neue Karten oben in der
 Spalte, Fälligkeitsdatum, Zuständige und Datum beim Anlegen, Schritte, erweiterte Allowlist aus `72d0639`, Kommentare als Rich Text, Chat, Abonnenten).
-Koordination in Minka: `minka-63`.
+Koordination in Minka: `minka-c2`.
 
 Befehle:
 
@@ -380,15 +380,21 @@ oben; 404 nur bei einer ungültigen ID. Der Fake folgte dem schon.
     durch. Chat-Nachrichten dagegen: `messages edit` hat keine Sperre, weil der Chat keine einzelne
     Nachricht liefert. Wer eine Nachricht mit Erwähnungen ändert, schickt
     `bodySource` mit `--format html`.
-  - Erwähnungen schreiben kann die CLI nicht: Der Vorschlags-Endpunkt
-    `GET /projects/{p}/mentions` liefert ein HTML-Fragment. Eine JSON-Fassung
-    wäre bei minka-63 zu erbitten, wenn Agenten Personen erwähnen sollen.
+  - Erwähnungen schreiben kann die CLI noch nicht: Der Vorschlags-Endpunkt
+    `GET /projects/{p}/mentions` liefert ein HTML-Fragment für den Editor, und
+    `/api/v1/projects/{p}/people` kennt kein Handle. Das signierte Handle
+    entsteht serverseitig und wird beim Speichern geprüft (E-088), die CLI
+    kann es nicht selbst bilden. Robert will Erwähnungen für Agenten, der
+    Wunsch liegt bei minka-c2 (siehe „Wünsche an die API“).
 
 - Das Review der Schritte in Minka ist mit `51b44e6` abgeschlossen. Das Board
   liefert je Karte `stepCount` und `completedStepCount`. `DELETE` auf einen
   Schritt einer anderen Karte oder auf eine ungültige Schritt-ID gibt bewusst
   204 (E-067), 404 nur für eine fremde Karte.
 - Umbenennen und Umsortieren von Schritten gibt es in der API noch nicht.
+- Entfernte Chat-Nachrichten bekommen keinen Grabstein mehr. minka-c2 meldet,
+  ob die Chat-Endpunkte sie dann gar nicht mehr liefern oder anders
+  kennzeichnen; danach `messages list` und die Textausgabe prüfen.
 - Projekte haben seit Minka `ccd0439` Chat-Werkzeuge (`type=chat`).
   `boards list` zeigt nur Boards.
 - Die erweiterte Allowlist (`72d0639`) und Kommentare als Rich Text
@@ -500,9 +506,10 @@ oben; 404 nur bei einer ungültigen ID. Der Fake folgte dem schon.
   - `--help --agent`
   - Installation für andere
 
-## Wünsche an die API (an minka-8a)
+## Wünsche an die API
 
-Gemeldet am 13.09.2026. Wie minka-8a sie behandelt:
+Die ersten vier am 13.09.2026 an minka-8a gemeldet. Wie die Koordination sie
+behandelt:
 
 1. **Allowlist erweitern** (`h2`/`h3`, `code` inline, `hr`): erledigt in
    Minka `1f46b37` (E-060), in der CLI umgesetzt. Tabellen, `ol[start]` und
@@ -514,3 +521,9 @@ Gemeldet am 13.09.2026. Wie minka-8a sie behandelt:
    Minka `60c7257`, in der CLI `cards delete`.
 4. **Done über 25 Karten hinaus lesen** (Blättern): später, wenn das
    Dogfooding es braucht.
+5. **Erwähnungen für Agenten**: am 16.09.2026 an minka-c2 gemeldet. Als Feld
+   `mention` an jedem Eintrag von `/api/v1/projects/{projectId}/people`
+   vorgesehen, mit dem signierten Handle und dem fertigen
+   `action-text-attachment`-Markup zum Einsetzen in `bodySource` oder
+   `descriptionSource`. Liegt als Backlog-Karte bei Shaun, Zeitpunkt offen;
+   die Antwortform meldet minka-c2, wenn das Paket geschnitten ist.
