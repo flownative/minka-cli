@@ -854,6 +854,14 @@ func (s *Server) messages(w http.ResponseWriter, r *http.Request, person *Person
 	last := func(messages []*ChatMessage) []*ChatMessage {
 		return messages[max(0, len(messages)-wanted):]
 	}
+	// A message that was taken back is out of the transcript and comes back
+	// only among what changed above a change number.
+	var transcript []*ChatMessage
+	for _, message := range chat.Messages {
+		if !message.Removed {
+			transcript = append(transcript, message)
+		}
+	}
 
 	var page []*ChatMessage
 	switch {
@@ -863,7 +871,7 @@ func (s *Server) messages(w http.ResponseWriter, r *http.Request, person *Person
 			notFound(w)
 			return
 		}
-		for _, message := range chat.Messages {
+		for _, message := range transcript {
 			if message.Seq < before {
 				page = append(page, message)
 			}
@@ -884,7 +892,7 @@ func (s *Server) messages(w http.ResponseWriter, r *http.Request, person *Person
 		page = page[:min(len(page), wanted)]
 		slices.SortFunc(page, func(a, b *ChatMessage) int { return a.Seq - b.Seq })
 	default:
-		page = last(chat.Messages)
+		page = last(transcript)
 	}
 
 	list := []any{}

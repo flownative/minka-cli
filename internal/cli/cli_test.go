@@ -1628,6 +1628,57 @@ func TestOnlyTheAuthorChangesOrRemovesAMessage(t *testing.T) {
 	}
 }
 
+// A message somebody takes back leaves the transcript. Only the answer to
+// --after still names it, so that a client which has it drops it.
+func TestARemovedMessageIsGoneFromTheTranscript(t *testing.T) {
+	e := newTestEnv(t)
+	chat := e.fixture.Chat
+	removed := chat.Messages[0]
+
+	_, r := e.runJSON("", "messages", "delete", chat.ID, removed.ID)
+	expectCode(t, r, ExitOK)
+
+	for _, args := range [][]string{{}, {"--before", "3"}} {
+		env, r := e.runJSON("", append([]string{"messages", "list", chat.ID}, args...)...)
+		expectCode(t, r, ExitOK)
+		for _, message := range decodeMessages(t, env.Data) {
+			if message.ID == removed.ID {
+				t.Errorf("messages list %v still carries the removed message: %s", args, env.Data)
+			}
+		}
+	}
+
+	env, r := e.runJSON("", "messages", "list", chat.ID, "--after", "0")
+	expectCode(t, r, ExitOK)
+	found := false
+	for _, message := range decodeMessages(t, env.Data) {
+		if message.ID == removed.ID {
+			found = true
+			if !message.Removed || message.BodyText != "" || message.BodyHTML != "" || message.BodySource != "" {
+				t.Errorf("the removed message still carries something: %+v", message)
+			}
+		}
+	}
+	if !found {
+		t.Errorf("--after does not carry the removed message: %s", env.Data)
+	}
+
+	r = e.run("", "messages", "list", chat.ID, "--after", "0", "--styled")
+	expectCode(t, r, ExitOK)
+	if !strings.Contains(r.stdout, "(removed)") {
+		t.Errorf("the text does not mark the removed message:\n%s", r.stdout)
+	}
+}
+
+func decodeMessages(t *testing.T, raw json.RawMessage) []api.ChatMessage {
+	t.Helper()
+	var messages []api.ChatMessage
+	if err := json.Unmarshal(raw, &messages); err != nil {
+		t.Fatalf("data is not a list of messages: %v: %s", err, raw)
+	}
+	return messages
+}
+
 func TestMarkReadUsesTheLastMessageUnlessToldOtherwise(t *testing.T) {
 	e := newTestEnv(t)
 	chat := e.fixture.Chat
@@ -1656,11 +1707,10 @@ func TestMarkReadUsesTheLastMessageUnlessToldOtherwise(t *testing.T) {
 func TestMessagesAsText(t *testing.T) {
 	e := newTestEnv(t)
 	chat := e.fixture.Chat
-	chat.Messages[2].Removed, chat.Messages[2].BodyText = true, ""
 
 	r := e.run("", "messages", "list", chat.ID, "--styled")
 	expectCode(t, r, ExitOK)
-	for _, want := range []string{"#2 Anke", "Zelt ist bestellt", "#3 Bruno", "(removed)"} {
+	for _, want := range []string{"#2 Anke", "Zelt ist bestellt", "#3 Bruno"} {
 		if !strings.Contains(r.stdout, want) {
 			t.Errorf("missing %q in:\n%s", want, r.stdout)
 		}

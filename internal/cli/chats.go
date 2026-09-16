@@ -26,7 +26,7 @@ func (a *app) newChatsListCmd() *cobra.Command {
 		Use:   "list <projectId>",
 		Short: "List the chats of a project with what is unread in them",
 		Long: `Lists the chats of a project. unreadCount is what the person of the token has
-not read; their own messages and removed ones count as well.`,
+not read; their own messages count as well, removed ones never.`,
 		Args: requireArgs("projectId"),
 		RunE: func(_ *cobra.Command, args []string) error {
 			s, err := a.session()
@@ -131,7 +131,8 @@ func (a *app) newMessagesListCmd() *cobra.Command {
 --after <changeSeq> gives everything that changed after that change number:
 new messages, edits and removals in one answer. Remember the highest changeSeq
 you have seen and ask for what came after it. --limit sets how many messages
-come, up to 200. A removed message comes along with removed: true and no text.`,
+come, up to 200. A removed message is gone from the transcript: only --after
+carries it, as removed: true without a text, so that a client drops it.`,
 		Example: `  minka messages list 0199...
   minka messages list 0199... --before 120 --limit 50
   minka messages list 0199... --after 431`,
@@ -341,8 +342,10 @@ func (a *app) newMessagesDeleteCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "delete <chatId> <messageId>",
 		Short: "Remove a message you wrote",
-		Long: `Removes a message. Only its author can. The message stays in the transcript,
-marked as removed and without its text. Removing it again succeeds.`,
+		Long: `Removes a message. Only its author can. The message is gone: it stands in no
+page of the transcript any more and counts as nothing unread. Whoever asks with
+--after what changed still learns of it, as removed: true without a text.
+Removing it again succeeds.`,
 		Args: requireArgs("chatId", "messageId"),
 		RunE: func(_ *cobra.Command, args []string) error {
 			s, err := a.session()

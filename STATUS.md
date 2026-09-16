@@ -277,6 +277,7 @@ genannte Test wird rot. Zuletzt am 13.09.2026 nach dem Review ausgeführt:
 | Anlegen in Done/Not now auch per ID abgelehnt | `TestCreateInNotNowOrDoneIsRefusedHoweverTheColumnIsGiven` |
 | Typname und gleicher Titel mehrdeutig | `TestATypeThatIsAlsoTheTitleOfAnotherColumnIsAmbiguous` |
 | HTML → Markdown: Zeilenanfänge escaped, `<br>` hart | `TestTextWithoutMarkupStaysText` |
+| Entfernte Chat-Nachricht nicht im Verlauf | `TestARemovedMessageIsGoneFromTheTranscript` |
 | Kommentar mit Anhängen: neuer Text nur mit `--drop-attachments`, Quelle als HTML erlaubt | `TestACommentWithAttachmentsIsNotReplacedUnlessAsked` |
 | `comments edit` sendet HTML, nicht das Markdown | `TestOnlyTheAuthorChangesOrRemovesAComment` |
 | Hinweis „nur der Autor“ bei 404 | `TestOnlyTheAuthorChangesOrRemovesAComment` |
@@ -392,9 +393,13 @@ oben; 404 nur bei einer ungültigen ID. Der Fake folgte dem schon.
   Schritt einer anderen Karte oder auf eine ungültige Schritt-ID gibt bewusst
   204 (E-067), 404 nur für eine fremde Karte.
 - Umbenennen und Umsortieren von Schritten gibt es in der API noch nicht.
-- Entfernte Chat-Nachrichten bekommen keinen Grabstein mehr. minka-c2 meldet,
-  ob die Chat-Endpunkte sie dann gar nicht mehr liefern oder anders
-  kennzeichnen; danach `messages list` und die Textausgabe prüfen.
+- Uploads gibt es seit Minka `30a19d2` auch in der API:
+  `POST /api/v1/projects/{projectId}/uploads?filename=…`, Rumpf sind die rohen
+  Bytes, `Content-Type` ist Pflicht, höchstens 50 MiB. Die Antwort trägt
+  `attachmentSource`, das fertige `action-text-attachment` mit frischer
+  Signatur, das unverändert in `descriptionSource` oder `bodySource` gehört.
+  Damit könnte die CLI Dateien anhängen, obwohl das Briefing Uploads
+  ausschließt. Ob das dazukommt, entscheiden Robert und Shaun.
 - Projekte haben seit Minka `ccd0439` Chat-Werkzeuge (`type=chat`).
   `boards list` zeigt nur Boards.
 - Die erweiterte Allowlist (`72d0639`) und Kommentare als Rich Text
@@ -408,6 +413,12 @@ oben; 404 nur bei einer ungültigen ID. Der Fake folgte dem schon.
 - Das Token `minka-cli-smoke` liegt in `~/.config/minka/config.json`.
   Widerrufen beim Umstieg auf das Dogfooding zur internen Alpha. Das
   Agentenkonto „Claude (Robert)" ist schon Mitglied im Minka-Projekt.
+- Entfernte Chat-Nachrichten ohne Grabstein (Minka `2b6b3b1`, E-097) sind am
+  16.09.2026 live im Chat „Chat1 Abnahme“ geprüft, an einer eigenen Nachricht:
+  Nach `messages delete` ist sie weder ohne Parameter noch mit `--before` im
+  Verlauf. `--after` trägt sie weiter, mit `removed: true` und leerem
+  `bodyText`, `bodyHtml` und `bodySource`; die Textausgabe zeigt „(removed)“.
+  `unreadCount` fällt von 1 auf 0, das zweite `delete` endet wieder mit Exit 0.
 - Kommentare ändern und entfernen (Minka `6694096`) sind am 16.09.2026 live
   geprüft, an einer Testkarte im Board „API-3 Abnahme“: Markdown mit
   Zeilenumbruch kommt als `<strong>` und `<br>` an, `editedAt` ist gesetzt, die
@@ -448,8 +459,7 @@ oben; 404 nur bei einer ungültigen ID. Der Fake folgte dem schon.
     zweites Senden mit derselben ID liefert dieselbe Nachricht.
   - Zeilenumbruch und Autolink kommen im `bodyHtml` an.
   - `messages edit` erhöht `changeSeq`, und `--after` holt die Änderung nach.
-  - `messages delete` zweimal ergibt beide Male Exit 0; die Nachricht steht
-    danach als „removed“ im Verlauf.
+  - `messages delete` zweimal ergibt beide Male Exit 0.
   - `chats mark-read` setzt die ungelesenen Nachrichten auf 0.
   - Eine leere Nachricht endet mit Exit 9 `chatMessageMissing`.
 - Kommentare als Rich Text (Minka `c7c4d1b`) sind am 15.09.2026 live geprüft:

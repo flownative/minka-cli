@@ -185,14 +185,16 @@ such as `Doing`.
 ## Chats
 
 - `chats list <projectId>` gives `{id, name, unreadCount, appUrl}`.
-  `unreadCount` counts own and removed messages as well.
+  `unreadCount` counts own messages as well, removed ones never.
 - `messages list <chatId>` gives messages oldest first as `{id, seq,
   changeSeq, author, bodyHtml, bodyText, createdAt, editedAt, removed}`, the
   latest 50 by default, `--limit` up to 200.
   - Read back with `--before <seq>` (messages in front of that one).
   - Catch up with `--after <changeSeq>`: new messages, edits and removals in
     one answer. Keep the highest `changeSeq` you have seen.
-  - A removed message comes with `removed: true` and empty text.
+  - A removed message is gone from the transcript: no page of it carries the
+    message any more. Only `--after` names it, as `removed: true` with empty
+    text, which is the sign to drop it from what you keep.
 - `messages create` and `messages edit` take Markdown by default and send it
   as HTML, keeping every line break, as comments do. `--format text` sends the
   text as it is (the server keeps it as plain text with line breaks and
