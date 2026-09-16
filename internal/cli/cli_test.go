@@ -3,11 +3,13 @@ package cli
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -771,6 +773,131 @@ func TestAGroupWithoutSubcommandShowsHelp(t *testing.T) {
 	}
 }
 
+// A file travels as its own bytes, with what it is called in the query and
+// what it is in the header, and comes back as the attachment for a text.
+func TestAFileIsUploadedAsItIsAndComesBackAsAnAttachment(t *testing.T) {
+	e := newTestEnv(t)
+	content := onePixelPNG()
+	path := filepath.Join(t.TempDir(), "plan.png")
+	if err := os.WriteFile(path, content, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	env, r := e.runJSON("", "uploads", "create", e.fixture.Project.ID, path)
+	expectCode(t, r, ExitOK)
+	upload := decode(t, env.Data)
+	if upload["filename"] != "plan.png" || upload["contentType"] != "image/png" || upload["kind"] != "image" {
+		t.Errorf("upload %s", env.Data)
+	}
+	source, _ := upload["attachmentSource"].(string)
+	if !strings.Contains(source, "<action-text-attachment ") || !strings.Contains(source, "sgid=") {
+		t.Errorf("attachment source %q", source)
+	}
+
+	requests := e.server.Requests()
+	if len(requests) != 1 {
+		t.Fatalf("%d requests, want one", len(requests))
+	}
+	request := requests[0]
+	if request.Query != "filename=plan.png" {
+		t.Errorf("query %q", request.Query)
+	}
+	if got := request.Header.Get("Content-Type"); got != "image/png" {
+		t.Errorf("content type %q", got)
+	}
+	// The length is announced, so that a file too large is refused before it
+	// travels rather than after.
+	if got := request.Header.Get("Content-Length"); got != strconv.Itoa(len(content)) {
+		t.Errorf("content length %q, want %d", got, len(content))
+	}
+	if !bytes.Equal(request.Body, content) {
+		t.Errorf("the bytes did not arrive as they are: %q", request.Body)
+	}
+
+	// What the name of a file says it is counts, even where its first bytes
+	// look like something else.
+	page := filepath.Join(filepath.Dir(path), "notes.txt")
+	if err := os.WriteFile(page, []byte("<html><body>notes</body></html>"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_, r = e.runJSON("", "uploads", "create", e.fixture.Project.ID, page)
+	expectCode(t, r, ExitOK)
+	requests = e.server.Requests()
+	if got := requests[len(requests)-1].Header.Get("Content-Type"); got != "text/plain; charset=utf-8" {
+		t.Errorf("content type of a text file %q", got)
+	}
+
+	// The attachment goes into a text of the same project as it is.
+	_, r = e.runJSON(source, "cards", "edit", e.fixture.CardInTriage.ID, "--description", "-", "--description-format", "html")
+	expectCode(t, r, ExitOK)
+	if description := e.fixture.CardInTriage.Description; !strings.Contains(description, "action-text-attachment") {
+		t.Errorf("description %q", description)
+	}
+}
+
+func TestAnUploadIsRefusedWhenTheFileOrItsTypeIsWrong(t *testing.T) {
+	e := newTestEnv(t)
+	dir := t.TempDir()
+	png := filepath.Join(dir, "plan.png")
+	if err := os.WriteFile(png, onePixelPNG(), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	// A name that promises a picture over words is one the server sees through.
+	words := filepath.Join(dir, "notes.png")
+	if err := os.WriteFile(words, []byte("plain words, no picture at all"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	env, r := e.runJSON("", "uploads", "create", e.fixture.Project.ID, words)
+	expectCode(t, r, ExitValidation)
+	if env.Meta["apiCode"] != "contentTypeMismatch" || !strings.Contains(env.Hint, "--content-type") {
+		t.Errorf("envelope %+v", env)
+	}
+
+	// Named for what it is, the same file goes through.
+	_, r = e.runJSON("", "uploads", "create", e.fixture.Project.ID, words, "--content-type", "text/plain", "--name", "notes.txt")
+	expectCode(t, r, ExitOK)
+	if last := e.server.Requests()[len(e.server.Requests())-1]; last.Query != "filename=notes.txt" {
+		t.Errorf("query %q", last.Query)
+	}
+
+	sent := len(e.server.Requests())
+	env, r = e.runJSON("", "uploads", "create", e.fixture.Project.ID, filepath.Join(dir, "nothing.png"))
+	expectCode(t, r, ExitUsage)
+	if !strings.Contains(env.Error, "cannot read") {
+		t.Errorf("a file that is not there: %q", env.Error)
+	}
+	env, r = e.runJSON("", "uploads", "create", e.fixture.Project.ID, dir)
+	expectCode(t, r, ExitUsage)
+	if !strings.Contains(env.Error, "is a directory, not a file") {
+		t.Errorf("a directory: %q", env.Error)
+	}
+	if now := len(e.server.Requests()); now != sent {
+		t.Errorf("%d requests for files that cannot be sent", now-sent)
+	}
+
+	_, r = e.runJSON("", "uploads", "create", e.fixture.OtherProject.ID, png)
+	expectCode(t, r, ExitNotFound)
+
+	e.server.FailNextWith(http.StatusRequestEntityTooLarge)
+	env, r = e.runJSON("", "uploads", "create", e.fixture.Project.ID, png)
+	expectCode(t, r, ExitValidation)
+	if env.Retryable {
+		t.Errorf("envelope %+v", env)
+	}
+}
+
+// onePixelPNG is the smallest picture there is, so that a test has bytes that
+// are what they say they are.
+func onePixelPNG() []byte {
+	content, err := base64.StdEncoding.DecodeString(
+		"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==")
+	if err != nil {
+		panic(err)
+	}
+	return content
+}
+
 func TestTheCatalogListsEveryCommandWithItsFlags(t *testing.T) {
 	e := newTestEnv(t)
 	r := e.run("", "commands", "--quiet")
@@ -788,7 +915,7 @@ func TestTheCatalogListsEveryCommandWithItsFlags(t *testing.T) {
 	for _, cmd := range catalog.Commands {
 		byName[cmd.Command] = cmd
 	}
-	for _, name := range []string{"minka auth login", "minka me", "minka projects list", "minka boards list", "minka boards show", "minka cards show", "minka cards create", "minka cards edit", "minka cards move", "minka cards done", "minka cards delete", "minka cards assign", "minka cards unassign", "minka people list", "minka steps list", "minka steps create", "minka steps complete", "minka steps reopen", "minka steps delete", "minka comments create", "minka chats list", "minka chats mark-read", "minka messages list", "minka messages create", "minka messages edit", "minka messages delete", "minka cards subscribe", "minka cards unsubscribe", "minka comments edit", "minka comments delete"} {
+	for _, name := range []string{"minka auth login", "minka me", "minka projects list", "minka boards list", "minka boards show", "minka cards show", "minka cards create", "minka cards edit", "minka cards move", "minka cards done", "minka cards delete", "minka cards assign", "minka cards unassign", "minka people list", "minka steps list", "minka steps create", "minka steps complete", "minka steps reopen", "minka steps delete", "minka comments create", "minka chats list", "minka chats mark-read", "minka messages list", "minka messages create", "minka messages edit", "minka messages delete", "minka cards subscribe", "minka cards unsubscribe", "minka comments edit", "minka comments delete", "minka uploads create"} {
 		if _, ok := byName[name]; !ok {
 			t.Errorf("catalog misses %q", name)
 		}

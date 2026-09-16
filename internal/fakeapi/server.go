@@ -115,6 +115,26 @@ type Chat struct {
 	lastChangeSeq int
 }
 
+// MaxUploadBytes is what Minka takes for one file.
+const MaxUploadBytes = 50 << 20
+
+// Upload is a file somebody put into a project. The bytes themselves are of no
+// interest here; what matters is that the answer carries an attachment whose
+// handle only this project has.
+type Upload struct {
+	ID          string
+	ProjectID   string
+	Filename    string
+	ContentType string
+	Size        int
+}
+
+// handle stands for the signature the server puts on the pair of project and
+// file, which is what makes an attachment belong to a text of that project.
+func (u *Upload) handle() string {
+	return "sgid-" + u.ProjectID + "-" + u.ID
+}
+
 type ChatMessage struct {
 	ID              string
 	Seq             int
@@ -178,6 +198,7 @@ type Server struct {
 	Projects []*Project
 	Boards   []*Board
 	Chats    []*Chat
+	Uploads  []*Upload
 
 	mu       sync.Mutex
 	requests []RecordedRequest
@@ -290,6 +311,7 @@ func New(t testing.TB) (*Server, *Fixture) {
 	mux.HandleFunc("PATCH /api/v1/chats/{chatId}/messages/{messageId}", s.authenticated(s.editMessage))
 	mux.HandleFunc("DELETE /api/v1/chats/{chatId}/messages/{messageId}", s.authenticated(s.removeMessage))
 	mux.HandleFunc("POST /api/v1/chats/{chatId}/read", s.authenticated(s.markChatRead))
+	mux.HandleFunc("POST /api/v1/projects/{projectId}/uploads", s.authenticated(s.upload))
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		// Flow answers an unknown path or a wrong method with an HTML page.
 		w.Header().Set("Content-Type", "text/html")
@@ -1037,6 +1059,88 @@ func (s *Server) markChatRead(w http.ResponseWriter, r *http.Request, person *Pe
 	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// upload takes the bytes of the body as a file of the project. The order of
+// the checks is the order of the server: the project first, then what the
+// request says about the file, then the bytes themselves.
+func (s *Server) upload(w http.ResponseWriter, r *http.Request, person *Person) {
+	project := s.visibleProject(r.PathValue("projectId"), person)
+	if project == nil {
+		notFound(w)
+		return
+	}
+	filename := phpTrim(r.URL.Query().Get("filename"))
+	if filename == "" {
+		unprocessable(w, "filenameMissing", `The query argument "filename" has to name the file.`)
+		return
+	}
+	contentType := mediaType(r.Header.Get("Content-Type"))
+	if contentType == "" {
+		unprocessable(w, "contentTypeMissing", `The header "Content-Type" has to name the media type of the file.`)
+		return
+	}
+	if r.ContentLength > MaxUploadBytes {
+		tooLarge(w)
+		return
+	}
+
+	content, err := io.ReadAll(io.LimitReader(r.Body, MaxUploadBytes+1))
+	if err != nil {
+		malformed(w, "The bytes of the file did not arrive whole.")
+		return
+	}
+	if len(content) > MaxUploadBytes {
+		tooLarge(w)
+		return
+	}
+	// What the bytes are is read out of them, and the header decides nothing.
+	// It may contradict them, though, where one of the two is a picture: that
+	// is what decides whether a file is later shown or handed over.
+	looksLike := mediaType(http.DetectContentType(content))
+	if looksLike != contentType && (isPicture(looksLike) || isPicture(contentType)) {
+		unprocessable(w, "contentTypeMismatch", "The file is a "+looksLike+", and not the "+contentType+" it says it is.")
+		return
+	}
+	stored := contentType
+	if looksLike != "application/octet-stream" {
+		stored = looksLike
+	}
+
+	upload := &Upload{
+		ID: newID(), ProjectID: project.ID, Filename: filename, ContentType: stored, Size: len(content),
+	}
+	s.Uploads = append(s.Uploads, upload)
+	writeJSON(w, http.StatusCreated, s.uploadResource(upload))
+}
+
+func isPicture(contentType string) bool {
+	return strings.HasPrefix(contentType, "image/")
+}
+
+func (s *Server) uploadResource(upload *Upload) map[string]any {
+	kind := "file"
+	if isPicture(upload.ContentType) {
+		kind = "image"
+	}
+	address := s.URL + "/projects/" + upload.ProjectID + "/uploads/" + upload.ID + "/original/" + upload.Filename
+	return map[string]any{
+		"id": upload.ID, "filename": upload.Filename, "contentType": upload.ContentType, "size": upload.Size,
+		"kind": kind, "appUrl": address,
+		"attachmentSource": fmt.Sprintf(
+			`<action-text-attachment sgid=%q content-type=%q url=%q filename=%q filesize="%d" presentation="gallery"></action-text-attachment>`,
+			upload.handle(), upload.ContentType, address, upload.Filename, upload.Size,
+		),
+	}
+}
+
+func tooLarge(w http.ResponseWriter) {
+	writeJSON(w, http.StatusRequestEntityTooLarge, errorBody("tooLarge", fmt.Sprintf("A file must not be larger than %d bytes.", MaxUploadBytes)))
+}
+
+// mediaType is the type itself, without what a header says about its encoding.
+func mediaType(header string) string {
+	return strings.TrimSpace(strings.Split(header, ";")[0])
 }
 
 func (s *Server) chatMessageResource(message *ChatMessage) map[string]any {

@@ -176,3 +176,17 @@ type MoveCardInput struct {
 	PreviousCardID string `json:"previousCardId,omitempty"`
 	NextCardID     string `json:"nextCardId,omitempty"`
 }
+
+// Upload is a file that was put into a project. AttachmentSource is the one
+// thing a client cannot build for itself: the element that hangs the file in a
+// text, with a handle signed by the server. Put into a descriptionSource or a
+// bodySource unchanged, it makes the file part of that text.
+type Upload struct {
+	ID               string `json:"id"`
+	Filename         string `json:"filename"`
+	ContentType      string `json:"contentType"`
+	Size             int64  `json:"size"`
+	Kind             string `json:"kind"` // "image" is shown where it stands, "file" is handed over
+	AppURL           string `json:"appUrl"`
+	AttachmentSource string `json:"attachmentSource"`
+}

@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -29,6 +30,7 @@ func TestIdentifiersAreEscapedInThePath(t *testing.T) {
 	_ = client.DeleteMessage(context.Background(), "c", "../m")
 	_ = client.Unsubscribe(context.Background(), "c", "../p")
 	_ = client.DeleteComment(context.Background(), "c", "../k")
+	_, _ = client.UploadFile(context.Background(), "p/q", "../plan.png", "image/png", strings.NewReader("x"), 1)
 
 	want := []string{
 		"/api/v1/cards/..%2Fme",
@@ -42,6 +44,7 @@ func TestIdentifiersAreEscapedInThePath(t *testing.T) {
 		"/api/v1/chats/c/messages/..%2Fm",
 		"/api/v1/cards/c/subscribers/..%2Fp",
 		"/api/v1/cards/c/comments/..%2Fk",
+		"/api/v1/projects/p%2Fq/uploads",
 	}
 	if !slices.Equal(paths, want) {
 		t.Errorf("paths\n got: %q\nwant: %q", paths, want)
@@ -83,5 +86,26 @@ func TestAnEmptyAnswerIsASuccess(t *testing.T) {
 	}
 	if method != http.MethodDelete || path != "/api/v1/cards/a%2Fb" {
 		t.Errorf("request %s %s", method, path)
+	}
+}
+
+// The name of the file rides in the query, where a slash or an ampersand of
+// its own would otherwise start something else.
+func TestTheNameOfAnUploadedFileIsEscapedInTheQuery(t *testing.T) {
+	var queries []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		queries = append(queries, r.URL.RawQuery)
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer server.Close()
+	client := New(server.URL, "minka_pat_x", "")
+
+	for _, filename := range []string{"../plan.png", "a b&limit=1.png"} {
+		_, _ = client.UploadFile(context.Background(), "p", filename, "image/png", strings.NewReader("x"), 1)
+	}
+
+	want := []string{"filename=..%2Fplan.png", "filename=a+b%26limit%3D1.png"}
+	if !slices.Equal(queries, want) {
+		t.Errorf("queries\n got: %q\nwant: %q", queries, want)
 	}
 }
