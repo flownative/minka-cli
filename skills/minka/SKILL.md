@@ -90,6 +90,7 @@ minka auth status --json
 minka projects list --json
 minka boards list <projectId> --json
 minka boards show <boardId> --json
+minka cards mine --json
 minka cards show <cardId> --json
 minka cards create --board <boardId> --title "Title" [--column <column>] [--assignee <person>]... [--due YYYY-MM-DD] [--description - < body.md] --json
 minka cards edit <cardId> [--title "New"] [--due YYYY-MM-DD] [--description - < body.md] --json
@@ -120,6 +121,19 @@ minka uploads create <projectId> <file> [--name <name>] [--content-type <type>] 
 
 `<column>` is a column ID, a type (`triage`, `not_now`, `done`) or a title
 such as `Doing`.
+
+## Your own cards
+
+- `cards mine` lists the cards the account of the token is assigned to, across
+  every project it is a member of, as a bare array of the same cards
+  `cards show` gives. Each carries `project {id, name}` and `board {id, title}`
+  besides `projectId` and `boardId`.
+- Cards in Done, cards in the trash and cards of a project that was left are
+  not among them, so the list is what is still to do.
+- The order is the order of the page: projects by name, then by `dueOn` with
+  the overdue ones first and the ones without a date last.
+- It is the cheapest way to answer "what am I on?": one request instead of a
+  board per project.
 
 ## Boards
 

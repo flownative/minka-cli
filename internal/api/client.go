@@ -107,6 +107,12 @@ func (c *Client) Board(ctx context.Context, boardID string) (Result[Board], erro
 	return request[Board](ctx, c, http.MethodGet, "/boards/"+url.PathEscape(boardID), nil)
 }
 
+// MyCards lists the cards the person of the token is responsible for, across
+// the projects they are a member of. Cards in Done are not among them.
+func (c *Client) MyCards(ctx context.Context) (Result[[]Card], error) {
+	return request[[]Card](ctx, c, http.MethodGet, "/me/cards", nil)
+}
+
 func (c *Client) Card(ctx context.Context, cardID string) (Result[Card], error) {
 	return request[Card](ctx, c, http.MethodGet, "/cards/"+url.PathEscape(cardID), nil)
 }

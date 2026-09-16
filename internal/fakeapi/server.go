@@ -289,6 +289,7 @@ func New(t testing.TB) (*Server, *Fixture) {
 	mux.HandleFunc("GET /api/v1/projects", s.authenticated(s.projects))
 	mux.HandleFunc("GET /api/v1/projects/{projectId}/boards", s.authenticated(s.boards))
 	mux.HandleFunc("GET /api/v1/boards/{boardId}", s.authenticated(s.board))
+	mux.HandleFunc("GET /api/v1/me/cards", s.authenticated(s.myCards))
 	mux.HandleFunc("GET /api/v1/cards/{cardId}", s.authenticated(s.card))
 	mux.HandleFunc("POST /api/v1/boards/{boardId}/cards", s.authenticated(s.addCard))
 	mux.HandleFunc("PATCH /api/v1/cards/{cardId}", s.authenticated(s.updateCard))
@@ -481,6 +482,67 @@ func (s *Server) board(w http.ResponseWriter, r *http.Request, person *Person) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"id": board.ID, "projectId": board.ProjectID, "title": board.Title, "appUrl": s.boardURL(board), "columns": columns,
 	})
+}
+
+// myCards lists the cards the person is assigned to, in the order the server
+// gives them: projects by name, then by due date with the ones without a date
+// last, then by title. Done is left out, as are cards of a project the person
+// is not a member of.
+func (s *Server) myCards(w http.ResponseWriter, _ *http.Request, person *Person) {
+	type assigned struct {
+		board  *Board
+		column *Column
+		card   *Card
+	}
+	var mine []assigned
+	for _, board := range s.Boards {
+		if s.visibleProject(board.ProjectID, person) == nil {
+			continue
+		}
+		for _, column := range board.Columns {
+			if column.Type == "done" {
+				continue
+			}
+			for _, card := range column.Cards {
+				if slices.Contains(card.AssigneeIDs, person.ID) {
+					mine = append(mine, assigned{board, column, card})
+				}
+			}
+		}
+	}
+
+	slices.SortStableFunc(mine, func(one, other assigned) int {
+		if order := strings.Compare(s.projectOf(one.board).Name, s.projectOf(other.board).Name); order != 0 {
+			return order
+		}
+		if order := strings.Compare(dayOrLast(one.card.DueOn), dayOrLast(other.card.DueOn)); order != 0 {
+			return order
+		}
+		return strings.Compare(one.card.Title, other.card.Title)
+	})
+
+	list := []any{}
+	for _, item := range mine {
+		list = append(list, s.cardResource(item.board, item.column, item.card))
+	}
+	writeJSON(w, http.StatusOK, list)
+}
+
+// dayOrLast sorts a card without a due date behind every card that has one.
+func dayOrLast(dueOn *string) string {
+	if dueOn == nil {
+		return "9999-99-99"
+	}
+	return *dueOn
+}
+
+func (s *Server) projectOf(board *Board) *Project {
+	for _, project := range s.Projects {
+		if project.ID == board.ProjectID {
+			return project
+		}
+	}
+	return &Project{}
 }
 
 func (s *Server) card(w http.ResponseWriter, r *http.Request, person *Person) {
@@ -1384,8 +1446,12 @@ func (s *Server) cardResource(board *Board, column *Column, card *Card) map[stri
 	for _, comment := range card.Comments {
 		comments = append(comments, s.commentResource(comment))
 	}
+	project := s.projectOf(board)
 	return map[string]any{
-		"id": card.ID, "projectId": board.ProjectID, "boardId": board.ID, "title": card.Title,
+		"id": card.ID, "projectId": board.ProjectID, "boardId": board.ID,
+		"project":     map[string]any{"id": project.ID, "name": project.Name},
+		"board":       map[string]any{"id": board.ID, "title": board.Title},
+		"title":       card.Title,
 		"description": card.Description, "descriptionSource": card.Description,
 		"column":       map[string]any{"id": column.ID, "type": column.Type, "title": columnTitle(column), "customTitle": column.CustomTitle},
 		"commentCount": len(card.Comments), "createdAt": timestamp(card.CreatedAt),
