@@ -133,9 +133,15 @@ func (c *Chat) isConversation() bool {
 // TrashedCard is a card that was taken off a board, together with the column
 // it hung in, which is where a restore puts it back.
 type TrashedCard struct {
-	Card   *Card
-	Column *Column
+	Card      *Card
+	Column    *Column
+	TrashedAt time.Time
+	TrashedBy string // person ID
 }
+
+// TrashEntries is how many entries an answer carries at most, as the server
+// caps them.
+const TrashEntries = 200
 
 // MaxUploadBytes is what Minka takes for one file.
 const MaxUploadBytes = 50 << 20
@@ -328,6 +334,7 @@ func New(t testing.TB) (*Server, *Fixture) {
 	mux.HandleFunc("DELETE /api/v1/cards/{cardId}/comments/{commentId}", s.authenticated(s.removeComment))
 	mux.HandleFunc("DELETE /api/v1/cards/{cardId}", s.authenticated(s.removeCard))
 	mux.HandleFunc("POST /api/v1/cards/{cardId}/restore", s.authenticated(s.restoreCard))
+	mux.HandleFunc("GET /api/v1/projects/{projectId}/trash", s.authenticated(s.trash))
 	mux.HandleFunc("GET /api/v1/projects/{projectId}/people", s.authenticated(s.people))
 	mux.HandleFunc("GET /api/v1/messages/{conversationId}/people", s.authenticated(s.conversationPeople))
 	mux.HandleFunc("POST /api/v1/cards/{cardId}/assignees", s.authenticated(s.assignCard))
@@ -1545,11 +1552,55 @@ func (s *Server) removeCard(w http.ResponseWriter, r *http.Request, person *Pers
 		return
 	}
 	column.Cards = slices.DeleteFunc(column.Cards, func(c *Card) bool { return c == card })
-	s.Trash = append(s.Trash, &TrashedCard{Card: card, Column: column})
+	s.Trash = append(s.Trash, &TrashedCard{Card: card, Column: column, TrashedAt: s.now, TrashedBy: person.ID})
 
 	// The server sends its JSON Content-Type along with the empty 204.
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// trash lists what was taken out of a project, the newest first, and says in
+// a header when it hands out less than there is.
+func (s *Server) trash(w http.ResponseWriter, r *http.Request, person *Person) {
+	project := s.visibleProject(r.PathValue("projectId"), person)
+	if project == nil {
+		notFound(w)
+		return
+	}
+
+	var entries []*TrashedCard
+	for _, trashed := range s.Trash {
+		if board := s.boardOfColumn(trashed.Column); board != nil && board.ProjectID == project.ID {
+			entries = append(entries, trashed)
+		}
+	}
+	slices.Reverse(entries)
+	if len(entries) > TrashEntries {
+		entries = entries[:TrashEntries]
+		w.Header().Set("X-Minka-Truncated", "true")
+	}
+
+	list := []any{}
+	for _, trashed := range entries {
+		board := s.boardOfColumn(trashed.Column)
+		list = append(list, map[string]any{
+			"kind": "card", "id": trashed.Card.ID, "title": trashed.Card.Title, "toolType": nil,
+			"board":     map[string]any{"id": board.ID, "title": board.Title},
+			"column":    map[string]any{"id": trashed.Column.ID, "type": trashed.Column.Type, "title": columnTitle(trashed.Column), "customTitle": trashed.Column.CustomTitle},
+			"trashedAt": timestampOrNil(nilIfZero(trashed.TrashedAt)), "trashedBy": s.personReferenceOrNil(trashed.TrashedBy),
+			"restorable": true, "blockedBy": nil,
+			"appUrl": s.URL + "/projects/" + project.ID + "/trash",
+		})
+	}
+	writeJSON(w, http.StatusOK, list)
+}
+
+// nilIfZero is how a row from before Minka noted the time says nothing.
+func nilIfZero(at time.Time) *time.Time {
+	if at.IsZero() {
+		return nil
+	}
+	return &at
 }
 
 // restoreCard puts a card of the trash back on top of the column it was taken

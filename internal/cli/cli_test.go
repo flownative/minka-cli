@@ -933,6 +933,67 @@ func TestAConversationWithSomebodyIsBegunOnlyOnce(t *testing.T) {
 	expectCode(t, r, ExitNotFound)
 }
 
+// The trash of a project says what was taken out of it, and what a long list
+// leaves out.
+func TestTheTrashListsWhatWasTakenOutOfAProject(t *testing.T) {
+	e := newTestEnv(t)
+	card := e.fixture.CardInDoing
+
+	env, r := e.runJSON("", "trash", "list", e.fixture.Project.ID)
+	expectCode(t, r, ExitOK)
+	if string(env.Data) != "[]" || env.Summary != "0 entries" {
+		t.Errorf("an empty trash: %s, %q", env.Data, env.Summary)
+	}
+
+	_, r = e.runJSON("", "cards", "delete", card.ID)
+	expectCode(t, r, ExitOK)
+	env, r = e.runJSON("", "trash", "list", e.fixture.Project.ID)
+	expectCode(t, r, ExitOK)
+	var entries []api.TrashEntry
+	if err := json.Unmarshal(env.Data, &entries); err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("trash %s", env.Data)
+	}
+	if entry := entries[0]; entry.Kind != "card" || entry.ID != card.ID || !entry.Restorable ||
+		entry.Board == nil || entry.Board.Title != e.fixture.Board.Title ||
+		entry.Column == nil || entry.Column.Title != "Doing" ||
+		entry.TrashedBy == nil || entry.TrashedBy.Name != "Bruno" {
+		t.Errorf("entry %+v", entries[0])
+	}
+	if env.Notice != "" {
+		t.Errorf("notice %q", env.Notice)
+	}
+
+	r = e.run("", "trash", "list", e.fixture.Project.ID, "--styled")
+	expectCode(t, r, ExitOK)
+	for _, want := range []string{"Review the API", "API-3 Abnahme / Doing", "by Bruno", "yes"} {
+		if !strings.Contains(r.stdout, want) {
+			t.Errorf("missing %q in:\n%s", want, r.stdout)
+		}
+	}
+
+	// A trash longer than one answer says that it is.
+	for range fakeapi.TrashEntries {
+		e.server.Trash = append(e.server.Trash, &fakeapi.TrashedCard{
+			Card: &fakeapi.Card{ID: "0192f3a4-5b6c-4d7e-8f90-a1b2c3d4e5f6", Title: "Older"}, Column: e.fixture.Doing,
+		})
+	}
+	env, r = e.runJSON("", "trash", "list", e.fixture.Project.ID)
+	expectCode(t, r, ExitOK)
+	if err := json.Unmarshal(env.Data, &entries); err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != fakeapi.TrashEntries || !strings.Contains(env.Notice, "newest 200") {
+		t.Errorf("%d entries, notice %q", len(entries), env.Notice)
+	}
+
+	// The trash of a project somebody is no member of is none of theirs.
+	_, r = e.runJSON("", "trash", "list", e.fixture.OtherProject.ID)
+	expectCode(t, r, ExitNotFound)
+}
+
 // A card in the trash comes back on top of the column it hung in, and only
 // once: a second restore finds nothing there.
 func TestACardComesBackFromTheTrashOnce(t *testing.T) {
@@ -1229,7 +1290,7 @@ func TestTheCatalogListsEveryCommandWithItsFlags(t *testing.T) {
 	for _, cmd := range catalog.Commands {
 		byName[cmd.Command] = cmd
 	}
-	for _, name := range []string{"minka auth login", "minka me", "minka projects list", "minka boards list", "minka boards show", "minka cards show", "minka cards create", "minka cards edit", "minka cards move", "minka cards done", "minka cards delete", "minka cards assign", "minka cards unassign", "minka people list", "minka steps list", "minka steps create", "minka steps complete", "minka steps reopen", "minka steps delete", "minka comments create", "minka chats list", "minka chats mark-read", "minka messages list", "minka messages create", "minka messages edit", "minka messages delete", "minka cards subscribe", "minka cards unsubscribe", "minka comments edit", "minka comments delete", "minka uploads create", "minka cards mine", "minka cards restore", "minka conversations list", "minka conversations with", "minka conversations people"} {
+	for _, name := range []string{"minka auth login", "minka me", "minka projects list", "minka boards list", "minka boards show", "minka cards show", "minka cards create", "minka cards edit", "minka cards move", "minka cards done", "minka cards delete", "minka cards assign", "minka cards unassign", "minka people list", "minka steps list", "minka steps create", "minka steps complete", "minka steps reopen", "minka steps delete", "minka comments create", "minka chats list", "minka chats mark-read", "minka messages list", "minka messages create", "minka messages edit", "minka messages delete", "minka cards subscribe", "minka cards unsubscribe", "minka comments edit", "minka comments delete", "minka uploads create", "minka cards mine", "minka cards restore", "minka conversations list", "minka conversations with", "minka conversations people", "minka trash list"} {
 		if _, ok := byName[name]; !ok {
 			t.Errorf("catalog misses %q", name)
 		}

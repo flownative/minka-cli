@@ -26,6 +26,7 @@ minka boards list <projectId> | show <boardId>
 minka people list <projectId>
 minka cards mine
 minka cards restore <cardId>
+minka trash list <projectId>
 minka cards show|create|edit|move|assign|unassign|subscribe|unsubscribe|done|delete
 minka steps list|create|complete|reopen|delete
 minka comments create|edit|delete <cardId> ...

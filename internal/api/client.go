@@ -61,6 +61,7 @@ type Result[T any] struct {
 	Value      T
 	Raw        json.RawMessage
 	StatusCode int
+	Header     http.Header
 }
 
 // Error is an answer of the server that is not a success.
@@ -105,6 +106,13 @@ func (c *Client) Boards(ctx context.Context, projectID string) (Result[[]BoardLi
 
 func (c *Client) Board(ctx context.Context, boardID string) (Result[Board], error) {
 	return request[Board](ctx, c, http.MethodGet, "/boards/"+url.PathEscape(boardID), nil)
+}
+
+// Trash lists what was taken out of a project: cards, columns and tools, the
+// newest first. The answer carries at most 200 entries and says so in the
+// header X-Minka-Truncated when there are more.
+func (c *Client) Trash(ctx context.Context, projectID string) (Result[[]TrashEntry], error) {
+	return request[[]TrashEntry](ctx, c, http.MethodGet, "/projects/"+url.PathEscape(projectID)+"/trash", nil)
 }
 
 // MyCards lists the cards the person of the token is responsible for, across
@@ -352,6 +360,7 @@ func send[T any](ctx context.Context, c *Client, httpClient *http.Client, method
 	}
 
 	result.StatusCode = resp.StatusCode
+	result.Header = resp.Header
 
 	// A 204 has no body, whatever its Content-Type says.
 	if resp.StatusCode == http.StatusNoContent {

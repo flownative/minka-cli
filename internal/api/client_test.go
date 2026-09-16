@@ -34,6 +34,7 @@ func TestIdentifiersAreEscapedInThePath(t *testing.T) {
 	_, _ = client.StartConversation(context.Background(), "../p")
 	_, _ = client.UploadToConversation(context.Background(), "../c", "plan.png", "image/png", strings.NewReader("x"), 1)
 	_, _ = client.ConversationPeople(context.Background(), "../p")
+	_, _ = client.Trash(context.Background(), "p/t")
 	_, _ = client.UploadToProject(context.Background(), "p/q", "../plan.png", "image/png", strings.NewReader("x"), 1)
 
 	want := []string{
@@ -52,6 +53,7 @@ func TestIdentifiersAreEscapedInThePath(t *testing.T) {
 		"/api/v1/messages/with/..%2Fp",
 		"/api/v1/messages/..%2Fc/uploads",
 		"/api/v1/messages/..%2Fp/people",
+		"/api/v1/projects/p%2Ft/trash",
 		"/api/v1/projects/p%2Fq/uploads",
 	}
 	if !slices.Equal(paths, want) {

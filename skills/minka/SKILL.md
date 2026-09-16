@@ -98,6 +98,7 @@ minka cards move <cardId> --column <column> [--top | --bottom | --after <cardId>
 minka cards done <cardId> --json
 minka cards delete <cardId> --json
 minka cards restore <cardId> --json
+minka trash list <projectId> --json
 minka people list <projectId> --json
 minka conversations people <conversationId> --json
 minka cards assign <cardId> <person> --json
@@ -141,8 +142,13 @@ such as `Doing`.
 - `cards delete` puts a card in the trash and `cards restore <cardId>` takes it
   back out, on top of the column it hung in. Only a card that is in the trash
   can be restored: a second restore, a card that was never trashed and a card
-  whose board or project is in the trash all exit 2. Nothing lists the trash,
-  so keep the ID of a card you delete if you may want it back.
+  whose board or project is in the trash all exit 2.
+- `trash list <projectId>` says what was taken out of a project, the newest
+  first and at most 200 (a `notice` says when there are more). Every entry is
+  `{kind, id, title, toolType, board, column, trashedAt, trashedBy,
+  restorable, blockedBy, appUrl}`. `kind` is `card`, `column` or `tool`;
+  `restorable` says whether `cards restore` takes it, `blockedBy` which of
+  board and column is in the way. Columns and tools come back in the web only.
 
 ## Boards
 

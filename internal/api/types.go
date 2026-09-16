@@ -73,6 +73,22 @@ type BoardCard struct {
 	AppURL             string            `json:"appUrl"`
 }
 
+// TrashEntry is one thing that was taken out of a project. Only a card can be
+// put back, and only while neither its column nor its board is in the trash.
+type TrashEntry struct {
+	Kind       string           `json:"kind"` // "card", "column" or "tool"
+	ID         string           `json:"id"`
+	Title      string           `json:"title"`
+	ToolType   *string          `json:"toolType"` // "board" or "chat" for a tool, null for the rest
+	Board      *BoardReference  `json:"board"`
+	Column     *ColumnReference `json:"column"`
+	TrashedAt  *string          `json:"trashedAt"`
+	TrashedBy  *PersonReference `json:"trashedBy"`
+	Restorable bool             `json:"restorable"`
+	BlockedBy  *string          `json:"blockedBy"` // "board" or "column", null where nothing blocks
+	AppURL     string           `json:"appUrl"`
+}
+
 // ProjectMember is somebody a circle has: a member of a project or one of the
 // two of a private conversation. Whom a card can be assigned to and whom a text
 // may name are the same list, so the mention rides along.
