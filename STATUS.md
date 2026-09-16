@@ -29,10 +29,10 @@ minka cards restore <cardId>
 minka trash list <projectId>
 minka cards show|create|edit|move|assign|unassign|subscribe|unsubscribe|done|delete
 minka steps list|create|complete|reopen|delete
-minka comments create|edit|delete <cardId> ...
+minka comments create|edit|delete|react|unreact <cardId> ...
 minka chats list <projectId> | mark-read <chatId>
 minka conversations list | with <person>
-minka messages list|create|edit|delete <chatId> ...
+minka messages list|create|edit|delete|react|unreact <chatId> ...
 minka uploads create <datei> --project <id> | --conversation <id>
 minka commands            Katalog aller Befehle mit Flags
 minka version
@@ -303,7 +303,7 @@ genannte Test wird rot. Zuletzt am 13.09.2026 nach dem Review ausgeführt:
 | Genau ein Kreis, sonst Exit 1 | `TestAnUploadNamesOneCircleToGoInto` |
 | Kreis-ID muss eine UUID sein | `TestAnUploadNamesOneCircleToGoInto` |
 | Außenstehende laden nichts in ein Gespräch | `TestAFileGoesIntoTheCircleTheFlagNames` |
-| Dateiname eines Uploads in der Query escaped | `TestTheNameOfAnUploadedFileIsEscapedInTheQuery` (api) |
+| Dateiname und Reaktion in der Query escaped | `TestWhatRidesInTheQueryIsEscaped` (api) |
 | Projekt-ID eines Uploads im Pfad escaped | `TestIdentifiersAreEscapedInThePath` (api) |
 | Medientyp aus dem Dateinamen, nicht nur aus den Bytes | `TestAFileIsUploadedAsItIsAndComesBackAsAnAttachment` |
 | Länge des Uploads angekündigt (`Content-Length`) | `TestAFileIsUploadedAsItIsAndComesBackAsAnAttachment` |
@@ -425,7 +425,10 @@ oben; 404 nur bei einer ungültigen ID. Der Fake folgte dem schon.
 - Umbenennen und Umsortieren von Schritten gibt es in der API noch nicht.
 - Reaktionen (Minka `f006bd4`, E-106) sind gelesen umgesetzt: `reactions` an
   Kommentaren und Nachrichten, in der Textansicht als eine Zeile darunter.
-  Schreiben gibt es an der API noch nicht; minka-c2 meldet Teil 2.
+  Schreiben gibt es seit E-114 auch: `comments react|unreact` und `messages
+  react|unreact`. In privaten Gesprächen antwortet die API noch mit 404, das
+  ist im Bau. Die Fake-API normalisiert den Text einer Reaktion nicht nach
+  Unicode NFC, der Server tut es.
 - Die Fake-API kennt keine Organisationen. Dass ein Gespräch mit jemandem aus
   einer fremden Organisation mit 404 endet, ist deshalb nur gegen den Code
   gelesen, nicht nachgebildet. Laut minka-c2 bleibt es ein nacktes 404 ohne
@@ -474,6 +477,11 @@ oben; 404 nur bei einer ungültigen ID. Der Fake folgte dem schon.
   geprüft ist die neue Form für Projekte sowie die Fehlerfälle (kein Kreis,
   beide Kreise, unbekanntes Gespräch). Der Weg in ein echtes Gespräch fehlt,
   solange der Schreibtest für Gespräche nicht freigegeben ist.
+- Reaktionen schreiben (Minka E-114) ist am 16.09.2026 live geprüft: `comments
+  react` legt 👍 an (zweites Mal „already“), die Textansicht zeigt es, eine
+  21 Zeichen lange Reaktion endet mit Exit 9 `reactionTooLong`, `unreact`
+  räumt sie weg und ein `unreact` ohne Reaktion endet mit Exit 0. Dasselbe an
+  einer Chat-Nachricht in „Chat1 Abnahme“. Testkarte und Nachricht gelöscht.
 - Reaktionen (Minka `f006bd4`) sind am 16.09.2026 live geprüft, soweit es geht:
   `reactions` kommt an Chat-Nachrichten und an einem frisch geschriebenen
   Kommentar als leeres Array an. Mit Inhalt gefüllt ist es nur gegen den Fake

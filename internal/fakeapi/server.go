@@ -330,6 +330,10 @@ func New(t testing.TB) (*Server, *Fixture) {
 	mux.HandleFunc("PATCH /api/v1/cards/{cardId}", s.authenticated(s.updateCard))
 	mux.HandleFunc("POST /api/v1/cards/{cardId}/moves", s.authenticated(s.moveCard))
 	mux.HandleFunc("POST /api/v1/cards/{cardId}/comments", s.authenticated(s.writeComment))
+	mux.HandleFunc("POST /api/v1/cards/{cardId}/comments/{commentId}/reactions", s.authenticated(s.reactToComment))
+	mux.HandleFunc("DELETE /api/v1/cards/{cardId}/comments/{commentId}/reactions", s.authenticated(s.unreactFromComment))
+	mux.HandleFunc("POST /api/v1/chats/{chatId}/messages/{messageId}/reactions", s.authenticated(s.reactToMessage))
+	mux.HandleFunc("DELETE /api/v1/chats/{chatId}/messages/{messageId}/reactions", s.authenticated(s.unreactFromMessage))
 	mux.HandleFunc("PATCH /api/v1/cards/{cardId}/comments/{commentId}", s.authenticated(s.editComment))
 	mux.HandleFunc("DELETE /api/v1/cards/{cardId}/comments/{commentId}", s.authenticated(s.removeComment))
 	mux.HandleFunc("DELETE /api/v1/cards/{cardId}", s.authenticated(s.removeCard))
@@ -1294,6 +1298,152 @@ func (s *Server) markChatRead(w http.ResponseWriter, r *http.Request, person *Pe
 	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(http.StatusNoContent)
+}
+
+const maxReactionLength = 20
+
+// reactToComment and the three that follow it are the two ways to react and
+// the two ways to take a reaction away. Both texts behave the same, so the
+// work is in reactTo and unreactFrom.
+func (s *Server) reactToComment(w http.ResponseWriter, r *http.Request, person *Person) {
+	_, _, card := s.visibleCard(r.PathValue("cardId"), person)
+	comment := commentOf(card, r.PathValue("commentId"))
+	if comment == nil {
+		notFound(w)
+		return
+	}
+	content, ok := reactionContent(w, r)
+	if !ok {
+		return
+	}
+	status := reactTo(&comment.Reactions, content, person.ID)
+	writeJSON(w, status, s.commentResource(comment))
+}
+
+func (s *Server) unreactFromComment(w http.ResponseWriter, r *http.Request, person *Person) {
+	_, _, card := s.visibleCard(r.PathValue("cardId"), person)
+	comment := commentOf(card, r.PathValue("commentId"))
+	if comment == nil {
+		notFound(w)
+		return
+	}
+	unreactFrom(&comment.Reactions, r.URL.Query().Get("content"), person.ID)
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) reactToMessage(w http.ResponseWriter, r *http.Request, person *Person) {
+	message := s.messageOfChat(r, person)
+	if message == nil {
+		notFound(w)
+		return
+	}
+	content, ok := reactionContent(w, r)
+	if !ok {
+		return
+	}
+	status := reactTo(&message.Reactions, content, person.ID)
+	writeJSON(w, status, s.chatMessageResource(message))
+}
+
+func (s *Server) unreactFromMessage(w http.ResponseWriter, r *http.Request, person *Person) {
+	message := s.messageOfChat(r, person)
+	if message == nil {
+		notFound(w)
+		return
+	}
+	unreactFrom(&message.Reactions, r.URL.Query().Get("content"), person.ID)
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// messageOfChat is the message of the chat the address names. A message that
+// belongs to another chat is as unreachable as one that is not there.
+func (s *Server) messageOfChat(r *http.Request, person *Person) *ChatMessage {
+	chat := s.visibleChat(r.PathValue("chatId"), person)
+	if chat == nil {
+		return nil
+	}
+	for _, message := range chat.Messages {
+		if message.ID == r.PathValue("messageId") && !message.Removed {
+			return message
+		}
+	}
+	return nil
+}
+
+func commentOf(card *Card, commentID string) *Comment {
+	if card == nil {
+		return nil
+	}
+	for _, comment := range card.Comments {
+		if comment.ID == commentID {
+			return comment
+		}
+	}
+	return nil
+}
+
+// reactionContent reads what the body says to react with, and refuses what the
+// server refuses.
+func reactionContent(w http.ResponseWriter, r *http.Request) (string, bool) {
+	fields, ok := readBody(w, r)
+	if !ok {
+		return "", false
+	}
+	value, ok := stringField(w, fields, "content")
+	if !ok {
+		return "", false
+	}
+	content := phpTrim(deref(value))
+	switch {
+	case content == "":
+		unprocessable(w, "reactionMissing", "A reaction needs a content.")
+	case utf8.RuneCountInString(content) > maxReactionLength:
+		unprocessable(w, "reactionTooLong", "A reaction must not be longer than 20 characters.")
+	case strings.IndexFunc(content, unicode.IsControl) >= 0:
+		unprocessable(w, "reactionHasControlCharacters", "A reaction must not contain control characters.")
+	default:
+		return content, true
+	}
+	return "", false
+}
+
+// reactTo adds a reaction, and answers 200 where the same one of this person
+// stood already.
+func reactTo(reactions *[]*Reaction, content, personID string) int {
+	for _, reaction := range *reactions {
+		if reaction.Content != content {
+			continue
+		}
+		if slices.Contains(reaction.PersonIDs, personID) {
+			return http.StatusOK
+		}
+		reaction.PersonIDs = append(reaction.PersonIDs, personID)
+		return http.StatusCreated
+	}
+	*reactions = append(*reactions, &Reaction{Content: content, PersonIDs: []string{personID}})
+	return http.StatusCreated
+}
+
+// unreactFrom takes away the reaction of this person, and where they left
+// none, the one somebody else left last: taking a reaction away is not bound
+// to whoever left it.
+func unreactFrom(reactions *[]*Reaction, content, personID string) {
+	for i, reaction := range *reactions {
+		if reaction.Content != content {
+			continue
+		}
+		whose := slices.Index(reaction.PersonIDs, personID)
+		if whose < 0 {
+			whose = len(reaction.PersonIDs) - 1
+		}
+		reaction.PersonIDs = slices.Delete(reaction.PersonIDs, whose, whose+1)
+		if len(reaction.PersonIDs) == 0 {
+			*reactions = slices.Delete(*reactions, i, i+1)
+		}
+		return
+	}
 }
 
 // upload takes the bytes of the body as a file of the project. The order of

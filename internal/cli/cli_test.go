@@ -819,6 +819,115 @@ func TestThePeopleOfACircleCarryTheirMention(t *testing.T) {
 	expectCode(t, r, ExitNotFound)
 }
 
+// Reacting twice the same way changes nothing, and a reaction comes off
+// whoever left it.
+func TestAReactionIsLeftOnceAndComesOffAgain(t *testing.T) {
+	e := newTestEnv(t)
+	card := e.fixture.CardInTriage
+	comment := card.Comments[0]
+
+	env, r := e.runJSON("", "comments", "react", card.ID, comment.ID, "🚀")
+	expectCode(t, r, ExitOK)
+	if !strings.Contains(env.Summary, "Reacted 🚀") {
+		t.Errorf("summary %q", env.Summary)
+	}
+	env, r = e.runJSON("", "comments", "react", card.ID, comment.ID, "🚀")
+	expectCode(t, r, ExitOK)
+	if !strings.Contains(env.Summary, "already") {
+		t.Errorf("summary of a second reaction %q", env.Summary)
+	}
+	if count := countOf(t, env.Data, "🚀"); count != 1 {
+		t.Errorf("%d people behind one reaction of one person", count)
+	}
+
+	// Anke reacted 👍 first, then Bruno; the agent comes last.
+	e.vars["MINKA_TOKEN"] = "minka_pat_agent"
+	_, r = e.runJSON("", "comments", "react", card.ID, comment.ID, "👍")
+	expectCode(t, r, ExitOK)
+	e.vars["MINKA_TOKEN"] = e.fixture.Token
+
+	// Taking one away takes your own, not the one that came last.
+	_, r = e.runJSON("", "comments", "unreact", card.ID, comment.ID, "👍")
+	expectCode(t, r, ExitOK)
+	env, r = e.runJSON("", "cards", "show", card.ID)
+	expectCode(t, r, ExitOK)
+	var shown api.Card
+	if err := json.Unmarshal(env.Data, &shown); err != nil {
+		t.Fatal(err)
+	}
+	for _, reaction := range shown.Comments[0].Reactions {
+		if reaction.Content != "👍" {
+			continue
+		}
+		var names []string
+		for _, person := range reaction.People {
+			names = append(names, person.Name)
+		}
+		if strings.Join(names, ", ") != "Anke, "+e.fixture.Agent.Name {
+			t.Errorf("👍 of %v, want Bruno gone and the others left", names)
+		}
+	}
+	// Taking away what is not there succeeds.
+	_, r = e.runJSON("", "comments", "unreact", card.ID, comment.ID, "🤷")
+	expectCode(t, r, ExitOK)
+
+	// The same on a message of a chat.
+	message := e.fixture.Chat.Messages[0]
+	env, r = e.runJSON("", "messages", "react", e.fixture.Chat.ID, message.ID, "👀")
+	expectCode(t, r, ExitOK)
+	if countOf(t, env.Data, "👀") != 1 {
+		t.Errorf("message %s", env.Data)
+	}
+	_, r = e.runJSON("", "messages", "unreact", e.fixture.Chat.ID, message.ID, "👀")
+	expectCode(t, r, ExitOK)
+	if len(message.Reactions) != 0 {
+		t.Errorf("reactions left: %+v", message.Reactions)
+	}
+
+	// A message of another chat of this person is as unreachable as one that
+	// is not there.
+	_, r = e.runJSON("", "messages", "react", e.fixture.Chat.ID, e.fixture.Conversation.Messages[0].ID, "👀")
+	expectCode(t, r, ExitNotFound)
+	_, r = e.runJSON("", "messages", "react", e.fixture.OtherChat.ID, message.ID, "👀")
+	expectCode(t, r, ExitNotFound)
+}
+
+func TestAReactionIsShortAndSays_Something(t *testing.T) {
+	e := newTestEnv(t)
+	card := e.fixture.CardInTriage
+	comment := card.Comments[0]
+
+	env, r := e.runJSON("", "comments", "react", card.ID, comment.ID, strings.Repeat("x", 21))
+	expectCode(t, r, ExitValidation)
+	if env.Meta["apiCode"] != "reactionTooLong" || !strings.Contains(env.Hint, "20 characters") {
+		t.Errorf("envelope %+v", env)
+	}
+
+	env, r = e.runJSON("", "comments", "react", card.ID, comment.ID, "   ")
+	expectCode(t, r, ExitValidation)
+	if env.Meta["apiCode"] != "reactionMissing" {
+		t.Errorf("envelope %+v", env)
+	}
+}
+
+// countOf is how many people stand behind one reaction of a comment or a
+// message the server just answered with.
+func countOf(t *testing.T, data json.RawMessage, content string) int {
+	t.Helper()
+	var text struct {
+		Reactions []api.Reaction `json:"reactions"`
+	}
+	if err := json.Unmarshal(data, &text); err != nil {
+		t.Fatalf("data carries no reactions: %v: %s", err, data)
+	}
+	for _, reaction := range text.Reactions {
+		if reaction.Content == content {
+			return len(reaction.People)
+		}
+	}
+	return 0
+}
+
 // What people said about a comment or a message stands under it, counted
 // together, and nothing stands there when nobody said anything.
 func TestReactionsStandUnderACommentAndAMessage(t *testing.T) {
@@ -1290,7 +1399,7 @@ func TestTheCatalogListsEveryCommandWithItsFlags(t *testing.T) {
 	for _, cmd := range catalog.Commands {
 		byName[cmd.Command] = cmd
 	}
-	for _, name := range []string{"minka auth login", "minka me", "minka projects list", "minka boards list", "minka boards show", "minka cards show", "minka cards create", "minka cards edit", "minka cards move", "minka cards done", "minka cards delete", "minka cards assign", "minka cards unassign", "minka people list", "minka steps list", "minka steps create", "minka steps complete", "minka steps reopen", "minka steps delete", "minka comments create", "minka chats list", "minka chats mark-read", "minka messages list", "minka messages create", "minka messages edit", "minka messages delete", "minka cards subscribe", "minka cards unsubscribe", "minka comments edit", "minka comments delete", "minka uploads create", "minka cards mine", "minka cards restore", "minka conversations list", "minka conversations with", "minka conversations people", "minka trash list"} {
+	for _, name := range []string{"minka auth login", "minka me", "minka projects list", "minka boards list", "minka boards show", "minka cards show", "minka cards create", "minka cards edit", "minka cards move", "minka cards done", "minka cards delete", "minka cards assign", "minka cards unassign", "minka people list", "minka steps list", "minka steps create", "minka steps complete", "minka steps reopen", "minka steps delete", "minka comments create", "minka chats list", "minka chats mark-read", "minka messages list", "minka messages create", "minka messages edit", "minka messages delete", "minka cards subscribe", "minka cards unsubscribe", "minka comments edit", "minka comments delete", "minka uploads create", "minka cards mine", "minka cards restore", "minka conversations list", "minka conversations with", "minka conversations people", "minka trash list", "minka comments react", "minka comments unreact", "minka messages react", "minka messages unreact"} {
 		if _, ok := byName[name]; !ok {
 			t.Errorf("catalog misses %q", name)
 		}

@@ -285,6 +285,37 @@ func (c *Client) WriteComment(ctx context.Context, cardID string, body string) (
 	return request[Comment](ctx, c, http.MethodPost, "/cards/"+url.PathEscape(cardID)+"/comments", map[string]string{"body": body})
 }
 
+// ReactToComment leaves a reaction on a comment. The status code is 201 for a
+// new reaction and 200 where the same one of yours stood already.
+func (c *Client) ReactToComment(ctx context.Context, cardID, commentID, content string) (Result[Comment], error) {
+	return request[Comment](ctx, c, http.MethodPost,
+		"/cards/"+url.PathEscape(cardID)+"/comments/"+url.PathEscape(commentID)+"/reactions", map[string]string{"content": content})
+}
+
+// UnreactFromComment takes a reaction off a comment: your own, and where you
+// left none the last one somebody else left. Taking away what is not there
+// succeeds as well.
+func (c *Client) UnreactFromComment(ctx context.Context, cardID, commentID, content string) error {
+	_, err := request[struct{}](ctx, c, http.MethodDelete,
+		"/cards/"+url.PathEscape(cardID)+"/comments/"+url.PathEscape(commentID)+"/reactions?content="+url.QueryEscape(content), nil)
+	return err
+}
+
+// ReactToMessage leaves a reaction on a message of a chat, 201 for a new one
+// and 200 where the same one of yours stood already.
+func (c *Client) ReactToMessage(ctx context.Context, chatID, messageID, content string) (Result[ChatMessage], error) {
+	return request[ChatMessage](ctx, c, http.MethodPost,
+		"/chats/"+url.PathEscape(chatID)+"/messages/"+url.PathEscape(messageID)+"/reactions", map[string]string{"content": content})
+}
+
+// UnreactFromMessage takes a reaction off a message, the way it comes off a
+// comment.
+func (c *Client) UnreactFromMessage(ctx context.Context, chatID, messageID, content string) error {
+	_, err := request[struct{}](ctx, c, http.MethodDelete,
+		"/chats/"+url.PathEscape(chatID)+"/messages/"+url.PathEscape(messageID)+"/reactions?content="+url.QueryEscape(content), nil)
+	return err
+}
+
 // UploadToProject puts a file into a project, where it can hang in the texts of
 // that project.
 func (c *Client) UploadToProject(ctx context.Context, projectID, filename, contentType string, content io.Reader, size int64) (Result[Upload], error) {

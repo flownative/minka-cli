@@ -111,11 +111,13 @@ number beyond the last message counts as the last one.`,
 }
 
 func (a *app) newMessagesCmd() *cobra.Command {
-	return group("messages", "Read and write the messages of a chat",
+	return group("messages", "Read, write and react to the messages of a chat",
 		a.newMessagesListCmd(),
 		a.newMessagesCreateCmd(),
 		a.newMessagesEditCmd(),
 		a.newMessagesDeleteCmd(),
+		a.newMessagesReactCmd(),
+		a.newMessagesUnreactCmd(),
 	)
 }
 

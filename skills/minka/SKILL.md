@@ -113,11 +113,15 @@ minka steps delete <cardId> <step> --json
 minka comments create <cardId> - --json < comment.txt
 minka comments edit <cardId> <commentId> - [--format html] --json < comment.txt
 minka comments delete <cardId> <commentId> --json
+minka comments react <cardId> <commentId> 👍 --json
+minka comments unreact <cardId> <commentId> 👍 --json
 minka chats list <projectId> --json
 minka messages list <chatId> [--before <seq> | --after <changeSeq>] [--limit <n>] --json
 minka messages create <chatId> - [--client-message-id <uuid>] --json < message.txt
 minka messages edit <chatId> <messageId> - --json < message.txt
 minka messages delete <chatId> <messageId> --json
+minka messages react <chatId> <messageId> 👍 --json
+minka messages unreact <chatId> <messageId> 👍 --json
 minka chats mark-read <chatId> [--seq <seq>] --json
 minka conversations list --json
 minka conversations with <person> [--project <projectId>] --json
@@ -289,8 +293,17 @@ such as `Doing`.
   content counted together, in the order it was first left in, and an empty
   array where nobody reacted. `content` is mostly an emoji but may be up to 20
   characters of text. `cards show --styled` and `messages list --styled` put
-  them in a line under the comment or the message. Reacting is not in the API
-  yet, so the CLI can only read them.
+  them in a line under the comment or the message.
+- `comments react <cardId> <commentId> <content>` and `messages react <chatId>
+  <messageId> <content>` leave a reaction, `comments unreact` and `messages
+  unreact` take one away. A reaction is an emoji or at most 20 characters;
+  longer exits 9 with `reactionTooLong`, empty with `reactionMissing`.
+- Reacting the same way twice changes nothing and succeeds. Taking one away is
+  not bound to whoever left it: it takes your own reaction of that text, and
+  where you left none, the one somebody else left last. Taking away what is
+  not there succeeds as well.
+- Private conversations answer 2 to both for now; reacting there is being
+  built.
 - Comments are rich text like descriptions. `comments create` converts
   Markdown and keeps every line break, so plain text arrives as typed;
   `--format html` sends HTML as it is. `cards show --styled` shows comments as
