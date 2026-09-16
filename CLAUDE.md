@@ -4,7 +4,9 @@ Anweisungen für Claude Code für die Arbeit an diesem Repository.
 
 ## Unterhaltung
 
-Die Sprache für Unterhaltungen mit Robert ist Deutsch mit informellem "du".
+Auftraggeber ist Robert; seit dem 16.09.2026 vertritt Shaun ihn, mit denselben
+Rechten. Die Sprache für Unterhaltungen mit beiden ist Deutsch mit informellem
+"du".
 Code, Kommentare, Commit-Messages, Hilfetexte und Ausgaben der CLI sind
 Englisch.
 
@@ -24,7 +26,7 @@ anbietet.
 Proprietär wie Minka, bis Minka veröffentlicht wird. Das Repository liegt auf
 GitHub unter `git@github.com:flownative/minka-cli.git`; der Stand kommt
 regelmäßig nach `main`. Andere Branches und alles, was Geschichte umschreibt,
-nur wenn Robert es verlangt.
+nur auf Ansage des Auftraggebers.
 
 ## Stand und Status
 
