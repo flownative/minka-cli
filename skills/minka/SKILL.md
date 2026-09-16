@@ -233,7 +233,10 @@ such as `Doing`.
 - A conversation is a chat without a project, between two people. `conversations
   list` gives `{id, name, counterpart {id, name}, lastMessageText,
   lastMessageAt, unreadCount, appUrl}`, the newest word first. `name` is the
-  other person.
+  other person. `lastMessageText` is the last word without markup, its line
+  breaks folded into spaces and cut to 200 characters with an ellipsis; it is
+  a hint, not the message, and needs no shortening of your own. Both last
+  fields are null while nothing has been said.
 - `conversations with <person>` answers with the conversation with that person
   and begins it where there is none, so asking twice is no mistake. A person is
   given by ID; with `--project` a name or an e-mail address is looked up among

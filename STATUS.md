@@ -421,7 +421,11 @@ oben; 404 nur bei einer ungültigen ID. Der Fake folgte dem schon.
   zeigen, wird entschieden, wenn das Paket auf main ist.
 - Die Fake-API kennt keine Organisationen. Dass ein Gespräch mit jemandem aus
   einer fremden Organisation mit 404 endet, ist deshalb nur gegen den Code
-  gelesen, nicht nachgebildet.
+  gelesen, nicht nachgebildet. Laut minka-c2 bleibt es ein nacktes 404 ohne
+  eigenen Fehlercode (E-032), da ist also nichts nachzuziehen.
+- `lastMessageText` ist `body_text` mit zusammengefassten Zeilenumbrüchen, auf
+  200 Zeichen gekürzt mit angehängtem „…“ (`previewOf`, im Code nachgesehen).
+  Die CLI zeigt es unverändert und kürzt nicht noch einmal.
 - Uploads: seit Minka `30a19d2` in der API und seit dem 16.09.2026 in der CLI
   als `uploads create` (Shaun hat entschieden, dass sie dazugehören):
   `POST /api/v1/projects/{projectId}/uploads?filename=…`, Rumpf sind die rohen
