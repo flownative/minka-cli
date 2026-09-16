@@ -99,9 +99,10 @@ func TestAnEmptyAnswerIsASuccess(t *testing.T) {
 	}
 }
 
-// The name of the file rides in the query, where a slash or an ampersand of
-// its own would otherwise start something else.
-func TestTheNameOfAnUploadedFileIsEscapedInTheQuery(t *testing.T) {
+// What rides in the query is escaped, so that a slash or an ampersand of its
+// own does not start something else: the name of a file, the content of a
+// reaction.
+func TestWhatRidesInTheQueryIsEscaped(t *testing.T) {
 	var queries []string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		queries = append(queries, r.URL.RawQuery)
@@ -113,8 +114,13 @@ func TestTheNameOfAnUploadedFileIsEscapedInTheQuery(t *testing.T) {
 	for _, filename := range []string{"../plan.png", "a b&limit=1.png"} {
 		_, _ = client.UploadToProject(context.Background(), "p", filename, "image/png", strings.NewReader("x"), 1)
 	}
+	_ = client.UnreactFromComment(context.Background(), "c", "k", "a b&x=1")
+	_ = client.UnreactFromMessage(context.Background(), "c", "m", "👍&x=1")
 
-	want := []string{"filename=..%2Fplan.png", "filename=a+b%26limit%3D1.png"}
+	want := []string{
+		"filename=..%2Fplan.png", "filename=a+b%26limit%3D1.png",
+		"content=a+b%26x%3D1", "content=%F0%9F%91%8D%26x%3D1",
+	}
 	if !slices.Equal(queries, want) {
 		t.Errorf("queries\n got: %q\nwant: %q", queries, want)
 	}

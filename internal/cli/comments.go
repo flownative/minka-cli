@@ -18,10 +18,12 @@ except that every line break is kept: plain text arrives as it was typed.
 const commentAuthorHint = "It does not exist, was removed, or somebody else wrote it: only the author can change or remove a comment."
 
 func (a *app) newCommentsCmd() *cobra.Command {
-	return group("comments", "Write, change and remove comments on cards",
+	return group("comments", "Write, change, remove and react to comments on cards",
 		a.newCommentsCreateCmd(),
 		a.newCommentsEditCmd(),
 		a.newCommentsDeleteCmd(),
+		a.newCommentsReactCmd(),
+		a.newCommentsUnreactCmd(),
 	)
 }
 
