@@ -73,10 +73,22 @@ type BoardCard struct {
 	AppURL             string            `json:"appUrl"`
 }
 
+// ProjectMember is somebody a circle has: a member of a project or one of the
+// two of a private conversation. Whom a card can be assigned to and whom a text
+// may name are the same list, so the mention rides along.
 type ProjectMember struct {
-	ID           string `json:"id"`
-	Name         string `json:"name"` // the e-mail address until the person gives a name
-	EmailAddress string `json:"emailAddress"`
+	ID           string  `json:"id"`
+	Name         string  `json:"name"` // the e-mail address until the person gives a name
+	EmailAddress string  `json:"emailAddress"`
+	Mention      Mention `json:"mention"`
+}
+
+// Mention is how a text names a person: the handle the server signed, and the
+// markup carrying it. The markup holds in the circle it was asked for and
+// nowhere else, and goes into a descriptionSource or a bodySource unchanged.
+type Mention struct {
+	Handle string `json:"handle"`
+	Markup string `json:"markup"`
 }
 
 type ColumnReference struct {

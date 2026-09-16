@@ -14,15 +14,24 @@ import (
 const personHelp = `A person is given by ID, as "me", by e-mail address or by name. A name has to
 match exactly one person, ignoring case.`
 
+const mentionHelp = `Every person carries a mention: the markup that names them in a text. Put
+mention.markup from --json into a descriptionSource or a bodySource unchanged
+and send that back as HTML; the person is then named, notified and subscribed
+to the card. A mention holds in the circle it was asked for, so one of a
+project belongs in texts of that project and one of a conversation in that
+conversation.`
+
 func (a *app) newPeopleCmd() *cobra.Command {
-	return group("people", "List the members of a project", a.newPeopleListCmd())
+	return group("people", "List the people of a project", a.newPeopleListCmd())
 }
 
 func (a *app) newPeopleListCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "list <projectId>",
 		Short: "List the members of a project, the people its cards can be assigned to",
-		Args:  requireArgs("projectId"),
+		Long: "Lists the members of a project: whom its cards can be assigned to, and whom\n" +
+			"its texts may name.\n\n" + mentionHelp,
+		Args: requireArgs("projectId"),
 		RunE: func(_ *cobra.Command, args []string) error {
 			s, err := a.session()
 			if err != nil {
@@ -38,22 +47,54 @@ func (a *app) newPeopleListCmd() *cobra.Command {
 				summary: plural(len(people.Value), "person", "people"),
 				breadcrumbs: []Breadcrumb{
 					{Action: "assign", Cmd: "minka cards assign <cardId> <person>", Description: "Assign a member to a card"},
+					{Action: "mention", Cmd: "minka comments create <cardId> - --format html", Description: "Write a text that carries mention.markup"},
 				},
-				text: func(w io.Writer) {
-					if len(people.Value) == 0 {
-						fmt.Fprintln(w, "No people.")
-						return
-					}
-					table := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
-					fmt.Fprintln(table, "ID\tNAME\tE-MAIL")
-					for _, person := range people.Value {
-						fmt.Fprintf(table, "%s\t%s\t%s\n", person.ID, person.Name, person.EmailAddress)
-					}
-					_ = table.Flush()
-				},
+				text: func(w io.Writer) { renderPeople(w, people.Value) },
 			})
 		},
 	}
+}
+
+func (a *app) newConversationsPeopleCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "people <conversationId>",
+		Short: "List the two people of a private conversation",
+		Long: "Lists the people of a private conversation, whom its messages may name.\n" +
+			"Somebody who is not one of the two finds nothing there.\n\n" + mentionHelp,
+		Args: requireArgs("conversationId"),
+		RunE: func(_ *cobra.Command, args []string) error {
+			s, err := a.session()
+			if err != nil {
+				return err
+			}
+			people, err := s.client.ConversationPeople(a.ctx, args[0])
+			if err != nil {
+				return s.fail(err)
+			}
+
+			return a.ok(success{
+				data:    people.Raw,
+				summary: plural(len(people.Value), "person", "people"),
+				breadcrumbs: []Breadcrumb{
+					{Action: "mention", Cmd: "minka messages create " + args[0] + " - --format html", Description: "Say something that carries mention.markup"},
+				},
+				text: func(w io.Writer) { renderPeople(w, people.Value) },
+			})
+		},
+	}
+}
+
+func renderPeople(w io.Writer, people []api.ProjectMember) {
+	if len(people) == 0 {
+		fmt.Fprintln(w, "No people.")
+		return
+	}
+	table := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
+	fmt.Fprintln(table, "ID\tNAME\tE-MAIL")
+	for _, person := range people {
+		fmt.Fprintf(table, "%s\t%s\t%s\n", person.ID, person.Name, person.EmailAddress)
+	}
+	_ = table.Flush()
 }
 
 func (a *app) newCardsAssignCmd() *cobra.Command {
