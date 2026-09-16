@@ -99,6 +99,7 @@ minka cards done <cardId> --json
 minka cards delete <cardId> --json
 minka cards restore <cardId> --json
 minka people list <projectId> --json
+minka conversations people <conversationId> --json
 minka cards assign <cardId> <person> --json
 minka cards unassign <cardId> <person> --json
 minka cards subscribe <cardId> <person> --json
@@ -246,8 +247,10 @@ such as `Doing`.
   with `messages create`, change and remove with `messages edit` and `messages
   delete`, note how far it is read with `chats mark-read`. Everybody else
   exits 2 there.
-- A conversation is text: files and mentions belong to projects, and
-  `bodySource` is the text itself.
+- A conversation carries files and mentions too: `uploads create --conversation`
+  puts a file in, and `conversations people <conversationId>` gives the two
+  people with the markup that names them there. Somebody outside the two
+  exits 2.
 - Conversations are not among the chats of a project, and the chats of a
   project are not among the conversations.
 
@@ -293,6 +296,25 @@ such as `Doing`.
   edit` refuses a new text that would drop attachments or mentions unless
   `--drop-attachments` is given; send the comment's `bodySource` back with
   `--format html` to keep them.
+
+## Naming somebody in a text
+
+- `people list <projectId>` and `conversations people <conversationId>` give
+  every person a `mention: {handle, markup}`. `markup` is the
+  `<action-text-attachment>` element that names them.
+- Put the markup into a text unchanged and send it as HTML — Markdown cannot
+  hold it:
+
+```bash
+MARKUP=$(minka people list <projectId> --quiet | jq -r '.[] | select(.name == "Anke") | .mention.markup')
+printf '%s please have a look' "$MARKUP" | minka comments create <cardId> - --format html
+```
+
+- The person named is notified and becomes a subscriber of the card.
+- A mention holds in the circle it was asked for: one of a project belongs in
+  texts of that project, one of a conversation in that conversation. Anywhere
+  else the server drops it while saving, without an error.
+- `cards show --styled` and `messages list --styled` show a mention as `@Name`.
 
 ## Uploads
 
