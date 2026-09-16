@@ -399,7 +399,19 @@ oben; 404 nur bei einer ungültigen ID. Der Fake folgte dem schon.
   `attachmentSource`, das fertige `action-text-attachment` mit frischer
   Signatur, das unverändert in `descriptionSource` oder `bodySource` gehört.
   Damit könnte die CLI Dateien anhängen, obwohl das Briefing Uploads
-  ausschließt. Ob das dazukommt, entscheiden Robert und Shaun.
+  ausschließt. Die Entscheidung liegt bei Shaun, minka-c2 hat sie ihm als Karte
+  vorgelegt. Was für die Umsetzung schon feststeht (von minka-c2, im Code
+  nachgesehen):
+  - Die Signatur in `attachmentSource` verfällt nie, sie steht ja dauerhaft im
+    gespeicherten Text. Ein Handle aus einem fremden Projekt wird beim
+    Speichern aber stillschweigend aus dem Text genommen, ohne Fehler. Die CLI
+    darf `attachmentSource` also nur in Texte desselben Projekts setzen und
+    sollte nach dem Speichern prüfen, ob der Anhang noch da ist.
+  - Ein Upload, auf den nach sieben Tagen kein gespeicherter Text zeigt, wird
+    weggeräumt (`uploads:collectGarbage`, Vorgaben 168 und 24 Stunden). Erst
+    das Speichern des Textes macht ihn dauerhaft; das gehört in die Hilfe.
+  - Uploads hängen am Projekt, nicht am Board oder Chat. Zum Testen reicht das
+    Test-Projekt.
 - Projekte haben seit Minka `ccd0439` Chat-Werkzeuge (`type=chat`).
   `boards list` zeigt nur Boards.
 - Die erweiterte Allowlist (`72d0639`) und Kommentare als Rich Text
