@@ -453,10 +453,12 @@ oben; 404 nur bei einer ungültigen ID. Der Fake folgte dem schon.
 - `cards mine` (Minka `a91a133`, E-101) ist am 16.09.2026 live geprüft: Eine
   eigene Karte mit Fälligkeit in der Vergangenheit steht in der Liste als
   „overdue“, nach `cards done` ist sie draußen. Dabei ist ein Fehler in Minka
-  aufgefallen: `DELETE /api/v1/cards/{id}` auf eine Karte in Done antwortet
-  mit 500 (`DbalCardRepository::moveToTrash`, Exception 1789508136). An
-  minka-c2 gemeldet; die Testkarte ließ sich nach einem `cards move --column
-  triage` löschen.
+  aufgefallen: `DELETE /api/v1/cards/{id}` antwortete mit 500
+  (`DbalCardRepository::moveToTrash`, Exception 1789508136). Ursache war laut
+  minka-c2 kein Fehler im Code, sondern das Merge-Fenster von E-102: Der Code
+  kannte `trashed_at` schon, die Migration lief erst danach. Am 16.09.2026
+  nachgeprüft: Karte in Done → `cards delete` → 204, `cards restore` bringt sie
+  nach Done zurück.
 - Uploads (Minka `30a19d2`) sind am 16.09.2026 live geprüft, im Test-Projekt:
   Ein PNG kommt als `kind: image` zurück, eine CSV-Datei als `kind: file` mit
   `contentType: text/csv`. Das `attachmentSource` aus der Antwort, unverändert
