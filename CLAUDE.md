@@ -21,9 +21,10 @@ Prinzipien übernehmen, nicht den Umfang. Nicht dazu gehören: KI-Integrationen,
 Uploads, Benachrichtigungen, eine interaktive TUI, alles, was die API nicht
 anbietet.
 
-Proprietär wie Minka, bis Minka veröffentlicht wird. Nur ein lokales
-Git-Repository, **kein Remote, niemals pushen**, solange Robert es nicht
-ausdrücklich verlangt.
+Proprietär wie Minka, bis Minka veröffentlicht wird. Das Repository liegt auf
+GitHub unter `git@github.com:flownative/minka-cli.git`; der Stand kommt
+regelmäßig nach `main`. Andere Branches und alles, was Geschichte umschreibt,
+nur wenn Robert es verlangt.
 
 ## Stand und Status
 
