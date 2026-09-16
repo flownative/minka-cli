@@ -388,5 +388,8 @@ func renderMessages(w io.Writer, messages []api.ChatMessage) {
 			header += " (edited)"
 		}
 		fmt.Fprintf(w, "%s\n%s\n", header, message.BodyText)
+		if line := reactionLine(message.Reactions); line != "" {
+			fmt.Fprintf(w, "%s\n", line)
+		}
 	}
 }

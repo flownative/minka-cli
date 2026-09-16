@@ -95,6 +95,14 @@ type Comment struct {
 	Body      string
 	CreatedAt time.Time
 	EditedAt  *time.Time
+	Reactions []*Reaction
+}
+
+// Reaction is what people said about a comment or a message, the same content
+// counted together.
+type Reaction struct {
+	Content   string
+	PersonIDs []string // in the order they reacted in
 }
 
 type RecordedRequest struct {
@@ -160,6 +168,7 @@ type ChatMessage struct {
 	CreatedAt       time.Time
 	EditedAt        *time.Time
 	Removed         bool
+	Reactions       []*Reaction
 }
 
 func (c *Chat) post(authorID, text, clientMessageID string, now time.Time) *ChatMessage {
@@ -275,7 +284,8 @@ func New(t testing.TB) (*Server, *Fixture) {
 	board := &Board{ID: newID(), ProjectID: project.ID, Title: "API-3 Abnahme", Columns: []*Column{triage, doing, notNow, done}}
 
 	cardInTriage := &Card{ID: newID(), Title: "Write the CLI", Description: "<p>With <strong>Go</strong></p>", CreatedAt: s.now, CreatorID: bruno.ID,
-		Comments: []*Comment{{ID: newID(), AuthorID: bruno.ID, Body: "First comment", CreatedAt: s.now}}}
+		Comments: []*Comment{{ID: newID(), AuthorID: bruno.ID, Body: "First comment", CreatedAt: s.now,
+			Reactions: []*Reaction{{Content: "👍", PersonIDs: []string{anke.ID, bruno.ID}}, {Content: "🎉", PersonIDs: []string{anke.ID}}}}}}
 	cardInDoing := &Card{ID: newID(), Title: "Review the API", CreatedAt: s.now, CreatorID: bruno.ID}
 	secondInDoing := &Card{ID: newID(), Title: "Second in Doing", CreatedAt: s.now, CreatorID: bruno.ID}
 	triage.Cards = []*Card{cardInTriage}
@@ -294,7 +304,7 @@ func New(t testing.TB) (*Server, *Fixture) {
 
 	chat := &Chat{ID: newID(), ProjectID: project.ID, Name: "Planung", ReadMarks: map[string]int{bruno.ID: 1}}
 	chat.post(bruno.ID, "Hallo", "", s.now)
-	chat.post(anke.ID, "Zelt ist bestellt", "", s.now)
+	chat.post(anke.ID, "Zelt ist bestellt", "", s.now).Reactions = []*Reaction{{Content: "👍", PersonIDs: []string{bruno.ID}}}
 	chat.post(bruno.ID, "Danke", "", s.now)
 	otherChat := &Chat{ID: newID(), ProjectID: otherProject.ID, Name: "Secret chat", ReadMarks: map[string]int{}}
 	otherChat.post(stranger.ID, "Psst", "", s.now)
@@ -1320,6 +1330,7 @@ func (s *Server) chatMessageResource(message *ChatMessage) map[string]any {
 		"id": message.ID, "seq": message.Seq, "changeSeq": message.ChangeSeq,
 		"author": s.personReference(message.AuthorID), "bodyHtml": message.BodyHTML, "bodyText": message.BodyText, "bodySource": message.BodyHTML,
 		"createdAt": timestamp(message.CreatedAt), "editedAt": timestampOrNil(message.EditedAt), "removed": message.Removed,
+		"reactions": s.reactionResources(message.Reactions),
 	}
 }
 
@@ -1604,9 +1615,22 @@ func (s *Server) cardResource(board *Board, column *Column, card *Card) map[stri
 	}
 }
 
+func (s *Server) reactionResources(reactions []*Reaction) []any {
+	list := []any{}
+	for _, reaction := range reactions {
+		people := []any{}
+		for _, personID := range reaction.PersonIDs {
+			people = append(people, s.personReference(personID))
+		}
+		list = append(list, map[string]any{"content": reaction.Content, "people": people})
+	}
+	return list
+}
+
 func (s *Server) commentResource(comment *Comment) map[string]any {
 	return map[string]any{
 		"id": comment.ID, "author": s.personReference(comment.AuthorID), "body": comment.Body, "bodySource": comment.Body,
+		"reactions": s.reactionResources(comment.Reactions),
 		"createdAt": timestamp(comment.CreatedAt), "editedAt": timestampOrNil(comment.EditedAt),
 	}
 }

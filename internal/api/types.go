@@ -124,6 +124,14 @@ type Comment struct {
 	BodySource string          `json:"bodySource"` // the body as the editor opens it
 	CreatedAt  string          `json:"createdAt"`
 	EditedAt   *string         `json:"editedAt"`
+	Reactions  []Reaction      `json:"reactions"`
+}
+
+// Reaction is what people said about a comment or a message, the same content
+// counted together, in the order it was first left in.
+type Reaction struct {
+	Content string            `json:"content"` // mostly an emoji, at most 20 characters
+	People  []PersonReference `json:"people"`
 }
 
 type Chat struct {
@@ -168,6 +176,7 @@ type ChatMessage struct {
 	CreatedAt  string          `json:"createdAt"`
 	EditedAt   *string         `json:"editedAt"`
 	Removed    bool            `json:"removed"` // true only in an answer to After: the message is gone
+	Reactions  []Reaction      `json:"reactions"`
 }
 
 // MessagesQuery chooses the messages of a chat. Without Before and After it is
