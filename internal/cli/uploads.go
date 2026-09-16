@@ -18,28 +18,28 @@ import (
 const maxUploadBytes = 50 << 20
 
 func (a *app) newUploadsCmd() *cobra.Command {
-	return group("uploads", "Put files into a project and hang them in texts", a.newUploadsCreateCmd())
+	return group("uploads", "Put files into a project or a conversation and hang them in texts", a.newUploadsCreateCmd())
 }
 
 func (a *app) newUploadsCreateCmd() *cobra.Command {
-	var name, contentType string
+	var name, contentType, projectID, conversationID string
 
 	cmd := &cobra.Command{
-		Use:   "create <projectId> <file>",
-		Short: "Upload a file into a project",
-		Long: `Uploads a file into a project and answers with attachmentSource, the element
-that hangs the file in a text. Put it into the descriptionSource of a card or
-the bodySource of a comment or a message, unchanged, and send that back as
-HTML:
+		Use:   "create <file> (--project <projectId> | --conversation <conversationId>)",
+		Short: "Upload a file into a project or a private conversation",
+		Long: `Uploads a file and answers with attachmentSource, the element that hangs the
+file in a text. Put it into the descriptionSource of a card or the bodySource
+of a comment or a message, unchanged, and send that back as HTML:
 
-  SOURCE=$(minka uploads create <projectId> shot.png --quiet | jq -r .attachmentSource)
+  SOURCE=$(minka uploads create shot.png --project <projectId> --quiet | jq -r .attachmentSource)
   minka cards show <cardId> --quiet | jq -r .descriptionSource > text.html
   printf '%s' "$SOURCE" >> text.html
   minka cards edit <cardId> --description - --description-format html < text.html
 
-The attachment belongs to the project it was uploaded into. In a text of
-another project it is dropped on saving, without an error, so read the text
-back after saving if you want to be sure.
+A file belongs to the circle it was uploaded into: a file of a project hangs
+in the texts of that project, a file of a conversation in the messages of that
+conversation, and nowhere else. A foreign attachment is dropped while saving,
+without an error, so read the text back after saving if you want to be sure.
 
 A file is kept only once a text that carries it is saved. An upload no saved
 text points to is removed after seven days.
@@ -47,11 +47,24 @@ text points to is removed after seven days.
 The media type comes from the name of the file and, failing that, from its
 first bytes. Give --content-type where that guess is wrong: the server reads
 the bytes itself and refuses a file that contradicts what the type says.`,
-		Example: `  minka uploads create 0199... screenshot.png
-  minka uploads create 0199... report.csv --content-type text/csv`,
-		Args: requireArgs("projectId", "file"),
+		Example: `  minka uploads create screenshot.png --project 0199...
+  minka uploads create report.csv --project 0199... --content-type text/csv
+  minka uploads create shot.png --conversation 0199...`,
+		Args: requireArgs("file"),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			path := args[1]
+			flags := cmd.Flags()
+			if flags.Changed("project") == flags.Changed("conversation") {
+				return usageErrorf(cmd, "give --project or --conversation, not both and not neither")
+			}
+			if flags.Changed("project") {
+				if err := requireID(cmd, "--project", projectID); err != nil {
+					return err
+				}
+			} else if err := requireID(cmd, "--conversation", conversationID); err != nil {
+				return err
+			}
+
+			path := args[0]
 			file, err := os.Open(path)
 			if err != nil {
 				return &Error{Code: CodeUsage, Message: fmt.Sprintf("cannot read %s: %v", path, err)}
@@ -86,9 +99,17 @@ the bytes itself and refuses a file that contradicts what the type says.`,
 			if err != nil {
 				return err
 			}
-			upload, err := s.client.UploadFile(a.ctx, args[0], filename, mediaType, file, info.Size())
+			upload := s.client.UploadToProject
+			target := projectID
+			if conversationID != "" {
+				upload, target = s.client.UploadToConversation, conversationID
+			}
+			uploaded, err := upload(a.ctx, target, filename, mediaType, file, info.Size())
 			if err != nil {
 				e := s.fail(err)
+				if e.Code == CodeNotFound {
+					e.Hint = "There is no such project or conversation, or you are not in it."
+				}
 				switch e.APICode {
 				case "contentTypeMismatch":
 					e.Hint = "The bytes are not what their media type says. Give the right one with --content-type."
@@ -100,26 +121,39 @@ the bytes itself and refuses a file that contradicts what the type says.`,
 				return e
 			}
 
-			summary := fmt.Sprintf("Uploaded %s as %s, %s", upload.Value.Filename, upload.Value.Kind, fileSize(upload.Value.Size))
+			summary := fmt.Sprintf("Uploaded %s as %s, %s", uploaded.Value.Filename, uploaded.Value.Kind, fileSize(uploaded.Value.Size))
 			return a.ok(success{
-				data:    upload.Raw,
-				summary: summary,
-				notices: []string{"the file is kept only once a text that carries it is saved, and is removed after seven days if none does"},
-				breadcrumbs: []Breadcrumb{
-					{Action: "attach-to-card", Cmd: "minka cards edit <cardId> --description - --description-format html", Description: "Send a description that carries attachmentSource"},
-					{Action: "attach-to-comment", Cmd: "minka comments create <cardId> - --format html", Description: "Write a comment that carries attachmentSource"},
-				},
+				data:        uploaded.Raw,
+				summary:     summary,
+				notices:     []string{"the file is kept only once a text that carries it is saved, and is removed after seven days if none does"},
+				breadcrumbs: attachmentBreadcrumbs(conversationID != ""),
 				text: func(w io.Writer) {
-					fmt.Fprintf(w, "%s.\n%s\n\n%s\n", summary, upload.Value.AppURL, upload.Value.AttachmentSource)
+					fmt.Fprintf(w, "%s.\n%s\n\n%s\n", summary, uploaded.Value.AppURL, uploaded.Value.AttachmentSource)
 				},
 			})
 		},
 	}
 	flags := cmd.Flags()
+	flags.StringVar(&projectID, "project", "", "Project the file goes into")
+	flags.StringVar(&conversationID, "conversation", "", "Private conversation the file goes into")
 	flags.StringVar(&name, "name", "", "Name the file gets in Minka, by default the name it has here")
 	flags.StringVar(&contentType, "content-type", "", "Media type of the file, by default guessed from its name and its bytes")
 
 	return cmd
+}
+
+// attachmentBreadcrumbs say where an uploaded file can hang, which for a
+// conversation is nowhere but that conversation.
+func attachmentBreadcrumbs(inAConversation bool) []Breadcrumb {
+	if inAConversation {
+		return []Breadcrumb{
+			{Action: "attach-to-message", Cmd: "minka messages create <conversationId> - --format html", Description: "Say something that carries attachmentSource"},
+		}
+	}
+	return []Breadcrumb{
+		{Action: "attach-to-card", Cmd: "minka cards edit <cardId> --description - --description-format html", Description: "Send a description that carries attachmentSource"},
+		{Action: "attach-to-comment", Cmd: "minka comments create <cardId> - --format html", Description: "Write a comment that carries attachmentSource"},
+	}
 }
 
 // mediaTypeOf is what the file says it is: the type its name stands for, or

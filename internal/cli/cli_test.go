@@ -984,7 +984,7 @@ func TestAFileIsUploadedAsItIsAndComesBackAsAnAttachment(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	env, r := e.runJSON("", "uploads", "create", e.fixture.Project.ID, path)
+	env, r := e.runJSON("", "uploads", "create", path, "--project", e.fixture.Project.ID)
 	expectCode(t, r, ExitOK)
 	upload := decode(t, env.Data)
 	if upload["filename"] != "plan.png" || upload["contentType"] != "image/png" || upload["kind"] != "image" {
@@ -1021,7 +1021,7 @@ func TestAFileIsUploadedAsItIsAndComesBackAsAnAttachment(t *testing.T) {
 	if err := os.WriteFile(page, []byte("<html><body>notes</body></html>"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	_, r = e.runJSON("", "uploads", "create", e.fixture.Project.ID, page)
+	_, r = e.runJSON("", "uploads", "create", page, "--project", e.fixture.Project.ID)
 	expectCode(t, r, ExitOK)
 	requests = e.server.Requests()
 	if got := requests[len(requests)-1].Header.Get("Content-Type"); got != "text/plain; charset=utf-8" {
@@ -1033,6 +1033,74 @@ func TestAFileIsUploadedAsItIsAndComesBackAsAnAttachment(t *testing.T) {
 	expectCode(t, r, ExitOK)
 	if description := e.fixture.CardInTriage.Description; !strings.Contains(description, "action-text-attachment") {
 		t.Errorf("description %q", description)
+	}
+}
+
+// A file of a conversation goes to the address of that conversation, and only
+// the two people there may put one in.
+func TestAFileGoesIntoTheCircleTheFlagNames(t *testing.T) {
+	e := newTestEnv(t)
+	path := filepath.Join(t.TempDir(), "plan.png")
+	if err := os.WriteFile(path, onePixelPNG(), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	env, r := e.runJSON("", "uploads", "create", path, "--conversation", e.fixture.Conversation.ID)
+	expectCode(t, r, ExitOK)
+	source, _ := decode(t, env.Data)["attachmentSource"].(string)
+	if !strings.Contains(source, "conversation:"+e.fixture.Conversation.ID) {
+		t.Errorf("the attachment does not belong to the conversation: %q", source)
+	}
+	if request := e.server.Requests()[0]; request.Path != "/api/v1/messages/"+e.fixture.Conversation.ID+"/uploads" {
+		t.Errorf("request %s", request.Path)
+	}
+	for _, crumb := range env.Breadcrumbs {
+		if strings.Contains(crumb.Cmd, "cards") {
+			t.Errorf("a conversation has no cards: %+v", crumb)
+		}
+	}
+
+	// A file of a project carries a handle of that project, not of a talk.
+	env, r = e.runJSON("", "uploads", "create", path, "--project", e.fixture.Project.ID)
+	expectCode(t, r, ExitOK)
+	if source, _ := decode(t, env.Data)["attachmentSource"].(string); strings.Contains(source, "conversation:") {
+		t.Errorf("attachment of a project %q", source)
+	}
+
+	// Somebody outside the two finds nothing at that address.
+	e.vars["MINKA_TOKEN"] = e.fixture.StrangerToken
+	env, r = e.runJSON("", "uploads", "create", path, "--conversation", e.fixture.Conversation.ID)
+	expectCode(t, r, ExitNotFound)
+	if !strings.Contains(env.Hint, "not in it") {
+		t.Errorf("hint %q", env.Hint)
+	}
+}
+
+func TestAnUploadNamesOneCircleToGoInto(t *testing.T) {
+	e := newTestEnv(t)
+	path := filepath.Join(t.TempDir(), "plan.png")
+	if err := os.WriteFile(path, onePixelPNG(), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, args := range [][]string{
+		{},
+		{"--project", "0192f3a4-5b6c-4d7e-8f90-a1b2c3d4e5f6", "--conversation", "0192f3a4-5b6c-4d7e-8f90-a1b2c3d4e5f7"},
+	} {
+		env, r := e.runJSON("", append([]string{"uploads", "create", path}, args...)...)
+		expectCode(t, r, ExitUsage)
+		if !strings.Contains(env.Error, "--project or --conversation") {
+			t.Errorf("error for %v: %q", args, env.Error)
+		}
+	}
+
+	env, r := e.runJSON("", "uploads", "create", path, "--project", "not-an-id")
+	expectCode(t, r, ExitUsage)
+	if !strings.Contains(env.Error, "not an ID") {
+		t.Errorf("error %q", env.Error)
+	}
+	if n := len(e.server.Requests()); n != 0 {
+		t.Errorf("%d requests for uploads that name no circle", n)
 	}
 }
 
@@ -1049,26 +1117,26 @@ func TestAnUploadIsRefusedWhenTheFileOrItsTypeIsWrong(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	env, r := e.runJSON("", "uploads", "create", e.fixture.Project.ID, words)
+	env, r := e.runJSON("", "uploads", "create", words, "--project", e.fixture.Project.ID)
 	expectCode(t, r, ExitValidation)
 	if env.Meta["apiCode"] != "contentTypeMismatch" || !strings.Contains(env.Hint, "--content-type") {
 		t.Errorf("envelope %+v", env)
 	}
 
 	// Named for what it is, the same file goes through.
-	_, r = e.runJSON("", "uploads", "create", e.fixture.Project.ID, words, "--content-type", "text/plain", "--name", "notes.txt")
+	_, r = e.runJSON("", "uploads", "create", words, "--project", e.fixture.Project.ID, "--content-type", "text/plain", "--name", "notes.txt")
 	expectCode(t, r, ExitOK)
 	if last := e.server.Requests()[len(e.server.Requests())-1]; last.Query != "filename=notes.txt" {
 		t.Errorf("query %q", last.Query)
 	}
 
 	sent := len(e.server.Requests())
-	env, r = e.runJSON("", "uploads", "create", e.fixture.Project.ID, filepath.Join(dir, "nothing.png"))
+	env, r = e.runJSON("", "uploads", "create", filepath.Join(dir, "nothing.png"), "--project", e.fixture.Project.ID)
 	expectCode(t, r, ExitUsage)
 	if !strings.Contains(env.Error, "cannot read") {
 		t.Errorf("a file that is not there: %q", env.Error)
 	}
-	env, r = e.runJSON("", "uploads", "create", e.fixture.Project.ID, dir)
+	env, r = e.runJSON("", "uploads", "create", dir, "--project", e.fixture.Project.ID)
 	expectCode(t, r, ExitUsage)
 	if !strings.Contains(env.Error, "is a directory, not a file") {
 		t.Errorf("a directory: %q", env.Error)
@@ -1077,11 +1145,11 @@ func TestAnUploadIsRefusedWhenTheFileOrItsTypeIsWrong(t *testing.T) {
 		t.Errorf("%d requests for files that cannot be sent", now-sent)
 	}
 
-	_, r = e.runJSON("", "uploads", "create", e.fixture.OtherProject.ID, png)
+	_, r = e.runJSON("", "uploads", "create", png, "--project", e.fixture.OtherProject.ID)
 	expectCode(t, r, ExitNotFound)
 
 	e.server.FailNextWith(http.StatusRequestEntityTooLarge)
-	env, r = e.runJSON("", "uploads", "create", e.fixture.Project.ID, png)
+	env, r = e.runJSON("", "uploads", "create", png, "--project", e.fixture.Project.ID)
 	expectCode(t, r, ExitValidation)
 	if env.Retryable {
 		t.Errorf("envelope %+v", env)
