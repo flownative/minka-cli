@@ -426,8 +426,8 @@ oben; 404 nur bei einer ungültigen ID. Der Fake folgte dem schon.
 - Reaktionen (Minka `f006bd4`, E-106) sind gelesen umgesetzt: `reactions` an
   Kommentaren und Nachrichten, in der Textansicht als eine Zeile darunter.
   Schreiben gibt es seit E-114 auch: `comments react|unreact` und `messages
-  react|unreact`. In privaten Gesprächen antwortet die API noch mit 404, das
-  ist im Bau. Die Fake-API normalisiert den Text einer Reaktion nicht nach
+  react|unreact`, seit E-118 auch an Nachrichten privater Gespräche unter
+  deren ID. Die Fake-API normalisiert den Text einer Reaktion nicht nach
   Unicode NFC, der Server tut es.
 - Die Fake-API kennt keine Organisationen. Dass ein Gespräch mit jemandem aus
   einer fremden Organisation mit 404 endet, ist deshalb nur gegen den Code

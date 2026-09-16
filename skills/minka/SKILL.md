@@ -302,8 +302,8 @@ such as `Doing`.
   not bound to whoever left it: it takes your own reaction of that text, and
   where you left none, the one somebody else left last. Taking away what is
   not there succeeds as well.
-- Private conversations answer 2 to both for now; reacting there is being
-  built.
+- A message of a private conversation takes a reaction the same way, under the
+  ID of the conversation; somebody outside the two exits 2.
 - Comments are rich text like descriptions. `comments create` converts
   Markdown and keeps every line break, so plain text arrives as typed;
   `--format html` sends HTML as it is. `cards show --styled` shows comments as
