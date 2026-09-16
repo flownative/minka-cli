@@ -18,12 +18,17 @@ import (
 // at most 25 cards in Done, so real responses stay far below it.
 const maxResponseBytes = 16 << 20
 
+// uploadTimeout is what sending the bytes of a file may take. It is far above
+// the timeout of the other requests, which carry nothing but JSON.
+const uploadTimeout = 10 * time.Minute
+
 // Client talks to one Minka host with one access token.
 type Client struct {
 	host      string
 	token     string
 	userAgent string
 	http      *http.Client
+	uploads   *http.Client
 }
 
 // New returns a client for a host such as "https://minka.localbeach.net".
@@ -31,15 +36,20 @@ type Client struct {
 // The client never follows a redirect. A redirect would carry the token to an
 // address the user did not name, and the API has no reason to send one.
 func New(host, token, userAgent string) *Client {
+	noRedirect := func(*http.Request, []*http.Request) error {
+		return http.ErrUseLastResponse
+	}
 	return &Client{
 		host:      strings.TrimRight(host, "/"),
 		token:     token,
 		userAgent: userAgent,
 		http: &http.Client{
-			Timeout: 30 * time.Second,
-			CheckRedirect: func(*http.Request, []*http.Request) error {
-				return http.ErrUseLastResponse
-			},
+			Timeout:       30 * time.Second,
+			CheckRedirect: noRedirect,
+		},
+		uploads: &http.Client{
+			Timeout:       uploadTimeout,
+			CheckRedirect: noRedirect,
 		},
 	}
 }
@@ -236,22 +246,38 @@ func (c *Client) WriteComment(ctx context.Context, cardID string, body string) (
 	return request[Comment](ctx, c, http.MethodPost, "/cards/"+url.PathEscape(cardID)+"/comments", map[string]string{"body": body})
 }
 
+// UploadFile puts a file into a project. The bytes go into the body as they
+// are, with their media type in the header and the name of the file in the
+// query, and are read while they are sent, so a large file is never held in
+// memory whole.
+func (c *Client) UploadFile(ctx context.Context, projectID, filename, contentType string, content io.Reader, size int64) (Result[Upload], error) {
+	path := "/projects/" + url.PathEscape(projectID) + "/uploads?filename=" + url.QueryEscape(filename)
+	return send[Upload](ctx, c, c.uploads, http.MethodPost, path, content, contentType, size)
+}
+
 // request sends a request to a path below /api/v1. Every identifier in the
 // path has to be escaped by the caller, or an identifier like "../me" would
 // address another resource.
 func request[T any](ctx context.Context, c *Client, method, path string, body any) (Result[T], error) {
-	var result Result[T]
-
-	var requestBody io.Reader
-	if body != nil {
-		encoded, err := json.Marshal(body)
-		if err != nil {
-			return result, fmt.Errorf("encoding the request body: %w", err)
-		}
-		requestBody = bytes.NewReader(encoded)
+	if body == nil {
+		return send[T](ctx, c, c.http, method, path, nil, "", -1)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, method, c.host+"/api/v1"+path, requestBody)
+	encoded, err := json.Marshal(body)
+	if err != nil {
+		var result Result[T]
+		return result, fmt.Errorf("encoding the request body: %w", err)
+	}
+	return send[T](ctx, c, c.http, method, path, bytes.NewReader(encoded), "application/json", int64(len(encoded)))
+}
+
+// send carries out one request. A size of less than zero means that the
+// request has no body; a size of zero or more is what the server is told to
+// expect, so that it can refuse a file before it reads it.
+func send[T any](ctx context.Context, c *Client, httpClient *http.Client, method, path string, body io.Reader, contentType string, size int64) (Result[T], error) {
+	var result Result[T]
+
+	req, err := http.NewRequestWithContext(ctx, method, c.host+"/api/v1"+path, body)
 	if err != nil {
 		return result, fmt.Errorf("building the request: %w", err)
 	}
@@ -260,11 +286,14 @@ func request[T any](ctx context.Context, c *Client, method, path string, body an
 	if c.userAgent != "" {
 		req.Header.Set("User-Agent", c.userAgent)
 	}
-	if body != nil {
-		req.Header.Set("Content-Type", "application/json")
+	if contentType != "" {
+		req.Header.Set("Content-Type", contentType)
+	}
+	if size >= 0 {
+		req.ContentLength = size
 	}
 
-	resp, err := c.http.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return result, &NetworkError{Method: method, Err: err}
 	}

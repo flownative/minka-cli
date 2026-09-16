@@ -100,7 +100,8 @@ func apiError(err error, host string) *Error {
 		case status == http.StatusNotFound:
 			e.Code = CodeNotFound
 			e.Hint = "It does not exist, or it belongs to a project you are not a member of."
-		case status == http.StatusBadRequest || status == http.StatusUnsupportedMediaType || status == http.StatusUnprocessableEntity:
+		case status == http.StatusBadRequest || status == http.StatusUnsupportedMediaType ||
+			status == http.StatusRequestEntityTooLarge || status == http.StatusUnprocessableEntity:
 			e.Code = CodeValidation
 		case status >= 500:
 			if apiErr.Method == http.MethodGet {

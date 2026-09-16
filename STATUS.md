@@ -29,6 +29,7 @@ minka steps list|create|complete|reopen|delete
 minka comments create|edit|delete <cardId> ...
 minka chats list <projectId> | mark-read <chatId>
 minka messages list|create|edit|delete <chatId> ...
+minka uploads create <projectId> <datei>
 minka commands            Katalog aller Befehle mit Flags
 minka version
 ```
@@ -278,6 +279,14 @@ genannte Test wird rot. Zuletzt am 13.09.2026 nach dem Review ausgeführt:
 | Typname und gleicher Titel mehrdeutig | `TestATypeThatIsAlsoTheTitleOfAnotherColumnIsAmbiguous` |
 | HTML → Markdown: Zeilenanfänge escaped, `<br>` hart | `TestTextWithoutMarkupStaysText` |
 | Entfernte Chat-Nachricht nicht im Verlauf | `TestARemovedMessageIsGoneFromTheTranscript` |
+| Dateiname eines Uploads in der Query escaped | `TestTheNameOfAnUploadedFileIsEscapedInTheQuery` (api) |
+| Projekt-ID eines Uploads im Pfad escaped | `TestIdentifiersAreEscapedInThePath` (api) |
+| Medientyp aus dem Dateinamen, nicht nur aus den Bytes | `TestAFileIsUploadedAsItIsAndComesBackAsAnAttachment` |
+| Länge des Uploads angekündigt (`Content-Length`) | `TestAFileIsUploadedAsItIsAndComesBackAsAnAttachment` |
+| Die Bytes gehen unverändert zum Server | `TestAFileIsUploadedAsItIsAndComesBackAsAnAttachment` |
+| Verzeichnis wird nicht hochgeladen | `TestAnUploadIsRefusedWhenTheFileOrItsTypeIsWrong` |
+| 413 gilt als Validierungsfehler (Exit 9) | `TestAnUploadIsRefusedWhenTheFileOrItsTypeIsWrong` |
+| Hinweis auf `--content-type` bei falschem Typ | `TestAnUploadIsRefusedWhenTheFileOrItsTypeIsWrong` |
 | Kommentar mit Anhängen: neuer Text nur mit `--drop-attachments`, Quelle als HTML erlaubt | `TestACommentWithAttachmentsIsNotReplacedUnlessAsked` |
 | `comments edit` sendet HTML, nicht das Markdown | `TestOnlyTheAuthorChangesOrRemovesAComment` |
 | Hinweis „nur der Autor“ bei 404 | `TestOnlyTheAuthorChangesOrRemovesAComment` |
@@ -361,9 +370,6 @@ oben; 404 nur bei einer ungültigen ID. Der Fake folgte dem schon.
 
 ## Offene Punkte
 
-- Uploads (`POST /projects/{p}/uploads`, `PUT`) gibt es in der API, das
-  Anhängen an Karten noch nicht. Uploads gehören laut Briefing nicht zum
-  Umfang der CLI; minka-63 meldet, wenn Anhängen per API kommt.
 - Seit Minka `268065d` kommt jeder Text zweimal: gespeichert und als Quelle
   (`descriptionSource`, `bodySource`). Dateien und Erwähnungen stehen darin
   als `action-text-attachment` mit frischer Signatur, `url`, `filename` und
@@ -393,25 +399,28 @@ oben; 404 nur bei einer ungültigen ID. Der Fake folgte dem schon.
   Schritt einer anderen Karte oder auf eine ungültige Schritt-ID gibt bewusst
   204 (E-067), 404 nur für eine fremde Karte.
 - Umbenennen und Umsortieren von Schritten gibt es in der API noch nicht.
-- Uploads gibt es seit Minka `30a19d2` auch in der API:
+- Uploads: seit Minka `30a19d2` in der API und seit dem 16.09.2026 in der CLI
+  als `uploads create` (Shaun hat entschieden, dass sie dazugehören):
   `POST /api/v1/projects/{projectId}/uploads?filename=…`, Rumpf sind die rohen
   Bytes, `Content-Type` ist Pflicht, höchstens 50 MiB. Die Antwort trägt
   `attachmentSource`, das fertige `action-text-attachment` mit frischer
   Signatur, das unverändert in `descriptionSource` oder `bodySource` gehört.
-  Damit könnte die CLI Dateien anhängen, obwohl das Briefing Uploads
-  ausschließt. Die Entscheidung liegt bei Shaun, minka-c2 hat sie ihm als Karte
-  vorgelegt. Was für die Umsetzung schon feststeht (von minka-c2, im Code
-  nachgesehen):
+  Damit hängt die CLI Dateien an Texte an, obwohl das Briefing Uploads
+  ausschloss. Was dabei gilt (von minka-c2, im Code nachgesehen):
   - Die Signatur in `attachmentSource` verfällt nie, sie steht ja dauerhaft im
     gespeicherten Text. Ein Handle aus einem fremden Projekt wird beim
     Speichern aber stillschweigend aus dem Text genommen, ohne Fehler. Die CLI
-    darf `attachmentSource` also nur in Texte desselben Projekts setzen und
-    sollte nach dem Speichern prüfen, ob der Anhang noch da ist.
+    setzt `attachmentSource` also nur in Texte desselben Projekts; die Hilfe
+    und die SKILL.md sagen, dass man den Text nach dem Speichern zurücklesen
+    sollte. Die Fake-API bildet dieses stille Entfernen nicht nach.
   - Ein Upload, auf den nach sieben Tagen kein gespeicherter Text zeigt, wird
     weggeräumt (`uploads:collectGarbage`, Vorgaben 168 und 24 Stunden). Erst
     das Speichern des Textes macht ihn dauerhaft; das gehört in die Hilfe.
   - Uploads hängen am Projekt, nicht am Board oder Chat. Zum Testen reicht das
     Test-Projekt.
+  - Der Server liest den Medientyp aus den Bytes und widerspricht dem Header
+    nur, wenn eine der beiden Seiten ein Bild ist (`UploadedBytes`). Die
+    Fake-API hält sich an dieselbe Regel.
 - Projekte haben seit Minka `ccd0439` Chat-Werkzeuge (`type=chat`).
   `boards list` zeigt nur Boards.
 - Die erweiterte Allowlist (`72d0639`) und Kommentare als Rich Text
@@ -425,6 +434,15 @@ oben; 404 nur bei einer ungültigen ID. Der Fake folgte dem schon.
 - Das Token `minka-cli-smoke` liegt in `~/.config/minka/config.json`.
   Widerrufen beim Umstieg auf das Dogfooding zur internen Alpha. Das
   Agentenkonto „Claude (Robert)" ist schon Mitglied im Minka-Projekt.
+- Uploads (Minka `30a19d2`) sind am 16.09.2026 live geprüft, im Test-Projekt:
+  Ein PNG kommt als `kind: image` zurück, eine CSV-Datei als `kind: file` mit
+  `contentType: text/csv`. Das `attachmentSource` aus der Antwort, unverändert
+  als Beschreibung einer Testkarte gespeichert, steht danach im
+  `descriptionSource` und erscheint in `cards show --styled` als
+  Markdown-Bild auf die `display`-Variante. Eine CSV-Datei mit der Endung
+  `.png` endet mit Exit 9 `contentTypeMismatch`, ein fremdes Projekt mit
+  Exit 2. Testkarte danach gelöscht; die Uploads räumt Minka nach sieben Tagen
+  selbst weg.
 - Entfernte Chat-Nachrichten ohne Grabstein (Minka `2b6b3b1`, E-097) sind am
   16.09.2026 live im Chat „Chat1 Abnahme“ geprüft, an einer eigenen Nachricht:
   Nach `messages delete` ist sie weder ohne Parameter noch mit `--before` im

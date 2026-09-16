@@ -115,6 +115,7 @@ minka messages create <chatId> - [--client-message-id <uuid>] --json < message.t
 minka messages edit <chatId> <messageId> - --json < message.txt
 minka messages delete <chatId> <messageId> --json
 minka chats mark-read <chatId> [--seq <seq>] --json
+minka uploads create <projectId> <file> [--name <name>] [--content-type <type>] --json
 ```
 
 `<column>` is a column ID, a type (`triage`, `not_now`, `done`) or a title
@@ -227,7 +228,7 @@ such as `Doing`.
   them, take `descriptionSource` from `minka cards show <cardId> --quiet`,
   change it and send it back with `cards edit --description - --description-format html`.
   A new description that would drop them is refused (exit 1) unless
-  `--drop-attachments` is given. Files cannot be uploaded through the CLI.
+  `--drop-attachments` is given.
 - `cards show --styled` prints the description as Markdown, which can be edited
   and sent back with `cards edit --description -`.
 - Comments are rich text like descriptions. `comments create` converts
@@ -241,6 +242,36 @@ such as `Doing`.
   edit` refuses a new text that would drop attachments or mentions unless
   `--drop-attachments` is given; send the comment's `bodySource` back with
   `--format html` to keep them.
+
+## Uploads
+
+- `uploads create <projectId> <file>` puts a file into a project and answers
+  with `{id, filename, contentType, size, kind, appUrl, attachmentSource}`.
+  `kind` is `image` for a picture, which is shown where it stands, and `file`
+  for everything else, which is handed over.
+- `attachmentSource` is the whole point: the `<action-text-attachment>` element
+  with a signature only the server can make. Put it into a `descriptionSource`
+  or a `bodySource`, unchanged, and send that back as HTML:
+
+```bash
+SOURCE=$(minka uploads create <projectId> shot.png --quiet | jq -r .attachmentSource)
+minka cards show <cardId> --quiet | jq -r .descriptionSource > text.html
+printf '\n%s' "$SOURCE" >> text.html
+minka cards edit <cardId> --description - --description-format html < text.html
+```
+
+- The attachment belongs to the project it went into. In a text of another
+  project the server drops it while saving, without an error, so read the text
+  back if it matters.
+- A file is kept only once a text carrying it is saved. An upload no saved text
+  points to is removed after seven days.
+- The media type comes from the name of the file, and from its first bytes
+  where the name says nothing. `--content-type` gives it instead. The server
+  reads the bytes itself: a file that says it is a picture and is not exits 9
+  with `meta.apiCode` `contentTypeMismatch`, a broken picture `notReadable`.
+- At most 50 MiB. A larger file exits 1 before it travels, and a server that
+  refuses one exits 9 with `tooLarge`.
+- `--name` gives the file another name in Minka than it has here.
 
 ## Common workflows
 
