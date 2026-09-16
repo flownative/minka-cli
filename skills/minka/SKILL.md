@@ -97,6 +97,7 @@ minka cards edit <cardId> [--title "New"] [--due YYYY-MM-DD] [--description - < 
 minka cards move <cardId> --column <column> [--top | --bottom | --after <cardId> | --before <cardId>] --json
 minka cards done <cardId> --json
 minka cards delete <cardId> --json
+minka cards restore <cardId> --json
 minka people list <projectId> --json
 minka cards assign <cardId> <person> --json
 minka cards unassign <cardId> <person> --json
@@ -134,6 +135,11 @@ such as `Doing`.
   the overdue ones first and the ones without a date last.
 - It is the cheapest way to answer "what am I on?": one request instead of a
   board per project.
+- `cards delete` puts a card in the trash and `cards restore <cardId>` takes it
+  back out, on top of the column it hung in. Only a card that is in the trash
+  can be restored: a second restore, a card that was never trashed and a card
+  whose board or project is in the trash all exit 2. Nothing lists the trash,
+  so keep the ID of a card you delete if you may want it back.
 
 ## Boards
 

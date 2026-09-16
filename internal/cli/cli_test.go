@@ -774,6 +774,40 @@ func TestAGroupWithoutSubcommandShowsHelp(t *testing.T) {
 	}
 }
 
+// A card in the trash comes back on top of the column it hung in, and only
+// once: a second restore finds nothing there.
+func TestACardComesBackFromTheTrashOnce(t *testing.T) {
+	e := newTestEnv(t)
+	card := e.fixture.CardInDoing
+
+	_, r := e.runJSON("", "cards", "delete", card.ID)
+	expectCode(t, r, ExitOK)
+	_, r = e.runJSON("", "cards", "show", card.ID)
+	expectCode(t, r, ExitNotFound)
+
+	env, r := e.runJSON("", "cards", "restore", card.ID)
+	expectCode(t, r, ExitOK)
+	if restored := decode(t, env.Data); restored["id"] != card.ID || decode(t, env.Data)["column"].(map[string]any)["title"] != "Doing" {
+		t.Errorf("restored card %s", env.Data)
+	}
+	if first := e.fixture.Doing.Cards[0]; first != card {
+		t.Errorf("the card did not come back on top: %s", first.Title)
+	}
+
+	env, r = e.runJSON("", "cards", "restore", card.ID)
+	expectCode(t, r, ExitNotFound)
+	if !strings.Contains(env.Hint, "trash") {
+		t.Errorf("hint %q", env.Hint)
+	}
+	// A card in the trash of a project somebody is no member of stays there.
+	e.server.Trash = append(e.server.Trash, &fakeapi.TrashedCard{Card: e.fixture.OtherCard, Column: e.fixture.OtherBoard.Columns[0]})
+	_, r = e.runJSON("", "cards", "restore", e.fixture.OtherCard.ID)
+	expectCode(t, r, ExitNotFound)
+	if len(e.server.Trash) != 1 {
+		t.Error("the card of the other project left the trash")
+	}
+}
+
 // The cards somebody is responsible for come from every project at once, in
 // the order of the page: by project, then by due date with the ones without a
 // date last.
@@ -968,7 +1002,7 @@ func TestTheCatalogListsEveryCommandWithItsFlags(t *testing.T) {
 	for _, cmd := range catalog.Commands {
 		byName[cmd.Command] = cmd
 	}
-	for _, name := range []string{"minka auth login", "minka me", "minka projects list", "minka boards list", "minka boards show", "minka cards show", "minka cards create", "minka cards edit", "minka cards move", "minka cards done", "minka cards delete", "minka cards assign", "minka cards unassign", "minka people list", "minka steps list", "minka steps create", "minka steps complete", "minka steps reopen", "minka steps delete", "minka comments create", "minka chats list", "minka chats mark-read", "minka messages list", "minka messages create", "minka messages edit", "minka messages delete", "minka cards subscribe", "minka cards unsubscribe", "minka comments edit", "minka comments delete", "minka uploads create", "minka cards mine"} {
+	for _, name := range []string{"minka auth login", "minka me", "minka projects list", "minka boards list", "minka boards show", "minka cards show", "minka cards create", "minka cards edit", "minka cards move", "minka cards done", "minka cards delete", "minka cards assign", "minka cards unassign", "minka people list", "minka steps list", "minka steps create", "minka steps complete", "minka steps reopen", "minka steps delete", "minka comments create", "minka chats list", "minka chats mark-read", "minka messages list", "minka messages create", "minka messages edit", "minka messages delete", "minka cards subscribe", "minka cards unsubscribe", "minka comments edit", "minka comments delete", "minka uploads create", "minka cards mine", "minka cards restore"} {
 		if _, ok := byName[name]; !ok {
 			t.Errorf("catalog misses %q", name)
 		}

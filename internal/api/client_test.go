@@ -30,6 +30,7 @@ func TestIdentifiersAreEscapedInThePath(t *testing.T) {
 	_ = client.DeleteMessage(context.Background(), "c", "../m")
 	_ = client.Unsubscribe(context.Background(), "c", "../p")
 	_ = client.DeleteComment(context.Background(), "c", "../k")
+	_, _ = client.RestoreCard(context.Background(), "../x")
 	_, _ = client.UploadFile(context.Background(), "p/q", "../plan.png", "image/png", strings.NewReader("x"), 1)
 
 	want := []string{
@@ -44,6 +45,7 @@ func TestIdentifiersAreEscapedInThePath(t *testing.T) {
 		"/api/v1/chats/c/messages/..%2Fm",
 		"/api/v1/cards/c/subscribers/..%2Fp",
 		"/api/v1/cards/c/comments/..%2Fk",
+		"/api/v1/cards/..%2Fx/restore",
 		"/api/v1/projects/p%2Fq/uploads",
 	}
 	if !slices.Equal(paths, want) {

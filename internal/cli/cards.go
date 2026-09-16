@@ -34,6 +34,7 @@ func (a *app) newCardsCmd() *cobra.Command {
 		a.newCardsUnsubscribeCmd(),
 		a.newCardsDoneCmd(),
 		a.newCardsDeleteCmd(),
+		a.newCardsRestoreCmd(),
 	)
 }
 
@@ -68,6 +69,43 @@ Every card names the project and the board it hangs on.`,
 				},
 				text: func(w io.Writer) {
 					renderMyCards(w, cards.Value, time.Now().Format(dayFormat))
+				},
+			})
+		},
+	}
+}
+
+func (a *app) newCardsRestoreCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "restore <cardId>",
+		Short: "Take a card out of the trash",
+		Long: `Takes a card out of the trash and puts it back on top of the column it hung in.
+
+Only a card that is in the trash can be restored. A card that was never there,
+a card restored already and a card whose board or project is itself in the
+trash all answer with 2 (not_found), and so does a second restore.`,
+		Args: requireArgs("cardId"),
+		RunE: func(_ *cobra.Command, args []string) error {
+			s, err := a.session()
+			if err != nil {
+				return err
+			}
+			card, err := s.client.RestoreCard(a.ctx, args[0])
+			if err != nil {
+				e := s.fail(err)
+				if e.Code == CodeNotFound {
+					e.Hint = "The card is not in the trash, or its board or project is. A card can only be restored once."
+				}
+				return e
+			}
+
+			summary := fmt.Sprintf("Restored card %s to %s", card.Value.Title, card.Value.Column.Title)
+			return a.ok(success{
+				data:        card.Raw,
+				summary:     summary,
+				breadcrumbs: cardBreadcrumbs(card.Value.ID),
+				text: func(w io.Writer) {
+					fmt.Fprintf(w, "%s.\n%s\n", summary, card.Value.AppURL)
 				},
 			})
 		},
