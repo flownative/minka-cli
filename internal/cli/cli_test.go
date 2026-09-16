@@ -884,6 +884,18 @@ func TestAReactionIsLeftOnceAndComesOffAgain(t *testing.T) {
 		t.Errorf("reactions left: %+v", message.Reactions)
 	}
 
+	// A message of a private conversation takes a reaction the same way.
+	private := e.fixture.Conversation.Messages[0]
+	env, r = e.runJSON("", "messages", "react", e.fixture.Conversation.ID, private.ID, "👍")
+	expectCode(t, r, ExitOK)
+	if countOf(t, env.Data, "👍") != 1 {
+		t.Errorf("message of a conversation %s", env.Data)
+	}
+	e.vars["MINKA_TOKEN"] = e.fixture.StrangerToken
+	_, r = e.runJSON("", "messages", "react", e.fixture.Conversation.ID, private.ID, "👎")
+	expectCode(t, r, ExitNotFound)
+	e.vars["MINKA_TOKEN"] = e.fixture.Token
+
 	// A message of another chat of this person is as unreachable as one that
 	// is not there.
 	_, r = e.runJSON("", "messages", "react", e.fixture.Chat.ID, e.fixture.Conversation.Messages[0].ID, "👀")
