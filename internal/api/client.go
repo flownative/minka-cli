@@ -180,6 +180,19 @@ func (c *Client) DeleteStep(ctx context.Context, cardID, stepID string) error {
 	return err
 }
 
+// Conversations lists the private conversations of the person of the token,
+// the ones with the newest word first.
+func (c *Client) Conversations(ctx context.Context) (Result[[]Conversation], error) {
+	return request[[]Conversation](ctx, c, http.MethodGet, "/messages", nil)
+}
+
+// StartConversation begins a private conversation with somebody, or answers
+// with the one these two have already. The status code is 201 for a new
+// conversation and 200 for one that stood already.
+func (c *Client) StartConversation(ctx context.Context, personID string) (Result[Conversation], error) {
+	return request[Conversation](ctx, c, http.MethodPost, "/messages/with/"+url.PathEscape(personID), nil)
+}
+
 func (c *Client) Chats(ctx context.Context, projectID string) (Result[[]Chat], error) {
 	return request[[]Chat](ctx, c, http.MethodGet, "/projects/"+url.PathEscape(projectID)+"/chats", nil)
 }

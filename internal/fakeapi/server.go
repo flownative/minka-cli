@@ -107,12 +107,19 @@ type RecordedRequest struct {
 
 type Chat struct {
 	ID        string
-	ProjectID string
+	ProjectID string   // empty for a private conversation
+	Partners  []string // the two people of a private conversation, nobody for a chat of a project
 	Name      string
 	Messages  []*ChatMessage // in the order of the transcript
 	ReadMarks map[string]int // person ID → the seq read up to
 
 	lastChangeSeq int
+}
+
+// isConversation says whether this is a private talk, which has people instead
+// of a project and is addressed by the same endpoints.
+func (c *Chat) isConversation() bool {
+	return len(c.Partners) > 0
 }
 
 // TrashedCard is a card that was taken off a board, together with the column
@@ -235,6 +242,7 @@ type Fixture struct {
 	OtherCard     *Card
 	Chat          *Chat // three messages by Bruno, Anke and Bruno; Bruno has read the first
 	OtherChat     *Chat
+	Conversation  *Chat // Bruno and Anke privately; her one word is unread
 }
 
 // New starts a fake with a small fixture: Bruno is a member of one project
@@ -290,7 +298,9 @@ func New(t testing.TB) (*Server, *Fixture) {
 	chat.post(bruno.ID, "Danke", "", s.now)
 	otherChat := &Chat{ID: newID(), ProjectID: otherProject.ID, Name: "Secret chat", ReadMarks: map[string]int{}}
 	otherChat.post(stranger.ID, "Psst", "", s.now)
-	s.Chats = []*Chat{chat, otherChat}
+	conversation := &Chat{ID: newID(), Partners: []string{bruno.ID, anke.ID}, ReadMarks: map[string]int{}}
+	conversation.post(anke.ID, "Hast du kurz Zeit?", "", s.now)
+	s.Chats = []*Chat{chat, otherChat, conversation}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v1/me", s.authenticated(s.me))
@@ -316,6 +326,8 @@ func New(t testing.TB) (*Server, *Fixture) {
 	mux.HandleFunc("POST /api/v1/cards/{cardId}/subscribers/{personId}", s.authenticated(s.subscribeToCard))
 	mux.HandleFunc("DELETE /api/v1/cards/{cardId}/subscribers/{personId}", s.authenticated(s.unsubscribeFromCard))
 	mux.HandleFunc("GET /api/v1/projects/{projectId}/chats", s.authenticated(s.chats))
+	mux.HandleFunc("GET /api/v1/messages", s.authenticated(s.conversations))
+	mux.HandleFunc("POST /api/v1/messages/with/{personId}", s.authenticated(s.startConversation))
 	mux.HandleFunc("GET /api/v1/chats/{chatId}/messages", s.authenticated(s.messages))
 	mux.HandleFunc("POST /api/v1/chats/{chatId}/messages", s.authenticated(s.postMessage))
 	mux.HandleFunc("PATCH /api/v1/chats/{chatId}/messages/{messageId}", s.authenticated(s.editMessage))
@@ -338,7 +350,7 @@ func New(t testing.TB) (*Server, *Fixture) {
 		Triage: triage, Doing: doing, NotNow: notNow, Done: done,
 		CardInTriage: cardInTriage, CardInDoing: cardInDoing,
 		OtherProject: otherProject, OtherBoard: otherBoard, OtherCard: otherCard,
-		Chat: chat, OtherChat: otherChat,
+		Chat: chat, OtherChat: otherChat, Conversation: conversation,
 	}
 }
 
@@ -907,7 +919,7 @@ func (s *Server) chats(w http.ResponseWriter, r *http.Request, person *Person) {
 	}
 	list := []any{}
 	for _, chat := range s.Chats {
-		if chat.ProjectID == project.ID {
+		if !chat.isConversation() && chat.ProjectID == project.ID {
 			list = append(list, map[string]any{
 				"id": chat.ID, "name": chat.Name, "unreadCount": chat.unread(person.ID),
 				"appUrl": s.URL + "/projects/" + project.ID + "/chats/" + chat.ID,
@@ -917,13 +929,102 @@ func (s *Server) chats(w http.ResponseWriter, r *http.Request, person *Person) {
 	writeJSON(w, http.StatusOK, list)
 }
 
+// visibleChat finds a chat of a project the person is a member of, or a
+// private conversation of theirs. Both answer at the same endpoints under the
+// same identifier, with a different lock.
 func (s *Server) visibleChat(id string, person *Person) *Chat {
 	for _, chat := range s.Chats {
-		if chat.ID == id && s.visibleProject(chat.ProjectID, person) != nil {
+		if chat.ID != id {
+			continue
+		}
+		if chat.isConversation() {
+			if slices.Contains(chat.Partners, person.ID) {
+				return chat
+			}
+			continue
+		}
+		if s.visibleProject(chat.ProjectID, person) != nil {
 			return chat
 		}
 	}
 	return nil
+}
+
+// conversations lists the private conversations of a person, the one with the
+// newest word first.
+func (s *Server) conversations(w http.ResponseWriter, _ *http.Request, person *Person) {
+	var mine []*Chat
+	for _, chat := range s.Chats {
+		if chat.isConversation() && slices.Contains(chat.Partners, person.ID) {
+			mine = append(mine, chat)
+		}
+	}
+	slices.SortStableFunc(mine, func(one, other *Chat) int {
+		return lastWordAt(other).Compare(lastWordAt(one))
+	})
+
+	list := []any{}
+	for _, chat := range mine {
+		list = append(list, s.conversationResource(chat, person))
+	}
+	writeJSON(w, http.StatusOK, list)
+}
+
+// startConversation answers with the conversation of these two, and begins it
+// where they have none. Somebody unknown, somebody of another organization and
+// the person themselves all answer like a person who does not exist.
+func (s *Server) startConversation(w http.ResponseWriter, r *http.Request, person *Person) {
+	other, known := s.People[r.PathValue("personId")]
+	if !known || other.ID == person.ID {
+		notFound(w)
+		return
+	}
+
+	for _, chat := range s.Chats {
+		if chat.isConversation() && slices.Contains(chat.Partners, person.ID) && slices.Contains(chat.Partners, other.ID) {
+			writeJSON(w, http.StatusOK, s.conversationResource(chat, person))
+			return
+		}
+	}
+
+	conversation := &Chat{ID: newID(), Partners: []string{person.ID, other.ID}, ReadMarks: map[string]int{}}
+	s.Chats = append(s.Chats, conversation)
+	writeJSON(w, http.StatusCreated, s.conversationResource(conversation, person))
+}
+
+func (s *Server) conversationResource(chat *Chat, person *Person) map[string]any {
+	other := s.People[chat.Partners[0]]
+	if other.ID == person.ID {
+		other = s.People[chat.Partners[1]]
+	}
+
+	var lastText, lastAt any
+	for i := len(chat.Messages) - 1; i >= 0; i-- {
+		if chat.Messages[i].Removed {
+			continue
+		}
+		lastText, lastAt = chat.Messages[i].BodyText, timestamp(chat.Messages[i].CreatedAt)
+		break
+	}
+
+	return map[string]any{
+		"id": chat.ID, "name": other.Name,
+		"counterpart":     map[string]any{"id": other.ID, "name": other.Name},
+		"lastMessageText": lastText, "lastMessageAt": lastAt,
+		"unreadCount": chat.unread(person.ID),
+		"appUrl":      s.URL + "/messages/" + chat.ID,
+	}
+}
+
+// lastWordAt is when a conversation was last spoken in, which is the beginning
+// of time while nothing has been said.
+func lastWordAt(chat *Chat) time.Time {
+	for i := len(chat.Messages) - 1; i >= 0; i-- {
+		if !chat.Messages[i].Removed {
+			return chat.Messages[i].CreatedAt
+		}
+	}
+	return time.Time{}
 }
 
 // messages pages the way the server does: before a seq, after a changeSeq,
