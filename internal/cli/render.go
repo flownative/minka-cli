@@ -151,8 +151,28 @@ func renderCard(w io.Writer, card api.Card) {
 				body = richtext.ToMarkdown(body)
 			}
 			fmt.Fprintf(w, "\n### %s, %s%s\n\n%s\n", comment.Author.Name, formatTime(comment.CreatedAt), edited, body)
+			if line := reactionLine(comment.Reactions); line != "" {
+				fmt.Fprintf(w, "%s\n", line)
+			}
 		}
 	}
+}
+
+// reactionLine says what people said about a comment or a message, in one
+// line, and nothing at all where nobody said anything.
+func reactionLine(reactions []api.Reaction) string {
+	if len(reactions) == 0 {
+		return ""
+	}
+	parts := make([]string, len(reactions))
+	for i, reaction := range reactions {
+		names := make([]string, len(reaction.People))
+		for j, person := range reaction.People {
+			names[j] = person.Name
+		}
+		parts[i] = fmt.Sprintf("%s %s", reaction.Content, strings.Join(names, ", "))
+	}
+	return "Reactions: " + strings.Join(parts, "; ")
 }
 
 func cardBreadcrumbs(cardID string) []Breadcrumb {

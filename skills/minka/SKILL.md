@@ -276,6 +276,12 @@ such as `Doing`.
   `--drop-attachments` is given.
 - `cards show --styled` prints the description as Markdown, which can be edited
   and sent back with `cards edit --description -`.
+- Comments and messages carry `reactions`: `[{content, people}]`, the same
+  content counted together, in the order it was first left in, and an empty
+  array where nobody reacted. `content` is mostly an emoji but may be up to 20
+  characters of text. `cards show --styled` and `messages list --styled` put
+  them in a line under the comment or the message. Reacting is not in the API
+  yet, so the CLI can only read them.
 - Comments are rich text like descriptions. `comments create` converts
   Markdown and keeps every line break, so plain text arrives as typed;
   `--format html` sends HTML as it is. `cards show --styled` shows comments as

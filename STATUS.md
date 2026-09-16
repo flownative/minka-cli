@@ -295,6 +295,9 @@ genannte Test wird rot. Zuletzt am 13.09.2026 nach dem Review ausgeführt:
 | Name statt ID braucht `--project` | `TestAConversationWithSomebodyIsBegunOnlyOnce` |
 | Ein Gespräch je Paar, zweites Mal dasselbe | `TestAConversationWithSomebodyIsBegunOnlyOnce` |
 | Nur die beiden lesen ein Gespräch | `TestAConversationIsAChatWithoutAProject` |
+| Reaktionen mit allen Namen, gleiche Inhalte zusammen | `TestReactionsStandUnderACommentAndAMessage` |
+| Keine Zeile, wo niemand reagiert hat | `TestReactionsStandUnderACommentAndAMessage` |
+| Reaktionen auch an Chat-Nachrichten | `TestReactionsStandUnderACommentAndAMessage` |
 | Dateiname eines Uploads in der Query escaped | `TestTheNameOfAnUploadedFileIsEscapedInTheQuery` (api) |
 | Projekt-ID eines Uploads im Pfad escaped | `TestIdentifiersAreEscapedInThePath` (api) |
 | Medientyp aus dem Dateinamen, nicht nur aus den Bytes | `TestAFileIsUploadedAsItIsAndComesBackAsAnAttachment` |
@@ -415,10 +418,9 @@ oben; 404 nur bei einer ungültigen ID. Der Fake folgte dem schon.
   Schritt einer anderen Karte oder auf eine ungültige Schritt-ID gibt bewusst
   204 (E-067), 404 nur für eine fremde Karte.
 - Umbenennen und Umsortieren von Schritten gibt es in der API noch nicht.
-- Reaktionen kommen an `ChatMessageResource` und `CommentResource` als
-  `reactions: [{content, people}]`, vorerst nur lesend. Die JSON-Ausgabe
-  reicht sie durch; ob `cards show --styled` und `messages list --styled` sie
-  zeigen, wird entschieden, wenn das Paket auf main ist.
+- Reaktionen (Minka `f006bd4`, E-106) sind gelesen umgesetzt: `reactions` an
+  Kommentaren und Nachrichten, in der Textansicht als eine Zeile darunter.
+  Schreiben gibt es an der API noch nicht; minka-c2 meldet Teil 2.
 - Die Fake-API kennt keine Organisationen. Dass ein Gespräch mit jemandem aus
   einer fremden Organisation mit 404 endet, ist deshalb nur gegen den Code
   gelesen, nicht nachgebildet. Laut minka-c2 bleibt es ein nacktes 404 ohne
@@ -461,6 +463,10 @@ oben; 404 nur bei einer ungültigen ID. Der Fake folgte dem schon.
 - Das Token `minka-cli-smoke` liegt in `~/.config/minka/config.json`.
   Widerrufen beim Umstieg auf das Dogfooding zur internen Alpha. Das
   Agentenkonto „Claude (Robert)" ist schon Mitglied im Minka-Projekt.
+- Reaktionen (Minka `f006bd4`) sind am 16.09.2026 live geprüft, soweit es geht:
+  `reactions` kommt an Chat-Nachrichten und an einem frisch geschriebenen
+  Kommentar als leeres Array an. Mit Inhalt gefüllt ist es nur gegen den Fake
+  geprüft, weil über die API niemand reagieren kann. Testkarte wieder gelöscht.
 - Private Gespräche (Minka `79703e4`, E-104/E-107) sind am 16.09.2026 nur
   lesend live geprüft: `conversations list` antwortet für das Smoke-Konto mit
   einer leeren Liste. Schreibend nicht geprüft: Ein Gespräch zu beginnen oder

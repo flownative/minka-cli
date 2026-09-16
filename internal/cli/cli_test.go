@@ -774,6 +774,39 @@ func TestAGroupWithoutSubcommandShowsHelp(t *testing.T) {
 	}
 }
 
+// What people said about a comment or a message stands under it, counted
+// together, and nothing stands there when nobody said anything.
+func TestReactionsStandUnderACommentAndAMessage(t *testing.T) {
+	e := newTestEnv(t)
+
+	r := e.run("", "cards", "show", e.fixture.CardInTriage.ID, "--styled")
+	expectCode(t, r, ExitOK)
+	if !strings.Contains(r.stdout, "Reactions: 👍 Anke, Bruno; 🎉 Anke") {
+		t.Errorf("reactions of the comment missing in:\n%s", r.stdout)
+	}
+
+	r = e.run("", "messages", "list", e.fixture.Chat.ID, "--styled")
+	expectCode(t, r, ExitOK)
+	if !strings.Contains(r.stdout, "Zelt ist bestellt\nReactions: 👍 Bruno") {
+		t.Errorf("reactions of the message missing in:\n%s", r.stdout)
+	}
+	if strings.Contains(r.stdout, "Hallo\nReactions:") {
+		t.Errorf("a message nobody reacted to carries a line:\n%s", r.stdout)
+	}
+
+	// The JSON is the resource of the server, reactions and all.
+	env, r := e.runJSON("", "cards", "show", e.fixture.CardInTriage.ID)
+	expectCode(t, r, ExitOK)
+	var card api.Card
+	if err := json.Unmarshal(env.Data, &card); err != nil {
+		t.Fatal(err)
+	}
+	reactions := card.Comments[0].Reactions
+	if len(reactions) != 2 || reactions[0].Content != "👍" || len(reactions[0].People) != 2 || reactions[0].People[0].Name != "Anke" {
+		t.Errorf("reactions %+v", reactions)
+	}
+}
+
 // A private conversation is a chat without a project: it is not among the
 // chats of a project, but its identifier reads and writes at the same place.
 func TestAConversationIsAChatWithoutAProject(t *testing.T) {
