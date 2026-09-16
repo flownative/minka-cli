@@ -774,6 +774,87 @@ func TestAGroupWithoutSubcommandShowsHelp(t *testing.T) {
 	}
 }
 
+// A private conversation is a chat without a project: it is not among the
+// chats of a project, but its identifier reads and writes at the same place.
+func TestAConversationIsAChatWithoutAProject(t *testing.T) {
+	e := newTestEnv(t)
+	conversation := e.fixture.Conversation
+
+	env, r := e.runJSON("", "conversations", "list")
+	expectCode(t, r, ExitOK)
+	var conversations []api.Conversation
+	if err := json.Unmarshal(env.Data, &conversations); err != nil {
+		t.Fatalf("data is not a list of conversations: %v: %s", err, env.Data)
+	}
+	if len(conversations) != 1 {
+		t.Fatalf("conversations %s", env.Data)
+	}
+	if first := conversations[0]; first.ID != conversation.ID || first.Name != e.fixture.Anke.Name ||
+		first.Counterpart.ID != e.fixture.Anke.ID || first.UnreadCount != 1 ||
+		first.LastMessageText == nil || *first.LastMessageText != "Hast du kurz Zeit?" {
+		t.Errorf("conversation %+v", first)
+	}
+
+	// The chats of the project are the chats of the project.
+	env, r = e.runJSON("", "chats", "list", e.fixture.Project.ID)
+	expectCode(t, r, ExitOK)
+	if strings.Contains(string(env.Data), conversation.ID) {
+		t.Errorf("the conversation is among the chats of the project: %s", env.Data)
+	}
+
+	// Reading and writing go through the commands for messages.
+	_, r = e.runJSON("", "messages", "create", conversation.ID, "Ja, gleich")
+	expectCode(t, r, ExitOK)
+	env, r = e.runJSON("", "messages", "list", conversation.ID)
+	expectCode(t, r, ExitOK)
+	if messages := decodeMessages(t, env.Data); len(messages) != 2 || messages[1].BodyText != "Ja, gleich" {
+		t.Errorf("messages %s", env.Data)
+	}
+
+	// Somebody who is not one of the two finds nothing there.
+	e.vars["MINKA_TOKEN"] = e.fixture.StrangerToken
+	_, r = e.runJSON("", "messages", "list", conversation.ID)
+	expectCode(t, r, ExitNotFound)
+}
+
+func TestAConversationWithSomebodyIsBegunOnlyOnce(t *testing.T) {
+	e := newTestEnv(t)
+
+	env, r := e.runJSON("", "conversations", "with", e.fixture.Agent.ID)
+	expectCode(t, r, ExitOK)
+	begun := decode(t, env.Data)
+	if begun["name"] != e.fixture.Agent.Name {
+		t.Errorf("conversation %s", env.Data)
+	}
+
+	env, r = e.runJSON("", "conversations", "with", e.fixture.Agent.ID)
+	expectCode(t, r, ExitOK)
+	if again := decode(t, env.Data); again["id"] != begun["id"] {
+		t.Errorf("a second conversation with the same person: %s", env.Data)
+	}
+
+	// A name is looked up among the members of a project, and only then.
+	env, r = e.runJSON("", "conversations", "with", "anke@example.com")
+	expectCode(t, r, ExitUsage)
+	if !strings.Contains(env.Error, "--project") {
+		t.Errorf("error %q", env.Error)
+	}
+	env, r = e.runJSON("", "conversations", "with", "anke@example.com", "--project", e.fixture.Project.ID)
+	expectCode(t, r, ExitOK)
+	if withAnke := decode(t, env.Data); withAnke["id"] != e.fixture.Conversation.ID {
+		t.Errorf("conversation %s", env.Data)
+	}
+
+	// Nobody, and oneself, are nobody to talk to.
+	env, r = e.runJSON("", "conversations", "with", "00000000-0000-4000-8000-000000000000")
+	expectCode(t, r, ExitNotFound)
+	if !strings.Contains(env.Hint, "organization") {
+		t.Errorf("hint %q", env.Hint)
+	}
+	_, r = e.runJSON("", "conversations", "with", e.fixture.Bruno.ID)
+	expectCode(t, r, ExitNotFound)
+}
+
 // A card in the trash comes back on top of the column it hung in, and only
 // once: a second restore finds nothing there.
 func TestACardComesBackFromTheTrashOnce(t *testing.T) {
@@ -1002,7 +1083,7 @@ func TestTheCatalogListsEveryCommandWithItsFlags(t *testing.T) {
 	for _, cmd := range catalog.Commands {
 		byName[cmd.Command] = cmd
 	}
-	for _, name := range []string{"minka auth login", "minka me", "minka projects list", "minka boards list", "minka boards show", "minka cards show", "minka cards create", "minka cards edit", "minka cards move", "minka cards done", "minka cards delete", "minka cards assign", "minka cards unassign", "minka people list", "minka steps list", "minka steps create", "minka steps complete", "minka steps reopen", "minka steps delete", "minka comments create", "minka chats list", "minka chats mark-read", "minka messages list", "minka messages create", "minka messages edit", "minka messages delete", "minka cards subscribe", "minka cards unsubscribe", "minka comments edit", "minka comments delete", "minka uploads create", "minka cards mine", "minka cards restore"} {
+	for _, name := range []string{"minka auth login", "minka me", "minka projects list", "minka boards list", "minka boards show", "minka cards show", "minka cards create", "minka cards edit", "minka cards move", "minka cards done", "minka cards delete", "minka cards assign", "minka cards unassign", "minka people list", "minka steps list", "minka steps create", "minka steps complete", "minka steps reopen", "minka steps delete", "minka comments create", "minka chats list", "minka chats mark-read", "minka messages list", "minka messages create", "minka messages edit", "minka messages delete", "minka cards subscribe", "minka cards unsubscribe", "minka comments edit", "minka comments delete", "minka uploads create", "minka cards mine", "minka cards restore", "minka conversations list", "minka conversations with"} {
 		if _, ok := byName[name]; !ok {
 			t.Errorf("catalog misses %q", name)
 		}

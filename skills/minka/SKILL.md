@@ -117,6 +117,8 @@ minka messages create <chatId> - [--client-message-id <uuid>] --json < message.t
 minka messages edit <chatId> <messageId> - --json < message.txt
 minka messages delete <chatId> <messageId> --json
 minka chats mark-read <chatId> [--seq <seq>] --json
+minka conversations list --json
+minka conversations with <person> [--project <projectId>] --json
 minka uploads create <projectId> <file> [--name <name>] [--content-type <type>] --json
 ```
 
@@ -225,6 +227,26 @@ such as `Doing`.
   somebody else's exits 2. Deleting twice succeeds.
 - `chats mark-read <chatId>` marks the chat read up to its last message, or up
   to `--seq`. The mark only grows.
+
+## Private conversations
+
+- A conversation is a chat without a project, between two people. `conversations
+  list` gives `{id, name, counterpart {id, name}, lastMessageText,
+  lastMessageAt, unreadCount, appUrl}`, the newest word first. `name` is the
+  other person.
+- `conversations with <person>` answers with the conversation with that person
+  and begins it where there is none, so asking twice is no mistake. A person is
+  given by ID; with `--project` a name or an e-mail address is looked up among
+  the members of that project. Nobody of the organization, and your own ID,
+  exit 2.
+- The ID of a conversation is a chat ID: read it with `messages list`, write
+  with `messages create`, change and remove with `messages edit` and `messages
+  delete`, note how far it is read with `chats mark-read`. Everybody else
+  exits 2 there.
+- A conversation is text: files and mentions belong to projects, and
+  `bodySource` is the text itself.
+- Conversations are not among the chats of a project, and the chats of a
+  project are not among the conversations.
 
 ## Descriptions and comments
 

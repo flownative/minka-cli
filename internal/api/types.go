@@ -145,6 +145,18 @@ type BoardReference struct {
 	Title string `json:"title"`
 }
 
+// Conversation is a private talk between two people. It carries no project,
+// and its ID addresses the same endpoints a chat of a project does.
+type Conversation struct {
+	ID              string          `json:"id"`
+	Name            string          `json:"name"` // the other person, which is what a conversation is called
+	Counterpart     PersonReference `json:"counterpart"`
+	LastMessageText *string         `json:"lastMessageText"` // the beginning of the last word, null while none was said
+	LastMessageAt   *string         `json:"lastMessageAt"`
+	UnreadCount     int             `json:"unreadCount"`
+	AppURL          string          `json:"appUrl"`
+}
+
 type ChatMessage struct {
 	ID         string          `json:"id"`
 	Seq        int             `json:"seq"`       // the place in the transcript, which never changes

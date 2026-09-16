@@ -30,6 +30,7 @@ minka cards show|create|edit|move|assign|unassign|subscribe|unsubscribe|done|del
 minka steps list|create|complete|reopen|delete
 minka comments create|edit|delete <cardId> ...
 minka chats list <projectId> | mark-read <chatId>
+minka conversations list | with <person>
 minka messages list|create|edit|delete <chatId> ...
 minka uploads create <projectId> <datei>
 minka commands            Katalog aller Befehle mit Flags
@@ -290,6 +291,10 @@ genannte Test wird rot. Zuletzt am 13.09.2026 nach dem Review ausgeführt:
 | Zurückgeholte Karte steht oben in ihrer Spalte | `TestACardComesBackFromTheTrashOnce` |
 | Zweites `restore` endet mit Exit 2 samt Hinweis | `TestACardComesBackFromTheTrashOnce` |
 | Fremde Karte bleibt im Papierkorb | `TestACardComesBackFromTheTrashOnce` |
+| Personen-ID beim Gespräch im Pfad escaped | `TestIdentifiersAreEscapedInThePath` (api) |
+| Name statt ID braucht `--project` | `TestAConversationWithSomebodyIsBegunOnlyOnce` |
+| Ein Gespräch je Paar, zweites Mal dasselbe | `TestAConversationWithSomebodyIsBegunOnlyOnce` |
+| Nur die beiden lesen ein Gespräch | `TestAConversationIsAChatWithoutAProject` |
 | Dateiname eines Uploads in der Query escaped | `TestTheNameOfAnUploadedFileIsEscapedInTheQuery` (api) |
 | Projekt-ID eines Uploads im Pfad escaped | `TestIdentifiersAreEscapedInThePath` (api) |
 | Medientyp aus dem Dateinamen, nicht nur aus den Bytes | `TestAFileIsUploadedAsItIsAndComesBackAsAnAttachment` |
@@ -410,6 +415,13 @@ oben; 404 nur bei einer ungültigen ID. Der Fake folgte dem schon.
   Schritt einer anderen Karte oder auf eine ungültige Schritt-ID gibt bewusst
   204 (E-067), 404 nur für eine fremde Karte.
 - Umbenennen und Umsortieren von Schritten gibt es in der API noch nicht.
+- Reaktionen kommen an `ChatMessageResource` und `CommentResource` als
+  `reactions: [{content, people}]`, vorerst nur lesend. Die JSON-Ausgabe
+  reicht sie durch; ob `cards show --styled` und `messages list --styled` sie
+  zeigen, wird entschieden, wenn das Paket auf main ist.
+- Die Fake-API kennt keine Organisationen. Dass ein Gespräch mit jemandem aus
+  einer fremden Organisation mit 404 endet, ist deshalb nur gegen den Code
+  gelesen, nicht nachgebildet.
 - Uploads: seit Minka `30a19d2` in der API und seit dem 16.09.2026 in der CLI
   als `uploads create` (Shaun hat entschieden, dass sie dazugehören):
   `POST /api/v1/projects/{projectId}/uploads?filename=…`, Rumpf sind die rohen
@@ -445,6 +457,12 @@ oben; 404 nur bei einer ungültigen ID. Der Fake folgte dem schon.
 - Das Token `minka-cli-smoke` liegt in `~/.config/minka/config.json`.
   Widerrufen beim Umstieg auf das Dogfooding zur internen Alpha. Das
   Agentenkonto „Claude (Robert)" ist schon Mitglied im Minka-Projekt.
+- Private Gespräche (Minka `79703e4`, E-104/E-107) sind am 16.09.2026 nur
+  lesend live geprüft: `conversations list` antwortet für das Smoke-Konto mit
+  einer leeren Liste. Schreibend nicht geprüft: Ein Gespräch zu beginnen oder
+  darin zu schreiben schickt einer echten Person eine Nachricht, und erlaubt
+  sind live nur das Board „API-3 Abnahme“ und der Chat „Chat1 Abnahme“. Robert
+  oder Shaun müssten dafür ein Gegenüber freigeben.
 - `cards restore` (Minka `20d5e44`, E-102) ist am 16.09.2026 live geprüft, an
   einer Testkarte im Board „API-3 Abnahme“: Nach `cards delete` ist die Karte
   weg (Exit 2), `cards restore` holt sie zurück nach Triage, das zweite
