@@ -271,13 +271,23 @@ func (c *Client) WriteComment(ctx context.Context, cardID string, body string) (
 	return request[Comment](ctx, c, http.MethodPost, "/cards/"+url.PathEscape(cardID)+"/comments", map[string]string{"body": body})
 }
 
-// UploadFile puts a file into a project. The bytes go into the body as they
-// are, with their media type in the header and the name of the file in the
-// query, and are read while they are sent, so a large file is never held in
-// memory whole.
-func (c *Client) UploadFile(ctx context.Context, projectID, filename, contentType string, content io.Reader, size int64) (Result[Upload], error) {
-	path := "/projects/" + url.PathEscape(projectID) + "/uploads?filename=" + url.QueryEscape(filename)
-	return send[Upload](ctx, c, c.uploads, http.MethodPost, path, content, contentType, size)
+// UploadToProject puts a file into a project, where it can hang in the texts of
+// that project.
+func (c *Client) UploadToProject(ctx context.Context, projectID, filename, contentType string, content io.Reader, size int64) (Result[Upload], error) {
+	return uploadTo(ctx, c, "/projects/"+url.PathEscape(projectID)+"/uploads", filename, contentType, content, size)
+}
+
+// UploadToConversation puts a file into a private conversation, where it can
+// hang in the messages of that conversation and nowhere else.
+func (c *Client) UploadToConversation(ctx context.Context, conversationID, filename, contentType string, content io.Reader, size int64) (Result[Upload], error) {
+	return uploadTo(ctx, c, "/messages/"+url.PathEscape(conversationID)+"/uploads", filename, contentType, content, size)
+}
+
+// uploadTo sends the bytes of a file as they are, with their media type in the
+// header and the name of the file in the query. They are read while they are
+// sent, so a large file is never held in memory whole.
+func uploadTo(ctx context.Context, c *Client, path, filename, contentType string, content io.Reader, size int64) (Result[Upload], error) {
+	return send[Upload](ctx, c, c.uploads, http.MethodPost, path+"?filename="+url.QueryEscape(filename), content, contentType, size)
 }
 
 // request sends a request to a path below /api/v1. Every identifier in the

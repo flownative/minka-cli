@@ -32,7 +32,7 @@ minka comments create|edit|delete <cardId> ...
 minka chats list <projectId> | mark-read <chatId>
 minka conversations list | with <person>
 minka messages list|create|edit|delete <chatId> ...
-minka uploads create <projectId> <datei>
+minka uploads create <datei> --project <id> | --conversation <id>
 minka commands            Katalog aller Befehle mit Flags
 minka version
 ```
@@ -298,6 +298,10 @@ genannte Test wird rot. Zuletzt am 13.09.2026 nach dem Review ausgeführt:
 | Reaktionen mit allen Namen, gleiche Inhalte zusammen | `TestReactionsStandUnderACommentAndAMessage` |
 | Keine Zeile, wo niemand reagiert hat | `TestReactionsStandUnderACommentAndAMessage` |
 | Reaktionen auch an Chat-Nachrichten | `TestReactionsStandUnderACommentAndAMessage` |
+| Datei geht an die Adresse des genannten Kreises | `TestAFileGoesIntoTheCircleTheFlagNames` |
+| Genau ein Kreis, sonst Exit 1 | `TestAnUploadNamesOneCircleToGoInto` |
+| Kreis-ID muss eine UUID sein | `TestAnUploadNamesOneCircleToGoInto` |
+| Außenstehende laden nichts in ein Gespräch | `TestAFileGoesIntoTheCircleTheFlagNames` |
 | Dateiname eines Uploads in der Query escaped | `TestTheNameOfAnUploadedFileIsEscapedInTheQuery` (api) |
 | Projekt-ID eines Uploads im Pfad escaped | `TestIdentifiersAreEscapedInThePath` (api) |
 | Medientyp aus dem Dateinamen, nicht nur aus den Bytes | `TestAFileIsUploadedAsItIsAndComesBackAsAnAttachment` |
@@ -463,6 +467,12 @@ oben; 404 nur bei einer ungültigen ID. Der Fake folgte dem schon.
 - Das Token `minka-cli-smoke` liegt in `~/.config/minka/config.json`.
   Widerrufen beim Umstieg auf das Dogfooding zur internen Alpha. Das
   Agentenkonto „Claude (Robert)" ist schon Mitglied im Minka-Projekt.
+- Dateien in Gesprächen (Minka `f722d09`, E-112) sind umgesetzt: `uploads
+  create` nimmt jetzt die Datei als Argument und den Kreis als Flag
+  (`--project` oder `--conversation`), weil die Adresse den Kreis nennt. Live
+  geprüft ist die neue Form für Projekte sowie die Fehlerfälle (kein Kreis,
+  beide Kreise, unbekanntes Gespräch). Der Weg in ein echtes Gespräch fehlt,
+  solange der Schreibtest für Gespräche nicht freigegeben ist.
 - Reaktionen (Minka `f006bd4`) sind am 16.09.2026 live geprüft, soweit es geht:
   `reactions` kommt an Chat-Nachrichten und an einem frisch geschriebenen
   Kommentar als leeres Array an. Mit Inhalt gefüllt ist es nur gegen den Fake

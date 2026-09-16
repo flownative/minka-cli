@@ -32,7 +32,8 @@ func TestIdentifiersAreEscapedInThePath(t *testing.T) {
 	_ = client.DeleteComment(context.Background(), "c", "../k")
 	_, _ = client.RestoreCard(context.Background(), "../x")
 	_, _ = client.StartConversation(context.Background(), "../p")
-	_, _ = client.UploadFile(context.Background(), "p/q", "../plan.png", "image/png", strings.NewReader("x"), 1)
+	_, _ = client.UploadToConversation(context.Background(), "../c", "plan.png", "image/png", strings.NewReader("x"), 1)
+	_, _ = client.UploadToProject(context.Background(), "p/q", "../plan.png", "image/png", strings.NewReader("x"), 1)
 
 	want := []string{
 		"/api/v1/cards/..%2Fme",
@@ -48,6 +49,7 @@ func TestIdentifiersAreEscapedInThePath(t *testing.T) {
 		"/api/v1/cards/c/comments/..%2Fk",
 		"/api/v1/cards/..%2Fx/restore",
 		"/api/v1/messages/with/..%2Fp",
+		"/api/v1/messages/..%2Fc/uploads",
 		"/api/v1/projects/p%2Fq/uploads",
 	}
 	if !slices.Equal(paths, want) {
@@ -105,7 +107,7 @@ func TestTheNameOfAnUploadedFileIsEscapedInTheQuery(t *testing.T) {
 	client := New(server.URL, "minka_pat_x", "")
 
 	for _, filename := range []string{"../plan.png", "a b&limit=1.png"} {
-		_, _ = client.UploadFile(context.Background(), "p", filename, "image/png", strings.NewReader("x"), 1)
+		_, _ = client.UploadToProject(context.Background(), "p", filename, "image/png", strings.NewReader("x"), 1)
 	}
 
 	want := []string{"filename=..%2Fplan.png", "filename=a+b%26limit%3D1.png"}

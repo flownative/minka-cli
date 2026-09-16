@@ -145,16 +145,17 @@ const MaxUploadBytes = 50 << 20
 // handle only this project has.
 type Upload struct {
 	ID          string
-	ProjectID   string
+	Circle      string // the project, or "conversation:" and the conversation
 	Filename    string
 	ContentType string
 	Size        int
 }
 
-// handle stands for the signature the server puts on the pair of project and
-// file, which is what makes an attachment belong to a text of that project.
+// handle stands for the signature the server puts on the pair of circle and
+// file, which is what makes an attachment belong to a text of that circle and
+// of no other.
 func (u *Upload) handle() string {
-	return "sgid-" + u.ProjectID + "-" + u.ID
+	return "sgid-" + u.Circle + "-" + u.ID
 }
 
 type ChatMessage struct {
@@ -337,7 +338,7 @@ func New(t testing.TB) (*Server, *Fixture) {
 	mux.HandleFunc("DELETE /api/v1/cards/{cardId}/subscribers/{personId}", s.authenticated(s.unsubscribeFromCard))
 	mux.HandleFunc("GET /api/v1/projects/{projectId}/chats", s.authenticated(s.chats))
 	mux.HandleFunc("GET /api/v1/messages", s.authenticated(s.conversations))
-	mux.HandleFunc("POST /api/v1/messages/with/{personId}", s.authenticated(s.startConversation))
+	mux.HandleFunc("POST /api/v1/messages/{first}/{second}", s.authenticated(s.beginOrUpload))
 	mux.HandleFunc("GET /api/v1/chats/{chatId}/messages", s.authenticated(s.messages))
 	mux.HandleFunc("POST /api/v1/chats/{chatId}/messages", s.authenticated(s.postMessage))
 	mux.HandleFunc("PATCH /api/v1/chats/{chatId}/messages/{messageId}", s.authenticated(s.editMessage))
@@ -980,6 +981,23 @@ func (s *Server) conversations(w http.ResponseWriter, _ *http.Request, person *P
 	writeJSON(w, http.StatusOK, list)
 }
 
+// beginOrUpload tells the two addresses below /messages apart the way the
+// routes of the server do, which the patterns of one mux cannot: "with" names
+// a person to talk to, everything else a conversation to put a file into.
+func (s *Server) beginOrUpload(w http.ResponseWriter, r *http.Request, person *Person) {
+	if r.PathValue("first") == "with" {
+		r.SetPathValue("personId", r.PathValue("second"))
+		s.startConversation(w, r, person)
+		return
+	}
+	if r.PathValue("second") != "uploads" {
+		notFound(w)
+		return
+	}
+	r.SetPathValue("conversationId", r.PathValue("first"))
+	s.upload(w, r, person)
+}
+
 // startConversation answers with the conversation of these two, and begins it
 // where they have none. Somebody unknown, somebody of another organization and
 // the person themselves all answer like a person who does not exist.
@@ -1247,8 +1265,17 @@ func (s *Server) markChatRead(w http.ResponseWriter, r *http.Request, person *Pe
 // the checks is the order of the server: the project first, then what the
 // request says about the file, then the bytes themselves.
 func (s *Server) upload(w http.ResponseWriter, r *http.Request, person *Person) {
-	project := s.visibleProject(r.PathValue("projectId"), person)
-	if project == nil {
+	// Which circle the file goes into is what the address names, and a person
+	// outside it finds nothing there.
+	circle := ""
+	if projectID := r.PathValue("projectId"); projectID != "" {
+		if project := s.visibleProject(projectID, person); project != nil {
+			circle = project.ID
+		}
+	} else if conversation := s.visibleChat(r.PathValue("conversationId"), person); conversation != nil && conversation.isConversation() {
+		circle = "conversation:" + conversation.ID
+	}
+	if circle == "" {
 		notFound(w)
 		return
 	}
@@ -1290,7 +1317,7 @@ func (s *Server) upload(w http.ResponseWriter, r *http.Request, person *Person) 
 	}
 
 	upload := &Upload{
-		ID: newID(), ProjectID: project.ID, Filename: filename, ContentType: stored, Size: len(content),
+		ID: newID(), Circle: circle, Filename: filename, ContentType: stored, Size: len(content),
 	}
 	s.Uploads = append(s.Uploads, upload)
 	writeJSON(w, http.StatusCreated, s.uploadResource(upload))
@@ -1305,7 +1332,10 @@ func (s *Server) uploadResource(upload *Upload) map[string]any {
 	if isPicture(upload.ContentType) {
 		kind = "image"
 	}
-	address := s.URL + "/projects/" + upload.ProjectID + "/uploads/" + upload.ID + "/original/" + upload.Filename
+	address := s.URL + "/projects/" + upload.Circle + "/uploads/" + upload.ID + "/original/" + upload.Filename
+	if conversationID, private := strings.CutPrefix(upload.Circle, "conversation:"); private {
+		address = s.URL + "/messages/" + conversationID + "/uploads/" + upload.ID + "/original/" + upload.Filename
+	}
 	return map[string]any{
 		"id": upload.ID, "filename": upload.Filename, "contentType": upload.ContentType, "size": upload.Size,
 		"kind": kind, "appUrl": address,

@@ -119,7 +119,7 @@ minka messages delete <chatId> <messageId> --json
 minka chats mark-read <chatId> [--seq <seq>] --json
 minka conversations list --json
 minka conversations with <person> [--project <projectId>] --json
-minka uploads create <projectId> <file> [--name <name>] [--content-type <type>] --json
+minka uploads create <file> (--project <projectId> | --conversation <conversationId>) [--name <name>] [--content-type <type>] --json
 ```
 
 `<column>` is a column ID, a type (`triage`, `not_now`, `done`) or a title
@@ -296,8 +296,10 @@ such as `Doing`.
 
 ## Uploads
 
-- `uploads create <projectId> <file>` puts a file into a project and answers
-  with `{id, filename, contentType, size, kind, appUrl, attachmentSource}`.
+- `uploads create <file> --project <projectId>` puts a file into a project and
+  answers with `{id, filename, contentType, size, kind, appUrl,
+  attachmentSource}`. `--conversation <conversationId>` puts it into a private
+  conversation instead. Exactly one of the two is given.
   `kind` is `image` for a picture, which is shown where it stands, and `file`
   for everything else, which is handed over.
 - `attachmentSource` is the whole point: the `<action-text-attachment>` element
@@ -305,15 +307,16 @@ such as `Doing`.
   or a `bodySource`, unchanged, and send that back as HTML:
 
 ```bash
-SOURCE=$(minka uploads create <projectId> shot.png --quiet | jq -r .attachmentSource)
+SOURCE=20 20 12 61 79 80 81 98 33 100 204 250 395 398 399 400minka uploads create shot.png --project <projectId> --quiet | jq -r .attachmentSource)
 minka cards show <cardId> --quiet | jq -r .descriptionSource > text.html
 printf '\n%s' "$SOURCE" >> text.html
 minka cards edit <cardId> --description - --description-format html < text.html
 ```
 
-- The attachment belongs to the project it went into. In a text of another
-  project the server drops it while saving, without an error, so read the text
-  back if it matters.
+- The attachment belongs to the circle it went into: a file of a project hangs
+  in the texts of that project, a file of a conversation in the messages of
+  that conversation. Anywhere else the server drops it while saving, without an
+  error, so read the text back if it matters.
 - A file is kept only once a text carrying it is saved. An upload no saved text
   points to is removed after seven days.
 - The media type comes from the name of the file, and from its first bytes
