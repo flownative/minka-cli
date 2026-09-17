@@ -423,6 +423,9 @@ oben; 404 nur bei einer ungültigen ID. Der Fake folgte dem schon.
   Schritt einer anderen Karte oder auf eine ungültige Schritt-ID gibt bewusst
   204 (E-067), 404 nur für eine fremde Karte.
 - Umbenennen und Umsortieren von Schritten gibt es in der API noch nicht.
+- Teil 2 von E-124 bringt „retired" für ausgeschiedene Agenten, voraussichtlich
+  an derselben Ressource wie `kind`. minka-c2 meldet den Merge; dann ist zu
+  entscheiden, ob `people list` ausgeschiedene Agenten kennzeichnet.
 - Reaktionen (Minka `f006bd4`, E-106) sind gelesen umgesetzt: `reactions` an
   Kommentaren und Nachrichten, in der Textansicht als eine Zeile darunter.
   Schreiben gibt es seit E-114 auch: `comments react|unreact` und `messages
