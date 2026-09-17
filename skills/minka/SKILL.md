@@ -319,7 +319,8 @@ such as `Doing`.
 ## Naming somebody in a text
 
 - `people list <projectId>` and `conversations people <conversationId>` give
-  every person a `mention: {handle, markup}`. `markup` is the
+  every person a `kind` (`human`, `agent` or `bot`), a `principal` (the human
+  an agent acts for, otherwise null) and a `mention: {handle, markup}`. `markup` is the
   `<action-text-attachment>` element that names them.
 - Put the markup into a text unchanged and send it as HTML — Markdown cannot
   hold it:

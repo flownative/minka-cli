@@ -36,8 +36,11 @@ is the person the agent acts for.`,
 					if me.Value.OrganizationRole != nil {
 						fmt.Fprintf(w, "Organization role: %s\n", *me.Value.OrganizationRole)
 					}
+					if me.Value.Kind != "" && me.Value.Kind != "human" {
+						fmt.Fprintf(w, "Kind: %s\n", me.Value.Kind)
+					}
 					if me.Value.Principal != nil {
-						fmt.Fprintf(w, "Acting for: %s <%s>\n", me.Value.Principal.Name, me.Value.Principal.EmailAddress)
+						fmt.Fprintf(w, "Acting for: %s\n", me.Value.Principal.Name)
 					}
 				},
 			})
