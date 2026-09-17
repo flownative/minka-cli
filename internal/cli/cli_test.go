@@ -774,6 +774,59 @@ func TestAGroupWithoutSubcommandShowsHelp(t *testing.T) {
 	}
 }
 
+// An agent is a person of its own, named after the human it acts for.
+func TestAnAgentSaysWhomItActsFor(t *testing.T) {
+	e := newTestEnv(t)
+	e.vars["MINKA_TOKEN"] = "minka_pat_agent"
+
+	env, r := e.runJSON("", "me")
+	expectCode(t, r, ExitOK)
+	var me api.Me
+	if err := json.Unmarshal(env.Data, &me); err != nil {
+		t.Fatal(err)
+	}
+	if me.Kind != "agent" || me.Principal == nil || me.Principal.Name != "Bruno" {
+		t.Errorf("me %+v", me)
+	}
+
+	r = e.run("", "me", "--styled")
+	expectCode(t, r, ExitOK)
+	for _, want := range []string{"Kind: agent", "Acting for: Bruno"} {
+		if !strings.Contains(r.stdout, want) {
+			t.Errorf("missing %q in:\n%s", want, r.stdout)
+		}
+	}
+	if strings.Contains(r.stdout, "<>") {
+		t.Errorf("an empty address in:\n%s", r.stdout)
+	}
+
+	// The people of a project say which of them is an agent, and for whom.
+	env, r = e.runJSON("", "people", "list", e.fixture.Project.ID)
+	expectCode(t, r, ExitOK)
+	var people []api.ProjectMember
+	if err := json.Unmarshal(env.Data, &people); err != nil {
+		t.Fatal(err)
+	}
+	for _, person := range people {
+		wantKind := "human"
+		if person.ID == e.fixture.Agent.ID {
+			wantKind = "agent"
+		}
+		if person.Kind != wantKind {
+			t.Errorf("%s is a %q", person.Name, person.Kind)
+		}
+		if (person.Principal != nil) != (wantKind == "agent") {
+			t.Errorf("principal of %s: %+v", person.Name, person.Principal)
+		}
+	}
+
+	r = e.run("", "people", "list", e.fixture.Project.ID, "--styled")
+	expectCode(t, r, ExitOK)
+	if !strings.Contains(r.stdout, "agent for Bruno") {
+		t.Errorf("the agent is not named in:\n%s", r.stdout)
+	}
+}
+
 // Naming somebody in a text needs markup only the server can make, and it
 // comes with the people of the circle the text belongs to.
 func TestThePeopleOfACircleCarryTheirMention(t *testing.T) {

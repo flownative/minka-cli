@@ -90,9 +90,9 @@ func renderPeople(w io.Writer, people []api.ProjectMember) {
 		return
 	}
 	table := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(table, "ID\tNAME\tE-MAIL")
+	fmt.Fprintln(table, "ID\tNAME\tE-MAIL\tKIND")
 	for _, person := range people {
-		fmt.Fprintf(table, "%s\t%s\t%s\n", person.ID, person.Name, person.EmailAddress)
+		fmt.Fprintf(table, "%s\t%s\t%s\t%s\n", person.ID, person.Name, person.EmailAddress, natureOf(person))
 	}
 	_ = table.Flush()
 }
@@ -228,6 +228,15 @@ func peopleOnCardFirst(onCard []api.PersonReference, members []api.ProjectMember
 		}
 	}
 	return candidates
+}
+
+// natureOf says what sort of being somebody is, and for an agent whom it acts
+// for.
+func natureOf(person api.ProjectMember) string {
+	if person.Principal != nil {
+		return person.Kind + " for " + person.Principal.Name
+	}
+	return person.Kind
 }
 
 func hasPerson(people []api.PersonReference, id string) bool {

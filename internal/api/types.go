@@ -15,11 +15,12 @@ type Person struct {
 }
 
 type Me struct {
-	ID               string  `json:"id"`
-	Name             string  `json:"name"`
-	EmailAddress     string  `json:"emailAddress"`
-	OrganizationRole *string `json:"organizationRole"`
-	Principal        *Person `json:"principal"` // the person an agent account acts for, nil for a person
+	ID               string           `json:"id"`
+	Name             string           `json:"name"`
+	EmailAddress     string           `json:"emailAddress"`
+	Kind             string           `json:"kind"` // "human", "agent" or "bot"
+	OrganizationRole *string          `json:"organizationRole"`
+	Principal        *PersonReference `json:"principal"` // the human an agent acts for, nil for anybody else
 }
 
 type PersonReference struct {
@@ -93,10 +94,12 @@ type TrashEntry struct {
 // two of a private conversation. Whom a card can be assigned to and whom a text
 // may name are the same list, so the mention rides along.
 type ProjectMember struct {
-	ID           string  `json:"id"`
-	Name         string  `json:"name"` // the e-mail address until the person gives a name
-	EmailAddress string  `json:"emailAddress"`
-	Mention      Mention `json:"mention"`
+	ID           string           `json:"id"`
+	Name         string           `json:"name"` // the e-mail address until the person gives a name
+	EmailAddress string           `json:"emailAddress"`
+	Kind         string           `json:"kind"`      // "human", "agent" or "bot"
+	Principal    *PersonReference `json:"principal"` // the human an agent acts for, nil for anybody else
+	Mention      Mention          `json:"mention"`
 }
 
 // Mention is how a text names a person: the handle the server signed, and the

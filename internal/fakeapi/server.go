@@ -453,15 +453,29 @@ func (s *Server) authenticated(next handler) http.HandlerFunc {
 }
 
 func (s *Server) me(w http.ResponseWriter, _ *http.Request, person *Person) {
-	var principal any
-	if person.PrincipalID != "" {
-		p := s.People[person.PrincipalID]
-		principal = map[string]any{"id": p.ID, "name": p.Name, "emailAddress": p.Email}
-	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"id": person.ID, "name": person.Name, "emailAddress": person.Email,
-		"organizationRole": "member", "principal": principal,
+		"kind": kindOf(person), "principal": s.principalOf(person),
+		"organizationRole": "member",
 	})
+}
+
+// kindOf says what sort of being somebody is: an account that acts for a human
+// is an agent, everybody else is a human.
+func kindOf(person *Person) string {
+	if person.PrincipalID != "" {
+		return "agent"
+	}
+	return "human"
+}
+
+// principalOf names the human an agent acts for, and nothing for anybody else.
+func (s *Server) principalOf(person *Person) any {
+	if person.PrincipalID == "" {
+		return nil
+	}
+	principal := s.People[person.PrincipalID]
+	return map[string]any{"id": principal.ID, "name": principal.Name}
 }
 
 func (s *Server) projects(w http.ResponseWriter, _ *http.Request, person *Person) {
@@ -803,6 +817,7 @@ func (s *Server) writePeople(w http.ResponseWriter, circle string, memberIDs []s
 		handle := "sgid-person-" + circle + "-" + member.ID
 		list = append(list, map[string]any{
 			"id": member.ID, "name": member.Name, "emailAddress": member.Email,
+			"kind": kindOf(member), "principal": s.principalOf(member),
 			"mention": map[string]any{
 				"handle": handle,
 				"markup": fmt.Sprintf(

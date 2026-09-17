@@ -161,7 +161,7 @@ there is no token or the host does not accept it.`,
 				text: func(w io.Writer) {
 					fmt.Fprintf(w, "Signed in to %s as %s <%s>.\n", s.host, me.Value.Name, me.Value.EmailAddress)
 					if me.Value.Principal != nil {
-						fmt.Fprintf(w, "Acting for %s <%s>.\n", me.Value.Principal.Name, me.Value.Principal.EmailAddress)
+						fmt.Fprintf(w, "Acting for %s.\n", me.Value.Principal.Name)
 					}
 					fmt.Fprintf(w, "The token comes from %s.\n", tokenSource)
 				},
