@@ -1,173 +1,174 @@
-# Entscheidungsregister
+# Decision register
 
-Je Entscheidung: was gilt, warum, wofür, wo umgesetzt. Nachschlagen, nicht am
-Stück lesen. IDs bleiben stehen und werden nie wiederverwendet; kippt eine
-Entscheidung, bekommt die neue eine neue ID und die alte die Zeile „überholt
-durch".
+Per decision: what holds, why, what for, where it is implemented. For looking
+things up, not for reading in one go. IDs stay and are never reused; when a
+decision is overturned, the new one gets a new ID and the old one the line
+"superseded by".
 
-Entscheidungen über die **API** trägt Minka selbst
-(`/Users/robert/Sites/minka/Documentation/decisions.md`, E-…). Hier steht nur,
-was die CLI für sich entscheidet.
+Decisions about the **API** are kept by Minka itself
+(`/Users/robert/Sites/minka/Documentation/decisions.md`, E-…). Here stands only
+what the CLI decides for itself.
 
 <a id="c-001"></a>
-## C-001 — Die Konventionen von basecamp-cli, nicht sein Umfang
+## C-001 — The conventions of basecamp-cli, not its scope
 
-*Gilt für: Befehlsnamen, Ausgabe, Exit-Codes*
+*Applies to: command names, output, exit codes*
 
-Befehle heißen Plural-Gruppe plus Aktion, die Ausgabe folgt basecamp-cli.
-Nicht übernommen: Umfang und Funktionsbereiche.
+Commands are named plural group plus action, the output follows basecamp-cli.
+Not adopted: its scope and its feature areas.
 
-**Warum:** Ein Agent, der eine der beiden CLIs kennt, kann die andere lesen,
-ohne sie zu lernen. **Umgesetzt als:** `internal/cli`, siehe
-[Ausgabe](stable/output-contract.md).
+**Why:** An agent that knows one of the two CLIs can read the other without
+learning it. **Implemented as:** `internal/cli`, see
+[Output](stable/output-contract.md).
 
 <a id="c-002"></a>
-## C-002 — `data` ist die Ressource der API, roh durchgereicht
+## C-002 — `data` is the resource of the API, passed through raw
 
-*Gilt für: jede Ausgabe mit `--json` und `--quiet`*
+*Applies to: every output with `--json` and `--quiet`*
 
-Die CLI reicht das JSON der API unverändert durch, statt es neu
-zusammenzusetzen.
+The CLI passes the JSON of the API through unchanged instead of assembling it
+anew.
 
-**Warum:** Ein Feld, das die API dazubekommt, erreicht jeden Client sofort, und
-die CLI kann nichts verfälschen. **Umgesetzt als:** `api.Result.Raw`,
+**Why:** A field the API gains reaches every client at once, and the CLI
+cannot distort anything. **Implemented as:** `api.Result.Raw`,
 `internal/cli/output.go`.
 
 <a id="c-003"></a>
-## C-003 — Exit-Codes sind ein Vertrag
+## C-003 — Exit codes are a contract
 
-*Gilt für: jeden Fehlerweg*
+*Applies to: every error path*
 
-Eine Fehlerklasse hat genau einen Exit-Code, die Tabelle steht in
-`internal/cli/errors.go` und in der SKILL.md.
+A class of error has exactly one exit code; the table is in
+`internal/cli/errors.go` and in the SKILL.md.
 
-**Warum:** Ein Agent entscheidet am Exit-Code, ob er wiederholt, nachfragt oder
-aufgibt — ohne Text zu lesen. **Umgesetzt als:** `internal/cli/errors.go`.
+**Why:** An agent decides by the exit code whether to retry, ask or give up —
+without reading text. **Implemented as:** `internal/cli/errors.go`.
 
 <a id="c-004"></a>
-## C-004 — Ein Token geht nur an seinen Host
+## C-004 — A token goes to its own host only
 
-*Gilt für: Anmeldung, jede Anfrage*
+*Applies to: sign-in, every request*
 
-`MINKA_TOKEN` gilt nur mit `MINKA_HOST` und nur für diesen Host; für jeden
-anderen kommt das Token aus der Konfigurationsdatei oder gar keins.
+`MINKA_TOKEN` counts only together with `MINKA_HOST` and only for that host;
+for any other host the token comes from the configuration file, or there is
+none.
 
-**Warum:** Sonst trüge ein `--host` das Token einer Instanz an eine fremde.
-**Umgesetzt als:** `internal/cli/root.go` (`session`), siehe
+**Why:** Otherwise a `--host` would carry the token of one instance to a
+foreign one. **Implemented as:** `internal/cli/root.go` (`session`), see
 [Token](stable/security.md).
 
 <a id="c-005"></a>
-## C-005 — Tests laufen gegen eine nachgebaute API
+## C-005 — Tests run against a rebuilt API
 
-*Gilt für: alle Tests außer dem Live-Lauf*
+*Applies to: all tests except the live run*
 
-`internal/fakeapi` bildet den Vertrag nach, bis hin zu den bytegleichen 401-
-und 404-Rümpfen. Ändert sich die API, wird zuerst der Fake angepasst.
+`internal/fakeapi` mirrors the contract, down to the byte-identical 401 and 404
+bodies. When the API changes, the fake is adapted first.
 
-**Warum:** Tests gegen eine laufende Instanz wären langsam, unzuverlässig und
-würden fremde Daten anfassen. **Umgesetzt als:** `internal/fakeapi`.
+**Why:** Tests against a running instance would be slow, unreliable, and would
+touch other people's data. **Implemented as:** `internal/fakeapi`.
 
 <a id="c-006"></a>
-## C-006 — Jede Schutzmaßnahme hat einen Sabotagebeweis
+## C-006 — Every safeguard has a sabotage proof
 
-*Gilt für: Dateirechte, Escaping, Allowlist, Sperren*
+*Applies to: file permissions, escaping, allowlist, locks*
 
-Schutz in einer Kopie herausnehmen, kompilieren, Test rot sehen. Ein Beweis,
-der nicht kompiliert, zählt nicht; bleibt der Test grün, wird er geschärft.
+Take the safeguard out in a copy, compile, see the test go red. A proof that
+does not compile does not count; if the test stays green, it gets sharpened.
 
-**Warum:** Ein Test, der auch ohne den Schutz grün bleibt, sichert nichts.
-**Umgesetzt als:** Verfahren, siehe [Testen](stable/testing.md).
+**Why:** A test that stays green without the safeguard secures nothing.
+**Implemented as:** a procedure, see [Testing](stable/testing.md).
 
 <a id="c-007"></a>
-## C-007 — Freitext kommt über stdin
+## C-007 — Free text comes through stdin
 
-*Gilt für: Beschreibung, Kommentar, Nachricht*
+*Applies to: description, comment, message*
 
-Mehrzeiliger Text wird mit `-` von stdin gelesen; Titel sind einzeilig und
-stehen in Flags.
+Multi-line text is read from stdin with `-`; titles are single-line and go
+into flags.
 
-**Warum:** Shell-Quoting ist die häufigste Fehlerquelle eines Agenten, der
-Text mit Anführungszeichen und Umbrüchen schickt. **Umgesetzt als:**
+**Why:** Shell quoting is the most common source of errors for an agent that
+sends text with quotation marks and line breaks. **Implemented as:**
 `app.readValue`.
 
 <a id="c-008"></a>
-## C-008 — Markdown hinein, Markdown heraus
+## C-008 — Markdown in, Markdown out
 
-*Gilt für: Beschreibungen, Kommentare, Nachrichten*
+*Applies to: descriptions, comments, messages*
 
-Die CLI nimmt Markdown und zeigt Markdown; die Quelle eines Textes ist
-maßgeblich, und Anhänge und Erwähnungen gehen nur mit `--drop-attachments`
-verloren.
+The CLI takes Markdown and shows Markdown; the source of a text is what counts,
+and attachments and mentions are lost only with `--drop-attachments`.
 
-**Warum:** Was die CLI zeigt, soll sich ändern und zurückschicken lassen, ohne
-etwas zu verlieren. **Umgesetzt als:** `internal/markdown`, `internal/richtext`,
-siehe [Rich Text](stable/rich-text.md).
+**Why:** What the CLI shows should be editable and sendable back without
+losing anything. **Implemented as:** `internal/markdown`, `internal/richtext`,
+see [Rich text](stable/rich-text.md).
 
 <a id="c-009"></a>
-## C-009 — Was dieselbe Adresse hat, bekommt denselben Befehl
+## C-009 — What has the same address gets the same command
 
-*Gilt für: private Gespräche*
+*Applies to: private conversations*
 
-Die ID eines Gesprächs geht an `messages list|create|edit|delete|react|unreact`
-und `chats mark-read`; eigene Befehle gibt es nur für das, was es nur dort
-gibt (`conversations list|with|people`).
+The ID of a conversation goes to `messages list|create|edit|delete|react|unreact`
+and `chats mark-read`; commands of their own exist only for what exists only
+there (`conversations list|with|people`).
 
-**Warum:** Die API bedient beides unter denselben Endpunkten; eine zweite
-Befehlsreihe wäre doppelte Oberfläche für dieselbe Sache. **Umgesetzt als:**
+**Why:** The API serves both under the same endpoints; a second set of
+commands would be a doubled surface for the same thing. **Implemented as:**
 `internal/cli/conversations.go`.
 
 <a id="c-010"></a>
-## C-010 — Der Kreis eines Uploads steht in einem Flag
+## C-010 — The circle of an upload is in a flag
 
-*Gilt für: `uploads create`*
+*Applies to: `uploads create`*
 
-Die Datei ist das Argument, der Kreis ein Flag: `--project` oder
-`--conversation`, genau eines von beiden.
+The file is the argument, the circle a flag: `--project` or `--conversation`,
+exactly one of the two.
 
-**Warum:** Zwei ID-Arten auf derselben Position ließen die CLI raten, an welche
-Adresse sie schickt. **Umgesetzt als:** `internal/cli/uploads.go`.
+**Why:** Two kinds of ID in the same position would leave the CLI guessing
+which address to send to. **Implemented as:** `internal/cli/uploads.go`.
 
 <a id="c-011"></a>
-## C-011 — Live wird nur dort geschrieben, wo es freigegeben ist
+## C-011 — Writing live happens only where it is cleared
 
-*Gilt für: jeden Live-Lauf*
+*Applies to: every live run*
 
-Erlaubt sind die Test-Instanz mit dem Agentenkonto und auf der lokalen Instanz
-Board und Chat „…Abnahme". Alles andere entscheiden Robert oder Shaun.
+Allowed are the test instance with the agent account and, on the local
+instance, the board and chat "…Abnahme". Everything else is decided by Robert
+or Shaun.
 
-**Warum:** Ein Schreibvorgang erreicht echte Menschen und fremde Daten.
-**Umgesetzt als:** [Live-Prüfung](guides/live-check.md).
+**Why:** A write reaches real people and other people's data.
+**Implemented as:** [Live check](guides/live-check.md).
 
 <a id="c-012"></a>
-## C-012 — `retryable` nur, wo ein zweiter Versuch nichts anrichtet
+## C-012 — `retryable` only where a second attempt does no harm
 
-*Gilt für: jeden Fehler*
+*Applies to: every error*
 
-Wahr bei lesenden Anfragen und bei `messages create` mit
-`--client-message-id`; sonst falsch, mit dem Hinweis, den Stand nachzulesen.
+True for reading requests and for `messages create` with
+`--client-message-id`; false otherwise, with the hint to read the state back.
 
-**Warum:** Ein wiederholter Schreibvorgang legt sonst eine Karte oder einen
-Kommentar zweimal an. **Umgesetzt als:** `internal/cli/errors.go`.
+**Why:** A repeated write would otherwise create a card or a comment twice.
+**Implemented as:** `internal/cli/errors.go`.
 
 <a id="c-013"></a>
-## C-013 — Was der Server sicher ablehnt, lehnt die CLI vorher ab
+## C-013 — What the server is sure to refuse, the CLI refuses first
 
-*Gilt für: Uploads, IDs, Pflicht-Flags*
+*Applies to: uploads, IDs, required flags*
 
-Eine Datei über 50 MiB, ein Verzeichnis, eine ID, die keine UUID ist, ein
-Aufruf ohne Kreis: Exit 1, ohne Anfrage.
+A file over 50 MiB, a directory, an ID that is not a UUID, a call without a
+circle: exit 1, without a request.
 
-**Warum:** Spart eine nutzlose Übertragung und gibt einen Fehler, der sagt, was
-zu tun ist. **Umgesetzt als:** `internal/cli/uploads.go`, `requireArgs`.
+**Why:** Saves a useless transfer and gives an error that says what to do.
+**Implemented as:** `internal/cli/uploads.go`, `requireArgs`.
 
 <a id="c-014"></a>
-## C-014 — Die SKILL.md ist der Vertrag für Agenten
+## C-014 — The SKILL.md is the contract for agents
 
-*Gilt für: `skills/minka/SKILL.md`*
+*Applies to: `skills/minka/SKILL.md`*
 
-Sie liegt im Repository, wird mit jeder Änderung an Befehlen oder Verhalten
-nachgezogen und beschreibt, was ein Agent wissen muss — nicht, was die CLI
-intern tut.
+It lives in the repository, is brought up to date with every change to
+commands or behaviour, and describes what an agent needs to know — not what
+the CLI does internally.
 
-**Warum:** Agenten sind die Hauptnutzer; ihre Beschreibung veraltet sonst als
-Erstes. **Umgesetzt als:** `skills/minka/SKILL.md`.
+**Why:** Agents are the main users; their description would otherwise be the
+first thing to go stale. **Implemented as:** `skills/minka/SKILL.md`.

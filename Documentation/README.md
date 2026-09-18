@@ -1,46 +1,46 @@
-# Dokumentation der Minka-CLI
+# Documentation of the Minka CLI
 
-Das Kartenblatt über die gesamte Dokumentation: eine Zeile pro Dokument, mit
-einem Satz dazu, wann man es braucht. Es gibt bewusst nur **diesen einen**
-Index.
+The map of the whole documentation: one line per document, with a sentence on
+when you need it. There is deliberately only **this one** index.
 
-**Regeln:** `stable/` beschreibt die geltende Praxis · `guides/` sind erprobte
-Abläufe · `work-in-progress/` ändert sich häufig. Grundsatz über allem: Die
-Dokumentation sagt, was gilt; wie es dazu kam, steht in git.
+**Rules:** `stable/` describes the practice in force · `guides/` are proven
+procedures · `work-in-progress/` changes often. The principle above everything:
+the documentation says what holds; how it came about is in git.
 
-## Geltende Regeln
+## Rules in force
 
-- [Ausgabe, Fehler und Exit-Codes](stable/output-contract.md): Die drei
-  Ausgabemodi, die Hülle, die Exit-Code-Tabelle, wie Befehle geschnitten sind —
-  vor jeder Arbeit an einem Befehl lesen.
-- [Token, Hosts und Anfragen](stable/security.md): Wie das Token
-  aufbewahrt und verschickt wird, was am HTTP-Client festliegt, welche Prüfung
-  vor einer Anfrage passiert — vor jeder Arbeit an Anmeldung, Client oder IDs.
-- [Rich Text in beide Richtungen](stable/rich-text.md): Markdown zu HTML und
-  zurück, die Allowlist des Servers, Quellen, Dateien und Erwähnungen — vor
-  jeder Arbeit an Beschreibungen, Kommentaren oder Nachrichten.
-- [Testen](stable/testing.md): Fake-API, Sabotagebeweise, was ein Test
-  festhält — vor dem ersten eigenen Test lesen.
+- [Output, errors and exit codes](stable/output-contract.md): The three output
+  modes, the envelope, the table of exit codes, how commands are cut — read
+  before any work on a command.
+- [Token, hosts and requests](stable/security.md): How the token is kept and
+  sent, what is fixed about the HTTP client, which check happens before a
+  request — before any work on sign-in, client or IDs.
+- [Rich text in both directions](stable/rich-text.md): Markdown to HTML and
+  back, the allowlist of the server, sources, files and mentions — before any
+  work on descriptions, comments or messages.
+- [Testing](stable/testing.md): Fake API, sabotage proofs, what a test pins
+  down — read before your first test.
 
-## Anleitungen
+## Guides
 
-- [Live-Prüfung](guides/live-check.md): Wo geschrieben werden darf, in welcher
-  Reihenfolge geprüft wird, was danach aufgeräumt wird — vor jedem Lauf gegen
-  eine echte Instanz.
+- [Live check](guides/live-check.md): Where writing is allowed, in which order
+  to check, what gets tidied up afterwards — before every run against a real
+  instance.
 
-## Entscheidungen
+## Decisions
 
-- [Entscheidungsregister](decisions.md): Je Entscheidung, was gilt, warum und
-  wo sie umgesetzt ist (C-001…). Nachschlagen, nicht am Stück lesen.
-  Entscheidungen über die API selbst stehen in Minkas Register (E-…).
+- [Decision register](decisions.md): Per decision, what holds, why and where
+  it is implemented (C-001…). For looking things up, not for reading in one
+  go. Decisions about the API itself are in Minka's register (E-…).
 
-## Work in Progress
+## Work in progress
 
-- [Stand](work-in-progress/status.md): Was die CLI kann, was nur gegen den Fake
-  geprüft ist, was in der API offen ist — der erste Blick jeder neuen Session.
+- [Status](work-in-progress/status.md): What the CLI can do, what is checked
+  against the fake only, what is open in the API — the first look of every new
+  session.
 
 ---
 
-Bei Code-Änderungen gehört das Doku-Update in denselben Commit. Veraltetes
-wird gelöscht, nicht stehen gelassen; beim Anlegen oder Verschieben eines
-Dokuments wird dieser Index mitgepflegt.
+With a code change, the documentation update belongs in the same commit. What
+is outdated gets deleted, not left standing; when a document is created or
+moved, this index is kept up to date.

@@ -1,58 +1,55 @@
-# Rich Text in beide Richtungen
+# Rich text in both directions
 
-Beschreibungen, Kommentare und Nachrichten sind Rich Text. Die CLI nimmt
-Markdown an und gibt Markdown aus, damit ein Text, den sie zeigt, sich ändern
-und zurückschicken lässt (C-008).
+Descriptions, comments and messages are rich text. The CLI accepts Markdown and
+prints Markdown, so that a text it shows can be edited and sent back (C-008).
 
 ## Markdown → HTML
 
-`internal/markdown` wandelt mit goldmark um und schreibt nur Elemente und
-Attributwerte, die die Allowlist des Servers behält. Maßgeblich ist die
-Allowlist im Minka-Code, nicht diese Aufzählung:
+`internal/markdown` converts with goldmark and writes only elements and
+attribute values that the allowlist of the server keeps. The allowlist in the
+Minka code decides, not this list:
 
-- Überschriften aller sechs Ebenen, `ol start`, Link-Titel.
-- Inline-Code wird `code`, ein Block `pre > code` mit `data-language`, wenn die
-  Sprache dem Muster des Servers entspricht.
-- Tabellen entstehen so, wie der Editor sie schreibt:
-  `figure.lexxy-content__table-wrapper > table > tbody`, Kopfzellen
-  `th.lexxy-content__table-cell--header`. Die Spaltenausrichtung geht verloren.
-- Bilder werden Links; ein Bild in einem Link wird sein Label.
-- Rohes HTML im Markdown wird sichtbarer Text.
-- Ein Link, dessen Ziel nicht http, https, mailto, tel oder relativ ist, wird
-  Klartext — dieselbe Regel wie `RichText::isSafeUrl`, samt der Behandlung von
-  `\\` und `/\` am Anfang.
+- Headings of all six levels, `ol start`, link titles.
+- Inline code becomes `code`, a block `pre > code` with `data-language` if the
+  language matches the pattern of the server.
+- Tables come out the way the editor writes them:
+  `figure.lexxy-content__table-wrapper > table > tbody`, header cells
+  `th.lexxy-content__table-cell--header`. Column alignment is lost.
+- Images become links; an image inside a link becomes its label.
+- Raw HTML in the Markdown becomes visible text.
+- A link whose target is not http, https, mailto, tel or relative becomes
+  plain text — the same rule as `RichText::isSafeUrl`, including the handling
+  of a leading `\\` and `/\`.
 
-Jede dieser Änderungen meldet die CLI als `notice`.
+The CLI reports each of these changes as a `notice`.
 
-Markdown, das Text enthält, aber nichts, was Minka behält, wird abgelehnt,
-statt eine Beschreibung stillschweigend zu leeren. Leeren geht mit
-`--description ""`.
+Markdown that contains text but nothing Minka keeps is refused instead of
+silently emptying a description. Emptying is done with `--description ""`.
 
-Kommentare und Nachrichten behalten jeden Zeilenumbruch, damit Klartext so
-ankommt, wie er getippt wurde.
+Comments and messages keep every line break, so that plain text arrives the
+way it was typed.
 
 ## HTML → Markdown
 
-`internal/richtext` wandelt zurück, was `cards show --styled` und `messages
-list --styled` zeigen. Zeichen mit Bedeutung werden escaped, `<br>` wird ein
-harter Umbruch, und der Rückweg ergibt dasselbe HTML.
+`internal/richtext` converts back what `cards show --styled` and `messages
+list --styled` show. Characters with a meaning are escaped, `<br>` becomes a
+hard break, and the way back yields the same HTML.
 
-`CarriesMarkup` entscheidet, ob ein Text Markup trägt, nach der Regel des
-Servers: Markup ist nur ein bis zur schließenden spitzen Klammer
-ausgeschriebener Tag eines bedienten Elements. `a<i und b<s` bleibt Klartext.
+`CarriesMarkup` decides whether a text carries markup, by the rule of the
+server: markup is only a tag of a served element that is written out up to its
+closing angle bracket. `a<i und b<s` stays plain text.
 
-## Quellen, Dateien und Erwähnungen
+## Sources, files and mentions
 
-Jeder Text kommt zweimal: gespeichert (`description`, `body`, `bodyHtml`) und
-als Quelle (`descriptionSource`, `bodySource`). In der Quelle stehen Dateien
-und Erwähnungen als `action-text-attachment` mit frisch signiertem Handle.
+Every text comes twice: as stored (`description`, `body`, `bodyHtml`) and as
+source (`descriptionSource`, `bodySource`). In the source, files and mentions
+are `action-text-attachment` elements with a freshly signed handle.
 
-- Gezeigt wird immer die Quelle: ein Bild als Markdown-Bild, eine Datei als
-  Link, eine Erwähnung als `@Name`. Der Klartext neben einer Nachricht hat
-  beides nicht.
-- Markdown kann beides nicht halten. Ein neuer Text, der Anhänge oder
-  Erwähnungen verlöre, wird abgelehnt; `--drop-attachments` erlaubt es
-  ausdrücklich. Wer die Quelle als HTML zurückschickt, behält sie.
-- Ein Handle gilt nur in seinem Kreis — Projekt oder Gespräch. In einem
-  fremden Text entfernt der Server es beim Speichern stillschweigend, deshalb
-  raten Hilfe und SKILL.md, den Text danach zurückzulesen.
+- What is shown is always the source: an image as a Markdown image, a file as
+  a link, a mention as `@Name`. The plain text next to a message has neither.
+- Markdown can hold neither. A new text that would lose attachments or
+  mentions is refused; `--drop-attachments` allows it explicitly. Sending the
+  source back as HTML keeps them.
+- A handle is valid only within its circle — project or conversation. In a
+  text elsewhere the server silently removes it on saving, which is why the
+  help and the SKILL.md advise reading the text back afterwards.

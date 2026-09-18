@@ -1,63 +1,62 @@
-# Ausgabe, Fehler und Exit-Codes
+# Output, errors and exit codes
 
-Was die CLI ausgibt, ist ein Vertrag: Felder dürfen dazukommen, nie
-verschwinden oder umbenannt werden. Die Konventionen stammen von
-[basecamp-cli](https://github.com/basecamp/basecamp-cli), damit ein Agent, der
-eine der beiden kennt, die andere lesen kann (C-001).
+What the CLI prints is a contract: fields may be added, never disappear or be
+renamed. The conventions come from
+[basecamp-cli](https://github.com/basecamp/basecamp-cli), so that an agent that
+knows one of the two can read the other (C-001).
 
-## Drei Ausgabemodi
+## Three output modes
 
-Auf einem Terminal Text, sonst JSON.
+Text on a terminal, JSON otherwise.
 
-| Modus | Ausgabe |
+| Mode | Output |
 |---|---|
-| `--json` | Hülle `{ok, data, summary, notice, breadcrumbs}` |
-| `--quiet` | nur `data` |
-| `--styled` | Text, auch ohne Terminal |
+| `--json` | envelope `{ok, data, summary, notice, breadcrumbs}` |
+| `--quiet` | only `data` |
+| `--styled` | text, even without a terminal |
 
-`data` ist die Ressource der API, roh durchgereicht — nicht neu
-zusammengesetzt. Ein Feld, das die API dazubekommt, erreicht so jeden Client,
-ohne dass die CLI es kennt (C-002).
+`data` is the resource of the API, passed through raw — not assembled anew. A
+field the API gains reaches every client this way, without the CLI knowing it
+(C-002).
 
-Warnungen stehen bei `--json` in `notice`, sonst auf stderr, damit
-`--quiet | jq` nie etwas Fremdes im Strom hat.
+Warnings are in `notice` with `--json`, on stderr otherwise, so that
+`--quiet | jq` never has anything foreign in the stream.
 
-## Fehler
+## Errors
 
 `{ok: false, error, code, retryable, hint, meta: {apiCode, httpStatus}}`.
-`meta.apiCode` ist der Fallcode von Minka (`cardTitleTooLong`), `code` die
-Klasse, `hint` der nächste Schritt.
+`meta.apiCode` is the case code of Minka (`cardTitleTooLong`), `code` the
+class, `hint` the next step.
 
-| Exit | `code` | Bedeutung |
+| Exit | `code` | Meaning |
 |---|---|---|
 | 0 | — | ok |
-| 1 | `usage`, `config` | Aufruf oder Config-Datei |
-| 2 | `not_found` | nicht gefunden, oder nicht sichtbar |
-| 3 | `auth_required` | nicht angemeldet |
-| 4 | `forbidden` | verboten |
-| 6 | `network` | keine vollständige Antwort |
-| 7 | `api_error` | Server- oder Protokollfehler |
-| 8 | `ambiguous` | mehrdeutige Angabe |
-| 9 | `validation` | von Minka abgelehnt |
+| 1 | `usage`, `config` | the call or the config file |
+| 2 | `not_found` | not found, or not visible |
+| 3 | `auth_required` | not signed in |
+| 4 | `forbidden` | forbidden |
+| 6 | `network` | no complete response |
+| 7 | `api_error` | server or protocol error |
+| 8 | `ambiguous` | ambiguous input |
+| 9 | `validation` | refused by Minka |
 
-`retryable` ist nur bei lesenden Anfragen wahr, und bei `messages create` mit
-`--client-message-id`, weil ein zweiter Versuch dann nichts Neues schreibt. Ein
-fehlgeschlagener Schreibvorgang kann angekommen sein; dort rät der `hint` zum
-Nachlesen (C-012).
+`retryable` is true only for reading requests, and for `messages create` with
+`--client-message-id`, because a second attempt then writes nothing new. A
+failed write may have arrived; there the `hint` advises reading the state back
+(C-012).
 
-## Befehle
+## Commands
 
-Plural-Gruppe plus Aktion (`cards move`, `comments react`). Ein Befehl, der
-eine Ressource holt, gibt `breadcrumbs` mit: die nächsten sinnvollen Aufrufe
-mit fertiger Befehlszeile.
+Plural group plus action (`cards move`, `comments react`). A command that
+fetches a resource adds `breadcrumbs`: the next sensible calls, each with a
+ready-made command line.
 
-Freitext kommt nie über Shell-Quoting allein: Beschreibung, Kommentar und
-Nachricht nehmen `-` für stdin. Titel sind einzeilig und stehen in Flags
-(C-007).
+Free text never comes through shell quoting alone: description, comment and
+message take `-` for stdin. Titles are single-line and go into flags (C-007).
 
-Nennt eine Adresse zwei verschiedene Dinge, benennt ein Flag den Kreis, statt
-zwei ID-Arten auf dieselbe Position zu legen: `uploads create <datei>
+Where one address names two different things, a flag names the circle instead
+of putting two kinds of ID in the same position: `uploads create <file>
 --project <id> | --conversation <id>` (C-010).
 
-Was die API unter derselben ID anbietet, bekommt keine zweite Befehlsreihe: die
-ID eines privaten Gesprächs geht an `messages …` und `chats mark-read` (C-009).
+What the API offers under the same ID gets no second set of commands: the ID
+of a private conversation goes to `messages …` and `chats mark-read` (C-009).
