@@ -47,11 +47,14 @@ type envelope struct {
 }
 
 // newTestEnv starts a fake API and signs the CLI in to it through
-// $MINKA_HOST and $MINKA_TOKEN, with a config file in a temporary directory.
+// $MINKA_HOST and $MINKA_TOKEN, with a config file in a temporary directory
+// and a home directory of its own, so that no test reads or writes the home
+// of whoever runs it.
 func newTestEnv(t *testing.T) *testEnv {
 	t.Helper()
 	server, fixture := fakeapi.New(t)
 	return &testEnv{t: t, server: server, fixture: fixture, vars: map[string]string{
+		"HOME":         t.TempDir(),
 		"MINKA_CONFIG": filepath.Join(t.TempDir(), "minka", "config.json"),
 		"MINKA_HOST":   server.URL,
 		"MINKA_TOKEN":  fixture.Token,
