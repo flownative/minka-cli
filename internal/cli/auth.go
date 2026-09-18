@@ -51,24 +51,9 @@ The config file is ~/.config/minka/config.json, or $MINKA_CONFIG.`,
 				return err
 			}
 
-			me, err := api.New(host, token, userAgent()).Me(a.ctx)
-			if err != nil {
-				e := apiError(err, host)
-				if e.Code == CodeAuth {
-					e.Message = fmt.Sprintf("%s did not accept the token, nothing was saved", host)
-					e.Hint = "Check that the token is complete and not revoked or expired."
-				}
-				return e
-			}
-
-			path, file, err := a.loadConfig()
+			path, me, err := a.signIn(host, token)
 			if err != nil {
 				return err
-			}
-			file.Hosts[host] = config.HostEntry{Token: token, PersonName: me.Value.Name, EmailAddress: me.Value.EmailAddress}
-			file.DefaultHost = host
-			if err := file.Save(path); err != nil {
-				return &Error{Code: CodeConfig, Message: err.Error()}
 			}
 
 			return a.ok(success{
@@ -86,6 +71,32 @@ The config file is ~/.config/minka/config.json, or $MINKA_CONFIG.`,
 	cmd.Flags().BoolVar(&withToken, "with-token", false, "Read the token from stdin")
 
 	return cmd
+}
+
+// signIn checks a token against its host and saves it as the token of that
+// host, which becomes the default host. A token the host does not accept is
+// not saved, so the config file never holds one that does not work.
+func (a *app) signIn(host, token string) (string, api.Result[api.Me], error) {
+	me, err := api.New(host, token, userAgent()).Me(a.ctx)
+	if err != nil {
+		e := apiError(err, host)
+		if e.Code == CodeAuth {
+			e.Message = fmt.Sprintf("%s did not accept the token, nothing was saved", host)
+			e.Hint = "Check that the token is complete and not revoked or expired."
+		}
+		return "", api.Result[api.Me]{}, e
+	}
+
+	path, file, err := a.loadConfig()
+	if err != nil {
+		return "", api.Result[api.Me]{}, err
+	}
+	file.Hosts[host] = config.HostEntry{Token: token, PersonName: me.Value.Name, EmailAddress: me.Value.EmailAddress}
+	file.DefaultHost = host
+	if err := file.Save(path); err != nil {
+		return "", api.Result[api.Me]{}, &Error{Code: CodeConfig, Message: err.Error()}
+	}
+	return path, me, nil
 }
 
 func (a *app) readToken(cmd *cobra.Command, host string, fromStdin bool) (string, error) {

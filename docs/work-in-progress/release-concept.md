@@ -44,20 +44,14 @@ brew install flownative/flownative/minka
 minka setup
 ```
 
-- `minka setup` runs on a terminal only: asks for the host, points to the
-  account page of that host where a token for an agent is created, takes the
-  token hidden, checks it against `/me`, stores it, offers to install the skill
-  and shows a few first commands. Without a terminal it refuses and names the
-  single steps.
-- The skill is built: see [The skill](../stable/skill.md).
-- `minka doctor` checks sign-in, reachability, version, the permissions of the
-  configuration file and the installed skill.
+- `setup`, `doctor` and the skill are built: see
+  [First steps](../stable/first-steps.md) and [The skill](../stable/skill.md).
 
 ## Steps
 
 1. Checks on pull requests, the way of working through pull requests.
-2. `setup` and `doctor`. The skill inside the binary and its test against the
-   command tree are built.
+2. Built: the skill inside the binary with its test against the command tree,
+   `setup` and `doctor`.
 3. The release workflow, the formula template, a guide for releasing.
 4. A README that covers installing, first steps, use, sign-in, agents,
    configuration, troubleshooting, upgrading, verifying a release, development.

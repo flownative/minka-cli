@@ -210,3 +210,27 @@ a skill directory that is a symbolic link.
 **Why:** A tool that writes into a home directory unasked, or through a link
 into somebody's checkout, changes files nobody asked it to touch.
 **Implemented as:** `staleSkillNotice`, `installSkill`.
+
+<a id="c-018"></a>
+## C-018 — `setup` is for a person, the single steps are for an agent
+
+*Applies to: `setup`, `auth login`, `skill install`*
+
+`setup` asks questions and refuses without a terminal; everything it does is
+also a command of its own that asks nothing.
+
+**Why:** An agent that gets asked a question hangs, and a person should not
+have to know three commands to begin. **Implemented as:**
+`internal/cli/setup.go`, see [First steps](stable/first-steps.md).
+
+<a id="c-019"></a>
+## C-019 — `doctor` reports and exits 0
+
+*Applies to: `doctor`*
+
+A failed check is data, `data.healthy` and `checks[].status`, not an error of
+the command.
+
+**Why:** An exit code names one class of error, and a broken setup can have
+several at once; the report names each with its hint. **Implemented as:**
+`internal/cli/doctor.go`.
