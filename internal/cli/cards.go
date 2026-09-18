@@ -228,7 +228,7 @@ func (a *app) newCardsCreateCmd() *cobra.Command {
 				notices:     notices,
 				breadcrumbs: cardBreadcrumbs(card.Value.ID),
 				text: func(w io.Writer) {
-					fmt.Fprintf(w, "Created card %s in %s: %s\n%s\n", card.Value.ID, card.Value.Column.Title, card.Value.Title, card.Value.AppURL)
+					fmt.Fprintf(w, "Created card %s in %s: %s%s\n%s\n", card.Value.ID, card.Value.Column.Title, shortIDBefore(card.Value.ShortID), card.Value.Title, card.Value.AppURL)
 				},
 			})
 		},

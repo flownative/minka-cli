@@ -62,6 +62,7 @@ type Column struct {
 
 type BoardCard struct {
 	ID                 string            `json:"id"`
+	ShortID            *string           `json:"shortId"` // such as "MNK-1A", nil where the board shows no short identifiers
 	Title              string            `json:"title"`
 	HasDescription     bool              `json:"hasDescription"`
 	CommentCount       int               `json:"commentCount"`
@@ -121,6 +122,7 @@ type ColumnReference struct {
 
 type Card struct {
 	ID          string           `json:"id"`
+	ShortID     *string          `json:"shortId"` // such as "MNK-1A", nil where the board shows no short identifiers
 	ProjectID   string           `json:"projectId"`
 	BoardID     string           `json:"boardId"`
 	Project     ProjectReference `json:"project"`

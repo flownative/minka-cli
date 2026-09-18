@@ -38,6 +38,8 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   its tests. Live, the local instance shows `status` and takes the filter; the
   test instance runs an older Minka, where `projects list --archived` refuses
   as it should.
+- A `shortId` that is not null: live, every card carries the field, but no
+  board that can be read there shows short identifiers.
 - "agent for X" in `people list` has been seen live, an agent that stepped
   down has not — it is in no list any more.
 
@@ -47,10 +49,9 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
 - Paging Done beyond 25 cards does not exist; needed once dogfooding needs it.
 - Flow answers a wrong HTTP method with HTML instead of JSON.
 - Column colours come later, read-only.
-- In work at Minka: cards gain `shortId`, a string such as `MINKA-1K`, or null
-  where the board has no prefix (E-138). `data` carries it without a change;
-  the text of `cards show`, `cards mine` and `boards show` should show it. It
-  is no address: the API finds a card by its UUID only.
+- Wished for: an address that finds a card by its short identifier. Cards
+  carry `shortId`, but the API finds a card by its UUID only, so a command
+  cannot take `MNK-1A` without reading a whole board first.
 
 ## Next steps
 

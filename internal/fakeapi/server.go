@@ -70,7 +70,12 @@ type Column struct {
 }
 
 type Card struct {
-	ID            string
+	ID string
+	// ShortID is such as "MNK-1A", empty where the board shows no short
+	// identifiers. A test sets it on a card; the server gives one to every
+	// card of a board with a prefix, which this does not mirror: a card
+	// created here has none.
+	ShortID       string
 	Title         string
 	Description   string
 	CreatedAt     time.Time
@@ -597,7 +602,7 @@ func (s *Server) board(w http.ResponseWriter, r *http.Request, person *Person) {
 		}
 		for _, card := range listed {
 			cards = append(cards, map[string]any{
-				"id": card.ID, "title": card.Title, "hasDescription": card.Description != "",
+				"id": card.ID, "shortId": nullable(card.ShortID), "title": card.Title, "hasDescription": card.Description != "",
 				"stepCount": len(card.Steps), "completedStepCount": completedStepCount(card),
 				"commentCount": len(card.Comments), "createdAt": timestamp(card.CreatedAt),
 				"creator": s.personReference(card.CreatorID), "completedAt": timestampOrNil(card.CompletedAt),
@@ -2028,7 +2033,7 @@ func (s *Server) cardResource(board *Board, column *Column, card *Card) map[stri
 	}
 	project := s.projectOf(board)
 	return map[string]any{
-		"id": card.ID, "projectId": board.ProjectID, "boardId": board.ID,
+		"id": card.ID, "shortId": nullable(card.ShortID), "projectId": board.ProjectID, "boardId": board.ID,
 		"project":     map[string]any{"id": project.ID, "name": project.Name},
 		"board":       map[string]any{"id": board.ID, "title": board.Title},
 		"title":       card.Title,
@@ -2167,6 +2172,15 @@ func malformed(w http.ResponseWriter, message string) {
 
 func unprocessable(w http.ResponseWriter, code, message string) {
 	writeJSON(w, http.StatusUnprocessableEntity, errorBody(code, message))
+}
+
+// nullable is null for an empty text, the way the API answers for what is not
+// there.
+func nullable(text string) any {
+	if text == "" {
+		return nil
+	}
+	return text
 }
 
 func errorBody(code, message string) map[string]any {
