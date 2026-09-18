@@ -83,7 +83,10 @@ func (a *app) newCardsRestoreCmd() *cobra.Command {
 
 Only a card that is in the trash can be restored. A card that was never there,
 a card restored already and a card whose board or project is itself in the
-trash all answer with 2 (not_found), and so does a second restore.`,
+trash all answer with 2 (not_found), and so does a second restore.
+
+A card in the trash goes by no short identifier, so give its ID, which
+"minka trash list <projectId>" shows.`,
 		Args: requireArgs("cardId"),
 		RunE: func(_ *cobra.Command, args []string) error {
 			s, err := a.session()
@@ -365,6 +368,7 @@ Done is ordered by completion, so it takes no placement.
 ` + columnHelp,
 		Example: `  minka cards move 0199... --column Doing --bottom
   minka cards move 0199... --column Doing --after 0199...
+  minka cards move MNK-1A --column Doing --after MNK-2B
   minka cards move 0199... --column triage`,
 		Args: requireArgs("cardId"),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -384,6 +388,9 @@ Done is ordered by completion, so it takes no placement.
 			if neighbour != "" {
 				if err := requireID(cmd, neighbourCard, neighbour); err != nil {
 					return err
+				}
+				if strings.EqualFold(neighbour, args[0]) {
+					return usageErrorf(cmd, "a card cannot be placed next to itself")
 				}
 			}
 
@@ -465,8 +472,8 @@ Done is ordered by completion, so it takes no placement.
 	flags.StringVar(&column, "column", "", "Target column")
 	flags.BoolVar(&top, "top", false, "Put the card at the top of the column")
 	flags.BoolVar(&bottom, "bottom", false, "Put the card at the bottom of the column")
-	flags.StringVar(&after, "after", "", "Put the card below this card")
-	flags.StringVar(&before, "before", "", "Put the card above this card")
+	flags.StringVar(&after, "after", "", "Put the card below this card (ID or short identifier)")
+	flags.StringVar(&before, "before", "", "Put the card above this card (ID or short identifier)")
 	_ = cmd.MarkFlagRequired("column")
 
 	return cmd

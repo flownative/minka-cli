@@ -242,6 +242,11 @@ type Server struct {
 	// projects could be archived: no status, and the filter goes unnoticed.
 	IgnoresProjectStatus bool
 
+	// AnswersCardsWithoutID makes the lookup of a short identifier answer with
+	// a card that has no ID, which no Minka does: what a client does with an
+	// answer it cannot use must not depend on that.
+	AnswersCardsWithoutID bool
+
 	mu       sync.Mutex
 	requests []RecordedRequest
 	failWith int
@@ -705,7 +710,11 @@ func (s *Server) cardByShortIdentifier(w http.ResponseWriter, r *http.Request, p
 		for _, column := range board.Columns {
 			for _, card := range column.Cards {
 				if card.ShortID != "" && card.ShortID == identifier {
-					writeJSON(w, http.StatusOK, s.cardResource(board, column, card))
+					resource := s.cardResource(board, column, card)
+					if s.AnswersCardsWithoutID {
+						resource["id"] = ""
+					}
+					writeJSON(w, http.StatusOK, resource)
 					return
 				}
 			}

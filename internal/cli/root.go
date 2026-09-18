@@ -338,9 +338,13 @@ func (s *session) resolveCard(ctx context.Context, card *string) error {
 		e := s.fail(err)
 		if e.Code == CodeNotFound {
 			e.Message = "no card you can see goes by " + identifier
-			e.Hint = "It does not exist, its board shows no short identifiers, it is in the trash or in a project you are not a member of, or two of your organizations use this prefix. The ID of a card always works."
+			e.Hint = "It does not exist, its board shows no short identifiers, it is in the trash or in a project you are not a member of, or two of your organizations use this prefix. The ID of a card always works; minka trash list <projectId> gives the ID of a card in the trash."
 		}
 		return e
+	}
+	// What comes back goes into the path of the requests that follow.
+	if !uuidPattern.MatchString(found.Value.ID) {
+		return &Error{Code: CodeAPI, Message: s.host + " answered for " + identifier + " with a card that has no ID"}
 	}
 	*card = found.Value.ID
 	return nil
