@@ -22,9 +22,11 @@ adopt the principles, not the scope. Not part of it: AI integrations,
 notifications, an interactive TUI, anything the API does not offer.
 
 Proprietary like Minka, until Minka is published. The repository lives on
-GitHub at `git@github.com:flownative/minka-cli.git`; the work goes to `main`
-regularly. Other branches and anything that rewrites history only when the
-client says so.
+GitHub at `git@github.com:flownative/minka-cli.git`. Work reaches `main`
+through a pull request from a branch of its own; GitHub Actions run the checks
+on it. Pushing, and anything that rewrites pushed history, only when the client
+says so. How a version gets released is laid down in the
+[release concept](docs/work-in-progress/release-concept.md).
 
 ## Documentation
 
