@@ -57,7 +57,7 @@ internal/markdown/    Markdown → HTML, only elements the server keeps
 internal/richtext/    HTML of a text → Markdown for reading
 internal/cli/         commands, output, exit codes
 internal/fakeapi/     in-memory Minka API for tests (httptest)
-skills/minka/         SKILL.md for agents
+skills/               SKILL.md for agents, embedded into the binary
 ```
 
 ```bash

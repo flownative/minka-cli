@@ -185,3 +185,28 @@ dependencies, a build, known vulnerabilities.
 **Why:** A release is cut from `main`, so `main` has to be releasable at any
 time, and a pull request is where a second pair of eyes looks. **Implemented
 as:** `.github/workflows/test.yml`, see [Testing](stable/testing.md).
+
+<a id="c-016"></a>
+## C-016 — The skill travels inside the binary
+
+*Applies to: `skill show|install|status`, installing and upgrading*
+
+The binary carries the SKILL.md and writes it out on request; it is not fetched
+from the network and not installed by a separate package.
+
+**Why:** The description an agent reads then always fits the commands of the
+version that is installed. **Implemented as:** `skills/embed.go`,
+`internal/cli/skill.go`, see [The skill](stable/skill.md).
+
+<a id="c-017"></a>
+## C-017 — A differing skill is reported, never replaced
+
+*Applies to: every command, `skill install`*
+
+When the installed skill differs from the one the binary carries, a `notice`
+says so; only `skill install` writes, and not through a directory of skills or
+a skill directory that is a symbolic link.
+
+**Why:** A tool that writes into a home directory unasked, or through a link
+into somebody's checkout, changes files nobody asked it to touch.
+**Implemented as:** `staleSkillNotice`, `installSkill`.

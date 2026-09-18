@@ -70,6 +70,12 @@ type success struct {
 // ok prints a success. Notices go into the envelope for --json and to stderr
 // otherwise, so that --quiet keeps stdout to the bare data without losing them.
 func (a *app) ok(s success) error {
+	if !a.skillIsTheTopic {
+		if notice := a.staleSkillNotice(); notice != "" {
+			s.notices = append(s.notices, notice)
+		}
+	}
+
 	switch a.format() {
 	case formatQuiet:
 		a.warn(s.notices)

@@ -82,11 +82,32 @@ not expected in practice.
 
 - `minka commands --json`: every command with usage and flags.
 - `minka <command> --help`: description and examples.
+- `minka version --json`: the version of this minka.
+- `minka auth logout --host <url>`: forget the token of a host. The token stays
+  valid until it is revoked on the server.
+
+## This skill
+
+The binary carries this description, so it fits the commands of the version
+that is installed.
+
+- `minka skill show --styled`: print it.
+- `minka skill install`: write it to `~/.claude/skills/minka/SKILL.md`, or
+  into another directory of skills with `--dir <dir>`. A directory of
+  skills or a skill directory that is a symbolic link is refused (exit 1)
+  rather than written through, and draws no notice.
+- `minka skill status --json`: `data.state` is `current`, `differs` or
+  `not installed`.
+
+After an upgrade the installed copy is older than the binary. minka never
+replaces it by itself; every command then carries a `notice` that says so.
+When you see it, run `minka skill install` and read the skill again.
 
 ## Quick reference
 
 ```bash
 minka auth status --json
+minka me --json
 minka projects list --json
 minka boards list <projectId> --json
 minka boards show <boardId> --json
