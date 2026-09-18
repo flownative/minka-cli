@@ -18,6 +18,9 @@ the documentation says what holds; how it came about is in git.
 - [Rich text in both directions](stable/rich-text.md): Markdown to HTML and
   back, the allowlist of the server, sources, files and mentions — before any
   work on descriptions, comments or messages.
+- [The skill](stable/skill.md): How the skill travels inside the binary, how it
+  gets installed, what happens after an upgrade, the test against the command
+  tree — before any work on a command's name or on `skill`.
 - [Testing](stable/testing.md): Fake API, sabotage proofs, what a test pins
   down — read before your first test.
 

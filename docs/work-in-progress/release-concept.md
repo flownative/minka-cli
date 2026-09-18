@@ -49,20 +49,15 @@ minka setup
   token hidden, checks it against `/me`, stores it, offers to install the skill
   and shows a few first commands. Without a terminal it refuses and names the
   single steps.
-- `minka skill` prints the skill; `minka skill install` writes it to
-  `~/.claude/skills/minka/` with a stamp of the version it came from.
-- When the installed skill is older than the binary, every command says so: in
-  `notice` with `--json`, on stderr otherwise.
+- The skill is built: see [The skill](../stable/skill.md).
 - `minka doctor` checks sign-in, reachability, version, the permissions of the
   configuration file and the installed skill.
-- A test holds the SKILL.md against the command tree, so a command cannot be
-  added or removed without the skill following.
 
 ## Steps
 
 1. Checks on pull requests, the way of working through pull requests.
-2. The skill inside the binary, `skill`, `setup`, `doctor`, the test against
-   the command tree.
+2. `setup` and `doctor`. The skill inside the binary and its test against the
+   command tree are built.
 3. The release workflow, the formula template, a guide for releasing.
 4. A README that covers installing, first steps, use, sign-in, agents,
    configuration, troubleshooting, upgrading, verifying a release, development.
