@@ -124,8 +124,11 @@ print {ok: false, error, code, retryable, hint, meta} and exit with a code per
 class: 1 usage, 2 not found, 3 not signed in, 4 forbidden, 6 network,
 7 API error, 8 ambiguous, 9 validation.
 
-Sign in first:
-  minka auth login --host https://minka.example.com
+First steps, on a terminal:
+  minka setup
+
+Without a terminal, sign in with:
+  minka auth login --host https://minka.example.com --with-token < token.txt
 
 $MINKA_HOST and $MINKA_TOKEN sign in without the config file. The token is
 only used for the host in $MINKA_HOST.`,
