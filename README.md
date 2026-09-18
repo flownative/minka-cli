@@ -51,5 +51,6 @@ codes and how descriptions are converted.
 make check   # gofmt, go vet, tests against an in-memory fake of the API
 ```
 
-Working notes for Claude Code are in [CLAUDE.md](CLAUDE.md), the current state
-in [STATUS.md](STATUS.md).
+Working notes for Claude Code are in [CLAUDE.md](CLAUDE.md); the documentation
+is indexed in [Documentation/README.md](Documentation/README.md), starting with
+the [current state](Documentation/work-in-progress/status.md).

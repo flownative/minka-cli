@@ -4,34 +4,40 @@ Anweisungen für Claude Code für die Arbeit an diesem Repository.
 
 ## Unterhaltung
 
-Auftraggeber ist Robert; seit dem 16.09.2026 vertritt Shaun ihn, mit denselben
-Rechten. Die Sprache für Unterhaltungen mit beiden ist Deutsch mit informellem
-"du".
-Code, Kommentare, Commit-Messages, Hilfetexte und Ausgaben der CLI sind
-Englisch.
+Auftraggeber ist Robert; Shaun vertritt ihn mit denselben Rechten. Die Sprache
+für Unterhaltungen mit beiden ist Deutsch mit informellem "du". Code,
+Kommentare, Commit-Messages, Hilfetexte und Ausgaben der CLI sind Englisch.
 
 ## Was das ist
 
 `minka` ist die Kommandozeile für die JSON-API von Minka (`/api/v1`). Zuerst
 für das Dogfooding: Robert und Claude-Sessions pflegen damit die
-Entwicklungsaufgaben von Minka im lokalen Minka-Board. Sie ist ausdrücklich
-auch für KI-Agenten gebaut: stabile `--json`-Ausgabe, Exit-Codes je
-Fehlerklasse, eine Befehlsbeschreibung in `skills/minka/SKILL.md`.
+Entwicklungsaufgaben von Minka. Sie ist ausdrücklich auch für KI-Agenten
+gebaut: stabile `--json`-Ausgabe, Exit-Codes je Fehlerklasse, eine
+Befehlsbeschreibung in `skills/minka/SKILL.md`.
 
 Vorbild für Konzepte ist [basecamp-cli](https://github.com/basecamp/basecamp-cli):
 Prinzipien übernehmen, nicht den Umfang. Nicht dazu gehören: KI-Integrationen,
-Uploads, Benachrichtigungen, eine interaktive TUI, alles, was die API nicht
-anbietet.
+Benachrichtigungen, eine interaktive TUI, alles, was die API nicht anbietet.
 
 Proprietär wie Minka, bis Minka veröffentlicht wird. Das Repository liegt auf
 GitHub unter `git@github.com:flownative/minka-cli.git`; der Stand kommt
 regelmäßig nach `main`. Andere Branches und alles, was Geschichte umschreibt,
 nur auf Ansage des Auftraggebers.
 
-## Stand und Status
+## Dokumentation
 
-Der aktuelle Stand, offene Punkte und Wünsche an die API stehen in
-[STATUS.md](STATUS.md). Vor jeder Arbeit lesen, danach nachführen.
+- **Index über alle Dokumente:** [Documentation/README.md](Documentation/README.md)
+  — eine Zeile pro Dokument mit dem Hinweis, wann man es braucht. Minimal
+  starten, bei Bedarf nachladen.
+- **Erster Blick jeder Session:** [Stand](Documentation/work-in-progress/status.md).
+- **Entscheidungsregister:** [Documentation/decisions.md](Documentation/decisions.md)
+  (C-001…) — je Entscheidung kurz: was gilt, warum, wo umgesetzt.
+- Struktur und Lebenszyklus der Doku: `.claude/rules/documentation.md` (lädt
+  automatisch bei Arbeit unter `Documentation/`).
+
+Nichts über vorhandenen Code annehmen, sondern nachsehen. Doku-Update gehört in
+denselben Commit wie die Code-Änderung.
 
 ## Stack und Aufbau
 
@@ -45,13 +51,11 @@ cmd/minka/            main: ruft cli.Run auf und beendet mit dessen Exit-Code
 internal/api/         HTTP-Client und Typen der Ressourcen
 internal/config/      Hosts und Tokens in einer Datei mit 0600
 internal/markdown/    Markdown → HTML, nur Elemente, die der Server behält
-internal/richtext/    HTML einer Beschreibung → Markdown zum Lesen
+internal/richtext/    HTML eines Textes → Markdown zum Lesen
 internal/cli/         Befehle, Ausgabe, Exit-Codes
 internal/fakeapi/     In-Memory-Minka-API für Tests (httptest)
 skills/minka/         SKILL.md für Agenten
 ```
-
-## Befehle
 
 ```bash
 make build        # bin/minka
@@ -63,70 +67,50 @@ make check        # gofmt-Prüfung, go vet, Tests; vor jedem Bericht und Commit
 
 Die Quelle der Wahrheit liegt im Minka-Repository, **nur lesen**:
 
-- `/Users/robert/Sites/minka/Documentation/stable/02-architecture/authorization.md`,
-  Abschnitt „API" (Endpunkte, Fehlercodes)
-- `/Users/robert/Sites/minka/Documentation/decisions.md`, E-057 mit
-  „Umgesetzt als"
+- `Documentation/stable/02-architecture/authorization.md`, Abschnitt „API"
+- `Documentation/decisions.md` (E-…)
 - Code unter `DistributionPackages/Flownative.Minka/Classes/Presentation/Api/`
 
-`internal/fakeapi` bildet diesen Vertrag nach. Ändert sich die API, zuerst
-den Fake anpassen, dann die CLI.
+`internal/fakeapi` bildet diesen Vertrag nach. Ändert sich die API, zuerst den
+Fake anpassen, dann die CLI.
 
-Die API ist „intern, instabil". Fragen, Widersprüche und Wünsche an die API
-gehen per Nachricht an die Minka-Koordinator-Session, nicht als Änderung ins
-Minka-Repository. Nacheinander waren das `minka-8a`, `minka-63`, `minka-c2` und
-seit dem 17.09.2026 `minka-92`. Nachrichten über API-Änderungen mit dem Code
-abgleichen: Maßgeblich sind Controller, Resources und Tests im Commit.
+Die API ist „intern, instabil". Fragen, Widersprüche und Wünsche gehen per
+Nachricht an die Minka-Koordinator-Session (derzeit `minka-92`), nicht als
+Änderung ins Minka-Repository. Jede Meldung über eine API-Änderung mit dem Code
+abgleichen: Maßgeblich sind Controller, Resources und Tests, nicht die
+Meldung. Weicht beides ab, geht das zurück an die Koordination.
 
 ## Regeln gegenüber dem Minka-Repository
 
 `/Users/robert/Sites/minka` ist **nur zum Lesen** da. Keine Dateien ändern,
 keine Git-Befehle, die etwas ändern, kein `composer`, `phpunit`,
-`npm run test:browser`, keine Migrationen: Es gibt genau eine
-Testdatenbank, und andere Agenten testen parallel darin.
+`npm run test:browser`, keine Migrationen: Es gibt genau eine Testdatenbank,
+und andere Agenten testen parallel darin.
 
 Erlaubt: lesen, `beach exec ./flow token:create|token:list|token:revoke`,
-Live-Aufrufe gegen `https://minka.localbeach.net`. **Geschrieben wird live nur
-im Board „API-3 Abnahme" und im Chat „Chat1 Abnahme", beide im Projekt
-„Test-Projekt".** Der Chat „Sommerfest" dort ist Roberts Demo und bleibt
-unberührt. Gelöscht werden nur Karten und Nachrichten, die ein Test selbst
-angelegt hat.
+Live-Aufrufe. Wo live geschrieben werden darf, steht in
+[Live-Prüfung](Documentation/guides/live-check.md).
 
 Tokens stehen nie im Repository, in Commits, Tests oder Logs, nur in der
-Konfigurationsdatei der CLI (`~/.config/minka/config.json`, 0600). Für
-Entwicklung und Smoke-Tests: Token für `bruno@example.com`.
+Konfigurationsdatei der CLI (`~/.config/minka/config.json`, 0600).
 
 ## Konventionen
 
-- **Konventionen von basecamp-cli**, damit ein Agent, der eine der beiden CLIs
-  kennt, die andere lesen kann: Befehle als Plural-Gruppe plus Aktion
-  (`cards move`), Text auf einem Terminal, sonst JSON.
-- **Die JSON-Ausgabe ist ein Vertrag.** `--json`:
-  `{ok, data, summary, notice, breadcrumbs}`, `data` ist die Ressource der API
-  unverändert; `--quiet`: nur `data`; Fehler:
-  `{ok: false, error, code, retryable, hint, meta: {apiCode, httpStatus}}`.
-  Felder dürfen dazukommen, nie verschwinden oder umbenannt werden.
-- **Exit-Codes sind ein Vertrag**, dieselben wie bei basecamp-cli. Tabelle in
-  `internal/cli/errors.go` und `skills/minka/SKILL.md`.
-- **Freitext kommt nie über Shell-Quoting allein.** Beschreibung und
-  Kommentar nehmen `-` für stdin an; Titel sind einzeilig und kommen als Flag.
-- **Ein Token geht nur an seinen Host.** `MINKA_TOKEN` gilt allein für
-  `MINKA_HOST`, sonst kommt das Token aus der Config-Datei für genau den Host.
-- **Tests gegen den Fake**, nicht gegen die lokale Instanz. Jede Schutzmaßnahme
-  (Dateirechte, Pfad-Escaping, keine Redirects, Allowlist des Markdowns …)
-  bekommt einen Test und einen Sabotagebeweis: Schutz herausnehmen, Test wird
-  rot, Schutz zurück. Den Beweis in STATUS.md notieren.
+Die geltenden Regeln stehen unter `Documentation/stable/`; ihre Begründungen im
+Register. Für die Arbeit selbst gilt:
+
 - Kommentare nach dem Skill `code-comments` (Intention statt Mechanik,
   zeitlos, keine Verweise auf Karten, Doku oder Entscheidungs-IDs).
 - Commit-Messages nach dem Skill `git-workflow`, Englisch, keine
   Session-Links.
+- Jede Schutzmaßnahme bekommt einen Test und einen Sabotagebeweis
+  ([Testen](Documentation/stable/testing.md)).
 
 ## Arbeitsweise mit Unteragenten
 
-Wie in Minka (`Documentation/work-in-progress/bootstrap/operating-model.md`):
-Implementierer baut, ein Reviewer, der nichts ändert, prüft. Niemand prüft
-sein eigenes Werk. Recherche, die viel Text erzeugt, geht an einen
-Unteragenten mit knappem Berichtsformat.
+Wie in Minka: Implementierer baut, ein Reviewer, der nichts ändert, prüft.
+Niemand prüft sein eigenes Werk. Recherche, die viel Text erzeugt, geht an
+einen Unteragenten mit knappem Berichtsformat.
 
 ## Zentrale Best Practices (Flownative Skills)
 
