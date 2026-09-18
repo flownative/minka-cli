@@ -149,6 +149,7 @@ only used for the host in $MINKA_HOST.`,
 	})
 
 	root.AddCommand(
+		a.newSetupCmd(),
 		a.newAuthCmd(),
 		a.newMeCmd(),
 		a.newProjectsCmd(),
@@ -163,6 +164,7 @@ only used for the host in $MINKA_HOST.`,
 		a.newUploadsCmd(),
 		a.newTrashCmd(),
 		a.newSkillCmd(),
+		a.newDoctorCmd(),
 		a.newCommandsCmd(root),
 		a.newVersionCmd(),
 	)

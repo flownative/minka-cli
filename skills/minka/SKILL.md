@@ -83,6 +83,16 @@ not expected in practice.
 - `minka commands --json`: every command with usage and flags.
 - `minka <command> --help`: description and examples.
 - `minka version --json`: the version of this minka.
+- `minka doctor --json`: checks the config file, the sign-in, whether the host
+  answers and accepts the token, and the installed skill. It is a report and
+  exits 0 whatever it finds: read `data.healthy`, and for every entry of
+  `data.checks` its `status` (`ok`, `warn`, `fail`, or `skip` where a check
+  before it failed), `detail` and `hint`. Run
+  it first when a command fails in a way you do not understand.
+- `minka setup` is for a person on a terminal: it asks for the host and the
+  token and offers to install this skill. Without a terminal it exits 1; take
+  `minka auth login --host <url> --with-token < file` and `minka skill install`
+  instead.
 - `minka auth logout --host <url>`: forget the token of a host. The token stays
   valid until it is revoked on the server.
 

@@ -10,10 +10,23 @@ make install   # go install ./cmd/minka
 make build     # bin/minka
 ```
 
-## Sign in
+## First steps
 
-Create an access token on the server and pipe it into the CLI, so it never
-appears in the shell history:
+```bash
+minka setup
+```
+
+asks for the host, takes an access token without echo, checks it against the
+host, saves it and offers to install the skill for agents. Create the token on
+your account page in Minka, for an agent of yours; it is shown once.
+
+`minka doctor` checks the config file, the sign-in, the host and the skill, and
+says what to do about what it finds.
+
+## Sign in without a terminal
+
+Pipe the token into the CLI, so it never appears in the shell history. On a
+development instance a token can be created on the server:
 
 ```bash
 beach exec ./flow token:create --email-address you@example.com --name laptop \
