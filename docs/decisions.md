@@ -234,3 +234,27 @@ the command.
 **Why:** An exit code names one class of error, and a broken setup can have
 several at once; the report names each with its hint. **Implemented as:**
 `internal/cli/doctor.go`.
+
+<a id="c-020"></a>
+## C-020 — Homebrew installs, no script from the network
+
+*Applies to: installing, upgrading, the README*
+
+The CLI is installed and upgraded through the Homebrew tap, or by hand from an
+archive with a checksum. There is no install script and no self-update.
+
+**Why:** A script piped into a shell is run unread, and a package manager
+already knows how to upgrade. **Implemented as:**
+`.github/workflows/release.yml`, see [Releases](stable/releases.md).
+
+<a id="c-021"></a>
+## C-021 — While the repository is private, the formula builds from source
+
+*Applies to: `Formula/minka.rb` in the tap*
+
+The formula clones the tag over SSH and builds with Go; the archives of a
+release are for installing by hand.
+
+**Why:** Release files of a private repository need a token on every machine,
+SSH access to the repository everybody who may install already has.
+**Implemented as:** `.github/formula/minka.rb.tpl`.
