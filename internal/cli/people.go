@@ -114,6 +114,9 @@ succeeds.
 			if err != nil {
 				return err
 			}
+			if err := s.resolveCard(a.ctx, &args[0]); err != nil {
+				return err
+			}
 			card, err := s.client.Card(a.ctx, args[0])
 			if err != nil {
 				return s.fail(err)
@@ -162,6 +165,9 @@ nothing and succeeds. Somebody who left the project can still be taken off.
 		RunE: func(_ *cobra.Command, args []string) error {
 			s, err := a.session()
 			if err != nil {
+				return err
+			}
+			if err := s.resolveCard(a.ctx, &args[0]); err != nil {
 				return err
 			}
 			card, err := s.client.Card(a.ctx, args[0])

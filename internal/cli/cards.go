@@ -90,6 +90,9 @@ trash all answer with 2 (not_found), and so does a second restore.`,
 			if err != nil {
 				return err
 			}
+			if err := s.resolveCard(a.ctx, &args[0]); err != nil {
+				return err
+			}
 			card, err := s.client.RestoreCard(a.ctx, args[0])
 			if err != nil {
 				e := s.fail(err)
@@ -123,6 +126,9 @@ into the same HTML; in JSON it is the HTML the server stores.`,
 		RunE: func(_ *cobra.Command, args []string) error {
 			s, err := a.session()
 			if err != nil {
+				return err
+			}
+			if err := s.resolveCard(a.ctx, &args[0]); err != nil {
 				return err
 			}
 			card, err := s.client.Card(a.ctx, args[0])
@@ -296,6 +302,9 @@ func (a *app) newCardsEditCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			if err := s.resolveCard(a.ctx, &args[0]); err != nil {
+				return err
+			}
 			if input.Description != nil {
 				current, err := s.client.Card(a.ctx, args[0])
 				if err != nil {
@@ -373,17 +382,30 @@ Done is ordered by completion, so it takes no placement.
 				neighbour = before
 			}
 			if neighbour != "" {
-				if err := requireID(cmd, "the neighbour", neighbour); err != nil {
+				if err := requireID(cmd, neighbourCard, neighbour); err != nil {
 					return err
-				}
-				if neighbour == args[0] {
-					return usageErrorf(cmd, "a card cannot be placed next to itself")
 				}
 			}
 
 			s, err := a.session()
 			if err != nil {
 				return err
+			}
+			if err := s.resolveCard(a.ctx, &args[0]); err != nil {
+				return err
+			}
+			if neighbour != "" {
+				if err := s.resolveCard(a.ctx, &neighbour); err != nil {
+					return err
+				}
+				if neighbour == args[0] {
+					return usageErrorf(cmd, "a card cannot be placed next to itself")
+				}
+				if after != "" {
+					after = neighbour
+				} else {
+					before = neighbour
+				}
 			}
 			card, err := s.client.Card(a.ctx, args[0])
 			if err != nil {
@@ -462,6 +484,9 @@ is already done stays as it is. To reopen a card, move it out of Done.`,
 			if err != nil {
 				return err
 			}
+			if err := s.resolveCard(a.ctx, &args[0]); err != nil {
+				return err
+			}
 			card, err := s.client.Card(a.ctx, args[0])
 			if err != nil {
 				return s.fail(err)
@@ -523,6 +548,9 @@ leaves the card in the trash all the same; only the second exit code differs.`,
 		RunE: func(_ *cobra.Command, args []string) error {
 			s, err := a.session()
 			if err != nil {
+				return err
+			}
+			if err := s.resolveCard(a.ctx, &args[0]); err != nil {
 				return err
 			}
 			if err := s.client.DeleteCard(a.ctx, args[0]); err != nil {

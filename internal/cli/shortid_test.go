@@ -57,3 +57,78 @@ func TestTheHeadingOfACardStaysItsBareTitle(t *testing.T) {
 		t.Fatalf("the heading is not the bare title followed by the short identifier:\n%s", r.stdout)
 	}
 }
+
+func TestACardIsFoundByItsShortIdentifierInAnyCase(t *testing.T) {
+	e := newTestEnv(t)
+	e.fixture.CardInDoing.ShortID = "MNK-1A"
+
+	for _, name := range []string{"MNK-1A", "mnk-1a"} {
+		env, r := e.runJSON("", "cards", "show", name)
+		expectCode(t, r, ExitOK)
+		if got := decode(t, env.Data)["id"]; got != e.fixture.CardInDoing.ID {
+			t.Fatalf("%s: card %v, want %s", name, got, e.fixture.CardInDoing.ID)
+		}
+	}
+}
+
+func TestACommandThatWritesGoesOnWithTheIDOfTheCard(t *testing.T) {
+	e := newTestEnv(t)
+	e.fixture.CardInDoing.ShortID = "MNK-1A"
+
+	env, r := e.runJSON("", "comments", "create", "MNK-1A", "A comment")
+	expectCode(t, r, ExitOK)
+
+	write := e.server.WritingRequests()[0]
+	if write.Path != "/api/v1/cards/"+e.fixture.CardInDoing.ID+"/comments" {
+		t.Fatalf("the comment went to %s", write.Path)
+	}
+	for _, crumb := range env.Breadcrumbs {
+		if strings.Contains(crumb.Cmd, "MNK-1A") {
+			t.Fatalf("a breadcrumb names the card by its short identifier, which may stop naming it: %s", crumb.Cmd)
+		}
+	}
+}
+
+func TestANeighbourIsNamedByItsShortIdentifierToo(t *testing.T) {
+	e := newTestEnv(t)
+	e.fixture.CardInTriage.ShortID = "MNK-1A"
+	e.fixture.CardInDoing.ShortID = "MNK-2B"
+
+	_, r := e.runJSON("", "cards", "move", "MNK-1A", "--column", "Doing", "--after", "mnk-2b")
+	expectCode(t, r, ExitOK)
+	body := e.lastWriteBody()
+	if body["previousCardId"] != e.fixture.CardInDoing.ID {
+		t.Fatalf("the neighbour did not travel as an ID: %v", body)
+	}
+
+	_, itself := e.runJSON("", "cards", "move", "MNK-1A", "--column", "Doing", "--after", "mnk-1a")
+	expectCode(t, itself, ExitUsage)
+}
+
+func TestAShortIdentifierThatNamesNothingSaysWhatThatCanMean(t *testing.T) {
+	e := newTestEnv(t)
+	e.fixture.OtherCard.ShortID = "OTH-1"
+
+	for _, name := range []string{"MNK-9Z", "OTH-1"} {
+		env, r := e.runJSON("", "comments", "create", name, "A comment")
+		expectCode(t, r, ExitNotFound)
+		if !strings.Contains(env.Error, strings.ToUpper(name)) || !strings.Contains(env.Hint, "short identifiers") {
+			t.Fatalf("%s: error %q, hint %q", name, env.Error, env.Hint)
+		}
+		if len(e.server.WritingRequests()) != 0 {
+			t.Fatal("something was written")
+		}
+	}
+}
+
+func TestWhatIsNeitherAnIDNorAShortIdentifierSendsNothing(t *testing.T) {
+	e := newTestEnv(t)
+
+	for _, name := range []string{"MNK", "MNK-", "-1A", "MNK-1A/../../me", "M-1", "MNK-1234567890123", "MNK 1A"} {
+		_, r := e.runJSON("", "cards", "show", name)
+		expectCode(t, r, ExitUsage)
+	}
+	if n := len(e.server.Requests()); n != 0 {
+		t.Fatalf("%d requests sent", n)
+	}
+}

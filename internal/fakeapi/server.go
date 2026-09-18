@@ -339,6 +339,7 @@ func New(t testing.TB) (*Server, *Fixture) {
 	mux.HandleFunc("GET /api/v1/boards/{boardId}", s.authenticated(s.board))
 	mux.HandleFunc("GET /api/v1/me/cards", s.authenticated(s.myCards))
 	mux.HandleFunc("GET /api/v1/cards/{cardId}", s.authenticated(s.card))
+	mux.HandleFunc("GET /api/v1/cards/by-short-id/{identifier}", s.authenticated(s.cardByShortIdentifier))
 	mux.HandleFunc("POST /api/v1/boards/{boardId}/cards", s.authenticated(s.addCard))
 	mux.HandleFunc("PATCH /api/v1/cards/{cardId}", s.authenticated(s.updateCard))
 	mux.HandleFunc("POST /api/v1/cards/{cardId}/moves", s.authenticated(s.moveCard))
@@ -690,6 +691,27 @@ func (s *Server) card(w http.ResponseWriter, r *http.Request, person *Person) {
 		return
 	}
 	writeJSON(w, http.StatusOK, s.cardResource(board, column, card))
+}
+
+// cardByShortIdentifier finds a card under the name people call it by, read
+// in any case. Whatever names no card the person can see answers like an
+// address that was never there.
+func (s *Server) cardByShortIdentifier(w http.ResponseWriter, r *http.Request, person *Person) {
+	identifier := strings.ToUpper(strings.TrimSpace(r.PathValue("identifier")))
+	for _, board := range s.Boards {
+		if s.visibleProject(board.ProjectID, person) == nil {
+			continue
+		}
+		for _, column := range board.Columns {
+			for _, card := range column.Cards {
+				if card.ShortID != "" && card.ShortID == identifier {
+					writeJSON(w, http.StatusOK, s.cardResource(board, column, card))
+					return
+				}
+			}
+		}
+	}
+	notFound(w)
 }
 
 func (s *Server) addCard(w http.ResponseWriter, r *http.Request, person *Person) {
