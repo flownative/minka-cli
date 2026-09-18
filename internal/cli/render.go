@@ -48,7 +48,7 @@ func renderBoard(w io.Writer, board api.Board) {
 			if card.CompletedAt != nil {
 				details = append(details, "completed "+formatTime(*card.CompletedAt))
 			}
-			line := fmt.Sprintf("- %s  %s", card.ID, card.Title)
+			line := fmt.Sprintf("- %s  %s%s", card.ID, shortIDBefore(card.ShortID), card.Title)
 			if len(details) > 0 {
 				line += " (" + strings.Join(details, ", ") + ")"
 			}
@@ -91,7 +91,7 @@ func renderMyCards(w io.Writer, cards []api.Card, today string) {
 		if open := openSteps(card.Steps); open > 0 {
 			details = append(details, fmt.Sprintf("steps %d/%d", len(card.Steps)-open, len(card.Steps)))
 		}
-		fmt.Fprintf(w, "- %s  %s (%s)\n", card.ID, card.Title, strings.Join(details, ", "))
+		fmt.Fprintf(w, "- %s  %s%s (%s)\n", card.ID, shortIDBefore(card.ShortID), card.Title, strings.Join(details, ", "))
 	}
 }
 
@@ -106,7 +106,12 @@ func openSteps(steps []api.Step) int {
 }
 
 func renderCard(w io.Writer, card api.Card) {
+	// The heading stays the bare title, so that somebody who takes it as the
+	// new title of the card does not write the short identifier into it.
 	fmt.Fprintf(w, "# %s\n", card.Title)
+	if card.ShortID != nil {
+		fmt.Fprintf(w, "Short ID: %s\n", *card.ShortID)
+	}
 	fmt.Fprintf(w, "Card: %s\nBoard: %s\nProject: %s\n", card.ID, card.BoardID, card.ProjectID)
 	fmt.Fprintf(w, "Column: %s (%s, %s)\n", card.Column.Title, card.Column.Type, card.Column.ID)
 	fmt.Fprintf(w, "Created: %s by %s\n", formatTime(card.CreatedAt), card.Creator.Name)
@@ -209,4 +214,14 @@ func plural(n int, one, many string) string {
 		return "1 " + one
 	}
 	return fmt.Sprintf("%d %s", n, many)
+}
+
+// shortIDBefore puts the short identifier of a card in front of its title in
+// a list. It is what people call a card by; commands still take the ID,
+// because the API finds a card by nothing else.
+func shortIDBefore(shortID *string) string {
+	if shortID == nil {
+		return ""
+	}
+	return *shortID + "  "
 }

@@ -206,6 +206,16 @@ such as `Doing`.
 
 ## Boards
 
+- A card carries `shortId`, such as `MNK-1A`, or null where its board shows no
+  short identifiers. It is what people call a card by. The text views show it
+  beside the title; it is no part of the title. It is no address: every
+  command takes the `id`, the UUID.
+- To find a card somebody names by its short identifier, read the board with
+  `boards show <boardId> --quiet` and pick the card whose `shortId` matches,
+  ignoring case. The prefix belongs to one board, but no answer says to which:
+  ask for the board, or try the boards of the project. Finding nothing proves
+  nothing: Done lists only the 25 cards completed last, and a card in the
+  trash shows no short identifier.
 - Column types: `triage` (landing zone for new cards), `column` (working
   columns), `not_now`, `done`.
 - A new card lands in Triage unless `--column` names Triage or a working
