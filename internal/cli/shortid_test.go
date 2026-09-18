@@ -132,3 +132,83 @@ func TestWhatIsNeitherAnIDNorAShortIdentifierSendsNothing(t *testing.T) {
 		t.Fatalf("%d requests sent", n)
 	}
 }
+
+// Every command that takes a card has to look a short identifier up and go on
+// with the ID: nothing but the lookup may carry the short identifier.
+func TestEveryCommandThatTakesACardTakesItsShortIdentifier(t *testing.T) {
+	reading := map[string][]string{
+		"cards show": {"cards", "show", "CARD"},
+		"steps list": {"steps", "list", "CARD"},
+	}
+
+	names := map[string]bool{}
+	for name := range everyWrite(newTestEnv(t)) {
+		names[name] = true
+	}
+	for name := range reading {
+		names[name] = true
+	}
+
+	for name := range names {
+		t.Run(name, func(t *testing.T) {
+			e := newTestEnv(t)
+			args, isWrite := everyWrite(e)[name]
+			if !isWrite {
+				args = reading[name]
+			}
+			e.fixture.CardInDoing.ShortID = "MNK-1A"
+			e.fixture.CardInTriage.ShortID = "MNK-2B"
+
+			named := false
+			for i, arg := range args {
+				switch arg {
+				case e.fixture.CardInDoing.ID, "CARD":
+					args[i], named = "mnk-1a", true
+				case e.fixture.CardInTriage.ID:
+					args[i], named = "mnk-2b", true
+				}
+			}
+			if !named {
+				t.Skip("takes no card")
+			}
+			before := len(e.server.Requests())
+
+			_, r := e.runJSON("", args...)
+			if name == "cards restore" {
+				// A card in the trash goes by no short identifier.
+				expectCode(t, r, ExitNotFound)
+			} else {
+				expectCode(t, r, ExitOK)
+			}
+
+			lookups := 0
+			for _, request := range e.server.Requests()[before:] {
+				if strings.HasPrefix(request.Path, "/api/v1/cards/by-short-id/") {
+					lookups++
+					continue
+				}
+				if strings.Contains(strings.ToUpper(request.Path+request.Query+string(request.Body)), "MNK-") {
+					t.Errorf("%s %s carries the short identifier", request.Method, request.Path)
+				}
+			}
+			if lookups != 1 {
+				t.Errorf("%d lookups, want 1", lookups)
+			}
+		})
+	}
+}
+
+func TestAnAnswerWithoutAnIDStopsTheCommand(t *testing.T) {
+	e := newTestEnv(t)
+	e.fixture.CardInDoing.ShortID = "MNK-1A"
+	e.server.AnswersCardsWithoutID = true
+
+	env, r := e.runJSON("", "comments", "create", "MNK-1A", "A comment")
+	expectCode(t, r, ExitAPI)
+	if env.Code != CodeAPI {
+		t.Fatalf("code %q", env.Code)
+	}
+	if len(e.server.WritingRequests()) != 0 {
+		t.Fatal("something was written to a card without an ID")
+	}
+}

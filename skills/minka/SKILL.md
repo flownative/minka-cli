@@ -23,9 +23,9 @@ when stdout is not a terminal, so an agent gets structured output by default.
 - Pass long or multi-line text through stdin with `-`, never through shell
   quoting: `--description -` for cards, `<text>` = `-` for comments. Stdin
   has to be a pipe or a file, not a terminal.
-- IDs are UUIDs. Take them from earlier output, never guess them. A value that
-  is no UUID is refused with exit 1 before any request. Only a card may also
-  be named by its short identifier, such as `MNK-1A`.
+- IDs are UUIDs. Take them from earlier output, never guess them. A card may
+  also be named by its short identifier, such as `MNK-1A`. A value that is
+  neither is refused with exit 1 before any request.
 - Retry only when `retryable` is true, which only happens for reads. After a
   failed write, read the card back before trying again: the change may have
   reached the server. A 404 (`not_found`) means the thing does not exist,
@@ -209,8 +209,8 @@ such as `Doing`.
 
 - A card carries `shortId`, such as `MNK-1A`, or null where its board shows no
   short identifiers. It is what people call a card by. The text views show it
-  beside the title; it is no part of the title. It is no address: every
-  command takes the `id`, the UUID.
+  beside the title; it is no part of the title. It is no lasting address: it
+  changes when the board changes its prefix, and the `id` never does.
 - Wherever a command takes `<cardId>`, the short identifier works as well, in
   any case: `minka cards show mnk-1a`, `minka comments create MNK-1A -`,
   `minka cards move MNK-1A --column Doing --after MNK-2B`. The command looks
