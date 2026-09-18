@@ -52,6 +52,9 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
 
 ## Next steps
 
+- Build the [release concept](release-concept.md) step by step; the checks on
+  pull requests are the first step.
+
 - React to messages from `minka-92`: check against the code, fake first, then
   the CLI, test and sabotage proof, check live, documentation in the same
   commit.
