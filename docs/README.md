@@ -24,11 +24,17 @@ the documentation says what holds; how it came about is in git.
 - [The skill](stable/skill.md): How the skill travels inside the binary, how it
   gets installed, what happens after an upgrade, the test against the command
   tree — before any work on a command's name or on `skill`.
+- [Releases](stable/releases.md): What publishing a release in GitHub sets off,
+  why Homebrew and no install script, why the formula builds from source —
+  before any work on the workflows, the Makefile's `dist` or the formula.
 - [Testing](stable/testing.md): Fake API, sabotage proofs, what a test pins
   down — read before your first test.
 
 ## Guides
 
+- [Releasing a version](guides/release.md): Choosing the number, publishing in
+  GitHub, trying the result, what to do when a step fails — before every
+  release.
 - [Live check](guides/live-check.md): Where writing is allowed, in which order
   to check, what gets tidied up afterwards — before every run against a real
   instance.
@@ -41,9 +47,6 @@ the documentation says what holds; how it came about is in git.
 
 ## Work in progress
 
-- [Release concept](work-in-progress/release-concept.md): How a version gets
-  released, installed through Homebrew and set up, and which steps are still
-  to build — before any work on releases, `setup`, `skill` or `doctor`.
 - [Status](work-in-progress/status.md): What the CLI can do, what is checked
   against the fake only, what is open in the API — the first look of every new
   session.

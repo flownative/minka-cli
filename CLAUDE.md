@@ -26,7 +26,7 @@ GitHub at `git@github.com:flownative/minka-cli.git`. Work reaches `main`
 through a pull request from a branch of its own; GitHub Actions run the checks
 on it. Pushing, and anything that rewrites pushed history, only when the client
 says so. How a version gets released is laid down in the
-[release concept](docs/work-in-progress/release-concept.md).
+[Releases](docs/stable/releases.md).
 
 ## Documentation
 
