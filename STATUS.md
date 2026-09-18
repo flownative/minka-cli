@@ -482,6 +482,11 @@ oben; 404 nur bei einer ungültigen ID. Der Fake folgte dem schon.
   (`c7c4d1b`) kamen ohne Nachricht der Minka-Koordination; beides fiel beim
   Abgleich mit dem Code auf. Ist an minka-63 gemeldet.
 
+- Projekt archivieren und in den Papierkorb legen (E-129) ist in Arbeit: Ein
+  archiviertes Projekt nimmt keine Schreibvorgänge mehr an, eines im
+  Papierkorb antwortet überall 404. Neue API-Endpunkte gibt es dafür nicht;
+  minka-92 meldet die Einzelheiten nach dem Merge. Dann ist zu prüfen, ob die
+  Fehlerhinweise der CLI den Fall „Projekt archiviert" erwähnen sollten.
 - Spaltenfarben (`color` an Spalten) kommen mit Minka M2-2d, nur lesend. Die
   JSON-Ausgabe reicht sie ungeändert durch. Ob die Textausgabe sie zeigt,
   wird entschieden, wenn der Commit da ist.
@@ -522,9 +527,11 @@ oben; 404 nur bei einer ungültigen ID. Der Fake folgte dem schon.
     Anhang noch Erwähnung, weil es den `bodyText` nahm. Es liest jetzt die
     Quelle, wie `cards show` es bei Kommentaren tut.
   - Dabei aufgefallen und an minka-92 gemeldet: Die `seq`-Nummern haben Lücken
-    (1, dann 3), ohne dass eine Nachricht entfernt wurde. Offenbar zählt jede
-    Änderung am Gespräch mit. Die Formulierung „der Platz im Verlauf" in der
-    SKILL.md wird umgeschrieben, sobald minka-92 Lücken bestätigt.
+    (1, dann 3), ohne dass eine Nachricht entfernt wurde. minka-92 hat es am
+    Code bestätigt: `DbalChatRepository::nextNumberOf` ist ein Zähler je Chat,
+    aus dem `seq` und `change_seq` gezogen werden; jede Änderung verbraucht
+    eine Nummer. `seq` ist also eine aufsteigende Ordnungsnummer, keine
+    lückenlose Position. SKILL.md, Typdoku und Hilfe sagen das jetzt so.
   - Am 16.09.2026 war es nur lesend geprüft: `conversations list` des
     Smoke-Kontos antwortete mit einer leeren Liste.
 - Erwähnungen (Minka `800d27e`, E-115) sind am 16.09.2026 live geprüft: Das

@@ -131,6 +131,8 @@ func (a *app) newMessagesListCmd() *cobra.Command {
 		Long: `Reads messages of a chat, oldest first. Without a flag it gives the latest 50.
 
 --before <seq> gives the messages in front of that message, for reading back.
+A number orders the transcript and only rises: a chat counts every change with
+the same counter, so numbers may be missing between two messages.
 --after <changeSeq> gives everything that changed after that change number:
 new messages, edits and removals in one answer. Remember the highest changeSeq
 you have seen and ask for what came after it. --limit sets how many messages

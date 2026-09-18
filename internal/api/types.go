@@ -199,7 +199,7 @@ type Conversation struct {
 
 type ChatMessage struct {
 	ID         string          `json:"id"`
-	Seq        int             `json:"seq"`       // the place in the transcript, which never changes
+	Seq        int             `json:"seq"`       // orders the transcript and only rises; numbers may be missing
 	ChangeSeq  int             `json:"changeSeq"` // raised with every change of the message
 	Author     PersonReference `json:"author"`
 	BodyHTML   string          `json:"bodyHtml"`   // empty for a removed message
