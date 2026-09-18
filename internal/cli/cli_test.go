@@ -2390,10 +2390,13 @@ func TestMarkReadUsesTheLastMessageUnlessToldOtherwise(t *testing.T) {
 func TestMessagesAsText(t *testing.T) {
 	e := newTestEnv(t)
 	chat := e.fixture.Chat
+	// A file and a mention stand in the source, and in no other field.
+	chat.Messages[0].BodyHTML = `<p>Hallo <action-text-attachment sgid="x" content-type="application/vnd.minka.person" content="@Anke"></action-text-attachment>, siehe <action-text-attachment sgid="y" content-type="image/png" url="https://minka.example/f/zelt.png" filename="zelt.png"></action-text-attachment></p>`
+	chat.Messages[0].BodyText = "Hallo , siehe"
 
 	r := e.run("", "messages", "list", chat.ID, "--styled")
 	expectCode(t, r, ExitOK)
-	for _, want := range []string{"#2 Anke", "Zelt ist bestellt", "#3 Bruno"} {
+	for _, want := range []string{"#2 Anke", "Zelt ist bestellt", "#3 Bruno", "@Anke", "![zelt.png](https://minka.example/f/zelt.png)"} {
 		if !strings.Contains(r.stdout, want) {
 			t.Errorf("missing %q in:\n%s", want, r.stdout)
 		}
