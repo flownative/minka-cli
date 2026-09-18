@@ -52,8 +52,13 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
 
 ## Next steps
 
-- Build the [release concept](release-concept.md) step by step; the checks on
-  pull requests are the first step.
+- Release 0.1.0 and try the way through Homebrew once: the release workflow
+  and the formula have not run yet.
+- A README that covers installing, first steps, use, sign-in, agents,
+  configuration, troubleshooting, upgrading and development.
+- Once the repository is public: the formula installs the archives, a release
+  gains a build provenance attestation with instructions for verifying it, and
+  the macOS binaries get notarised, which waits for an Apple Developer ID.
 
 - React to messages from `minka-92`: check against the code, fake first, then
   the CLI, test and sabotage proof, check live, documentation in the same
