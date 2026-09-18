@@ -54,8 +54,6 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
 
 - Release 0.1.0 and try the way through Homebrew once: the release workflow
   and the formula have not run yet.
-- A README that covers installing, first steps, use, sign-in, agents,
-  configuration, troubleshooting, upgrading and development.
 - Once the repository is public: the formula installs the archives, a release
   gains a build provenance attestation with instructions for verifying it, and
   the macOS binaries get notarised, which waits for an Apple Developer ID.
