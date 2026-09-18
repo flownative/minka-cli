@@ -226,6 +226,10 @@ such as `Doing`.
 - `messages list <chatId>` gives messages oldest first as `{id, seq,
   changeSeq, author, bodyHtml, bodyText, createdAt, editedAt, removed}`, the
   latest 50 by default, `--limit` up to 200.
+  - `seq` orders the transcript and only rises; it is not a position without
+    gaps. A chat counts every change with the same counter, so an edit, an
+    upload or a reaction leaves a number unused and a transcript may run
+    1, 3, 6. `changeSeq` is the field to catch up with.
   - Read back with `--before <seq>` (messages in front of that one).
   - Catch up with `--after <changeSeq>`: new messages, edits and removals in
     one answer. Keep the highest `changeSeq` you have seen.
