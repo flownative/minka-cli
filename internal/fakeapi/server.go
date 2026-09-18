@@ -1323,8 +1323,11 @@ func (s *Server) postMessage(w http.ResponseWriter, r *http.Request, person *Per
 		notFound(w)
 		return
 	}
-	// A message that was sent before is found again even in an archived
-	// project: nothing is written, so nothing is refused.
+	// Asked before a message sent earlier is looked for: in an archived
+	// project a refused write must not pass for one that went through.
+	if s.refusedAsArchived(w, s.projectOfChat(chat)) {
+		return
+	}
 	if deref(clientMessageID) != "" {
 		for _, message := range chat.Messages {
 			if message.ClientMessageID == *clientMessageID && message.AuthorID == person.ID {
@@ -1332,9 +1335,6 @@ func (s *Server) postMessage(w http.ResponseWriter, r *http.Request, person *Per
 				return
 			}
 		}
-	}
-	if s.refusedAsArchived(w, s.projectOfChat(chat)) {
-		return
 	}
 	writeJSON(w, http.StatusCreated, s.chatMessageResource(chat.post(person.ID, text, deref(clientMessageID), s.now)))
 }

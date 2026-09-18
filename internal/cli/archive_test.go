@@ -228,21 +228,20 @@ func TestCardsMineLeavesOutArchivedProjects(t *testing.T) {
 	}
 }
 
-func TestAMessageSentBeforeTheArchiveIsFoundAgain(t *testing.T) {
+func TestAMessageSentBeforeTheArchiveIsRefusedLikeAnyOther(t *testing.T) {
 	e := newTestEnv(t)
 	id := "0192f3a4-5b6c-4d7e-8f90-a1b2c3d4e5f6"
-	sent, first := e.runJSON("", "messages", "create", e.fixture.Chat.ID, "A word", "--client-message-id", id)
+	_, first := e.runJSON("", "messages", "create", e.fixture.Chat.ID, "A word", "--client-message-id", id)
 	expectCode(t, first, ExitOK)
 	e.fixture.Project.Archived = true
 
-	count := len(e.fixture.Chat.Messages)
-	second, again := e.runJSON("", "messages", "create", e.fixture.Chat.ID, "A word", "--client-message-id", id)
-	expectCode(t, again, ExitOK)
-	if decode(t, second.Data)["id"] != decode(t, sent.Data)["id"] {
-		t.Fatal("the answer is not the message that was sent before")
+	env, again := e.runJSON("", "messages", "create", e.fixture.Chat.ID, "A word", "--client-message-id", id)
+	expectCode(t, again, ExitValidation)
+	if env.Meta["apiCode"] != "projectArchived" {
+		t.Fatalf("apiCode %v", env.Meta["apiCode"])
 	}
-	if len(e.fixture.Chat.Messages) != count {
-		t.Fatal("a message was written into an archived project")
+	if env.Retryable {
+		t.Fatal("a repeated send reads as retryable, although trying again cannot help")
 	}
 }
 

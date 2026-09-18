@@ -43,9 +43,6 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
 
 ## Open in the API
 
-- Reported to the coordination: `messages create` with a known
-  `clientMessageId` answers 200 in an archived project while every other write
-  answers 422. Nothing is written, so it does no harm; the fake mirrors it.
 
 - Renaming and reordering steps does not exist.
 - Paging Done beyond 25 cards does not exist; needed once dogfooding needs it.
