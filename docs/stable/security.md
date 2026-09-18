@@ -41,8 +41,11 @@ accepted for loopback only. Other paths are refused.
 - Redirects are never followed: a redirect would carry the token to an address
   nobody named.
 - Every ID is checked locally as a UUID — one that is not ends with exit 1,
-  without a request going out — and additionally escaped in the path. What
-  rides in the query (file name, content of a reaction) is escaped as well.
+  without a request going out — and additionally escaped in the path. A card
+  may be named by its short identifier instead, whose shape is checked the
+  same way; it is looked up once, and the command goes on with the UUID
+  (C-022). What rides in the query (file name, content of a reaction) is
+  escaped as well.
 - Timeout 30 seconds, 10 minutes for the body of an upload. The CLI reads at
   most 16 MB of a response.
 - What the server is sure to refuse, the CLI refuses first: a file over 50

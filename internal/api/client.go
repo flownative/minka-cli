@@ -130,6 +130,12 @@ func (c *Client) Card(ctx context.Context, cardID string) (Result[Card], error) 
 	return request[Card](ctx, c, http.MethodGet, "/cards/"+url.PathEscape(cardID), nil)
 }
 
+// CardByShortIdentifier finds a card under the name people call it by, such as
+// "MNK-1A".
+func (c *Client) CardByShortIdentifier(ctx context.Context, identifier string) (Result[Card], error) {
+	return request[Card](ctx, c, http.MethodGet, "/cards/by-short-id/"+url.PathEscape(identifier), nil)
+}
+
 func (c *Client) CreateCard(ctx context.Context, boardID string, input CreateCardInput) (Result[Card], error) {
 	return request[Card](ctx, c, http.MethodPost, "/boards/"+url.PathEscape(boardID)+"/cards", input)
 }

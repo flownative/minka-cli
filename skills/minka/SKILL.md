@@ -24,7 +24,8 @@ when stdout is not a terminal, so an agent gets structured output by default.
   quoting: `--description -` for cards, `<text>` = `-` for comments. Stdin
   has to be a pipe or a file, not a terminal.
 - IDs are UUIDs. Take them from earlier output, never guess them. A value that
-  is no UUID is refused with exit 1 before any request.
+  is no UUID is refused with exit 1 before any request. Only a card may also
+  be named by its short identifier, such as `MNK-1A`.
 - Retry only when `retryable` is true, which only happens for reads. After a
   failed write, read the card back before trying again: the change may have
   reached the server. A 404 (`not_found`) means the thing does not exist,
@@ -210,12 +211,15 @@ such as `Doing`.
   short identifiers. It is what people call a card by. The text views show it
   beside the title; it is no part of the title. It is no address: every
   command takes the `id`, the UUID.
-- To find a card somebody names by its short identifier, read the board with
-  `boards show <boardId> --quiet` and pick the card whose `shortId` matches,
-  ignoring case. The prefix belongs to one board, but no answer says to which:
-  ask for the board, or try the boards of the project. Finding nothing proves
-  nothing: Done lists only the 25 cards completed last, and a card in the
-  trash shows no short identifier.
+- Wherever a command takes `<cardId>`, the short identifier works as well, in
+  any case: `minka cards show mnk-1a`, `minka comments create MNK-1A -`,
+  `minka cards move MNK-1A --column Doing --after MNK-2B`. The command looks
+  the card up first and goes on with its `id`; answers and `breadcrumbs` name
+  the `id`, which stays when a board changes its prefix.
+- Exit 2 for a short identifier means that no card you can see goes by it: it
+  does not exist, its board shows no short identifiers, the card is in the
+  trash or in a project you are not in, or two of your organizations use the
+  prefix. `cards restore` therefore needs the `id`, which `trash list` gives.
 - Column types: `triage` (landing zone for new cards), `column` (working
   columns), `not_now`, `done`.
 - A new card lands in Triage unless `--column` names Triage or a working
