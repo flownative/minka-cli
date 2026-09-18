@@ -18,6 +18,10 @@ both directions. What is checked against the fake only is listed below.
 Coordination of the API: the Minka session `minka-92`. It reports changes,
 which are checked against the Minka code; deviations go back to it.
 
+Versions are released by publishing a release in GitHub and installed through
+the Homebrew tap; `setup`, `doctor` and the skill inside the binary cover the
+first steps.
+
 Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
 (account Bruno, local instance) gets revoked then.
 
@@ -52,8 +56,9 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
 
 ## Next steps
 
-- Release 0.1.0 and try the way through Homebrew once: the release workflow
-  and the formula have not run yet.
+- Install through Homebrew once and play `minka setup` through by hand on a
+  terminal: the release workflow has built a version and written the formula,
+  but nobody has installed from it yet, and `setup` is covered by tests only.
 - Once the repository is public: the formula installs the archives, a release
   gains a build provenance attestation with instructions for verifying it, and
   the macOS binaries get notarised, which waits for an Apple Developer ID.
