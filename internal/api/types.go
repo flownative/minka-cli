@@ -18,7 +18,8 @@ type Me struct {
 	ID               string           `json:"id"`
 	Name             string           `json:"name"`
 	EmailAddress     string           `json:"emailAddress"`
-	Kind             string           `json:"kind"` // "human", "agent" or "bot"
+	Kind             string           `json:"kind"`    // "human", "agent" or "bot"
+	Retired          bool             `json:"retired"` // an agent that stepped down; its tokens are gone with it
 	OrganizationRole *string          `json:"organizationRole"`
 	Principal        *PersonReference `json:"principal"` // the human an agent acts for, nil for anybody else
 }

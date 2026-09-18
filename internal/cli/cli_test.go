@@ -800,6 +800,13 @@ func TestAnAgentSaysWhomItActsFor(t *testing.T) {
 		t.Errorf("an empty address in:\n%s", r.stdout)
 	}
 
+	// An agent that stepped down is in no list any more.
+	env, r = e.runJSON("", "people", "list", e.fixture.Project.ID)
+	expectCode(t, r, ExitOK)
+	if strings.Contains(string(env.Data), e.fixture.RetiredAgent.ID) {
+		t.Errorf("the retired agent is still listed: %s", env.Data)
+	}
+
 	// The people of a project say which of them is an agent, and for whom.
 	env, r = e.runJSON("", "people", "list", e.fixture.Project.ID)
 	expectCode(t, r, ExitOK)
