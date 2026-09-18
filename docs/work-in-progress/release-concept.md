@@ -71,5 +71,8 @@ Robert merges pull requests.
 
 ## Open
 
-- Which credential lets the release workflow write to the tap.
+- The release workflow writes to the tap with a deploy key of its own: the
+  public half is a deploy key with write access on the tap, the private half a
+  secret of the `release` environment here. It can write to the tap and
+  nowhere else. Somebody with admin rights on both repositories creates it.
 - An Apple Developer ID is not there yet; notarising waits for it.
