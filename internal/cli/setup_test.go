@@ -1,0 +1,234 @@
+package cli
+
+import (
+	"encoding/json"
+	"errors"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/flownative/minka-cli/internal/fakeapi"
+)
+
+// newSetupEnv is a test environment nobody is signed in to, the way a machine
+// is before its first setup.
+func newSetupEnv(t *testing.T) *testEnv {
+	t.Helper()
+	e := newTestEnv(t)
+	delete(e.vars, "MINKA_HOST")
+	delete(e.vars, "MINKA_TOKEN")
+	return e
+}
+
+// onATerminal lets the CLI believe it talks to a person, who pastes token when
+// asked for one.
+func onATerminal(token string) func(*app) {
+	return func(a *app) {
+		a.stdinIsTerminal = func() bool { return true }
+		a.stdoutIsTerminal = func() bool { return true }
+		a.readSecret = func() (string, error) {
+			if token == "" {
+				return "", errors.New("nobody was to be asked for a token")
+			}
+			return token + "\n", nil
+		}
+	}
+}
+
+func TestSetupSignsInAndInstallsTheSkill(t *testing.T) {
+	e := newSetupEnv(t)
+
+	r := e.runWith(onATerminal(e.fixture.Token), e.server.URL+"\n\n", "setup")
+	expectCode(t, r, ExitOK)
+
+	info, err := os.Stat(e.vars["MINKA_CONFIG"])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm() != 0o600 {
+		t.Fatalf("config file has permissions %04o, want 0600", info.Mode().Perm())
+	}
+	if _, err := os.Stat(e.installedSkillPath()); err != nil {
+		t.Fatalf("the skill was not installed: %v", err)
+	}
+	if strings.Contains(r.stdout+r.stderr, e.fixture.Token) {
+		t.Fatal("the token was printed")
+	}
+
+	status := e.run("", "auth", "status", "--json")
+	expectCode(t, status, ExitOK)
+}
+
+func TestSetupInstallsNoSkillWithoutAYes(t *testing.T) {
+	e := newSetupEnv(t)
+
+	r := e.runWith(onATerminal(e.fixture.Token), e.server.URL+"\nn\n", "setup")
+	expectCode(t, r, ExitOK)
+	if _, err := os.Stat(e.installedSkillPath()); err == nil {
+		t.Fatal("the skill was installed although the answer was no")
+	}
+}
+
+func TestSetupNeedsATerminal(t *testing.T) {
+	e := newSetupEnv(t)
+
+	env, r := e.runJSON(e.server.URL+"\n\n", "setup")
+	expectCode(t, r, ExitUsage)
+	if !strings.Contains(env.Hint, "minka auth login") || !strings.Contains(env.Hint, "minka skill install") {
+		t.Fatalf("hint %q does not name the single steps", env.Hint)
+	}
+	if len(e.server.Requests()) != 0 {
+		t.Fatal("a request was sent")
+	}
+	if _, err := os.Stat(e.installedSkillPath()); err == nil {
+		t.Fatal("the skill was installed")
+	}
+}
+
+func TestSetupKeepsATokenThatWorks(t *testing.T) {
+	e := newSetupEnv(t)
+	first := e.runWith(onATerminal(e.fixture.Token), e.server.URL+"\nn\n", "setup")
+	expectCode(t, first, ExitOK)
+
+	// An empty answer takes the host signed in to last, and nobody is asked
+	// for a token again.
+	r := e.runWith(onATerminal(""), "\nn\n", "setup")
+	expectCode(t, r, ExitOK)
+	if !strings.Contains(r.stderr, "Already signed in") {
+		t.Fatalf("stderr does not say that the sign-in was kept: %s", r.stderr)
+	}
+}
+
+func TestSetupSavesNoTokenTheHostRefuses(t *testing.T) {
+	e := newSetupEnv(t)
+
+	r := e.runWith(onATerminal("minka_pat_wrong"), e.server.URL+"\n\n", "setup")
+	expectCode(t, r, ExitAuth)
+	if _, err := os.Stat(e.vars["MINKA_CONFIG"]); err == nil {
+		t.Fatal("a config file was written for a token the host refused")
+	}
+	if _, err := os.Stat(e.installedSkillPath()); err == nil {
+		t.Fatal("setup went on after the sign-in failed")
+	}
+}
+
+func TestSetupAsksAgainForAHostItCannotUse(t *testing.T) {
+	e := newSetupEnv(t)
+
+	r := e.runWith(onATerminal(e.fixture.Token), "http://example.com\n"+e.server.URL+"\nn\n", "setup")
+	expectCode(t, r, ExitOK)
+	if strings.Count(r.stderr, "Minka host") != 2 {
+		t.Fatalf("the host was not asked for a second time: %s", r.stderr)
+	}
+}
+
+// nobodyTypesAToken fails the test when setup asks for a token.
+func nobodyTypesAToken(t *testing.T) func(*app) {
+	return func(a *app) {
+		onATerminal("")(a)
+		a.readSecret = func() (string, error) {
+			t.Error("setup asked for a token")
+			return "", errors.New("nobody is there")
+		}
+	}
+}
+
+func TestSetupSendsASavedTokenToItsOwnHostOnly(t *testing.T) {
+	e := newSetupEnv(t)
+	first := e.runWith(onATerminal(e.fixture.Token), e.server.URL+"\nn\n", "setup")
+	expectCode(t, first, ExitOK)
+
+	other, _ := fakeapi.New(t)
+	for token, person := range other.Tokens {
+		delete(other.Tokens, token)
+		other.Tokens["minka_pat_of_the_other_host"] = person
+		break
+	}
+
+	r := e.runWith(onATerminal("minka_pat_of_the_other_host"), "n\n", "setup", "--host", other.URL)
+	expectCode(t, r, ExitOK)
+	for _, request := range other.Requests() {
+		if strings.Contains(request.Header.Get("Authorization"), e.fixture.Token) {
+			t.Fatal("the token of the first host was sent to the second")
+		}
+	}
+
+	status, _ := e.runJSON("", "auth", "status")
+	if got := decode(t, status.Data)["host"]; got != other.URL {
+		t.Fatalf("default host %v, want the host set up last, %s", got, other.URL)
+	}
+}
+
+func TestSetupMakesAHostItIsAlreadySignedInToTheDefault(t *testing.T) {
+	e := newSetupEnv(t)
+	other, otherFixture := fakeapi.New(t)
+	expectCode(t, e.runWith(onATerminal(e.fixture.Token), "n\n", "setup", "--host", e.server.URL), ExitOK)
+	expectCode(t, e.runWith(onATerminal(otherFixture.Token), "n\n", "setup", "--host", other.URL), ExitOK)
+
+	r := e.runWith(nobodyTypesAToken(t), "n\n", "setup", "--host", e.server.URL)
+	expectCode(t, r, ExitOK)
+
+	status, _ := e.runJSON("", "auth", "status")
+	if got := decode(t, status.Data)["host"]; got != e.server.URL {
+		t.Fatalf("default host %v, want %s", got, e.server.URL)
+	}
+}
+
+func TestSetupAsksForNoTokenWhenTheHostDoesNotAnswer(t *testing.T) {
+	e := newSetupEnv(t)
+	expectCode(t, e.runWith(onATerminal(e.fixture.Token), e.server.URL+"\nn\n", "setup"), ExitOK)
+	e.server.Close()
+
+	r := e.runWith(nobodyTypesAToken(t), "\nn\n", "setup")
+	expectCode(t, r, ExitNetwork)
+}
+
+func TestSetupStopsAtAConfigFileItCannotUseBeforeAskingForAToken(t *testing.T) {
+	e := newSetupEnv(t)
+	path := e.vars["MINKA_CONFIG"]
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(`{"hosts":{}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	r := e.runWith(nobodyTypesAToken(t), e.server.URL+"\n\n", "setup")
+	expectCode(t, r, ExitUsage)
+	if len(e.server.Requests()) != 0 {
+		t.Fatal("a request was sent")
+	}
+}
+
+func TestSetupKeepsTheTokenOutOfTheEnvelope(t *testing.T) {
+	e := newSetupEnv(t)
+
+	r := e.runWith(onATerminal(e.fixture.Token), e.server.URL+"\n\n", "setup", "--json")
+	expectCode(t, r, ExitOK)
+	if strings.Contains(r.stdout+r.stderr, e.fixture.Token) {
+		t.Fatal("the token was printed")
+	}
+	var env envelope
+	if err := json.Unmarshal([]byte(r.stdout), &env); err != nil {
+		t.Fatalf("stdout is not one JSON envelope: %v\n%s", err, r.stdout)
+	}
+}
+
+func TestSetupEndsWhenTheInputEnds(t *testing.T) {
+	e := newSetupEnv(t)
+
+	r := e.runWith(nobodyTypesAToken(t), "", "setup")
+	expectCode(t, r, ExitUsage)
+}
+
+func TestSetupSaysNothingTwiceAboutADifferingSkill(t *testing.T) {
+	e := newSetupEnv(t)
+	e.writeInstalledSkill("an older skill")
+
+	r := e.runWith(onATerminal(e.fixture.Token), e.server.URL+"\nn\n", "setup")
+	expectCode(t, r, ExitOK)
+	if strings.Contains(r.stderr, "Warning:") {
+		t.Fatalf("setup warns about the skill it just asked about: %s", r.stderr)
+	}
+}
