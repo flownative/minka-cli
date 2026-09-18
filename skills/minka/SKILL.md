@@ -199,8 +199,8 @@ such as `Doing`.
   chats, people, trash. Every write into it exits 9 with `projectArchived`;
   only `chats mark-read` still works. Somebody who is no member gets exit 2 as
   ever and does not learn that it is archived.
-- `messages create` with a `--client-message-id` that was sent before the
-  project was archived still answers with that message.
+- `messages create` is refused like every other write, also with a
+  `--client-message-id` that was sent before the project was archived.
 - A host whose Minka does not know archived projects yet makes `projects list
   --archived` exit 7 rather than list projects in use as archived.
 
