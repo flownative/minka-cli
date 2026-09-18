@@ -67,8 +67,9 @@ minka setup
 4. A README that covers installing, first steps, use, sign-in, agents,
    configuration, troubleshooting, upgrading, verifying a release, development.
 
+Robert merges pull requests.
+
 ## Open
 
-- Whether the bot token that writes to the tap may be used by this repository.
-- Whether there is an Apple Developer ID, for notarising later.
-- Who merges a pull request.
+- Which credential lets the release workflow write to the tap.
+- An Apple Developer ID is not there yet; notarising waits for it.
