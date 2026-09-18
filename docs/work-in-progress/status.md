@@ -50,9 +50,16 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
 - Promised by the coordination, not merged yet: a write by a member into an
   archived project answers 422 `projectArchived` throughout, uploads included;
   `chats mark-read` stays allowed; the project resource gains `status`
-  (`active|archived`). With the merge message: check against the code, adapt
+  (`active|archived`) and `projects list` a filter `status=archived`; adding a
+  step to a card of an archived project no longer answers 500, and removing
+  one no longer answers 204 without doing it. With the merge message: check against the code, adapt
   the fake, add a hint for `projectArchived`, and show `status` in the output.
   Until then the hint text stays as it is.
+
+- In work at Minka: cards gain `shortId`, a string such as `MINKA-1K`, or null
+  where the board has no prefix (E-138). `data` carries it without a change;
+  the text of `cards show`, `cards mine` and `boards show` should show it. It
+  is no address: the API finds a card by its UUID only.
 
 ## Next steps
 
