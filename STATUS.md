@@ -14,7 +14,7 @@ eine interne Alpha.
 API-Stand, gegen den gebaut ist: Minka `6694096` (API-1 bis API-5,
 erweiterte Allowlist aus E-060, Zuständige an Karten, neue Karten oben in der
 Spalte, Fälligkeitsdatum, Zuständige und Datum beim Anlegen, Schritte, erweiterte Allowlist aus `72d0639`, Kommentare als Rich Text, Chat, Abonnenten).
-Koordination in Minka: `minka-c2`.
+Koordination in Minka: `minka-92`.
 
 Befehle:
 
