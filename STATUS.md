@@ -31,7 +31,7 @@ minka cards show|create|edit|move|assign|unassign|subscribe|unsubscribe|done|del
 minka steps list|create|complete|reopen|delete
 minka comments create|edit|delete|react|unreact <cardId> ...
 minka chats list <projectId> | mark-read <chatId>
-minka conversations list | with <person>
+minka conversations list | with <person> | people <gesprächsId>
 minka messages list|create|edit|delete|react|unreact <chatId> ...
 minka uploads create <datei> --project <id> | --conversation <id>
 minka commands            Katalog aller Befehle mit Flags
@@ -315,6 +315,23 @@ genannte Test wird rot. Zuletzt am 13.09.2026 nach dem Review ausgeführt:
 | `comments edit` sendet HTML, nicht das Markdown | `TestOnlyTheAuthorChangesOrRemovesAComment` |
 | Hinweis „nur der Autor“ bei 404 | `TestOnlyTheAuthorChangesOrRemovesAComment` |
 | Kommentar-ID im Pfad escaped | `TestIdentifiersAreEscapedInThePath` (api) |
+| Erwähnungs-Markup geht unverändert zum Server | `TestThePeopleOfACircleCarryTheirMention` |
+| Erwähnung eines Gesprächs trägt dessen Handle | `TestThePeopleOfACircleCarryTheirMention` |
+| Außenstehende sehen die Teilnehmenden nicht | `TestThePeopleOfACircleCarryTheirMention` |
+| Gesprächs-ID bei den Personen im Pfad escaped | `TestIdentifiersAreEscapedInThePath` (api) |
+| Projekt-ID beim Papierkorb im Pfad escaped | `TestIdentifiersAreEscapedInThePath` (api) |
+| Gekürzter Papierkorb sagt es als Notiz | `TestTheTrashListsWhatWasTakenOutOfAProject` |
+| Papierkorb nur für Mitglieder | `TestTheTrashListsWhatWasTakenOutOfAProject` |
+| Wer etwas weggeworfen hat, steht dabei | `TestTheTrashListsWhatWasTakenOutOfAProject` |
+| Zweimal dieselbe Reaktion zählt einmal | `TestAReactionIsLeftOnceAndComesOffAgain` |
+| `unreact` nimmt die eigene, nicht die letzte | `TestAReactionIsLeftOnceAndComesOffAgain` |
+| Nachricht muss zum Chat der Adresse gehören | `TestAReactionIsLeftOnceAndComesOffAgain` |
+| Reaktion an einer Gesprächsnachricht, nur für die beiden | `TestAReactionIsLeftOnceAndComesOffAgain` |
+| Hinweis bei zu langer Reaktion | `TestAReactionIsShortAndSays_Something` |
+| Art der Person (`kind`) und für wen ein Agent handelt | `TestAnAgentSaysWhomItActsFor` |
+| `principal` ist nur noch ID und Name | `TestAnAgentSaysWhomItActsFor` |
+| Ausgeschiedener Agent steht in keiner Personenliste | `TestAnAgentSaysWhomItActsFor` |
+| Nachricht zeigt Anhang und Erwähnung im Text | `TestMessagesAsText` |
 
 ### Smoke-Lauf gegen die lokale Instanz
 
@@ -411,12 +428,10 @@ oben; 404 nur bei einer ungültigen ID. Der Fake folgte dem schon.
     durch. Chat-Nachrichten dagegen: `messages edit` hat keine Sperre, weil der Chat keine einzelne
     Nachricht liefert. Wer eine Nachricht mit Erwähnungen ändert, schickt
     `bodySource` mit `--format html`.
-  - Erwähnungen schreiben kann die CLI noch nicht: Der Vorschlags-Endpunkt
-    `GET /projects/{p}/mentions` liefert ein HTML-Fragment für den Editor, und
-    `/api/v1/projects/{p}/people` kennt kein Handle. Das signierte Handle
-    entsteht serverseitig und wird beim Speichern geprüft (E-088), die CLI
-    kann es nicht selbst bilden. Robert will Erwähnungen für Agenten, der
-    Wunsch liegt bei minka-c2 (siehe „Wünsche an die API“).
+  - Erwähnungen schreiben geht seit Minka `800d27e` (E-115): `people list` und
+    `conversations people` liefern je Person `mention: {handle, markup}`. Das
+    Markup geht unverändert in einen Text desselben Kreises, als HTML
+    gesendet.
 
 - Das Review der Schritte in Minka ist mit `51b44e6` abgeschlossen. Das Board
   liefert je Karte `stepCount` und `completedStepCount`. `DELETE` auf einen
@@ -489,12 +504,54 @@ oben; 404 nur bei einer ungültigen ID. Der Fake folgte dem schon.
   `reactions` kommt an Chat-Nachrichten und an einem frisch geschriebenen
   Kommentar als leeres Array an. Mit Inhalt gefüllt ist es nur gegen den Fake
   geprüft, weil über die API niemand reagieren kann. Testkarte wieder gelöscht.
-- Private Gespräche (Minka `79703e4`, E-104/E-107) sind am 16.09.2026 nur
-  lesend live geprüft: `conversations list` antwortet für das Smoke-Konto mit
-  einer leeren Liste. Schreibend nicht geprüft: Ein Gespräch zu beginnen oder
-  darin zu schreiben schickt einer echten Person eine Nachricht, und erlaubt
-  sind live nur das Board „API-3 Abnahme“ und der Chat „Chat1 Abnahme“. Robert
-  oder Shaun müssten dafür ein Gegenüber freigeben.
+- Private Gespräche sind am 18.09.2026 vollständig live geprüft, schreibend —
+  auf der Test-Instanz `dev.minka.flownative.com`, die Robert dafür
+  eingerichtet hat, als Agentenkonto „Claude" (handelt für Robert Lemke), im
+  Gespräch mit Shaun:
+  - `conversations with` per E-Mail-Adresse und `--project`; der zweite Aufruf
+    liefert dasselbe Gespräch, die eigene ID endet mit Exit 2.
+  - Schreiben, Ändern (`editedAt`), `uploads create --conversation`, das
+    `attachmentSource` zusammen mit einem Erwähnungs-Markup als HTML gesendet:
+    beides steht danach im `bodySource`.
+  - `messages react|unreact` (E-118), `chats mark-read`, `unreadCount` zählt
+    eigene Nachrichten mit, `lastMessageText` ist auf 200 Zeichen gekürzt.
+  - `messages delete` nimmt die Nachricht aus dem Verlauf (E-097).
+  - Shauns Antwort kam an: gelesen, mit 🎉 beantwortet, Lesemarke gesetzt,
+    `unreadCount` danach 0. Damit ist auch der Rückweg geprüft.
+  - Dabei aufgefallen und behoben: `messages list --styled` zeigte weder
+    Anhang noch Erwähnung, weil es den `bodyText` nahm. Es liest jetzt die
+    Quelle, wie `cards show` es bei Kommentaren tut.
+  - Dabei aufgefallen und an minka-92 gemeldet: Die `seq`-Nummern haben Lücken
+    (1, dann 3), ohne dass eine Nachricht entfernt wurde. Offenbar zählt jede
+    Änderung am Gespräch mit. Die Formulierung „der Platz im Verlauf" in der
+    SKILL.md wird umgeschrieben, sobald minka-92 Lücken bestätigt.
+  - Am 16.09.2026 war es nur lesend geprüft: `conversations list` des
+    Smoke-Kontos antwortete mit einer leeren Liste.
+- Erwähnungen (Minka `800d27e`, E-115) sind am 16.09.2026 live geprüft: Das
+  `mention.markup` aus `people list` als Kommentar mit `--format html`
+  gespeichert kommt unverändert zurück und steht in `cards show --styled` als
+  „@Bruno". Am 18.09.2026 auch in einem Gespräch, zusammen mit einem Anhang.
+- Der Papierkorb (Minka E-116) ist am 16.09.2026 live geprüft: `trash list`
+  zeigt die eigenen Testkarten mit Board, Spalte, Zeitpunkt und „by Bruno",
+  alle `restorable`, ein fremdes Projekt endet mit Exit 2. Eine Karte daraus
+  mit `cards restore` zurückgeholt und wieder gelöscht.
+- Reaktionen schreiben (Minka E-114) ist am 16.09.2026 live geprüft: `comments
+  react` legt 👍 an (zweites Mal „already"), die Textansicht zeigt es, eine
+  21 Zeichen lange Reaktion endet mit Exit 9 `reactionTooLong`, `unreact`
+  räumt sie weg, ein `unreact` ohne Reaktion endet mit Exit 0. Dasselbe an
+  einer Chat-Nachricht in „Chat1 Abnahme".
+- `kind`, `principal` und `retired` (Minka `18f69c7` E-124, `e6fc150` E-126)
+  sind am 17. und 18.09.2026 live geprüft: auf der lokalen Instanz meldet `me`
+  `human` ohne `principal`, auf der Test-Instanz das Agentenkonto `kind:
+  agent`, `principal` als Paar aus ID und Name und `retired: false`;
+  `people list` zeigt die Spalte KIND mit „agent for Robert Lemke". `retired`
+  steht nur an `GET /me`, nicht an den Personenlisten; wer ausscheidet,
+  verschwindet ohnehin aus ihnen (`StillInService`), und seine Anfragen enden
+  mit Exit 3.
+- Die Konfiguration hat seit dem 18.09.2026 zwei Hosts, Vorgabe ist
+  `dev.minka.flownative.com` (Agentenkonto „Claude"). Für die lokale Instanz
+  `--host https://minka.localbeach.net` mitgeben; dort gilt weiter das
+  Smoke-Konto Bruno und die Freigabe nur für Board und Chat „…Abnahme".
 - `cards restore` (Minka `20d5e44`, E-102) ist am 16.09.2026 live geprüft, an
   einer Testkarte im Board „API-3 Abnahme“: Nach `cards delete` ist die Karte
   weg (Exit 2), `cards restore` holt sie zurück nach Triage, das zweite
@@ -636,9 +693,10 @@ behandelt:
    Minka `60c7257`, in der CLI `cards delete`.
 4. **Done über 25 Karten hinaus lesen** (Blättern): später, wenn das
    Dogfooding es braucht.
-5. **Erwähnungen für Agenten**: am 16.09.2026 an minka-c2 gemeldet. Als Feld
-   `mention` an jedem Eintrag von `/api/v1/projects/{projectId}/people`
-   vorgesehen, mit dem signierten Handle und dem fertigen
-   `action-text-attachment`-Markup zum Einsetzen in `bodySource` oder
-   `descriptionSource`. Liegt als Backlog-Karte bei Shaun, Zeitpunkt offen;
-   die Antwortform meldet minka-c2, wenn das Paket geschnitten ist.
+5. **Erwähnungen für Agenten**: am 16.09.2026 gemeldet und am selben Tag
+   erledigt (Minka `800d27e`, E-115). `mention: {handle, markup}` steht an
+   jedem Eintrag von `/api/v1/projects/{projectId}/people` und des neuen
+   `/api/v1/messages/{conversationId}/people`; in der CLI umgesetzt als
+   `people list` und `conversations people`.
+6. **Papierkorb-Liste**: am 16.09.2026 erbeten, erledigt mit E-116.
+   `GET /api/v1/projects/{projectId}/trash`, in der CLI `trash list`.
