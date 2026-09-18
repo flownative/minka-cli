@@ -1,129 +1,129 @@
 # CLAUDE.md
 
-Anweisungen für Claude Code für die Arbeit an diesem Repository.
+Instructions for Claude Code for working on this repository.
 
-## Unterhaltung
+## Conversation
 
-Auftraggeber ist Robert; Shaun vertritt ihn mit denselben Rechten. Die Sprache
-für Unterhaltungen mit beiden ist Deutsch mit informellem "du". Code,
-Kommentare, Commit-Messages, Hilfetexte und Ausgaben der CLI sind Englisch.
+The client is Robert; Shaun stands in for him with the same rights.
+Conversations with both are in German, with the informal "du". Everything
+written down is English: code, comments, commit messages, help texts, the
+output of the CLI, the documentation and the skills of this project.
 
-## Was das ist
+## What this is
 
-`minka` ist die Kommandozeile für die JSON-API von Minka (`/api/v1`). Zuerst
-für das Dogfooding: Robert und Claude-Sessions pflegen damit die
-Entwicklungsaufgaben von Minka. Sie ist ausdrücklich auch für KI-Agenten
-gebaut: stabile `--json`-Ausgabe, Exit-Codes je Fehlerklasse, eine
-Befehlsbeschreibung in `skills/minka/SKILL.md`.
+`minka` is the command line for the JSON API of Minka (`/api/v1`). First of all
+for dogfooding: Robert and Claude sessions use it to manage the development
+tasks of Minka. It is explicitly built for AI agents as well: stable `--json` output,
+an exit code per class of error, a description of the commands in
+`skills/minka/SKILL.md`.
 
-Vorbild für Konzepte ist [basecamp-cli](https://github.com/basecamp/basecamp-cli):
-Prinzipien übernehmen, nicht den Umfang. Nicht dazu gehören: KI-Integrationen,
-Benachrichtigungen, eine interaktive TUI, alles, was die API nicht anbietet.
+The model for its concepts is [basecamp-cli](https://github.com/basecamp/basecamp-cli):
+adopt the principles, not the scope. Not part of it: AI integrations,
+notifications, an interactive TUI, anything the API does not offer.
 
-Proprietär wie Minka, bis Minka veröffentlicht wird. Das Repository liegt auf
-GitHub unter `git@github.com:flownative/minka-cli.git`; der Stand kommt
-regelmäßig nach `main`. Andere Branches und alles, was Geschichte umschreibt,
-nur auf Ansage des Auftraggebers.
+Proprietary like Minka, until Minka is published. The repository lives on
+GitHub at `git@github.com:flownative/minka-cli.git`; the work goes to `main`
+regularly. Other branches and anything that rewrites history only when the
+client says so.
 
-## Dokumentation
+## Documentation
 
-- **Index über alle Dokumente:** [Documentation/README.md](Documentation/README.md)
-  — eine Zeile pro Dokument mit dem Hinweis, wann man es braucht. Minimal
-  starten, bei Bedarf nachladen.
-- **Erster Blick jeder Session:** [Stand](Documentation/work-in-progress/status.md).
-- **Entscheidungsregister:** [Documentation/decisions.md](Documentation/decisions.md)
-  (C-001…) — je Entscheidung kurz: was gilt, warum, wo umgesetzt.
-- Struktur und Lebenszyklus der Doku: `.claude/rules/documentation.md` (lädt
-  automatisch bei Arbeit unter `Documentation/`).
+- **Index of all documents:** [Documentation/README.md](Documentation/README.md)
+  — one line per document, saying when you need it. Start with little, load
+  more when needed.
+- **First look of every session:** [Status](Documentation/work-in-progress/status.md).
+- **Decision register:** [Documentation/decisions.md](Documentation/decisions.md)
+  (C-001…) — per decision, briefly: what holds, why, where it is implemented.
+- Structure and lifecycle of the documentation: `.claude/rules/documentation.md`
+  (loads by itself when working under `Documentation/`).
 
-Nichts über vorhandenen Code annehmen, sondern nachsehen. Doku-Update gehört in
-denselben Commit wie die Code-Änderung.
+Assume nothing about existing code, look it up. The documentation update
+belongs in the same commit as the code change.
 
-## Stack und Aufbau
+## Stack and layout
 
-Go (siehe `go.mod`), [cobra](https://github.com/spf13/cobra) für Befehle,
-[goldmark](https://github.com/yuin/goldmark) für Markdown,
-`golang.org/x/net/html` für HTML, `golang.org/x/term` für die verdeckte
-Token-Eingabe.
+Go (see `go.mod`), [cobra](https://github.com/spf13/cobra) for commands,
+[goldmark](https://github.com/yuin/goldmark) for Markdown,
+`golang.org/x/net/html` for HTML, `golang.org/x/term` for the hidden token
+prompt.
 
 ```
-cmd/minka/            main: ruft cli.Run auf und beendet mit dessen Exit-Code
-internal/api/         HTTP-Client und Typen der Ressourcen
-internal/config/      Hosts und Tokens in einer Datei mit 0600
-internal/markdown/    Markdown → HTML, nur Elemente, die der Server behält
-internal/richtext/    HTML eines Textes → Markdown zum Lesen
-internal/cli/         Befehle, Ausgabe, Exit-Codes
-internal/fakeapi/     In-Memory-Minka-API für Tests (httptest)
-skills/minka/         SKILL.md für Agenten
+cmd/minka/            main: calls cli.Run and exits with its exit code
+internal/api/         HTTP client and the types of the resources
+internal/config/      hosts and tokens in one file with 0600
+internal/markdown/    Markdown → HTML, only elements the server keeps
+internal/richtext/    HTML of a text → Markdown for reading
+internal/cli/         commands, output, exit codes
+internal/fakeapi/     in-memory Minka API for tests (httptest)
+skills/minka/         SKILL.md for agents
 ```
 
 ```bash
 make build        # bin/minka
 make test         # go test ./...
-make check        # gofmt-Prüfung, go vet, Tests; vor jedem Bericht und Commit
+make check        # gofmt check, go vet, tests; before every report and commit
 ```
 
-## Der API-Vertrag
+## The API contract
 
-Die Quelle der Wahrheit liegt im Minka-Repository, **nur lesen**:
+The source of truth lives in the Minka repository, **read only**:
 
-- `Documentation/stable/02-architecture/authorization.md`, Abschnitt „API"
+- `Documentation/stable/02-architecture/authorization.md`, section "API"
 - `Documentation/decisions.md` (E-…)
-- Code unter `DistributionPackages/Flownative.Minka/Classes/Presentation/Api/`
+- Code under `DistributionPackages/Flownative.Minka/Classes/Presentation/Api/`
 
-`internal/fakeapi` bildet diesen Vertrag nach. Ändert sich die API, zuerst den
-Fake anpassen, dann die CLI.
+`internal/fakeapi` mirrors this contract. When the API changes, adapt the fake
+first, then the CLI.
 
-Die API ist „intern, instabil". Fragen, Widersprüche und Wünsche gehen per
-Nachricht an die Minka-Koordinator-Session (derzeit `minka-92`), nicht als
-Änderung ins Minka-Repository. Jede Meldung über eine API-Änderung mit dem Code
-abgleichen: Maßgeblich sind Controller, Resources und Tests, nicht die
-Meldung. Weicht beides ab, geht das zurück an die Koordination.
+The API is "internal, unstable". Questions, contradictions and wishes go as a
+message to the Minka coordinator session (currently `minka-92`), not as a
+change into the Minka repository. Check every message about an API change
+against the code: controllers, resources and tests decide, not the message.
+Where the two differ, that goes back to the coordination.
 
-## Regeln gegenüber dem Minka-Repository
+## Rules towards the Minka repository
 
-`/Users/robert/Sites/minka` ist **nur zum Lesen** da. Keine Dateien ändern,
-keine Git-Befehle, die etwas ändern, kein `composer`, `phpunit`,
-`npm run test:browser`, keine Migrationen: Es gibt genau eine Testdatenbank,
-und andere Agenten testen parallel darin.
+`/Users/robert/Sites/minka` is there **for reading only**. Change no files, run
+no Git commands that change anything, no `composer`, `phpunit`,
+`npm run test:browser`, no migrations: there is exactly one test database, and
+other agents are testing in it at the same time.
 
-Erlaubt: lesen, `beach exec ./flow token:create|token:list|token:revoke`,
-Live-Aufrufe. Wo live geschrieben werden darf, steht in
-[Live-Prüfung](Documentation/guides/live-check.md).
+Allowed: reading, `beach exec ./flow token:create|token:list|token:revoke`,
+live calls. Where writing live is allowed is laid down in the
+[live check](Documentation/guides/live-check.md).
 
-Tokens stehen nie im Repository, in Commits, Tests oder Logs, nur in der
-Konfigurationsdatei der CLI (`~/.config/minka/config.json`, 0600).
+Tokens never appear in the repository, in commits, tests or logs, only in the
+configuration file of the CLI (`~/.config/minka/config.json`, 0600).
 
-## Konventionen
+## Conventions
 
-Die geltenden Regeln stehen unter `Documentation/stable/`; ihre Begründungen im
-Register. Für die Arbeit selbst gilt:
+The rules in force are under `Documentation/stable/`; their reasons are in the
+register. For the work itself:
 
-- Kommentare nach dem Skill `code-comments` (Intention statt Mechanik,
-  zeitlos, keine Verweise auf Karten, Doku oder Entscheidungs-IDs).
-- Commit-Messages nach dem Skill `git-workflow`, Englisch, keine
-  Session-Links.
-- Jede Schutzmaßnahme bekommt einen Test und einen Sabotagebeweis
-  ([Testen](Documentation/stable/testing.md)).
+- Comments follow the skill `code-comments` (intention instead of mechanics,
+  timeless, no references to cards, documentation or decision IDs).
+- Commit messages follow the skill `git-workflow`, English, no session links.
+- Every safeguard gets a test and a sabotage proof
+  ([Testing](Documentation/stable/testing.md)).
 
-## Arbeitsweise mit Unteragenten
+## Working with subagents
 
-Wie in Minka: Implementierer baut, ein Reviewer, der nichts ändert, prüft.
-Niemand prüft sein eigenes Werk. Recherche, die viel Text erzeugt, geht an
-einen Unteragenten mit knappem Berichtsformat.
+As in Minka: an implementer builds, a reviewer who changes nothing checks.
+Nobody checks their own work. Research that produces a lot of text goes to a
+subagent with a terse report format.
 
-## Zentrale Best Practices (Flownative Skills)
+## Central best practices (Flownative skills)
 
-Skills aus github.com/flownative/flownative-best-practices, per Symlink unter
-`.claude/skills`. Aktualisieren: `git -C .claude/skills pull origin main`.
+Skills from github.com/flownative/flownative-best-practices, symlinked at
+`.claude/skills`. Update: `git -C .claude/skills pull origin main`.
 
-| Aufgabe | Skill |
-|---------|-------|
-| Code-Kommentare | `/code-comments` |
-| Refactoring, Code entfernen, Code Review | `/code-quality`, `/review` |
-| Commit Message, Branch aufräumen | `/git-workflow` |
-| Neue Best Practice festhalten | `/learn-best-practice` |
+| Task | Skill |
+|------|-------|
+| Code comments | `/code-comments` |
+| Refactoring, removing code, code review | `/code-quality`, `/review` |
+| Commit message, tidying a branch | `/git-workflow` |
+| Recording a new best practice | `/learn-best-practice` |
 
-Die Skills sind überwiegend für PHP, Flow und Neos geschrieben. Übertragbar
-sind die Regeln zu Kommentaren, Benennung, Commits und Reviews; bei
-Widersprüchen gewinnt dieses Repository.
+The skills are mostly written for PHP, Flow and Neos, and in German. What
+carries over are the rules on comments, naming, commits and reviews; where they
+contradict this repository, this repository wins.

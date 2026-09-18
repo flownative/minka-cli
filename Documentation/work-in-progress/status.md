@@ -1,59 +1,58 @@
-# Stand
+# Status
 
-Der erste Blick jeder neuen Session. Was gilt, steht unter `stable/`; hier
-steht, wo die Arbeit gerade ist.
+The first look of every new session. What holds is under `stable/`; here
+stands where the work currently is.
 
-## Wo wir stehen
+## Where we are
 
-Die CLI bedient, was `/api/v1` anbietet: Projekte, Boards, Karten samt
-Papierkorb, Spalten, Zuständige, Fälligkeiten, Schritte, Abonnenten,
-Kommentare, Chats, private Gespräche, Uploads, Erwähnungen, Reaktionen und die
-eigenen Karten über alle Projekte. `minka commands` zählt sie alle auf, aus dem
-Befehlsbaum selbst gebaut.
+The CLI serves what `/api/v1` offers: projects, boards, cards including the
+trash, columns, assignees, due dates, steps, subscribers, comments, chats,
+private conversations, uploads, mentions, reactions and one's own cards across
+all projects. `minka commands` lists them all, built from the command tree
+itself.
 
-Alles ist gegen die Fake-API getestet und live geprüft — die Kette
-Upload → Anhang im Text → Anzeige ebenso wie private Gespräche in beide
-Richtungen. Was nur gegen den Fake geprüft ist, steht unten.
+Everything is tested against the fake API and checked live — the chain
+upload → attachment in the text → display as well as private conversations in
+both directions. What is checked against the fake only is listed below.
 
-Koordination der API: die Minka-Session `minka-92`. Sie meldet Änderungen, die
-gegen den Minka-Code abgeglichen werden; Abweichungen gehen an sie zurück.
+Coordination of the API: the Minka session `minka-92`. It reports changes,
+which are checked against the Minka code; deviations go back to it.
 
-Das Dogfooding wartet auf die interne Alpha. Das Smoke-Token
-`minka-cli-smoke` (Konto Bruno, lokale Instanz) wird dann widerrufen.
+Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
+(account Bruno, local instance) gets revoked then.
 
-## Nur gegen den Fake geprüft
+## Checked against the fake only
 
-- Dass ein Gespräch mit jemandem aus einer fremden Organisation 404 gibt: Die
-  Fake-API kennt keine Organisationen. Am Minka-Code gelesen.
-- Dass ein fremdes Attachment beim Speichern stillschweigend verschwindet: Der
-  Fake entfernt es nicht.
-- Unicode-NFC für den Inhalt einer Reaktion: Der Server normalisiert, der Fake
-  nicht.
-- „agent for X" in `people list` ist live gesehen, ein ausgeschiedener Agent
-  nicht — er steht in keiner Liste mehr.
+- That a conversation with somebody from a foreign organisation gives 404: the
+  fake API knows no organisations. Read in the Minka code.
+- That a foreign attachment silently disappears on saving: the fake does not
+  remove it.
+- Unicode NFC for the content of a reaction: the server normalises, the fake
+  does not.
+- "agent for X" in `people list` has been seen live, an agent that stepped
+  down has not — it is in no list any more.
 
-## Offen in der API
+## Open in the API
 
-- Schritte umbenennen und umsortieren gibt es nicht.
-- Done über 25 Karten hinaus blättern gibt es nicht; wird gebraucht, wenn das
-  Dogfooding es braucht.
-- Eine falsche HTTP-Methode beantwortet Flow mit HTML statt JSON.
-- Spaltenfarben kommen später, nur lesend.
-- Projekt archivieren und in den Papierkorb legen (E-129) steht. Ein Projekt
-  im Papierkorb antwortet überall 404. Ein archiviertes bleibt unter seinen
-  Adressen lesbar, fehlt aber in `projects list` und `me cards`; Schreiben
-  antwortet 404 `notFound`, bei Abonnenten 422 `personNotAProjectMember`. Der
-  Hinweis der CLI zu 404 nennt diesen Fall nicht.
-- Zugesagt von der Koordination, noch nicht gemerged: Schreiben eines Mitglieds
-  in ein archiviertes Projekt antwortet einheitlich 422 `projectArchived`, auch
-  Uploads; `chats read` bleibt erlaubt; die Projektressource bekommt `status`
-  (`active|archived`). Mit der Merge-Meldung: gegen den Code abgleichen, Fake
-  anpassen, Hinweis zu `projectArchived` und `status` in der Ausgabe ergänzen.
-  Bis dahin bleibt der Hinweistext, wie er ist.
+- Renaming and reordering steps does not exist.
+- Paging Done beyond 25 cards does not exist; needed once dogfooding needs it.
+- Flow answers a wrong HTTP method with HTML instead of JSON.
+- Column colours come later, read-only.
+- Archiving a project and moving it to the trash (E-129) is in place. A project
+  in the trash answers 404 everywhere. An archived one stays readable at its
+  addresses, but is missing from `projects list` and `me cards`; writing
+  answers 404 `notFound`, for subscribers 422 `personNotAProjectMember`. The
+  hint of the CLI for 404 does not name this case.
+- Promised by the coordination, not merged yet: a write by a member into an
+  archived project answers 422 `projectArchived` throughout, uploads included;
+  `chats mark-read` stays allowed; the project resource gains `status`
+  (`active|archived`). With the merge message: check against the code, adapt
+  the fake, add a hint for `projectArchived`, and show `status` in the output.
+  Until then the hint text stays as it is.
 
-## Nächste Schritte
+## Next steps
 
-- Auf Meldungen von `minka-92` reagieren: gegen den Code abgleichen, Fake
-  zuerst, dann die CLI, Test und Sabotagebeweis, live prüfen, Doku im selben
-  Commit.
-- Die interne Alpha vorbereiten: Token wechseln, SKILL.md gegenlesen.
+- React to messages from `minka-92`: check against the code, fake first, then
+  the CLI, test and sabotage proof, check live, documentation in the same
+  commit.
+- Prepare the internal alpha: change the token, proofread the SKILL.md.

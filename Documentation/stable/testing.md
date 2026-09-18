@@ -1,41 +1,40 @@
-# Testen
+# Testing
 
-`make check` ist die Schwelle: gofmt-Prüfung, `go vet`, alle Tests. Läuft vor
-jedem Bericht und jedem Commit.
+`make check` is the threshold: gofmt check, `go vet`, all tests. It runs before
+every report and every commit.
 
-## Gegen die Fake-API, nicht gegen eine Instanz
+## Against the fake API, not against an instance
 
-`internal/fakeapi` bildet den Vertrag von `/api/v1` nach: dieselben Pfade,
-Statuscodes und Fehlercodes, in derselben Reihenfolge geprüft, mit den
-bytegleichen 401- und 404-Rümpfen. Sie hält die Anfragen fest, sodass ein Test
-sieht, was wirklich hinausging (C-005).
+`internal/fakeapi` mirrors the contract of `/api/v1`: the same paths, status
+codes and error codes, checked in the same order, with the byte-identical 401
+and 404 bodies. It records the requests, so a test sees what really went out
+(C-005).
 
-Ändert sich die API, wird zuerst der Fake angepasst, dann die CLI. Was der
-Fake nicht nachbildet, gehört als Satz in den Status, damit niemand eine
-Sicherheit annimmt, die es nicht gibt.
+When the API changes, the fake is adapted first, then the CLI. What the fake
+does not mirror belongs as a sentence in the status, so that nobody assumes a
+certainty that does not exist.
 
-## Sabotagebeweise
+## Sabotage proofs
 
-Jede Schutzmaßnahme bekommt einen Test und einen Beweis, dass er greift: den
-Schutz in einer Kopie des Repositories herausnehmen, prüfen, dass der Code
-kompiliert, und den Test rot werden sehen (C-006).
+Every safeguard gets a test and a proof that the test bites: take the safeguard
+out in a copy of the repository, check that the code compiles, and see the test
+go red (C-006).
 
-Ein Beweis, der nicht kompiliert, ist keiner — dann sagt der Compiler nein,
-nicht der Test. Bleibt ein Test grün, fehlt eine Zusicherung: erst den Test
-schärfen, dann den Beweis wiederholen.
+A proof that does not compile is none — then the compiler says no, not the
+test. If a test stays green, an assertion is missing: sharpen the test first,
+then repeat the proof.
 
-Die Kopie liegt im Scratchpad, nie im Repository.
+The copy lives in the scratchpad, never in the repository.
 
-## Live prüfen
+## Checking live
 
-Ein Live-Lauf zeigt, was kein Fake zeigt: die echten Antworten des Servers.
-Dafür gelten Regeln, siehe [Live-Prüfung](../guides/live-check.md).
+A live run shows what no fake shows: the real answers of the server. Rules
+apply to it, see [Live check](../guides/live-check.md).
 
-## Was ein Test festhält
+## What a test pins down
 
-- Den Vertrag: Hülle, Exit-Code, `meta.apiCode`, die gesendete Anfrage.
-- Die Regel, nicht die Formulierung — außer der Hinweis ist selbst die Hilfe,
-  die jemand braucht (der Autor-Hinweis bei 404, der Rat zu
-  `--content-type`).
-- Die Fälle, die eine API-Meldung beschreibt: 201 gegen 200, doppelt
-  ausgeführt, von jemand anderem, an der falschen Adresse.
+- The contract: envelope, exit code, `meta.apiCode`, the request that was sent.
+- The rule, not the wording — unless the hint is itself the help somebody needs
+  (the author hint on a 404, the advice on `--content-type`).
+- The cases an API message describes: 201 versus 200, run twice, by somebody
+  else, at the wrong address.

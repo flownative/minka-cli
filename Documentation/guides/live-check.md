@@ -1,41 +1,39 @@
-# Live-Prüfung
+# Live check
 
-Eine neue API-Meldung ist erst geprüft, wenn sie gegen eine laufende Instanz
-lief. Bis dahin steht im Status, dass sie nur gegen den Fake geprüft ist.
+A new API message counts as checked only once it ran against a running
+instance. Until then the status says it is checked against the fake only.
 
-## Wo geschrieben werden darf
+## Where writing is allowed
 
-| Instanz | Konto | Schreiben erlaubt |
+| Instance | Account | Writing allowed |
 |---|---|---|
-| `dev.minka.flownative.com` | Agentenkonto „Claude", handelt für Robert | überall im Projekt „Flownative HQ", und privat an Shaun |
-| `minka.localbeach.net` | Smoke-Konto Bruno | nur Board „API-3 Abnahme" und Chat „Chat1 Abnahme" im „Test-Projekt" |
+| `dev.minka.flownative.com` | agent account "Claude", acts for Robert | anywhere in the project "Flownative HQ", and privately to Shaun |
+| `minka.localbeach.net` | smoke account Bruno | only the board "API-3 Abnahme" and the chat "Chat1 Abnahme" in "Test-Projekt" |
 
-Der Chat „Sommerfest" auf der lokalen Instanz ist Roberts Demo und bleibt
-unberührt. Gelöscht wird nur, was der Lauf selbst angelegt hat.
+The chat "Sommerfest" on the local instance is Robert's demo and stays
+untouched. Only what the run created itself gets deleted.
 
-Vorgabe-Host ist die Test-Instanz; die lokale braucht
+The default host is the test instance; the local one needs
 `--host https://minka.localbeach.net`.
 
-Alles darüber hinaus — einer weiteren Person schreiben, in einem fremden
-Projekt etwas anlegen — ist eine Entscheidung von Robert oder Shaun, nicht des
-Koordinators.
+Anything beyond that — writing to another person, creating something in a
+project of others — is a decision of Robert or Shaun, not of the coordinator.
 
-## Ablauf
+## Procedure
 
-1. `make build`, damit `bin/minka` den geprüften Stand hat.
-2. Eigene Daten anlegen: eine Karte, eine Nachricht, ein Kommentar. Nie an
-   fremden weiterarbeiten.
-3. Den gemeldeten Fall durchspielen, auch die Absagen: zweiter Aufruf, fremde
-   ID, zu langer Wert, fehlende Berechtigung.
-4. Die Textansicht ansehen, nicht nur `--quiet`. Ein Fehler in der Darstellung
-   fällt nur dort auf.
-5. Aufräumen: eigene Karten löschen, eigene Nachrichten entfernen. Ein Upload,
-   auf den kein gespeicherter Text zeigt, verschwindet nach sieben Tagen von
-   selbst.
-6. Was der Lauf gezeigt hat, in den Status; was er an der CLI aufgedeckt hat,
-   sofort beheben.
+1. `make build`, so that `bin/minka` has the state under test.
+2. Create data of your own: a card, a message, a comment. Never continue on
+   somebody else's.
+3. Play through the reported case, the refusals too: second call, foreign ID,
+   value too long, missing permission.
+4. Look at the text view, not only at `--quiet`. An error in the rendering
+   shows up only there.
+5. Tidy up: delete your own cards, remove your own messages. An upload that no
+   stored text points to disappears by itself after seven days.
+6. What the run showed goes into the status; what it uncovered in the CLI gets
+   fixed at once.
 
-## Bilder
+## Images
 
-Ein Testbild soll sichtbar sein. Ein 1×1-Pixel kommt zwar korrekt an, aber
-niemand sieht daran, ob die Anzeige stimmt.
+A test image should be visible. A 1×1 pixel does arrive correctly, but nobody
+can tell from it whether the display is right.
