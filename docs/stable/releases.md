@@ -34,10 +34,13 @@ How the CLI gets from `main` to a machine.
 
 The job that writes to the tap runs in the environment `release`, which holds
 the one secret of this repository: a deploy key that can write to the tap and
-nowhere else. The environment only deploys from tags `v*` and asks a reviewer
-first; that, not the workflow, is what keeps a branch with a workflow of its
-own from reaching the key. The tap carries other formulae as well, so the key
-is worth that care.
+nowhere else. The environment only deploys from tags `v*`; that, not the
+workflow, is what keeps a branch with a workflow of its own from reaching the
+key. Somebody who may push a tag `v*` can still reach it, with a release from a
+commit whose workflow they changed: a required reviewer would close that, and
+GitHub offers one for private repositories on the Enterprise plan only. The
+tap carries other formulae as well, so who may write to this repository is
+worth that thought.
 
 ## The formula
 
