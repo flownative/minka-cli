@@ -9,6 +9,7 @@ import (
 
 	"github.com/flownative/minka-cli/internal/api"
 	"github.com/flownative/minka-cli/internal/markdown"
+	"github.com/flownative/minka-cli/internal/richtext"
 	"github.com/spf13/cobra"
 )
 
@@ -372,6 +373,15 @@ Removing it again succeeds.`,
 	}
 }
 
+// messageText is a message as Markdown, so that a file or a mention in it is
+// seen at all: the plain text the server keeps beside a message has neither.
+func messageText(message api.ChatMessage) string {
+	if source := firstNonEmpty(message.BodySource, message.BodyHTML); richtext.CarriesMarkup(source) {
+		return richtext.ToMarkdown(source)
+	}
+	return message.BodyText
+}
+
 func renderMessages(w io.Writer, messages []api.ChatMessage) {
 	if len(messages) == 0 {
 		fmt.Fprintln(w, "No messages.")
@@ -389,7 +399,7 @@ func renderMessages(w io.Writer, messages []api.ChatMessage) {
 		if message.EditedAt != nil {
 			header += " (edited)"
 		}
-		fmt.Fprintf(w, "%s\n%s\n", header, message.BodyText)
+		fmt.Fprintf(w, "%s\n%s\n", header, messageText(message))
 		if line := reactionLine(message.Reactions); line != "" {
 			fmt.Fprintf(w, "%s\n", line)
 		}

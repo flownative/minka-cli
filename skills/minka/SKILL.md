@@ -220,6 +220,9 @@ such as `Doing`.
 
 - `chats list <projectId>` gives `{id, name, unreadCount, appUrl}`.
   `unreadCount` counts own messages as well, removed ones never.
+- `messages list --styled` shows a message as Markdown when it carries markup,
+  so a file in it is a Markdown image or link and a mention is `@Name`. The
+  plain `bodyText` beside every message has neither.
 - `messages list <chatId>` gives messages oldest first as `{id, seq,
   changeSeq, author, bodyHtml, bodyText, createdAt, editedAt, removed}`, the
   latest 50 by default, `--limit` up to 200.
