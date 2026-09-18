@@ -35,6 +35,9 @@ the documentation says what holds; how it came about is in git.
 
 ## Work in progress
 
+- [Release concept](work-in-progress/release-concept.md): How a version gets
+  released, installed through Homebrew and set up, and which steps are still
+  to build — before any work on releases, `setup`, `skill` or `doctor`.
 - [Status](work-in-progress/status.md): What the CLI can do, what is checked
   against the fake only, what is open in the API — the first look of every new
   session.

@@ -172,3 +172,16 @@ the CLI does internally.
 
 **Why:** Agents are the main users; their description would otherwise be the
 first thing to go stale. **Implemented as:** `skills/minka/SKILL.md`.
+
+<a id="c-015"></a>
+## C-015 — Work reaches `main` through a pull request
+
+*Applies to: every change to the repository*
+
+A change lives on a branch of its own and is merged through a pull request
+once GitHub Actions ran the checks on it: formatting, vet, tests, tidy
+dependencies, a build, known vulnerabilities.
+
+**Why:** A release is cut from `main`, so `main` has to be releasable at any
+time, and a pull request is where a second pair of eyes looks. **Implemented
+as:** `.github/workflows/test.yml`, see [Testing](stable/testing.md).
