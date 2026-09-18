@@ -39,10 +39,17 @@ Das Dogfooding wartet auf die interne Alpha. Das Smoke-Token
   Dogfooding es braucht.
 - Eine falsche HTTP-Methode beantwortet Flow mit HTML statt JSON.
 - Spaltenfarben kommen später, nur lesend.
-- In Arbeit mit API-Bezug: Projekt archivieren und in den Papierkorb legen
-  (E-129). Ein archiviertes Projekt nimmt keine Schreibvorgänge mehr an, eines
-  im Papierkorb antwortet überall 404. Wenn es steht, ist zu entscheiden, ob
-  die Fehlerhinweise der CLI diesen Fall benennen.
+- Projekt archivieren und in den Papierkorb legen (E-129) steht. Ein Projekt
+  im Papierkorb antwortet überall 404. Ein archiviertes bleibt unter seinen
+  Adressen lesbar, fehlt aber in `projects list` und `me cards`; Schreiben
+  antwortet 404 `notFound`, bei Abonnenten 422 `personNotAProjectMember`. Der
+  Hinweis der CLI zu 404 nennt diesen Fall nicht.
+- Zugesagt von der Koordination, noch nicht gemerged: Schreiben eines Mitglieds
+  in ein archiviertes Projekt antwortet einheitlich 422 `projectArchived`, auch
+  Uploads; `chats read` bleibt erlaubt; die Projektressource bekommt `status`
+  (`active|archived`). Mit der Merge-Meldung: gegen den Code abgleichen, Fake
+  anpassen, Hinweis zu `projectArchived` und `status` in der Ausgabe ergänzen.
+  Bis dahin bleibt der Hinweistext, wie er ist.
 
 ## Nächste Schritte
 
