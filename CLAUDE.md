@@ -22,20 +22,22 @@ adopt the principles, not the scope. Not part of it: AI integrations,
 notifications, an interactive TUI, anything the API does not offer.
 
 Proprietary like Minka, until Minka is published. The repository lives on
-GitHub at `git@github.com:flownative/minka-cli.git`; the work goes to `main`
-regularly. Other branches and anything that rewrites history only when the
-client says so.
+GitHub at `git@github.com:flownative/minka-cli.git`. Work reaches `main`
+through a pull request from a branch of its own; GitHub Actions run the checks
+on it. Pushing, and anything that rewrites pushed history, only when the client
+says so. How a version gets released is laid down in the
+[release concept](docs/work-in-progress/release-concept.md).
 
 ## Documentation
 
-- **Index of all documents:** [Documentation/README.md](Documentation/README.md)
+- **Index of all documents:** [docs/README.md](docs/README.md)
   — one line per document, saying when you need it. Start with little, load
   more when needed.
-- **First look of every session:** [Status](Documentation/work-in-progress/status.md).
-- **Decision register:** [Documentation/decisions.md](Documentation/decisions.md)
+- **First look of every session:** [Status](docs/work-in-progress/status.md).
+- **Decision register:** [docs/decisions.md](docs/decisions.md)
   (C-001…) — per decision, briefly: what holds, why, where it is implemented.
 - Structure and lifecycle of the documentation: `.claude/rules/documentation.md`
-  (loads by itself when working under `Documentation/`).
+  (loads by itself when working under `docs/`).
 
 Assume nothing about existing code, look it up. The documentation update
 belongs in the same commit as the code change.
@@ -90,21 +92,21 @@ other agents are testing in it at the same time.
 
 Allowed: reading, `beach exec ./flow token:create|token:list|token:revoke`,
 live calls. Where writing live is allowed is laid down in the
-[live check](Documentation/guides/live-check.md).
+[live check](docs/guides/live-check.md).
 
 Tokens never appear in the repository, in commits, tests or logs, only in the
 configuration file of the CLI (`~/.config/minka/config.json`, 0600).
 
 ## Conventions
 
-The rules in force are under `Documentation/stable/`; their reasons are in the
+The rules in force are under `docs/stable/`; their reasons are in the
 register. For the work itself:
 
 - Comments follow the skill `code-comments` (intention instead of mechanics,
   timeless, no references to cards, documentation or decision IDs).
 - Commit messages follow the skill `git-workflow`, English, no session links.
 - Every safeguard gets a test and a sabotage proof
-  ([Testing](Documentation/stable/testing.md)).
+  ([Testing](docs/stable/testing.md)).
 
 ## Working with subagents
 

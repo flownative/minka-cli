@@ -3,6 +3,11 @@
 `make check` is the threshold: gofmt check, `go vet`, all tests. It runs before
 every report and every commit.
 
+On a pull request and on `main`, GitHub Actions run the same threshold, check
+that `go.mod` is tidy, build the binary and scan for known vulnerabilities
+with `govulncheck`. Actions are pinned to a commit, and a workflow holds no
+more permissions than its job needs.
+
 ## Against the fake API, not against an instance
 
 `internal/fakeapi` mirrors the contract of `/api/v1`: the same paths, status
