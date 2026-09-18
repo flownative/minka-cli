@@ -1,11 +1,11 @@
 ---
 paths:
-  - "Documentation/**"
+  - "docs/**"
 ---
 
 # Structure and lifecycle of the documentation
 
-The complete index is `Documentation/README.md` — one line per document, saying
+The complete index is `docs/README.md` — one line per document, saying
 when you need it. Do not create sub-indexes.
 
 The principle above everything: **the status quo, not how it came about.** The
@@ -28,7 +28,7 @@ retrospectives belong in the commit message.
 
 Two readers, two places: the rule stands normatively under `stable/` and names
 the ID, the reason stands in one sentence in the register
-(`Documentation/decisions.md`).
+(`docs/decisions.md`).
 
 - IDs (`C-001`) are stable and never reused.
 - An entry has at most eight lines: *what holds*, *why* (one sentence),
