@@ -27,8 +27,12 @@ when stdout is not a terminal, so an agent gets structured output by default.
   is no UUID is refused with exit 1 before any request.
 - Retry only when `retryable` is true, which only happens for reads. After a
   failed write, read the card back before trying again: the change may have
-  reached the server. A 404 (`not_found`) means the thing does not exist or
-  belongs to a project the token's person is not in.
+  reached the server. A 404 (`not_found`) means the thing does not exist,
+  belongs to a project the token's person is not in, or its project is in the
+  trash.
+- Exit 9 with `meta.apiCode` `projectArchived` means the project is archived:
+  it can be read, nothing can be written, and trying again does not help. Tell
+  the person; putting it back in use is done in Minka on the web.
 - `minka cards done` is safe to repeat: a card already in Done is left alone.
 - `minka cards delete` moves a card to the trash. Repeating it changes
   nothing on the server, but a card in the trash reads like one that never
@@ -73,7 +77,7 @@ fine), `commentNotReadable`, `cardDueDateNotADate`, `personNotAProjectMember`, `
 `chatMessageMissing`, `chatMessageTooLong`, `chatMessageHasControlCharacters`,
 `chatMessageNotReadable`, `chatMessageDraftNotAnIdentifier`, `chatMessagesLimitNotANumber`,
 `chatReadSeqMissing`, `nothingToChange`, `columnIdMissing`, `malformedBody`,
-`unsupportedMediaType`.
+`unsupportedMediaType`, `projectArchived`.
 
 Minka answers everything you may not see with 404, never 403, so exit 4 is
 not expected in practice.
@@ -118,7 +122,7 @@ When you see it, run `minka skill install` and read the skill again.
 ```bash
 minka auth status --json
 minka me --json
-minka projects list --json
+minka projects list [--archived] --json
 minka boards list <projectId> --json
 minka boards show <boardId> --json
 minka cards mine --json
@@ -168,8 +172,9 @@ such as `Doing`.
   every project it is a member of, as a bare array of the same cards
   `cards show` gives. Each carries `project {id, name}` and `board {id, title}`
   besides `projectId` and `boardId`.
-- Cards in Done, cards in the trash and cards of a project that was left are
-  not among them, so the list is what is still to do.
+- Cards in Done, cards in the trash, cards of an archived project and cards of
+  a project that was left are not among them, so the list is what is still to
+  do.
 - The order is the order of the page: projects by name, then by `dueOn` with
   the overdue ones first and the ones without a date last.
 - It is the cheapest way to answer "what am I on?": one request instead of a
@@ -184,6 +189,20 @@ such as `Doing`.
   restorable, blockedBy, appUrl}`. `kind` is `card`, `column` or `tool`;
   `restorable` says whether `cards restore` takes it, `blockedBy` which of
   board and column is in the way. Columns and tools come back in the web only.
+
+## Projects
+
+- `projects list` gives the projects in use as `{id, name, description,
+  status, appUrl}`; `status` is `active` or `archived`. `--archived` lists the
+  archived ones instead.
+- An archived project stays readable under every address: boards, cards,
+  chats, people, trash. Every write into it exits 9 with `projectArchived`;
+  only `chats mark-read` still works. Somebody who is no member gets exit 2 as
+  ever and does not learn that it is archived.
+- `messages create` with a `--client-message-id` that was sent before the
+  project was archived still answers with that message.
+- A host whose Minka does not know archived projects yet makes `projects list
+  --archived` exit 7 rather than list projects in use as archived.
 
 ## Boards
 

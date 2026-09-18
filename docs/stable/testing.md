@@ -43,3 +43,6 @@ apply to it, see [Live check](../guides/live-check.md).
   (the author hint on a 404, the advice on `--content-type`).
 - The cases an API message describes: 201 versus 200, run twice, by somebody
   else, at the wrong address.
+- A rule that holds for every command of a kind is tested against a list the
+  command tree is held against, so that a new command cannot go untested:
+  every command is known to write into a project or not.

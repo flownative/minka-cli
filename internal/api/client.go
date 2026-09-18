@@ -96,8 +96,13 @@ func (c *Client) Me(ctx context.Context) (Result[Me], error) {
 	return request[Me](ctx, c, http.MethodGet, "/me", nil)
 }
 
-func (c *Client) Projects(ctx context.Context) (Result[[]Project], error) {
-	return request[[]Project](ctx, c, http.MethodGet, "/projects", nil)
+// Projects lists the projects in use, or the archived ones instead.
+func (c *Client) Projects(ctx context.Context, archived bool) (Result[[]Project], error) {
+	path := "/projects"
+	if archived {
+		path += "?status=archived"
+	}
+	return request[[]Project](ctx, c, http.MethodGet, path, nil)
 }
 
 func (c *Client) Boards(ctx context.Context, projectID string) (Result[[]BoardListItem], error) {

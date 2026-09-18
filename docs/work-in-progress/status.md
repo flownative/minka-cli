@@ -33,29 +33,24 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   remove it.
 - Unicode NFC for the content of a reaction: the server normalises, the fake
   does not.
+- That a write into an archived project answers 422 `projectArchived`: no
+  project that may be written to live is archived. Read in the Minka code and
+  its tests. Live, the local instance shows `status` and takes the filter; the
+  test instance runs an older Minka, where `projects list --archived` refuses
+  as it should.
 - "agent for X" in `people list` has been seen live, an agent that stepped
   down has not — it is in no list any more.
 
 ## Open in the API
 
+- Reported to the coordination: `messages create` with a known
+  `clientMessageId` answers 200 in an archived project while every other write
+  answers 422. Nothing is written, so it does no harm; the fake mirrors it.
+
 - Renaming and reordering steps does not exist.
 - Paging Done beyond 25 cards does not exist; needed once dogfooding needs it.
 - Flow answers a wrong HTTP method with HTML instead of JSON.
 - Column colours come later, read-only.
-- Archiving a project and moving it to the trash (E-129) is in place. A project
-  in the trash answers 404 everywhere. An archived one stays readable at its
-  addresses, but is missing from `projects list` and `me cards`; writing
-  answers 404 `notFound`, for subscribers 422 `personNotAProjectMember`. The
-  hint of the CLI for 404 does not name this case.
-- Promised by the coordination, not merged yet: a write by a member into an
-  archived project answers 422 `projectArchived` throughout, uploads included;
-  `chats mark-read` stays allowed; the project resource gains `status`
-  (`active|archived`) and `projects list` a filter `status=archived`; adding a
-  step to a card of an archived project no longer answers 500, and removing
-  one no longer answers 204 without doing it. With the merge message: check against the code, adapt
-  the fake, add a hint for `projectArchived`, and show `status` in the output.
-  Until then the hint text stays as it is.
-
 - In work at Minka: cards gain `shortId`, a string such as `MINKA-1K`, or null
   where the board has no prefix (E-138). `data` carries it without a change;
   the text of `cards show`, `cards mine` and `boards show` should show it. It
