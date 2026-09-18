@@ -22,9 +22,8 @@ The rules behind this are in [Releases](../stable/releases.md).
 
 ## After
 
-1. Watch the workflow "Release" in Actions and approve the job that writes to
-   the tap when it asks. The archives and `checksums.txt` appear on the
-   release; the tap gets a commit "minka X.Y.Z".
+1. Watch the workflow "Release" in Actions. The archives and `checksums.txt`
+   appear on the release; the tap gets a commit "minka X.Y.Z".
 2. Try it:
 
    ```bash
