@@ -46,6 +46,10 @@ type app struct {
 	jsonFlag   bool
 	quietFlag  bool
 	styledFlag bool
+
+	// skillIsTheTopic is set by a command that reports on the installed skill
+	// itself, so that it does not say the same thing twice.
+	skillIsTheTopic bool
 }
 
 // Run executes the CLI and returns its exit code.
@@ -158,6 +162,7 @@ only used for the host in $MINKA_HOST.`,
 		a.newConversationsCmd(),
 		a.newUploadsCmd(),
 		a.newTrashCmd(),
+		a.newSkillCmd(),
 		a.newCommandsCmd(root),
 		a.newVersionCmd(),
 	)

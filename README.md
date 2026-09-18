@@ -24,6 +24,18 @@ beach exec ./flow token:create --email-address you@example.com --name laptop \
 The token is stored in `~/.config/minka/config.json` with permissions 0600.
 `MINKA_HOST` and `MINKA_TOKEN` override the config file.
 
+## For agents
+
+The description of minka for agents travels inside the binary:
+
+```bash
+minka skill install   # ~/.claude/skills/minka/SKILL.md, read by Claude Code
+minka skill status    # current, differs or not installed
+```
+
+After an upgrade minka says when the installed copy differs from the one it
+carries; it never replaces it by itself.
+
 ## Use
 
 ```bash
