@@ -93,7 +93,7 @@ func apiError(err error, host string) *Error {
 		switch status := apiErr.StatusCode; {
 		case status == http.StatusUnauthorized:
 			e.Code = CodeAuth
-			e.Hint = "The token is missing, unknown, revoked or expired. Run: minka auth login --host " + host
+			e.Hint = "The token is missing, unknown, revoked or expired, or the agent it belongs to stepped down. Run: minka auth login --host " + host
 		case status == http.StatusForbidden:
 			e.Code = CodeForbidden
 			e.Hint = "The account of the token may not use this part of Minka."

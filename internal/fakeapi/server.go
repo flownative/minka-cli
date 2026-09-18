@@ -44,6 +44,7 @@ type Person struct {
 	Name        string
 	Email       string
 	PrincipalID string
+	Retired     bool // an agent that stepped down: gone from every circle, and its tokens with it
 }
 
 type Project struct {
@@ -245,6 +246,7 @@ type Fixture struct {
 	Anke          *Person // a member of the project besides Bruno
 	Stranger      *Person // no member of the project
 	Agent         *Person
+	RetiredAgent  *Person // an agent that stepped down: still a member, in no list
 	Project       *Project
 	Board         *Board
 	Triage        *Column
@@ -275,14 +277,15 @@ func New(t testing.TB) (*Server, *Fixture) {
 	stranger := &Person{ID: newID(), Name: "Stranger", Email: "stranger@example.com"}
 	agent := &Person{ID: newID(), Name: "Claude (Bruno)", Email: "claude-bruno@agents.invalid", PrincipalID: bruno.ID}
 	anke := &Person{ID: newID(), Name: "Anke", Email: "anke@example.com"}
-	for _, p := range []*Person{bruno, anke, stranger, agent} {
+	retired := &Person{ID: newID(), Name: "Claude (Anke)", Email: "claude-anke@agents.invalid", PrincipalID: anke.ID, Retired: true}
+	for _, p := range []*Person{bruno, anke, stranger, agent, retired} {
 		s.People[p.ID] = p
 	}
 	s.Tokens["minka_pat_bruno"] = bruno.ID
 	s.Tokens["minka_pat_stranger"] = stranger.ID
 	s.Tokens["minka_pat_agent"] = agent.ID
 
-	project := &Project{ID: newID(), Name: "Test-Projekt", Description: "For trying things", MemberIDs: []string{bruno.ID, anke.ID, agent.ID}}
+	project := &Project{ID: newID(), Name: "Test-Projekt", Description: "For trying things", MemberIDs: []string{bruno.ID, anke.ID, agent.ID, retired.ID}}
 	triage := &Column{ID: newID(), Type: "triage"}
 	doingTitle := "Doing"
 	doing := &Column{ID: newID(), Type: "column", CustomTitle: &doingTitle}
@@ -369,7 +372,7 @@ func New(t testing.TB) (*Server, *Fixture) {
 
 	return s, &Fixture{
 		Token: "minka_pat_bruno", StrangerToken: "minka_pat_stranger",
-		Bruno: bruno, Anke: anke, Stranger: stranger, Agent: agent, Project: project, Board: board,
+		Bruno: bruno, Anke: anke, Stranger: stranger, Agent: agent, RetiredAgent: retired, Project: project, Board: board,
 		Triage: triage, Doing: doing, NotNow: notNow, Done: done,
 		CardInTriage: cardInTriage, CardInDoing: cardInDoing,
 		OtherProject: otherProject, OtherBoard: otherBoard, OtherCard: otherCard,
@@ -455,7 +458,7 @@ func (s *Server) authenticated(next handler) http.HandlerFunc {
 func (s *Server) me(w http.ResponseWriter, _ *http.Request, person *Person) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"id": person.ID, "name": person.Name, "emailAddress": person.Email,
-		"kind": kindOf(person), "principal": s.principalOf(person),
+		"kind": kindOf(person), "retired": person.Retired, "principal": s.principalOf(person),
 		"organizationRole": "member",
 	})
 }
@@ -814,6 +817,11 @@ func (s *Server) writePeople(w http.ResponseWriter, circle string, memberIDs []s
 	list := []any{}
 	for _, id := range memberIDs {
 		member := s.People[id]
+		// Somebody who stepped down is in no circle any more, however long
+		// their name stands on what they once wrote.
+		if member.Retired {
+			continue
+		}
 		handle := "sgid-person-" + circle + "-" + member.ID
 		list = append(list, map[string]any{
 			"id": member.ID, "name": member.Name, "emailAddress": member.Email,
