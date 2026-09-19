@@ -57,41 +57,68 @@ func (a *app) newProjectsCmd() *cobra.Command {
 }
 
 func (a *app) newProjectsListCmd() *cobra.Command {
-	return &cobra.Command{
+	var archived bool
+	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List the projects you are a member of",
-		Args:  requireArgs(),
+		Long: `Lists the projects in use that you are a member of. Every project carries
+its status, "active" or "archived".
+
+--archived lists the archived ones instead. An archived project can still be
+read, but nothing is written in it: every write exits 9 with meta.apiCode
+projectArchived. Its cards are not among "cards mine".`,
+		Args: requireArgs(),
 		RunE: func(*cobra.Command, []string) error {
 			s, err := a.session()
 			if err != nil {
 				return err
 			}
-			projects, err := s.client.Projects(a.ctx)
+			projects, err := s.client.Projects(a.ctx, archived)
 			if err != nil {
 				return s.fail(err)
 			}
 
+			// A host that does not know the filter ignores it and lists the
+			// projects in use, which must not be passed off as archived.
+			if archived {
+				for _, project := range projects.Value {
+					if project.Status != "archived" {
+						return &Error{
+							Code:    CodeAPI,
+							Message: s.host + " does not tell archived projects apart yet",
+							Hint:    "Its Minka is older than this minka expects and may not know archived projects yet.",
+						}
+					}
+				}
+			}
+
+			singular, several, none := "project", "projects", "No projects."
+			if archived {
+				singular, several, none = "archived project", "archived projects", "No archived projects."
+			}
 			return a.ok(success{
 				data:    projects.Raw,
-				summary: plural(len(projects.Value), "project", "projects"),
+				summary: plural(len(projects.Value), singular, several),
 				breadcrumbs: []Breadcrumb{
 					{Action: "boards", Cmd: "minka boards list <projectId>", Description: "List the boards of a project"},
 				},
 				text: func(w io.Writer) {
 					if len(projects.Value) == 0 {
-						fmt.Fprintln(w, "No projects.")
+						fmt.Fprintln(w, none)
 						return
 					}
 					table := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
-					fmt.Fprintln(table, "ID\tNAME")
+					fmt.Fprintln(table, "ID\tNAME\tSTATUS")
 					for _, project := range projects.Value {
-						fmt.Fprintf(table, "%s\t%s\n", project.ID, project.Name)
+						fmt.Fprintf(table, "%s\t%s\t%s\n", project.ID, project.Name, project.Status)
 					}
 					_ = table.Flush()
 				},
 			})
 		},
 	}
+	cmd.Flags().BoolVar(&archived, "archived", false, "List the archived projects instead of the ones in use")
+	return cmd
 }
 
 func (a *app) newBoardsCmd() *cobra.Command {

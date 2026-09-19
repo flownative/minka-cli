@@ -40,6 +40,9 @@ func (a *app) newCommentsReactCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			if err := s.resolveCard(a.ctx, &args[0]); err != nil {
+				return err
+			}
 			comment, err := s.client.ReactToComment(a.ctx, args[0], args[1], args[2])
 			if err != nil {
 				return reactionError(s.fail(err))
@@ -69,6 +72,9 @@ func (a *app) newCommentsUnreactCmd() *cobra.Command {
 		RunE: func(_ *cobra.Command, args []string) error {
 			s, err := a.session()
 			if err != nil {
+				return err
+			}
+			if err := s.resolveCard(a.ctx, &args[0]); err != nil {
 				return err
 			}
 			if err := s.client.UnreactFromComment(a.ctx, args[0], args[1], args[2]); err != nil {

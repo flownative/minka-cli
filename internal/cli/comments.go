@@ -70,6 +70,9 @@ func (a *app) newCommentsCreateCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			if err := s.resolveCard(a.ctx, &args[0]); err != nil {
+				return err
+			}
 			comment, err := s.client.WriteComment(a.ctx, args[0], body)
 			if err != nil {
 				return s.fail(err)
@@ -123,6 +126,9 @@ that would drop them is refused unless --drop-attachments is given.`,
 
 			s, err := a.session()
 			if err != nil {
+				return err
+			}
+			if err := s.resolveCard(a.ctx, &args[0]); err != nil {
 				return err
 			}
 			card, err := s.client.Card(a.ctx, args[0])
@@ -182,6 +188,9 @@ removing it again exits with 2 (not_found), like a comment that never existed.`,
 		RunE: func(_ *cobra.Command, args []string) error {
 			s, err := a.session()
 			if err != nil {
+				return err
+			}
+			if err := s.resolveCard(a.ctx, &args[0]); err != nil {
 				return err
 			}
 			if err := s.client.DeleteComment(a.ctx, args[0], args[1]); err != nil {

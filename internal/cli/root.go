@@ -29,6 +29,12 @@ const (
 	tokenFromEnvironment = "environment"
 )
 
+// shortIdentifierPattern is the shape of what people call a card by, such as
+// "MNK-1A". It is a little wider than what the server reads, which leaves out
+// four letters behind the hyphen: what is no card answers 404 there, and a
+// pattern kept narrower here could only fall behind.
+var shortIdentifierPattern = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9]{1,9}-[0-9A-Za-z]{1,12}$`)
+
 var uuidPattern = regexp.MustCompile(`(?i)^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
 
 type app struct {
@@ -214,7 +220,16 @@ func requireArgs(names ...string) cobra.PositionalArgs {
 	}
 }
 
+// requireID keeps anything that is no ID out of the path of a request. A card
+// may also be named by its short identifier, which is looked up before the
+// command goes on with the ID.
 func requireID(cmd *cobra.Command, name, value string) error {
+	if name == "cardId" || name == neighbourCard {
+		if uuidPattern.MatchString(value) || shortIdentifierPattern.MatchString(value) {
+			return nil
+		}
+		return usageErrorf(cmd, "%s %q is not an ID; a card is named by a UUID such as 0192f3a4-5b6c-4d7e-8f90-a1b2c3d4e5f6 or by its short identifier such as MNK-1A", name, value)
+	}
 	if !uuidPattern.MatchString(value) {
 		return usageErrorf(cmd, "%s %q is not an ID; IDs are UUIDs such as 0192f3a4-5b6c-4d7e-8f90-a1b2c3d4e5f6", name, value)
 	}
@@ -307,6 +322,32 @@ func (a *app) session() (*session, error) {
 	}
 
 	return &session{client: api.New(host, token, userAgent()), host: host, tokenSource: tokenFromConfig, configPath: path}, nil
+}
+
+const neighbourCard = "the neighbour"
+
+// resolveCard replaces the short identifier of a card by its ID, so that a
+// command goes on with the one address every other request takes.
+func (s *session) resolveCard(ctx context.Context, card *string) error {
+	if uuidPattern.MatchString(*card) {
+		return nil
+	}
+	identifier := strings.ToUpper(*card)
+	found, err := s.client.CardByShortIdentifier(ctx, identifier)
+	if err != nil {
+		e := s.fail(err)
+		if e.Code == CodeNotFound {
+			e.Message = "no card you can see goes by " + identifier
+			e.Hint = "It does not exist, its board shows no short identifiers, it is in the trash or in a project you are not a member of, or two of your organizations use this prefix. The ID of a card always works; minka trash list <projectId> gives the ID of a card in the trash."
+		}
+		return e
+	}
+	// What comes back goes into the path of the requests that follow.
+	if !uuidPattern.MatchString(found.Value.ID) {
+		return &Error{Code: CodeAPI, Message: s.host + " answered for " + identifier + " with a card that has no ID"}
+	}
+	*card = found.Value.ID
+	return nil
 }
 
 // fail classifies a failed request of this session.

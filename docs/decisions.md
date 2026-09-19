@@ -258,3 +258,15 @@ release are for installing by hand.
 **Why:** Release files of a private repository need a token on every machine,
 SSH access to the repository everybody who may install already has.
 **Implemented as:** `.github/formula/minka.rb.tpl`.
+
+<a id="c-022"></a>
+## C-022 — A short identifier is looked up, then the ID takes over
+
+*Applies to: every command that takes a card*
+
+`MNK-1A` is accepted wherever a card is named. The command asks the API for the
+card once and goes on with its UUID; answers and breadcrumbs name the UUID.
+
+**Why:** People call cards by their short identifier, but it stops naming the
+card when a board changes its prefix, and every other address takes the UUID.
+**Implemented as:** `session.resolveCard`, `requireID`.

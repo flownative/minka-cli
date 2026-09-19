@@ -26,6 +26,9 @@ to it or comment on it.
 			if err != nil {
 				return err
 			}
+			if err := s.resolveCard(a.ctx, &args[0]); err != nil {
+				return err
+			}
 			card, err := s.client.Card(a.ctx, args[0])
 			if err != nil {
 				return s.fail(err)
@@ -73,6 +76,9 @@ somebody who is not on the list succeeds as well.
 		RunE: func(_ *cobra.Command, args []string) error {
 			s, err := a.session()
 			if err != nil {
+				return err
+			}
+			if err := s.resolveCard(a.ctx, &args[0]); err != nil {
 				return err
 			}
 			card, err := s.client.Card(a.ctx, args[0])
