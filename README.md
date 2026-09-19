@@ -83,7 +83,8 @@ minka uploads create shot.png --project <projectId>
 minka commands                         # every command with its flags
 ```
 
-IDs are UUIDs and come from earlier output. People are given by ID, `me`,
+IDs are UUIDs and come from earlier output; a card can also be named by its
+short identifier, such as `MNK-1A`. People are given by ID, `me`,
 e-mail address or name; columns by ID, type or title. Long or multi-line text
 comes through stdin with `-`, so no shell quoting gets in its way.
 `minka <command> --help` has the details.

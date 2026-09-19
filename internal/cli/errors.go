@@ -81,6 +81,10 @@ func usageErrorf(cmd *cobra.Command, format string, args ...any) *Error {
 	}
 }
 
+// apiCodeProjectArchived is what Minka answers a member who writes into an
+// archived project.
+const apiCodeProjectArchived = "projectArchived"
+
 // apiError classifies a failed request.
 //
 // Only a failed read is retryable. A write can have been applied before the
@@ -99,10 +103,13 @@ func apiError(err error, host string) *Error {
 			e.Hint = "The account of the token may not use this part of Minka."
 		case status == http.StatusNotFound:
 			e.Code = CodeNotFound
-			e.Hint = "It does not exist, or it belongs to a project you are not a member of."
+			e.Hint = "It does not exist, it belongs to a project you are not a member of, or its project is in the trash."
 		case status == http.StatusBadRequest || status == http.StatusUnsupportedMediaType ||
 			status == http.StatusRequestEntityTooLarge || status == http.StatusUnprocessableEntity:
 			e.Code = CodeValidation
+			if apiErr.Code == apiCodeProjectArchived {
+				e.Hint = "The project can still be read. Nothing is written in it until it is put back in use, which is done in Minka on the web. List archived projects with: minka projects list --archived"
+			}
 		case status >= 500:
 			if apiErr.Method == http.MethodGet {
 				e.Retryable = true

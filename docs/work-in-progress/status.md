@@ -33,6 +33,14 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   remove it.
 - Unicode NFC for the content of a reaction: the server normalises, the fake
   does not.
+- That a write into an archived project answers 422 `projectArchived`: no
+  project that may be written to live is archived. Read in the Minka code and
+  its tests. Live, the local instance shows `status` and takes the filter; the
+  test instance runs an older Minka, where `projects list --archived` refuses
+  as it should.
+- A `shortId` that is not null, and a card found by it: live, every card
+  carries the field and the address answers, but no board that can be read
+  there shows short identifiers, so only the 404 was seen.
 - "agent for X" in `people list` has been seen live, an agent that stepped
   down has not — it is in no list any more.
 
@@ -42,17 +50,6 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
 - Paging Done beyond 25 cards does not exist; needed once dogfooding needs it.
 - Flow answers a wrong HTTP method with HTML instead of JSON.
 - Column colours come later, read-only.
-- Archiving a project and moving it to the trash (E-129) is in place. A project
-  in the trash answers 404 everywhere. An archived one stays readable at its
-  addresses, but is missing from `projects list` and `me cards`; writing
-  answers 404 `notFound`, for subscribers 422 `personNotAProjectMember`. The
-  hint of the CLI for 404 does not name this case.
-- Promised by the coordination, not merged yet: a write by a member into an
-  archived project answers 422 `projectArchived` throughout, uploads included;
-  `chats mark-read` stays allowed; the project resource gains `status`
-  (`active|archived`). With the merge message: check against the code, adapt
-  the fake, add a hint for `projectArchived`, and show `status` in the output.
-  Until then the hint text stays as it is.
 
 ## Next steps
 

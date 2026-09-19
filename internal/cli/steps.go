@@ -35,6 +35,9 @@ func (a *app) newStepsListCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			if err := s.resolveCard(a.ctx, &args[0]); err != nil {
+				return err
+			}
 			card, err := s.client.Card(a.ctx, args[0])
 			if err != nil {
 				return s.fail(err)
@@ -87,6 +90,9 @@ func (a *app) newStepsCreateCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			if err := s.resolveCard(a.ctx, &args[0]); err != nil {
+				return err
+			}
 			card, err := s.client.AddStep(a.ctx, args[0], text)
 			if err != nil {
 				return s.fail(err)
@@ -129,6 +135,9 @@ command succeeds.
 		RunE: func(_ *cobra.Command, args []string) error {
 			s, err := a.session()
 			if err != nil {
+				return err
+			}
+			if err := s.resolveCard(a.ctx, &args[0]); err != nil {
 				return err
 			}
 			card, err := s.client.Card(a.ctx, args[0])
@@ -178,6 +187,9 @@ card succeeds as well.
 		RunE: func(_ *cobra.Command, args []string) error {
 			s, err := a.session()
 			if err != nil {
+				return err
+			}
+			if err := s.resolveCard(a.ctx, &args[0]); err != nil {
 				return err
 			}
 			card, err := s.client.Card(a.ctx, args[0])

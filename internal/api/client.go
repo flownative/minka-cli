@@ -96,8 +96,13 @@ func (c *Client) Me(ctx context.Context) (Result[Me], error) {
 	return request[Me](ctx, c, http.MethodGet, "/me", nil)
 }
 
-func (c *Client) Projects(ctx context.Context) (Result[[]Project], error) {
-	return request[[]Project](ctx, c, http.MethodGet, "/projects", nil)
+// Projects lists the projects in use, or the archived ones instead.
+func (c *Client) Projects(ctx context.Context, archived bool) (Result[[]Project], error) {
+	path := "/projects"
+	if archived {
+		path += "?status=archived"
+	}
+	return request[[]Project](ctx, c, http.MethodGet, path, nil)
 }
 
 func (c *Client) Boards(ctx context.Context, projectID string) (Result[[]BoardListItem], error) {
@@ -123,6 +128,12 @@ func (c *Client) MyCards(ctx context.Context) (Result[[]Card], error) {
 
 func (c *Client) Card(ctx context.Context, cardID string) (Result[Card], error) {
 	return request[Card](ctx, c, http.MethodGet, "/cards/"+url.PathEscape(cardID), nil)
+}
+
+// CardByShortIdentifier finds a card under the name people call it by, such as
+// "MNK-1A".
+func (c *Client) CardByShortIdentifier(ctx context.Context, identifier string) (Result[Card], error) {
+	return request[Card](ctx, c, http.MethodGet, "/cards/by-short-id/"+url.PathEscape(identifier), nil)
 }
 
 func (c *Client) CreateCard(ctx context.Context, boardID string, input CreateCardInput) (Result[Card], error) {

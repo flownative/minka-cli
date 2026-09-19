@@ -23,12 +23,17 @@ when stdout is not a terminal, so an agent gets structured output by default.
 - Pass long or multi-line text through stdin with `-`, never through shell
   quoting: `--description -` for cards, `<text>` = `-` for comments. Stdin
   has to be a pipe or a file, not a terminal.
-- IDs are UUIDs. Take them from earlier output, never guess them. A value that
-  is no UUID is refused with exit 1 before any request.
+- IDs are UUIDs. Take them from earlier output, never guess them. A card may
+  also be named by its short identifier, such as `MNK-1A`. A value that is
+  neither is refused with exit 1 before any request.
 - Retry only when `retryable` is true, which only happens for reads. After a
   failed write, read the card back before trying again: the change may have
-  reached the server. A 404 (`not_found`) means the thing does not exist or
-  belongs to a project the token's person is not in.
+  reached the server. A 404 (`not_found`) means the thing does not exist,
+  belongs to a project the token's person is not in, or its project is in the
+  trash.
+- Exit 9 with `meta.apiCode` `projectArchived` means the project is archived:
+  it can be read, nothing can be written, and trying again does not help. Tell
+  the person; putting it back in use is done in Minka on the web.
 - `minka cards done` is safe to repeat: a card already in Done is left alone.
 - `minka cards delete` moves a card to the trash. Repeating it changes
   nothing on the server, but a card in the trash reads like one that never
@@ -73,7 +78,7 @@ fine), `commentNotReadable`, `cardDueDateNotADate`, `personNotAProjectMember`, `
 `chatMessageMissing`, `chatMessageTooLong`, `chatMessageHasControlCharacters`,
 `chatMessageNotReadable`, `chatMessageDraftNotAnIdentifier`, `chatMessagesLimitNotANumber`,
 `chatReadSeqMissing`, `nothingToChange`, `columnIdMissing`, `malformedBody`,
-`unsupportedMediaType`.
+`unsupportedMediaType`, `projectArchived`.
 
 Minka answers everything you may not see with 404, never 403, so exit 4 is
 not expected in practice.
@@ -118,7 +123,7 @@ When you see it, run `minka skill install` and read the skill again.
 ```bash
 minka auth status --json
 minka me --json
-minka projects list --json
+minka projects list [--archived] --json
 minka boards list <projectId> --json
 minka boards show <boardId> --json
 minka cards mine --json
@@ -168,8 +173,9 @@ such as `Doing`.
   every project it is a member of, as a bare array of the same cards
   `cards show` gives. Each carries `project {id, name}` and `board {id, title}`
   besides `projectId` and `boardId`.
-- Cards in Done, cards in the trash and cards of a project that was left are
-  not among them, so the list is what is still to do.
+- Cards in Done, cards in the trash, cards of an archived project and cards of
+  a project that was left are not among them, so the list is what is still to
+  do.
 - The order is the order of the page: projects by name, then by `dueOn` with
   the overdue ones first and the ones without a date last.
 - It is the cheapest way to answer "what am I on?": one request instead of a
@@ -185,8 +191,35 @@ such as `Doing`.
   `restorable` says whether `cards restore` takes it, `blockedBy` which of
   board and column is in the way. Columns and tools come back in the web only.
 
+## Projects
+
+- `projects list` gives the projects in use as `{id, name, description,
+  status, appUrl}`; `status` is `active` or `archived`. `--archived` lists the
+  archived ones instead.
+- An archived project stays readable under every address: boards, cards,
+  chats, people, trash. Every write into it exits 9 with `projectArchived`;
+  only `chats mark-read` still works. Somebody who is no member gets exit 2 as
+  ever and does not learn that it is archived.
+- `messages create` is refused like every other write, also with a
+  `--client-message-id` that was sent before the project was archived.
+- A host whose Minka does not know archived projects yet makes `projects list
+  --archived` exit 7 rather than list projects in use as archived.
+
 ## Boards
 
+- A card carries `shortId`, such as `MNK-1A`, or null where its board shows no
+  short identifiers. It is what people call a card by. The text views show it
+  beside the title; it is no part of the title. It is no lasting address: it
+  changes when the board changes its prefix, and the `id` never does.
+- Wherever a command takes `<cardId>`, the short identifier works as well, in
+  any case: `minka cards show mnk-1a`, `minka comments create MNK-1A -`,
+  `minka cards move MNK-1A --column Doing --after MNK-2B`. The command looks
+  the card up first and goes on with its `id`; answers and `breadcrumbs` name
+  the `id`, which stays when a board changes its prefix.
+- Exit 2 for a short identifier means that no card you can see goes by it: it
+  does not exist, its board shows no short identifiers, the card is in the
+  trash or in a project you are not in, or two of your organizations use the
+  prefix. `cards restore` therefore needs the `id`, which `trash list` gives.
 - Column types: `triage` (landing zone for new cards), `column` (working
   columns), `not_now`, `done`.
 - A new card lands in Triage unless `--column` names Triage or a working
