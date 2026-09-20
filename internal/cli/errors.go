@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 
 	"github.com/flownative/minka-cli/internal/api"
@@ -60,6 +61,13 @@ type Error struct {
 	Retryable  bool
 	APICode    string
 	HTTPStatus int
+
+	// Data is what a command got done before it failed, for a run that ends
+	// incomplete: the caller still gets the result, and the exit code says
+	// that something is missing from it. Text prints it for a person.
+	Data    any
+	Text    func(w io.Writer)
+	Notices []string
 }
 
 func (e *Error) Error() string {

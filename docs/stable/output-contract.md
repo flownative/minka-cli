@@ -24,14 +24,16 @@ Warnings are in `notice` with `--json`, on stderr otherwise, so that
 
 ## Errors
 
-`{ok: false, error, code, retryable, hint, meta: {apiCode, httpStatus}}`.
-`meta.apiCode` is the case code of Minka (`cardTitleTooLong`), `code` the
-class, `hint` the next step.
+`{ok: false, error, code, retryable, hint, meta: {apiCode, httpStatus}, data,
+notice}`. `meta.apiCode` is the case code of Minka (`cardTitleTooLong`), `code`
+the class, `hint` the next step. `meta` is there when a server answered.
+`data` and `notice` are there only when a command got its work done but not
+all of it: `data` is the result it would have printed, `notice` its warnings.
 
 | Exit | `code` | Meaning |
 |---|---|---|
 | 0 | — | ok |
-| 1 | `usage`, `config` | the call or the config file |
+| 1 | `usage`, `config` | the call, or this machine: the config file, a CLI of a foreign system that is missing, a bundle that cannot be written |
 | 2 | `not_found` | not found, or not visible |
 | 3 | `auth_required` | not signed in |
 | 4 | `forbidden` | forbidden |
@@ -39,6 +41,11 @@ class, `hint` the next step.
 | 7 | `api_error` | server or protocol error |
 | 8 | `ambiguous` | ambiguous input |
 | 9 | `validation` | refused by Minka |
+
+Such a command fails so that a caller notices, and the result is not lost:
+the error envelope with `data` is printed with `--quiet` as well, and the text
+output prints the result before the error. `import basecamp` ends this way
+when files could not be fetched (C-025).
 
 `retryable` is true only for reading requests, and for `messages create` with
 `--client-message-id`, because a second attempt then writes nothing new. A
