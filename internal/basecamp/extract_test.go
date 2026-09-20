@@ -168,7 +168,11 @@ func TestOfADockTheToolsMinkaKnowsComeOverAndTheRestIsCounted(t *testing.T) {
 }
 
 func TestEveryReferenceInABundleLeadsToARecordOfTheBundle(t *testing.T) {
-	dir, _ := extract(t, fakebasecamp.New(), "7001", "7002")
+	// The creator of the first project is somebody nothing else names.
+	account := fakebasecamp.New()
+	stranger := fakebasecamp.Person{ID: 555, Name: "A Stranger", CreatedAt: "2021-01-01T08:00:00.000Z", UpdatedAt: "2021-01-01T08:00:00.000Z"}
+	account.Projects[0].Dock[4].CreatedAt, account.Projects[0].Dock[4].Creator = "2022-05-01T09:00:00.150Z", &stranger
+	dir, _ := extract(t, account, "7001", "7002", "7003")
 
 	people := map[string]bool{}
 	for _, record := range records(t, dir, bundle.People) {
@@ -177,6 +181,12 @@ func TestEveryReferenceInABundleLeadsToARecordOfTheBundle(t *testing.T) {
 	projects := map[string]bool{}
 	for _, record := range records(t, dir, bundle.Projects) {
 		projects[record["sourceId"].(string)] = true
+		if creator, ok := record["createdBy"].(string); ok && !people[creator] {
+			t.Errorf("project %v was created by %s, who is no person of the bundle", record["sourceId"], creator)
+		}
+		if id := record["sourceId"]; id != "7002" && record["createdBy"] == nil {
+			t.Errorf("project %v names no creator", id)
+		}
 		for _, member := range record["members"].([]any) {
 			if !people[member.(string)] {
 				t.Errorf("member %v of project %v is no person of the bundle", member, record["sourceId"])

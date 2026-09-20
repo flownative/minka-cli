@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/flownative/minka-cli/internal/bundle"
 )
@@ -245,25 +246,19 @@ func (e *Extractor) extractProject(ctx context.Context, id int64, w *bundle.Writ
 		}
 	}
 
-	projectID := sourceID(p.ID)
-	err = w.Add(bundle.Projects, bundle.Project{
-		Record:      bundle.Record{SourceID: projectID, CreatedAt: p.CreatedAt, UpdatedAt: p.UpdatedAt},
-		Name:        p.Name,
-		Description: textToHTML(p.Description),
-		Status:      p.Status,
-		Members:     memberIDs,
-	})
-	if err != nil {
-		return err
+	type extractedTool struct {
+		entry   dockEntry
+		details toolDetails
 	}
-
-	var boards []*board
+	var tools []extractedTool
+	var made []recording
+	var others []dockEntry
 	dock := append([]dockEntry(nil), p.Dock...)
 	sort.Slice(dock, func(i, j int) bool { return dock[i].ID < dock[j].ID })
 	for _, entry := range dock {
-		kind, known := toolKinds[entry.Name]
-		if !known || !entry.Enabled {
+		if _, known := toolKinds[entry.Name]; !known || !entry.Enabled {
 			e.skipped[skippedKey{kind: entry.Name, enabled: entry.Enabled}]++
+			others = append(others, entry)
 			continue
 		}
 		path, err := e.relativePath(fmt.Sprintf("tool %d", entry.ID), entry.URL)
@@ -274,25 +269,114 @@ func (e *Extractor) extractProject(ctx context.Context, id int64, w *bundle.Writ
 		if err != nil {
 			return err
 		}
-		record, err := e.record("tool", entry.ID, details.recording)
+		tools = append(tools, extractedTool{entry: entry, details: details})
+		made = append(made, details.recording)
+	}
+
+	creator, err := e.projectCreator(ctx, p, made, others)
+	if err != nil {
+		return err
+	}
+	projectID := sourceID(p.ID)
+	err = w.Add(bundle.Projects, bundle.Project{
+		Record:      bundle.Record{SourceID: projectID, CreatedAt: p.CreatedAt, UpdatedAt: p.UpdatedAt, CreatedBy: creator},
+		Name:        p.Name,
+		Description: textToHTML(p.Description),
+		Status:      p.Status,
+		Members:     memberIDs,
+	})
+	if err != nil {
+		return err
+	}
+
+	var boards []*board
+	for _, tool := range tools {
+		record, err := e.record("tool", tool.entry.ID, tool.details.recording)
 		if err != nil {
 			return err
 		}
+		kind := toolKinds[tool.entry.Name]
 		err = w.Add(bundle.Tools, bundle.Tool{
 			Record:          record,
 			ProjectSourceID: projectID,
 			Kind:            kind,
-			Name:            entry.Title,
-			Position:        entry.Position,
+			Name:            tool.entry.Title,
+			Position:        tool.entry.Position,
 		})
 		if err != nil {
 			return err
 		}
 		if kind == bundle.ToolBoard {
-			boards = append(boards, &board{id: entry.ID, lists: details.Lists})
+			boards = append(boards, &board{id: tool.entry.ID, lists: tool.details.Lists})
 		}
 	}
 	return e.extractBoards(ctx, w, id, boards)
+}
+
+const (
+	// projectCreationWindow is how long after a project a tool may have been
+	// made to count as made together with it. Basecamp makes the tools of a new
+	// project within a fraction of a second; a tool somebody adds by hand comes
+	// minutes later at the earliest.
+	projectCreationWindow = 5 * time.Second
+	// maxCreatorProbes is how many tools a run asks for besides the ones it
+	// extracts, to find who created a project.
+	maxCreatorProbes = 3
+)
+
+// projectCreator finds who created a project. Basecamp does not say, but it
+// makes the first tools of a project in the same moment and in the name of
+// whoever created it. So the creator of a tool that was made with the project
+// is the creator of the project; a tool added later, by whomever, says
+// nothing. Without such a tool the project comes without a creator.
+//
+// The tools the run extracts are looked at first. Only when none of them was
+// made with the project are a few of the others asked for, those that are
+// switched off included, which answer like any other. They go in the order of
+// their IDs, which is the order they were made in, up to the first that
+// answers the question.
+func (e *Extractor) projectCreator(ctx context.Context, p project, extracted []recording, others []dockEntry) (*string, error) {
+	created, err := time.Parse(time.RFC3339Nano, p.CreatedAt)
+	if err != nil {
+		return nil, nil
+	}
+	madeWithProject := func(tool recording) bool {
+		made, err := time.Parse(time.RFC3339Nano, tool.CreatedAt)
+		if err != nil || tool.Creator == nil {
+			return false
+		}
+		after := made.Sub(created)
+		return after >= 0 && after <= projectCreationWindow
+	}
+
+	for _, tool := range extracted {
+		if madeWithProject(tool) {
+			return e.people.refer(tool.Creator, false)
+		}
+	}
+	probes := 0
+	for _, entry := range others {
+		if probes == maxCreatorProbes {
+			break
+		}
+		path, err := e.relativePath(fmt.Sprintf("tool %d", entry.ID), entry.URL)
+		if err != nil {
+			continue
+		}
+		probes++
+		tool, err := getOne[recording](ctx, e.Source, path)
+		var failed *Error
+		if errors.As(err, &failed) && failed.Kind == NotFound {
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		if madeWithProject(tool) {
+			return e.people.refer(tool.Creator, false)
+		}
+	}
+	return nil, nil
 }
 
 var projectStatuses = map[string]bool{"active": true, "archived": true, "trashed": true}
