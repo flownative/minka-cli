@@ -433,7 +433,7 @@ printf '%s please have a look' "$MARKUP" | minka comments create <cardId> - --fo
   or a `bodySource`, unchanged, and send that back as HTML:
 
 ```bash
-SOURCE=20 20 12 61 79 80 81 98 33 100 204 250 395 398 399 400minka uploads create shot.png --project <projectId> --quiet | jq -r .attachmentSource)
+SOURCE=$(minka uploads create shot.png --project <projectId> --quiet | jq -r .attachmentSource)
 minka cards show <cardId> --quiet | jq -r .descriptionSource > text.html
 printf '\n%s' "$SOURCE" >> text.html
 minka cards edit <cardId> --description - --description-format html < text.html
