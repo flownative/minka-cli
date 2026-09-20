@@ -141,9 +141,20 @@ in a text not yet.
   apart and every avatar is taken; the report says so
   (`avatars.initialsDistinguishable: false`). The picture is stored as it
   comes, without converting it. `file` is relative to `files/`.
-- **Projects** come with their members. Basecamp names no creator, so
-  `createdBy` is `null`. The description is plain text there and HTML in the
-  bundle: escaped, a paragraph per block, a `<br>` per line break.
+- **Projects** come with their members. Basecamp names no creator of a
+  project, but it makes the first tools of a project in the same moment and
+  in the name of whoever created it. So `createdBy` is the creator of a tool
+  that was made within five seconds after the project
+  (`projectCreationWindow`), compared as moments; a tool somebody added later
+  never names the creator, and without such a tool `createdBy` is `null`. The
+  tools the run extracts are looked at first. Only when none of them answers
+  are up to three others asked for (`maxCreatorProbes`), those that are
+  switched off included, in the order of their IDs, which is the order they
+  were made in, and only until one answers. Such a tool that is not there, or
+  that lies outside the account, is passed over. The creator comes into the
+  bundle like anybody a record names.
+  The description is plain text there and HTML in the bundle: escaped, a
+  paragraph per block, a `<br>` per line break.
 - **Tools** are the dock entries that are switched on and that Minka has a
   counterpart for: `kanban_board` → `board`, `chat` → `chat`, `message_board`
   → `posts`, several of a kind where a project has several. Creator and

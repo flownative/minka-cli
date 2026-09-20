@@ -167,7 +167,9 @@ func boardProject(ada, grace, linus, edsger, former Person, tool func(int64, str
 	sketch := File{ID: 5001, SGID: SGID("gid://bc3/Attachment/5001?expires_in"), Key: "k5001f00dcafe", Filename: "sketch.png", ContentType: "image/png", Bytes: 2048}
 	lost := SGID("gid://bc3/Attachment/5002?expires_in")
 
+	// The first board was made together with the project, the others later.
 	roadmap := tool(9020, "kanban_board", "card_tables", "Roadmap", true, 1, &ada)
+	roadmap.CreatedAt = "2023-03-01T07:00:00.150Z"
 	roadmap.Lists = []List{
 		{ID: 9103, Type: Triage, Title: "Inbox", Creator: &ada, CreatedAt: at(1, 8), UpdatedAt: at(1, 9), Cards: []Card{
 			{ID: 9204, Title: "Write the announcement", Position: 1, Creator: &former, CreatedAt: at(2, 8), UpdatedAt: at(2, 9)},
