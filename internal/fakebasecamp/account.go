@@ -99,6 +99,9 @@ type Account struct {
 
 	// Fail makes the request of a path, without its page, end in an error.
 	Fail map[string]error
+	// FailFirst limits Fail to the first requests of a path: that many of them
+	// fail, and every later one is answered.
+	FailFirst map[string]int
 	// FailAvatarOf makes the download of one person's avatar end in an error.
 	FailAvatarOf map[int64]error
 
@@ -181,6 +184,7 @@ func New() *Account {
 		},
 		SubtasksURL:  map[int64]string{},
 		Fail:         map[string]error{},
+		FailFirst:    map[string]int{},
 		FailAvatarOf: map[int64]error{},
 	}
 }
@@ -233,7 +237,14 @@ func (a *Account) Get(_ context.Context, path string) ([]byte, error) {
 		page, _ = strconv.Atoi(match[2])
 	}
 	if err := a.Fail[path]; err != nil {
-		return nil, err
+		remaining, limited := a.FailFirst[path]
+		if !limited {
+			return nil, err
+		}
+		if remaining > 0 {
+			a.FailFirst[path] = remaining - 1
+			return nil, err
+		}
 	}
 
 	switch {

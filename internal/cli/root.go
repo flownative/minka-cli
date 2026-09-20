@@ -54,7 +54,9 @@ type app struct {
 	// What import reads a foreign system through, replaced in tests.
 	basecampSource basecamp.Source
 	avatarFetcher  basecamp.AvatarFetcher
-	now            func() time.Time
+	// retryPause waits before a request is asked again; by the clock when nil.
+	retryPause basecamp.Pause
+	now        func() time.Time
 
 	hostFlag   string
 	jsonFlag   bool

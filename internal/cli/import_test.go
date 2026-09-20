@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -23,6 +24,12 @@ type importEnv struct {
 	account *fakebasecamp.Account
 	now     time.Time
 	env     *testEnv
+	// source stands between the CLI and the account, where a test needs more
+	// than the account does by itself.
+	source basecamp.Source
+	// pauses are the pauses a run asked for before it asked a request again.
+	// No test waits for one.
+	pauses []time.Duration
 }
 
 func newImportEnv(t *testing.T) *importEnv {
@@ -42,8 +49,15 @@ func (e *importEnv) run(args ...string) result {
 	e.t.Helper()
 	return e.env.runWith(func(a *app) {
 		a.basecampSource = e.account
+		if e.source != nil {
+			a.basecampSource = e.source
+		}
 		a.avatarFetcher = e.account
 		a.now = func() time.Time { return e.now }
+		a.retryPause = func(ctx context.Context, pause time.Duration) error {
+			e.pauses = append(e.pauses, pause)
+			return ctx.Err()
+		}
 	}, "", args...)
 }
 
@@ -101,7 +115,8 @@ func TestImportBasecampWritesABundleAndReportsWhatItHolds(t *testing.T) {
 		"postsLeftOut":  float64(0), "postsWithEmptyBody": float64(0),
 		"messagesByType":     map[string]any{"text": float64(0), "richText": float64(0), "upload": float64(0), "integration": float64(0)},
 		"uploadLinesLeftOut": float64(0), "messagesWithEmptyBody": float64(0),
-		"longestBody": map[string]any{"cards": float64(0), "comments": float64(0), "posts": float64(0), "messages": float64(0)},
+		"longestBody":     map[string]any{"cards": float64(0), "comments": float64(0), "posts": float64(0), "messages": float64(0)},
+		"requestsRetried": float64(0),
 	}
 	if got := decode(t, env.Data); !reflect.DeepEqual(got, want) {
 		t.Errorf("data:\n got %v\nwant %v", got, want)
@@ -392,14 +407,19 @@ func TestImportFailuresHaveTheCodeOfTheirClass(t *testing.T) {
 		exit      int
 		retryable bool
 		hint      string
+		// asked is how often the request went out: once, or as often as a
+		// request is tried when its failure may pass.
+		asked int
 	}{
-		{"the Basecamp CLI is missing", basecamp.NotInstalled, CodeConfig, ExitUsage, false, "basecamp auth login"},
-		{"not signed in", basecamp.AuthRequired, CodeAuth, ExitAuth, false, "basecamp auth login"},
-		{"forbidden", basecamp.Forbidden, CodeForbidden, ExitForbidden, false, ""},
-		{"rate limited", basecamp.RateLimited, CodeAPI, ExitAPI, true, ""},
-		{"network", basecamp.Network, CodeNetwork, ExitNetwork, true, ""},
-		{"interrupted", basecamp.Interrupted, CodeNetwork, ExitNetwork, false, ""},
-		{"API", basecamp.API, CodeAPI, ExitAPI, false, ""},
+		{"the Basecamp CLI is missing", basecamp.NotInstalled, CodeConfig, ExitUsage, false, "basecamp auth login", 1},
+		{"not found", basecamp.NotFound, CodeNotFound, ExitNotFound, false, "", 1},
+		{"not signed in", basecamp.AuthRequired, CodeAuth, ExitAuth, false, "basecamp auth login", 1},
+		{"forbidden", basecamp.Forbidden, CodeForbidden, ExitForbidden, false, "", 1},
+		{"rate limited", basecamp.RateLimited, CodeAPI, ExitAPI, true, "", 4},
+		{"network", basecamp.Network, CodeNetwork, ExitNetwork, true, "", 4},
+		{"Basecamp or a gateway failed", basecamp.Unavailable, CodeAPI, ExitAPI, true, "try again", 4},
+		{"interrupted", basecamp.Interrupted, CodeNetwork, ExitNetwork, false, "", 1},
+		{"API", basecamp.API, CodeAPI, ExitAPI, false, "", 1},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -418,7 +438,199 @@ func TestImportFailuresHaveTheCodeOfTheirClass(t *testing.T) {
 			if entries, _ := os.ReadDir(parent); len(entries) != 0 {
 				t.Errorf("left %v", entries)
 			}
+			if asked := timesAsked(e.account.Requests, "projects/7001/people.json?page=1"); asked != c.asked {
+				t.Errorf("asked %d times, want %d", asked, c.asked)
+			}
+			if want := basecamp.RetryPauses[:c.asked-1]; !slices.Equal(e.pauses, want) {
+				t.Errorf("waited %v, want %v", e.pauses, want)
+			}
 		})
+	}
+}
+
+// timesAsked is how often one request went out.
+func timesAsked(requests []string, wanted string) int {
+	count := 0
+	for _, request := range requests {
+		if request == wanted {
+			count++
+		}
+	}
+	return count
+}
+
+func TestARequestThatFailsAndThenAnswersDoesNotCostTheRun(t *testing.T) {
+	e := newImportEnv(t)
+	out := filepath.Join(t.TempDir(), "bundle")
+	e.account.Fail["projects/7001/people.json"] = &basecamp.Error{Kind: basecamp.Unavailable, Message: "Basecamp: Request failed (HTTP 525)"}
+	e.account.FailFirst["projects/7001/people.json"] = 2
+
+	env, r := e.runJSON("import", "basecamp", "--project", "7001", "--out", out)
+	expectCode(t, r, ExitOK)
+	if got := decode(t, env.Data)["requestsRetried"]; got != float64(2) {
+		t.Errorf("requestsRetried %v, want 2", got)
+	}
+	if asked := timesAsked(e.account.Requests, "projects/7001/people.json?page=1"); asked != 3 {
+		t.Errorf("asked %d times, want 3", asked)
+	}
+	if want := []time.Duration{2 * time.Second, 10 * time.Second}; !slices.Equal(e.pauses, want) {
+		t.Errorf("waited %v, want %v", e.pauses, want)
+	}
+	if strings.Contains(r.stdout, "525") || strings.Contains(r.stdout, "people.json") {
+		t.Errorf("a run that ended well names the failure or the request: %s", r.stdout)
+	}
+
+	e.account.FailFirst["projects/7001/people.json"] = 1
+	r = e.run("import", "basecamp", "--project", "7001", "--out", out, "--styled")
+	expectCode(t, r, ExitOK)
+	if want := "Requests asked again after a failure that passed: 1\n"; !strings.Contains(r.stdout, want) {
+		t.Errorf("the text lacks %q:\n%s", want, r.stdout)
+	}
+
+	r = e.run("import", "basecamp", "--project", "7001", "--out", out, "--styled")
+	expectCode(t, r, ExitOK)
+	if strings.Contains(r.stdout, "asked again") {
+		t.Errorf("a run without a failure talks of one:\n%s", r.stdout)
+	}
+}
+
+// stumbling fails every request the first times it is asked, of whatever kind
+// it is, and passes it on after that: once, when times is 0.
+type stumbling struct {
+	account *fakebasecamp.Account
+	times   int
+	asked   map[string]int
+	failed  int
+}
+
+func (s *stumbling) Get(ctx context.Context, path string) ([]byte, error) {
+	if s.asked == nil {
+		s.asked = map[string]int{}
+	}
+	if s.asked[path] < max(s.times, 1) {
+		s.asked[path]++
+		s.failed++
+		return nil, &basecamp.Error{Kind: basecamp.Unavailable, Message: "Basecamp: Gateway error (502)"}
+	}
+	return s.account.Get(ctx, path)
+}
+
+// A project per run: every request of a run stumbles, and a run asks no more
+// requests again than MaxRetriesOfARun.
+func TestARunWhoseEveryRequestIsAskedAgainWritesTheSameBytes(t *testing.T) {
+	files, stumbled := 0, 0
+	for _, project := range []string{"7001", "7003", "7004"} {
+		calm := newImportEnv(t)
+		calmOut := filepath.Join(t.TempDir(), "bundle")
+		calmEnv, r := calm.runJSON("import", "basecamp", "--out", calmOut, "--project", project)
+		expectCode(t, r, ExitOK)
+
+		e := newImportEnv(t)
+		source := &stumbling{account: e.account}
+		e.source = source
+		out := filepath.Join(t.TempDir(), "bundle")
+		env, r := e.runJSON("import", "basecamp", "--out", out, "--project", project)
+		expectCode(t, r, ExitOK)
+
+		want, got := filesUnder(t, calmOut), filesUnder(t, out)
+		if !reflect.DeepEqual(got, want) {
+			t.Errorf("project %s: the bundles differ:\n got %v\nwant %v", project, got, want)
+		}
+		if !slices.Equal(e.account.Requests, calm.account.Requests) {
+			t.Errorf("project %s: the account was asked for other things, or in another order", project)
+		}
+
+		// Every request of every kind stumbled once: none goes round the retries.
+		if source.failed > basecamp.MaxRetriesOfARun {
+			t.Fatalf("project %s takes %d requests, more than a run asks again: the test needs a smaller walk", project, source.failed)
+		}
+		if source.failed != len(calm.account.Requests) {
+			t.Fatalf("project %s: %d requests failed once, of %d the run makes", project, source.failed, len(calm.account.Requests))
+		}
+		data, calmData := decode(t, env.Data), decode(t, calmEnv.Data)
+		if data["requestsRetried"] != float64(source.failed) || calmData["requestsRetried"] != float64(0) {
+			t.Errorf("project %s: requestsRetried %v and %v, want %d and 0", project, data["requestsRetried"], calmData["requestsRetried"], source.failed)
+		}
+		for _, pause := range e.pauses {
+			if pause != basecamp.RetryPauses[0] {
+				t.Fatalf("project %s: waited %v before a second attempt", project, pause)
+			}
+		}
+		delete(data, "requestsRetried")
+		delete(calmData, "requestsRetried")
+		data["bundle"], calmData["bundle"] = "", ""
+		if !reflect.DeepEqual(data, calmData) {
+			t.Errorf("project %s: the reports differ in more than the retries:\n got %v\nwant %v", project, data, calmData)
+		}
+		files, stumbled = files+len(want), stumbled+source.failed
+	}
+	if files < 20 || stumbled < 50 {
+		t.Errorf("%d files and %d requests are too little to tell", files, stumbled)
+	}
+}
+
+// Every request passes on its third attempt: no request uses up its attempts,
+// and the run would take the pauses of all of them.
+func TestARunWhoseSourceKeepsFailingEndsInsteadOfWaitingForEveryRequest(t *testing.T) {
+	for name, args := range map[string][]string{
+		"a run":     {"--out", "bundle"},
+		"a dry run": {"--dry-run"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			e := newImportEnv(t)
+			source := &stumbling{account: e.account, times: 2}
+			e.source = source
+			parent := t.TempDir()
+			if args[0] == "--out" {
+				args = []string{"--out", filepath.Join(parent, args[1])}
+			}
+
+			env, r := e.runJSON(append([]string{"import", "basecamp", "--project", "7003", "--project", "7004"}, args...)...)
+			expectCode(t, r, ExitAPI)
+			if env.Code != CodeAPI || !env.Retryable {
+				t.Errorf("code %q, retryable %v", env.Code, env.Retryable)
+			}
+			if env.Error != "Basecamp: Gateway error (502); Basecamp kept failing: 100 requests of this run were asked again already, and no further one is" {
+				t.Errorf("the message does not say that Basecamp kept failing: %q", env.Error)
+			}
+			if len(e.pauses) != 100 || source.failed != 101 {
+				t.Errorf("waited %d times and met %d failures, want 100 and one more", len(e.pauses), source.failed)
+			}
+			if entries, _ := os.ReadDir(parent); len(entries) != 0 {
+				t.Errorf("left %v", entries)
+			}
+		})
+	}
+}
+
+func TestADryRunAsksAgainTheWayARealRunDoes(t *testing.T) {
+	projects := []string{"--project", "7004"}
+
+	e := newImportEnv(t)
+	source := &stumbling{account: e.account}
+	e.source = source
+	parent := t.TempDir()
+	env, r := e.runJSON(append([]string{"import", "basecamp", "--out", filepath.Join(parent, "bundle"), "--dry-run"}, projects...)...)
+	expectCode(t, r, ExitOK)
+	if got := decode(t, env.Data)["requestsRetried"]; source.failed < 20 || got != float64(source.failed) {
+		t.Errorf("requestsRetried %v, want %d", got, source.failed)
+	}
+	if len(e.pauses) != source.failed {
+		t.Errorf("waited %d times, want %d", len(e.pauses), source.failed)
+	}
+
+	failing := newImportEnv(t)
+	failing.account.Fail["projects/7004/people.json"] = &basecamp.Error{Kind: basecamp.Unavailable, Message: "Basecamp: Request failed (HTTP 525)"}
+	env, r = failing.runJSON(append([]string{"import", "basecamp", "--dry-run"}, projects...)...)
+	expectCode(t, r, ExitAPI)
+	if env.Code != CodeAPI || !env.Retryable || env.Error != "Basecamp: Request failed (HTTP 525)" {
+		t.Errorf("code %q, retryable %v, error %q", env.Code, env.Retryable, env.Error)
+	}
+	if asked := timesAsked(failing.account.Requests, "projects/7004/people.json?page=1"); asked != 4 {
+		t.Errorf("asked %d times, want 4", asked)
+	}
+	if entries, _ := os.ReadDir(parent); len(entries) != 0 {
+		t.Errorf("a dry run wrote %v", entries)
 	}
 }
 

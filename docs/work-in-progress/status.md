@@ -75,8 +75,12 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   killed was not seen live either. Seen live: a missing Basecamp CLI, masked
   addresses ending the run, a missing project as `not_found`, people of the
   account being left out, and files that could not be fetched, with the bundle
-  written without them and the run ending as `network`. The classes are the
-  exit codes and codes the Basecamp CLI shows; its source was not read.
+  written without them and the run ending as `network`, and a 525 of a
+  gateway in front of Basecamp ending a run. That a request which failed for
+  a reason that may pass is asked again is tested against the fake and a
+  stand-in of the Basecamp CLI only. The classes are the exit codes and codes
+  the Basecamp CLI shows; of its source only the failure object and the
+  wording of an API failure were read.
 - Of the boards of `import basecamp`: a mention in a stored note that has no
   rendering, a mention of somebody who left the account, a boost on a card, a
   trashed comment, a card whose column is in no extracted board, more steps
