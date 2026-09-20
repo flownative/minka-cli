@@ -93,6 +93,18 @@ type Result struct {
 	// PeopleLeftOut counts the people of the account nothing in the bundle
 	// refers to, who are therefore not in it.
 	PeopleLeftOut int
+	// CardsByStatus counts the cards of the bundle: active, archived, trashed.
+	CardsByStatus map[string]int
+	// CardsOnHold counts the cards that were set aside within their column.
+	CardsOnHold int
+	// CardsLeftOut counts archived and trashed cards whose column is in no
+	// board that is extracted: a board that is switched off, a column that is
+	// gone.
+	CardsLeftOut int
+	// CommentsTrashed counts the comments left out because they are in the
+	// trash.
+	CommentsTrashed int
+	Bodies          BodyCounts
 }
 
 // Extractor walks projects of a Basecamp account and adds what it finds to a
@@ -110,6 +122,12 @@ type Extractor struct {
 	apiRoot string
 	skipped map[skippedKey]int
 	missing []MissingFile
+
+	cardsByStatus   map[string]int
+	cardsOnHold     int
+	cardsLeftOut    int
+	commentsTrashed int
+	bodies          BodyCounts
 }
 
 type skippedKey struct {
@@ -133,6 +151,8 @@ func (e *Extractor) Extract(ctx context.Context, projectIDs []string, w *bundle.
 	e.skipped = map[skippedKey]int{}
 	e.missing = []MissingFile{}
 	e.account, e.apiRoot = "", ""
+	e.cardsByStatus = map[string]int{bundle.StatusActive: 0, bundle.StatusArchived: 0, bundle.StatusTrashed: 0}
+	e.cardsOnHold, e.cardsLeftOut, e.commentsTrashed, e.bodies = 0, 0, 0, BodyCounts{}
 
 	ids, err := sortedIDs(projectIDs)
 	if err != nil {
@@ -165,6 +185,11 @@ func (e *Extractor) Extract(ctx context.Context, projectIDs []string, w *bundle.
 		Missing:          e.missing,
 		InvalidAddresses: e.people.invalidAddresses(),
 		PeopleLeftOut:    e.people.leftOut(),
+		CardsByStatus:    e.cardsByStatus,
+		CardsOnHold:      e.cardsOnHold,
+		CardsLeftOut:     e.cardsLeftOut,
+		CommentsTrashed:  e.commentsTrashed,
+		Bodies:           e.bodies,
 	}, nil
 }
 
@@ -232,6 +257,7 @@ func (e *Extractor) extractProject(ctx context.Context, id int64, w *bundle.Writ
 		return err
 	}
 
+	var boards []*board
 	dock := append([]dockEntry(nil), p.Dock...)
 	sort.Slice(dock, func(i, j int) bool { return dock[i].ID < dock[j].ID })
 	for _, entry := range dock {
@@ -240,23 +266,20 @@ func (e *Extractor) extractProject(ctx context.Context, id int64, w *bundle.Writ
 			e.skipped[skippedKey{kind: entry.Name, enabled: entry.Enabled}]++
 			continue
 		}
-		path, err := e.relativePath(entry.URL)
+		path, err := e.relativePath(fmt.Sprintf("tool %d", entry.ID), entry.URL)
 		if err != nil {
 			return err
 		}
-		origin, err := getOne[recording](ctx, e.Source, path)
+		details, err := getOne[toolDetails](ctx, e.Source, path)
 		if err != nil {
 			return err
 		}
-		if err := requireTimestamps(fmt.Sprintf("tool %d of project %d", entry.ID, id), origin.CreatedAt, origin.UpdatedAt); err != nil {
-			return err
-		}
-		creator, err := e.people.refer(origin.Creator, false)
+		record, err := e.record("tool", entry.ID, details.recording)
 		if err != nil {
 			return err
 		}
 		err = w.Add(bundle.Tools, bundle.Tool{
-			Record:          bundle.Record{SourceID: sourceID(entry.ID), CreatedAt: origin.CreatedAt, UpdatedAt: origin.UpdatedAt, CreatedBy: creator},
+			Record:          record,
 			ProjectSourceID: projectID,
 			Kind:            kind,
 			Name:            entry.Title,
@@ -265,8 +288,11 @@ func (e *Extractor) extractProject(ctx context.Context, id int64, w *bundle.Writ
 		if err != nil {
 			return err
 		}
+		if kind == bundle.ToolBoard {
+			boards = append(boards, &board{id: entry.ID, lists: details.Lists})
+		}
 	}
-	return nil
+	return e.extractBoards(ctx, w, id, boards)
 }
 
 var projectStatuses = map[string]bool{"active": true, "archived": true, "trashed": true}
@@ -274,10 +300,17 @@ var projectStatuses = map[string]bool{"active": true, "archived": true, "trashed
 // requireTimestamps refuses a record without its times. The applier decides by
 // updatedAt whether a run changes a record, so a bundle never carries a guess.
 func requireTimestamps(what, createdAt, updatedAt string) error {
-	if createdAt == "" || updatedAt == "" {
-		return &Error{Kind: API, Message: "Basecamp does not say when " + what + " was created and updated"}
+	var missing []string
+	if createdAt == "" {
+		missing = append(missing, "created")
 	}
-	return nil
+	if updatedAt == "" {
+		missing = append(missing, "updated")
+	}
+	if len(missing) == 0 {
+		return nil
+	}
+	return &Error{Kind: API, Message: "Basecamp does not say when " + what + " was " + strings.Join(missing, " and ")}
 }
 
 var projectAddressPattern = regexp.MustCompile(`^(https://[^/?#]+/([0-9]+)/)projects/([0-9]+)\.json$`)
@@ -305,10 +338,12 @@ var relativePathPattern = regexp.MustCompile(`^[a-z0-9_]+(/[a-z0-9_]+)*\.json$`)
 // account. The Basecamp CLI signs every request it makes, so only paths of the
 // account reach it: an address that leads anywhere else is refused instead of
 // fetched.
-func (e *Extractor) relativePath(address string) (string, error) {
+//
+// The address is not quoted: it is whatever the answer held.
+func (e *Extractor) relativePath(what, address string) (string, error) {
 	path, found := strings.CutPrefix(address, e.apiRoot)
 	if !found || !relativePathPattern.MatchString(path) {
-		return "", &Error{Kind: API, Message: "Basecamp names a tool at an address outside the account: " + address}
+		return "", &Error{Kind: API, Message: "Basecamp names " + what + " at an address outside the account"}
 	}
 	return path, nil
 }

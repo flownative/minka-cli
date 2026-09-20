@@ -108,6 +108,19 @@ func (r *registry) refer(named *person, present bool) (*string, error) {
 	return &id, nil
 }
 
+// referByID brings somebody into the bundle of whom a record names the ID
+// alone, as a mention does, and returns their name with the reference. Only
+// the list of the account knows such a person: the reference is nil for
+// anybody else, because there is nothing to write a person from.
+func (r *registry) referByID(id int64) (*string, string, error) {
+	p, listed := r.account[id]
+	if !listed {
+		return nil, "", nil
+	}
+	reference, err := r.refer(&p, false)
+	return reference, p.Name, err
+}
+
 // refuseMasks ends a run over masked addresses. The error says how many, and
 // never which: neither an address nor whose it is belongs into a message that
 // ends up in a log.

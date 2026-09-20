@@ -307,3 +307,15 @@ the command exits 6 when trying again may help, else 7, the report as `data`.
 **Why:** One missing picture must not cost a run of hours, and exit 0 would
 hide that the bundle is incomplete.
 **Implemented as:** `Extractor.attach`, `incompleteImport`.
+
+<a id="c-026"></a>
+## C-026 — A mention refers only to somebody the account lists
+
+*Applies to: `import basecamp`, every text of a bundle*
+
+The person is read from the signed ID, then the rendered avatar, then the
+editor's attribute; anybody the people list lacks stays a name in the text.
+
+**Why:** A mention names an ID alone, and without a record of the person there
+is nothing to write the reference to; a text may claim what nobody signed.
+**Implemented as:** `mentionedPerson`, `registry.referByID`.
