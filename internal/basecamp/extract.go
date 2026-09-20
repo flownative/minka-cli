@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/flownative/minka-cli/internal/bundle"
 )
@@ -22,8 +23,11 @@ type person struct {
 	Name         string `json:"name"`
 	EmailAddress string `json:"email_address"`
 	AvatarURL    string `json:"avatar_url"`
-	CreatedAt    string `json:"created_at"`
-	UpdatedAt    string `json:"updated_at"`
+	// PersonableType is the kind of person: a user, a bot, what is left of
+	// somebody who was deleted, and others.
+	PersonableType string `json:"personable_type"`
+	CreatedAt      string `json:"created_at"`
+	UpdatedAt      string `json:"updated_at"`
 }
 
 type project struct {
@@ -105,7 +109,25 @@ type Result struct {
 	// CommentsTrashed counts the comments left out because they are in the
 	// trash.
 	CommentsTrashed int
-	Bodies          BodyCounts
+	// PostsByStatus counts the posts of the bundle: active, archived, trashed.
+	PostsByStatus map[string]int
+	// PostsLeftOut counts archived and trashed posts of a message board that
+	// is not extracted.
+	PostsLeftOut int
+	// PostsWithEmptyBody counts the posts that came with a title alone.
+	PostsWithEmptyBody int
+	// MessagesByType counts the lines of the bundle by what they were in the
+	// chat: text, richText, upload, integration.
+	MessagesByType map[string]int
+	// MessagesWithEmptyBody counts the lines somebody wrote that say nothing,
+	// which are left out.
+	MessagesWithEmptyBody int
+	// UploadLinesLeftOut counts the lines that were files alone, of which
+	// Basecamp names none in a way a bundle can refer to.
+	UploadLinesLeftOut int
+	// LongestBody is the longest text of a kind, in characters.
+	LongestBody map[bundle.Kind]int
+	Bodies      BodyCounts
 }
 
 // Extractor walks projects of a Basecamp account and adds what it finds to a
@@ -117,18 +139,39 @@ type Result struct {
 type Extractor struct {
 	Source  Source
 	Avatars AvatarFetcher
+	// MessagesPerPart is how many lines of a chat one file of a bundle holds
+	// at most; messagesPerPart when 0.
+	MessagesPerPart int
 
 	people  *registry
 	account string
 	apiRoot string
 	skipped map[skippedKey]int
 	missing []MissingFile
+	// talks are the message boards and chats of the projects walked so far.
+	talks []talk
 
-	cardsByStatus   map[string]int
-	cardsOnHold     int
-	cardsLeftOut    int
-	commentsTrashed int
-	bodies          BodyCounts
+	cardsByStatus      map[string]int
+	cardsOnHold        int
+	cardsLeftOut       int
+	commentsTrashed    int
+	postsByStatus      map[string]int
+	postsLeftOut       int
+	postsWithEmptyBody int
+	messagesByType     map[string]int
+	uploadLinesLeftOut int
+
+	messagesWithEmptyBody int
+	longestBody           map[bundle.Kind]int
+	bodies                BodyCounts
+}
+
+// talk names the tools of one project that hold posts and lines, each kind in
+// the order of the tools.
+type talk struct {
+	bucket        int64
+	messageBoards []int64
+	chats         []int64
 }
 
 type skippedKey struct {
@@ -147,6 +190,11 @@ func ValidProjectID(value string) bool {
 
 // Extract walks the projects and adds their records to w. A discarding Writer
 // gets the same records, except that no avatar is downloaded.
+//
+// The walk goes kind by kind: the projects with their tools and boards, then
+// the message boards of all of them, then the chats. So the comments and the
+// reactions of a bundle stand in the order of what they hang on: those of
+// cards, those of posts, those of lines.
 func (e *Extractor) Extract(ctx context.Context, projectIDs []string, w *bundle.Writer) (Result, error) {
 	e.people = newRegistry()
 	e.skipped = map[skippedKey]int{}
@@ -154,6 +202,14 @@ func (e *Extractor) Extract(ctx context.Context, projectIDs []string, w *bundle.
 	e.account, e.apiRoot = "", ""
 	e.cardsByStatus = map[string]int{bundle.StatusActive: 0, bundle.StatusArchived: 0, bundle.StatusTrashed: 0}
 	e.cardsOnHold, e.cardsLeftOut, e.commentsTrashed, e.bodies = 0, 0, 0, BodyCounts{}
+	e.talks = nil
+	e.postsByStatus = map[string]int{bundle.StatusActive: 0, bundle.StatusArchived: 0, bundle.StatusTrashed: 0}
+	e.postsLeftOut, e.postsWithEmptyBody, e.uploadLinesLeftOut, e.messagesWithEmptyBody = 0, 0, 0, 0
+	e.messagesByType = map[string]int{}
+	for _, name := range lineTypes {
+		e.messagesByType[name] = 0
+	}
+	e.longestBody = map[bundle.Kind]int{bundle.Cards: 0, bundle.Comments: 0, bundle.Posts: 0, bundle.Messages: 0}
 
 	ids, err := sortedIDs(projectIDs)
 	if err != nil {
@@ -174,6 +230,14 @@ func (e *Extractor) Extract(ctx context.Context, projectIDs []string, w *bundle.
 			return Result{}, err
 		}
 	}
+	for _, t := range e.talks {
+		if err := e.extractPosts(ctx, w, t.bucket, t.messageBoards); err != nil {
+			return Result{}, err
+		}
+	}
+	if err := e.extractChats(ctx, w); err != nil {
+		return Result{}, err
+	}
 
 	avatars, err := e.writePeople(ctx, w)
 	if err != nil {
@@ -190,7 +254,16 @@ func (e *Extractor) Extract(ctx context.Context, projectIDs []string, w *bundle.
 		CardsOnHold:      e.cardsOnHold,
 		CardsLeftOut:     e.cardsLeftOut,
 		CommentsTrashed:  e.commentsTrashed,
-		Bodies:           e.bodies,
+
+		PostsByStatus:      e.postsByStatus,
+		PostsLeftOut:       e.postsLeftOut,
+		PostsWithEmptyBody: e.postsWithEmptyBody,
+		MessagesByType:     e.messagesByType,
+		UploadLinesLeftOut: e.uploadLinesLeftOut,
+
+		MessagesWithEmptyBody: e.messagesWithEmptyBody,
+		LongestBody:           e.longestBody,
+		Bodies:                e.bodies,
 	}, nil
 }
 
@@ -290,6 +363,7 @@ func (e *Extractor) extractProject(ctx context.Context, id int64, w *bundle.Writ
 	}
 
 	var boards []*board
+	talks := talk{bucket: id}
 	for _, tool := range tools {
 		record, err := e.record("tool", tool.entry.ID, tool.details.recording)
 		if err != nil {
@@ -306,10 +380,16 @@ func (e *Extractor) extractProject(ctx context.Context, id int64, w *bundle.Writ
 		if err != nil {
 			return err
 		}
-		if kind == bundle.ToolBoard {
+		switch kind {
+		case bundle.ToolBoard:
 			boards = append(boards, &board{id: tool.entry.ID, lists: tool.details.Lists})
+		case bundle.ToolPosts:
+			talks.messageBoards = append(talks.messageBoards, tool.entry.ID)
+		case bundle.ToolChat:
+			talks.chats = append(talks.chats, tool.entry.ID)
 		}
 	}
+	e.talks = append(e.talks, talks)
 	return e.extractBoards(ctx, w, id, boards)
 }
 
@@ -440,7 +520,7 @@ func (e *Extractor) writePeople(ctx context.Context, w *bundle.Writer) (int, err
 		record := bundle.Person{
 			Record:  bundle.Record{SourceID: id, CreatedAt: seen.CreatedAt, UpdatedAt: seen.UpdatedAt},
 			Name:    seen.Name,
-			Retired: !seen.listed,
+			Retired: seen.retired(),
 		}
 		if seen.EmailAddress != "" {
 			record.Email = &seen.EmailAddress
@@ -527,6 +607,12 @@ func (e *Extractor) skippedTools() []SkippedTools {
 		return skipped[i].Enabled && !skipped[j].Enabled
 	})
 	return skipped
+}
+
+// measure notes how long a text of a kind is, in characters: whoever sets the
+// limits of where a bundle goes has to know the longest one.
+func (e *Extractor) measure(kind bundle.Kind, text string) {
+	e.longestBody[kind] = max(e.longestBody[kind], utf8.RuneCountInString(text))
 }
 
 func sourceID(id int64) string {

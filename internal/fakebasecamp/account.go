@@ -18,8 +18,11 @@ import (
 const apiHost = "https://3.basecampapi.test"
 
 type Person struct {
-	ID        int64
-	Name      string
+	ID   int64
+	Name string
+	// Kind is what Basecamp calls the personable type: "User" when empty,
+	// "Integration" for a bot, "Tombstone" for somebody who was deleted.
+	Kind      string
 	Email     string
 	NoAvatar  bool
 	CreatedAt string
@@ -35,6 +38,9 @@ type Project struct {
 	UpdatedAt   string
 	Members     []int64
 	Dock        []Tool
+	// Categories is the list of categories the project answers with: those of
+	// its first message board.
+	Categories []Category
 	// URL replaces the address the account would give the project.
 	URL string
 }
@@ -54,6 +60,11 @@ type Tool struct {
 	URL       string
 	// Lists are the lists of a card table.
 	Lists []List
+	// Posts are the messages of a message board, whatever their status.
+	Posts []Post
+	// Lines are the lines of a chat, oldest first; the account lists them the
+	// other way round, as Basecamp does.
+	Lines []Line
 }
 
 // Account is the fake. It is a basecamp.Source and a basecamp.AvatarFetcher,
@@ -66,6 +77,12 @@ type Account struct {
 
 	// Former is somebody who left the account and is only found as a creator.
 	Former Person
+	// Bot wrote lines of a chat and Deleted is what is left of somebody who
+	// was deleted. Neither can be asked for. The list of the account holds
+	// them, as an admin sees it; for anybody else it holds users alone, see
+	// UsersOnly.
+	Bot     Person
+	Deleted Person
 
 	// MemberEmail replaces the address of a person in the list of a project.
 	MemberEmail map[int64]string
@@ -89,18 +106,33 @@ type Account struct {
 	AvatarRequests []string
 }
 
-// New is an account with five people, one of whom the first two projects have
+// UsersOnly takes everybody out of the list of the account who is no user,
+// which is the list somebody sees who is no admin.
+func (a *Account) UsersOnly() {
+	var users []Person
+	for _, p := range a.People {
+		if p.Kind == "" {
+			users = append(users, p)
+		}
+	}
+	a.People = users
+}
+
+// New is an account with five users, a bot and somebody deleted in its list:
+// the list an admin sees. Of the users, one is somebody the first two projects have
 // nothing to do with. Those two have a dock that holds every case: several
 // tools of a kind, tools Minka has nothing for, tools that are switched off,
 // and a tool whose creator has left; their one board is empty. The third
-// project holds the boards.
+// project holds the boards, the fourth the message boards and the chats.
 func New() *Account {
 	ada := Person{ID: 101, Name: "Ada Example", Email: "ada@example.test", CreatedAt: "2020-01-01T08:00:00.000Z", UpdatedAt: "2024-01-01T08:00:00.000Z"}
 	grace := Person{ID: 102, Name: "Grace Sample", Email: "grace@example.test", CreatedAt: "2020-02-01T08:00:00.000Z", UpdatedAt: "2024-02-01T08:00:00.000Z"}
 	linus := Person{ID: 103, Name: "Linus Placeholder", CreatedAt: "2020-03-01T08:00:00.000Z", UpdatedAt: "2024-03-01T08:00:00.000Z"}
 	edsger := Person{ID: 104, Name: "Edsger Invented", Email: "edsger@example.test", NoAvatar: true, CreatedAt: "2020-04-01T08:00:00.000Z", UpdatedAt: "2024-04-01T08:00:00.000Z"}
 	niklaus := Person{ID: 105, Name: "Niklaus Nowhere", Email: "niklaus@example.test", CreatedAt: "2020-05-01T08:00:00.000Z", UpdatedAt: "2024-05-01T08:00:00.000Z"}
-	former := Person{ID: 99, Name: "Former Colleague", Email: "former@example.test", CreatedAt: "2019-01-01T08:00:00.000Z", UpdatedAt: "2021-01-01T08:00:00.000Z"}
+	former := Person{ID: 99, Name: "Former Colleague", Kind: "Tombstone", Email: "former@example.test", CreatedAt: "2019-01-01T08:00:00.000Z", UpdatedAt: "2021-01-01T08:00:00.000Z"}
+	bot := Person{ID: 801, Name: "Build Robot", Kind: "Integration", CreatedAt: "2021-06-01T08:00:00.000Z", UpdatedAt: "2021-06-01T08:00:00.000Z"}
+	deleted := Person{ID: 802, Name: "Deleted Somebody", Kind: "Tombstone", Email: "deleted@example.test", CreatedAt: "2019-06-01T08:00:00.000Z", UpdatedAt: "2022-06-01T08:00:00.000Z"}
 
 	tool := func(id int64, name, kind, title string, enabled bool, position int, creator *Person) Tool {
 		return Tool{ID: id, Name: name, Type: kind, Title: title, Enabled: enabled, Position: position, Creator: creator,
@@ -116,8 +148,10 @@ func New() *Account {
 	return &Account{
 		ID:       "4242",
 		PageSize: 2,
-		People:   []Person{grace, ada, edsger, linus, niklaus},
+		People:   []Person{grace, ada, edsger, linus, niklaus, bot, deleted},
 		Former:   former,
+		Bot:      bot,
+		Deleted:  deleted,
 		Projects: []Project{
 			{
 				ID: 7001, Name: "Example Project", Status: "active",
@@ -143,6 +177,7 @@ func New() *Account {
 				Dock:    []Tool{tool(9010, "chat", "chats", "Campfire", true, 1, nil)},
 			},
 			boardProject(ada, grace, linus, edsger, former, tool),
+			talkProject(ada, grace, linus, edsger, former, bot, deleted, tool),
 		},
 		SubtasksURL:  map[int64]string{},
 		Fail:         map[string]error{},
@@ -167,10 +202,18 @@ func AvatarOf(id int64) []byte {
 }
 
 func (a *Account) person(p Person) map[string]any {
-	return map[string]any{
+	answer := map[string]any{
 		"id": p.ID, "name": p.Name, "email_address": p.Email, "avatar_url": a.avatarURL(p),
 		"created_at": p.CreatedAt, "updated_at": p.UpdatedAt, "personable_type": "User",
 	}
+	switch p.Kind {
+	case "":
+	case "Integration":
+		answer["personable_type"], answer["email_address"] = p.Kind, nil
+	default:
+		answer["personable_type"], answer["tombstoned_at"] = p.Kind, p.UpdatedAt
+	}
+	return answer
 }
 
 var (
@@ -233,6 +276,9 @@ func (a *Account) Get(_ context.Context, path string) ([]byte, error) {
 		}
 	default:
 		if answer, known := a.boards(path, page); known {
+			return answer, nil
+		}
+		if answer, known := a.talks(path, page); known {
 			return answer, nil
 		}
 	}
