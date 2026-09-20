@@ -388,7 +388,7 @@ func (e *Extractor) writeCard(ctx context.Context, w *bundle.Writer, bucket int6
 	if err != nil {
 		return err
 	}
-	description, err := e.rewriteBody(found.Content, found.Description, found.Files)
+	description, files, err := e.rewriteBody(found.Content, found.Description, found.Files)
 	if err != nil {
 		return err
 	}
@@ -418,6 +418,9 @@ func (e *Extractor) writeCard(ctx context.Context, w *bundle.Writer, bucket int6
 	e.cardsByStatus[found.Status]++
 	if found.onHold {
 		e.cardsOnHold++
+	}
+	if err := e.attachFiles(ctx, w, bundle.OwnerCard, origin, files); err != nil {
+		return err
 	}
 
 	if err := e.writeSteps(ctx, w, projectID, toolID, found.card); err != nil {
@@ -541,7 +544,7 @@ func (e *Extractor) writeComments(ctx context.Context, w *bundle.Writer, bucket 
 		if err != nil {
 			return nil, err
 		}
-		body, err := e.rewriteBody(c.Content, "", c.Files)
+		body, files, err := e.rewriteBody(c.Content, "", c.Files)
 		if err != nil {
 			return nil, err
 		}
@@ -556,6 +559,9 @@ func (e *Extractor) writeComments(ctx context.Context, w *bundle.Writer, bucket 
 			return nil, err
 		}
 		e.measure(bundle.Comments, body)
+		if err := e.attachFiles(ctx, w, bundle.OwnerComment, origin, files); err != nil {
+			return nil, err
+		}
 	}
 	return comments, nil
 }

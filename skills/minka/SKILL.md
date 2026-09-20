@@ -485,8 +485,7 @@ minka cards edit <cardId> --description - --description-format html < text.html
   trashed ones included, with their categories, comments and boosts, and of
   each chat its lines as messages with their boosts. `data.skippedTools`
   counts what was left out, per kind and whether it was switched on;
-  `data.counts` is what the manifest says. The files of texts and chats do
-  not come yet, only the references to them.
+  `data.counts` is what the manifest says.
 - A person comes with `retired: true` unless Basecamp calls them a user: a
   bot, somebody who was deleted and an outsider are authors and nothing more,
   whichever identity ran the import.
@@ -521,6 +520,25 @@ minka cards edit <cardId> --description - --description-format html < text.html
   became a link to it; one whose address is none of the web leaves its title
   as text and is not counted. `data.longestBody` is the longest text per kind
   (`cards`, `comments`, `posts`, `messages`) in characters. None of them fails a run.
+- Every reference to a file has a record in `attachments.jsonl` with the same
+  ID (`attachment-<id>` for a file of a text, `blob-<key>` for one dropped
+  into a chat) and its bytes under `files/<id>/`, whatever their size and
+  type. `data.filesExpected` counts the files the references name, each
+  once, and `data.filesBytesExpected` what Basecamp says they weigh: that is
+  all `--dry-run` knows of them, so run it first to see what a run would
+  fetch. After a real run `data.filesFetched` were downloaded,
+  `data.filesReused` taken over from the bundle the run replaced, which a
+  run does by itself when the file there still has the size and the digest
+  of its record, `data.filesBytes` is what they weigh together, and
+  `data.filesGone` counts the files Basecamp lists and no longer has: they
+  have a record with `gone: true` and a `notice` counts them. Every run asks
+  for such a file again and brings it when it is back; nothing has to be
+  done about one that stays gone. `data.fileNamesChanged` counts the names
+  that had to be made plain, `data.captionsDropped` the captions over 1000
+  characters that are left off their reference,
+  `data.filesOfSeveralOwners` the times a file turned up under a second
+  owner. None of them fails a run. No output says the name of a file, a
+  caption or an address; do not quote them either.
 - A request that fails for a reason that may pass (network, rate limit, a
   5xx, 408 or 429 of Basecamp or of a gateway in front of it) is asked again
   by the command itself, up to four times with pauses of 2, 10 and 30
@@ -530,7 +548,8 @@ minka cards edit <cardId> --description - --description-format html < text.html
   `retryable` (exit 6 for the network, else 7): nothing was written, run it
   again later.
 - `--dry-run` walks Basecamp the same way, downloads and writes nothing, and
-  answers with the same counts. `--out` is not needed then.
+  answers with the same counts and with what a run would fetch. `--out` is
+  not needed then.
 - The bundle is built next to `--out` and takes its place at the end: a failed
   run leaves what was there. An earlier bundle of Basecamp is replaced as a
   whole; a directory that holds anything else is refused with exit 1, by
@@ -542,7 +561,15 @@ minka cards edit <cardId> --description - --description-format html < text.html
   without it and can be applied, and the command fails at the end: exit 6 and
   `retryable` when running again may bring the file, else exit 7. The report
   is `data` of the error envelope then, and `data.missingFiles` names each
-  file with its owner and the `reason`. Do not treat such a run as lost.
+  file with its owner and the `reason`. Do not treat such a run as lost: run
+  the same command again, it fetches what is missing and takes the rest
+  over. A download that brings nothing for a minute is given up and counts
+  as missing, retryable. A file whose `reason` speaks of its key or of an
+  address that cannot be asked for safely comes with no run; leave it. A
+  Basecamp CLI that lost its sign-in while files were fetched ends the run
+  with exit 3 and nothing written, and a run that ends that way, or is
+  stopped, fetches its files again: only a bundle in place hands files
+  over.
 - A bundle holds personal data: names, e-mail addresses, pictures. Write it
   outside of any repository, do not quote from it, and delete it once it has
   been applied.

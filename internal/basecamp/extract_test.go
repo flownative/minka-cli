@@ -36,7 +36,7 @@ func extractInParts(t *testing.T, account *fakebasecamp.Account, perPart int, pr
 	}
 	defer writer.Abort()
 
-	extractor := basecamp.Extractor{Source: account, Avatars: account, MessagesPerPart: perPart}
+	extractor := basecamp.Extractor{Source: account, Avatars: account, Files: account, MessagesPerPart: perPart}
 	result, err := extractor.Extract(t.Context(), projects, writer)
 	if err != nil {
 		t.Fatal(err)
@@ -45,6 +45,14 @@ func extractInParts(t *testing.T, account *fakebasecamp.Account, perPart int, pr
 		t.Fatal(err)
 	}
 	return dir, result
+}
+
+// asADryRunKnowsIt is the result of a real run without what only a download
+// shows: a dry run knows which files a run would bring, not what became of
+// them.
+func asADryRunKnowsIt(result basecamp.Result) basecamp.Result {
+	result.Files.Bytes, result.Files.Fetched, result.Files.Reused, result.Files.Gone = 0, 0, 0, 0
+	return result
 }
 
 func records(t *testing.T, dir string, kind bundle.Kind) []map[string]any {
@@ -215,6 +223,9 @@ func TestEveryReferenceInABundleLeadsToARecordOfTheBundle(t *testing.T) {
 		}
 	}
 	for _, record := range records(t, dir, bundle.Attachments) {
+		if record["ownerKind"] != bundle.OwnerPerson {
+			continue
+		}
 		if !people[record["ownerSourceId"].(string)] || !people[record["createdBy"].(string)] {
 			t.Errorf("attachment %v belongs to somebody who is no person of the bundle", record["sourceId"])
 		}
@@ -260,7 +271,7 @@ func TestADiscardedRunWalksTheSameWayAndDownloadsNoAvatar(t *testing.T) {
 
 	dry := fakebasecamp.New()
 	writer := bundle.Discard()
-	extractor := basecamp.Extractor{Source: dry, Avatars: dry}
+	extractor := basecamp.Extractor{Source: dry, Avatars: dry, Files: dry}
 	result, err := extractor.Extract(t.Context(), []string{"7001"}, writer)
 	if err != nil {
 		t.Fatal(err)
@@ -293,7 +304,7 @@ func TestAToolAtAnAddressOutsideTheAccountIsNotFetched(t *testing.T) {
 		account := fakebasecamp.New()
 		account.Projects[0].Dock[0].URL = address
 
-		extractor := basecamp.Extractor{Source: account, Avatars: account}
+		extractor := basecamp.Extractor{Source: account, Avatars: account, Files: account}
 		_, err := extractor.Extract(t.Context(), []string{"7001"}, bundle.Discard())
 		var failed *basecamp.Error
 		if !errors.As(err, &failed) || failed.Kind != basecamp.API {
@@ -309,7 +320,7 @@ func TestAToolAtAnAddressOutsideTheAccountIsNotFetched(t *testing.T) {
 
 func TestAProjectThatIsNotThereIsNamedInTheError(t *testing.T) {
 	account := fakebasecamp.New()
-	extractor := basecamp.Extractor{Source: account, Avatars: account}
+	extractor := basecamp.Extractor{Source: account, Avatars: account, Files: account}
 	_, err := extractor.Extract(t.Context(), []string{"7001", "8888"}, bundle.Discard())
 
 	var failed *basecamp.Error
@@ -324,7 +335,7 @@ func TestAProjectThatIsNotThereIsNamedInTheError(t *testing.T) {
 func TestWhatIsNoProjectIDNeverBecomesAPath(t *testing.T) {
 	for _, id := range []string{"", "abc", "-1", "7001/../people", "7001.json", "99999999999999999999999"} {
 		account := fakebasecamp.New()
-		extractor := basecamp.Extractor{Source: account, Avatars: account}
+		extractor := basecamp.Extractor{Source: account, Avatars: account, Files: account}
 		if _, err := extractor.Extract(t.Context(), []string{id}, bundle.Discard()); err == nil {
 			t.Errorf("%q was taken as the ID of a project", id)
 		}
@@ -336,7 +347,7 @@ func TestWhatIsNoProjectIDNeverBecomesAPath(t *testing.T) {
 
 func expectAPIError(t *testing.T, account *fakebasecamp.Account, what string, projects ...string) {
 	t.Helper()
-	extractor := basecamp.Extractor{Source: account, Avatars: account}
+	extractor := basecamp.Extractor{Source: account, Avatars: account, Files: account}
 	_, err := extractor.Extract(t.Context(), projects, bundle.Discard())
 	var failed *basecamp.Error
 	if !errors.As(err, &failed) || failed.Kind != basecamp.API {
@@ -452,7 +463,7 @@ func TestAnInterruptionEndsTheRunInsteadOfLeavingFilesOut(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer writer.Abort()
-	extractor := basecamp.Extractor{Source: account, Avatars: account}
+	extractor := basecamp.Extractor{Source: account, Avatars: account, Files: account}
 	_, err = extractor.Extract(t.Context(), []string{"7001"}, writer)
 
 	var failed *basecamp.Error
@@ -469,7 +480,7 @@ func TestAnErrorOfTheSourceIsNotChangedForTheNextRun(t *testing.T) {
 	shared := &basecamp.Error{Kind: basecamp.NotFound, Message: "as the source said it"}
 	account.Fail["projects/7001.json"] = shared
 
-	extractor := basecamp.Extractor{Source: account, Avatars: account}
+	extractor := basecamp.Extractor{Source: account, Avatars: account, Files: account}
 	_, err := extractor.Extract(t.Context(), []string{"7001"}, bundle.Discard())
 	if err == nil || !strings.Contains(err.Error(), "7001") {
 		t.Errorf("got %v, want the project named", err)
@@ -512,7 +523,7 @@ func endsBeforeAnythingElse(t *testing.T, change func(*fakebasecamp.Account), wa
 				t.Fatal(err)
 			}
 		}
-		extractor := basecamp.Extractor{Source: account, Avatars: account}
+		extractor := basecamp.Extractor{Source: account, Avatars: account, Files: account}
 		_, err := extractor.Extract(t.Context(), []string{"7002"}, writer)
 		writer.Abort()
 
@@ -574,7 +585,7 @@ func TestSomebodyWithAnAddressThatIsNoneComesWithoutOneAndIsNamedByID(t *testing
 func TestACreatorWithAMaskedAddressEndsTheRun(t *testing.T) {
 	account := fakebasecamp.New()
 	account.Projects[0].Dock[2].Creator.Email = maskedAddress
-	extractor := basecamp.Extractor{Source: account, Avatars: account}
+	extractor := basecamp.Extractor{Source: account, Avatars: account, Files: account}
 	_, err := extractor.Extract(t.Context(), []string{"7001"}, bundle.Discard())
 	var failed *basecamp.Error
 	if !errors.As(err, &failed) || failed.Kind != basecamp.Forbidden {

@@ -33,7 +33,11 @@ const (
 	ToolChat  = "chat"
 	ToolPosts = "posts"
 
-	OwnerPerson = "person"
+	OwnerCard    = "card"
+	OwnerComment = "comment"
+	OwnerMessage = "message"
+	OwnerPerson  = "person"
+	OwnerPost    = "post"
 
 	RoleTriage = "triage"
 	RoleWork   = "work"
@@ -176,16 +180,27 @@ type Reaction struct {
 }
 
 // Attachment describes a file of the bundle. File is relative to the
-// directory files/ of the bundle.
+// directory files/ of the bundle. ContentType is what the source says and nil
+// where it says nothing. CreatedBy is nil for a file of a text, which reads as
+// whoever wrote the text.
+//
+// Gone marks a file the source no longer has: such a record says what the
+// file was and whose, and File, Bytes and SHA256 are nil.
 type Attachment struct {
 	Record
-	Filename      string `json:"filename"`
-	ContentType   string `json:"contentType"`
-	Bytes         int64  `json:"bytes"`
-	SHA256        string `json:"sha256"`
-	File          string `json:"file"`
-	OwnerKind     string `json:"ownerKind"`
-	OwnerSourceID string `json:"ownerSourceId"`
+	Filename      string  `json:"filename"`
+	ContentType   *string `json:"contentType"`
+	Bytes         *int64  `json:"bytes"`
+	SHA256        *string `json:"sha256"`
+	File          *string `json:"file"`
+	Gone          bool    `json:"gone,omitempty"`
+	OwnerKind     string  `json:"ownerKind"`
+	OwnerSourceID string  `json:"ownerSourceId"`
+}
+
+// Holds says of a record what the bundle stores for it.
+func (a *Attachment) Holds(stored StoredFile) {
+	a.File, a.Bytes, a.SHA256 = &stored.File, &stored.Bytes, &stored.SHA256
 }
 
 // Manifest says where a bundle came from and how much it holds. Parts names

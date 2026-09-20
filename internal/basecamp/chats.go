@@ -27,10 +27,13 @@ type line struct {
 
 // upload is a file of a line that is nothing else. Basecamp gives it no ID:
 // the key of the stored file, which stands in its addresses, is all that
-// names it.
+// names it. URL is where the file is previewed, which is never the file.
 type upload struct {
 	URL         string `json:"url"`
 	DownloadURL string `json:"download_url"`
+	Filename    string `json:"filename"`
+	ContentType string `json:"content_type"`
+	ByteSize    *int64 `json:"byte_size"`
 }
 
 const uploadLine = "Chat::Lines::Upload"
@@ -119,7 +122,7 @@ func (e *Extractor) extractChat(ctx context.Context, w *bundle.Writer, bucket, c
 	// and the fraction its time is written with.
 	var second int64
 	for _, found := range lines {
-		body, err := e.lineBody(found)
+		body, files, err := e.lineBody(found)
 		if err != nil {
 			return err
 		}
@@ -154,6 +157,9 @@ func (e *Extractor) extractChat(ctx context.Context, w *bundle.Writer, bucket, c
 		}
 		e.measure(bundle.Messages, body)
 		e.messagesByType[lineTypes[found.Type]]++
+		if err := e.attachFiles(ctx, w, bundle.OwnerMessage, origin, files); err != nil {
+			return err
+		}
 		if found.BoostsCount > 0 {
 			if err := e.writeBoosts(ctx, w, bucket, bundle.TargetMessage, found.ID); err != nil {
 				return err
@@ -172,12 +178,16 @@ func (e *Extractor) extractChat(ctx context.Context, w *bundle.Writer, bucket, c
 // reference names it by the key of the stored file, which stands in the address
 // it is downloaded from, or else in the one it is previewed at. A file without
 // such a key is dropped and counted, and the body of a line that keeps none
-// is empty.
-func (e *Extractor) lineBody(found line) (string, error) {
+// is empty. Such a reference carries nothing besides: a file of a line has no
+// caption.
+//
+// The files the body refers to come back with it, one per reference.
+func (e *Extractor) lineBody(found line) (string, []sourceFile, error) {
 	if found.Type != uploadLine {
 		return e.rewriteBody(found.Content, "", nil)
 	}
 	var body strings.Builder
+	var referred []sourceFile
 	for _, file := range found.Attachments {
 		key := blobKey(file.DownloadURL)
 		if key == "" {
@@ -188,9 +198,14 @@ func (e *Extractor) lineBody(found line) (string, error) {
 			continue
 		}
 		e.bodies.Files++
-		fmt.Fprintf(&body, `<import-attachment ref="blob-%s"></import-attachment>`, key)
+		source := sourceFile{
+			ref: "blob-" + key, key: key,
+			filename: file.Filename, contentType: file.ContentType, byteSize: file.ByteSize, downloadURL: file.DownloadURL,
+		}
+		referred = append(referred, source)
+		fmt.Fprintf(&body, `<import-attachment ref="%s"></import-attachment>`, source.ref)
 	}
-	return body.String(), nil
+	return body.String(), referred, nil
 }
 
 // blobKeyPattern is what a key may be made of to become part of a reference,

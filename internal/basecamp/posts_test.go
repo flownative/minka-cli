@@ -225,7 +225,7 @@ func TestAPostThatCannotBeCarriedEndsTheRunWhereItIsFirstMet(t *testing.T) {
 		account := fakebasecamp.New()
 		c.change(account)
 		writer := bundle.Discard()
-		extractor := basecamp.Extractor{Source: account, Avatars: account}
+		extractor := basecamp.Extractor{Source: account, Avatars: account, Files: account}
 		_, err := extractor.Extract(t.Context(), []string{talkProject}, writer)
 		var failed *basecamp.Error
 		if !errors.As(err, &failed) || failed.Kind != basecamp.API || !strings.HasSuffix(failed.Message, c.message) {
@@ -363,7 +363,7 @@ func TestAKindOfPostWithoutANameEndsTheRunAndOneWithoutAnIconComes(t *testing.T)
 		account := fakebasecamp.New()
 		c.change(account)
 		writer := bundle.Discard()
-		extractor := basecamp.Extractor{Source: account, Avatars: account}
+		extractor := basecamp.Extractor{Source: account, Avatars: account, Files: account}
 		_, err := extractor.Extract(t.Context(), []string{talkProject}, writer)
 		if c.message == "" {
 			if err != nil {

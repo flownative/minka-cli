@@ -49,6 +49,21 @@ accepted for loopback only. Other paths are refused.
   same way; it is looked up once, and the command goes on with the UUID
   (C-022). What rides in the query (file name, content of a reaction) is
   escaped as well.
+- What reaches the command line of the Basecamp CLI during an import is a
+  path of the account, or the storage address of a file. minka builds that
+  address: scheme, host, the account of the run and the place of every part
+  are its own. Out of an answer come the key of the stored file, which has
+  to have the shape of a UUID, and the name, which is the last segment of
+  the address Basecamp gives the file and must not, with its escapes taken
+  away, hold `/` or `\` or be `.` or `..`: the Basecamp CLI asks for the
+  path without escapes and signs what it requests, so such a name would
+  lead to another path, as far as another account. No host and no path of
+  an answer is passed on. Both kinds of argument stand behind `--` and are
+  held against a strict pattern right before the call. See
+  [Importing](import.md).
+- The download of a file for an import has no limit of size and is streamed
+  to disk. It is ended when no byte comes for 60 seconds, and after an hour
+  at the latest.
 - Timeout 30 seconds, 10 minutes for the body of an upload. The CLI reads at
   most 16 MB of a response.
 - What the server is sure to refuse, the CLI refuses first: a file over 50

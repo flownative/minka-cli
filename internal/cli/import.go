@@ -51,6 +51,24 @@ type importReport struct {
 	MentionsUnresolved int `json:"mentionsUnresolved"`
 	FilesInBodies      int `json:"filesInBodies"`
 	FilesDropped       int `json:"filesDropped"`
+	// FilesExpected are the files the references name, each once, and
+	// FilesBytesExpected what Basecamp says they weigh: what a run sets out to
+	// bring, and all a dry run knows of them. The rest says what became of
+	// them: FilesBytes is what the files of the bundle weigh, FilesFetched
+	// were downloaded, FilesReused taken over from the bundle the run
+	// replaces, FilesGone are those Basecamp no longer has.
+	FilesExpected      int   `json:"filesExpected"`
+	FilesBytesExpected int64 `json:"filesBytesExpected"`
+	FilesBytes         int64 `json:"filesBytes"`
+	FilesFetched       int   `json:"filesFetched"`
+	FilesReused        int   `json:"filesReused"`
+	FilesGone          int   `json:"filesGone"`
+	// FileNamesChanged are files whose name could not stay as it was,
+	// CaptionsDropped captions too long for a reference, FilesOfSeveralOwners
+	// the times a file turned up under another owner than its first.
+	FileNamesChanged     int `json:"fileNamesChanged"`
+	CaptionsDropped      int `json:"captionsDropped"`
+	FilesOfSeveralOwners int `json:"filesOfSeveralOwners"`
 	// LinkPreviews are the previews of a link that became the link,
 	// PicturesLinked the pictures at a foreign address that became a link to it.
 	LinkPreviews   int `json:"linkPreviews"`
@@ -108,7 +126,15 @@ message board the messages with the archived and the trashed ones as posts,
 their categories, comments and boosts, and of each chat its lines with their
 boosts as messages. Other tools and tools that are switched off are counted as
 skipped. A mention and a file in a text become a reference, and so does a file
-dropped into a chat; the files themselves do not come yet.
+dropped into a chat.
+
+Every file a reference names comes with a record and its bytes under files/,
+whatever its size and type, streamed from the Basecamp CLI (basecamp files
+download). A file that is still whole in the bundle being replaced is taken
+over from there instead of being fetched again; the report counts both as
+filesFetched and filesReused. A file Basecamp lists and no longer has gets a
+record that says so (filesGone). The name of a file is made a plain one
+(fileNamesChanged), and no output ever says a name, a caption or an address.
 
 The lines of chats are written in parts, messages-0001.jsonl and on, each
 holding lines of one chat, and the manifest names them under parts. A part
@@ -119,7 +145,8 @@ The bundle is built next to --out and takes its place at the end, so a run
 that fails leaves no half bundle. A bundle of an earlier run is replaced; a
 directory that holds anything else, a bundle of another source included, is
 refused. --dry-run walks Basecamp the
-same way, downloads no avatar, writes nothing and shows the counts.
+same way, downloads no avatar and no file, writes nothing and shows the counts
+and what a run would fetch: filesExpected and filesBytesExpected.
 
 A request that fails for a reason that may pass, such as a gateway in front
 of Basecamp that fails for a moment, is asked again a few times with growing
@@ -128,7 +155,12 @@ counts them as requestsRetried.
 
 A file that cannot be fetched does not end the run: the bundle is written
 without it, the report names it under missingFiles, and the command exits 6
-when trying again may help, else 7. A later run brings what is missing.
+when trying again may help, else 7. A later run brings what is missing. A
+download that brings no byte for 60 seconds, or does not end within an hour,
+is given up and counts as such a file. A Basecamp CLI that is not signed in
+ends the run, for a file as for a request. A run that ends before its bundle
+is in place loses the files it fetched: only a bundle in place hands files
+over to the next run.
 
 A bundle holds personal data. Keep it out of repositories and delete it when
 it has been applied.`,
@@ -168,7 +200,7 @@ it has been applied.`,
 			// Every request of the run goes through the one source that asks
 			// again, whatever kind it is of and whether anything is written.
 			source := basecamp.NewRetrying(a.basecampSource, a.retryPause)
-			extractor := basecamp.Extractor{Source: source, Avatars: a.avatarFetcher}
+			extractor := basecamp.Extractor{Source: source, Avatars: a.avatarFetcher, Files: a.basecampFiles}
 			result, err := extractor.Extract(a.ctx, projects, writer)
 			if err != nil {
 				return basecampError(err)
@@ -202,8 +234,18 @@ it has been applied.`,
 				MentionsUnresolved: result.Bodies.MentionsUnresolved,
 				FilesInBodies:      result.Bodies.Files,
 				FilesDropped:       result.Bodies.FilesDropped,
-				LinkPreviews:       result.Bodies.LinkPreviews,
-				PicturesLinked:     result.Bodies.PicturesLinked,
+
+				FilesExpected:        result.Files.Expected,
+				FilesBytesExpected:   result.Files.BytesExpected,
+				FilesBytes:           result.Files.Bytes,
+				FilesFetched:         result.Files.Fetched,
+				FilesReused:          result.Files.Reused,
+				FilesGone:            result.Files.Gone,
+				FileNamesChanged:     result.Files.NamesChanged,
+				CaptionsDropped:      result.Bodies.CaptionsDropped,
+				FilesOfSeveralOwners: result.Files.SecondOwners,
+				LinkPreviews:         result.Bodies.LinkPreviews,
+				PicturesLinked:       result.Bodies.PicturesLinked,
 
 				PostsByStatus:      result.PostsByStatus,
 				PostsLeftOut:       result.PostsLeftOut,
@@ -223,6 +265,16 @@ it has been applied.`,
 				notices = append(notices, plural(count,
 					"file embedded in a text or dropped into a chat could not be named, because Basecamp lists no file for it; of an embedded one only the caption stays in the text",
 					"files embedded in texts or dropped into chats could not be named, because Basecamp lists no file for them; of an embedded one only the caption stays in the text"))
+			}
+			if count := report.FilesGone; count > 0 {
+				notices = append(notices, plural(count,
+					"file of a text or a chat is gone: Basecamp lists it and no longer has it, and its record in the bundle says so",
+					"files of texts or chats are gone: Basecamp lists them and no longer has them, and their records in the bundle say so"))
+			}
+			if count := report.CaptionsDropped; count > 0 {
+				notices = append(notices, plural(count,
+					"caption of a file is left off its reference, because it is longer than 1000 characters; the file comes",
+					"captions of files are left off their references, because they are longer than 1000 characters; the files come"))
 			}
 			if count := report.UploadLinesLeftOut; count > 0 {
 				notices = append(notices, plural(count,
@@ -302,6 +354,15 @@ func renderImportReport(w io.Writer, report importReport) {
 		plural(report.MentionsUnresolved, "mention left as a name", "mentions left as names"),
 		plural(report.LinkPreviews, "preview of a link turned into the link", "previews of links turned into links"),
 		plural(report.PicturesLinked, "picture at a foreign address turned into a link", "pictures at foreign addresses turned into links"))
+	if report.DryRun {
+		fmt.Fprintf(w, "Files a run would fetch: %d, %d bytes as Basecamp gives their sizes\n", report.FilesExpected, report.FilesBytesExpected)
+	} else {
+		fmt.Fprintf(w, "Files: %d of %d brought, %d bytes of %d expected; %d fetched, %d taken over from the bundle before, %d gone at Basecamp\n",
+			report.FilesFetched+report.FilesReused, report.FilesExpected, report.FilesBytes, report.FilesBytesExpected,
+			report.FilesFetched, report.FilesReused, report.FilesGone)
+	}
+	fmt.Fprintf(w, "Names of files changed: %d; captions too long for a reference, left off: %d; files met under a second owner: %d\n",
+		report.FileNamesChanged, report.CaptionsDropped, report.FilesOfSeveralOwners)
 	fmt.Fprintf(w, "Longest text in characters: cards %d, comments %d, posts %d, messages %d\n",
 		report.LongestBody[bundle.Cards], report.LongestBody[bundle.Comments], report.LongestBody[bundle.Posts], report.LongestBody[bundle.Messages])
 

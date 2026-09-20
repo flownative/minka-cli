@@ -466,7 +466,7 @@ func TestADiscardedRunOverBoardsAsksTheSameAndCountsTheSame(t *testing.T) {
 
 	dry := fakebasecamp.New()
 	writer := bundle.Discard()
-	extractor := basecamp.Extractor{Source: dry, Avatars: dry}
+	extractor := basecamp.Extractor{Source: dry, Avatars: dry, Files: dry}
 	got, err := extractor.Extract(t.Context(), []string{boardProject}, writer)
 	if err != nil {
 		t.Fatal(err)
@@ -474,16 +474,19 @@ func TestADiscardedRunOverBoardsAsksTheSameAndCountsTheSame(t *testing.T) {
 	if !slices.Equal(dry.Requests, written.Requests) {
 		t.Errorf("a dry run asked for\n%v\na real one for\n%v", dry.Requests, written.Requests)
 	}
-	if !reflect.DeepEqual(got, want) {
+	if want = asADryRunKnowsIt(want); !reflect.DeepEqual(got, want) {
 		t.Errorf("a dry run reports\n%+v\na real one\n%+v", got, want)
 	}
+	if len(dry.Downloads) != 0 || len(written.Downloads) != 2 {
+		t.Errorf("a dry run downloaded %d files, a real one %d", len(dry.Downloads), len(written.Downloads))
+	}
 	wantCounts := map[bundle.Kind]int{bundle.People: 6, bundle.Projects: 1, bundle.Tools: 2, bundle.Columns: 8, bundle.Cards: 10,
-		bundle.Steps: 3, bundle.Comments: 3, bundle.Reactions: 3, bundle.Attachments: 5}
+		bundle.Steps: 3, bundle.Comments: 3, bundle.Reactions: 3, bundle.Attachments: 7}
 	if counts := writer.Counts(); !reflect.DeepEqual(counts, wantCounts) {
 		t.Errorf("counts %v, want %v", counts, wantCounts)
 	}
 	for kind, count := range wantCounts {
-		if kind != bundle.Attachments && len(records(t, dir, kind)) != count {
+		if len(records(t, dir, kind)) != count {
 			t.Errorf("the real run wrote %d %s, the dry one counted %d", len(records(t, dir, kind)), kind, count)
 		}
 	}
@@ -617,7 +620,7 @@ func TestWhatABundleCannotSayAboutABoardEndsTheRunWithoutNamingAnything(t *testi
 	} {
 		account := fakebasecamp.New()
 		change(account)
-		extractor := basecamp.Extractor{Source: account, Avatars: account}
+		extractor := basecamp.Extractor{Source: account, Avatars: account, Files: account}
 		_, err := extractor.Extract(t.Context(), []string{boardProject}, bundle.Discard())
 		var failed *basecamp.Error
 		if !errors.As(err, &failed) {
@@ -649,7 +652,7 @@ func TestARecordThatCannotBeCarriedEndsTheRunWhereItIsFirstMet(t *testing.T) {
 		account := fakebasecamp.New()
 		c.change(account)
 		writer := bundle.Discard()
-		extractor := basecamp.Extractor{Source: account, Avatars: account}
+		extractor := basecamp.Extractor{Source: account, Avatars: account, Files: account}
 		_, err := extractor.Extract(t.Context(), []string{boardProject}, writer)
 		if err == nil || !strings.HasSuffix(err.Error(), c.message) && !strings.Contains(err.Error(), c.message+",") {
 			t.Errorf("%s: got %v, want a message that ends in %q", what, err, c.message)
