@@ -9,8 +9,11 @@ import (
 	"os"
 	"regexp"
 	"strings"
+	"syscall"
+	"time"
 
 	"github.com/flownative/minka-cli/internal/api"
+	"github.com/flownative/minka-cli/internal/basecamp"
 	"github.com/flownative/minka-cli/internal/config"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
@@ -48,6 +51,11 @@ type app struct {
 	stdoutIsTerminal func() bool
 	readSecret       func() (string, error)
 
+	// What import reads a foreign system through, replaced in tests.
+	basecampSource basecamp.Source
+	avatarFetcher  basecamp.AvatarFetcher
+	now            func() time.Time
+
 	hostFlag   string
 	jsonFlag   bool
 	quietFlag  bool
@@ -58,6 +66,11 @@ type app struct {
 	skillIsTheTopic bool
 }
 
+// Signals are what ends a command early: Ctrl-C on a terminal, and the
+// termination a supervisor such as Kubernetes sends. Both cancel the context,
+// so that a command tidies up what it was writing.
+var Signals = []os.Signal{os.Interrupt, syscall.SIGTERM}
+
 // Run executes the CLI and returns its exit code.
 func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.Writer, getenv func(string) string) int {
 	return newApp(ctx, stdin, stdout, stderr, getenv).run(args)
@@ -65,6 +78,9 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 
 func newApp(ctx context.Context, stdin io.Reader, stdout, stderr io.Writer, getenv func(string) string) *app {
 	a := &app{ctx: ctx, stdin: stdin, stdout: stdout, stderr: stderr, getenv: getenv}
+	a.basecampSource = basecamp.CLI{}
+	a.avatarFetcher = basecamp.NewAvatarClient()
+	a.now = time.Now
 	a.stdinIsTerminal = func() bool { return isTerminal(stdin) }
 	a.stdoutIsTerminal = func() bool { return isTerminal(stdout) }
 	a.readSecret = func() (string, error) {
@@ -172,6 +188,7 @@ only used for the host in $MINKA_HOST.`,
 		a.newConversationsCmd(),
 		a.newUploadsCmd(),
 		a.newTrashCmd(),
+		a.newImportCmd(),
 		a.newSkillCmd(),
 		a.newDoctorCmd(),
 		a.newCommandsCmd(root),

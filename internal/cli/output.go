@@ -34,6 +34,8 @@ type ErrorResponse struct {
 	Retryable bool           `json:"retryable"`
 	Hint      string         `json:"hint,omitempty"`
 	Meta      map[string]any `json:"meta,omitempty"` // apiCode and httpStatus when the server answered
+	Data      any            `json:"data,omitempty"` // what an incomplete run got done
+	Notice    string         `json:"notice,omitempty"`
 }
 
 type format int
@@ -103,7 +105,7 @@ func (a *app) warn(notices []string) {
 
 func (a *app) fail(e *Error) {
 	if a.format() != formatText {
-		response := ErrorResponse{OK: false, Error: e.Message, Code: e.Code, Retryable: e.Retryable, Hint: e.Hint}
+		response := ErrorResponse{OK: false, Error: e.Message, Code: e.Code, Retryable: e.Retryable, Hint: e.Hint, Data: e.Data, Notice: strings.Join(e.Notices, "; ")}
 		if e.APICode != "" || e.HTTPStatus != 0 {
 			response.Meta = map[string]any{"apiCode": e.APICode, "httpStatus": e.HTTPStatus}
 		}
@@ -111,6 +113,10 @@ func (a *app) fail(e *Error) {
 		return
 	}
 
+	a.warn(e.Notices)
+	if e.Text != nil {
+		e.Text(a.stdout)
+	}
 	message := e.Message
 	if e.APICode != "" && e.Code == CodeValidation {
 		message += " (" + e.APICode + ")"

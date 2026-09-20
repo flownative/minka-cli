@@ -270,3 +270,40 @@ card once and goes on with its UUID; answers and breadcrumbs name the UUID.
 **Why:** People call cards by their short identifier, but it stops naming the
 card when a board changes its prefix, and every other address takes the UUID.
 **Implemented as:** `session.resolveCard`, `requireID`.
+
+<a id="c-023"></a>
+## C-023 — Foreign history is read through the source's own CLI
+
+*Applies to: `import basecamp`, every later extractor whose source has a CLI*
+
+The extractor runs `basecamp api get` for every request instead of speaking
+the Basecamp API; it keeps no Basecamp token and no HTTP client for it.
+
+**Why:** The Basecamp CLI brings sign-in, token refresh, rate limiting and
+retries, and a Kubernetes job that extracts later ships both binaries.
+**Implemented as:** `internal/basecamp` (`CLI`), see
+[Importing](stable/import.md).
+
+<a id="c-024"></a>
+## C-024 — A run replaces the bundle as a whole, staged next to the target
+
+*Applies to: `import`, `internal/bundle`*
+
+A bundle is built in a directory beside `--out` and renamed into place at the
+end; only a bundle of the same format and source is replaced.
+
+**Why:** A bundle that mixes two runs, or half of one, would be applied as if
+it were whole, and a rename within one directory cannot end halfway.
+**Implemented as:** `bundle.Writer`, see [Importing](stable/import.md).
+
+<a id="c-025"></a>
+## C-025 — A file that cannot be fetched is left out, and the run fails at the end
+
+*Applies to: `import`, every attachment of a bundle*
+
+The bundle is written without the file and its record and the report names it;
+the command exits 6 when trying again may help, else 7, the report as `data`.
+
+**Why:** One missing picture must not cost a run of hours, and exit 0 would
+hide that the bundle is incomplete.
+**Implemented as:** `Extractor.attach`, `incompleteImport`.

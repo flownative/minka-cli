@@ -60,7 +60,7 @@ Errors: `{"ok": false, "error", "code", "retryable", "hint", "meta": {"apiCode",
 | Exit | code | Meaning |
 |------|------|---------|
 | 0 | | success |
-| 1 | `usage`, `config` | wrong command line, unreadable or insecure config file |
+| 1 | `usage`, `config` | wrong command line, unreadable or insecure config file, a missing Basecamp CLI, a bundle that cannot be written |
 | 2 | `not_found` | does not exist or not visible to you |
 | 3 | `auth_required` | not signed in, token refused (401) |
 | 4 | `forbidden` | account may not use the API (403) |
@@ -162,6 +162,7 @@ minka chats mark-read <chatId> [--seq <seq>] --json
 minka conversations list --json
 minka conversations with <person> [--project <projectId>] --json
 minka uploads create <file> (--project <projectId> | --conversation <conversationId>) [--name <name>] [--content-type <type>] --json
+minka import basecamp --project <basecampProjectId> [--project <basecampProjectId>]... (--out <dir> | --dry-run) --json
 ```
 
 `<column>` is a column ID, a type (`triage`, `not_now`, `done`) or a title
@@ -451,6 +452,50 @@ minka cards edit <cardId> --description - --description-format html < text.html
 - At most 50 MiB. A larger file exits 1 before it travels, and a server that
   refuses one exits 9 with `tooLarge`.
 - `--name` gives the file another name in Minka than it has here.
+
+## Importing from Basecamp
+
+- `import basecamp --project <id> --out <dir>` extracts projects of a Basecamp
+  account into an import bundle, the directory Minka's applier reads foreign
+  history from. It talks to Basecamp only, and only reads there; it needs no
+  Minka host and no token.
+- It runs the Basecamp CLI, which has to be installed and signed in. Without
+  it the command exits 1 (`config`), without a sign-in 3; the `hint` names
+  `basecamp auth login`. A project that Basecamp does not show exits 2.
+- Exit 4 with "masks e-mail addresses" means the Basecamp identity that is
+  signed in may not see the addresses of other people. Nothing was written and
+  trying again does not help: tell the person that the run needs an identity
+  of the account's own company, or an admin.
+- `--project` takes the numeric ID of a Basecamp project and is repeated for
+  several. Anything that is no number exits 1 before any request.
+- `data.invalidAddresses` lists, by ID only, the people who come without an
+  e-mail address, and so without a login, because the one Basecamp holds is
+  none; `notice` says how many. The run still exits 0 and running it again
+  changes nothing: only somebody with access to the account can repair the
+  address there. Never look the address up to quote it.
+- So far a bundle holds the structure: the people the projects refer to
+  (members and creators, `data.peopleLeftOut` counts the rest of the account)
+  with their avatars, the projects with their members, and the card tables, chats and
+  message boards that are switched on. `data.skippedTools` counts what was
+  left out, per kind and whether it was switched on; `data.counts` is what the
+  manifest says.
+- `--dry-run` walks Basecamp the same way, downloads and writes nothing, and
+  answers with the same counts. `--out` is not needed then.
+- The bundle is built next to `--out` and takes its place at the end: a failed
+  run leaves what was there. An earlier bundle of Basecamp is replaced as a
+  whole; a directory that holds anything else is refused with exit 1, by
+  `--dry-run --out <dir>` as well.
+- One run at a time works on an `--out`: a second one exits 1 (`config`) and
+  names the lock the first holds. A run that was killed holds none. `--out`
+  must not be a symbolic link.
+- A file that cannot be fetched does not end the run. The bundle is written
+  without it and can be applied, and the command fails at the end: exit 6 and
+  `retryable` when running again may bring the file, else exit 7. The report
+  is `data` of the error envelope then, and `data.missingFiles` names each
+  file with its owner and the `reason`. Do not treat such a run as lost.
+- A bundle holds personal data: names, e-mail addresses, pictures. Write it
+  outside of any repository, do not quote from it, and delete it once it has
+  been applied.
 
 ## Common workflows
 

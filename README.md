@@ -80,6 +80,7 @@ minka messages list <chatId>
 minka messages create <chatId> - < message.md
 minka conversations with <person> --project <projectId>
 minka uploads create shot.png --project <projectId>
+minka import basecamp --project <basecampId> --out <dir>   # a bundle for Minka's importer
 minka commands                         # every command with its flags
 ```
 
