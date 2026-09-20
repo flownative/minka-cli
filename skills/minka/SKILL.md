@@ -521,6 +521,14 @@ minka cards edit <cardId> --description - --description-format html < text.html
   became a link to it; one whose address is none of the web leaves its title
   as text and is not counted. `data.longestBody` is the longest text per kind
   (`cards`, `comments`, `posts`, `messages`) in characters. None of them fails a run.
+- A request that fails for a reason that may pass (network, rate limit, a
+  5xx, 408 or 429 of Basecamp or of a gateway in front of it) is asked again
+  by the command itself, up to four times with pauses of 2, 10 and 30
+  seconds, and at most 100 times in one run. `data.requestsRetried` counts
+  those further attempts, 0 when none was needed; it fails no run. A run that
+  still ends on such a failure, or because Basecamp kept failing, is
+  `retryable` (exit 6 for the network, else 7): nothing was written, run it
+  again later.
 - `--dry-run` walks Basecamp the same way, downloads and writes nothing, and
   answers with the same counts. `--out` is not needed then.
 - The bundle is built next to `--out` and takes its place at the end: a failed

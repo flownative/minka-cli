@@ -71,6 +71,9 @@ type importReport struct {
 	// LongestBody is the longest text per kind, in characters: a number and
 	// nothing of the text.
 	LongestBody map[bundle.Kind]int `json:"longestBody"`
+	// RequestsRetried counts the requests that were asked again because they
+	// failed for a reason that may pass, each further attempt counted.
+	RequestsRetried int `json:"requestsRetried"`
 }
 
 type importAvatars struct {
@@ -118,6 +121,11 @@ directory that holds anything else, a bundle of another source included, is
 refused. --dry-run walks Basecamp the
 same way, downloads no avatar, writes nothing and shows the counts.
 
+A request that fails for a reason that may pass, such as a gateway in front
+of Basecamp that fails for a moment, is asked again a few times with growing
+pauses before the run ends, and at most 100 requests of a run are; the report
+counts them as requestsRetried.
+
 A file that cannot be fetched does not end the run: the bundle is written
 without it, the report names it under missingFiles, and the command exits 6
 when trying again may help, else 7. A later run brings what is missing.
@@ -157,7 +165,10 @@ it has been applied.`,
 			}
 			defer writer.Abort()
 
-			extractor := basecamp.Extractor{Source: a.basecampSource, Avatars: a.avatarFetcher}
+			// Every request of the run goes through the one source that asks
+			// again, whatever kind it is of and whether anything is written.
+			source := basecamp.NewRetrying(a.basecampSource, a.retryPause)
+			extractor := basecamp.Extractor{Source: source, Avatars: a.avatarFetcher}
 			result, err := extractor.Extract(a.ctx, projects, writer)
 			if err != nil {
 				return basecampError(err)
@@ -202,6 +213,7 @@ it has been applied.`,
 
 				MessagesWithEmptyBody: result.MessagesWithEmptyBody,
 				LongestBody:           result.LongestBody,
+				RequestsRetried:       source.Retried(),
 			}
 			var notices []string
 			if count := len(report.InvalidAddresses); count > 0 {
@@ -293,6 +305,10 @@ func renderImportReport(w io.Writer, report importReport) {
 	fmt.Fprintf(w, "Longest text in characters: cards %d, comments %d, posts %d, messages %d\n",
 		report.LongestBody[bundle.Cards], report.LongestBody[bundle.Comments], report.LongestBody[bundle.Posts], report.LongestBody[bundle.Messages])
 
+	if report.RequestsRetried > 0 {
+		fmt.Fprintf(w, "Requests asked again after a failure that passed: %d\n", report.RequestsRetried)
+	}
+
 	if len(report.MissingFiles) > 0 {
 		fmt.Fprintln(w, "\nMissing files:")
 		for _, missing := range report.MissingFiles {
@@ -362,6 +378,9 @@ func basecampError(err error) *Error {
 		e.Code = CodeNetwork
 		e.Retryable = true
 		e.Hint = "Is Basecamp reachable? Check with: basecamp doctor"
+	case basecamp.Unavailable:
+		e.Retryable = true
+		e.Hint = "Basecamp, or a gateway in front of it, failed several times in a row. That usually passes: try again in a few minutes."
 	case basecamp.Interrupted:
 		e.Code = CodeNetwork
 	}

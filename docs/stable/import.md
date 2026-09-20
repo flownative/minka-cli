@@ -43,6 +43,24 @@ installed and signed in.
   SIGINT or SIGTERM ended the Basecamp CLI, which the signal may reach first.
   A Basecamp CLI that any other signal ended, such as the kill of a system out
   of memory, is an `api_error` that names the signal.
+- A request that fails for a reason that may pass is asked again before the
+  run gives up (C-029): at most four times (`MaxAttempts`), after pauses of 2,
+  10 and 30 seconds (`RetryPauses`). Such a reason is a failure of the
+  network, the rate limit, and a failure of the API that may pass, see below.
+  Every other failure ends the run at the first answer: not found, not signed
+  in, forbidden, a request Basecamp refuses, an answer that is no JSON, a
+  Basecamp CLI that crashed or that a signal ended. A run that is stopped
+  during a pause ends at once as `interrupted`, without a further request.
+  When the attempts are used up the run ends with the last failure, which is
+  `retryable`. A run asks again at most 100 times (`MaxRetriesOfARun`): a
+  source that fails now and then stays far below that, and one where every
+  request needs its pauses would stretch a run by hours. The next failure
+  that may pass then ends the run with its class, `retryable`, and a message
+  that says Basecamp kept failing. Every request of a run goes through the
+  one source that asks again (`Retrying`), the dry run included; the download
+  of a file does not, see Files that cannot be fetched. `requestsRetried` in
+  the report counts the requests that were asked again, each further attempt
+  counted.
 
 Its failures keep their class:
 
@@ -54,8 +72,26 @@ Its failures keep their class:
 | forbidden (4) | `forbidden` | 4 |
 | rate limit (5) | `api_error`, retryable | 7 |
 | network (6) | `network`, retryable | 6 |
+| API failure (7) that may pass | `api_error`, retryable | 7 |
 | anything else | `api_error` | 7 |
 
+The failure object of the Basecamp CLI is `{ok, error, code, retryable, hint,
+meta: {request_id}}` and names no HTTP status. A failure of the API (exit 7,
+`api_error`) may pass when the Basecamp CLI says `retryable: true`, which it
+does for a gateway error (502, 503, 504), or when its message is, as a whole,
+one of those the Basecamp CLI makes up around a status, `Request failed (HTTP
+<status>)`, `Server error (<status>)` or `Gateway error (<status>)`, and the
+status is 5xx, 408 or 429. Its own word is not enough: it calls a status it
+does not know final, such as the 525 of a gateway that lost its connection to
+Basecamp, and it does not try such a request again itself. A message Basecamp
+sent instead names no status, and a text that merely quotes one proves
+nothing; both stay final.
+
+The message of a failure is what the Basecamp CLI says, as of every failure
+of the API. Only a message of one of the fixed forms is known to hold a
+status and nothing else. One that comes with `retryable: true` may be text
+the server sent, which the Basecamp CLI cuts to 500 bytes, and minka passes
+it on as it does for a failure that stays.
 
 The exit code alone is no class: a program that crashes exits 2 as well. A
 class counts only when the failure object `{ok: false, …}` stands on stdout
@@ -437,10 +473,12 @@ files the same way as an avatar is attached.
   `postsWithEmptyBody`, `messagesByType` (`text`, `richText`, `upload`,
   `integration`), `messagesWithEmptyBody`, `uploadLinesLeftOut`, `parts` as
   the manifest has them, `mentionsUnresolved`, `filesInBodies`,
-  `filesDropped`, `linkPreviews`, `picturesLinked`, `longestBody` and the
-  absolute path of the bundle. `longestBody` is the longest text per kind,
-  `cards`, `comments`, `posts` and `messages`, in characters: whoever sets
-  the limits of where a bundle goes has to know it.
+  `filesDropped`, `linkPreviews`, `picturesLinked`, `longestBody`,
+  `requestsRetried` and the absolute path of the bundle. `longestBody` is the
+  longest text per kind, `cards`, `comments`, `posts` and `messages`, in
+  characters: whoever sets the limits of where a bundle goes has to know it.
+  `requestsRetried` is a number, 0 for a run that met no failure; the text
+  shows its line only when it is more.
   No output names a title, a person or what stands in a text.
 - A run prints nothing while it goes on, in any mode: the output contract
   knows results, warnings and errors only.

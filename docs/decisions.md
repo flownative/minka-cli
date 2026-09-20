@@ -343,3 +343,16 @@ of all projects, then the chats; nothing of a later kind is written before.
 **Why:** Each file of a kind is streamed and never rewritten, and the comments
 of posts follow those of cards, the reactions those of what they hang on.
 **Implemented as:** `Extractor.Extract`, see [Importing](stable/import.md).
+
+<a id="c-029"></a>
+## C-029 — A request that failed for a reason that may pass is asked again
+
+*Applies to: `import basecamp`, every request through the Basecamp CLI*
+
+Network, rate limit and an API failure of 5xx, 408 or 429 are tried up to four
+times with growing pauses, 100 retries a run; then the run ends, retryable.
+
+**Why:** A run of hours must not end on one failure that passes, and the
+Basecamp CLI gives up at once on a status it does not know, a gateway's 525.
+**Implemented as:** `basecamp.Retrying`, `failure`, see
+[Importing](stable/import.md).
