@@ -208,7 +208,7 @@ func TestTwoRunsOverTheSameAccountWriteTheSameBytes(t *testing.T) {
 	slices.Reverse(shuffled.Projects[0].Members)
 	second, _ := extract(t, shuffled, "7002", "7001")
 
-	for _, name := range []string{"people.jsonl", "projects.jsonl", "tools.jsonl", "attachments.jsonl", "manifest.json"} {
+	for _, name := range []string{"people.jsonl", "projects.jsonl", "tools.jsonl", "columns.jsonl", "attachments.jsonl", "manifest.json"} {
 		a, err := os.ReadFile(filepath.Join(first, name))
 		if err != nil {
 			t.Fatal(err)
@@ -241,7 +241,7 @@ func TestADiscardedRunWalksTheSameWayAndDownloadsNoAvatar(t *testing.T) {
 	if len(dry.AvatarRequests) != 0 {
 		t.Errorf("a dry run downloaded %v", dry.AvatarRequests)
 	}
-	want := map[bundle.Kind]int{bundle.People: 5, bundle.Projects: 1, bundle.Tools: 4, bundle.Attachments: 4}
+	want := map[bundle.Kind]int{bundle.People: 5, bundle.Projects: 1, bundle.Tools: 4, bundle.Columns: 3, bundle.Attachments: 4}
 	if got := writer.Counts(); !reflect.DeepEqual(got, want) {
 		t.Errorf("counts %v, want %v", got, want)
 	}

@@ -11,11 +11,14 @@ private conversations, uploads, mentions, reactions and one's own cards across
 all projects. `minka commands` lists them all, built from the command tree
 itself.
 
-`minka import basecamp` extracts the structure of Basecamp projects into an
-import bundle for Minka's applier: people with avatars, projects with members,
-and the boards, chats and message boards as tools. It reads through the
-Basecamp CLI, is tested against the invented account in `internal/fakebasecamp`
-and has been run live, as a dry run and into a bundle outside the repository.
+`minka import basecamp` extracts the structure and the boards of Basecamp
+projects into an import bundle for Minka's applier: people with avatars,
+projects with members, the boards, chats and message boards as tools, and of
+each board the columns, cards, steps, comments and boosts, with mentions and
+files in the texts as references. It reads through the Basecamp CLI and is
+tested against the invented account in `internal/fakebasecamp`. It has been
+run live, as a dry run and into a bundle outside the repository, under an
+identity that sees addresses.
 A run needs a Basecamp identity that may see the e-mail addresses of others,
 which is somebody of the account's own company or an admin. Under one that
 may not, masked addresses were seen live ending the run as `forbidden`. Only
@@ -68,6 +71,15 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   account being left out, and files that could not be fetched, with the bundle
   written without them and the run ending as `network`. The classes are the
   exit codes and codes the Basecamp CLI shows; its source was not read.
+- Of the boards of `import basecamp`: a mention in a stored note that has no
+  rendering, a mention of somebody who left the account, a boost on a card, a
+  trashed comment, a card whose column is in no extracted board, more steps
+  than a card shows itself, and a second system column. Seen live, in a bundle
+  that was checked reference by reference: cards on hold, archived and trashed
+  cards with their comments, completed cards ranked as Basecamp lists them,
+  mentions resolved from a rendering, horizontal rules, and files whose signed
+  ID is an older one than the list has, found by the key of the stored file.
+  The fake mirrors both forms of a signed ID as they were seen.
 - "agent for X" in `people list` has been seen live, an agent that stepped
   down has not — it is in no list any more.
 
@@ -80,11 +92,12 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
 
 ## Next steps
 
+- The bundle with the boards waits for Minka's applier of boards; what that
+  run finds comes back through the coordination.
 - The extractor goes on kind by kind, each a further step of the same walk:
-  boards (columns, cards, steps, comments), then chats and posts (categories,
-  posts, messages, comments, reactions), then the attachments of all of them
-  with `<import-attachment>` and `<import-mention>` in the bodies. Authors who
-  left the account come in as retired people through the registry.
+  chats and posts (categories, posts, messages, comments, reactions), then
+  the files of all texts: an attachment record and a download for every
+  `<import-attachment>` a body carries.
 - Install through Homebrew once and play `minka setup` through by hand on a
   terminal: the release workflow has built a version and written the formula,
   but nobody has installed from it yet, and `setup` is covered by tests only.

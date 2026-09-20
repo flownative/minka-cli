@@ -34,6 +34,21 @@ type importReport struct {
 	// PeopleLeftOut are the people of the account no record of the bundle
 	// refers to; counts.people is who was written.
 	PeopleLeftOut int `json:"peopleLeftOut"`
+	// CardsByStatus splits counts.cards; CardsOnHold are those of them that
+	// were set aside within their column.
+	CardsByStatus map[string]int `json:"cardsByStatus"`
+	CardsOnHold   int            `json:"cardsOnHold"`
+	// CardsLeftOut are archived and trashed cards whose column is in no board
+	// that is extracted. CommentsTrashed are comments left out because they
+	// are in the trash.
+	CardsLeftOut    int `json:"cardsLeftOut"`
+	CommentsTrashed int `json:"commentsTrashed"`
+	// MentionsUnresolved stayed a name in the text. FilesInBodies counts the
+	// references to a file that were written, FilesDropped the embedded files
+	// Basecamp lists no file for.
+	MentionsUnresolved int `json:"mentionsUnresolved"`
+	FilesInBodies      int `json:"filesInBodies"`
+	FilesDropped       int `json:"filesDropped"`
 }
 
 type importAvatars struct {
@@ -58,11 +73,14 @@ e-mail addresses of other people; Basecamp masks them for anybody else, and
 the run ends with exit 4. Nothing is written to Basecamp, and no Minka
 host or token is needed.
 
-So far a bundle holds the structure: the people the named projects refer to
-with their avatars (their members and the creators of what is extracted, not
-the rest of the account), the projects with their members, and of each
-project the card tables, chats and message boards that are switched on. Other
-tools and tools that are switched off are counted as skipped.
+So far a bundle holds the structure and the boards: the people the named
+projects refer to with their avatars (their members and whoever a record
+names, not the rest of the account), the projects with their members, of each
+project the card tables, chats and message boards that are switched on, and of
+each card table the columns, the cards with the archived and the trashed ones,
+their steps, comments and boosts. Other tools and tools that are switched off
+are counted as skipped. A mention and a file in a text become a reference; the
+files themselves, chats and message boards do not come yet.
 
 The bundle is built next to --out and takes its place at the end, so a run
 that fails leaves no half bundle. A bundle of an earlier run is replaced; a
@@ -134,10 +152,23 @@ it has been applied.`,
 
 				InvalidAddresses: result.InvalidAddresses,
 				PeopleLeftOut:    result.PeopleLeftOut,
+
+				CardsByStatus:      result.CardsByStatus,
+				CardsOnHold:        result.CardsOnHold,
+				CardsLeftOut:       result.CardsLeftOut,
+				CommentsTrashed:    result.CommentsTrashed,
+				MentionsUnresolved: result.Bodies.MentionsUnresolved,
+				FilesInBodies:      result.Bodies.Files,
+				FilesDropped:       result.Bodies.FilesDropped,
 			}
 			var notices []string
 			if count := len(report.InvalidAddresses); count > 0 {
 				notices = append(notices, plural(count, "person comes", "people come")+" without an e-mail address, and so without a login, because the one Basecamp holds is none; data.invalidAddresses names them by ID, and only the source can repair it")
+			}
+			if count := report.FilesDropped; count > 0 {
+				notices = append(notices, plural(count,
+					"file embedded in a text could not be named, because Basecamp lists no file for the embed; only its caption stays in the text",
+					"files embedded in texts could not be named, because Basecamp lists no file for the embeds; only their captions stay in the texts"))
 			}
 			if leftover != "" {
 				notices = append(notices, "the bundle of the run before could not be removed and still lies at "+leftover+"; it holds personal data, remove it by hand")
@@ -149,7 +180,8 @@ it has been applied.`,
 			}
 			summary += plural(report.Counts[bundle.People], "person", "people") + ", " +
 				plural(report.Counts[bundle.Projects], "project", "projects") + ", " +
-				plural(report.Counts[bundle.Tools], "tool", "tools")
+				plural(report.Counts[bundle.Tools], "tool", "tools") + ", " +
+				plural(report.Counts[bundle.Cards], "card", "cards")
 
 			if len(report.MissingFiles) > 0 {
 				return incompleteImport(report, notices)
@@ -190,6 +222,14 @@ func renderImportReport(w io.Writer, report importReport) {
 		fmt.Fprintf(w, "Invalid addresses: %d (person %s)\n", count, strings.Join(report.InvalidAddresses, ", "))
 	}
 
+	fmt.Fprintf(w, "\nCards: %d active, %d archived, %d trashed; %d of them on hold\n",
+		report.CardsByStatus[bundle.StatusActive], report.CardsByStatus[bundle.StatusArchived], report.CardsByStatus[bundle.StatusTrashed], report.CardsOnHold)
+	fmt.Fprintf(w, "Archived and trashed cards whose column is in no extracted board, left out: %d\n", report.CardsLeftOut)
+	fmt.Fprintf(w, "Comments in the trash, left out: %d\n", report.CommentsTrashed)
+	fmt.Fprintf(w, "In the texts: %s referred to, %s Basecamp lists nothing for dropped, %s\n",
+		plural(report.FilesInBodies, "file", "files"), plural(report.FilesDropped, "file", "files"),
+		plural(report.MentionsUnresolved, "mention left as a name", "mentions left as names"))
+
 	if len(report.MissingFiles) > 0 {
 		fmt.Fprintln(w, "\nMissing files:")
 		for _, missing := range report.MissingFiles {
@@ -217,7 +257,7 @@ func renderImportReport(w io.Writer, report importReport) {
 func incompleteImport(report importReport, notices []string) *Error {
 	e := &Error{
 		Code:    CodeAPI,
-		Message: "the bundle was written, but " + plural(len(report.MissingFiles), "file", "files") + " could not be fetched and is left out",
+		Message: "the bundle was written, but " + plural(len(report.MissingFiles), "file could not be fetched and is left out", "files could not be fetched and are left out"),
 		Hint:    "data.missingFiles names each file with the reason. The bundle can be applied as it is; a later run brings what is missing.",
 		Data:    report,
 		Text:    func(w io.Writer) { renderImportReport(w, report) },
