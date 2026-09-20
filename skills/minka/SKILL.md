@@ -473,24 +473,54 @@ minka cards edit <cardId> --description - --description-format html < text.html
   none; `notice` says how many. The run still exits 0 and running it again
   changes nothing: only somebody with access to the account can repair the
   address there. Never look the address up to quote it.
-- So far a bundle holds the structure and the boards: the people the projects
-  refer to (members and whoever a record names, `data.peopleLeftOut` counts
-  the rest of the account) with their avatars, the projects with their
-  members, the card tables, chats and message boards that are switched on,
-  and of each card table the columns, the cards with the archived and the
-  trashed ones, their steps, comments and boosts. `data.skippedTools` counts
-  what was left out, per kind and whether it was switched on; `data.counts`
-  is what the manifest says. The messages of chats, the posts of message
-  boards and the files embedded in texts do not come yet.
+- So far a bundle holds the structure, the boards, the message boards and the
+  chats: the people the projects refer to (members and whoever a record
+  names; `data.peopleLeftOut` counts the rest of the account's list, which
+  holds more for an admin than for anybody else, the people written do not
+  differ) with their
+  avatars, the projects with their members, the card tables, chats and
+  message boards that are switched on, of each card table the columns, the
+  cards with the archived and the trashed ones, their steps, comments and
+  boosts, of each message board its messages as posts, the archived and the
+  trashed ones included, with their categories, comments and boosts, and of
+  each chat its lines as messages with their boosts. `data.skippedTools`
+  counts what was left out, per kind and whether it was switched on;
+  `data.counts` is what the manifest says. The files of texts and chats do
+  not come yet, only the references to them.
+- A person comes with `retired: true` unless Basecamp calls them a user: a
+  bot, somebody who was deleted and an outsider are authors and nothing more,
+  whichever identity ran the import.
 - `data.cardsByStatus` splits the cards, `data.cardsOnHold` counts those set
   aside within their column, `data.cardsLeftOut` the archived and trashed
   cards whose column is in no extracted board, `data.commentsTrashed` the
-  comments left out because they are in the trash. In the texts a mention and
-  a file become a reference: `data.filesInBodies` counts the files referred
-  to, `data.filesDropped` the embedded files Basecamp lists nothing for, of
-  which only the caption stays and which a `notice` counts as well,
+  comments left out because they are in the trash.
+- `data.postsByStatus` splits the posts, `data.postsLeftOut` counts the
+  archived and trashed posts of a message board that is not extracted,
+  `data.postsWithEmptyBody` the posts that are a title alone. Basecamp hands
+  out no drafts and tells of no pin, so every post comes with `pinnedAt`
+  `null`.
+- `data.messagesByType` splits the messages by what a line was in its chat:
+  `text`, `richText`, `upload`, `integration`; `data.messagesWithEmptyBody`
+  counts the lines somebody wrote that say nothing, which are left out. A
+  line that was files alone becomes a body of references to them;
+  `data.uploadLinesLeftOut` counts the lines of which Basecamp names no
+  file, which are left out and which a `notice` counts as well. Lines
+  somebody deleted and the lines Basecamp writes itself are not in its API.
+- The messages are written in parts, `messages-0001.jsonl` and on, each with
+  lines of one chat; a part ends once it holds 10,000 lines, where the second
+  changes, so it may hold somewhat more. `data.parts.messages` and the
+  manifest name them in their order. Only a bundle whose lines came to a
+  single part carries `messages.jsonl` instead, and `data.parts` is missing.
+- In the texts a mention and a file become a reference and the preview of a
+  link the link: `data.filesInBodies` counts the files referred to,
+  `data.filesDropped` the files Basecamp lists nothing for, of which only the
+  caption stays and which a `notice` counts as well,
   `data.mentionsUnresolved` the mentions of somebody the account does not
-  list any more, which stay a name. None of them fails a run.
+  list any more, which stay a name, `data.linkPreviews` the previews that
+  became links, `data.picturesLinked` the pictures at a foreign address that
+  became a link to it; one whose address is none of the web leaves its title
+  as text and is not counted. `data.longestBody` is the longest text per kind
+  (`cards`, `comments`, `posts`, `messages`) in characters. None of them fails a run.
 - `--dry-run` walks Basecamp the same way, downloads and writes nothing, and
   answers with the same counts. `--out` is not needed then.
 - The bundle is built next to `--out` and takes its place at the end: a failed

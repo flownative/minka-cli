@@ -28,8 +28,26 @@ type registry struct {
 
 type seenPerson struct {
 	person
-	// listed tells that the source still has the person.
+	// listed tells that the list of the account or the members of a project
+	// name the person.
 	listed bool
+}
+
+// retired tells whether somebody comes as an author and nothing more. The
+// kind of person decides: a user is somebody to work with, and every other
+// kind is not, be it a bot, what is left of somebody who was deleted, or a
+// kind nobody knows yet. The list of an account says nothing here: what an
+// admin sees holds every kind, what anybody else sees holds users alone.
+// Only of somebody whose kind Basecamp does not say does the list decide:
+// whom only a record names has left.
+func (s seenPerson) retired() bool {
+	switch s.PersonableType {
+	case "User", "Client":
+		return false
+	case "":
+		return !s.listed
+	}
+	return true
 }
 
 func newRegistry() *registry {
@@ -98,6 +116,14 @@ func (r *registry) refer(named *person, present bool) (*string, error) {
 		if err := refuseMasks([]person{p}); err != nil {
 			return nil, err
 		}
+	}
+	if p.PersonableType == "" {
+		p.PersonableType = named.PersonableType
+	}
+	// A person is a record like any other and carries its times: said here,
+	// where somebody first comes in, and not at the end of a run of hours.
+	if err := requireTimestamps(fmt.Sprintf("person %d", p.ID), p.CreatedAt, p.UpdatedAt); err != nil {
+		return nil, err
 	}
 	// An address that is none is left out, not repaired.
 	if p.EmailAddress != "" && !looksLikeAnAddress(p.EmailAddress) {

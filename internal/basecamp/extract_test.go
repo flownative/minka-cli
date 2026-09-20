@@ -23,6 +23,12 @@ import (
 // returns where it stands.
 func extract(t *testing.T, account *fakebasecamp.Account, projects ...string) (string, basecamp.Result) {
 	t.Helper()
+	return extractInParts(t, account, 0, projects...)
+}
+
+// extractInParts is an extraction whose parts hold so many lines of a chat.
+func extractInParts(t *testing.T, account *fakebasecamp.Account, perPart int, projects ...string) (string, basecamp.Result) {
+	t.Helper()
 	dir := filepath.Join(t.TempDir(), "bundle")
 	writer, err := bundle.Create(dir, basecamp.SourceName)
 	if err != nil {
@@ -30,7 +36,7 @@ func extract(t *testing.T, account *fakebasecamp.Account, projects ...string) (s
 	}
 	defer writer.Abort()
 
-	extractor := basecamp.Extractor{Source: account, Avatars: account}
+	extractor := basecamp.Extractor{Source: account, Avatars: account, MessagesPerPart: perPart}
 	result, err := extractor.Extract(t.Context(), projects, writer)
 	if err != nil {
 		t.Fatal(err)
@@ -43,7 +49,22 @@ func extract(t *testing.T, account *fakebasecamp.Account, projects ...string) (s
 
 func records(t *testing.T, dir string, kind bundle.Kind) []map[string]any {
 	t.Helper()
-	file, err := os.Open(filepath.Join(dir, string(kind)+".jsonl"))
+	return recordsIn(t, filepath.Join(dir, string(kind)+".jsonl"))
+}
+
+// recordsOrNone are the records of a kind a bundle may have none of.
+func recordsOrNone(t *testing.T, dir string, kind bundle.Kind) []map[string]any {
+	t.Helper()
+	if _, err := os.Stat(filepath.Join(dir, string(kind)+".jsonl")); errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	return records(t, dir, kind)
+}
+
+func recordsIn(t *testing.T, path string) []map[string]any {
+	t.Helper()
+	kind := filepath.Base(path)
+	file, err := os.Open(path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -519,7 +540,7 @@ func endsBeforeAnythingElse(t *testing.T, change func(*fakebasecamp.Account), wa
 // Project 7002 has to do with Ada alone. The mask is on somebody the bundle
 // would not even hold: it still says that the identity sees no addresses.
 func TestOneMaskedAddressEndsTheRunBeforeAnythingElseIsAskedFor(t *testing.T) {
-	endsBeforeAnythingElse(t, func(a *fakebasecamp.Account) { a.People[4].Email = maskedAddress }, basecamp.Forbidden, "1 of 4")
+	endsBeforeAnythingElse(t, func(a *fakebasecamp.Account) { a.People[4].Email = maskedAddress }, basecamp.Forbidden, "1 of 5")
 }
 
 func TestMostAddressesBeingNoneEndsTheRunBeforeAnythingElseIsAskedFor(t *testing.T) {
@@ -527,7 +548,7 @@ func TestMostAddressesBeingNoneEndsTheRunBeforeAnythingElseIsAskedFor(t *testing
 		for _, i := range []int{0, 2, 4} {
 			a.People[i].Email = "a\u25cf\u25cf@\u25cf\u25cf\u25cf.\u25cf\u25cf"
 		}
-	}, basecamp.API, "3 of 4")
+	}, basecamp.API, "3 of 5")
 }
 
 func TestSomebodyWithAnAddressThatIsNoneComesWithoutOneAndIsNamedByID(t *testing.T) {
@@ -569,8 +590,8 @@ func TestOnlyPeopleARecordRefersToComeIntoTheBundle(t *testing.T) {
 	for _, person := range records(t, dir, bundle.People) {
 		written = append(written, person["sourceId"].(string))
 	}
-	if !slices.Equal(written, []string{"101"}) || result.PeopleLeftOut != 4 {
-		t.Errorf("wrote %v and left %d out, want the one member and 4 left out", written, result.PeopleLeftOut)
+	if !slices.Equal(written, []string{"101"}) || result.PeopleLeftOut != 6 {
+		t.Errorf("wrote %v and left %d out, want the one member and 6 left out", written, result.PeopleLeftOut)
 	}
 	if len(account.AvatarRequests) != 1 || !strings.Contains(account.AvatarRequests[0], "/people/101/") {
 		t.Errorf("downloaded %v, want the avatar of the one person only", account.AvatarRequests)
@@ -580,7 +601,7 @@ func TestOnlyPeopleARecordRefersToComeIntoTheBundle(t *testing.T) {
 	}
 
 	_, result = extract(t, fakebasecamp.New(), "7001", "7002")
-	if result.PeopleLeftOut != 1 {
-		t.Errorf("%d left out, want the one nobody refers to", result.PeopleLeftOut)
+	if result.PeopleLeftOut != 3 {
+		t.Errorf("%d left out, want the three nobody refers to", result.PeopleLeftOut)
 	}
 }

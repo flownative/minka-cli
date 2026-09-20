@@ -1,6 +1,7 @@
 package basecamp
 
 import (
+	"errors"
 	"reflect"
 	"slices"
 	"strings"
@@ -9,8 +10,21 @@ import (
 
 const maskedAddress = "a\u2022\u2022\u2022@\u2022\u2022\u2022\u2022\u2022\u2022\u2022.\u2022\u2022\u2022\u2022"
 
+// someTime is when the people of these tests were created and updated: a
+// person without their times does not come into a bundle.
+const someTime = "2020-01-01T08:00:00.000Z"
+
+// timed gives the people a registry has listed their times.
+func timed(r *registry) {
+	for id, p := range r.account {
+		p.CreatedAt, p.UpdatedAt = someTime, someTime
+		r.account[id] = p
+	}
+}
+
 func mustRefer(t *testing.T, r *registry, p person, present bool) string {
 	t.Helper()
+	p.CreatedAt, p.UpdatedAt = someTime, someTime
 	reference, err := r.refer(&p, present)
 	if err != nil || reference == nil {
 		t.Fatalf("referring to person %d: %v, %v", p.ID, reference, err)
@@ -28,6 +42,7 @@ func TestOnlyWhoIsReferredToComesIntoTheBundle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	timed(r)
 	if len(r.sorted()) != 0 || r.leftOut() != 3 {
 		t.Fatalf("the list of the account brought %d people in and left %d out", len(r.sorted()), r.leftOut())
 	}
@@ -107,6 +122,7 @@ func TestAnAddressThatIsNoneIsLeftOutAndNotRepaired(t *testing.T) {
 	if err != nil {
 		t.Fatalf("two addresses of five that are none ended the run: %v", err)
 	}
+	timed(r)
 	mustRefer(t, r, person{ID: 30}, true)
 	mustRefer(t, r, person{ID: 5}, true)
 	mustRefer(t, r, person{ID: 200, EmailAddress: "a***@***.***"}, false)
@@ -148,6 +164,7 @@ func TestWhitespaceAroundAnAddressIsTakenAway(t *testing.T) {
 	if err := r.listAccount([]person{{ID: 1, EmailAddress: " ada@example.test\n"}, {ID: 2, EmailAddress: "  \t"}}); err != nil {
 		t.Fatal(err)
 	}
+	timed(r)
 	mustRefer(t, r, person{ID: 1}, true)
 	mustRefer(t, r, person{ID: 2}, true)
 	mustRefer(t, r, person{ID: 3, EmailAddress: "\tformer@example.test "}, false)
@@ -160,5 +177,89 @@ func TestWhitespaceAroundAnAddressIsTakenAway(t *testing.T) {
 	}
 	if got := r.invalidAddresses(); len(got) != 0 {
 		t.Errorf("whitespace made an address count as none: %v", got)
+	}
+}
+
+// The applier stops at a person without their times, which is after a run of
+// hours: the run says so where somebody first comes in.
+func TestSomebodyWithoutTheirTimesEndsTheRunWhereTheyFirstComeIn(t *testing.T) {
+	r := newRegistry()
+	if err := r.listAccount([]person{{ID: 1, Name: "Ada Example", CreatedAt: someTime}}); err != nil {
+		t.Fatal(err)
+	}
+	for what, c := range map[string]struct {
+		named   person
+		message string
+	}{
+		"somebody the account lists": {person{ID: 1}, "Basecamp does not say when person 1 was updated"},
+		"a bot without either":       {person{ID: 801, Name: "Build Robot"}, "Basecamp does not say when person 801 was created and updated"},
+		"somebody deleted":           {person{ID: 802, Name: "Deleted Somebody", UpdatedAt: someTime}, "Basecamp does not say when person 802 was created"},
+	} {
+		reference, err := r.refer(&c.named, false)
+		var failed *Error
+		if !errors.As(err, &failed) || failed.Kind != API || failed.Message != c.message || reference != nil {
+			t.Errorf("%s: got %v and %v, want the error %q", what, reference, err, c.message)
+		}
+	}
+	if len(r.sorted()) != 0 {
+		t.Errorf("%d people without their times came into the bundle", len(r.sorted()))
+	}
+}
+
+// The kind of person says who is retired, wherever somebody comes from: the
+// list of an account holds every kind for an admin and users alone otherwise.
+func TestTheKindOfPersonSaysWhoIsRetired(t *testing.T) {
+	r := newRegistry()
+	err := r.listAccount([]person{
+		{ID: 1, PersonableType: "User"}, {ID: 2, PersonableType: "Integration"}, {ID: 3, PersonableType: "Tombstone"},
+		{ID: 4, PersonableType: "DummyUser"}, {ID: 5, PersonableType: "Outsider", EmailAddress: "outsider@example.test"},
+		{ID: 6, PersonableType: "Client"}, {ID: 7, PersonableType: "SomethingNew"}, {ID: 8}, {ID: 9},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	timed(r)
+	want := map[int64]bool{}
+	refer := func(p person, present, retired bool) {
+		mustRefer(t, r, p, present)
+		want[p.ID] = retired
+	}
+	// From the list, where a record says less or something else about them.
+	for id := int64(1); id <= 9; id++ {
+		refer(person{ID: id}, id == 9, id != 1 && id != 6 && id != 8 && id != 9)
+	}
+	// From the members of a project.
+	refer(person{ID: 11, PersonableType: "User"}, true, false)
+	refer(person{ID: 12, PersonableType: "Integration"}, true, true)
+	refer(person{ID: 13}, true, false)
+	// From a record alone.
+	refer(person{ID: 21, PersonableType: "User"}, false, false)
+	refer(person{ID: 22, PersonableType: "Client"}, false, false)
+	refer(person{ID: 23, PersonableType: "Integration"}, false, true)
+	refer(person{ID: 24, PersonableType: "Tombstone", EmailAddress: "gone@example.test"}, false, true)
+	refer(person{ID: 25, PersonableType: "Outsider"}, false, true)
+	refer(person{ID: 26, PersonableType: "user"}, false, true)
+	refer(person{ID: 27}, false, true)
+
+	for _, seen := range r.sorted() {
+		if seen.retired() != want[seen.ID] {
+			t.Errorf("person %d of the kind %q comes with retired %v", seen.ID, seen.PersonableType, seen.retired())
+		}
+	}
+	// Whoever keeps an address keeps it, retired or not.
+	for _, seen := range r.sorted() {
+		if (seen.ID == 5 || seen.ID == 24) && seen.EmailAddress == "" {
+			t.Errorf("person %d lost their address", seen.ID)
+		}
+	}
+	// Somebody whose kind the list leaves out and a record says.
+	late := newRegistry()
+	if err := late.listAccount([]person{{ID: 1}}); err != nil {
+		t.Fatal(err)
+	}
+	timed(late)
+	mustRefer(t, late, person{ID: 1, PersonableType: "Integration"}, false)
+	if !late.sorted()[0].retired() {
+		t.Error("a bot whose kind only a record says is not retired")
 	}
 }

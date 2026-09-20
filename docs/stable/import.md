@@ -25,7 +25,10 @@ installed and signed in.
   in a path is read as a flag, and a question would hang a run nobody watches.
 - The Basecamp CLI answers one page per call and does not say whether another
   follows. Lists are read with `?page=1, 2, …` until a page comes back empty; a
-  page that repeats the one before it ends the run instead of looping.
+  page that repeats the one before it ends the run instead of looping. A list
+  that grows by exactly a page between two requests looks the same and ends
+  the run as well, and the message says both. A page is read into its records
+  when it arrives and let go of; of the page before it a digest is kept.
 - Only paths of the account reach the Basecamp CLI. Where an answer names an
   absolute address, as a dock entry does, it has to lie under the address of
   the account and is turned into a path; anything else is refused, because the
@@ -53,6 +56,7 @@ Its failures keep their class:
 | network (6) | `network`, retryable | 6 |
 | anything else | `api_error` | 7 |
 
+
 The exit code alone is no class: a program that crashes exits 2 as well. A
 class counts only when the failure object `{ok: false, …}` stands on stdout
 and its `code`, where it has one, says the same. Everything else is an
@@ -64,15 +68,18 @@ A bundle that cannot be written is `config`; an `--out` that holds something
 else is `usage`.
 
 What Basecamp says and a bundle cannot carry ends the run as `api_error`
-instead of being passed on: a status of a project, a card or a comment other
-than `active`, `archived` or `trashed`, a record without `created_at` or
-`updated_at`, a time that is none where records are ordered by it, a kind of
-column a bundle has no role for, a second Triage, Not now or Done on one
-board, a boost that does not say whose it is. A card and a comment are held
-to this where the walk first meets them, before anything that hangs on them
-is asked for. Such a message names the record by its ID and what is missing.
-Of what Basecamp said it quotes the status or the kind of column a bundle
-does not know, and never a title, a name, a text or an address.
+instead of being passed on: a status of a project, a card, a post or a
+comment other than `active`, `archived` or `trashed`, which a draft would be,
+a line of a chat that is not `active`, because a message of a bundle has no
+status, a record without `created_at` or `updated_at`, a time that is none
+where records are ordered by it, a kind of column a bundle has no role for, a
+kind of line a bundle does not know, a second Triage, Not now or Done on one
+board, a boost that does not say whose it is. A card, a post and a comment
+are held to this where the walk first meets them, before anything that hangs
+on them is asked for, and the lines of a chat before the first of them is
+written. Such a message names the record by its ID and what is missing. Of
+what Basecamp said it quotes the status or the kind of column or line a
+bundle does not know, and never a title, a name, a text or an address.
 
 ## What the Basecamp identity needs
 
@@ -113,11 +120,18 @@ names an address or whose it is, and `invalidAddresses` holds IDs, never names.
 
 ## What a bundle holds so far
 
-The structure and the boards: `manifest.json`, `people.jsonl`,
-`projects.jsonl`, `tools.jsonl`, `columns.jsonl`, `cards.jsonl`,
-`steps.jsonl`, `comments.jsonl`, `reactions.jsonl`, `attachments.jsonl` and
-`files/`. Chats and message boards come as tools only, and the files embedded
-in a text not yet.
+The structure, the boards, the message boards and the chats:
+`manifest.json`, `people.jsonl`, `projects.jsonl`, `tools.jsonl`,
+`categories.jsonl`, `columns.jsonl`, `cards.jsonl`, `steps.jsonl`,
+`posts.jsonl`, `messages.jsonl` or its parts, `comments.jsonl`,
+`reactions.jsonl`, `attachments.jsonl` and `files/`. A file of a kind the
+projects have nothing of is missing. The files of texts and chats do not come
+yet, only the references to them.
+
+The walk goes kind by kind across the projects of a run (C-028): the projects
+with their tools and boards, then the message boards of all projects, then
+the chats. So comments and reactions stand in the order of what they hang
+on: those of cards, those of posts, those of lines.
 
 - **People** are the ones a record of the bundle refers to, and nobody else:
   the members of the projects named and whoever a record names: its creator,
@@ -126,14 +140,30 @@ in a text not yet.
   looked up in, not what is written: most of an account has no place where
   only some projects move to.
   `peopleLeftOut` in the report counts them; `counts.people` is who was
-  written. Referring to a person is the one way into the bundle, so every
+  written. The first number depends on what the list holds for the identity
+  that asks, which is more for an admin than for anybody else; the people
+  written do not. Referring to a person is the one way into the bundle, so every
   reference leads to a person who is written. People are written at the end
   of the run, when it is known whom the records refer to.
-  Who is in the account's list comes with `retired: false`, and so does a
-  member of a project. Somebody only a record names, as its creator for
-  instance, has left the account and comes as the record shows them, with
-  `retired: true`. An empty e-mail address becomes `null`, and so does one
-  that is none, see above.
+  What the account's list says about somebody wins over what a record says;
+  somebody the list does not hold comes as the record shows them. An empty
+  e-mail address becomes `null`, and so does one that is none, see above.
+  `retired` follows the kind of person Basecamp names (`personable_type`),
+  not the list: a `User`, and a `Client`, comes with `retired: false`, and
+  every other kind with `retired: true`, a bot (`Integration`), what is left
+  of somebody who was deleted (`Tombstone`), a `DummyUser`, an `Outsider` and
+  a kind nobody knows yet, wherever somebody comes from. The list says
+  nothing here, because it depends on who asks: for an admin it holds every
+  kind of person, for anybody else users alone, and both give the same
+  people. Only of somebody whose kind Basecamp does not say does the list
+  decide: in the list or a member of a project is not retired, named by a
+  record alone is. A bot and somebody deleted cannot be asked for one by one.
+  A bot comes with `email: null` as Basecamp gives it, somebody deleted and
+  an outsider with the address Basecamp keeps, which is held to the same
+  rules as every address.
+  A person carries `createdAt` and `updatedAt` like any record: somebody of
+  whom Basecamp says neither ends the run as `api_error`, named by ID, where
+  a record first refers to them.
 - **Avatars** are attachments of their person, `avatar-<personId>`, downloaded
   without a sign-in and only for people of the bundle. Basecamp serves a
   picture it made from initials at the same kind of address, with the same
@@ -190,17 +220,84 @@ in a text not yet.
 - **Steps** come with the card, which shows them itself; only when it has
   more than it shows is their list asked for. Whom a step is assigned to and
   when it is due is left out, because a step in Minka has neither.
-- **Comments** are those of cards, `parentKind` `card`, oldest first. Basecamp
-  hands out the rendered text of a comment only. A comment in the trash is
-  left out with its boosts and counted (`commentsTrashed`); any other comes,
-  the archived comment of an archived card as well.
-- **Reactions** are the boosts of a card (`targetKind` `card`) and of a
-  comment (`comment`), with `content` as it is, a text of some words included:
-  what Minka takes for a reaction is the applier's to decide. A boost has one
-  time, which is both `createdAt` and `updatedAt`.
+- **Categories** are the kinds of post of a project, each once: those the
+  list of the project holds, and those only a post that is written shows.
+  Basecamp lists the categories of the first message board of a project
+  alone; a further board has its own, which are in no list and cannot be
+  asked for, so such a category is what a post shows of it, and as old as the
+  oldest post that carries it. `emoji` is the icon, `createdBy` is `null`.
+  They are written in the order of their names, whatever the case of a
+  letter, then of their IDs, and `position` is the number in that order,
+  because Basecamp gives none. A category without a name ends the run as
+  `api_error`, named by its ID, because the applier would stop at it; an
+  empty icon comes as it is. The list has no pages and answers every page
+  with all of it, so it is read once and without a page, and only for a
+  project with a message board that is extracted.
+- **Posts** are the messages of every message board, and the archived and
+  trashed ones. Basecamp lists the messages of a board itself, and the
+  archived and the trashed ones of a project in one list across all its
+  boards, those that are switched off included; a message of a board that is
+  not extracted is left out and counted (`postsLeftOut`). The posts of a
+  board are written oldest first, by `created_at` and then by ID, whatever
+  their status, the boards in the order of the tools. `title` is the subject
+  of the message, because what Basecamp calls its title begins with the emoji
+  of the category. `categorySourceId` is `null` for a message without a
+  category. The text is the rendered one, as of a comment; an empty one comes
+  as `body: ""` and is counted (`postsWithEmptyBody`): whether a post may say
+  nothing is the applier's to decide.
+- **Messages** are the lines of every chat: what somebody wrote, plain or
+  formatted, what a bot wrote, and a file somebody dropped, see Texts.
+  Basecamp lists a chat newest first, cannot be asked to turn it round and
+  does not say how long it is, so a chat is read to its end and held as a
+  whole, one chat at a time, and written oldest first, by `created_at` and
+  then by ID (C-027). A walk has no snapshot here either: a line that arrives
+  while the walk goes on moves every page, so a line can be met twice, and is
+  written once, or be missed where one is deleted meanwhile. A line somebody
+  wrote that says nothing is left out and counted (`messagesWithEmptyBody`):
+  nobody comes into the bundle for it, its boosts are not asked for and no
+  part ends at it. Nothing is what a reader sees nothing of: whitespace,
+  characters without a width, `<br>` and empty `<div>` and `<p>`. A
+  reference to a file or a person, a link, a rule and an embedded frame say
+  something. A line comes as long as it is: nothing is shortened.
+- **Parts.** The messages are written in parts: `messages-0001.jsonl` and on,
+  numbered through the bundle in the order of the chats, which is the order
+  of the projects and their tools. A part holds lines of one chat. It ends
+  once it holds 10,000 lines, but only where the second changes that the
+  lines were created in, so it may hold somewhat more: the applier keeps the
+  lines of one second in the order of their file by counting them, anew in
+  every part. The second is that of the moment, whatever zone and fraction a
+  time is written with. A chat without a line has no part and leaves no gap
+  in the numbers. The manifest names the parts in their order under
+  `parts.messages`, and `counts.messages` counts all lines. Only a bundle
+  whose lines came to a single part carries the one file `messages.jsonl`
+  instead, and its manifest has no `parts`. A bundle never carries both. The
+  writer of a bundle does this for any kind that is said to come in parts: it
+  counts, and whoever adds the records says where a part may end.
+- **Comments** are those of cards and of posts, `parentKind` `card` or `post`,
+  per parent oldest first, by `created_at` and then by ID: the applier reads
+  the order of the comments of a parent from the file. Basecamp hands out the
+  rendered text of a comment only. A comment in the trash is left out with
+  its boosts and counted (`commentsTrashed`); any other comes, the archived
+  comment of an archived card as well.
+- **Reactions** are the boosts of a card (`targetKind` `card`), of a post
+  (`post`), of a comment (`comment`) and of a line (`message`), with `content`
+  as it is, a text of some words included: what Minka takes for a reaction is
+  the applier's to decide. The boosts of a card or a post stand before those
+  of its comments. A boost has one time, which is both `createdAt` and
+  `updatedAt`.
 
-Left out besides: the colours, wormholes between boards, who follows a card,
-and being on hold as anything more than the flag.
+Left out besides: the colours, wormholes between boards, who follows a card
+or a post and whom a post told, and being on hold as anything more than the
+flag.
+
+What Basecamp does not hand out, so that no bundle carries it:
+
+- Whether a message is pinned, and since when. `pinnedAt` is `null` on every
+  post.
+- A draft of a message. It is in no list; a status that says so would end the
+  run.
+- A line somebody deleted, and the lines Basecamp writes itself, such as who
+  joined a chat.
 
 IDs are the numeric IDs of Basecamp as strings; `sourceInstance` is the ID of
 the account, taken from the address of a project. Times are written the way
@@ -211,15 +308,17 @@ order Basecamp answers in: two runs over an unchanged account write the same
 bytes, apart from `extractedAt`. Only where Basecamp gives cards no position,
 in Done and among the archived and the trashed, does its own order count.
 
-A card costs no request of its own: a list shows its cards in full. Comments
-are asked for only where a card says it has some, boosts only where a card or
-a comment says so.
+A card, a post and a line cost no request of their own: a list shows them in
+full. Comments are asked for only where a card or a post says it has some,
+boosts only where a card, a post, a comment or a line says so. The requests
+go one after the other, never two at a time: the Basecamp CLI keeps to the
+rate Basecamp allows.
 
 ### Texts
 
-A bundle never carries the embeds of its source. In the note of a card and
-the body of a comment, every `<bc-attachment>` is replaced as a whole, with
-the figure Basecamp rendered into it:
+A bundle never carries the embeds of its source. In the note of a card, the
+body of a post, of a comment and of a line, every `<bc-attachment>` is
+replaced as a whole, with the figure Basecamp rendered into it:
 
 - A mention becomes `<import-mention ref="<personId>">Name</import-mention>`,
   with the name the list of the account has. The person is looked for in the
@@ -242,8 +341,34 @@ the figure Basecamp rendered into it:
   stored note of a card the one of the rendered note, the rest is dropped, it
   is counted (`filesDropped`) and a `notice` says so. No attachment record is
   written for a file of a text yet, and nothing is downloaded.
-- A horizontal rule becomes `<hr>`. An embed of any other kind that carries
-  no signed ID stays as it is.
+- A horizontal rule becomes `<hr>`.
+- The preview of a link (`application/vnd.basecamp.opengraph-embed`) becomes
+  the link, `<a href="…">title</a>`, with the address as the text where the
+  preview has no title (`linkPreviews`). The address is the `href` of the
+  embed, else its `url`. Only an absolute address over http or https becomes
+  a link: of any other, the title stays as plain text, or nothing, and it is
+  not counted.
+- A picture at a foreign address, an embed of the kind `image` without a
+  signed ID, is no stored file. It becomes a link to its `url` with its
+  `caption` as the text, by the rules of the preview of a link, and never a
+  picture: a bundle fetches nothing from an address somebody wrote into a
+  text (`picturesLinked`, which counts what became a link). A picture with a
+  signed ID, and one of a kind such as `image/png`, is a file as above.
+- An embed of any other kind that carries no signed ID stays as it is, and so
+  does what is no embed at all, such as a `<figure>` with the `<iframe>` of a
+  video.
+
+A line of a chat that is a file somebody dropped has no text. Its body is one
+`<import-attachment ref="blob-<key>"></import-attachment>` per file, in the
+order of the line, and counts as `filesInBodies`. Basecamp gives such a file
+no ID, so the key of the stored file names it, which stands in the address it
+is downloaded from (`…/blobs/<key>/download/…`), else in the one it is
+previewed at (`…/blobs/<key>/previews/…`). A key is made of letters, digits,
+`-` and `_`, because it becomes part of the ID of an attachment. A file
+without such a key is dropped and counted (`filesDropped`); a line that keeps
+no file is left out with its boosts and counted (`uploadLinesLeftOut`), and
+nobody comes into the bundle for it. A plain line and the line of a bot go
+the way of every text and, holding no embed, pass byte for byte.
 
 The kind of an embed is its content type without parameters, in any case. A
 signed ID is base64, `--` and a signature, which stands behind the last `--`
@@ -270,8 +395,9 @@ files the same way as an avatar is attached.
 ## A run
 
 - The bundle is built in a directory next to `--out`,
-  `.<name>.staging-<random>`, and takes its place with a rename at the end;
-  the bundle of the run before is moved aside first and removed last (C-024).
+  `.<name>.staging-<random>`, its parts included, and takes its place with a
+  rename at the end; the bundle of the run before is moved aside first and
+  removed last (C-024).
   A run that fails or is interrupted, by Ctrl-C or by SIGTERM, leaves what was
   there: the earlier bundle, or nothing, not even the directories it made on
   the way to `--out`.
@@ -302,13 +428,20 @@ files the same way as an avatar is attached.
   names the first entries that are in the way. The check
   happens before Basecamp is asked and again before the replacing.
 - `--dry-run` walks Basecamp the same way, downloads no avatar, writes nothing
-  and reports the same counts. It needs no `--out`; given one, it checks it
-  the way the real run does, so the refusal shows beforehand.
+  and reports the same counts and the same parts. It needs no `--out`; given
+  one, it checks it the way the real run does, so the refusal shows
+  beforehand.
 - The report carries `counts` as the manifest has them, `avatars`,
   `skippedTools`, `missingFiles`, `cardsByStatus`, `cardsOnHold`,
-  `cardsLeftOut`, `commentsTrashed`, `mentionsUnresolved`, `filesInBodies`,
-  `filesDropped` and the absolute path of the bundle. No output names a
-  title, a person or what stands in a text.
+  `cardsLeftOut`, `commentsTrashed`, `postsByStatus`, `postsLeftOut`,
+  `postsWithEmptyBody`, `messagesByType` (`text`, `richText`, `upload`,
+  `integration`), `messagesWithEmptyBody`, `uploadLinesLeftOut`, `parts` as
+  the manifest has them, `mentionsUnresolved`, `filesInBodies`,
+  `filesDropped`, `linkPreviews`, `picturesLinked`, `longestBody` and the
+  absolute path of the bundle. `longestBody` is the longest text per kind,
+  `cards`, `comments`, `posts` and `messages`, in characters: whoever sets
+  the limits of where a bundle goes has to know it.
+  No output names a title, a person or what stands in a text.
 - A run prints nothing while it goes on, in any mode: the output contract
   knows results, warnings and errors only.
 
