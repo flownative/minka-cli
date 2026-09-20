@@ -67,8 +67,8 @@ type Tool struct {
 	Lines []Line
 }
 
-// Account is the fake. It is a basecamp.Source and a basecamp.AvatarFetcher,
-// and records what it was asked for.
+// Account is the fake. It is a basecamp.Source, a basecamp.AvatarFetcher and
+// a basecamp.Files, and records what it was asked for.
 type Account struct {
 	ID       string
 	PageSize int
@@ -104,9 +104,19 @@ type Account struct {
 	FailFirst map[string]int
 	// FailAvatarOf makes the download of one person's avatar end in an error.
 	FailAvatarOf map[int64]error
+	// FailFileOf makes the download of the stored file of a key end in an
+	// error, after half of the file.
+	FailFileOf map[string]error
+	// ServeBytes replaces how many bytes the download of a key brings, whatever
+	// the account says the file has.
+	ServeBytes map[string]int64
+	// BeforeDownload is called with the key before a file is served.
+	BeforeDownload func(key string)
 
 	Requests       []string
 	AvatarRequests []string
+	// Downloads are the addresses files were asked for at.
+	Downloads []string
 }
 
 // UsersOnly takes everybody out of the list of the account who is no user,
@@ -126,7 +136,8 @@ func (a *Account) UsersOnly() {
 // nothing to do with. Those two have a dock that holds every case: several
 // tools of a kind, tools Minka has nothing for, tools that are switched off,
 // and a tool whose creator has left; their one board is empty. The third
-// project holds the boards, the fourth the message boards and the chats.
+// project holds the boards, the fourth the message boards and the chats, the
+// fifth the files.
 func New() *Account {
 	ada := Person{ID: 101, Name: "Ada Example", Email: "ada@example.test", CreatedAt: "2020-01-01T08:00:00.000Z", UpdatedAt: "2024-01-01T08:00:00.000Z"}
 	grace := Person{ID: 102, Name: "Grace Sample", Email: "grace@example.test", CreatedAt: "2020-02-01T08:00:00.000Z", UpdatedAt: "2024-02-01T08:00:00.000Z"}
@@ -181,11 +192,14 @@ func New() *Account {
 			},
 			boardProject(ada, grace, linus, edsger, former, tool),
 			talkProject(ada, grace, linus, edsger, former, bot, deleted, tool),
+			fileProject(ada, grace, tool),
 		},
 		SubtasksURL:  map[int64]string{},
 		Fail:         map[string]error{},
 		FailFirst:    map[string]int{},
 		FailAvatarOf: map[int64]error{},
+		FailFileOf:   map[string]error{},
+		ServeBytes:   map[string]int64{},
 	}
 }
 

@@ -18,13 +18,16 @@ message boards as tools, of each board the columns, cards, steps, comments
 and boosts, of each message board the posts of every status with their
 categories, comments and boosts, and of each chat its lines as messages with
 their boosts, written in parts of one chat and some 10,000 lines each.
-Mentions and files in the texts are references, and so are the files dropped
-into a chat; the preview of a link is the link. It reads through the Basecamp
-CLI and is tested against the invented account in `internal/fakebasecamp`.
+Mentions in the texts are references, the preview of a link is the link, and
+the files of the texts and the files dropped into a chat come with a record
+and their bytes, streamed from the Basecamp CLI or taken over from the bundle
+the run replaces. It reads through the Basecamp CLI and is tested against the
+invented account in `internal/fakebasecamp`.
 It has been run live, as a dry run and into a bundle outside the repository,
 under an identity that sees addresses, the posts and the chats included: all
 references of that bundle resolve and its parts are the ones its manifest
-names.
+names. The files have been counted live by a dry run but not fetched: only
+the calls of the Basecamp CLI they rest on were seen, see below.
 A run needs a Basecamp identity that may see the e-mail addresses of others,
 which is somebody of the account's own company or an admin. Under one that
 may not, masked addresses were seen live ending the run as `forbidden`. Only
@@ -103,6 +106,22 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   out, posts with and without a category, archived posts, a second message
   board with categories no list holds, previews of links and pictures at a
   foreign address as links, and five parts of one chat each.
+- Of the files of `import basecamp`: everything the extractor does with them.
+  The fake serves invented bytes under the storage address a run has to
+  build, and a stand-in script takes the place of the Basecamp CLI for the
+  download itself. Seen live, of the Basecamp CLI alone: that
+  `files download --out - --agent -- <storage address>` is accepted with the
+  `--`, that a blob nobody has answers exit 2 with the failure object
+  `not_found` on standard output and nothing on standard error, and that the
+  keys of stored files have the shape of a UUID. Not seen: a download that
+  breaks off, a file whose size differs from what Basecamp says, a name that
+  Basecamp escapes in an address, a caption or a gallery in a real text, and
+  how long a run over thousands of files takes. That the Basecamp CLI asks
+  for the path of an address without its escapes was read in its SDK, not
+  seen.
+- A known limit of the files: a run that ends hard loses the files it
+  fetched, because files are taken over from a bundle in place only. The
+  first complete run over an account is the expensive one.
 - "agent for X" in `people list` has been seen live, an agent that stepped
   down has not — it is in no list any more.
 
@@ -118,10 +137,10 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
 - The bundle with the posts and the chats waits for Minka's appliers of
   posts and of chat lines; what those runs find comes back through the
   coordination.
-- The extractor goes on with the files of all texts and chats: an attachment
-  record and a download for every `<import-attachment>` a body carries,
-  `attachment-<id>` for a file embedded in a text and `blob-<key>` for one
-  dropped into a chat.
+- The files of texts and chats wait for their live run. A live dry run
+  counted them and what they weigh by Basecamp's own word. What follows is a
+  bundle outside the repository, checked with the `verify.sh` of Minka's
+  fixture `ImportWithFiles`, and a second run to see the files taken over.
 - Install through Homebrew once and play `minka setup` through by hand on a
   terminal: the release workflow has built a version and written the formula,
   but nobody has installed from it yet, and `setup` is covered by tests only.

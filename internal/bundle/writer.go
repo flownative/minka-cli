@@ -2,8 +2,6 @@ package bundle
 
 import (
 	"bytes"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -69,6 +67,9 @@ type Writer struct {
 	files   map[Kind]*os.File
 	counts  map[Kind]int
 	parts   map[Kind]*parted
+	// replaced is what the bundle at the target says about its files, read
+	// when a file of it is first asked for.
+	replaced map[string]replacedFile
 }
 
 // parted is a kind that is written in parts.
@@ -79,13 +80,6 @@ type parted struct {
 	// open tells that the last part still takes records, held how many it has.
 	open bool
 	held int
-}
-
-// StoredFile is what an attachment record says about its file.
-type StoredFile struct {
-	File   string
-	Bytes  int64
-	SHA256 string
 }
 
 // Create prepares a bundle of a source at target. The target may be missing,
@@ -228,8 +222,9 @@ func recoverFromCrash(target string) error {
 		}
 	}
 	for _, leftover := range leftovers {
+		// What cannot be removed may be a file somebody named.
 		if err := removeAll(leftover); err != nil {
-			return err
+			return fmt.Errorf("what a run that was killed left at %s cannot be removed: %w", leftover, withoutPath(err))
 		}
 	}
 	return nil
@@ -354,36 +349,6 @@ func (w *Writer) Add(kind Kind, record any) error {
 	}
 	_, err = file.Write(line)
 	return err
-}
-
-// AddFile stores the content of an attachment under files/ and returns what
-// the attachment record says about it. A discarding Writer stores nothing and
-// still answers, so that a record can be counted.
-func (w *Writer) AddFile(sourceID, filename string, content []byte) (StoredFile, error) {
-	for _, segment := range []string{sourceID, filename} {
-		if segment == "" || segment == "." || segment == ".." || strings.ContainsAny(segment, `/\`) {
-			return StoredFile{}, fmt.Errorf("%q cannot be part of the path of a file in the bundle", segment)
-		}
-	}
-
-	sum := sha256.Sum256(content)
-	stored := StoredFile{
-		File:   sourceID + "/" + filename,
-		Bytes:  int64(len(content)),
-		SHA256: hex.EncodeToString(sum[:]),
-	}
-	if w.Discards() {
-		return stored, nil
-	}
-
-	dir := filepath.Join(w.staging, filesDir, sourceID)
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return StoredFile{}, err
-	}
-	if err := os.WriteFile(filepath.Join(dir, filename), content, 0o600); err != nil {
-		return StoredFile{}, err
-	}
-	return stored, nil
 }
 
 // Commit writes the manifest with the counts and the parts, and puts the

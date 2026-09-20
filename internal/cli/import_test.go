@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -53,6 +54,7 @@ func (e *importEnv) run(args ...string) result {
 			a.basecampSource = e.source
 		}
 		a.avatarFetcher = e.account
+		a.basecampFiles = e.account
 		a.now = func() time.Time { return e.now }
 		a.retryPause = func(ctx context.Context, pause time.Duration) error {
 			e.pauses = append(e.pauses, pause)
@@ -111,6 +113,8 @@ func TestImportBasecampWritesABundleAndReportsWhatItHolds(t *testing.T) {
 		"cardsByStatus": map[string]any{"active": float64(0), "archived": float64(0), "trashed": float64(0)},
 		"cardsOnHold":   float64(0), "cardsLeftOut": float64(0), "commentsTrashed": float64(0),
 		"mentionsUnresolved": float64(0), "filesInBodies": float64(0), "filesDropped": float64(0), "linkPreviews": float64(0), "picturesLinked": float64(0),
+		"filesExpected": float64(0), "filesBytesExpected": float64(0), "filesBytes": float64(0), "filesFetched": float64(0), "filesReused": float64(0),
+		"filesGone": float64(0), "fileNamesChanged": float64(0), "captionsDropped": float64(0), "filesOfSeveralOwners": float64(0),
 		"postsByStatus": map[string]any{"active": float64(0), "archived": float64(0), "trashed": float64(0)},
 		"postsLeftOut":  float64(0), "postsWithEmptyBody": float64(0),
 		"messagesByType":     map[string]any{"text": float64(0), "richText": float64(0), "upload": float64(0), "integration": float64(0)},
@@ -891,7 +895,7 @@ func TestImportBasecampReportsTheBoardsOfAProject(t *testing.T) {
 	data := decode(t, env.Data)
 	want := map[string]any{
 		"counts": map[string]any{"people": float64(6), "projects": float64(1), "tools": float64(2), "columns": float64(8),
-			"cards": float64(10), "steps": float64(3), "comments": float64(3), "reactions": float64(3), "attachments": float64(5)},
+			"cards": float64(10), "steps": float64(3), "comments": float64(3), "reactions": float64(3), "attachments": float64(7)},
 		"cardsByStatus": map[string]any{"active": float64(7), "archived": float64(2), "trashed": float64(1)},
 		"cardsOnHold":   float64(2), "cardsLeftOut": float64(1),
 		"mentionsUnresolved": float64(1), "filesInBodies": float64(2), "filesDropped": float64(1),
@@ -949,6 +953,11 @@ func TestADryRunCountsTheBoardsAndTheTalksTheWayARealRunDoes(t *testing.T) {
 		want, got := decode(t, real.Data), decode(t, dry.Data)
 		delete(want, "bundle")
 		want["dryRun"] = true
+		// Only a download shows what became of a file.
+		if want["filesFetched"] == float64(0) || want["filesBytes"] != want["filesBytesExpected"] {
+			t.Errorf("project %s: the real run fetched %v files of %v bytes, expected %v", project, want["filesFetched"], want["filesBytes"], want["filesBytesExpected"])
+		}
+		want["filesBytes"], want["filesFetched"] = float64(0), float64(0)
 		if !reflect.DeepEqual(got, want) {
 			t.Errorf("project %s: a dry run reports\n%v\na real one\n%v", project, got, want)
 		}
@@ -972,7 +981,7 @@ func TestImportBasecampReportsThePostsAndTheChatsOfAProject(t *testing.T) {
 	parts := []any{"messages-0001.jsonl", "messages-0002.jsonl"}
 	want := map[string]any{
 		"counts": map[string]any{"people": float64(7), "projects": float64(1), "tools": float64(5), "categories": float64(4),
-			"posts": float64(6), "messages": float64(8), "comments": float64(3), "reactions": float64(4), "attachments": float64(6)},
+			"posts": float64(6), "messages": float64(8), "comments": float64(3), "reactions": float64(4), "attachments": float64(10)},
 		"parts":         map[string]any{"messages": parts},
 		"postsByStatus": map[string]any{"active": float64(4), "archived": float64(1), "trashed": float64(1)},
 		"postsLeftOut":  float64(1), "postsWithEmptyBody": float64(1),
@@ -1180,6 +1189,201 @@ func TestTheReportCountsWhatATextLostAndWhatWasInTheTrash(t *testing.T) {
 	for _, want := range []string{"Comments in the trash, left out: 1", "2 files Basecamp lists nothing for dropped, 1 mention left as a name"} {
 		if !strings.Contains(r.stdout, want) {
 			t.Errorf("the text lacks %q:\n%s", want, r.stdout)
+		}
+	}
+}
+
+func TestImportBasecampBringsTheFilesOfTextsAndChats(t *testing.T) {
+	e := newImportEnv(t)
+	out := filepath.Join(t.TempDir(), "bundle")
+
+	env, r := e.runJSON("import", "basecamp", "--project", "7005", "--out", out)
+	expectCode(t, r, ExitOK)
+	data := decode(t, env.Data)
+	want := map[string]any{
+		"filesInBodies": float64(15), "filesDropped": float64(0), "filesExpected": float64(13), "filesBytesExpected": float64(15950),
+		"filesBytes": float64(15114), "filesFetched": float64(12), "filesReused": float64(0), "filesGone": float64(1),
+		"fileNamesChanged": float64(5), "captionsDropped": float64(1), "filesOfSeveralOwners": float64(1), "missingFiles": []any{},
+	}
+	for field, value := range want {
+		if !reflect.DeepEqual(data[field], value) {
+			t.Errorf("%s: got %v, want %v", field, data[field], value)
+		}
+	}
+	if counts := data["counts"].(map[string]any); counts["attachments"] != float64(15) {
+		t.Errorf("counts %v", counts)
+	}
+	for _, notice := range []string{"1 file of a text or a chat is gone", "1 caption of a file is left off its reference"} {
+		if !strings.Contains(env.Notice, notice) {
+			t.Errorf("the notice lacks %q: %s", notice, env.Notice)
+		}
+	}
+	files := filesUnder(t, out)
+	if len(files["files/attachment-5101/holiday photo.png"]) != 3000 || !strings.Contains(files["attachments.jsonl"], `"sourceId":"attachment-5108"`) {
+		t.Error("the bundle lacks a file or the record of the one that is gone")
+	}
+
+	// A second run takes over what the first brought.
+	downloaded := len(e.account.Downloads)
+	env, r = e.runJSON("import", "basecamp", "--project", "7005", "--out", out)
+	expectCode(t, r, ExitOK)
+	data = decode(t, env.Data)
+	if data["filesReused"] != float64(12) || data["filesFetched"] != float64(0) || data["filesBytes"] != float64(15114) || len(e.account.Downloads) != downloaded+1 {
+		t.Errorf("reused %v, fetched %v, %v bytes, %d downloads", data["filesReused"], data["filesFetched"], data["filesBytes"], len(e.account.Downloads)-downloaded)
+	}
+	delete(files, "manifest.json")
+	again := filesUnder(t, out)
+	delete(again, "manifest.json")
+	if !reflect.DeepEqual(again, files) {
+		t.Error("the second run wrote another bundle than the first")
+	}
+
+	r = e.run("import", "basecamp", "--project", "7005", "--out", out, "--styled")
+	expectCode(t, r, ExitOK)
+	for _, line := range []string{
+		"Files: 12 of 13 brought, 15114 bytes of 15950 expected; 0 fetched, 12 taken over from the bundle before, 1 gone at Basecamp",
+		"Names of files changed: 5; captions too long for a reference, left off: 1; files met under a second owner: 1",
+	} {
+		if !strings.Contains(r.stdout, line) {
+			t.Errorf("the text lacks %q:\n%s", line, r.stdout)
+		}
+	}
+}
+
+func TestADryRunDownloadsNoFileAndSaysWhatARunWouldFetch(t *testing.T) {
+	e := newImportEnv(t)
+	parent := t.TempDir()
+
+	env, r := e.runJSON("import", "basecamp", "--project", "7005", "--out", filepath.Join(parent, "bundle"), "--dry-run")
+	expectCode(t, r, ExitOK)
+	data := decode(t, env.Data)
+	for field, value := range map[string]float64{
+		"filesExpected": 13, "filesBytesExpected": 15950, "filesBytes": 0, "filesFetched": 0, "filesReused": 0, "filesGone": 0,
+		"fileNamesChanged": 5, "captionsDropped": 1,
+	} {
+		if data[field] != value {
+			t.Errorf("%s: got %v, want %v", field, data[field], value)
+		}
+	}
+	if len(e.account.Downloads) != 0 || len(e.account.AvatarRequests) != 0 {
+		t.Errorf("a dry run downloaded %v and %v", e.account.Downloads, e.account.AvatarRequests)
+	}
+	if entries, _ := os.ReadDir(parent); len(entries) != 0 {
+		t.Errorf("a dry run wrote %v", entries)
+	}
+
+	r = e.run("import", "basecamp", "--project", "7005", "--dry-run", "--styled")
+	expectCode(t, r, ExitOK)
+	if want := "Files a run would fetch: 13, 15950 bytes as Basecamp gives their sizes"; !strings.Contains(r.stdout, want) {
+		t.Errorf("the text lacks %q:\n%s", want, r.stdout)
+	}
+}
+
+func TestAFileOfATextThatCannotBeFetchedFailsTheRunAndTheNextOneBringsIt(t *testing.T) {
+	e := newImportEnv(t)
+	out := filepath.Join(t.TempDir(), "bundle")
+	waiting := fakebasecamp.FileKey(4711)
+	e.account.FailFileOf[waiting] = &basecamp.Error{Kind: basecamp.Network, Message: "the network failed during the download"}
+
+	env, r := e.runJSON("import", "basecamp", "--project", "7005", "--out", out)
+	expectCode(t, r, ExitNetwork)
+	if env.Code != CodeNetwork || !env.Retryable || !strings.Contains(env.Error, "1 file could not be fetched and is left out") {
+		t.Errorf("code %q, retryable %v, error %q", env.Code, env.Retryable, env.Error)
+	}
+	data := decode(t, env.Data)
+	wantMissing := []any{map[string]any{
+		"attachmentSourceId": "attachment-4711", "ownerKind": "card", "ownerSourceId": "9902",
+		"reason": "the network failed during the download", "retryable": true,
+	}}
+	if !reflect.DeepEqual(data["missingFiles"], wantMissing) || data["filesFetched"] != float64(11) {
+		t.Errorf("missingFiles %v, fetched %v", data["missingFiles"], data["filesFetched"])
+	}
+	files := filesUnder(t, out)
+	if strings.Contains(files["attachments.jsonl"], "attachment-4711") || !strings.Contains(files["cards.jsonl"], `ref=\"attachment-4711\"`) {
+		t.Error("the file that is missing has a record, or the text lost its reference")
+	}
+	for path := range files {
+		if strings.HasPrefix(path, "files/attachment-4711/") {
+			t.Errorf("half a file stayed at %s", path)
+		}
+	}
+
+	// A failure that does not pass is no reason to try again.
+	e.account.FailFileOf[waiting] = &basecamp.Error{Kind: basecamp.Forbidden, Message: "Basecamp forbids the download"}
+	env, r = e.runJSON("import", "basecamp", "--project", "7005", "--out", out)
+	expectCode(t, r, ExitAPI)
+	if env.Retryable {
+		t.Error("a file Basecamp forbids makes the run worth repeating")
+	}
+
+	delete(e.account.FailFileOf, waiting)
+	env, r = e.runJSON("import", "basecamp", "--project", "7005", "--out", out)
+	expectCode(t, r, ExitOK)
+	data = decode(t, env.Data)
+	if data["filesFetched"] != float64(1) || data["filesReused"] != float64(11) || len(filesUnder(t, out)["files/attachment-4711/waiting.png"]) != 600 {
+		t.Errorf("the next run fetched %v and reused %v", data["filesFetched"], data["filesReused"])
+	}
+}
+
+func TestADownloadThatIsStoppedEndsTheRunWithNothingWritten(t *testing.T) {
+	e := newImportEnv(t)
+	parent := t.TempDir()
+	e.account.FailFileOf[fakebasecamp.FileKey(5102)] = &basecamp.Error{Kind: basecamp.Interrupted, Message: "interrupted"}
+
+	env, r := e.runJSON("import", "basecamp", "--project", "7005", "--out", filepath.Join(parent, "bundle"))
+	expectCode(t, r, ExitNetwork)
+	if env.OK || env.Data != nil || !strings.Contains(env.Error, "interrupted") {
+		t.Errorf("ok %v, error %q, data %s", env.OK, env.Error, env.Data)
+	}
+	if entries, _ := os.ReadDir(parent); len(entries) != 0 {
+		t.Errorf("the run left %v", entries)
+	}
+}
+
+func TestADownloadWithoutASignInEndsTheRunTheWayARequestDoes(t *testing.T) {
+	e := newImportEnv(t)
+	parent := t.TempDir()
+	e.account.FailFileOf[fakebasecamp.FileKey(5102)] = &basecamp.Error{Kind: basecamp.AuthRequired, Message: "the Basecamp CLI is not signed in"}
+
+	env, r := e.runJSON("import", "basecamp", "--project", "7005", "--out", filepath.Join(parent, "bundle"))
+	expectCode(t, r, ExitAuth)
+	if env.OK || env.Code != CodeAuth || env.Data != nil || !strings.Contains(env.Hint, "basecamp auth login") {
+		t.Errorf("ok %v, code %q, hint %q, data %s", env.OK, env.Code, env.Hint, env.Data)
+	}
+	if entries, _ := os.ReadDir(parent); len(entries) != 0 {
+		t.Errorf("the run left %v", entries)
+	}
+}
+
+func TestNoOutputSaysWhatAFileIsCalledOrWhereItLies(t *testing.T) {
+	written := []string{
+		"holiday", "photo.png", "beach", "reports", "q1.pdf", "break", "shredded", "waiting", "wordy", "unsized", "minutes", "scan",
+		"long name", "jpeg", "Sunset", "sea", "The beach", "goes on", "storage.", "basecampapi", "blobs", "download/", "%20",
+	}
+	failures := map[string]func(*fakebasecamp.Account){
+		"nothing fails": func(*fakebasecamp.Account) {},
+		"the network": func(a *fakebasecamp.Account) {
+			a.FailFileOf[fakebasecamp.FileKey(5101)] = &basecamp.Error{Kind: basecamp.Network, Message: "the network failed during the download"}
+		},
+		"another size":       func(a *fakebasecamp.Account) { a.ServeBytes[fakebasecamp.FileKey(6001)] = 17 },
+		"a key that is none": func(a *fakebasecamp.Account) { a.Projects[4].Dock[0].Lists[0].Cards[0].Files[1].Key = "k-one" },
+		"a bundle that is full": func(a *fakebasecamp.Account) {
+			a.FailFileOf[fakebasecamp.FileKey(5103)] = errors.New("no space left on device")
+		},
+	}
+	for name, change := range failures {
+		for _, mode := range [][]string{{"--json"}, {"--quiet"}, {"--styled"}, {"--json", "--dry-run"}} {
+			e := newImportEnv(t)
+			change(e.account)
+			r := e.run(append([]string{"import", "basecamp", "--project", "7005", "--out", filepath.Join(t.TempDir(), "bundle")}, mode...)...)
+			if wantOK := name == "nothing fails" || slices.Contains(mode, "--dry-run"); (r.code == ExitOK) != wantOK {
+				t.Errorf("%s %v: exit %d", name, mode, r.code)
+			}
+			for _, text := range written {
+				if strings.Contains(r.stdout+r.stderr, text) {
+					t.Errorf("%s %v: the output says %q:\n%s%s", name, mode, text, r.stdout, r.stderr)
+				}
+			}
 		}
 	}
 }

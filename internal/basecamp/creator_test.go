@@ -135,7 +135,7 @@ func TestAToolThatCannotAnswerDoesNotEndTheRun(t *testing.T) {
 	// Anything else that goes wrong is what it is for every request.
 	account = fakebasecamp.New()
 	account.Fail["buckets/7001/todosets/9005.json"] = &basecamp.Error{Kind: basecamp.Network, Message: "connection reset"}
-	extractor := basecamp.Extractor{Source: account, Avatars: account}
+	extractor := basecamp.Extractor{Source: account, Avatars: account, Files: account}
 	if _, err := extractor.Extract(t.Context(), []string{"7001"}, bundle.Discard()); err == nil {
 		t.Error("a request that failed was passed over")
 	}

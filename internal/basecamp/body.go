@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	nethtml "golang.org/x/net/html"
 )
@@ -21,16 +22,35 @@ const (
 	// foreignPicture is a picture that lies at an address of somebody else,
 	// where it carries no signed ID: no stored file, and nothing to fetch.
 	foreignPicture = "image"
+	// galleryPresentation is the one way of laying out a file a bundle knows.
+	galleryPresentation = "gallery"
 )
 
 // bodyFile is a file Basecamp lists next to the text it is embedded in. Its ID
-// is the one of the attachment, which is no recording.
+// is the one of the attachment, which is no recording: Basecamp says neither
+// when it was made nor by whom.
 type bodyFile struct {
 	ID             int64  `json:"id"`
 	SGID           string `json:"sgid"`
 	AttachableSGID string `json:"attachable_sgid"`
 	// Key names the stored file, and stands in the address it is fetched from.
-	Key string `json:"key"`
+	Key         string `json:"key"`
+	Filename    string `json:"filename"`
+	ContentType string `json:"content_type"`
+	ByteSize    *int64 `json:"byte_size"`
+	DownloadURL string `json:"download_url"`
+}
+
+// source is the file as a run brings it, named by the ID of the attachment.
+func (f bodyFile) source() sourceFile {
+	key := f.Key
+	if key == "" {
+		key = blobKey(f.DownloadURL)
+	}
+	return sourceFile{
+		ref: fmt.Sprintf("attachment-%d", f.ID), key: key,
+		filename: f.Filename, contentType: f.ContentType, byteSize: f.ByteSize, downloadURL: f.DownloadURL,
+	}
 }
 
 // BodyCounts says what became of the embeds in the texts of a run.
@@ -42,6 +62,9 @@ type BodyCounts struct {
 	// FilesDropped are embedded files Basecamp lists no file for, and uploaded
 	// ones whose stored file it does not name.
 	FilesDropped int
+	// CaptionsDropped are captions of files that are longer than a reference
+	// may carry, and so are left off it.
+	CaptionsDropped int
 	// LinkPreviews are the previews of a link that became the link: one whose
 	// address is none of the web leaves its title and is not counted.
 	LinkPreviews int
@@ -54,20 +77,24 @@ type BodyCounts struct {
 // never carries the embeds of its source: a mention becomes an
 // <import-mention>, a file an <import-attachment>, a rule an <hr>, the preview
 // of a link the link, a picture at a foreign address a link to it, each in the
-// place of the whole embed with what Basecamp rendered into it. Every other token passes through with the bytes it was
-// read from, because the applier sanitises a body anyway and every change
-// here would be a second opinion. What goes besides an embed is what belongs
-// to one: whitespace between an embed and its rendering, an end tag of an
-// embed without its beginning, and a tag the text breaks off in.
+// place of the whole embed with what Basecamp rendered into it. Every other
+// token passes through with the bytes it was read from, because the applier
+// sanitises a body anyway and every change here would be a second opinion.
+// What goes besides an embed is what belongs to one: whitespace between an
+// embed and its rendering, an end tag of an embed without its beginning, and
+// a tag the text breaks off in.
 //
 // The text is read token by token and never built into a tree: a tree moves a
 // figure out of a paragraph, and the embed would lose what belongs to it.
 //
 // rendered is the same text as Basecamp renders it, where the text itself is
 // the stored one and shows neither the name nor the avatar of a mention.
-func (e *Extractor) rewriteBody(text, rendered string, files []bodyFile) (string, error) {
+//
+// The files the text refers to come back in the order of their references,
+// one per reference: whoever writes the text brings them.
+func (e *Extractor) rewriteBody(text, rendered string, files []bodyFile) (string, []sourceFile, error) {
 	if !strings.Contains(strings.ToLower(text), embedTag) {
-		return text, nil
+		return text, nil, nil
 	}
 
 	var renderings map[string]rendering
@@ -84,13 +111,14 @@ func (e *Extractor) rewriteBody(text, rendered string, files []bodyFile) (string
 	}
 
 	var out strings.Builder
+	var referred []sourceFile
 	reader := newBodyReader(text)
 	// Embeds that pass through untouched, so that their end tags do as well.
 	passing := 0
 	for {
 		token, more := reader.next()
 		if !more {
-			return out.String(), nil
+			return out.String(), referred, nil
 		}
 		if token.kind == nethtml.EndTagToken && token.name == embedTag {
 			// An end tag without its embed is a leftover of one that was replaced.
@@ -116,15 +144,15 @@ func (e *Extractor) rewriteBody(text, rendered string, files []bodyFile) (string
 			continue
 		}
 		// An embed that closes itself holds nothing: what follows it is text.
-		var seen rendering
+		seen := rendering{fileCaption: token.attribute("caption"), presentation: token.attribute("presentation")}
 		if token.kind == nethtml.StartTagToken {
-			seen = reader.skipRendering()
+			seen = reader.skipRendering().of(seen)
 		}
 		switch {
 		case contentType == mentionType:
 			replacement, err := e.mention(sgid, token.attribute("content"), renderingOf(sgid, seen))
 			if err != nil {
-				return "", err
+				return "", nil, err
 			}
 			out.WriteString(replacement)
 		case contentType == horizontalRule:
@@ -140,7 +168,9 @@ func (e *Extractor) rewriteBody(text, rendered string, files []bodyFile) (string
 		default:
 			if file, listed := embeddedFile(files, token); listed {
 				e.bodies.Files++
-				fmt.Fprintf(&out, `<import-attachment ref="attachment-%d"></import-attachment>`, file.ID)
+				source := file.source()
+				referred = append(referred, source)
+				out.WriteString(e.fileReference(source.ref, renderingOf(sgid, seen)))
 			} else {
 				// The caption is all that is left of such a file.
 				e.bodies.FilesDropped++
@@ -148,6 +178,26 @@ func (e *Extractor) rewriteBody(text, rendered string, files []bodyFile) (string
 			}
 		}
 	}
+}
+
+// fileReference is what an embedded file becomes: the reference to its
+// attachment, with what somebody said about the file and how they laid it out.
+// A reference carries a caption, that a file stands in a gallery, and nothing
+// else, in this order. A caption that is longer than the applier takes is
+// left off and counted, and the file stays.
+func (e *Extractor) fileReference(ref string, seen rendering) string {
+	reference := `<import-attachment ref="` + html.EscapeString(ref) + `"`
+	if caption := seen.fileCaption; strings.TrimSpace(caption) != "" {
+		if utf8.RuneCountInString(caption) <= maxCaptionLength {
+			reference += ` caption="` + html.EscapeString(caption) + `"`
+		} else {
+			e.bodies.CaptionsDropped++
+		}
+	}
+	if seen.presentation == galleryPresentation {
+		reference += ` presentation="` + galleryPresentation + `"`
+	}
+	return reference + `></import-attachment>`
 }
 
 // link is what an embed becomes that shows what lies at an address: the link,
@@ -356,11 +406,22 @@ func idIn(text string, pattern *regexp.Regexp) (int64, bool) {
 }
 
 // rendering is what Basecamp rendered into an embed: for a mention the avatar,
-// which names the person, and the name as a caption.
+// which names the person, and the name as a caption. Of a file it is what the
+// embed itself says about it: the caption somebody wrote, which is another
+// thing than the one Basecamp renders from the name and the size, and how the
+// file is laid out.
 type rendering struct {
-	personID string
-	caption  string
-	text     string
+	personID     string
+	caption      string
+	text         string
+	fileCaption  string
+	presentation string
+}
+
+// of adds what the embed says itself to what was rendered into it.
+func (r rendering) of(embed rendering) rendering {
+	r.fileCaption, r.presentation = embed.fileCaption, embed.presentation
+	return r
 }
 
 func (r rendering) name() string {
@@ -377,6 +438,12 @@ func (r rendering) orElse(other rendering) rendering {
 	if r.name() == "" {
 		r.caption, r.text = other.caption, other.text
 	}
+	if r.fileCaption == "" {
+		r.fileCaption = other.fileCaption
+	}
+	if r.presentation == "" {
+		r.presentation = other.presentation
+	}
 	return r
 }
 
@@ -389,7 +456,8 @@ func renderingsBySGID(rendered string) map[string]rendering {
 			return renderings
 		}
 		if sgid := token.attribute("sgid"); token.opens(embedTag) && sgid != "" {
-			renderings[sgid] = reader.skipRendering()
+			embed := rendering{fileCaption: token.attribute("caption"), presentation: token.attribute("presentation")}
+			renderings[sgid] = reader.skipRendering().of(embed)
 		}
 	}
 }

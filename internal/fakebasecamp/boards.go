@@ -96,6 +96,13 @@ type File struct {
 	Filename    string
 	ContentType string
 	Bytes       int64
+	// NoSize leaves the size out of what the account says about the file.
+	NoSize bool
+	// Gone is a file the account lists and no longer has.
+	Gone bool
+	// URLName replaces the name in the addresses of the file: Basecamp writes
+	// a name into an address its own way.
+	URLName string
 }
 
 const (
@@ -162,9 +169,9 @@ func boardProject(ada, grace, linus, edsger, former Person, tool func(int64, str
 	graceMention := SGID("an opaque reference")
 	niklausMention := EnvelopedSGID("gid://bc3/Person/105?expires_in")
 	// An embed of an earlier day: its signed ID is another than the list has.
-	plan := File{ID: 5003, SGID: SGID("gid://bc3/Attachment/5003?expires_in"), Key: "k5003f00dcafe", Filename: "plan.png", ContentType: "image/png", Bytes: 4096}
+	plan := File{ID: 5003, SGID: SGID("gid://bc3/Attachment/5003?expires_in"), Key: FileKey(5003), Filename: "plan.png", ContentType: "image/png", Bytes: 4096}
 	goneMention := SGID("another opaque reference")
-	sketch := File{ID: 5001, SGID: SGID("gid://bc3/Attachment/5001?expires_in"), Key: "k5001f00dcafe", Filename: "sketch.png", ContentType: "image/png", Bytes: 2048}
+	sketch := File{ID: 5001, SGID: SGID("gid://bc3/Attachment/5001?expires_in"), Key: FileKey(5001), Filename: "sketch.png", ContentType: "image/png", Bytes: 2048}
 	lost := SGID("gid://bc3/Attachment/5002?expires_in")
 
 	// The first board was made together with the project, the others later.
@@ -483,10 +490,14 @@ func (a *Account) boostsJSON(boosts []Boost) []map[string]any {
 func (a *Account) filesJSON(files []File) []map[string]any {
 	answer := []map[string]any{}
 	for _, file := range files {
-		answer = append(answer, map[string]any{
+		entry := map[string]any{
 			"id": file.ID, "sgid": file.SGID, "attachable_sgid": file.SGID, "key": file.Key, "filename": file.Filename,
-			"content_type": file.ContentType, "byte_size": file.Bytes,
-		})
+			"content_type": file.ContentType, "byte_size": file.Bytes, "download_url": a.downloadURL(file.Key, file.urlName()),
+		}
+		if file.NoSize {
+			entry["byte_size"] = nil
+		}
+		answer = append(answer, entry)
 	}
 	return answer
 }

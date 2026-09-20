@@ -267,7 +267,7 @@ func TestADiscardedRunOverTalksAsksTheSameCountsTheSameAndNamesTheSameParts(t *t
 
 	dry := fakebasecamp.New()
 	writer := bundle.Discard()
-	extractor := basecamp.Extractor{Source: dry, Avatars: dry, MessagesPerPart: 3}
+	extractor := basecamp.Extractor{Source: dry, Avatars: dry, Files: dry, MessagesPerPart: 3}
 	got, err := extractor.Extract(t.Context(), []string{talkProject}, writer)
 	if err != nil {
 		t.Fatal(err)
@@ -275,11 +275,11 @@ func TestADiscardedRunOverTalksAsksTheSameCountsTheSameAndNamesTheSameParts(t *t
 	if !slices.Equal(dry.Requests, written.Requests) {
 		t.Errorf("a dry run asked for\n%v\na real one for\n%v", dry.Requests, written.Requests)
 	}
-	if !reflect.DeepEqual(got, want) {
+	if want = asADryRunKnowsIt(want); !reflect.DeepEqual(got, want) {
 		t.Errorf("a dry run reports\n%+v\na real one\n%+v", got, want)
 	}
 	wantCounts := map[bundle.Kind]int{bundle.People: 7, bundle.Projects: 1, bundle.Tools: 5, bundle.Categories: 4, bundle.Posts: 6,
-		bundle.Messages: 9, bundle.Comments: 3, bundle.Reactions: 4, bundle.Attachments: 6}
+		bundle.Messages: 9, bundle.Comments: 3, bundle.Reactions: 4, bundle.Attachments: 10}
 	if counts := writer.Counts(); !reflect.DeepEqual(counts, wantCounts) {
 		t.Errorf("counts %v, want %v", counts, wantCounts)
 	}
@@ -385,7 +385,7 @@ func TestWithoutANumberAPartHoldsTenThousandLines(t *testing.T) {
 	account.PageSize = 1000
 	campfire(account).Lines, side(account).Lines = nil, nil
 	quiet(account).Lines = chatOf(account, 100000, 10001)
-	extractor := basecamp.Extractor{Source: account, Avatars: account}
+	extractor := basecamp.Extractor{Source: account, Avatars: account, Files: account}
 	writer := bundle.Discard()
 	if _, err := extractor.Extract(t.Context(), []string{talkProject}, writer); err != nil {
 		t.Fatal(err)
@@ -484,7 +484,7 @@ func TestTheAddressOfSomebodyDeletedIsHeldToWhatEveryAddressIs(t *testing.T) {
 	account = fakebasecamp.New()
 	account.UsersOnly()
 	campfire(account).Lines[4].Creator.Email = maskedAddress
-	extractor := basecamp.Extractor{Source: account, Avatars: account}
+	extractor := basecamp.Extractor{Source: account, Avatars: account, Files: account}
 	_, err := extractor.Extract(t.Context(), []string{talkProject}, bundle.Discard())
 	var failed *basecamp.Error
 	if !errors.As(err, &failed) || failed.Kind != basecamp.Forbidden {
@@ -578,7 +578,7 @@ func TestWhatABundleCannotSayAboutATalkEndsTheRunWithoutNamingAnything(t *testin
 	} {
 		account := fakebasecamp.New()
 		change(account)
-		extractor := basecamp.Extractor{Source: account, Avatars: account}
+		extractor := basecamp.Extractor{Source: account, Avatars: account, Files: account}
 		_, err := extractor.Extract(t.Context(), []string{talkProject}, bundle.Discard())
 		var failed *basecamp.Error
 		if !errors.As(err, &failed) {
@@ -608,7 +608,7 @@ func TestALineThatCannotBeCarriedEndsTheRunBeforeItsChatIsWritten(t *testing.T) 
 		account := fakebasecamp.New()
 		c.change(account)
 		writer := bundle.Discard()
-		extractor := basecamp.Extractor{Source: account, Avatars: account}
+		extractor := basecamp.Extractor{Source: account, Avatars: account, Files: account}
 		_, err := extractor.Extract(t.Context(), []string{talkProject}, writer)
 		var failed *basecamp.Error
 		if !errors.As(err, &failed) || failed.Kind != basecamp.API || !strings.HasSuffix(failed.Message, c.message) {
@@ -697,7 +697,7 @@ func TestABotThatDoesNotSayWhenItWasMadeEndsTheRun(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		extractor := basecamp.Extractor{Source: account, Avatars: account}
+		extractor := basecamp.Extractor{Source: account, Avatars: account, Files: account}
 		_, err = extractor.Extract(t.Context(), []string{talkProject}, writer)
 		writer.Abort()
 

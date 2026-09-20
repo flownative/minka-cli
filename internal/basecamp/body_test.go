@@ -51,7 +51,7 @@ func bodyExtractor(t *testing.T) *Extractor {
 
 func rewritten(t *testing.T, e *Extractor, text, rendered string, files ...bodyFile) string {
 	t.Helper()
-	out, err := e.rewriteBody(text, rendered, files)
+	out, _, err := e.rewriteBody(text, rendered, files)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -222,7 +222,7 @@ func TestAFileBecomesAReferenceToItsAttachment(t *testing.T) {
 	} {
 		e := bodyExtractor(t)
 		got := rewritten(t, e, "<div>See "+embed+" above</div>", "", bodyFile{ID: 4000, SGID: "unrelated"}, file)
-		if want := `<div>See <import-attachment ref="attachment-5001"></import-attachment> above</div>`; got != want {
+		if want := `<div>See <import-attachment ref="attachment-5001" caption="A &amp; B"></import-attachment> above</div>`; got != want {
 			t.Errorf("%s:\n got %q\nwant %q", name, got, want)
 		}
 		if e.bodies.Files != 1 || e.bodies.FilesDropped != 0 {
@@ -366,7 +366,7 @@ func TestABrokenEmbedCostsNoMoreThanItself(t *testing.T) {
 		"a " + mentionOpen + ` sgid="` + base64.StdEncoding.EncodeToString([]byte(`{"_rails":17}`)) + `--x"> tail`:                "a  tail",
 	} {
 		e := bodyExtractor(t)
-		got, err := e.rewriteBody(text, "", nil)
+		got, _, err := e.rewriteBody(text, "", nil)
 		if err != nil || got != want {
 			t.Errorf("%q:\n got %q (%v)\nwant %q", text, got, err, want)
 		}
