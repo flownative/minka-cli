@@ -294,8 +294,10 @@ on: those of cards, those of posts, those of lines.
   nobody comes into the bundle for it, its boosts are not asked for and no
   part ends at it. Nothing is what a reader sees nothing of: whitespace,
   characters without a width, `<br>` and empty `<div>` and `<p>`. A
-  reference to a file or a person, a link, a rule and an embedded frame say
-  something. A line comes as long as it is: nothing is shortened.
+  reference to a file or a person, a link, a rule and an embed say
+  something: a line that was a video alone is a line, and one whose only
+  frame is left out, see Texts, says nothing. A line comes as long as it is:
+  nothing is shortened.
 - **Parts.** The messages are written in parts: `messages-0001.jsonl` and on,
   numbered through the bundle in the order of the chats, which is the order
   of the projects and their tools. A part holds lines of one chat. It ends
@@ -356,9 +358,11 @@ rate Basecamp allows.
 
 ### Texts
 
-A bundle never carries the embeds of its source. In the note of a card, the
-body of a post, of a comment and of a line, every `<bc-attachment>` is
-replaced as a whole, with the figure Basecamp rendered into it:
+A bundle never carries the embeds of its source, and writes three tags of
+its own in their place: `<import-mention>`, `<import-attachment>` and
+`<import-embed>`. In the note of a card, the body of a post, of a comment and
+of a line, every `<bc-attachment>` is replaced as a whole, with the figure
+Basecamp rendered into it:
 
 - A mention becomes `<import-mention ref="<personId>">Name</import-mention>`,
   with the name the list of the account has. The person is looked for in the
@@ -400,9 +404,58 @@ replaced as a whole, with the figure Basecamp rendered into it:
   picture: a bundle fetches nothing from an address somebody wrote into a
   text (`picturesLinked`, which counts what became a link). A picture with a
   signed ID, and one of a kind such as `image/png`, is a file as above.
-- An embed of any other kind that carries no signed ID stays as it is, and so
-  does what is no embed at all, such as a `<figure>` with the `<iframe>` of a
-  video.
+- An embed of any other kind that carries no signed ID stays as it is, with
+  all it holds but a frame.
+
+What the source embeds from elsewhere, a video, a track, a player, stands in
+a text as an `<iframe>`, mostly in a `<figure>` of its own. It becomes
+`<import-embed url="<address>"></import-embed>` in the place of the frame and
+of all the frame holds (`embeds`). The tag carries the `src` of the frame and
+nothing else: the address the `src` stands for, read out of the HTML once and
+escaped as an attribute value once. The whitespace a browser takes away
+before and behind an address, blank, tab, line feed, form feed and carriage
+return, goes before anything is asked of the address, because Minka takes
+none away, and the tag carries the address without it; a `src` of nothing
+else is no `src`. Nothing else of the address changes. The extractor tells no
+provider from another and asks nobody about the address.
+
+- A `<figure>` that holds a frame is not written, neither its start nor its
+  end tag. What else stands in it stays where it stands, as the source wrote
+  it, whitespace included. Its `<figcaption>` becomes a paragraph in its
+  place, `<p>`, what the caption holds and `</p>`, which is after the tag
+  wherever the source puts the caption after the frame; a caption that holds
+  nothing but whitespace becomes nothing. Whatever the figure, the caption
+  and the frame carry as attributes goes. A block around the figure stays.
+- A figure that holds no frame, such as the one around a table, passes byte
+  for byte.
+- Every frame of a text becomes a tag, in the order of the text, in a figure
+  or outside of one.
+- Only an address Minka takes becomes a tag, and `embeddable` is the whole
+  rule, asked of the address without the whitespace around it: it begins
+  with `http://` or `https://` in whatever case, names a host, holds no
+  character from U+0000 to U+0020, no U+007F and no backslash, and is at most
+  2,000 characters long, counted as code points. No other character is
+  refused. The host is what follows the scheme up to the first `/`, `?` or
+  `#`, without what stands before the last `@` and without a port; a colon
+  no port follows is no port, and a port is one to five digits and at most
+  65535. About a port the rule is stricter than Minka, which reads the number
+  a port begins with and lets the rest be: no tag is written that could be
+  refused, at the price of an embed whose port ends in something else. A
+  frame with any other address, relative ones, `//host/…`, `data:`, `about:`
+  and `javascript:` included, and a frame without a `src`, is left out with
+  all it holds and counted (`embedsLeftOut`), and a `notice` says so. Its
+  figure goes the same way, so one that held nothing else leaves nothing, and
+  a caption stays as its paragraph.
+- A frame that is never closed holds the rest of the text for a reader of
+  tokens, as it does for a browser. The rest is read anew as the text it is,
+  so such a frame costs no more than itself, and once, however many frames
+  follow: nothing closes a frame behind one that is never closed. A text is
+  read in a time that grows with its length, whatever it is made of.
+- A frame Basecamp rendered into a `<bc-attachment>` that is replaced goes
+  with that rendering and is not counted. In an embed of another kind, which
+  passes through, a frame becomes a tag or is left out like any other: no
+  `<iframe>` reaches a body, and such an embed may never end.
+- No output names an address.
 
 A line of a chat that is a file somebody dropped has no text. Its body is one
 `<import-attachment ref="blob-<key>"></import-attachment>` per file, in the
@@ -428,10 +481,11 @@ addresses, with or without padding. A global ID counts as a whole: nothing of
 a word before it, nothing of a number or a path after it.
 
 Every other token passes through with the bytes it was read from: Minka
-sanitises a body, and the extractor adds no second opinion. What goes besides
-an embed is what belongs to one: whitespace between an embed and its
-rendering, an end tag of an embed without its beginning, and a tag the text
-breaks off in. A text is read token by token, never parsed into a tree,
+sanitises a body, and the extractor adds no second opinion. A text that holds
+neither an embed nor a frame is not read at all and passes as it is. What
+goes besides an embed is what belongs to one: whitespace between an embed and
+its rendering, an end tag of an embed without its beginning, and a tag the
+text breaks off in. A text is read token by token, never parsed into a tree,
 because a tree moves a figure out of a paragraph; an embed that is never
 closed costs no more of the text than its figure, and one that closes itself
 nothing.
@@ -608,14 +662,15 @@ files of its texts the same way.
   `filesDropped`, `filesExpected`, `filesBytesExpected`, `filesBytes`,
   `filesFetched`, `filesReused`, `filesGone`, `fileNamesChanged`,
   `captionsDropped`, `filesOfSeveralOwners`, `linkPreviews`,
-  `picturesLinked`, `longestBody`, `requestsRetried` and the absolute path of
-  the bundle. `filesBytes` is what the files of the bundle weigh, fetched or
-  taken over; it and `filesFetched`, `filesReused` and `filesGone` are 0 in a
-  dry run. `longestBody` is the
-  longest text per kind, `cards`, `comments`, `posts` and `messages`, in
-  characters: whoever sets the limits of where a bundle goes has to know it.
-  `requestsRetried` is a number, 0 for a run that met no failure; the text
-  shows its line only when it is more.
+  `picturesLinked`, `embeds`, `embedsLeftOut`, `longestBody`,
+  `requestsRetried` and the absolute path of the bundle. `filesBytes` is
+  what the files of the bundle weigh, fetched or taken over; it and
+  `filesFetched`, `filesReused` and `filesGone` are 0 in a dry run.
+  `longestBody` is the longest text per kind, `cards`, `comments`, `posts`
+  and `messages`, in characters: whoever sets the limits of where a bundle
+  goes has to know it. `requestsRetried` is a number, 0 for a run that met no
+  failure; the text shows its line only when it is more, and so it does for
+  `embeds` and `embedsLeftOut`.
   No output names a title, a person or what stands in a text.
 - A run prints nothing while it goes on, in any mode: the output contract
   knows results, warnings and errors only.

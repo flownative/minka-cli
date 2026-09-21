@@ -73,6 +73,10 @@ type importReport struct {
 	// PicturesLinked the pictures at a foreign address that became a link to it.
 	LinkPreviews   int `json:"linkPreviews"`
 	PicturesLinked int `json:"picturesLinked"`
+	// Embeds are the embedded frames that became an embed, EmbedsLeftOut those
+	// that became nothing, because their address is none an embed may carry.
+	Embeds        int `json:"embeds"`
+	EmbedsLeftOut int `json:"embedsLeftOut"`
 	// PostsByStatus splits counts.posts. PostsLeftOut are archived and trashed
 	// posts of a message board that is not extracted, PostsWithEmptyBody the
 	// posts that came with a title alone.
@@ -126,7 +130,9 @@ message board the messages with the archived and the trashed ones as posts,
 their categories, comments and boosts, and of each chat its lines with their
 boosts as messages. Other tools and tools that are switched off are counted as
 skipped. A mention and a file in a text become a reference, and so does a file
-dropped into a chat.
+dropped into a chat. A video or a player embedded in a text, an iframe,
+becomes an embed that carries its address and nothing else (embeds); one whose
+address Minka would not take is left out (embedsLeftOut).
 
 Every file a reference names comes with a record and its bytes under files/,
 whatever its size and type, streamed from the Basecamp CLI (basecamp files
@@ -246,6 +252,8 @@ it has been applied.`,
 				FilesOfSeveralOwners: result.Files.SecondOwners,
 				LinkPreviews:         result.Bodies.LinkPreviews,
 				PicturesLinked:       result.Bodies.PicturesLinked,
+				Embeds:               result.Bodies.Embeds,
+				EmbedsLeftOut:        result.Bodies.EmbedsLeftOut,
 
 				PostsByStatus:      result.PostsByStatus,
 				PostsLeftOut:       result.PostsLeftOut,
@@ -275,6 +283,11 @@ it has been applied.`,
 				notices = append(notices, plural(count,
 					"caption of a file is left off its reference, because it is longer than 1000 characters; the file comes",
 					"captions of files are left off their references, because they are longer than 1000 characters; the files come"))
+			}
+			if count := report.EmbedsLeftOut; count > 0 {
+				notices = append(notices, plural(count,
+					"embedded frame is left out of its text, because its address is none an embed may carry",
+					"embedded frames are left out of their texts, because their addresses are none an embed may carry"))
 			}
 			if count := report.UploadLinesLeftOut; count > 0 {
 				notices = append(notices, plural(count,
@@ -354,6 +367,12 @@ func renderImportReport(w io.Writer, report importReport) {
 		plural(report.MentionsUnresolved, "mention left as a name", "mentions left as names"),
 		plural(report.LinkPreviews, "preview of a link turned into the link", "previews of links turned into links"),
 		plural(report.PicturesLinked, "picture at a foreign address turned into a link", "pictures at foreign addresses turned into links"))
+	if report.Embeds > 0 {
+		fmt.Fprintf(w, "Embedded frames turned into embeds: %d\n", report.Embeds)
+	}
+	if report.EmbedsLeftOut > 0 {
+		fmt.Fprintf(w, "Embedded frames with an address no embed may carry, left out: %d\n", report.EmbedsLeftOut)
+	}
 	if report.DryRun {
 		fmt.Fprintf(w, "Files a run would fetch: %d, %d bytes as Basecamp gives their sizes\n", report.FilesExpected, report.FilesBytesExpected)
 	} else {

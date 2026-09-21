@@ -2,8 +2,10 @@ package basecamp
 
 import (
 	"encoding/base64"
+	"html"
 	"strings"
 	"testing"
+	"time"
 )
 
 const (
@@ -420,14 +422,366 @@ func TestThePreviewOfALinkBecomesTheLink(t *testing.T) {
 	}
 }
 
-func TestAnEmbeddedFrameOutsideAnEmbedStaysAsItIs(t *testing.T) {
+const (
+	frameAddress = "https://video.example.test/embed/42"
+	frame        = `<iframe src="` + frameAddress + `"></iframe>`
+	embed        = `<import-embed url="` + frameAddress + `"></import-embed>`
+)
+
+func TestAnEmbeddedFrameBecomesAnEmbedInItsPlace(t *testing.T) {
+	for name, c := range map[string]struct {
+		text, want string
+		embeds     int
+	}{
+		"in its figure":               {`<div>Watch</div><figure>` + frame + `</figure><div>this</div>`, `<div>Watch</div>` + embed + `<div>this</div>`, 1},
+		"whatever the figure carries": {`<figure class="attachment attachment--preview" data-trix-attachment='{"a":1}'>` + frame + `</figure>`, embed, 1},
+		"outside a figure":            {`<div>Watch</div>` + frame + `<div>this</div>`, `<div>Watch</div>` + embed + `<div>this</div>`, 1},
+		"in a paragraph":              {`<p>Watch ` + frame + ` now</p>`, `<p>Watch ` + embed + ` now</p>`, 1},
+		"a figure in a block":         {`<div><figure>` + frame + `</figure></div>`, `<div>` + embed + `</div>`, 1},
+		"a figure in a paragraph":     {`<p><figure>` + frame + `</figure></p>`, `<p>` + embed + `</p>`, 1},
+		// Whatever the frame carries and holds goes with it.
+		"attributes in any order": {`<figure><iframe width="560" height="315" src="` + frameAddress + `" title="A film" allowfullscreen></iframe></figure>`, embed, 1},
+		"single quotes":           {`<iframe allow='autoplay' src='` + frameAddress + `'></iframe>`, embed, 1},
+		"no quotes":               {`<iframe src=` + frameAddress + `></iframe>`, embed, 1},
+		"in capitals":             {`<FIGURE><IFRAME SRC="` + frameAddress + `"></IFRAME></FIGURE>`, embed, 1},
+		"what the frame holds":    {`<figure><iframe src="` + frameAddress + `">Your browser shows <b>no</b> frames. <p>Sorry</p></iframe></figure>`, embed, 1},
+		// A caption becomes a paragraph, with all it holds as it was written.
+		"with a caption":           {`<figure>` + frame + `<figcaption>A &amp; B &lt;3 <em>film</em> &#39;x&#39;<br></figcaption></figure>`, embed + `<p>A &amp; B &lt;3 <em>film</em> &#39;x&#39;<br></p>`, 1},
+		"what the caption carries": {`<figure>` + frame + `<figcaption class="attachment__caption" data-x='y'> A film </figcaption></figure>`, embed + `<p> A film </p>`, 1},
+		"an empty caption":         {`<figure>` + frame + `<figcaption></figcaption></figure>`, embed, 1},
+		"a caption of whitespace":  {`<figure>` + frame + "<figcaption> \n\t&nbsp;\u200b</figcaption></figure>", embed, 1},
+		"a caption in capitals":    {`<figure>` + frame + `<FIGCAPTION>A film</FIGCAPTION></figure>`, embed + `<p>A film</p>`, 1},
+		"a caption before":         {`<figure><figcaption>A film</figcaption>` + frame + `</figure>`, `<p>A film</p>` + embed, 1},
+		"a mention in the caption": {`<figure>` + frame + `<figcaption>by ` + mentionOpen + ` sgid="` + signed("gid://bc3/Person/102") + `">` + figure("102", "Grace Sample") + `</bc-attachment></figcaption></figure>`, embed + `<p>by <import-mention ref="102">Grace Sample</import-mention></p>`, 1},
+		// What else stands in the figure stays where it stood.
+		"a link beside the frame":  {`<figure>` + frame + `<a href="https://example.test/film?a=1&b=2" class='x'>The film</a></figure>`, embed + `<a href="https://example.test/film?a=1&b=2" class='x'>The film</a>`, 1},
+		"whitespace in the figure": {"<figure>\n  " + frame + "\n  <figcaption>A film</figcaption>\n</figure>", "\n  " + embed + "\n  <p>A film</p>\n", 1},
+		"a figure without a frame within": {`<figure>` + frame + `<figure class="in"><img src="x"><figcaption>inner</figcaption></figure><figcaption>outer</figcaption></figure>`,
+			embed + `<figure class="in"><img src="x"><figcaption>inner</figcaption></figure><p>outer</p>`, 1},
+		"a figure with a frame within": {`<figure><figure>` + frame + `</figure><figcaption>outer</figcaption></figure>`, embed + `<p>outer</p>`, 1},
+		// Every frame of a text becomes an embed, in the order of the text.
+		"two in one figure": {`<figure>` + frame + `<iframe src="https://sound.example.test/track/7"></iframe><figcaption>Both</figcaption></figure>`,
+			embed + `<import-embed url="https://sound.example.test/track/7"></import-embed><p>Both</p>`, 2},
+		"between the embeds of Basecamp": {`<figure>` + frame + `<figcaption>A film</figcaption></figure>` + previewOpen + ` href="https://example.test/" title="A page"></bc-attachment><figure><iframe src="https://video.example.test/embed/43"></iframe></figure>`,
+			embed + `<p>A film</p><a href="https://example.test/">A page</a><import-embed url="https://video.example.test/embed/43"></import-embed>`, 2},
+	} {
+		e := bodyExtractor(t)
+		want := BodyCounts{Embeds: c.embeds}
+		if name == "between the embeds of Basecamp" {
+			want.LinkPreviews = 1
+		}
+		if got := rewritten(t, e, c.text, ""); got != c.want || e.bodies != want {
+			t.Errorf("%s:\n got %q %+v\nwant %q %+v", name, got, e.bodies, c.want, want)
+		}
+	}
+}
+
+// A table comes in a figure as well: only a frame makes a figure go.
+func TestAFigureThatHoldsNoFrameStaysAsItIs(t *testing.T) {
+	for _, untouched := range []string{
+		`<figure class="table"><table><tr><td>Boxes &amp; tape</td></tr></table><figcaption> A table </figcaption></figure>`,
+		`<FIGURE><img src="https://pictures.example.test/a.png"><figcaption></figcaption></FIGURE>`,
+		`</figcaption></figure></iframe>`,
+		// What looks like a frame and is text, or nothing anybody sees.
+		`<figure><textarea>` + frame + `</textarea></figure>`,
+		`<figure><!-- ` + frame + ` --><figcaption>A film</figcaption></figure>`,
+	} {
+		for _, text := range []string{untouched, untouched + frame, frame + untouched} {
+			e := bodyExtractor(t)
+			want := strings.ReplaceAll(text, frame, embed)
+			if strings.HasPrefix(untouched, "<figure><textarea>") || strings.HasPrefix(untouched, "<figure><!--") {
+				want = strings.Replace(text, untouched, "\x00", 1)
+				want = strings.Replace(strings.ReplaceAll(want, frame, embed), "\x00", untouched, 1)
+			}
+			if got := rewritten(t, e, text, ""); got != want {
+				t.Errorf("\n got %q\nwant %q", got, want)
+			}
+		}
+	}
+}
+
+// The address is the one the frame stands for, read once out of the text and
+// written once into it.
+func TestTheAddressOfAnEmbedIsReadOnceAndEscapedOnce(t *testing.T) {
+	for src, url := range map[string]string{
+		`https://video.example.test/embed?a=1&amp;b=2`:     `https://video.example.test/embed?a=1&amp;b=2`,
+		`https://video.example.test/embed?a=1&b=2`:         `https://video.example.test/embed?a=1&amp;b=2`,
+		`https://video.example.test/embed?a=&amp;amp;`:     `https://video.example.test/embed?a=&amp;amp;`,
+		`https://video.example.test/embed?a=&amp;quot;`:    `https://video.example.test/embed?a=&amp;quot;`,
+		`https://video.example.test/&quot;onload=&quot;x`:  `https://video.example.test/&#34;onload=&#34;x`,
+		`https://video.example.test/&lt;script&gt;&#x27;x`: `https://video.example.test/&lt;script&gt;&#39;x`,
+		`https://video.example.test/&#252;ber`:             `https://video.example.test/über`,
+	} {
+		e := bodyExtractor(t)
+		got := rewritten(t, e, `<figure><iframe src="`+src+`"></iframe></figure>`, "")
+		if want := `<import-embed url="` + url + `"></import-embed>`; got != want {
+			t.Errorf("%s:\n got %q\nwant %q", src, got, want)
+		}
+	}
 	e := bodyExtractor(t)
-	text := `<div>Watch</div><figure><iframe src="https://video.example.test/embed/42" allowfullscreen></iframe><figcaption>A film</figcaption></figure>` +
-		previewOpen + ` href="https://example.test/" title="A page"></bc-attachment><figure><iframe src="https://video.example.test/embed/43"></iframe></figure>`
-	want := `<div>Watch</div><figure><iframe src="https://video.example.test/embed/42" allowfullscreen></iframe><figcaption>A film</figcaption></figure>` +
-		`<a href="https://example.test/">A page</a><figure><iframe src="https://video.example.test/embed/43"></iframe></figure>`
-	if got := rewritten(t, e, text, ""); got != want {
-		t.Errorf("\n got %q\nwant %q", got, want)
+	if got, want := rewritten(t, e, `<iframe src='https://video.example.test/"x'></iframe>`, ""), `<import-embed url="https://video.example.test/&#34;x"></import-embed>`; got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+func TestOnlyAnAddressMinkaTakesBecomesAnEmbed(t *testing.T) {
+	const base = "https://video.example.test/"
+	for name, c := range map[string]struct {
+		address string
+		taken   bool
+	}{
+		"https":                                {"https://video.example.test/embed/42", true},
+		"http":                                 {"http://video.example.test/embed/42", true},
+		"a scheme in capitals":                 {"HTTPS://video.example.test/embed/42", true},
+		"a scheme in any case":                 {"hTtP://video.example.test/embed/42", true},
+		"a host alone":                         {"https://video.example.test", true},
+		"a host and a query":                   {"https://video.example.test?v=/@:x", true},
+		"a host and a fragment":                {"https://video.example.test#t=/@:x", true},
+		"somebody and a password":              {"https://ada:secret@video.example.test/embed", true},
+		"an at sign in what names them":        {"https://ada@home@video.example.test/embed", true},
+		"a password with an at sign before it": {"https://ada@home:secret@video.example.test/embed", true},
+		"a colon and no port":                  {"https://video.example.test:/embed", true},
+		"such a colon behind brackets":         {"https://[2001:db8::1]:/", true},
+		"nobody before the at sign":            {"https://@video.example.test/embed", true},
+		"a port":                               {"https://video.example.test:8443/embed", true},
+		"the largest port":                     {"https://video.example.test:65535/embed", true},
+		"a port with zeros before it":          {"https://video.example.test:00443/embed", true},
+		"a host of another script":             {"https://bücher.example.test/embed", true},
+		"a host of numbers and colons":         {"https://[2001:db8::1]/embed", true},
+		"such a host with a port":              {"https://[2001:db8::1]:8443/embed", true},
+		"exactly as long as may be":            {base + strings.Repeat("a", 2000-len(base)), true},
+		"as long in characters":                {base + strings.Repeat("ü", 2000-len(base)), true},
+		"a control character beyond":           {base + "a\u0085b\u009fc", true},
+		"a space that does not break":          {base + "a\u00a0b", true},
+		"a separator of lines":                 {base + "a\u2028b", true},
+		"a character without a width":          {base + "a\u200bb\ufeff", true},
+		"what HTML escapes":                    {base + `?a=1&b="2"&c=<d>&e='f'`, true},
+
+		"a path":                                   {"/embed/42", false},
+		"a relative path":                          {"embed/42", false},
+		"a host without a scheme":                  {"//video.example.test/embed/42", false},
+		"data":                                     {"data:text/html,<p>hello</p>", false},
+		"about":                                    {"about:blank", false},
+		"a script":                                 {"javascript:alert(1)", false},
+		"another protocol":                         {"ftp://video.example.test/embed", false},
+		"a longer scheme":                          {"httpsx://video.example.test/embed", false},
+		"a scheme with one slash":                  {"https:/video.example.test/embed", false},
+		"a scheme of another letter":               {"http\u017f://video.example.test/embed", false},
+		"a scheme alone":                           {"https://", false},
+		"a scheme and a path":                      {"https:///embed/42", false},
+		"a scheme and a query":                     {"https://?v=video.example.test", false},
+		"a scheme and a fragment":                  {"https://#video.example.test", false},
+		"somebody and no host":                     {"https://ada@/embed", false},
+		"a port and no host":                       {"https://:8443/embed", false},
+		"a port that is no number":                 {"https://video.example.test:84a/embed", false},
+		"a port with a sign":                       {"https://video.example.test:+8443/embed", false},
+		"a port too large":                         {"https://video.example.test:65536/embed", false},
+		"a port too long":                          {"https://video.example.test:008443/embed", false},
+		"a colon and neither host nor port":        {"https://:/embed", false},
+		"a port too large behind brackets":         {"https://[2001:db8::1]:65536/", false},
+		"a port that is no number behind brackets": {"https://[2001:db8::1]:84a/", false},
+		"something else behind brackets":           {"https://[2001:db8::1]x/embed", false},
+		"a blank":                                  {base + "a b", false},
+		"a blank in the scheme":                    {"java script://video.example.test/", false},
+		"a tab":                                    {base + "a\tb", false},
+		"a line break":                             {base + "a\nb", false},
+		"a carriage return":                        {base + "a\rb", false},
+		"a control character":                      {base + "a\u001fb", false},
+		"a zero":                                   {base + "a\u0000b", false},
+		"the character that deletes":               {base + "a\u007fb", false},
+		"a backslash":                              {base + `a\b`, false},
+		"a backslash before the host":              {`https://evil.example.test\@video.example.test/embed`, false},
+		"a backslash for a slash":                  {`https:/\video.example.test/embed`, false},
+		"one character too long":                   {base + strings.Repeat("a", 2001-len(base)), false},
+		"too long in characters":                   {base + strings.Repeat("ü", 2001-len(base)), false},
+		"no address":                               {"", false},
+	} {
+		if got := embeddable(c.address); got != c.taken {
+			t.Errorf("%s: taken %v, want %v", name, got, c.taken)
+		}
+
+		// A carriage return is a line break by the time a text is read.
+		if strings.Contains(c.address, "\r") || strings.Contains(c.address, "\x00") {
+			continue
+		}
+		e := bodyExtractor(t)
+		want, counts := `<import-embed url="`+html.EscapeString(c.address)+`"></import-embed>`, BodyCounts{Embeds: 1}
+		if !c.taken {
+			want, counts = "", BodyCounts{EmbedsLeftOut: 1}
+		}
+		got := rewritten(t, e, `<figure><iframe src="`+html.EscapeString(c.address)+`"></iframe></figure>`, "")
+		if got != want || e.bodies != counts {
+			t.Errorf("%s: a frame with it became %d characters and counted %+v, want %d and %+v", name, len(got), e.bodies, len(want), counts)
+		}
+	}
+}
+
+// A browser takes the whitespace around the address of a frame away, and
+// Minka takes none away: the embed carries the address without it.
+func TestTheWhitespaceAroundTheAddressOfAFrameGoes(t *testing.T) {
+	for name, c := range map[string]struct {
+		src   string
+		taken bool
+	}{
+		"a blank before":         {" " + frameAddress, true},
+		"a blank behind":         {frameAddress + " ", true},
+		"every kind on each end": {"\n\t \f" + frameAddress + "\r\n\t ", true},
+		"written as references":  {"&#32;&#9;&#10;" + frameAddress + "&#12;&#13;", true},
+		"whitespace alone":       {" \t\n\f ", false},
+		"a blank within":         {" https://video.example.test/embed /42 ", false},
+		// Only what a browser takes away goes: any other character refuses or stays.
+		"a vertical tab before":              {"\v" + frameAddress, false},
+		"a space that does not break":        {"\u00a0" + frameAddress, false},
+		"a character without a width":        {"\u200b" + frameAddress, false},
+		"a space that does not break behind": {frameAddress + "\u00a0", true},
+	} {
+		if embeddable(" "+frameAddress) || embeddable(frameAddress+"\n") {
+			t.Fatal("the rule itself takes an address with whitespace around it")
+		}
+		e := bodyExtractor(t)
+		got := rewritten(t, e, `<figure><iframe src="`+c.src+`"></iframe></figure>`, "")
+		want, counts := "", BodyCounts{EmbedsLeftOut: 1}
+		if c.taken {
+			want, counts = embed, BodyCounts{Embeds: 1}
+			if strings.HasSuffix(c.src, "\u00a0") {
+				want = `<import-embed url="` + frameAddress + "\u00a0" + `"></import-embed>`
+			}
+		}
+		if got != want || e.bodies != counts {
+			t.Errorf("%s:\n got %q %+v\nwant %q %+v", name, got, e.bodies, want, counts)
+		}
+	}
+}
+
+// A frame that becomes nothing takes the figure that held nothing else with
+// it, and leaves what else stood there.
+func TestAFrameWithoutAnAddressAnEmbedMayCarryIsLeftOut(t *testing.T) {
+	const refused = `<iframe src="about:blank" width="1">nothing</iframe>`
+	for name, c := range map[string]struct{ text, want string }{
+		"no address at all":           {`<div>a</div><figure><iframe allowfullscreen></iframe></figure><div>b</div>`, `<div>a</div><div>b</div>`},
+		"an empty address":            {`<div>a</div><figure><iframe src=""></iframe></figure><div>b</div>`, `<div>a</div><div>b</div>`},
+		"in its figure":               {`<div>a</div><figure class="x">` + refused + `</figure><div>b</div>`, `<div>a</div><div>b</div>`},
+		"outside a figure":            {`<p>a ` + refused + ` b</p>`, `<p>a  b</p>`},
+		"an empty caption goes along": {`<figure>` + refused + `<figcaption> </figcaption></figure>`, ``},
+		"a caption stays":             {`<figure>` + refused + `<figcaption>A <b>film</b></figcaption></figure>`, `<p>A <b>film</b></p>`},
+		"a link stays":                {`<figure>` + refused + `<a href="https://example.test/">The film</a></figure>`, `<a href="https://example.test/">The film</a>`},
+		"beside one that is taken":    {`<figure>` + refused + frame + `</figure>`, embed},
+	} {
+		e := bodyExtractor(t)
+		got := rewritten(t, e, c.text, "")
+		want := BodyCounts{EmbedsLeftOut: 1, Embeds: strings.Count(c.want, "<import-embed")}
+		if got != c.want || e.bodies != want {
+			t.Errorf("%s:\n got %q %+v\nwant %q %+v", name, got, e.bodies, c.want, want)
+		}
+	}
+}
+
+func TestABrokenFrameCostsNoMoreThanItself(t *testing.T) {
+	rule := `<bc-attachment content-type="application/vnd.basecamp.horizontal-rule.html"></bc-attachment>`
+	for text, want := range map[string]string{
+		// Never closed: what follows is the text's own, embeds included.
+		`a <iframe src="` + frameAddress + `"> tail <b>bold</b>` + rule + `<figure><figcaption>kept</figcaption></figure>`: `a ` + embed + ` tail <b>bold</b><hr><figure><figcaption>kept</figcaption></figure>`,
+		// A frame holds what stands up to the next end of one.
+		`a <iframe src="` + frameAddress + `"> gone <figure>` + frame + `</figure> tail`: `a ` + embed + `</figure> tail`,
+		`a <iframe src="` + frameAddress + `">`:                                          `a ` + embed,
+		`a <figure><iframe src="about:blank"> tail <b>bold</b>`:                          `a  tail <b>bold</b>`,
+		// One that closes itself holds what stands up to the next end of a frame, as one that does not.
+		`a <iframe src="` + frameAddress + `"/> tail <b>bold</b>`:   `a ` + embed + ` tail <b>bold</b>`,
+		`a <iframe src="` + frameAddress + `"/> gone</iframe> tail`: `a ` + embed + ` tail`,
+		// Cut off in the middle of the tag.
+		`a <iframe src="` + frameAddress: `a `,
+		// A figure and a caption that are never closed.
+		`a <figure>` + frame + ` tail <b>bold</b>`:                                                 `a ` + embed + ` tail <b>bold</b>`,
+		`a <figure>` + frame + `<figcaption>A film</figure> tail`:                                  `a ` + embed + `<p>A film</p> tail`,
+		`a <figure>` + frame + `<figcaption>A <b>film`:                                             `a ` + embed + `<p>A <b>film</p>`,
+		`a <figure>` + frame + `<figcaption> `:                                                     `a ` + embed,
+		`a <figure>` + frame + `<figcaption> </figure> tail`:                                       `a ` + embed + ` tail`,
+		`a <figure>` + frame + `<figcaption>one<figcaption>two</figcaption></figcaption></figure>`: `a ` + embed + `<p>one<figcaption>two</p></figcaption>`,
+		// What stands behind a frame that is never closed is read as any text: a figure there goes with its frame.
+		`a <iframe src="` + frameAddress + `"> b <figure><iframe src="https://sound.example.test/track/7"> c<figcaption>cap</figcaption></figure>`: `a ` + embed + ` b <import-embed url="https://sound.example.test/track/7"></import-embed> c<p>cap</p>`,
+		// Ends without a beginning are the text's own.
+		`a </iframe></figure> tail ` + frame: `a </iframe></figure> tail ` + embed,
+	} {
+		e := bodyExtractor(t)
+		got, _, err := e.rewriteBody(text, "", nil)
+		if err != nil || got != want {
+			t.Errorf("%q:\n got %q (%v)\nwant %q", text, got, err, want)
+		}
+	}
+}
+
+// What Basecamp rendered into an embed of its own goes with that embed. An
+// embed of another kind passes through, and no frame with it: a frame reaches
+// no bundle, wherever it stands.
+func TestAFrameInAnEmbedOfBasecampGoesWithItOrBecomesAnEmbed(t *testing.T) {
+	file := `<bc-attachment sgid="` + fileSGID + `" content-type="video/mp4"><figure>` + frame + `<figcaption>film.mp4</figcaption></figure></bc-attachment>`
+	const other = `<bc-attachment content-type="application/vnd.example.embed">`
+	for name, c := range map[string]struct {
+		text, want string
+		counts     BodyCounts
+	}{
+		"in an embed that is replaced": {`<div>` + file + `</div><figure>` + frame + `</figure>`,
+			`<div><import-attachment ref="attachment-5001"></import-attachment></div>` + embed, BodyCounts{Files: 1, Embeds: 1}},
+		"in an embed that passes": {other + `<figure class="x">` + frame + `<figcaption>A film</figcaption></figure></bc-attachment> tail`,
+			other + embed + `<p>A film</p></bc-attachment> tail`, BodyCounts{Embeds: 1}},
+		"one that is left out there": {other + `<figure><iframe src="about:blank"></iframe></figure></bc-attachment> tail`,
+			other + `</bc-attachment> tail`, BodyCounts{EmbedsLeftOut: 1}},
+		"behind an embed that never ends": {other + `<figure>` + frame + `</figure> and <p>` + frame + `</p><iframe src="//video.example.test/"></iframe>`,
+			other + embed + ` and <p>` + embed + `</p>`, BodyCounts{Embeds: 2, EmbedsLeftOut: 1}},
+	} {
+		e := bodyExtractor(t)
+		got := rewritten(t, e, c.text, "", bodyFile{ID: 5001, SGID: fileSGID})
+		if got != c.want || e.bodies != c.counts {
+			t.Errorf("%s:\n got %q %+v\nwant %q %+v", name, got, e.bodies, c.want, c.counts)
+		}
+		if strings.Contains(strings.ToLower(got), "<iframe") {
+			t.Errorf("%s: a frame reached the text: %q", name, got)
+		}
+	}
+}
+
+// A text is read in a time that grows with its length, whatever it is made of:
+// a text somebody pasted may hold thousands of frames nothing closes, or of
+// figures in one another.
+func TestATextOfManyBrokenFramesIsReadInATimeThatGrowsWithItsLength(t *testing.T) {
+	// Reading such a text over for every frame in it takes many times the
+	// bound, and reading it once a small part of it.
+	const bound = 3 * time.Second
+	for name, c := range map[string]struct {
+		count                   int
+		piece, becomes, closing string
+	}{
+		"frames that are never closed": {10000, `<iframe src="` + frameAddress + `"> tail `, embed + ` tail `, ""},
+		"figures in one another":       {40000, `<figure><iframe src="` + frameAddress + `"></iframe>`, embed, ""},
+		"with captions nothing closes": {10000, `<figure>` + frame + `<figcaption>c`, embed + `<p>c`, "</p>"},
+	} {
+		e := bodyExtractor(t)
+		started := time.Now()
+		got := rewritten(t, e, strings.Repeat(c.piece, c.count), "")
+		if took := time.Since(started); took > bound {
+			t.Errorf("%s: %d of them took %s", name, c.count, took)
+		}
+		if want := strings.Repeat(c.becomes, c.count) + strings.Repeat(c.closing, c.count); got != want || e.bodies.Embeds != c.count {
+			t.Errorf("%s: the text became %d characters with %d embeds, want %d with %d", name, len(got), e.bodies.Embeds, len(want), c.count)
+		}
+	}
+}
+
+// A text that was a frame and nothing else is one: it says something where
+// the frame became an embed, and nothing where it became nothing.
+func TestATextThatIsAnEmbedAloneSaysSomething(t *testing.T) {
+	for text, nothing := range map[string]bool{
+		`<figure>` + frame + `</figure>`: false,
+		frame:                            false,
+		"<div>\n<figure>" + frame + "<figcaption></figcaption></figure></div>":                                  false,
+		`<figure><iframe src="about:blank"></iframe></figure>`:                                                  true,
+		"<div><figure>\n<iframe></iframe>\n<figcaption> </figcaption></figure><br></div>":                       true,
+		`<figure><iframe src="//video.example.test/embed/42"></iframe><figcaption>A film</figcaption></figure>`: false,
+	} {
+		e := bodyExtractor(t)
+		if got := saysNothing(rewritten(t, e, text, "")); got != nothing {
+			t.Errorf("%q says nothing: %v, want %v", text, got, nothing)
+		}
 	}
 }
 
@@ -485,7 +839,7 @@ func TestWhatAReaderSeesNothingOfSaysNothing(t *testing.T) {
 		"": true, " \n\t": true, "&nbsp; ": true, "\u200b": true, "<div>\u200b\u200c\u200d\u2060\ufeff &#8203;</div>": true, "\u200ba\u200b": false, "<br>": true, "<BR/>": true, "<div><p> <br></p></div>": true, "</div>": true, "<!-- x -->": true,
 		"a": false, "&amp;": false, "<hr>": false, "<span></span>": false, "<img src=x>": false, `<a href="https://example.test/"></a>`: false,
 		`<import-attachment ref="blob-k"></import-attachment>`: false, `<import-mention ref="102"></import-mention>`: false,
-		`<figure><iframe src="https://video.example.test/"></iframe></figure>`: false,
+		`<import-embed url="https://video.example.test/"></import-embed>`: false, `<div><import-embed url="https://video.example.test/"></import-embed><br></div>`: false,
 	} {
 		if got := saysNothing(body); got != want {
 			t.Errorf("%q says nothing: %v, want %v", body, got, want)

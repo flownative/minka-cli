@@ -43,10 +43,11 @@ into `bin/`: an implementer or a reviewer at work is told so.
 ## How long, and how to wait
 
 Two projects without their files are some 2,500 requests and 25 minutes, a dry
-run the same. With the files, about 2,700 of them and 6 GiB, an hour or more
-is to be expected; a run that follows takes unchanged files over from the
-bundle it replaces. Start a run in the background and let it report when it
-ends. The ten-minute limit of a background command does not end it.
+run the same. Files come at about 50 a minute and 10 GiB an hour: one project
+with 1,500 files of 5.4 GiB took 33 minutes, both projects with 2,700 files
+of 6 GiB take about an hour; a run that follows takes unchanged files over
+from the bundle it replaces. Start a run in the background and let it report
+when it ends. The ten-minute limit of a background command does not end it.
 
 A run that ends hard leaves the earlier bundle in place and loses the files it
 fetched. A single failure of a gateway ends no run any more, the request is
@@ -58,11 +59,18 @@ asked again.
 |---|---|
 | `~/minka-import/basecamp-3923521` | the structure and the boards, as Minka's applier of boards ran it |
 | `~/minka-import/basecamp-3923521-chats` | the posts and the chats as well, released to the coordination |
+| `~/minka-import/basecamp-3923521-random` | one project whole, with its files and embeds, released to the coordination |
 
 The format coordination copies from a bundle for its trial runs. Tell it
 before a directory is written again, and again when it is ready, with counts.
 Into a directory that is being tried out elsewhere, write a new run under
 another name first and move it once it is checked.
+
+A bundle goes to the applier whole. What an earlier run of the applier passed
+over and a later one brings lands at the end where Minka keeps an order of its
+own, a line of a chat at the end of the chat. So the history of an account is
+applied from the complete bundle, files and embeds included, into an
+organisation that holds nothing of it yet.
 
 ## Checking a bundle
 
@@ -73,10 +81,9 @@ the parent of a comment, the category of a post, every `ref` of a mention;
 one chat, oldest first, and no second is cut in two; `bytes` and `sha256`
 agree with the files; the counts of the manifest are the counts of the report.
 
-Minka's fixture `ImportWithFiles` brings a `verify.sh`. Its output names file
-paths, which is personal data with a real bundle: pass on the result of each
-check and nothing else. Its check of unanswered references is wired to the
-fixture and fails for any other bundle.
+Minka brings `Build/verify-bundle.sh <bundle>`, which checks the files of a
+bundle against its index and prints identifiers and counts only. It only
+reads, so it may be run although it lies in Minka's repository.
 
 ## Afterwards
 
