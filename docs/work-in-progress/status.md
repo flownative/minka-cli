@@ -27,8 +27,8 @@ invented account in `internal/fakebasecamp`.
 It has been run live, as a dry run and into a bundle outside the repository,
 under an identity that sees addresses, the posts and the chats included: all
 references of that bundle resolve and its parts are the ones its manifest
-names. The files have been counted live by a dry run but not fetched: only
-the calls of the Basecamp CLI they rest on were seen, see below.
+names. The files and the embeds have been run live for one of the two
+projects: every file fetched, every embed written, see below.
 A run needs a Basecamp identity that may see the e-mail addresses of others,
 which is somebody of the account's own company or an admin. Under one that
 may not, masked addresses were seen live ending the run as `forbidden`. Only
@@ -38,7 +38,7 @@ Everything else is tested against the fake API and checked live — the chain
 upload → attachment in the text → display as well as private conversations in
 both directions. What is checked against the fake only is listed below.
 
-Coordination of the API: the Minka session `minka-d8`. It reports changes,
+Coordination of the API: the Minka session `minka-63`. It reports changes,
 which are checked against the Minka code; deviations go back to it.
 
 Versions are released by publishing a release in GitHub and installed through
@@ -107,26 +107,22 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   out, posts with and without a category, archived posts, a second message
   board with categories no list holds, previews of links and pictures at a
   foreign address as links, and five parts of one chat each.
-- Of the files of `import basecamp`: everything the extractor does with them.
-  The fake serves invented bytes under the storage address a run has to
-  build, and a stand-in script takes the place of the Basecamp CLI for the
-  download itself. Seen live, of the Basecamp CLI alone: that
-  `files download --out - --agent -- <storage address>` is accepted with the
-  `--`, that a blob nobody has answers exit 2 with the failure object
-  `not_found` on standard output and nothing on standard error, and that the
-  keys of stored files have the shape of a UUID. Not seen: a download that
-  breaks off, a file whose size differs from what Basecamp says, a name that
-  Basecamp escapes in an address, a caption or a gallery in a real text, and
-  how long a run over thousands of files takes. That the Basecamp CLI asks
-  for the path of an address without its escapes was read in its SDK, not
-  seen.
-- Of the embeds of `import basecamp`: everything. No run over the real
-  account has written an `<import-embed>` yet, so how Basecamp writes the
-  figure around a frame, whether a caption ever stands before its frame, what
-  its own players carry as an address and how many frames are left out is not
-  seen. The rule of which address becomes a tag is read from Minka's
-  `RichText::isEmbeddableUrl` and kept stricter where PHP reads a port more
-  loosely.
+- Of the files of `import basecamp`: a download that breaks off, a file
+  whose size differs from what Basecamp says, a file that is gone, a name that
+  has to be changed, a caption too long, one file under two owners, and files
+  taken over from the bundle a run replaces, which no live run has done yet.
+  Seen live, in a bundle of one project that was checked file by file, size
+  and digest computed anew, and that Minka's `Build/verify-bundle.sh` passes:
+  some 1,500 files of 5.4 GiB fetched in half an hour, none missing, the
+  largest of 273 MiB, files dropped into a chat, files in posts and comments,
+  pictures, PDFs, videos and sound. That the Basecamp CLI asks for the path of
+  an address without its escapes was read in its SDK, not seen.
+- Of the embeds of `import basecamp`: a frame that gets no tag, a caption in
+  a figure, a frame outside a figure and broken markup. Seen live, in the
+  bundle of one project: some 500 embeds written, none left out, no raw frame
+  and no embed of Basecamp left in a text. The rule of which address becomes
+  a tag is read from Minka's `RichText::isEmbeddableUrl` and kept stricter
+  where PHP reads a port more loosely.
 - A known limit of the files: a run that ends hard loses the files it
   fetched, because files are taken over from a bundle in place only. The
   first complete run over an account is the expensive one.
@@ -142,7 +138,9 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
 
 ## Branches that wait
 
-Nothing of the import is on `main` yet. Five branches stand on one another,
+Nothing of the import is on `main` yet. `task/chat-order-by-moment` stands on
+`main` by itself and follows a change of Minka's chat API; it has been checked
+against the fake only. Five branches of the import stand on one another,
 none of them pushed, and go up as pull requests in this order once the client
 says so: `task/import-basecamp-structure`, `task/import-basecamp-boards`,
 `task/import-basecamp-chats-posts` (which also asks Basecamp again after a
@@ -151,11 +149,13 @@ failure that may pass, and repairs an example in the skill),
 
 ## Waiting for the client
 
-- The first run that fetches the files: some 2,700 of them, 6.1 GiB by
-  Basecamp's own word, about an hour. It starts on the client's yes. Every
-  run that writes a bundle fetches the files, so the bundle that carries the
-  embeds waits for the same yes; the format coordination advises against a
-  switch that leaves the files out.
+- The run over both projects with their files: some 2,700 files, 6.1 GiB by
+  Basecamp's own word, about an hour. It starts on the client's yes. One of
+  the two projects has been run on its own, by the client's choice, and holds
+  5.4 of those GiB; the client tries that bundle on the local instance, which
+  the format coordination applies. Every run that writes a bundle fetches
+  the files, and the format coordination advises against a switch that
+  leaves them out.
 - Whether Minka gets a holding area in a column. The bundle carries `onHold`
   already.
 - `CLAUDE.md` still rules out what the API does not offer, which the import
@@ -171,10 +171,8 @@ failure that may pass, and repairs an example in the skill),
 - The bundle with the posts and the chats waits for Minka's appliers of
   posts and of chat lines; what those runs find comes back through the
   coordination.
-- The files of texts and chats wait for their live run. A live dry run
-  counted them and what they weigh by Basecamp's own word. What follows is a
-  bundle outside the repository, checked with the `verify.sh` of Minka's
-  fixture `ImportWithFiles`, and a second run to see the files taken over.
+- A second run into a bundle that holds its files, to see them taken over
+  instead of fetched again.
 - Install through Homebrew once and play `minka setup` through by hand on a
   terminal: the release workflow has built a version and written the formula,
   but nobody has installed from it yet, and `setup` is covered by tests only.
@@ -182,7 +180,7 @@ failure that may pass, and repairs an example in the skill),
   gains a build provenance attestation with instructions for verifying it, and
   the macOS binaries get notarised, which waits for an Apple Developer ID.
 
-- React to messages from `minka-d8`: check against the code, fake first,
+- React to messages from `minka-63`: check against the code, fake first,
   then the CLI, test and sabotage proof, check live, documentation in the
   same commit.
 - Prepare the internal alpha: change the token, proofread the SKILL.md.
