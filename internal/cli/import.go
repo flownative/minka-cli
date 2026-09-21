@@ -20,14 +20,16 @@ func (a *app) newImportCmd() *cobra.Command {
 }
 
 type importReport struct {
-	Source         string                  `json:"source"`
-	SourceInstance string                  `json:"sourceInstance"`
-	DryRun         bool                    `json:"dryRun"`
-	Bundle         string                  `json:"bundle,omitempty"`
-	Counts         map[bundle.Kind]int     `json:"counts"`
-	Avatars        importAvatars           `json:"avatars"`
-	SkippedTools   []basecamp.SkippedTools `json:"skippedTools"`
-	MissingFiles   []basecamp.MissingFile  `json:"missingFiles"`
+	Source         string              `json:"source"`
+	SourceInstance string              `json:"sourceInstance"`
+	DryRun         bool                `json:"dryRun"`
+	Bundle         string              `json:"bundle,omitempty"`
+	Counts         map[bundle.Kind]int `json:"counts"`
+	// Parts names the files of a kind that is written in several.
+	Parts        map[bundle.Kind][]string `json:"parts,omitempty"`
+	Avatars      importAvatars            `json:"avatars"`
+	SkippedTools []basecamp.SkippedTools  `json:"skippedTools"`
+	MissingFiles []basecamp.MissingFile   `json:"missingFiles"`
 	// InvalidAddresses holds IDs only: neither the address nor the name of
 	// somebody belongs into an output that ends up in a log.
 	InvalidAddresses []string `json:"invalidAddresses"`
@@ -49,6 +51,29 @@ type importReport struct {
 	MentionsUnresolved int `json:"mentionsUnresolved"`
 	FilesInBodies      int `json:"filesInBodies"`
 	FilesDropped       int `json:"filesDropped"`
+	// LinkPreviews are the previews of a link that became the link,
+	// PicturesLinked the pictures at a foreign address that became a link to it.
+	LinkPreviews   int `json:"linkPreviews"`
+	PicturesLinked int `json:"picturesLinked"`
+	// PostsByStatus splits counts.posts. PostsLeftOut are archived and trashed
+	// posts of a message board that is not extracted, PostsWithEmptyBody the
+	// posts that came with a title alone.
+	PostsByStatus      map[string]int `json:"postsByStatus"`
+	PostsLeftOut       int            `json:"postsLeftOut"`
+	PostsWithEmptyBody int            `json:"postsWithEmptyBody"`
+	// MessagesByType splits counts.messages by what a line was in its chat.
+	// MessagesWithEmptyBody are lines somebody wrote that say nothing,
+	// UploadLinesLeftOut lines that were files alone, none of which can be
+	// referred to: both are left out.
+	MessagesByType        map[string]int `json:"messagesByType"`
+	MessagesWithEmptyBody int            `json:"messagesWithEmptyBody"`
+	UploadLinesLeftOut    int            `json:"uploadLinesLeftOut"`
+	// LongestBody is the longest text per kind, in characters: a number and
+	// nothing of the text.
+	LongestBody map[bundle.Kind]int `json:"longestBody"`
+	// RequestsRetried counts the requests that were asked again because they
+	// failed for a reason that may pass, each further attempt counted.
+	RequestsRetried int `json:"requestsRetried"`
 }
 
 type importAvatars struct {
@@ -73,20 +98,33 @@ e-mail addresses of other people; Basecamp masks them for anybody else, and
 the run ends with exit 4. Nothing is written to Basecamp, and no Minka
 host or token is needed.
 
-So far a bundle holds the structure and the boards: the people the named
-projects refer to with their avatars (their members and whoever a record
-names, not the rest of the account), the projects with their members, of each
-project the card tables, chats and message boards that are switched on, and of
-each card table the columns, the cards with the archived and the trashed ones,
-their steps, comments and boosts. Other tools and tools that are switched off
-are counted as skipped. A mention and a file in a text become a reference; the
-files themselves, chats and message boards do not come yet.
+So far a bundle holds the structure, the boards, the message boards and the
+chats: the people the named projects refer to with their avatars (their
+members and whoever a record names, not the rest of the account), the projects
+with their members, of each project the card tables, chats and message boards
+that are switched on, of each card table the columns, the cards with the
+archived and the trashed ones, their steps, comments and boosts, of each
+message board the messages with the archived and the trashed ones as posts,
+their categories, comments and boosts, and of each chat its lines with their
+boosts as messages. Other tools and tools that are switched off are counted as
+skipped. A mention and a file in a text become a reference, and so does a file
+dropped into a chat; the files themselves do not come yet.
+
+The lines of chats are written in parts, messages-0001.jsonl and on, each
+holding lines of one chat, and the manifest names them under parts. A part
+ends once it holds 10,000 lines, where the second changes. Only a bundle
+whose lines came to a single part carries the one file messages.jsonl.
 
 The bundle is built next to --out and takes its place at the end, so a run
 that fails leaves no half bundle. A bundle of an earlier run is replaced; a
 directory that holds anything else, a bundle of another source included, is
 refused. --dry-run walks Basecamp the
 same way, downloads no avatar, writes nothing and shows the counts.
+
+A request that fails for a reason that may pass, such as a gateway in front
+of Basecamp that fails for a moment, is asked again a few times with growing
+pauses before the run ends, and at most 100 requests of a run are; the report
+counts them as requestsRetried.
 
 A file that cannot be fetched does not end the run: the bundle is written
 without it, the report names it under missingFiles, and the command exits 6
@@ -127,7 +165,10 @@ it has been applied.`,
 			}
 			defer writer.Abort()
 
-			extractor := basecamp.Extractor{Source: a.basecampSource, Avatars: a.avatarFetcher}
+			// Every request of the run goes through the one source that asks
+			// again, whatever kind it is of and whether anything is written.
+			source := basecamp.NewRetrying(a.basecampSource, a.retryPause)
+			extractor := basecamp.Extractor{Source: source, Avatars: a.avatarFetcher}
 			result, err := extractor.Extract(a.ctx, projects, writer)
 			if err != nil {
 				return basecampError(err)
@@ -146,6 +187,7 @@ it has been applied.`,
 				SourceInstance: result.SourceInstance,
 				DryRun:         dryRun,
 				Counts:         writer.Counts(),
+				Parts:          writer.Parts(),
 				Avatars:        importAvatars{Count: result.Avatars},
 				SkippedTools:   result.Skipped,
 				MissingFiles:   result.Missing,
@@ -160,6 +202,18 @@ it has been applied.`,
 				MentionsUnresolved: result.Bodies.MentionsUnresolved,
 				FilesInBodies:      result.Bodies.Files,
 				FilesDropped:       result.Bodies.FilesDropped,
+				LinkPreviews:       result.Bodies.LinkPreviews,
+				PicturesLinked:     result.Bodies.PicturesLinked,
+
+				PostsByStatus:      result.PostsByStatus,
+				PostsLeftOut:       result.PostsLeftOut,
+				PostsWithEmptyBody: result.PostsWithEmptyBody,
+				MessagesByType:     result.MessagesByType,
+				UploadLinesLeftOut: result.UploadLinesLeftOut,
+
+				MessagesWithEmptyBody: result.MessagesWithEmptyBody,
+				LongestBody:           result.LongestBody,
+				RequestsRetried:       source.Retried(),
 			}
 			var notices []string
 			if count := len(report.InvalidAddresses); count > 0 {
@@ -167,8 +221,13 @@ it has been applied.`,
 			}
 			if count := report.FilesDropped; count > 0 {
 				notices = append(notices, plural(count,
-					"file embedded in a text could not be named, because Basecamp lists no file for the embed; only its caption stays in the text",
-					"files embedded in texts could not be named, because Basecamp lists no file for the embeds; only their captions stay in the texts"))
+					"file embedded in a text or dropped into a chat could not be named, because Basecamp lists no file for it; of an embedded one only the caption stays in the text",
+					"files embedded in texts or dropped into chats could not be named, because Basecamp lists no file for them; of an embedded one only the caption stays in the text"))
+			}
+			if count := report.UploadLinesLeftOut; count > 0 {
+				notices = append(notices, plural(count,
+					"line of a chat is left out, because it was files alone and Basecamp names none of them",
+					"lines of chats are left out, because they were files alone and Basecamp names none of them"))
 			}
 			if leftover != "" {
 				notices = append(notices, "the bundle of the run before could not be removed and still lies at "+leftover+"; it holds personal data, remove it by hand")
@@ -181,7 +240,9 @@ it has been applied.`,
 			summary += plural(report.Counts[bundle.People], "person", "people") + ", " +
 				plural(report.Counts[bundle.Projects], "project", "projects") + ", " +
 				plural(report.Counts[bundle.Tools], "tool", "tools") + ", " +
-				plural(report.Counts[bundle.Cards], "card", "cards")
+				plural(report.Counts[bundle.Cards], "card", "cards") + ", " +
+				plural(report.Counts[bundle.Posts], "post", "posts") + ", " +
+				plural(report.Counts[bundle.Messages], "message", "messages")
 
 			if len(report.MissingFiles) > 0 {
 				return incompleteImport(report, notices)
@@ -226,9 +287,27 @@ func renderImportReport(w io.Writer, report importReport) {
 		report.CardsByStatus[bundle.StatusActive], report.CardsByStatus[bundle.StatusArchived], report.CardsByStatus[bundle.StatusTrashed], report.CardsOnHold)
 	fmt.Fprintf(w, "Archived and trashed cards whose column is in no extracted board, left out: %d\n", report.CardsLeftOut)
 	fmt.Fprintf(w, "Comments in the trash, left out: %d\n", report.CommentsTrashed)
-	fmt.Fprintf(w, "In the texts: %s referred to, %s Basecamp lists nothing for dropped, %s\n",
+	fmt.Fprintf(w, "Posts: %d active, %d archived, %d trashed; %d of them without a text\n",
+		report.PostsByStatus[bundle.StatusActive], report.PostsByStatus[bundle.StatusArchived], report.PostsByStatus[bundle.StatusTrashed], report.PostsWithEmptyBody)
+	fmt.Fprintf(w, "Archived and trashed posts of a message board that is not extracted, left out: %d\n", report.PostsLeftOut)
+	fmt.Fprintf(w, "Messages: %d text, %d rich text, %d upload, %d integration\n",
+		report.MessagesByType["text"], report.MessagesByType["richText"], report.MessagesByType["upload"], report.MessagesByType["integration"])
+	fmt.Fprintf(w, "Lines that say nothing, left out: %d\n", report.MessagesWithEmptyBody)
+	if names := report.Parts[bundle.Messages]; len(names) > 0 {
+		fmt.Fprintf(w, "Messages are written in %d parts, %s to %s\n", len(names), names[0], names[len(names)-1])
+	}
+	fmt.Fprintf(w, "Lines that were files Basecamp names none of, left out: %d\n", report.UploadLinesLeftOut)
+	fmt.Fprintf(w, "In the texts: %s referred to, %s Basecamp lists nothing for dropped, %s, %s, %s\n",
 		plural(report.FilesInBodies, "file", "files"), plural(report.FilesDropped, "file", "files"),
-		plural(report.MentionsUnresolved, "mention left as a name", "mentions left as names"))
+		plural(report.MentionsUnresolved, "mention left as a name", "mentions left as names"),
+		plural(report.LinkPreviews, "preview of a link turned into the link", "previews of links turned into links"),
+		plural(report.PicturesLinked, "picture at a foreign address turned into a link", "pictures at foreign addresses turned into links"))
+	fmt.Fprintf(w, "Longest text in characters: cards %d, comments %d, posts %d, messages %d\n",
+		report.LongestBody[bundle.Cards], report.LongestBody[bundle.Comments], report.LongestBody[bundle.Posts], report.LongestBody[bundle.Messages])
+
+	if report.RequestsRetried > 0 {
+		fmt.Fprintf(w, "Requests asked again after a failure that passed: %d\n", report.RequestsRetried)
+	}
 
 	if len(report.MissingFiles) > 0 {
 		fmt.Fprintln(w, "\nMissing files:")
@@ -299,6 +378,9 @@ func basecampError(err error) *Error {
 		e.Code = CodeNetwork
 		e.Retryable = true
 		e.Hint = "Is Basecamp reachable? Check with: basecamp doctor"
+	case basecamp.Unavailable:
+		e.Retryable = true
+		e.Hint = "Basecamp, or a gateway in front of it, failed several times in a row. That usually passes: try again in a few minutes."
 	case basecamp.Interrupted:
 		e.Code = CodeNetwork
 	}

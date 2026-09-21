@@ -300,33 +300,20 @@ func (a *Account) boards(path string, page int) ([]byte, bool) {
 	case commentsPattern.MatchString(path):
 		match := commentsPattern.FindStringSubmatch(path)
 		if p := a.project(match[1]); p != nil {
-			var answer []byte
-			a.eachCard(p, func(_ *List, _ *OnHold, card *Card) {
-				if strconv.FormatInt(card.ID, 10) == match[2] {
-					comments := []map[string]any{}
-					for _, comment := range card.Comments {
-						comments = append(comments, a.commentJSON(p, comment))
-					}
-					answer = a.pageOf(comments, page)
+			if found, known := a.commentsOf(p, match[2]); known {
+				comments := []map[string]any{}
+				for _, comment := range found {
+					comments = append(comments, a.commentJSON(p, comment))
 				}
-			})
-			return answer, answer != nil
+				return a.pageOf(comments, page), true
+			}
 		}
 	case boostsPattern.MatchString(path):
 		match := boostsPattern.FindStringSubmatch(path)
 		if p := a.project(match[1]); p != nil {
-			var answer []byte
-			a.eachCard(p, func(_ *List, _ *OnHold, card *Card) {
-				if strconv.FormatInt(card.ID, 10) == match[2] {
-					answer = a.pageOf(a.boostsJSON(card.Boosts), page)
-				}
-				for _, comment := range card.Comments {
-					if strconv.FormatInt(comment.ID, 10) == match[2] {
-						answer = a.pageOf(a.boostsJSON(comment.Boosts), page)
-					}
-				}
-			})
-			return answer, answer != nil
+			if found, known := a.boostsOf(p, match[2]); known {
+				return a.pageOf(a.boostsJSON(found), page), true
+			}
 		}
 	case subtasksPattern.MatchString(path):
 		match := subtasksPattern.FindStringSubmatch(path)

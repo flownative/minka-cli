@@ -319,3 +319,40 @@ editor's attribute; anybody the people list lacks stays a name in the text.
 **Why:** A mention names an ID alone, and without a record of the person there
 is nothing to write the reference to; a text may claim what nobody signed.
 **Implemented as:** `mentionedPerson`, `registry.referByID`.
+
+<a id="c-027"></a>
+## C-027 — A chat is read to its end and held before its first line is written
+
+*Applies to: `import basecamp`, the lines of a chat*
+
+All pages of a chat are read, then its lines are ordered oldest first and
+written; one chat is held at a time, and a page is let go of once it is read.
+
+**Why:** Basecamp lists a chat newest first and can neither reverse nor count
+it, while a bundle is read from the top; one chat at a time bounds the memory.
+**Implemented as:** `Extractor.extractChat`, `getList`.
+
+<a id="c-028"></a>
+## C-028 — The walk goes kind by kind across the projects of a run
+
+*Applies to: `import basecamp`, the order of every file of a bundle*
+
+The projects with their tools and boards come first, then the message boards
+of all projects, then the chats; nothing of a later kind is written before.
+
+**Why:** Each file of a kind is streamed and never rewritten, and the comments
+of posts follow those of cards, the reactions those of what they hang on.
+**Implemented as:** `Extractor.Extract`, see [Importing](stable/import.md).
+
+<a id="c-029"></a>
+## C-029 — A request that failed for a reason that may pass is asked again
+
+*Applies to: `import basecamp`, every request through the Basecamp CLI*
+
+Network, rate limit and an API failure of 5xx, 408 or 429 are tried up to four
+times with growing pauses, 100 retries a run; then the run ends, retryable.
+
+**Why:** A run of hours must not end on one failure that passes, and the
+Basecamp CLI gives up at once on a status it does not know, a gateway's 525.
+**Implemented as:** `basecamp.Retrying`, `failure`, see
+[Importing](stable/import.md).

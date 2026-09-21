@@ -45,9 +45,12 @@ const (
 	StatusTrashed  = "trashed"
 
 	ParentCard = "card"
+	ParentPost = "post"
 
 	TargetCard    = "card"
 	TargetComment = "comment"
+	TargetMessage = "message"
+	TargetPost    = "post"
 )
 
 // Record is what every record carries. CreatedBy is nil when the source does
@@ -79,6 +82,16 @@ type Tool struct {
 	Record
 	ProjectSourceID string `json:"projectSourceId"`
 	Kind            string `json:"kind"`
+	Name            string `json:"name"`
+	Position        int    `json:"position"`
+}
+
+// Category is a kind of post a project offers. It belongs to the project, not
+// to one of its tools.
+type Category struct {
+	Record
+	ProjectSourceID string `json:"projectSourceId"`
+	Emoji           string `json:"emoji"`
 	Name            string `json:"name"`
 	Position        int    `json:"position"`
 }
@@ -124,6 +137,27 @@ type Step struct {
 	CompletedBy     *string `json:"completedBy"`
 }
 
+// Post is a post of a Posts tool. Status is never a draft: a draft is its
+// writer's own and no bundle carries one.
+type Post struct {
+	Record
+	ProjectSourceID  string  `json:"projectSourceId"`
+	ToolSourceID     string  `json:"toolSourceId"`
+	CategorySourceID *string `json:"categorySourceId"`
+	Title            string  `json:"title"`
+	Body             string  `json:"body"`
+	PinnedAt         *string `json:"pinnedAt"`
+	Status           string  `json:"status"`
+}
+
+// Message is one line of a chat.
+type Message struct {
+	Record
+	ProjectSourceID string `json:"projectSourceId"`
+	ToolSourceID    string `json:"toolSourceId"`
+	Body            string `json:"body"`
+}
+
 type Comment struct {
 	Record
 	ProjectSourceID string `json:"projectSourceId"`
@@ -154,12 +188,15 @@ type Attachment struct {
 	OwnerSourceID string `json:"ownerSourceId"`
 }
 
-// Manifest says where a bundle came from and how much it holds.
+// Manifest says where a bundle came from and how much it holds. Parts names
+// the files of a kind that was written in several, in their order; a kind that
+// stands in its one file is not in it.
 type Manifest struct {
-	Format         int          `json:"format"`
-	Source         string       `json:"source"`
-	SourceInstance string       `json:"sourceInstance"`
-	ExtractedAt    string       `json:"extractedAt"`
-	Extractor      string       `json:"extractor"`
-	Counts         map[Kind]int `json:"counts"`
+	Format         int               `json:"format"`
+	Source         string            `json:"source"`
+	SourceInstance string            `json:"sourceInstance"`
+	ExtractedAt    string            `json:"extractedAt"`
+	Extractor      string            `json:"extractor"`
+	Counts         map[Kind]int      `json:"counts"`
+	Parts          map[Kind][]string `json:"parts,omitempty"`
 }

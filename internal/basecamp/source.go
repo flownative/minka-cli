@@ -9,8 +9,11 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"net/http"
 	"os"
 	"os/exec"
+	"regexp"
+	"strconv"
 	"strings"
 	"syscall"
 )
@@ -33,8 +36,11 @@ const (
 	Forbidden    Kind = "forbidden"
 	RateLimited  Kind = "rate_limited"
 	Network      Kind = "network"
-	Interrupted  Kind = "interrupted"
-	API          Kind = "api"
+	// Unavailable is a failure of Basecamp, or of a gateway in front of it,
+	// that says nothing about the request and may be gone a moment later.
+	Unavailable Kind = "unavailable"
+	Interrupted Kind = "interrupted"
+	API         Kind = "api"
 )
 
 type Error struct {
@@ -46,6 +52,12 @@ type Error struct {
 
 func (e *Error) Error() string {
 	return e.Message
+}
+
+// Transient tells that the failure may pass by itself, so that the same
+// request is worth asking again.
+func (e *Error) Transient() bool {
+	return e.Kind == Network || e.Kind == RateLimited || e.Kind == Unavailable
 }
 
 // CLI is the Source that runs the Basecamp CLI. The Basecamp CLI brings the
@@ -127,8 +139,39 @@ var failureKinds = map[int]struct {
 	6: {"network", Network},
 }
 
+// The Basecamp CLI ends a failure of the API with this exit code and code.
+const (
+	apiFailureExit = 7
+	apiFailureCode = "api_error"
+)
+
+// statusPattern reads the HTTP status out of the messages the Basecamp CLI
+// makes up itself for a failure of the API. It names the status nowhere else,
+// and a message that Basecamp sent instead names none. The whole message has
+// to match: a text that merely quotes a status proves nothing.
+var statusPattern = regexp.MustCompile(`^(?:Request failed \(HTTP |Server error \(|Gateway error \()([0-9]{3})\)$`)
+
+// passes tells whether a failure of the API may be gone a moment later: the
+// Basecamp CLI says so itself, or the status is one of a server or a gateway
+// that failed, of a request that timed out or of too many requests. The
+// Basecamp CLI calls a status it does not know final, such as the one of a
+// gateway that lost its connection to Basecamp, so its word alone is not
+// enough.
+func passes(retryable bool, message string) bool {
+	if retryable {
+		return true
+	}
+	match := statusPattern.FindStringSubmatch(message)
+	if match == nil {
+		return false
+	}
+	status, _ := strconv.Atoi(match[1])
+	return (status >= 500 && status <= 599) || status == http.StatusRequestTimeout || status == http.StatusTooManyRequests
+}
+
 // failure reads what the Basecamp CLI said when it exited with an error: an
-// object {ok: false, error, code} on stdout, and an exit code per class.
+// object {ok: false, error, code, retryable} on stdout, and an exit code per
+// class.
 //
 // The exit code alone proves nothing: a program that crashes exits 2 as well,
 // and a crash must not read as "not found". So a class counts only when the
@@ -136,9 +179,10 @@ var failureKinds = map[int]struct {
 // same. Everything else is an error that carries what stood on stderr.
 func failure(exitCode int, stdout, stderr []byte) *Error {
 	var answer struct {
-		OK    *bool  `json:"ok"`
-		Error string `json:"error"`
-		Code  string `json:"code"`
+		OK        *bool  `json:"ok"`
+		Error     string `json:"error"`
+		Code      string `json:"code"`
+		Retryable bool   `json:"retryable"`
 	}
 	if json.Unmarshal(stdout, &answer) != nil || answer.OK == nil || *answer.OK {
 		// What stands on stdout may be the data of a request that failed
@@ -160,6 +204,9 @@ func failure(exitCode int, stdout, stderr []byte) *Error {
 	e := &Error{Kind: API, Message: "Basecamp: " + message}
 	if class, known := failureKinds[exitCode]; known && (answer.Code == "" || answer.Code == class.code) {
 		e.Kind = class.kind
+	}
+	if exitCode == apiFailureExit && (answer.Code == "" || answer.Code == apiFailureCode) && passes(answer.Retryable, answer.Error) {
+		e.Kind = Unavailable
 	}
 	return e
 }

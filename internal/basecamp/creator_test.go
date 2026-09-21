@@ -143,7 +143,7 @@ func TestAToolThatCannotAnswerDoesNotEndTheRun(t *testing.T) {
 
 func TestTheCreatorOfAProjectComesIntoTheBundle(t *testing.T) {
 	account := fakebasecamp.New()
-	stranger := fakebasecamp.Person{ID: 555, Name: "A Stranger", Email: "stranger@example.test", CreatedAt: "2021-01-01T08:00:00.000Z", UpdatedAt: "2021-01-01T08:00:00.000Z"}
+	stranger := fakebasecamp.Person{ID: 555, Name: "A Stranger", Kind: "Tombstone", Email: "stranger@example.test", CreatedAt: "2021-01-01T08:00:00.000Z", UpdatedAt: "2021-01-01T08:00:00.000Z"}
 	account.Projects[0].Dock[5].CreatedAt, account.Projects[0].Dock[5].Creator = withTheProject, &stranger
 	dir, _ := extract(t, account, "7001")
 

@@ -49,7 +49,7 @@ func TestAListIsReadPageByPageUntilAPageIsEmpty(t *testing.T) {
 
 func TestAPageNumberJoinsAQueryThatIsAlreadyThere(t *testing.T) {
 	source := &pages{}
-	if _, err := getAll(t.Context(), source, "recordings.json?type=Message"); err != nil {
+	if _, err := getList[person](t.Context(), source, "recordings.json?type=Message"); err != nil {
 		t.Fatal(err)
 	}
 	if want := []string{"recordings.json?type=Message&page=1"}; !slices.Equal(source.requests, want) {
@@ -61,13 +61,50 @@ func TestAListThatIgnoresThePageNumberEndsInAnError(t *testing.T) {
 	same := `[{"id":1}]`
 	source := &pages{answers: []string{same, same, same, same, same}}
 
-	_, err := getAll(t.Context(), source, "people.json")
+	_, err := getList[person](t.Context(), source, "people.json")
 	var failed *Error
 	if !errors.As(err, &failed) || failed.Kind != API {
 		t.Fatalf("got %v, want an API error", err)
 	}
 	if len(source.requests) != 2 {
 		t.Errorf("asked %d times, want it to stop at the second page", len(source.requests))
+	}
+	// A chat that grows by a page between two requests looks the same.
+	if !strings.Contains(failed.Message, "page 2 of people.json") || !strings.Contains(failed.Message, "moved under the walk") {
+		t.Errorf("the message does not say which page, or that the list may have moved: %s", failed.Message)
+	}
+}
+
+// reusing answers every page out of the same memory, as a source may.
+type reusing struct {
+	pages
+	buffer []byte
+}
+
+func (r *reusing) Get(ctx context.Context, path string) ([]byte, error) {
+	content, err := r.pages.Get(ctx, path)
+	r.buffer = append(r.buffer[:0], content...)
+	return r.buffer, err
+}
+
+// A chat has thousands of pages' worth: a page is read into its entries when
+// it arrives, and nothing of what the source sent is held on to.
+func TestAPageIsLetGoOfOnceItIsRead(t *testing.T) {
+	source := &reusing{pages: pages{answers: []string{`[{"id":1}]`, `[{"id":2}]`, `[{"id":3}]`}}}
+	people, err := getList[person](t.Context(), source, "people.json")
+	if err != nil {
+		t.Fatalf("pages that share their memory: %v", err)
+	}
+	if len(people) != 3 || people[0].ID != 1 || people[2].ID != 3 {
+		t.Errorf("got the people %v", people)
+	}
+
+	// What cannot be read ends the walk at its page, not after the last one.
+	broken := &pages{answers: []string{`[{"id":"one"}]`, `[{"id":2}]`}}
+	_, err = getList[person](t.Context(), broken, "people.json")
+	var failed *Error
+	if !errors.As(err, &failed) || failed.Kind != API || len(broken.requests) != 1 {
+		t.Errorf("got %v after %d requests, want an API error at the first page", err, len(broken.requests))
 	}
 }
 
