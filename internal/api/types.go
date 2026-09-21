@@ -172,7 +172,7 @@ type Reaction struct {
 type Chat struct {
 	ID          string `json:"id"`
 	Name        string `json:"name"`
-	UnreadCount int    `json:"unreadCount"` // counts own messages, never removed ones
+	UnreadCount int    `json:"unreadCount"` // never counts own messages, removed ones or imported lines
 	AppURL      string `json:"appUrl"`
 }
 
@@ -200,9 +200,13 @@ type Conversation struct {
 	AppURL          string          `json:"appUrl"`
 }
 
+// ChatMessage is one message of a chat. Seq names it within its chat and is
+// what a read mark and a Before cursor are given in. It is not the place of the
+// message: a list is ordered by CreatedAt, so the numbers down it need not
+// rise, and some are missing.
 type ChatMessage struct {
 	ID         string          `json:"id"`
-	Seq        int             `json:"seq"`       // orders the transcript and only rises; numbers may be missing
+	Seq        int             `json:"seq"`
 	ChangeSeq  int             `json:"changeSeq"` // raised with every change of the message
 	Author     PersonReference `json:"author"`
 	BodyHTML   string          `json:"bodyHtml"`   // empty for a removed message
@@ -217,7 +221,7 @@ type ChatMessage struct {
 // MessagesQuery chooses the messages of a chat. Without Before and After it is
 // the end of the transcript.
 type MessagesQuery struct {
-	Before *int // messages with a seq below this one
+	Before *int // messages said in front of the one with this seq
 	After  *int // messages that changed after this changeSeq
 	Limit  *int // at most this many, the server allows up to 200
 }

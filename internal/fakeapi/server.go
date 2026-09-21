@@ -125,10 +125,12 @@ type Chat struct {
 	ProjectID string   // empty for a private conversation
 	Partners  []string // the two people of a private conversation, nobody for a chat of a project
 	Name      string
-	Messages  []*ChatMessage // in the order of the transcript
+	Messages  []*ChatMessage // in the order they were written, which is not the order of the transcript
 	ReadMarks map[string]int // person ID → the seq read up to
 
-	lastChangeSeq int
+	// One counter numbers the messages and their changes alike, so the numbers
+	// of two messages next to each other may lie apart.
+	lastSeq int
 }
 
 // isConversation says whether this is a private talk, which has people instead
@@ -182,23 +184,76 @@ type ChatMessage struct {
 	CreatedAt       time.Time
 	EditedAt        *time.Time
 	Removed         bool
+	Imported        bool // brought in from another tool; no field of the answer says so
 	Reactions       []*Reaction
 }
 
 func (c *Chat) post(authorID, text, clientMessageID string, now time.Time) *ChatMessage {
-	c.lastChangeSeq++
+	c.lastSeq++
 	message := &ChatMessage{
-		ID: newID(), Seq: len(c.Messages) + 1, ChangeSeq: c.lastChangeSeq, AuthorID: authorID,
+		ID: newID(), Seq: c.lastSeq, ChangeSeq: c.lastSeq, AuthorID: authorID,
 		BodyText: chatText(text), BodyHTML: chatHTML(text), ClientMessageID: clientMessageID, CreatedAt: now,
 	}
 	c.Messages = append(c.Messages, message)
 	return message
 }
 
+// noteChange gives a message the next number of the chat as its change number.
+// An edit, a removal and a reaction given or taken away all do, which is how
+// whoever catches up learns of them.
+func (c *Chat) noteChange(message *ChatMessage) {
+	c.lastSeq++
+	message.ChangeSeq = c.lastSeq
+}
+
+// Import writes a line the way an import brings it: it takes the next number
+// of the chat and stands at the moment it was said, which may lie in front of
+// messages with lower numbers.
+func (c *Chat) Import(authorID, text string, saidAt time.Time) *ChatMessage {
+	message := c.post(authorID, text, "", saidAt)
+	message.Imported = true
+	return message
+}
+
+// saidBefore is the order of a transcript: by moment, and by number among
+// messages of the same moment.
+func saidBefore(one, other *ChatMessage) int {
+	if byMoment := one.CreatedAt.Compare(other.CreatedAt); byMoment != 0 {
+		return byMoment
+	}
+	return one.Seq - other.Seq
+}
+
+// transcript is what a reader sees of a chat: every message that was not taken
+// back, in the order things were said.
+func (c *Chat) transcript() []*ChatMessage {
+	var transcript []*ChatMessage
+	for _, message := range c.Messages {
+		if !message.Removed {
+			transcript = append(transcript, message)
+		}
+	}
+	slices.SortFunc(transcript, saidBefore)
+	return transcript
+}
+
+// lastWord is the newest message of the transcript, or nil while nothing
+// stands in it.
+func (c *Chat) lastWord() *ChatMessage {
+	transcript := c.transcript()
+	if len(transcript) == 0 {
+		return nil
+	}
+	return transcript[len(transcript)-1]
+}
+
+// unread counts by number, wherever a message stands in the transcript. What
+// was taken back, what an import brought and what the person wrote themselves
+// is nothing to come and read.
 func (c *Chat) unread(personID string) int {
 	unread := 0
 	for _, message := range c.Messages {
-		if message.Seq > c.ReadMarks[personID] {
+		if message.Seq > c.ReadMarks[personID] && !message.Removed && !message.Imported && message.AuthorID != personID {
 			unread++
 		}
 	}
@@ -1221,12 +1276,8 @@ func (s *Server) conversationResource(chat *Chat, person *Person) map[string]any
 	}
 
 	var lastText, lastAt any
-	for i := len(chat.Messages) - 1; i >= 0; i-- {
-		if chat.Messages[i].Removed {
-			continue
-		}
-		lastText, lastAt = chat.Messages[i].BodyText, timestamp(chat.Messages[i].CreatedAt)
-		break
+	if last := chat.lastWord(); last != nil {
+		lastText, lastAt = last.BodyText, timestamp(last.CreatedAt)
 	}
 
 	return map[string]any{
@@ -1241,16 +1292,16 @@ func (s *Server) conversationResource(chat *Chat, person *Person) map[string]any
 // lastWordAt is when a conversation was last spoken in, which is the beginning
 // of time while nothing has been said.
 func lastWordAt(chat *Chat) time.Time {
-	for i := len(chat.Messages) - 1; i >= 0; i-- {
-		if !chat.Messages[i].Removed {
-			return chat.Messages[i].CreatedAt
-		}
+	if last := chat.lastWord(); last != nil {
+		return last.CreatedAt
 	}
 	return time.Time{}
 }
 
 // messages pages the way the server does: before a seq, after a changeSeq,
-// or the end of the transcript, always oldest first.
+// or the end of the transcript, always in the order things were said. A seq
+// names a message and never its place, so the numbers down a page need not
+// rise.
 func (s *Server) messages(w http.ResponseWriter, r *http.Request, person *Person) {
 	chat := s.visibleChat(r.PathValue("chatId"), person)
 	if chat == nil {
@@ -1272,12 +1323,7 @@ func (s *Server) messages(w http.ResponseWriter, r *http.Request, person *Person
 	}
 	// A message that was taken back is out of the transcript and comes back
 	// only among what changed above a change number.
-	var transcript []*ChatMessage
-	for _, message := range chat.Messages {
-		if !message.Removed {
-			transcript = append(transcript, message)
-		}
-	}
+	transcript := chat.transcript()
 
 	var page []*ChatMessage
 	switch {
@@ -1287,9 +1333,20 @@ func (s *Server) messages(w http.ResponseWriter, r *http.Request, person *Person
 			notFound(w)
 			return
 		}
-		for _, message := range transcript {
-			if message.Seq < before {
-				page = append(page, message)
+		// The cursor stands where the message of that number was said, taken
+		// back or not. A number no message carries names the place of the
+		// highest number below it, and that message belongs to the page.
+		var boundary *ChatMessage
+		for _, message := range chat.Messages {
+			if message.Seq <= before && (boundary == nil || message.Seq > boundary.Seq) {
+				boundary = message
+			}
+		}
+		if boundary != nil {
+			for _, message := range transcript {
+				if saidBefore(message, boundary) < 0 || message == boundary && boundary.Seq != before {
+					page = append(page, message)
+				}
 			}
 		}
 		page = last(page)
@@ -1306,7 +1363,7 @@ func (s *Server) messages(w http.ResponseWriter, r *http.Request, person *Person
 		}
 		slices.SortFunc(page, func(a, b *ChatMessage) int { return a.ChangeSeq - b.ChangeSeq })
 		page = page[:min(len(page), wanted)]
-		slices.SortFunc(page, func(a, b *ChatMessage) int { return a.Seq - b.Seq })
+		slices.SortFunc(page, saidBefore)
 	default:
 		page = last(transcript)
 	}
@@ -1414,8 +1471,8 @@ func (s *Server) editMessage(w http.ResponseWriter, r *http.Request, person *Per
 	}
 	if message.BodyHTML != chatHTML(text) {
 		now := s.now
-		chat.lastChangeSeq++
-		message.BodyText, message.BodyHTML, message.EditedAt, message.ChangeSeq = chatText(text), chatHTML(text), &now, chat.lastChangeSeq
+		message.BodyText, message.BodyHTML, message.EditedAt = chatText(text), chatHTML(text), &now
+		chat.noteChange(message)
 	}
 	writeJSON(w, http.StatusOK, s.chatMessageResource(message))
 }
@@ -1435,14 +1492,15 @@ func (s *Server) removeMessage(w http.ResponseWriter, r *http.Request, person *P
 		return
 	}
 	if !message.Removed {
-		chat.lastChangeSeq++
-		message.Removed, message.BodyText, message.BodyHTML, message.ChangeSeq = true, "", "", chat.lastChangeSeq
+		message.Removed, message.BodyText, message.BodyHTML = true, "", ""
+		chat.noteChange(message)
 	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// markChatRead keeps the highest mark and never one beyond the last message.
+// markChatRead keeps the highest mark and never one beyond the counter of the
+// chat, so that a number from elsewhere cannot silence the chat for good.
 func (s *Server) markChatRead(w http.ResponseWriter, r *http.Request, person *Person) {
 	fields, ok := readBody(w, r)
 	if !ok {
@@ -1458,7 +1516,7 @@ func (s *Server) markChatRead(w http.ResponseWriter, r *http.Request, person *Pe
 		notFound(w)
 		return
 	}
-	seq := min(int(value), len(chat.Messages))
+	seq := min(int(value), chat.lastSeq)
 	if seq > chat.ReadMarks[person.ID] {
 		chat.ReadMarks[person.ID] = seq
 	}
@@ -1514,10 +1572,14 @@ func (s *Server) reactToMessage(w http.ResponseWriter, r *http.Request, person *
 	if !ok {
 		return
 	}
-	if s.refusedAsArchived(w, s.projectOfChat(s.visibleChat(r.PathValue("chatId"), person))) {
+	chat := s.visibleChat(r.PathValue("chatId"), person)
+	if s.refusedAsArchived(w, s.projectOfChat(chat)) {
 		return
 	}
 	status := reactTo(&message.Reactions, content, person.ID)
+	if status == http.StatusCreated {
+		chat.noteChange(message)
+	}
 	writeJSON(w, status, s.chatMessageResource(message))
 }
 
@@ -1527,10 +1589,13 @@ func (s *Server) unreactFromMessage(w http.ResponseWriter, r *http.Request, pers
 		notFound(w)
 		return
 	}
-	if s.refusedAsArchived(w, s.projectOfChat(s.visibleChat(r.PathValue("chatId"), person))) {
+	chat := s.visibleChat(r.PathValue("chatId"), person)
+	if s.refusedAsArchived(w, s.projectOfChat(chat)) {
 		return
 	}
-	unreactFrom(&message.Reactions, r.URL.Query().Get("content"), person.ID)
+	if unreactFrom(&message.Reactions, r.URL.Query().Get("content"), person.ID) {
+		chat.noteChange(message)
+	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -1606,8 +1671,8 @@ func reactTo(reactions *[]*Reaction, content, personID string) int {
 
 // unreactFrom takes away the reaction of this person, and where they left
 // none, the one somebody else left last: taking a reaction away is not bound
-// to whoever left it.
-func unreactFrom(reactions *[]*Reaction, content, personID string) {
+// to whoever left it. It says whether there was one to take.
+func unreactFrom(reactions *[]*Reaction, content, personID string) bool {
 	for i, reaction := range *reactions {
 		if reaction.Content != content {
 			continue
@@ -1620,8 +1685,9 @@ func unreactFrom(reactions *[]*Reaction, content, personID string) {
 		if len(reaction.PersonIDs) == 0 {
 			*reactions = slices.Delete(*reactions, i, i+1)
 		}
-		return
+		return true
 	}
+	return false
 }
 
 // upload takes the bytes of the body as a file of the project. The order of
