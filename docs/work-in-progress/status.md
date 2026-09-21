@@ -18,8 +18,9 @@ message boards as tools, of each board the columns, cards, steps, comments
 and boosts, of each message board the posts of every status with their
 categories, comments and boosts, and of each chat its lines as messages with
 their boosts, written in parts of one chat and some 10,000 lines each.
-Mentions in the texts are references, the preview of a link is the link, and
-the files of the texts and the files dropped into a chat come with a record
+Mentions in the texts are references, the preview of a link is the link, a
+video or a player embedded in a text is an `<import-embed>` with its address,
+and the files of the texts and the files dropped into a chat come with a record
 and their bytes, streamed from the Basecamp CLI or taken over from the bundle
 the run replaces. It reads through the Basecamp CLI and is tested against the
 invented account in `internal/fakebasecamp`.
@@ -119,6 +120,13 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   how long a run over thousands of files takes. That the Basecamp CLI asks
   for the path of an address without its escapes was read in its SDK, not
   seen.
+- Of the embeds of `import basecamp`: everything. No run over the real
+  account has written an `<import-embed>` yet, so how Basecamp writes the
+  figure around a frame, whether a caption ever stands before its frame, what
+  its own players carry as an address and how many frames are left out is not
+  seen. The rule of which address becomes a tag is read from Minka's
+  `RichText::isEmbeddableUrl` and kept stricter where PHP reads a port more
+  loosely.
 - A known limit of the files: a run that ends hard loses the files it
   fetched, because files are taken over from a bundle in place only. The
   first complete run over an account is the expensive one.
@@ -149,17 +157,6 @@ failure that may pass, and repairs an example in the skill) and
   already.
 - `CLAUDE.md` still rules out what the API does not offer, which the import
   is, and names a coordinator session of the past.
-
-## Waiting for the format
-
-- What is embedded in a text — a video, a player, an `iframe` today, which
-  Minka drops — comes over as an element of its own, `<import-embed url="…">`
-  in place of `<figure><iframe src=…>`; the client has decided so, as the
-  format coordination reports. The bundle holds some 500 of them, and 332
-  lines of chat hold nothing else and are passed over by the applier until
-  then. Which address the element carries, which schemes it takes and what
-  becomes of Basecamp's own players is written into the format first; the
-  extractor changes once that text is on Minka's `main`.
 
 ## Next steps
 
