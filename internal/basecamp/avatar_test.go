@@ -131,6 +131,10 @@ func TestAnInterruptedDownloadIsNoFailureOfTheNetwork(t *testing.T) {
 		_, _ = w.Write([]byte("the beginning of a picture"))
 		w.(http.Flusher).Flush()
 		<-r.Context().Done()
+		// Returning would end the body properly, and the client can still read
+		// that end: closing TLS tells the server first and cuts the connection
+		// only afterwards. The picture must stay unfinished.
+		panic(http.ErrAbortHandler)
 	})
 	client = newAvatarClient(&http.Client{Transport: stopOnceAnswered{server.Client().Transport, cancel}}, avatarTimeout)
 	_, err = client.Fetch(ctx, server.URL+"/avatar")
