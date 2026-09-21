@@ -11,11 +11,21 @@ private conversations, uploads, mentions, reactions and one's own cards across
 all projects. `minka commands` lists them all, built from the command tree
 itself.
 
-Everything is tested against the fake API and checked live — the chain
+`minka import basecamp` extracts the structure of Basecamp projects into an
+import bundle for Minka's applier: people with avatars, projects with members,
+and the boards, chats and message boards as tools. It reads through the
+Basecamp CLI, is tested against the invented account in `internal/fakebasecamp`
+and has been run live, as a dry run and into a bundle outside the repository.
+A run needs a Basecamp identity that may see the e-mail addresses of others,
+which is somebody of the account's own company or an admin. Under one that
+may not, masked addresses were seen live ending the run as `forbidden`. Only
+the people the chosen projects refer to come into a bundle.
+
+Everything else is tested against the fake API and checked live — the chain
 upload → attachment in the text → display as well as private conversations in
 both directions. What is checked against the fake only is listed below.
 
-Coordination of the API: the Minka session `minka-92`. It reports changes,
+Coordination of the API: the Minka session `minka-27`. It reports changes,
 which are checked against the Minka code; deviations go back to it.
 
 Versions are released by publishing a release in GitHub and installed through
@@ -48,6 +58,16 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   numbers), the order by creation, `--before` also for a number that was taken
   back or that no message carries, the read mark and its hint taking the
   highest number of a page, one's own messages never unread, and the refusals.
+- Of `import basecamp`: a Basecamp CLI that is not signed in, forbidden by
+  Basecamp or rate limited, a creator who left the account, and that an
+  address which is none comes out as `null` with its person named in
+  `invalidAddresses`: the account holds such an address, but on nobody the
+  projects extracted refer to, and it holds nobody retired. A run that is
+  killed was not seen live either. Seen live: a missing Basecamp CLI, masked
+  addresses ending the run, a missing project as `not_found`, people of the
+  account being left out, and files that could not be fetched, with the bundle
+  written without them and the run ending as `network`. The classes are the
+  exit codes and codes the Basecamp CLI shows; its source was not read.
 - "agent for X" in `people list` has been seen live, an agent that stepped
   down has not — it is in no list any more.
 
@@ -60,6 +80,11 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
 
 ## Next steps
 
+- The extractor goes on kind by kind, each a further step of the same walk:
+  boards (columns, cards, steps, comments), then chats and posts (categories,
+  posts, messages, comments, reactions), then the attachments of all of them
+  with `<import-attachment>` and `<import-mention>` in the bodies. Authors who
+  left the account come in as retired people through the registry.
 - Install through Homebrew once and play `minka setup` through by hand on a
   terminal: the release workflow has built a version and written the formula,
   but nobody has installed from it yet, and `setup` is covered by tests only.
@@ -67,7 +92,7 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   gains a build provenance attestation with instructions for verifying it, and
   the macOS binaries get notarised, which waits for an Apple Developer ID.
 
-- React to messages from `minka-92`: check against the code, fake first, then
+- React to messages from `minka-27`: check against the code, fake first, then
   the CLI, test and sabotage proof, check live, documentation in the same
   commit.
 - Prepare the internal alpha: change the token, proofread the SKILL.md.

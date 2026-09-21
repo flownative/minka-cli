@@ -27,6 +27,10 @@ the documentation says what holds; how it came about is in git.
 - [Releases](stable/releases.md): What publishing a release in GitHub sets off,
   why Homebrew and no install script, why the formula builds from source —
   before any work on the workflows, the Makefile's `dist` or the formula.
+- [Importing from Basecamp](stable/import.md): What the extractor reads
+  through the Basecamp CLI and why, what a bundle holds so far, how a run
+  protects what is in `--out`, the privacy rule for bundles — before any work
+  on `import` or on a further kind of record.
 - [Testing](stable/testing.md): Fake API, sabotage proofs, what a test pins
   down — read before your first test.
 

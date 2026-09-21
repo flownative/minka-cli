@@ -39,7 +39,10 @@ accepted for loopback only. Other paths are refused.
 ## Requests
 
 - Redirects are never followed: a redirect would carry the token to an address
-  nobody named.
+  nobody named. The one exception carries no token: the download of an avatar
+  for an import follows at most five redirects, and only to https. A redirect
+  that is refused is a refusal, not a failure of the network, and not
+  retryable.
 - Every ID is checked locally as a UUID — one that is not ends with exit 1,
   without a request going out — and additionally escaped in the path. A card
   may be named by its short identifier instead, whose shape is checked the
