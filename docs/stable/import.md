@@ -16,10 +16,11 @@ host and no token.
 ## Through the Basecamp CLI
 
 The extractor does not speak the Basecamp API itself. It runs
-`basecamp api get <path> --agent` for every request (C-023): the Basecamp CLI
-brings the sign-in, the refreshing of the token, rate limiting and retries,
-and no Basecamp token ever passes through minka. The Basecamp CLI has to be
-installed and signed in.
+`basecamp api get <path> --agent` for every request, and
+`basecamp files download` for every file of a text or a chat, see Files
+(C-023): the Basecamp CLI brings the sign-in, the refreshing of the token,
+rate limiting and retries, and no Basecamp token ever passes through minka.
+The Basecamp CLI has to be installed and signed in.
 
 - The path stands behind `--` and `BASECAMP_NONINTERACTIVE=1` is set: nothing
   in a path is read as a flag, and a question would hang a run nobody watches.
@@ -160,9 +161,9 @@ The structure, the boards, the message boards and the chats:
 `manifest.json`, `people.jsonl`, `projects.jsonl`, `tools.jsonl`,
 `categories.jsonl`, `columns.jsonl`, `cards.jsonl`, `steps.jsonl`,
 `posts.jsonl`, `messages.jsonl` or its parts, `comments.jsonl`,
-`reactions.jsonl`, `attachments.jsonl` and `files/`. A file of a kind the
-projects have nothing of is missing. The files of texts and chats do not come
-yet, only the references to them.
+`reactions.jsonl`, `attachments.jsonl` and `files/` with the avatars and the
+files of texts and chats. A file of a kind the projects have nothing of is
+missing.
 
 The walk goes kind by kind across the projects of a run (C-028): the projects
 with their tools and boards, then the message boards of all projects, then
@@ -293,8 +294,10 @@ on: those of cards, those of posts, those of lines.
   nobody comes into the bundle for it, its boosts are not asked for and no
   part ends at it. Nothing is what a reader sees nothing of: whitespace,
   characters without a width, `<br>` and empty `<div>` and `<p>`. A
-  reference to a file or a person, a link, a rule and an embedded frame say
-  something. A line comes as long as it is: nothing is shortened.
+  reference to a file or a person, a link, a rule and an embed say
+  something: a line that was a video alone is a line, and one whose only
+  frame is left out, see Texts, says nothing. A line comes as long as it is:
+  nothing is shortened.
 - **Parts.** The messages are written in parts: `messages-0001.jsonl` and on,
   numbered through the bundle in the order of the chats, which is the order
   of the projects and their tools. A part holds lines of one chat. It ends
@@ -338,11 +341,14 @@ What Basecamp does not hand out, so that no bundle carries it:
 IDs are the numeric IDs of Basecamp as strings; `sourceInstance` is the ID of
 the account, taken from the address of a project. Times are written the way
 Basecamp writes them, milliseconds included. People, projects, tools and
-attachments are ordered by numeric ID, steps, comments and reactions by their
+avatars are ordered by numeric ID, steps, comments and reactions by their
 parents in the order of their file and then by position or age, whatever
 order Basecamp answers in: two runs over an unchanged account write the same
-bytes, apart from `extractedAt`. Only where Basecamp gives cards no position,
-in Done and among the archived and the trashed, does its own order count.
+bytes, apart from `extractedAt`, whether a run fetched its files or took
+them over. `attachments.jsonl` begins with the avatars and goes on with the
+files in the order the walk meets them, see Files. Only where Basecamp gives
+cards no position, in Done and among the archived and the trashed, does its
+own order count.
 
 A card, a post and a line cost no request of their own: a list shows them in
 full. Comments are asked for only where a card or a post says it has some,
@@ -352,9 +358,11 @@ rate Basecamp allows.
 
 ### Texts
 
-A bundle never carries the embeds of its source. In the note of a card, the
-body of a post, of a comment and of a line, every `<bc-attachment>` is
-replaced as a whole, with the figure Basecamp rendered into it:
+A bundle never carries the embeds of its source, and writes three tags of
+its own in their place: `<import-mention>`, `<import-attachment>` and
+`<import-embed>`. In the note of a card, the body of a post, of a comment and
+of a line, every `<bc-attachment>` is replaced as a whole, with the figure
+Basecamp rendered into it:
 
 - A mention becomes `<import-mention ref="<personId>">Name</import-mention>`,
   with the name the list of the account has. The person is looked for in the
@@ -366,6 +374,12 @@ replaced as a whole, with the figure Basecamp rendered into it:
   shows no name, the name comes from the rendered one.
 - A file becomes `<import-attachment ref="attachment-<id>"></import-attachment>`
   with the ID of the file Basecamp lists next to the text (`filesInBodies`).
+  The reference carries `caption` when the embed has one, and
+  `presentation="gallery"` when the embed says exactly that, in this order,
+  escaped as attribute values, and nothing else. A caption of more than 1000
+  characters (`maxCaptionLength`) is left off and counted
+  (`captionsDropped`), and the file comes all the same. A stored note that
+  says neither takes both from the rendered one.
   The listed file is found by the signed ID of the embed, then by the key of
   the stored file, which stands in the address of the embed
   (`…/blobs/<key>/download/…` in `href`, else `url`), then by the ID of the
@@ -375,8 +389,8 @@ replaced as a whole, with the figure Basecamp rendered into it:
   listed file is what says where the file is fetched from. An embedded file
   that is not listed cannot be named: its caption stays as text, for the
   stored note of a card the one of the rendered note, the rest is dropped, it
-  is counted (`filesDropped`) and a `notice` says so. No attachment record is
-  written for a file of a text yet, and nothing is downloaded.
+  is counted (`filesDropped`) and a `notice` says so. It has no reference,
+  and so no record and no file.
 - A horizontal rule becomes `<hr>`.
 - The preview of a link (`application/vnd.basecamp.opengraph-embed`) becomes
   the link, `<a href="…">title</a>`, with the address as the text where the
@@ -390,17 +404,68 @@ replaced as a whole, with the figure Basecamp rendered into it:
   picture: a bundle fetches nothing from an address somebody wrote into a
   text (`picturesLinked`, which counts what became a link). A picture with a
   signed ID, and one of a kind such as `image/png`, is a file as above.
-- An embed of any other kind that carries no signed ID stays as it is, and so
-  does what is no embed at all, such as a `<figure>` with the `<iframe>` of a
-  video.
+- An embed of any other kind that carries no signed ID stays as it is, with
+  all it holds but a frame.
+
+What the source embeds from elsewhere, a video, a track, a player, stands in
+a text as an `<iframe>`, mostly in a `<figure>` of its own. It becomes
+`<import-embed url="<address>"></import-embed>` in the place of the frame and
+of all the frame holds (`embeds`). The tag carries the `src` of the frame and
+nothing else: the address the `src` stands for, read out of the HTML once and
+escaped as an attribute value once. The whitespace a browser takes away
+before and behind an address, blank, tab, line feed, form feed and carriage
+return, goes before anything is asked of the address, because Minka takes
+none away, and the tag carries the address without it; a `src` of nothing
+else is no `src`. Nothing else of the address changes. The extractor tells no
+provider from another and asks nobody about the address.
+
+- A `<figure>` that holds a frame is not written, neither its start nor its
+  end tag. What else stands in it stays where it stands, as the source wrote
+  it, whitespace included. Its `<figcaption>` becomes a paragraph in its
+  place, `<p>`, what the caption holds and `</p>`, which is after the tag
+  wherever the source puts the caption after the frame; a caption that holds
+  nothing but whitespace becomes nothing. Whatever the figure, the caption
+  and the frame carry as attributes goes. A block around the figure stays.
+- A figure that holds no frame, such as the one around a table, passes byte
+  for byte.
+- Every frame of a text becomes a tag, in the order of the text, in a figure
+  or outside of one.
+- Only an address Minka takes becomes a tag, and `embeddable` is the whole
+  rule, asked of the address without the whitespace around it: it begins
+  with `http://` or `https://` in whatever case, names a host, holds no
+  character from U+0000 to U+0020, no U+007F and no backslash, and is at most
+  2,000 characters long, counted as code points. No other character is
+  refused. The host is what follows the scheme up to the first `/`, `?` or
+  `#`, without what stands before the last `@` and without a port; a colon
+  no port follows is no port, and a port is one to five digits and at most
+  65535. About a port the rule is stricter than Minka, which reads the number
+  a port begins with and lets the rest be: no tag is written that could be
+  refused, at the price of an embed whose port ends in something else. A
+  frame with any other address, relative ones, `//host/…`, `data:`, `about:`
+  and `javascript:` included, and a frame without a `src`, is left out with
+  all it holds and counted (`embedsLeftOut`), and a `notice` says so. Its
+  figure goes the same way, so one that held nothing else leaves nothing, and
+  a caption stays as its paragraph.
+- A frame that is never closed holds the rest of the text for a reader of
+  tokens, as it does for a browser. The rest is read anew as the text it is,
+  so such a frame costs no more than itself, and once, however many frames
+  follow: nothing closes a frame behind one that is never closed. A text is
+  read in a time that grows with its length, whatever it is made of.
+- A frame Basecamp rendered into a `<bc-attachment>` that is replaced goes
+  with that rendering and is not counted. In an embed of another kind, which
+  passes through, a frame becomes a tag or is left out like any other: no
+  `<iframe>` reaches a body, and such an embed may never end.
+- No output names an address.
 
 A line of a chat that is a file somebody dropped has no text. Its body is one
 `<import-attachment ref="blob-<key>"></import-attachment>` per file, in the
-order of the line, and counts as `filesInBodies`. Basecamp gives such a file
-no ID, so the key of the stored file names it, which stands in the address it
-is downloaded from (`…/blobs/<key>/download/…`), else in the one it is
-previewed at (`…/blobs/<key>/previews/…`). A key is made of letters, digits,
-`-` and `_`, because it becomes part of the ID of an attachment. A file
+order of the line, without a caption, and counts as `filesInBodies`. Basecamp
+gives such a file no ID, so the key of the stored file names it, which stands
+in the address it is downloaded from (`…/blobs/<key>/download/…`), else in
+the one it is previewed at (`…/blobs/<key>/previews/…`). A key is made of
+letters, digits, `-` and `_`, because it becomes part of the ID of an
+attachment; one that has not the shape of a UUID besides keeps its reference
+and is a file no run can ask for, see Files. A file
 without such a key is dropped and counted (`filesDropped`); a line that keeps
 no file is left out with its boosts and counted (`uploadLinesLeftOut`), and
 nobody comes into the bundle for it. A plain line and the line of a bot go
@@ -416,17 +481,136 @@ addresses, with or without padding. A global ID counts as a whole: nothing of
 a word before it, nothing of a number or a path after it.
 
 Every other token passes through with the bytes it was read from: Minka
-sanitises a body, and the extractor adds no second opinion. What goes besides
-an embed is what belongs to one: whitespace between an embed and its
-rendering, an end tag of an embed without its beginning, and a tag the text
-breaks off in. A text is read token by token, never parsed into a tree,
+sanitises a body, and the extractor adds no second opinion. A text that holds
+neither an embed nor a frame is not read at all and passes as it is. What
+goes besides an embed is what belongs to one: whitespace between an embed and
+its rendering, an end tag of an embed without its beginning, and a tag the
+text breaks off in. A text is read token by token, never parsed into a tree,
 because a tree moves a figure out of a paragraph; an embed that is never
 closed costs no more of the text than its figure, and one that closes itself
 nothing.
 
+### Files
+
+Every `<import-attachment>` the extractor writes has a record in
+`attachments.jsonl` whose `sourceId` is exactly its `ref`, and its bytes at
+`files/<sourceId>/<filename>`: `attachment-<id>` for a file embedded in the
+text of a card, a comment or a post, `blob-<key>` for a file dropped into a
+chat. The one reference without a record is a file the run could not fetch,
+see Files that cannot be fetched (C-030).
+
+- **The record** carries `filename`, `contentType` as Basecamp says it, or
+  `null`, `bytes`, `sha256`, `file`, which is exactly
+  `<sourceId>/<filename>`, `ownerKind` (`card`, `comment`, `post`, `message`)
+  and `ownerSourceId`. Basecamp gives a file neither a time nor a creator, so
+  `createdAt` and `updatedAt` are those of its owner, and `createdBy` is
+  `null`, which the format reads as the author of the owner. Avatars stay as
+  they are, with their person as creator.
+- **One record and one download per `sourceId`**, however many references
+  name it: a text may embed the same file twice. Where a file turns up under
+  a second owner, the first keeps the record and the case is counted
+  (`filesOfSeveralOwners`).
+- **Order.** The index begins with the avatars, in the order of the people,
+  and goes on with the files in the order the walk meets them: the files of
+  a card, those of its comments, the next card; then the posts the same way;
+  then the lines; within a text in the order of the references. A file is
+  fetched when its owner is written, and its record is held until the people
+  are written at the end of the run.
+- **Through the Basecamp CLI.** `basecamp files download <address> --out -
+  --agent` streams the bytes of a file to its standard output. `--out -`
+  matters: given a directory, the Basecamp CLI chooses the name itself and
+  overwrites a file of that name. The address stands behind `--`, and
+  `BASECAMP_NONINTERACTIVE=1` is set.
+- **The address** is
+  `https://storage.3.basecamp.com/<account>/blobs/<key>/download/<name>`.
+  The extractor's own are the scheme, the host, the account of the run and
+  the place of every part. Taken from Basecamp are the key, which has to
+  have the shape of a UUID, and the name: the last segment of the
+  `download_url` Basecamp gives the file, as escaped there, when that
+  address names the same account and key, else the name of the file,
+  escaped. Neither a host nor a path of an answer is passed on. The Basecamp
+  CLI takes a download from a storage address only, not from the
+  `download_url` itself, and sends its token to the API it is signed in at,
+  whatever host the address names. The preview address of a file is never
+  fetched: a bundle carries the original.
+  Right before the call the address is held against one pattern
+  (`checkStorageAddress`): https, a host that begins with `storage.` and
+  ends in `.basecamp.com`, digits for the account, a key of the shape of a
+  UUID, one segment for the name, and no query and no fragment. The name has
+  valid escapes and, with them taken away, is neither `.` nor `..` and holds
+  neither `/` nor `\` nor a NUL: the Basecamp CLI asks for the path without its
+  escapes, so such a name would be a path of its own, as far as into another
+  account, asked for with the sign-in. A file whose key or name does not
+  pass is missing, not retryable, never `gone`, and is never asked for; the
+  reason says whether the key has no form that can be asked for or the
+  address Basecamp gives cannot be asked for safely.
+- **Streaming.** The bytes go from the Basecamp CLI into the staged file
+  while they are counted and digested (`bundle.Writer.StoreFile`); a file is
+  never held in memory, and there is no limit of size and no check of the
+  type: the extractor fetches everything and decides nothing. Directories
+  are 0700, files 0600.
+- **Limits of time.** The Basecamp CLI puts none on a download. A download
+  that brings no byte for 60 seconds (`fileIdleTimeout`), or that has not
+  ended after an hour (`fileTimeLimit`), is ended together with the Basecamp
+  CLI and counts as a failure of the network. A run that is stopped ends the
+  Basecamp CLI at once and is `interrupted`; nothing of the bundle stays.
+  The reset of the idle time with every piece is what lets a long download
+  through.
+- **What a download came to.** The exit code decides whether it failed,
+  whatever stands on standard output, where the Basecamp CLI prints its
+  failure object in place of the file, or behind the part of a file that
+  broke off. Exit 0 and as many bytes as Basecamp says the file has
+  (`byte_size`, where it says one) is a file. Another number of bytes is a
+  failure, retryable when fewer came; the size alone decides, whatever the
+  bytes look like. Only where Basecamp gives no size does the look count:
+  exit 0 with nothing but a failure object (`ok: false`) of a few kilobytes
+  is then a failure and no file (`ErrLooksLikeAFailure`). Exit 2 with the
+  failure object `not_found` alone on standard output is a file Basecamp no
+  longer has:
+  its record says `gone: true`, with `file`, `bytes` and `sha256` `null` and
+  everything else as Basecamp lists it (`filesGone`, and a `notice`). A
+  crash with exit 2 is no such proof, and neither is `not_found` behind a
+  part of a file. A Basecamp CLI that is not signed in (exit 3) ends the
+  run as `auth_required`, as it does for a request: no further file would
+  come either. Every other failure, forbidden included, leaves the file
+  out, see Files that cannot be fetched. The download of a file is not asked
+  again within a run.
+- **Names.** `filename` is a plain name: `/`, `\` and control characters
+  become `_`, an empty name, `.` and `..` become `file`, and a name of more
+  than 255 bytes, which is never more than 255 characters, is shortened
+  before its extension, because a file system takes no more
+  (`plainName`). `fileNamesChanged` counts the names that changed. No output
+  ever says a name, a caption or an address: they are personal data, and a
+  reason names the `sourceId` and a class of failure, never what the
+  Basecamp CLI printed.
+- **Taking files over.** A run replaces the bundle as a whole, and would
+  fetch thousands of files again. So a file is taken over from the bundle at
+  `--out` that the run replaces, instead of being downloaded, when the index
+  of that bundle has a record of the same `sourceId` that names the same
+  `file`, the file is a regular file of the size the record gives, which is
+  also the size Basecamp gives, and its digest, computed anew, is the one of
+  the record (`bundle.Writer.ReuseFile`). Anything else is fetched. A record
+  that says `gone` is not trusted, the file is asked for again; an avatar is
+  never taken over, because somebody may have another picture under the
+  same ID. The old bundle is only read. The file is linked (a hard link),
+  or copied where it cannot be linked or is readable by others, and the
+  copy is digested again. A link shares its content with the old file, so
+  nothing is ever written into a file that stands: every file goes into a
+  directory that is made anew for it, one per attachment, and a directory
+  that stands takes nothing. A file is only ever removed by its name.
+  Removing the old bundle, giving a run up and tidying up after a killed one
+  therefore leave the other bundle whole. `filesReused` and `filesFetched`
+  count both ways.
+- **What a run that ends hard loses.** Files are taken over from a bundle
+  that is in place, and a bundle takes its place only at the end of a run.
+  A run that fails, is stopped or is killed therefore loses the files it
+  had fetched, and the next run fetches them again. The first complete run
+  over an account is the expensive one; every run after it fetches what is
+  new or was missing.
+
 A further kind is a further step of the walk that adds its records to the same
-writer, feeds the creators it meets into the same people and attaches its
-files the same way as an avatar is attached.
+writer, feeds the creators it meets into the same people and attaches the
+files of its texts the same way.
 
 ## A run
 
@@ -463,22 +647,30 @@ files the same way as an avatar is attached.
   manifest of its own and a bundle of another source included, and the refusal
   names the first entries that are in the way. The check
   happens before Basecamp is asked and again before the replacing.
-- `--dry-run` walks Basecamp the same way, downloads no avatar, writes nothing
-  and reports the same counts and the same parts. It needs no `--out`; given
-  one, it checks it the way the real run does, so the refusal shows
-  beforehand.
+- `--dry-run` walks Basecamp the same way, downloads no avatar and no file,
+  writes nothing and reports the same counts and the same parts, and what a
+  run would fetch: `filesExpected`, the files the references name, each once,
+  and `filesBytesExpected`, the sum of the sizes Basecamp gives them. It does
+  not look at what a run could take over. It needs no `--out`; given one, it
+  checks it the way the real run does, so the refusal shows beforehand.
 - The report carries `counts` as the manifest has them, `avatars`,
   `skippedTools`, `missingFiles`, `cardsByStatus`, `cardsOnHold`,
   `cardsLeftOut`, `commentsTrashed`, `postsByStatus`, `postsLeftOut`,
   `postsWithEmptyBody`, `messagesByType` (`text`, `richText`, `upload`,
   `integration`), `messagesWithEmptyBody`, `uploadLinesLeftOut`, `parts` as
   the manifest has them, `mentionsUnresolved`, `filesInBodies`,
-  `filesDropped`, `linkPreviews`, `picturesLinked`, `longestBody`,
-  `requestsRetried` and the absolute path of the bundle. `longestBody` is the
-  longest text per kind, `cards`, `comments`, `posts` and `messages`, in
-  characters: whoever sets the limits of where a bundle goes has to know it.
-  `requestsRetried` is a number, 0 for a run that met no failure; the text
-  shows its line only when it is more.
+  `filesDropped`, `filesExpected`, `filesBytesExpected`, `filesBytes`,
+  `filesFetched`, `filesReused`, `filesGone`, `fileNamesChanged`,
+  `captionsDropped`, `filesOfSeveralOwners`, `linkPreviews`,
+  `picturesLinked`, `embeds`, `embedsLeftOut`, `longestBody`,
+  `requestsRetried` and the absolute path of the bundle. `filesBytes` is
+  what the files of the bundle weigh, fetched or taken over; it and
+  `filesFetched`, `filesReused` and `filesGone` are 0 in a dry run.
+  `longestBody` is the longest text per kind, `cards`, `comments`, `posts`
+  and `messages`, in characters: whoever sets the limits of where a bundle
+  goes has to know it. `requestsRetried` is a number, 0 for a run that met no
+  failure; the text shows its line only when it is more, and so it does for
+  `embeds` and `embedsLeftOut`.
   No output names a title, a person or what stands in a text.
 - A run prints nothing while it goes on, in any mode: the output contract
   knows results, warnings and errors only.
@@ -486,11 +678,18 @@ files the same way as an avatar is attached.
 ## Files that cannot be fetched
 
 One file that is not to be had does not cost a run (C-025). Its attachment
-record is left out, whatever pointed to it points to nothing (`avatar: null`),
-and the bundle is written and put in place: it is whole and can be applied.
-`missingFiles` names each file with `attachmentSourceId`, `ownerKind`,
-`ownerSourceId`, `reason` and `retryable`. The rule holds for every file of a
-bundle, not for avatars only. Only an interruption ends the run.
+record is left out, and the bundle is written and put in place: it is whole
+and can be applied. A person whose avatar is missing comes with
+`avatar: null`; a text keeps the reference to a file that is missing, which
+the applier passes over until a later bundle answers it. What was written of
+such a file is removed. `missingFiles` names each file with
+`attachmentSourceId`, `ownerKind`, `ownerSourceId`, `reason` and `retryable`.
+The rule holds for every file of a bundle. What ends the run is an
+interruption, a bundle that cannot be written, and a Basecamp CLI that is
+not signed in when a file is asked for. A failure of the file system comes
+without the path it happened at, which ends in the name of the file. A file
+Basecamp no longer has is not missing: it has a record that says so, see
+Files.
 
 Such a run fails, so that a caller notices: `network`, exit 6 and retryable
 when at least one file failed for a reason that may pass by itself, else
@@ -498,11 +697,12 @@ when at least one file failed for a reason that may pass by itself, else
 the error envelope with `--json` and `--quiet`, as text before the error
 otherwise. A later run replaces the bundle and brings what it can get then.
 
-A file is fetched over https only, redirects included and at most five of
+An avatar is fetched over https only, redirects included and at most five of
 them, with a timeout of 30 seconds and at most 5 MiB, which is enforced while
 reading. It has to be a picture of a known type: an error page must not end up
-in a bundle. A reason never carries the address of the file, which names a
-person.
+in a bundle. A file of a text or a chat comes through the Basecamp CLI, see
+Files. A reason never carries the address or the name of a file, which name
+a person or what they wrote.
 
 ## A bundle is personal data
 

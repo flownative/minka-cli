@@ -75,7 +75,7 @@ func TestALineOfEveryKindBecomesAMessage(t *testing.T) {
 		"sourceId": "9802", "createdAt": "2023-04-20T09:02:00.000Z", "updatedAt": "2023-04-20T09:03:00.000Z", "createdBy": "102",
 		"projectSourceId": "7004", "toolSourceId": "9033",
 		"body": `<div><import-mention ref="101">Ada Example</import-mention> look: <a href="https://example.test/news?a=1&amp;b=2">News &amp; weather</a></div>` +
-			`<figure><iframe src="https://video.example.test/embed/42"></iframe></figure>`,
+			`<import-embed url="https://video.example.test/embed/42"></import-embed>`,
 	}
 	if got := recordWithID(t, lines, "9802"); !reflect.DeepEqual(got, want) {
 		t.Errorf("message:\n got %v\nwant %v", got, want)
@@ -98,7 +98,7 @@ func TestALineOfEveryKindBecomesAMessage(t *testing.T) {
 	if want := map[string]int{"text": 4, "richText": 2, "upload": 2, "integration": 1}; !reflect.DeepEqual(result.MessagesByType, want) {
 		t.Errorf("messages by type %v, want %v", result.MessagesByType, want)
 	}
-	if want := (basecamp.BodyCounts{Files: 4, FilesDropped: 2, LinkPreviews: 3, PicturesLinked: 1}); result.Bodies != want {
+	if want := (basecamp.BodyCounts{Files: 4, FilesDropped: 2, LinkPreviews: 3, PicturesLinked: 1, Embeds: 1}); result.Bodies != want {
 		t.Errorf("bodies %+v, want %+v", result.Bodies, want)
 	}
 }
@@ -267,7 +267,7 @@ func TestADiscardedRunOverTalksAsksTheSameCountsTheSameAndNamesTheSameParts(t *t
 
 	dry := fakebasecamp.New()
 	writer := bundle.Discard()
-	extractor := basecamp.Extractor{Source: dry, Avatars: dry, MessagesPerPart: 3}
+	extractor := basecamp.Extractor{Source: dry, Avatars: dry, Files: dry, MessagesPerPart: 3}
 	got, err := extractor.Extract(t.Context(), []string{talkProject}, writer)
 	if err != nil {
 		t.Fatal(err)
@@ -275,11 +275,11 @@ func TestADiscardedRunOverTalksAsksTheSameCountsTheSameAndNamesTheSameParts(t *t
 	if !slices.Equal(dry.Requests, written.Requests) {
 		t.Errorf("a dry run asked for\n%v\na real one for\n%v", dry.Requests, written.Requests)
 	}
-	if !reflect.DeepEqual(got, want) {
+	if want = asADryRunKnowsIt(want); !reflect.DeepEqual(got, want) {
 		t.Errorf("a dry run reports\n%+v\na real one\n%+v", got, want)
 	}
 	wantCounts := map[bundle.Kind]int{bundle.People: 7, bundle.Projects: 1, bundle.Tools: 5, bundle.Categories: 4, bundle.Posts: 6,
-		bundle.Messages: 9, bundle.Comments: 3, bundle.Reactions: 4, bundle.Attachments: 6}
+		bundle.Messages: 9, bundle.Comments: 3, bundle.Reactions: 4, bundle.Attachments: 10}
 	if counts := writer.Counts(); !reflect.DeepEqual(counts, wantCounts) {
 		t.Errorf("counts %v, want %v", counts, wantCounts)
 	}
@@ -385,7 +385,7 @@ func TestWithoutANumberAPartHoldsTenThousandLines(t *testing.T) {
 	account.PageSize = 1000
 	campfire(account).Lines, side(account).Lines = nil, nil
 	quiet(account).Lines = chatOf(account, 100000, 10001)
-	extractor := basecamp.Extractor{Source: account, Avatars: account}
+	extractor := basecamp.Extractor{Source: account, Avatars: account, Files: account}
 	writer := bundle.Discard()
 	if _, err := extractor.Extract(t.Context(), []string{talkProject}, writer); err != nil {
 		t.Fatal(err)
@@ -484,7 +484,7 @@ func TestTheAddressOfSomebodyDeletedIsHeldToWhatEveryAddressIs(t *testing.T) {
 	account = fakebasecamp.New()
 	account.UsersOnly()
 	campfire(account).Lines[4].Creator.Email = maskedAddress
-	extractor := basecamp.Extractor{Source: account, Avatars: account}
+	extractor := basecamp.Extractor{Source: account, Avatars: account, Files: account}
 	_, err := extractor.Extract(t.Context(), []string{talkProject}, bundle.Discard())
 	var failed *basecamp.Error
 	if !errors.As(err, &failed) || failed.Kind != basecamp.Forbidden {
@@ -578,7 +578,7 @@ func TestWhatABundleCannotSayAboutATalkEndsTheRunWithoutNamingAnything(t *testin
 	} {
 		account := fakebasecamp.New()
 		change(account)
-		extractor := basecamp.Extractor{Source: account, Avatars: account}
+		extractor := basecamp.Extractor{Source: account, Avatars: account, Files: account}
 		_, err := extractor.Extract(t.Context(), []string{talkProject}, bundle.Discard())
 		var failed *basecamp.Error
 		if !errors.As(err, &failed) {
@@ -608,7 +608,7 @@ func TestALineThatCannotBeCarriedEndsTheRunBeforeItsChatIsWritten(t *testing.T) 
 		account := fakebasecamp.New()
 		c.change(account)
 		writer := bundle.Discard()
-		extractor := basecamp.Extractor{Source: account, Avatars: account}
+		extractor := basecamp.Extractor{Source: account, Avatars: account, Files: account}
 		_, err := extractor.Extract(t.Context(), []string{talkProject}, writer)
 		var failed *basecamp.Error
 		if !errors.As(err, &failed) || failed.Kind != basecamp.API || !strings.HasSuffix(failed.Message, c.message) {
@@ -697,7 +697,7 @@ func TestABotThatDoesNotSayWhenItWasMadeEndsTheRun(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		extractor := basecamp.Extractor{Source: account, Avatars: account}
+		extractor := basecamp.Extractor{Source: account, Avatars: account, Files: account}
 		_, err = extractor.Extract(t.Context(), []string{talkProject}, writer)
 		writer.Abort()
 
@@ -788,17 +788,20 @@ func TestALineThatSaysNothingIsLeftOutAndCounted(t *testing.T) {
 	}
 }
 
-// What a reader sees nothing of is nothing; a reference, a link, a rule and a
-// frame are something, and so is a line however long.
+// What a reader sees nothing of is nothing; a reference, a link, a rule and an
+// embed are something, and so is a line however long. A frame that is left out
+// leaves nothing.
 func TestOnlyWhitespaceBreaksAndEmptyBlocksSayNothing(t *testing.T) {
 	long := strings.Repeat("a", 10001)
 	for content, written := range map[string]bool{
 		"": false, " \t\n": false, "\u200b\ufeff": false, "<br>": false, "<div></div>": false, "<div><br/></div><p>&nbsp;</p>": false, "<!-- nothing -->": false,
 		".": true, "<div>&amp;</div>": true, "<hr>": true, `<a href="https://example.test/"></a>`: true, "<span></span>": true,
-		`<figure><iframe src="https://video.example.test/embed/1"></iframe></figure>`:                      true,
-		fakebasecamp.LinkPreview("https://example.test/", ""):                                              true,
-		fakebasecamp.Mention(fakebasecamp.SGID("gid://bc3/Person/102"), "", 102, "Grace Sample"):           true,
-		`<bc-attachment content-type="application/vnd.basecamp.horizontal-rule.html"><hr></bc-attachment>`: true,
+		`<figure><iframe src="https://video.example.test/embed/1"></iframe></figure>`:                          true,
+		"<figure>\n<iframe src=\"//video.example.test/embed/1\"></iframe><figcaption> </figcaption></figure>":  false,
+		`<figure><iframe src="//video.example.test/embed/1"></iframe><figcaption>A film</figcaption></figure>`: true,
+		fakebasecamp.LinkPreview("https://example.test/", ""):                                                  true,
+		fakebasecamp.Mention(fakebasecamp.SGID("gid://bc3/Person/102"), "", 102, "Grace Sample"):               true,
+		`<bc-attachment content-type="application/vnd.basecamp.horizontal-rule.html"><hr></bc-attachment>`:     true,
 		long: true,
 	} {
 		account := fakebasecamp.New()
@@ -810,6 +813,15 @@ func TestOnlyWhitespaceBreaksAndEmptyBlocksSayNothing(t *testing.T) {
 		lines := messages(t, dir)
 		if written != (len(lines) == 1) || written == (result.MessagesWithEmptyBody == 1) {
 			t.Errorf("%.40q: %d lines were written and %d counted as saying nothing", content, len(lines), result.MessagesWithEmptyBody)
+		}
+		if strings.HasPrefix(content, "<figure>") {
+			leftOut := strings.Count(content, `"//`)
+			if result.Bodies.Embeds != 1-leftOut || result.Bodies.EmbedsLeftOut != leftOut {
+				t.Errorf("%.40q: counted %+v, want %d left out", content, result.Bodies, leftOut)
+			}
+		}
+		if strings.Contains(content, `"https://video`) && lines[0]["body"] != `<import-embed url="https://video.example.test/embed/1"></import-embed>` {
+			t.Errorf("a line that was a video alone became %q", lines[0]["body"])
 		}
 		if content == long && (lines[0]["body"] != long || result.LongestBody[bundle.Messages] != 10001) {
 			t.Errorf("a long line was changed, or measured as %d", result.LongestBody[bundle.Messages])
