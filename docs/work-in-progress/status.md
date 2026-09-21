@@ -132,7 +132,34 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
 - Flow answers a wrong HTTP method with HTML instead of JSON.
 - Column colours come later, read-only.
 
+## Branches that wait
+
+Nothing of the import is on `main` yet. Four branches stand on one another,
+none of them pushed, and go up as pull requests in this order once the client
+says so: `task/import-basecamp-structure`, `task/import-basecamp-boards`,
+`task/import-basecamp-chats-posts` (which also asks Basecamp again after a
+failure that may pass, and repairs an example in the skill) and
+`task/import-basecamp-files`.
+
+## Waiting for the client
+
+- The first run that fetches the files: some 2,700 of them, 6.1 GiB by
+  Basecamp's own word, about an hour. It starts on the client's yes.
+- Whether an embedded video, which is an `iframe` Minka drops, comes over as
+  an ordinary link: 332 lines of chat hold nothing else and are passed over
+  by the applier. The format coordination asks the client; the extractor
+  changes only once the format says so.
+- Whether Minka gets a holding area in a column. The bundle carries `onHold`
+  already.
+- `CLAUDE.md` still rules out what the API does not offer, which the import
+  is, and names a coordinator session of the past.
+
 ## Next steps
+
+- Small things put off in the extractor: a `forbidden` on one of the extra
+  dock entries asked for the creator of a project ends the run instead of
+  being passed over, and no test pins which creator wins when tools made with
+  a project name different people.
 
 - The bundle with the posts and the chats waits for Minka's appliers of
   posts and of chat lines; what those runs find comes back through the
