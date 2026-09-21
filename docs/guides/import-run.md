@@ -60,6 +60,7 @@ asked again.
 | `~/minka-import/basecamp-3923521` | the structure and the boards, as Minka's applier of boards ran it |
 | `~/minka-import/basecamp-3923521-chats` | the posts and the chats as well, released to the coordination |
 | `~/minka-import/basecamp-3923521-random` | one project whole, with its files and embeds, released to the coordination |
+| `~/minka-import/basecamp-3923521-full` | both projects whole, with their files and embeds, applied on minka-2 and hard-linked into it: never written again, a new run goes into a new directory |
 
 The format coordination copies from a bundle for its trial runs. Tell it
 before a directory is written again, and again when it is ready, with counts.
