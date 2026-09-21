@@ -518,8 +518,14 @@ minka cards edit <cardId> --description - --description-format html < text.html
   list any more, which stay a name, `data.linkPreviews` the previews that
   became links, `data.picturesLinked` the pictures at a foreign address that
   became a link to it; one whose address is none of the web leaves its title
-  as text and is not counted. `data.longestBody` is the longest text per kind
-  (`cards`, `comments`, `posts`, `messages`) in characters. None of them fails a run.
+  as text and is not counted. A video or a player embedded in a text, an
+  `<iframe>`, becomes `<import-embed url="…"></import-embed>` in its place:
+  `data.embeds` counts them, `data.embedsLeftOut` the frames that are left
+  out because Minka would not take their address, which a `notice` counts as
+  well. A line that was a video alone is a message; one whose only frame is
+  left out says nothing. `data.longestBody` is the longest text per kind
+  (`cards`, `comments`, `posts`, `messages`) in characters. None of them
+  fails a run.
 - Every reference to a file has a record in `attachments.jsonl` with the same
   ID (`attachment-<id>` for a file of a text, `blob-<key>` for one dropped
   into a chat) and its bytes under `files/<id>/`, whatever their size and
