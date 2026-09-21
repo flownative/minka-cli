@@ -27,7 +27,8 @@ func (a *app) newChatsListCmd() *cobra.Command {
 		Use:   "list <projectId>",
 		Short: "List the chats of a project with what is unread in them",
 		Long: `Lists the chats of a project. unreadCount is what the person of the token has
-not read; their own messages count as well, removed ones never.`,
+not read. Their own messages never count, and neither do removed ones or lines
+an import brought.`,
 		Args: requireArgs("projectId"),
 		RunE: func(_ *cobra.Command, args []string) error {
 			s, err := a.session()
@@ -68,9 +69,11 @@ func (a *app) newChatsMarkReadCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "mark-read <chatId>",
 		Short: "Note how far a chat has been read",
-		Long: `Notes that the person of the token has read a chat up to a message, by default
-up to its last one. The mark only grows: an older number changes nothing, and a
-number beyond the last message counts as the last one.`,
+		Long: `Notes that the person of the token has read a chat up to a message number, by
+default the highest number among its latest messages. That need not be the
+number of the last message: a transcript is ordered by moment, not by number.
+The mark only grows: an older number changes nothing, and a number beyond what
+the chat has counted is cut down to that.`,
 		Example: `  minka chats mark-read 0199...
   minka chats mark-read 0199... --seq 42`,
 		Args: requireArgs("chatId"),
@@ -85,20 +88,22 @@ number beyond the last message counts as the last one.`,
 				return err
 			}
 			if !given {
-				one := 1
-				latest, err := s.client.Messages(a.ctx, args[0], api.MessagesQuery{Limit: &one})
+				latest, err := s.client.Messages(a.ctx, args[0], api.MessagesQuery{})
 				if err != nil {
 					return s.fail(err)
 				}
-				if n := len(latest.Value); n > 0 {
-					seq = latest.Value[n-1].Seq
-				}
+				seq = highestSeq(latest.Value)
 			}
 			if err := s.client.MarkChatRead(a.ctx, args[0], seq); err != nil {
 				return s.fail(err)
 			}
 
 			summary := fmt.Sprintf("Marked chat %s read up to message %d", args[0], seq)
+			if given {
+				// The server may keep another number than the one given and
+				// does not say which one it kept.
+				summary += "; the server keeps no more than the chat has counted and never lowers the mark"
+			}
 			return a.ok(success{
 				data:    map[string]any{"chatId": args[0], "seq": seq},
 				summary: summary,
@@ -106,7 +111,7 @@ number beyond the last message counts as the last one.`,
 			})
 		},
 	}
-	cmd.Flags().IntVar(&seq, "seq", 0, "Message number read up to (default: the last message)")
+	cmd.Flags().IntVar(&seq, "seq", 0, "Message number read up to (default: the highest among the latest messages)")
 
 	return cmd
 }
@@ -128,11 +133,18 @@ func (a *app) newMessagesListCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list <chatId>",
 		Short: "Read messages of a chat, oldest first",
-		Long: `Reads messages of a chat, oldest first. Without a flag it gives the latest 50.
+		Long: `Reads messages of a chat in the order they were said, oldest first. Without a
+flag it gives the latest 50.
 
---before <seq> gives the messages in front of that message, for reading back.
-A number orders the transcript and only rises: a chat counts every change with
-the same counter, so numbers may be missing between two messages.
+seq is the number of a message in its chat: what the read mark counts and what
+--before takes. It does not order the transcript. A line an import brings later
+takes the next number and stands at the moment it was said, so the numbers down
+a page need not rise. Numbers may be missing as well: a chat counts every
+change with the same counter.
+--before <seq> gives the messages said in front of the message with that
+number. To read back, give the seq of the first message of a page, not the
+lowest. A number no message carries stands for the highest number below it, and
+that message then closes the page.
 --after <changeSeq> gives everything that changed after that change number:
 new messages, edits and removals in one answer. Remember the highest changeSeq
 you have seen and ask for what came after it. --limit sets how many messages
@@ -183,7 +195,7 @@ carries it, as removed: true without a text, so that a client drops it.`,
 				breadcrumbs = []Breadcrumb{
 					{Action: "earlier", Cmd: fmt.Sprintf("minka messages list %s --before %d", args[0], list[0].Seq), Description: "Read the messages in front of these"},
 					{Action: "changes", Cmd: fmt.Sprintf("minka messages list %s --after %d", args[0], highestChange), Description: "Read what changed after these"},
-					{Action: "read", Cmd: fmt.Sprintf("minka chats mark-read %s --seq %d", args[0], list[len(list)-1].Seq), Description: "Mark the chat read up to the last of these"},
+					{Action: "read", Cmd: fmt.Sprintf("minka chats mark-read %s --seq %d", args[0], highestSeq(list)), Description: "Mark the chat read up to the highest number of these"},
 				}
 			}
 
@@ -373,6 +385,17 @@ Removing it again succeeds.`,
 			})
 		},
 	}
+}
+
+// highestSeq is the number a reader of these messages has read up to. The last
+// message need not carry it: a transcript is ordered by moment, and a line
+// brought in later stands further up with a higher number.
+func highestSeq(messages []api.ChatMessage) int {
+	highest := 0
+	for _, message := range messages {
+		highest = max(highest, message.Seq)
+	}
+	return highest
 }
 
 // messageText is a message as Markdown, so that a file or a mention in it is

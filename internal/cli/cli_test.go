@@ -2171,7 +2171,7 @@ func TestChatsListShowsWhatIsUnread(t *testing.T) {
 	env, r := e.runJSON("", "chats", "list", e.fixture.Project.ID)
 	expectCode(t, r, ExitOK)
 	var chats []api.Chat
-	if err := json.Unmarshal(env.Data, &chats); err != nil || len(chats) != 1 || chats[0].Name != "Planung" || chats[0].UnreadCount != 2 {
+	if err := json.Unmarshal(env.Data, &chats); err != nil || len(chats) != 1 || chats[0].Name != "Planung" || chats[0].UnreadCount != 1 {
 		t.Errorf("data %s", env.Data)
 	}
 
@@ -2365,14 +2365,327 @@ func decodeMessages(t *testing.T, raw json.RawMessage) []api.ChatMessage {
 	return messages
 }
 
-func TestMarkReadUsesTheLastMessageUnlessToldOtherwise(t *testing.T) {
+// unreadIn is what chats list says is unread in the chat of the fixture.
+func unreadIn(t *testing.T, e *testEnv) int {
+	t.Helper()
+	env, r := e.runJSON("", "chats", "list", e.fixture.Project.ID)
+	expectCode(t, r, ExitOK)
+	var chats []api.Chat
+	if err := json.Unmarshal(env.Data, &chats); err != nil || len(chats) != 1 {
+		t.Fatalf("data %s", env.Data)
+	}
+	return chats[0].UnreadCount
+}
+
+// What one wrote oneself is nothing to come and read, and neither is a line
+// an import brought or a message that was taken back.
+func TestOnlyWhatSomebodyElseSaidIsUnread(t *testing.T) {
+	e := newTestEnv(t)
+	chat, conversation := e.fixture.Chat, e.fixture.Conversation
+
+	_, r := e.runJSON("", "messages", "create", chat.ID, "Bin gleich da")
+	expectCode(t, r, ExitOK)
+	if unread := unreadIn(t, e); unread != 1 {
+		t.Errorf("%d unread after writing oneself, want only the one of Anke", unread)
+	}
+
+	chat.Import(e.fixture.Anke.ID, "Aus dem alten Werkzeug", time.Date(2020, 1, 1, 9, 0, 0, 0, time.UTC))
+	if unread := unreadIn(t, e); unread != 1 {
+		t.Errorf("%d unread after an import, want 1", unread)
+	}
+
+	chat.Messages[1].Removed = true
+	if unread := unreadIn(t, e); unread != 0 {
+		t.Errorf("%d unread after the one of Anke was taken back, want 0", unread)
+	}
+
+	_, r = e.runJSON("", "messages", "create", conversation.ID, "Ja, gleich")
+	expectCode(t, r, ExitOK)
+	env, r := e.runJSON("", "conversations", "list")
+	expectCode(t, r, ExitOK)
+	var conversations []api.Conversation
+	if err := json.Unmarshal(env.Data, &conversations); err != nil || len(conversations) != 1 || conversations[0].UnreadCount != 1 {
+		t.Errorf("conversations %s, want the one word of Anke unread", env.Data)
+	}
+}
+
+// aTranscriptWithLateLines leaves the chat of the fixture the way a second
+// import run does: lines with new numbers standing between and in front of
+// older ones. It answers with the seqs in the order of the transcript.
+func aTranscriptWithLateLines(e *testEnv) []int {
+	chat, anke := e.fixture.Chat, e.fixture.Anke.ID
+	start := time.Date(2026, 9, 13, 10, 0, 0, 0, time.UTC)
+	chat.Messages[0].CreatedAt = start
+	chat.Messages[1].CreatedAt = start.Add(2 * time.Minute)
+	chat.Messages[2].CreatedAt = start.Add(3 * time.Minute)
+	chat.Import(anke, "Zwischen der ersten und der zweiten", start.Add(time.Minute))
+	chat.Import(anke, "Vor allem anderen", start.Add(-time.Hour))
+	chat.Import(anke, "Im selben Augenblick wie die zweite", start.Add(2*time.Minute))
+
+	return []int{5, 1, 4, 2, 6, 3}
+}
+
+// beforeOf is the number the breadcrumb for reading back names.
+func beforeOf(t *testing.T, env envelope) string {
+	t.Helper()
+	for _, crumb := range env.Breadcrumbs {
+		if crumb.Action != "earlier" {
+			continue
+		}
+		words := strings.Fields(crumb.Cmd)
+		if n := len(words); n >= 2 && words[n-2] == "--before" {
+			return words[n-1]
+		}
+	}
+	t.Fatalf("no breadcrumb for reading back: %+v", env.Breadcrumbs)
+	return ""
+}
+
+// A list stands in the order things were said. A seq names a message and is no
+// place: the numbers down a page fall where an import brought a line later.
+func TestATranscriptIsReadInTheOrderThingsWereSaid(t *testing.T) {
+	e := newTestEnv(t)
+	chat := e.fixture.Chat
+	aTranscriptWithLateLines(e)
+
+	for _, test := range []struct {
+		args []string
+		seqs []int
+	}{
+		{nil, []int{5, 1, 4, 2, 6, 3}},
+		{[]string{"--limit", "2"}, []int{6, 3}},
+		// The cursor stands at the moment of its message, not at its number.
+		{[]string{"--before", "2"}, []int{5, 1, 4}},
+		{[]string{"--before", "4"}, []int{5, 1}},
+		{[]string{"--before", "5"}, []int{}},
+		{[]string{"--before", "6", "--limit", "2"}, []int{4, 2}},
+		// A number no message carries is the place of the highest number
+		// below it, and that message closes the page.
+		{[]string{"--before", "99", "--limit", "3"}, []int{4, 2, 6}},
+		// Catching up is cut off in the order of the changes and handed out
+		// in the order of the transcript.
+		{[]string{"--after", "3"}, []int{5, 4, 6}},
+		{[]string{"--after", "1", "--limit", "3"}, []int{4, 2, 3}},
+	} {
+		env, r := e.runJSON("", append([]string{"messages", "list", chat.ID}, test.args...)...)
+		expectCode(t, r, ExitOK)
+		if got := messageSeqs(t, env.Data); !sameInts(got, test.seqs) {
+			t.Errorf("%v: seqs %v, want %v", test.args, got, test.seqs)
+		}
+	}
+
+	// A number that was taken back still names the moment its message was
+	// said at, and what stood in front of it.
+	chat.Messages[2].Removed = true
+	env, r := e.runJSON("", "messages", "list", chat.ID, "--before", "3")
+	expectCode(t, r, ExitOK)
+	if got := messageSeqs(t, env.Data); !sameInts(got, []int{5, 1, 4, 2, 6}) {
+		t.Errorf("before a removed message: seqs %v", got)
+	}
+}
+
+// Whoever follows the breadcrumb back from the end reads every message once,
+// wherever a page boundary falls among the late lines.
+func TestReadingBackNeitherSkipsNorRepeatsAMessage(t *testing.T) {
+	for _, pageLength := range []string{"1", "2", "3", "4"} {
+		e := newTestEnv(t)
+		chat := e.fixture.Chat
+		whole := aTranscriptWithLateLines(e)
+
+		env, r := e.runJSON("", "messages", "list", chat.ID, "--limit", pageLength)
+		expectCode(t, r, ExitOK)
+		read := messageSeqs(t, env.Data)
+		for pages := 0; pages < 2*len(whole); pages++ {
+			env, r = e.runJSON("", "messages", "list", chat.ID, "--limit", pageLength, "--before", beforeOf(t, env))
+			expectCode(t, r, ExitOK)
+			page := messageSeqs(t, env.Data)
+			if len(page) == 0 {
+				break
+			}
+			read = append(page, read...)
+		}
+		if !sameInts(read, whole) {
+			t.Errorf("pages of %s read %v, want %v", pageLength, read, whole)
+		}
+	}
+}
+
+// The text shows a transcript in the order it came in: nothing on this side
+// puts the messages back into the order of their numbers.
+func TestMessagesAsTextKeepTheOrderOfTheTranscript(t *testing.T) {
+	e := newTestEnv(t)
+	aTranscriptWithLateLines(e)
+
+	r := e.run("", "messages", "list", e.fixture.Chat.ID, "--styled")
+	expectCode(t, r, ExitOK)
+	at := -1
+	for _, header := range []string{"#5 Anke", "#1 Bruno", "#4 Anke", "#2 Anke", "#6 Anke", "#3 Bruno"} {
+		next := strings.Index(r.stdout, header)
+		if next <= at {
+			t.Fatalf("%q does not stand where it was said:\n%s", header, r.stdout)
+		}
+		at = next
+	}
+}
+
+// A reader has read up to the highest number it has seen, which the last
+// message of a list need not carry.
+func TestReadingIsNotedByTheHighestNumberSeen(t *testing.T) {
+	e := newTestEnv(t)
+	chat := e.fixture.Chat
+	aTranscriptWithLateLines(e)
+	// Somebody said this one by hand, so it waits to be read.
+	chat.Messages[5].Imported = false
+
+	env, r := e.runJSON("", "messages", "list", chat.ID)
+	expectCode(t, r, ExitOK)
+	read := ""
+	for _, crumb := range env.Breadcrumbs {
+		if crumb.Action == "read" {
+			read = crumb.Cmd
+		}
+	}
+	if want := "minka chats mark-read " + chat.ID + " --seq 6"; read != want {
+		t.Errorf("breadcrumb %q, want %q", read, want)
+	}
+
+	_, r = e.runJSON("", "chats", "mark-read", chat.ID)
+	expectCode(t, r, ExitOK)
+	if body := e.lastWriteBody(); body["seq"] != float64(6) {
+		t.Errorf("body sent %v, want the highest number of the page", body)
+	}
+	if unread := unreadIn(t, e); unread != 0 {
+		t.Errorf("%d unread after marking the chat read", unread)
+	}
+}
+
+// The mark never passes what the chat has counted and never goes back.
+func TestTheReadMarkHasACeilingAndOnlyGrows(t *testing.T) {
+	e := newTestEnv(t)
+	chat := e.fixture.Chat
+	bruno := e.fixture.Bruno.ID
+
+	// A change takes a number of the same counter, so the ceiling lies above
+	// the last message.
+	_, r := e.runJSON("", "messages", "edit", chat.ID, chat.Messages[0].ID, "Hallo zusammen")
+	expectCode(t, r, ExitOK)
+
+	env, r := e.runJSON("", "chats", "mark-read", chat.ID, "--seq", "999")
+	expectCode(t, r, ExitOK)
+	if mark := chat.ReadMarks[bruno]; mark != 4 {
+		t.Errorf("read mark %d, want the 4 the chat has counted", mark)
+	}
+	// The server does not say what it kept, so the summary says that the
+	// number asked for may have been cut down.
+	if !strings.Contains(env.Summary, "no more than the chat has counted") {
+		t.Errorf("summary %q claims a mark the server may not keep", env.Summary)
+	}
+
+	env, r = e.runJSON("", "chats", "mark-read", chat.ID, "--seq", "2")
+	expectCode(t, r, ExitOK)
+	if mark := chat.ReadMarks[bruno]; mark != 4 {
+		t.Errorf("read mark %d after an older number, want 4 still", mark)
+	}
+	if !strings.Contains(env.Summary, "never lowers the mark") {
+		t.Errorf("summary %q claims a mark the server did not lower", env.Summary)
+	}
+}
+
+// A chat numbers its messages and their changes with one counter, so a
+// message written after a change leaves a number out.
+func TestAMessageTakesTheNextNumberOfTheSharedCounter(t *testing.T) {
 	e := newTestEnv(t)
 	chat := e.fixture.Chat
 
-	_, r := e.runJSON("", "chats", "mark-read", chat.ID)
+	_, r := e.runJSON("", "messages", "edit", chat.ID, chat.Messages[0].ID, "Hallo zusammen")
+	expectCode(t, r, ExitOK)
+	_, r = e.runJSON("", "messages", "create", chat.ID, "Bin gleich da")
+	expectCode(t, r, ExitOK)
+
+	env, r := e.runJSON("", "messages", "list", chat.ID)
+	expectCode(t, r, ExitOK)
+	if got := messageSeqs(t, env.Data); !sameInts(got, []int{1, 2, 3, 5}) {
+		t.Errorf("seqs %v, want 1, 2, 3, 5", got)
+	}
+}
+
+// A reaction given or taken away is a change of its message: catching up
+// brings the message, and the counter of the chat has moved on.
+func TestCatchingUpBringsAMessageSomebodyReactedTo(t *testing.T) {
+	e := newTestEnv(t)
+	chat := e.fixture.Chat
+	reactedTo := chat.Messages[0]
+
+	changedAfter := func(after string) []int {
+		t.Helper()
+		env, r := e.runJSON("", "messages", "list", chat.ID, "--after", after)
+		expectCode(t, r, ExitOK)
+		return messageSeqs(t, env.Data)
+	}
+
+	_, r := e.runJSON("", "messages", "react", chat.ID, reactedTo.ID, "🎉")
+	expectCode(t, r, ExitOK)
+	if got := changedAfter("3"); !sameInts(got, []int{1}) || reactedTo.ChangeSeq != 4 {
+		t.Errorf("after a reaction: seqs %v, changeSeq %d", got, reactedTo.ChangeSeq)
+	}
+
+	// The same reaction again changes nothing.
+	_, r = e.runJSON("", "messages", "react", chat.ID, reactedTo.ID, "🎉")
+	expectCode(t, r, ExitOK)
+	if got := changedAfter("4"); len(got) != 0 {
+		t.Errorf("after the same reaction again: seqs %v", got)
+	}
+
+	_, r = e.runJSON("", "messages", "unreact", chat.ID, reactedTo.ID, "🎉")
+	expectCode(t, r, ExitOK)
+	if got := changedAfter("4"); !sameInts(got, []int{1}) || reactedTo.ChangeSeq != 5 {
+		t.Errorf("after the reaction was taken away: seqs %v, changeSeq %d", got, reactedTo.ChangeSeq)
+	}
+
+	// Taking away what nobody left changes nothing.
+	_, r = e.runJSON("", "messages", "unreact", chat.ID, reactedTo.ID, "🎉")
+	expectCode(t, r, ExitOK)
+	if got := changedAfter("5"); len(got) != 0 {
+		t.Errorf("after taking away nothing: seqs %v", got)
+	}
+
+	// The read mark may reach what the reactions counted.
+	_, r = e.runJSON("", "chats", "mark-read", chat.ID, "--seq", "999")
+	expectCode(t, r, ExitOK)
+	if mark := chat.ReadMarks[e.fixture.Bruno.ID]; mark != 5 {
+		t.Errorf("read mark %d, want 5", mark)
+	}
+}
+
+// The last word of a conversation is the one said last, whatever its number.
+func TestTheLastWordOfAConversationIsTheOneSaidLast(t *testing.T) {
+	e := newTestEnv(t)
+	conversation := e.fixture.Conversation
+
+	_, r := e.runJSON("", "messages", "create", conversation.ID, "Ja, gleich")
+	expectCode(t, r, ExitOK)
+	conversation.Messages[0].CreatedAt = conversation.Messages[1].CreatedAt.Add(time.Hour)
+
+	env, r := e.runJSON("", "conversations", "list")
+	expectCode(t, r, ExitOK)
+	var conversations []api.Conversation
+	if err := json.Unmarshal(env.Data, &conversations); err != nil || len(conversations) != 1 ||
+		conversations[0].LastMessageText == nil || *conversations[0].LastMessageText != "Hast du kurz Zeit?" {
+		t.Errorf("conversations %s", env.Data)
+	}
+}
+
+func TestMarkReadUsesTheHighestNumberUnlessToldOtherwise(t *testing.T) {
+	e := newTestEnv(t)
+	chat := e.fixture.Chat
+
+	env, r := e.runJSON("", "chats", "mark-read", chat.ID)
 	expectCode(t, r, ExitOK)
 	if body := e.lastWriteBody(); body["seq"] != float64(3) {
 		t.Errorf("body sent %v", body)
+	}
+	if want := "Marked chat " + chat.ID + " read up to message 3"; env.Summary != want {
+		t.Errorf("summary %q, want %q", env.Summary, want)
 	}
 	if mark := chat.ReadMarks[e.fixture.Bruno.ID]; mark != 3 {
 		t.Errorf("read mark %d", mark)

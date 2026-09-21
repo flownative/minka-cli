@@ -283,18 +283,26 @@ such as `Doing`.
 ## Chats
 
 - `chats list <projectId>` gives `{id, name, unreadCount, appUrl}`.
-  `unreadCount` counts own messages as well, removed ones never.
+  `unreadCount` never counts your own messages, removed ones or lines an
+  import brought. The same holds for a conversation.
 - `messages list --styled` shows a message as Markdown when it carries markup,
   so a file in it is a Markdown image or link and a mention is `@Name`. The
   plain `bodyText` beside every message has neither.
 - `messages list <chatId>` gives messages oldest first as `{id, seq,
   changeSeq, author, bodyHtml, bodyText, createdAt, editedAt, removed}`, the
   latest 50 by default, `--limit` up to 200.
-  - `seq` orders the transcript and only rises; it is not a position without
-    gaps. A chat counts every change with the same counter, so an edit, an
-    upload or a reaction leaves a number unused and a transcript may run
-    1, 3, 6. `changeSeq` is the field to catch up with.
-  - Read back with `--before <seq>` (messages in front of that one).
+  - The list is ordered by moment (`createdAt`, then `seq`), not by `seq`. Keep
+    the order it comes in; never sort by `seq`.
+  - `seq` is the number of a message in its chat, the unit of the read mark and
+    the cursor of `--before`. It is no position: a line an import brings later
+    takes the next number and stands at the moment it was said, so a transcript
+    may run 1, 7, 3, 6. Numbers are missing too: a chat counts every change
+    with the same counter, so an edit, a removal or a reaction leaves a number
+    unused. `changeSeq` is the field to catch up with.
+  - Read back with `--before <seq>`, giving the `seq` of the first message of
+    the page you have, not the lowest: the messages said in front of that one
+    come. A number no message carries stands for the highest number below it,
+    and that message closes the page.
   - Catch up with `--after <changeSeq>`: new messages, edits and removals in
     one answer. Keep the highest `changeSeq` you have seen.
   - A removed message is gone from the transcript: no page of it carries the
@@ -307,8 +315,10 @@ such as `Doing`.
   again then writes nothing new, and a failed send is `retryable`.
 - `messages edit` and `messages delete` only work on your own messages;
   somebody else's exits 2. Deleting twice succeeds.
-- `chats mark-read <chatId>` marks the chat read up to its last message, or up
-  to `--seq`. The mark only grows.
+- `chats mark-read <chatId>` marks the chat read up to `--seq`, which is the
+  highest `seq` you have seen and not that of the last message of a list;
+  without it, up to the highest among the latest messages. The mark only grows.
+  `data.seq` is the number sent, not the mark the server kept.
 
 ## Private conversations
 

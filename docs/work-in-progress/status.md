@@ -41,6 +41,13 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
 - A `shortId` that is not null, and a card found by it: live, every card
   carries the field and the address answers, but no board that can be read
   there shows short identifiers, so only the 404 was seen.
+- The order of a chat where only an import shows it: numbers out of order down
+  a list, and imported lines that are never unread. Nor have unread messages
+  of other people been seen, the smoke account being the only one. Live,
+  the local instance shows the shared counter (edits and reactions take
+  numbers), the order by creation, `--before` also for a number that was taken
+  back or that no message carries, the read mark and its hint taking the
+  highest number of a page, one's own messages never unread, and the refusals.
 - "agent for X" in `people list` has been seen live, an agent that stepped
   down has not — it is in no list any more.
 
