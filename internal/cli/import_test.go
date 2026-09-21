@@ -112,7 +112,7 @@ func TestImportBasecampWritesABundleAndReportsWhatItHolds(t *testing.T) {
 		"missingFiles": []any{}, "invalidAddresses": []any{}, "peopleLeftOut": float64(3),
 		"cardsByStatus": map[string]any{"active": float64(0), "archived": float64(0), "trashed": float64(0)},
 		"cardsOnHold":   float64(0), "cardsLeftOut": float64(0), "commentsTrashed": float64(0),
-		"mentionsUnresolved": float64(0), "filesInBodies": float64(0), "filesDropped": float64(0), "linkPreviews": float64(0), "picturesLinked": float64(0),
+		"mentionsUnresolved": float64(0), "filesInBodies": float64(0), "filesDropped": float64(0), "linkPreviews": float64(0), "picturesLinked": float64(0), "embeds": float64(0), "embedsLeftOut": float64(0),
 		"filesExpected": float64(0), "filesBytesExpected": float64(0), "filesBytes": float64(0), "filesFetched": float64(0), "filesReused": float64(0),
 		"filesGone": float64(0), "fileNamesChanged": float64(0), "captionsDropped": float64(0), "filesOfSeveralOwners": float64(0),
 		"postsByStatus": map[string]any{"active": float64(0), "archived": float64(0), "trashed": float64(0)},
@@ -987,8 +987,9 @@ func TestImportBasecampReportsThePostsAndTheChatsOfAProject(t *testing.T) {
 		"postsLeftOut":  float64(1), "postsWithEmptyBody": float64(1),
 		"messagesByType":     map[string]any{"text": float64(3), "richText": float64(2), "upload": float64(2), "integration": float64(1)},
 		"uploadLinesLeftOut": float64(1), "messagesWithEmptyBody": float64(1), "picturesLinked": float64(1),
-		"longestBody":   map[string]any{"cards": float64(0), "comments": float64(94), "posts": float64(212), "messages": float64(218)},
+		"longestBody":   map[string]any{"cards": float64(0), "comments": float64(94), "posts": float64(212), "messages": float64(213)},
 		"filesInBodies": float64(4), "filesDropped": float64(2), "linkPreviews": float64(3), "mentionsUnresolved": float64(0),
+		"embeds": float64(1), "embedsLeftOut": float64(0),
 	}
 	for key, value := range want {
 		if !reflect.DeepEqual(data[key], value) {
@@ -1034,7 +1035,7 @@ func TestImportBasecampReportsThePostsAndTheChatsOfAProject(t *testing.T) {
 		"Messages are written in 2 parts, messages-0001.jsonl to messages-0002.jsonl",
 		"Lines that were files Basecamp names none of, left out: 1",
 		"In the texts: 4 files referred to, 2 files Basecamp lists nothing for dropped, 0 mentions left as names, 3 previews of links turned into links, 1 picture at a foreign address turned into a link",
-		"Longest text in characters: cards 0, comments 94, posts 212, messages 218",
+		"Longest text in characters: cards 0, comments 94, posts 212, messages 213",
 	} {
 		if !strings.Contains(r.stdout, want) {
 			t.Errorf("the text lacks %q:\n%s", want, r.stdout)
@@ -1042,6 +1043,88 @@ func TestImportBasecampReportsThePostsAndTheChatsOfAProject(t *testing.T) {
 	}
 	if !strings.Contains(r.stderr, "Warning: 1 line of a chat is left out") {
 		t.Errorf("stderr: %s", r.stderr)
+	}
+}
+
+// The report counts the frames that became an embed and those that are left
+// out, and no output says where a frame led: an address may carry a token.
+func TestTheReportCountsEmbedsAndNoOutputSaysAnAddress(t *testing.T) {
+	const taken, refused = "https://player.example.test/embed/s3cret-one?t=1", "//player.example.test/embed/s3cret-two"
+	lines := func(a *fakebasecamp.Account) []fakebasecamp.Line { return a.Projects[3].Dock[3].Lines }
+	framed := func(a *fakebasecamp.Account) {
+		lines(a)[0].Type = fakebasecamp.RichTextLine
+		lines(a)[0].Content = `<figure><iframe src="` + taken + `"></iframe><figcaption>A film</figcaption></figure>`
+		lines(a)[4].Type = fakebasecamp.RichTextLine
+		lines(a)[4].Content = `<figure><iframe src="` + refused + `"></iframe></figure>`
+	}
+
+	e := newImportEnv(t)
+	framed(e.account)
+	out := filepath.Join(t.TempDir(), "bundle")
+	env, r := e.runJSON("import", "basecamp", "--project", "7004", "--out", out)
+	expectCode(t, r, ExitOK)
+	data := decode(t, env.Data)
+	if data["embeds"] != float64(2) || data["embedsLeftOut"] != float64(1) || data["messagesWithEmptyBody"] != float64(1) {
+		t.Errorf("embeds %v, embedsLeftOut %v, messagesWithEmptyBody %v", data["embeds"], data["embedsLeftOut"], data["messagesWithEmptyBody"])
+	}
+	if !strings.Contains(env.Notice, "1 embedded frame is left out of its text") {
+		t.Errorf("notice %q", env.Notice)
+	}
+	var written string
+	for name, content := range filesUnder(t, out) {
+		if strings.HasPrefix(name, "messages") {
+			written += content
+		}
+	}
+	if !strings.Contains(written, `"body":"<import-embed url=\"`+taken+`\"></import-embed><p>A film</p>"`) {
+		t.Errorf("the bundle lacks the embed:\n%s", written)
+	}
+	if strings.Contains(written, "s3cret-two") || strings.Contains(written, "iframe") {
+		t.Errorf("the bundle holds a frame, or an address no embed may carry:\n%s", written)
+	}
+	// A second run writes the same bytes.
+	e.now = e.now.Add(48 * time.Hour)
+	expectCode(t, e.run("import", "basecamp", "--project", "7004", "--out", out, "--json"), ExitOK)
+	for name, content := range filesUnder(t, out) {
+		if strings.HasPrefix(name, "messages") && !strings.Contains(written, content) {
+			t.Errorf("a second run wrote %s anew", name)
+		}
+	}
+
+	r = e.run("import", "basecamp", "--project", "7004", "--dry-run", "--styled")
+	expectCode(t, r, ExitOK)
+	for _, want := range []string{"Embedded frames turned into embeds: 2", "Embedded frames with an address no embed may carry, left out: 1"} {
+		if !strings.Contains(r.stdout, want) {
+			t.Errorf("the text lacks %q:\n%s", want, r.stdout)
+		}
+	}
+	// A run without a frame has no line for them.
+	r = e.run("import", "basecamp", "--project", "7001", "--dry-run", "--styled")
+	expectCode(t, r, ExitOK)
+	if strings.Contains(r.stdout, "Embedded frames") {
+		t.Errorf("a run without a frame shows a line for them:\n%s", r.stdout)
+	}
+
+	failures := map[string]func(*fakebasecamp.Account){
+		"nothing fails":       func(*fakebasecamp.Account) {},
+		"a line at no time":   func(a *fakebasecamp.Account) { lines(a)[4].CreatedAt = "" },
+		"a line in the trash": func(a *fakebasecamp.Account) { lines(a)[0].Status = "trashed" },
+	}
+	for name, change := range failures {
+		for _, mode := range [][]string{{"--json"}, {"--quiet"}, {"--styled"}, {"--json", "--dry-run"}} {
+			e := newImportEnv(t)
+			framed(e.account)
+			change(e.account)
+			r := e.run(append([]string{"import", "basecamp", "--project", "7004", "--out", filepath.Join(t.TempDir(), "bundle")}, mode...)...)
+			if (r.code == ExitOK) != (name == "nothing fails") {
+				t.Errorf("%s %v: exit %d", name, mode, r.code)
+			}
+			for _, text := range []string{"player.example", "s3cret", "embed/", "A film"} {
+				if strings.Contains(r.stdout+r.stderr, text) {
+					t.Errorf("%s %v: the output says %q:\n%s%s", name, mode, text, r.stdout, r.stderr)
+				}
+			}
+		}
 	}
 }
 

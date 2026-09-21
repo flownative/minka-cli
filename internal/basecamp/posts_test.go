@@ -153,6 +153,30 @@ func TestAPostWithoutATextIsWrittenAsItIsAndCounted(t *testing.T) {
 	}
 }
 
+// A post that was a video alone has a text; one whose only frame is left out
+// has none, and is written and counted like any other without one.
+func TestAPostThatIsAnEmbedAloneHasATextAndOneWhoseFrameIsLeftOutHasNone(t *testing.T) {
+	// A line of the project holds a frame as well, and a post has no text.
+	for content, c := range map[string]struct {
+		body                   string
+		empty, embeds, leftOut int
+	}{
+		`<figure><iframe src="https://video.example.test/embed/7"></iframe></figure>`: {`<import-embed url="https://video.example.test/embed/7"></import-embed>`, 1, 2, 0},
+		`<figure><iframe src="about:blank"></iframe></figure>`:                        {``, 2, 1, 1},
+	} {
+		account := fakebasecamp.New()
+		pitches(account).Posts[0].Content = content
+		dir, result := extract(t, account, talkProject)
+
+		if body := recordWithID(t, records(t, dir, bundle.Posts), "9711")["body"]; body != c.body {
+			t.Errorf("the body is %q, want %q", body, c.body)
+		}
+		if result.PostsWithEmptyBody != c.empty || result.Bodies.Embeds != c.embeds || result.Bodies.EmbedsLeftOut != c.leftOut {
+			t.Errorf("%d posts without a text, want %d; counted %+v, want %d embeds and %d left out", result.PostsWithEmptyBody, c.empty, result.Bodies, c.embeds, c.leftOut)
+		}
+	}
+}
+
 func TestThePostsOfABoardAreWrittenOldestFirstAndBoardsInTheOrderOfTheTools(t *testing.T) {
 	dir, _ := extract(t, fakebasecamp.New(), talkProject)
 	if got, want := sourceIDs(records(t, dir, bundle.Posts)), []string{"9703", "9701", "9702", "9704", "9712", "9711"}; !slices.Equal(got, want) {
