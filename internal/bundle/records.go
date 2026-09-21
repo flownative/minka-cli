@@ -34,6 +34,20 @@ const (
 	ToolPosts = "posts"
 
 	OwnerPerson = "person"
+
+	RoleTriage = "triage"
+	RoleWork   = "work"
+	RoleNotNow = "notnow"
+	RoleDone   = "done"
+
+	StatusActive   = "active"
+	StatusArchived = "archived"
+	StatusTrashed  = "trashed"
+
+	ParentCard = "card"
+
+	TargetCard    = "card"
+	TargetComment = "comment"
 )
 
 // Record is what every record carries. CreatedBy is nil when the source does
@@ -67,6 +81,64 @@ type Tool struct {
 	Kind            string `json:"kind"`
 	Name            string `json:"name"`
 	Position        int    `json:"position"`
+}
+
+// Column is a column of a board. A board has at most one column of each role
+// other than work.
+type Column struct {
+	Record
+	ProjectSourceID string `json:"projectSourceId"`
+	ToolSourceID    string `json:"toolSourceId"`
+	Name            string `json:"name"`
+	Position        int    `json:"position"`
+	Role            string `json:"role"`
+}
+
+// Card is a card of a board. Position counts from 1 within the column, without
+// gaps, whatever the status of the card. OnHold marks a card the source had
+// set aside within its column.
+type Card struct {
+	Record
+	ProjectSourceID string   `json:"projectSourceId"`
+	ToolSourceID    string   `json:"toolSourceId"`
+	ColumnSourceID  string   `json:"columnSourceId"`
+	Title           string   `json:"title"`
+	Description     *string  `json:"description"`
+	Position        int      `json:"position"`
+	DueOn           *string  `json:"dueOn"`
+	CompletedAt     *string  `json:"completedAt"`
+	CompletedBy     *string  `json:"completedBy"`
+	Assignees       []string `json:"assignees"`
+	Status          string   `json:"status"`
+	OnHold          bool     `json:"onHold,omitempty"`
+}
+
+type Step struct {
+	Record
+	ProjectSourceID string  `json:"projectSourceId"`
+	ToolSourceID    string  `json:"toolSourceId"`
+	CardSourceID    string  `json:"cardSourceId"`
+	Title           string  `json:"title"`
+	Position        int     `json:"position"`
+	CompletedAt     *string `json:"completedAt"`
+	CompletedBy     *string `json:"completedBy"`
+}
+
+type Comment struct {
+	Record
+	ProjectSourceID string `json:"projectSourceId"`
+	ParentKind      string `json:"parentKind"`
+	ParentSourceID  string `json:"parentSourceId"`
+	Body            string `json:"body"`
+}
+
+// Reaction is what somebody answered a record with, usually one emoji.
+// CreatedBy is who reacted and is never nil.
+type Reaction struct {
+	Record
+	TargetKind     string `json:"targetKind"`
+	TargetSourceID string `json:"targetSourceId"`
+	Content        string `json:"content"`
 }
 
 // Attachment describes a file of the bundle. File is relative to the

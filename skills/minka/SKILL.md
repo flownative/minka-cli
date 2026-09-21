@@ -473,12 +473,24 @@ minka cards edit <cardId> --description - --description-format html < text.html
   none; `notice` says how many. The run still exits 0 and running it again
   changes nothing: only somebody with access to the account can repair the
   address there. Never look the address up to quote it.
-- So far a bundle holds the structure: the people the projects refer to
-  (members and creators, `data.peopleLeftOut` counts the rest of the account)
-  with their avatars, the projects with their members, and the card tables, chats and
-  message boards that are switched on. `data.skippedTools` counts what was
-  left out, per kind and whether it was switched on; `data.counts` is what the
-  manifest says.
+- So far a bundle holds the structure and the boards: the people the projects
+  refer to (members and whoever a record names, `data.peopleLeftOut` counts
+  the rest of the account) with their avatars, the projects with their
+  members, the card tables, chats and message boards that are switched on,
+  and of each card table the columns, the cards with the archived and the
+  trashed ones, their steps, comments and boosts. `data.skippedTools` counts
+  what was left out, per kind and whether it was switched on; `data.counts`
+  is what the manifest says. The messages of chats, the posts of message
+  boards and the files embedded in texts do not come yet.
+- `data.cardsByStatus` splits the cards, `data.cardsOnHold` counts those set
+  aside within their column, `data.cardsLeftOut` the archived and trashed
+  cards whose column is in no extracted board, `data.commentsTrashed` the
+  comments left out because they are in the trash. In the texts a mention and
+  a file become a reference: `data.filesInBodies` counts the files referred
+  to, `data.filesDropped` the embedded files Basecamp lists nothing for, of
+  which only the caption stays and which a `notice` counts as well,
+  `data.mentionsUnresolved` the mentions of somebody the account does not
+  list any more, which stay a name. None of them fails a run.
 - `--dry-run` walks Basecamp the same way, downloads and writes nothing, and
   answers with the same counts. `--out` is not needed then.
 - The bundle is built next to `--out` and takes its place at the end: a failed
