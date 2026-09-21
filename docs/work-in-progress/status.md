@@ -142,17 +142,20 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
 
 ## Branches that wait
 
-Nothing of the import is on `main` yet. Four branches stand on one another,
+Nothing of the import is on `main` yet. Five branches stand on one another,
 none of them pushed, and go up as pull requests in this order once the client
 says so: `task/import-basecamp-structure`, `task/import-basecamp-boards`,
 `task/import-basecamp-chats-posts` (which also asks Basecamp again after a
-failure that may pass, and repairs an example in the skill) and
-`task/import-basecamp-files`.
+failure that may pass, and repairs an example in the skill),
+`task/import-basecamp-files` and `task/import-basecamp-embeds`.
 
 ## Waiting for the client
 
 - The first run that fetches the files: some 2,700 of them, 6.1 GiB by
-  Basecamp's own word, about an hour. It starts on the client's yes.
+  Basecamp's own word, about an hour. It starts on the client's yes. Every
+  run that writes a bundle fetches the files, so the bundle that carries the
+  embeds waits for the same yes; the format coordination advises against a
+  switch that leaves the files out.
 - Whether Minka gets a holding area in a column. The bundle carries `onHold`
   already.
 - `CLAUDE.md` still rules out what the API does not offer, which the import
