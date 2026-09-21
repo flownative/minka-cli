@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	nethtml "golang.org/x/net/html"
 )
@@ -21,16 +22,39 @@ const (
 	// foreignPicture is a picture that lies at an address of somebody else,
 	// where it carries no signed ID: no stored file, and nothing to fetch.
 	foreignPicture = "image"
+	// galleryPresentation is the one way of laying out a file a bundle knows.
+	galleryPresentation = "gallery"
+
+	frameTag   = "iframe"
+	figureTag  = "figure"
+	captionTag = "figcaption"
 )
 
 // bodyFile is a file Basecamp lists next to the text it is embedded in. Its ID
-// is the one of the attachment, which is no recording.
+// is the one of the attachment, which is no recording: Basecamp says neither
+// when it was made nor by whom.
 type bodyFile struct {
 	ID             int64  `json:"id"`
 	SGID           string `json:"sgid"`
 	AttachableSGID string `json:"attachable_sgid"`
 	// Key names the stored file, and stands in the address it is fetched from.
-	Key string `json:"key"`
+	Key         string `json:"key"`
+	Filename    string `json:"filename"`
+	ContentType string `json:"content_type"`
+	ByteSize    *int64 `json:"byte_size"`
+	DownloadURL string `json:"download_url"`
+}
+
+// source is the file as a run brings it, named by the ID of the attachment.
+func (f bodyFile) source() sourceFile {
+	key := f.Key
+	if key == "" {
+		key = blobKey(f.DownloadURL)
+	}
+	return sourceFile{
+		ref: fmt.Sprintf("attachment-%d", f.ID), key: key,
+		filename: f.Filename, contentType: f.ContentType, byteSize: f.ByteSize, downloadURL: f.DownloadURL,
+	}
 }
 
 // BodyCounts says what became of the embeds in the texts of a run.
@@ -42,32 +66,46 @@ type BodyCounts struct {
 	// FilesDropped are embedded files Basecamp lists no file for, and uploaded
 	// ones whose stored file it does not name.
 	FilesDropped int
+	// CaptionsDropped are captions of files that are longer than a reference
+	// may carry, and so are left off it.
+	CaptionsDropped int
 	// LinkPreviews are the previews of a link that became the link: one whose
 	// address is none of the web leaves its title and is not counted.
 	LinkPreviews int
 	// PicturesLinked are pictures at a foreign address that became a link to
 	// it, counted the same way.
 	PicturesLinked int
+	// Embeds are the embedded frames that became an <import-embed>.
+	Embeds int
+	// EmbedsLeftOut are the embedded frames that became nothing, because their
+	// address is none an embed may carry.
+	EmbedsLeftOut int
 }
 
 // rewriteBody turns the HTML of Basecamp into the HTML of a bundle. A bundle
 // never carries the embeds of its source: a mention becomes an
 // <import-mention>, a file an <import-attachment>, a rule an <hr>, the preview
 // of a link the link, a picture at a foreign address a link to it, each in the
-// place of the whole embed with what Basecamp rendered into it. Every other token passes through with the bytes it was
-// read from, because the applier sanitises a body anyway and every change
-// here would be a second opinion. What goes besides an embed is what belongs
-// to one: whitespace between an embed and its rendering, an end tag of an
-// embed without its beginning, and a tag the text breaks off in.
+// place of the whole embed with what Basecamp rendered into it. An embedded
+// frame becomes an <import-embed>, see frames. Every other token passes through
+// with the bytes it was read from, because the applier sanitises a body anyway
+// and every change here would be a second opinion. What goes besides an embed
+// is what belongs to one: whitespace between an embed and its rendering, an
+// end tag of an embed without its beginning, and a tag the text breaks off in.
 //
 // The text is read token by token and never built into a tree: a tree moves a
 // figure out of a paragraph, and the embed would lose what belongs to it.
 //
 // rendered is the same text as Basecamp renders it, where the text itself is
 // the stored one and shows neither the name nor the avatar of a mention.
-func (e *Extractor) rewriteBody(text, rendered string, files []bodyFile) (string, error) {
-	if !strings.Contains(strings.ToLower(text), embedTag) {
-		return text, nil
+//
+// The files the text refers to come back in the order of their references,
+// one per reference: whoever writes the text brings them.
+func (e *Extractor) rewriteBody(text, rendered string, files []bodyFile) (string, []sourceFile, error) {
+	lowered := strings.ToLower(text)
+	framed := strings.Contains(lowered, "<"+frameTag)
+	if !framed && !strings.Contains(lowered, embedTag) {
+		return text, nil, nil
 	}
 
 	var renderings map[string]rendering
@@ -84,13 +122,19 @@ func (e *Extractor) rewriteBody(text, rendered string, files []bodyFile) (string
 	}
 
 	var out strings.Builder
+	var referred []sourceFile
 	reader := newBodyReader(text)
+	frames := frames{counts: &e.bodies}
+	if framed {
+		frames.unwrapped = figuresAroundFrames(text)
+	}
 	// Embeds that pass through untouched, so that their end tags do as well.
 	passing := 0
 	for {
 		token, more := reader.next()
 		if !more {
-			return out.String(), nil
+			out.WriteString(frames.end())
+			return out.String(), referred, nil
 		}
 		if token.kind == nethtml.EndTagToken && token.name == embedTag {
 			// An end tag without its embed is a leftover of one that was replaced.
@@ -101,7 +145,13 @@ func (e *Extractor) rewriteBody(text, rendered string, files []bodyFile) (string
 			continue
 		}
 		if !token.opens(embedTag) {
-			out.WriteString(token.raw)
+			// No frame reaches a bundle, whatever holds it: an embed that passes
+			// through may never end, and would keep every frame behind it.
+			replacement, replaced := frames.rewrite(token, reader)
+			if !replaced {
+				replacement = token.raw
+			}
+			out.WriteString(replacement)
 			continue
 		}
 
@@ -116,15 +166,15 @@ func (e *Extractor) rewriteBody(text, rendered string, files []bodyFile) (string
 			continue
 		}
 		// An embed that closes itself holds nothing: what follows it is text.
-		var seen rendering
+		seen := rendering{fileCaption: token.attribute("caption"), presentation: token.attribute("presentation")}
 		if token.kind == nethtml.StartTagToken {
-			seen = reader.skipRendering()
+			seen = reader.skipRendering().of(seen)
 		}
 		switch {
 		case contentType == mentionType:
 			replacement, err := e.mention(sgid, token.attribute("content"), renderingOf(sgid, seen))
 			if err != nil {
-				return "", err
+				return "", nil, err
 			}
 			out.WriteString(replacement)
 		case contentType == horizontalRule:
@@ -140,7 +190,9 @@ func (e *Extractor) rewriteBody(text, rendered string, files []bodyFile) (string
 		default:
 			if file, listed := embeddedFile(files, token); listed {
 				e.bodies.Files++
-				fmt.Fprintf(&out, `<import-attachment ref="attachment-%d"></import-attachment>`, file.ID)
+				source := file.source()
+				referred = append(referred, source)
+				out.WriteString(e.fileReference(source.ref, renderingOf(sgid, seen)))
 			} else {
 				// The caption is all that is left of such a file.
 				e.bodies.FilesDropped++
@@ -148,6 +200,26 @@ func (e *Extractor) rewriteBody(text, rendered string, files []bodyFile) (string
 			}
 		}
 	}
+}
+
+// fileReference is what an embedded file becomes: the reference to its
+// attachment, with what somebody said about the file and how they laid it out.
+// A reference carries a caption, that a file stands in a gallery, and nothing
+// else, in this order. A caption that is longer than the applier takes is
+// left off and counted, and the file stays.
+func (e *Extractor) fileReference(ref string, seen rendering) string {
+	reference := `<import-attachment ref="` + html.EscapeString(ref) + `"`
+	if caption := seen.fileCaption; strings.TrimSpace(caption) != "" {
+		if utf8.RuneCountInString(caption) <= maxCaptionLength {
+			reference += ` caption="` + html.EscapeString(caption) + `"`
+		} else {
+			e.bodies.CaptionsDropped++
+		}
+	}
+	if seen.presentation == galleryPresentation {
+		reference += ` presentation="` + galleryPresentation + `"`
+	}
+	return reference + `></import-attachment>`
 }
 
 // link is what an embed becomes that shows what lies at an address: the link,
@@ -169,10 +241,210 @@ func link(address, title string, linked *int) string {
 	return fmt.Sprintf(`<a href="%s">%s</a>`, html.EscapeString(address), html.EscapeString(title))
 }
 
+// frames turns the embedded frames of a text into what a bundle carries of
+// them: an <import-embed> with the address of the frame and nothing else, in
+// the place of the frame and of all it holds. The address is the one of the
+// frame without the whitespace around it. A frame whose address is none an
+// embed may carry becomes nothing. Both are counted.
+//
+// The figure around a frame is not written, neither where it begins nor where
+// it ends, and what else stands in it stays where it stands. Its caption
+// becomes a paragraph there, which is after the frame wherever the source put
+// the caption after it; a caption that holds nothing becomes nothing. A figure
+// that holds no frame is none of this and passes as it is.
+type frames struct {
+	// unwrapped names the figures that hold a frame, by the place of their
+	// start tag among the tokens of the text.
+	unwrapped map[int]bool
+	// open are the figures the text is in, the innermost last.
+	open   []openFigure
+	counts *BodyCounts
+}
+
+type openFigure struct {
+	unwrapped bool
+	// inCaption says that the paragraph of a caption is open.
+	inCaption bool
+}
+
+// rewrite says what stands in the place of a token, and whether anything does:
+// any other token is the text's own.
+func (f *frames) rewrite(token bodyToken, reader *bodyReader) (string, bool) {
+	var innermost *openFigure
+	if len(f.open) > 0 {
+		innermost = &f.open[len(f.open)-1]
+	}
+	switch {
+	case token.opens(frameTag):
+		reader.skipFrame()
+		address := strings.Trim(token.attribute("src"), addressPadding)
+		if !embeddable(address) {
+			f.counts.EmbedsLeftOut++
+			return "", true
+		}
+		f.counts.Embeds++
+		return `<import-embed url="` + html.EscapeString(address) + `"></import-embed>`, true
+	case token.kind == nethtml.StartTagToken && token.name == figureTag:
+		f.open = append(f.open, openFigure{unwrapped: f.unwrapped[token.index]})
+		return "", f.unwrapped[token.index]
+	case token.kind == nethtml.EndTagToken && token.name == figureTag && innermost != nil:
+		closed := *innermost
+		f.open = f.open[:len(f.open)-1]
+		return closed.end(), closed.unwrapped
+	case innermost == nil || !innermost.unwrapped || token.name != captionTag:
+		return "", false
+	case token.kind == nethtml.StartTagToken && !innermost.inCaption:
+		leading, empty := reader.skipEmptyCaption()
+		if empty {
+			return "", true
+		}
+		innermost.inCaption = true
+		return "<p>" + leading, true
+	case token.kind == nethtml.EndTagToken && innermost.inCaption:
+		innermost.inCaption = false
+		return "</p>", true
+	}
+	return "", false
+}
+
+// end closes what a text that breaks off left open.
+func (f *frames) end() string {
+	var closing strings.Builder
+	for _, figure := range f.open {
+		closing.WriteString(figure.end())
+	}
+	f.open = nil
+	return closing.String()
+}
+
+// end is what stands where an unwrapped figure ends: the end of the paragraph
+// of a caption that was never closed.
+func (f openFigure) end() string {
+	if f.unwrapped && f.inCaption {
+		return "</p>"
+	}
+	return ""
+}
+
+// figuresAroundFrames finds the figures of a text that hold an embedded frame,
+// each by the place of its start tag among the tokens: whether a figure is
+// written is decided where it begins, and the frame comes after that.
+func figuresAroundFrames(text string) map[int]bool {
+	around := map[int]bool{}
+	var open []int
+	reader := newBodyReader(text)
+	for {
+		token, more := reader.next()
+		switch {
+		case !more:
+			return around
+		case token.kind == nethtml.StartTagToken && token.name == figureTag:
+			open = append(open, token.index)
+		case token.kind == nethtml.EndTagToken && token.name == figureTag && len(open) > 0:
+			open = open[:len(open)-1]
+		case token.opens(frameTag):
+			reader.skipFrame()
+			// Around a figure that is known to hold a frame, every figure is.
+			for i := len(open) - 1; i >= 0 && !around[open[i]]; i-- {
+				around[open[i]] = true
+			}
+		}
+	}
+}
+
+const (
+	// addressPadding is the whitespace a browser takes away before and behind
+	// the address of a frame. Minka takes none away, so it goes here, and an
+	// embed carries the address without it.
+	addressPadding = " \t\n\f\r"
+	// maxEmbedAddressLength is how long the address of an embed may be, in
+	// characters.
+	maxEmbedAddressLength = 2000
+	// largestPort is the largest number a port may be, and maxPortLength how
+	// many digits it may be written with.
+	largestPort   = 65535
+	maxPortLength = 5
+)
+
+// embedSchemes are the beginnings of an address an embed may carry, in lower
+// case. An address may write them in any case.
+var embedSchemes = []string{"http://", "https://"}
+
+// beginsWith tells whether an address begins with a scheme, whatever case its
+// letters from A to Z are written in.
+func beginsWith(address, scheme string) bool {
+	if len(address) < len(scheme) {
+		return false
+	}
+	for i := range len(scheme) {
+		character := address[i]
+		if 'A' <= character && character <= 'Z' {
+			character += 'a' - 'A'
+		}
+		if character != scheme[i] {
+			return false
+		}
+	}
+	return true
+}
+
+// refusedInEmbedAddress tells whether a character may stand nowhere in the
+// address of an embed: a blank, a control character up to it, the one that
+// deletes, and a backslash, which a browser reads as the end of the host.
+func refusedInEmbedAddress(character rune) bool {
+	return character <= ' ' || character == 0x7f || character == '\\'
+}
+
+// embeddable tells whether an address is one Minka takes for an embed, which
+// is the whole rule of what becomes an <import-embed>: an address Minka
+// refuses on arrival would be an embed lost without a word. The address is
+// asked as it stands, nothing of it is lowered or repaired.
+//
+// It begins with a scheme of the web and names a host, the way Minka reads a
+// host out of an address: what follows the scheme up to the first "/", "?" or
+// "#", without what stands before the last "@" and without a port. A colon
+// no port follows is no port. About a port the rule is stricter than Minka,
+// which reads the number a port begins with and lets the rest be: only digits
+// are a port here, so that no tag is written that could be refused, at the
+// price of an embed whose address ends its port in something else.
+func embeddable(address string) bool {
+	if utf8.RuneCountInString(address) > maxEmbedAddressLength || strings.ContainsFunc(address, refusedInEmbedAddress) {
+		return false
+	}
+	var authority string
+	var found bool
+	for _, scheme := range embedSchemes {
+		if beginsWith(address, scheme) {
+			authority, found = address[len(scheme):], true
+			break
+		}
+	}
+	if !found {
+		return false
+	}
+	if end := strings.IndexAny(authority, "/?#"); end >= 0 {
+		authority = authority[:end]
+	}
+	host := authority[strings.LastIndex(authority, "@")+1:]
+	// A host in brackets is an address of numbers and colons, and has no port.
+	bracketed := strings.HasPrefix(host, "[") && strings.HasSuffix(host, "]")
+	if colon := strings.LastIndex(host, ":"); colon >= 0 && !bracketed {
+		if port := host[colon+1:]; port != "" {
+			number, err := strconv.ParseUint(port, 10, 32)
+			if err != nil || len(port) > maxPortLength || number > largestPort {
+				return false
+			}
+		}
+		host = host[:colon]
+	}
+	return host != ""
+}
+
 // saysNothing tells whether a text of a bundle is empty for whoever reads it:
 // whitespace, characters without a width, line breaks and the empty blocks an
-// editor leaves behind. Anything else says something, a reference to a file or a person, a link, a
-// rule and an embedded frame included.
+// editor leaves behind. Anything else says something, a reference to a file
+// or a person, a link, a rule and an embed included: a text that was a video
+// alone is one.
 func saysNothing(body string) bool {
 	reader := newBodyReader(body)
 	for {
@@ -181,7 +453,7 @@ func saysNothing(body string) bool {
 		case !more:
 			return true
 		case token.kind == nethtml.TextToken:
-			if strings.TrimSpace(widthless.Replace(html.UnescapeString(token.raw))) != "" {
+			if !blank(token.raw) {
 				return false
 			}
 		case token.kind == nethtml.CommentToken || token.kind == nethtml.DoctypeToken:
@@ -189,6 +461,12 @@ func saysNothing(body string) bool {
 			return false
 		}
 	}
+}
+
+// blank tells whether a piece of text shows nothing: whitespace and characters
+// without a width, however they are written.
+func blank(raw string) bool {
+	return strings.TrimSpace(widthless.Replace(html.UnescapeString(raw))) == ""
 }
 
 // widthless takes away the characters that have no width and no meaning by
@@ -356,11 +634,22 @@ func idIn(text string, pattern *regexp.Regexp) (int64, bool) {
 }
 
 // rendering is what Basecamp rendered into an embed: for a mention the avatar,
-// which names the person, and the name as a caption.
+// which names the person, and the name as a caption. Of a file it is what the
+// embed itself says about it: the caption somebody wrote, which is another
+// thing than the one Basecamp renders from the name and the size, and how the
+// file is laid out.
 type rendering struct {
-	personID string
-	caption  string
-	text     string
+	personID     string
+	caption      string
+	text         string
+	fileCaption  string
+	presentation string
+}
+
+// of adds what the embed says itself to what was rendered into it.
+func (r rendering) of(embed rendering) rendering {
+	r.fileCaption, r.presentation = embed.fileCaption, embed.presentation
+	return r
 }
 
 func (r rendering) name() string {
@@ -377,6 +666,12 @@ func (r rendering) orElse(other rendering) rendering {
 	if r.name() == "" {
 		r.caption, r.text = other.caption, other.text
 	}
+	if r.fileCaption == "" {
+		r.fileCaption = other.fileCaption
+	}
+	if r.presentation == "" {
+		r.presentation = other.presentation
+	}
 	return r
 }
 
@@ -389,7 +684,8 @@ func renderingsBySGID(rendered string) map[string]rendering {
 			return renderings
 		}
 		if sgid := token.attribute("sgid"); token.opens(embedTag) && sgid != "" {
-			renderings[sgid] = reader.skipRendering()
+			embed := rendering{fileCaption: token.attribute("caption"), presentation: token.attribute("presentation")}
+			renderings[sgid] = reader.skipRendering().of(embed)
 		}
 	}
 }
@@ -399,6 +695,8 @@ type bodyToken struct {
 	raw  string
 	name string
 	attr []nethtml.Attribute
+	// index is the place of the token among those of its text.
+	index int
 }
 
 // opens tells whether the token is the start of such an element.
@@ -420,6 +718,11 @@ func (t bodyToken) attribute(key string) string {
 type bodyReader struct {
 	tokenizer *nethtml.Tokenizer
 	peeked    *bodyToken
+	// read counts the tokens that were read.
+	read int
+	// framesStayOpen says that no frame of the rest of the text is closed, so
+	// that what follows a frame is read as the text it is.
+	framesStayOpen bool
 }
 
 func newBodyReader(text string) *bodyReader {
@@ -436,10 +739,14 @@ func (r *bodyReader) next() (bodyToken, bool) {
 	if kind == nethtml.ErrorToken {
 		return bodyToken{}, false
 	}
-	token := bodyToken{kind: kind, raw: string(r.tokenizer.Raw())}
+	token := bodyToken{kind: kind, raw: string(r.tokenizer.Raw()), index: r.read}
+	r.read++
 	if kind == nethtml.StartTagToken || kind == nethtml.SelfClosingTagToken || kind == nethtml.EndTagToken {
 		parsed := r.tokenizer.Token()
 		token.name, token.attr = parsed.Data, parsed.Attr
+	}
+	if r.framesStayOpen && token.opens(frameTag) {
+		r.tokenizer.NextIsNotRawText()
 	}
 	return token, true
 }
@@ -453,6 +760,55 @@ func (r *bodyReader) peek() (bodyToken, bool) {
 		r.peeked = &token
 	}
 	return *r.peeked, true
+}
+
+// skipFrame takes what the frame that was just opened holds, and its end tag.
+// To whoever reads tokens, a frame that is never closed holds the rest of the
+// text. That rest is then read anew, as the text it is: a frame that is never
+// closed costs no more of the text than itself. Nothing closes a frame behind
+// one that is never closed, so the rest is read anew once, however many
+// frames it holds.
+func (r *bodyReader) skipFrame() {
+	if r.framesStayOpen {
+		return
+	}
+	var held string
+	token, more := r.peek()
+	if more && token.kind == nethtml.TextToken {
+		r.next()
+		held = token.raw
+		token, more = r.peek()
+	}
+	switch {
+	case !more:
+		r.tokenizer, r.framesStayOpen = nethtml.NewTokenizer(strings.NewReader(held)), true
+	case token.kind == nethtml.EndTagToken && token.name == frameTag:
+		r.next()
+	}
+}
+
+// skipEmptyCaption takes a caption that was just opened and holds nothing, up
+// to its end tag, and says whether it did. A caption ends where its figure or
+// the text does as well. Of a caption that holds something, only the
+// whitespace it begins with is taken, and handed back.
+func (r *bodyReader) skipEmptyCaption() (string, bool) {
+	var leading string
+	token, more := r.peek()
+	if more && token.kind == nethtml.TextToken && blank(token.raw) {
+		r.next()
+		leading = token.raw
+		token, more = r.peek()
+	}
+	switch {
+	case !more:
+		return "", true
+	case token.kind == nethtml.EndTagToken && token.name == captionTag:
+		r.next()
+		return "", true
+	case token.kind == nethtml.EndTagToken && token.name == figureTag:
+		return "", true
+	}
+	return leading, false
 }
 
 // skipRendering takes what Basecamp rendered into the embed that was just

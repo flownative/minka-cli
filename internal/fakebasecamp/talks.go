@@ -66,6 +66,10 @@ type Upload struct {
 	Bytes       int64
 	URL         string
 	DownloadURL string
+	// Gone is a file the account lists and no longer has.
+	Gone bool
+	// URLName replaces the name in the address the file is downloaded from.
+	URLName string
 }
 
 // ForeignPicture is a picture that lies at an address of somebody else, as
@@ -105,7 +109,7 @@ func talkProject(ada, grace, linus, edsger, former, bot, deleted Person, tool fu
 	// Of the second board, and so in no list.
 	pitch := Category{ID: 9650, Name: "Pitch", Icon: "💡"}
 
-	floor := File{ID: 5011, SGID: SGID("gid://bc3/Attachment/5011?expires_in"), Key: "k5011f00dcafe", Filename: "floor.png", ContentType: "image/png", Bytes: 1024}
+	floor := File{ID: 5011, SGID: SGID("gid://bc3/Attachment/5011?expires_in"), Key: FileKey(5011), Filename: "floor.png", ContentType: "image/png", Bytes: 1024}
 
 	news := tool(9030, "message_board", "message_boards", "News", true, 1, &ada)
 	news.CreatedAt = "2023-04-01T07:00:00.200Z"
@@ -366,7 +370,7 @@ func (a *Account) lineJSON(p *Project, chat *Tool, line Line) map[string]any {
 			address = fmt.Sprintf("https://preview.basecamp.test/%s/blobs/%s/previews/full", a.ID, upload.Key)
 		}
 		if download == "" {
-			download = fmt.Sprintf("%sblobs/%s/download/%s", a.root(), upload.Key, upload.Filename)
+			download = a.downloadURL(upload.Key, upload.urlName())
 		}
 		uploads = append(uploads, map[string]any{
 			"title": upload.Filename, "filename": upload.Filename, "content_type": upload.ContentType, "byte_size": upload.Bytes,

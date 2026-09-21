@@ -53,6 +53,7 @@ type app struct {
 
 	// What import reads a foreign system through, replaced in tests.
 	basecampSource basecamp.Source
+	basecampFiles  basecamp.Files
 	avatarFetcher  basecamp.AvatarFetcher
 	// retryPause waits before a request is asked again; by the clock when nil.
 	retryPause basecamp.Pause
@@ -81,6 +82,7 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 func newApp(ctx context.Context, stdin io.Reader, stdout, stderr io.Writer, getenv func(string) string) *app {
 	a := &app{ctx: ctx, stdin: stdin, stdout: stdout, stderr: stderr, getenv: getenv}
 	a.basecampSource = basecamp.CLI{}
+	a.basecampFiles = basecamp.Downloader{}
 	a.avatarFetcher = basecamp.NewAvatarClient()
 	a.now = time.Now
 	a.stdinIsTerminal = func() bool { return isTerminal(stdin) }

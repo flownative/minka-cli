@@ -42,6 +42,10 @@ the documentation says what holds; how it came about is in git.
 - [Live check](guides/live-check.md): Where writing is allowed, in which order
   to check, what gets tidied up afterwards — before every run against a real
   instance.
+- [Extracting from Basecamp live](guides/import-run.md): Which identity and
+  which binary a run takes, how long it lasts, where the bundles lie, how a
+  bundle is checked without showing what is in it — before every run of
+  `import basecamp` against the real account.
 
 ## Decisions
 

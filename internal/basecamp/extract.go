@@ -128,6 +128,7 @@ type Result struct {
 	// LongestBody is the longest text of a kind, in characters.
 	LongestBody map[bundle.Kind]int
 	Bodies      BodyCounts
+	Files       FileCounts
 }
 
 // Extractor walks projects of a Basecamp account and adds what it finds to a
@@ -139,6 +140,7 @@ type Result struct {
 type Extractor struct {
 	Source  Source
 	Avatars AvatarFetcher
+	Files   Files
 	// MessagesPerPart is how many lines of a chat one file of a bundle holds
 	// at most; messagesPerPart when 0.
 	MessagesPerPart int
@@ -164,6 +166,12 @@ type Extractor struct {
 	messagesWithEmptyBody int
 	longestBody           map[bundle.Kind]int
 	bodies                BodyCounts
+
+	// fileOwners names the first owner of every file the walk has met, and
+	// fileRecords are the records of those files in the order they were met.
+	fileOwners  map[string]string
+	fileRecords []bundle.Attachment
+	files       FileCounts
 }
 
 // talk names the tools of one project that hold posts and lines, each kind in
@@ -189,7 +197,7 @@ func ValidProjectID(value string) bool {
 }
 
 // Extract walks the projects and adds their records to w. A discarding Writer
-// gets the same records, except that no avatar is downloaded.
+// gets the same records, except that no avatar and no file is downloaded.
 //
 // The walk goes kind by kind: the projects with their tools and boards, then
 // the message boards of all of them, then the chats. So the comments and the
@@ -210,6 +218,7 @@ func (e *Extractor) Extract(ctx context.Context, projectIDs []string, w *bundle.
 		e.messagesByType[name] = 0
 	}
 	e.longestBody = map[bundle.Kind]int{bundle.Cards: 0, bundle.Comments: 0, bundle.Posts: 0, bundle.Messages: 0}
+	e.fileOwners, e.fileRecords, e.files = map[string]string{}, nil, FileCounts{}
 
 	ids, err := sortedIDs(projectIDs)
 	if err != nil {
@@ -243,6 +252,13 @@ func (e *Extractor) Extract(ctx context.Context, projectIDs []string, w *bundle.
 	if err != nil {
 		return Result{}, err
 	}
+	// The index of the files begins with the avatars, in the order of the
+	// people, and goes on with the files in the order the walk met them.
+	for _, record := range e.fileRecords {
+		if err := w.Add(bundle.Attachments, record); err != nil {
+			return Result{}, err
+		}
+	}
 	return Result{
 		SourceInstance:   e.account,
 		Skipped:          e.skippedTools(),
@@ -264,6 +280,7 @@ func (e *Extractor) Extract(ctx context.Context, projectIDs []string, w *bundle.
 		MessagesWithEmptyBody: e.messagesWithEmptyBody,
 		LongestBody:           e.longestBody,
 		Bodies:                e.bodies,
+		Files:                 e.files,
 	}, nil
 }
 
@@ -578,7 +595,7 @@ func (e *Extractor) attach(ctx context.Context, w *bundle.Writer, record bundle.
 				OwnerKind:          record.OwnerKind,
 				OwnerSourceID:      record.OwnerSourceID,
 				Reason:             failed.Message,
-				Retryable:          failed.Kind == Network || failed.Kind == RateLimited,
+				Retryable:          failed.Transient(),
 			})
 			return nil, nil
 		}
@@ -586,8 +603,8 @@ func (e *Extractor) attach(ctx context.Context, w *bundle.Writer, record bundle.
 		if err != nil {
 			return nil, err
 		}
-		record.Filename, record.ContentType = fetched.Filename, fetched.ContentType
-		record.File, record.Bytes, record.SHA256 = stored.File, stored.Bytes, stored.SHA256
+		record.Filename, record.ContentType = fetched.Filename, &fetched.ContentType
+		record.Holds(stored)
 	}
 	if err := w.Add(bundle.Attachments, record); err != nil {
 		return nil, err

@@ -356,3 +356,16 @@ times with growing pauses, 100 retries a run; then the run ends, retryable.
 Basecamp CLI gives up at once on a status it does not know, a gateway's 525.
 **Implemented as:** `basecamp.Retrying`, `failure`, see
 [Importing](stable/import.md).
+
+<a id="c-030"></a>
+## C-030 — Files are streamed in, or taken over from the bundle before
+
+*Applies to: `import basecamp`, every file of a text or a chat*
+
+`basecamp files download --out -` streams a file into the staged bundle under
+a name the extractor makes plain; a file the old bundle holds intact is linked.
+
+**Why:** A file of any size must not pass through memory or get a name the
+source chose, and a run that replaces the bundle would fetch thousands again.
+**Implemented as:** `basecamp.Downloader`, `Extractor.attachFile`,
+`bundle.Writer.StoreFile` and `ReuseFile`, see [Importing](stable/import.md).
