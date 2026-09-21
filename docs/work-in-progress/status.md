@@ -37,7 +37,7 @@ Everything else is tested against the fake API and checked live — the chain
 upload → attachment in the text → display as well as private conversations in
 both directions. What is checked against the fake only is listed below.
 
-Coordination of the API: the Minka session `basecamp-c1`. It reports changes,
+Coordination of the API: the Minka session `minka-d8`. It reports changes,
 which are checked against the Minka code; deviations go back to it.
 
 Versions are released by publishing a release in GitHub and installed through
@@ -145,14 +145,21 @@ failure that may pass, and repairs an example in the skill) and
 
 - The first run that fetches the files: some 2,700 of them, 6.1 GiB by
   Basecamp's own word, about an hour. It starts on the client's yes.
-- Whether an embedded video, which is an `iframe` Minka drops, comes over as
-  an ordinary link: 332 lines of chat hold nothing else and are passed over
-  by the applier. The format coordination asks the client; the extractor
-  changes only once the format says so.
 - Whether Minka gets a holding area in a column. The bundle carries `onHold`
   already.
 - `CLAUDE.md` still rules out what the API does not offer, which the import
   is, and names a coordinator session of the past.
+
+## Waiting for the format
+
+- What is embedded in a text — a video, a player, an `iframe` today, which
+  Minka drops — comes over as an element of its own, `<import-embed url="…">`
+  in place of `<figure><iframe src=…>`; the client has decided so, as the
+  format coordination reports. The bundle holds some 500 of them, and 332
+  lines of chat hold nothing else and are passed over by the applier until
+  then. Which address the element carries, which schemes it takes and what
+  becomes of Basecamp's own players is written into the format first; the
+  extractor changes once that text is on Minka's `main`.
 
 ## Next steps
 
@@ -175,7 +182,7 @@ failure that may pass, and repairs an example in the skill) and
   gains a build provenance attestation with instructions for verifying it, and
   the macOS binaries get notarised, which waits for an Apple Developer ID.
 
-- React to messages from `basecamp-c1`: check against the code, fake first,
+- React to messages from `minka-d8`: check against the code, fake first,
   then the CLI, test and sabotage proof, check live, documentation in the
   same commit.
 - Prepare the internal alpha: change the token, proofread the SKILL.md.
