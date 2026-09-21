@@ -64,6 +64,12 @@ before a directory is written again, and again when it is ready, with counts.
 Into a directory that is being tried out elsewhere, write a new run under
 another name first and move it once it is checked.
 
+A bundle goes to the applier whole. What an earlier run of the applier passed
+over and a later one brings lands at the end where Minka keeps an order of its
+own, a line of a chat at the end of the chat. So the history of an account is
+applied from the complete bundle, files and embeds included, into an
+organisation that holds nothing of it yet.
+
 ## Checking a bundle
 
 Every line parses; identifiers are unique per kind; every reference resolves
