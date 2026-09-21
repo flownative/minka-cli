@@ -499,8 +499,12 @@ func everyReferenceLeadsToAPerson(t *testing.T, dir string) map[string]bool {
 	for _, record := range records(t, dir, bundle.People) {
 		people[record["sourceId"].(string)] = true
 	}
-	for _, kind := range []bundle.Kind{bundle.Tools, bundle.Columns, bundle.Cards, bundle.Steps, bundle.Comments, bundle.Reactions} {
-		for _, record := range records(t, dir, kind) {
+	for _, kind := range []bundle.Kind{bundle.Tools, bundle.Categories, bundle.Columns, bundle.Cards, bundle.Steps, bundle.Posts, bundle.Messages, bundle.Comments, bundle.Reactions} {
+		found := recordsOrNone(t, dir, kind)
+		if kind == bundle.Messages {
+			found = messages(t, dir)
+		}
+		for _, record := range found {
 			var named []string
 			for _, field := range []string{"createdBy", "completedBy"} {
 				if reference, ok := record[field].(string); ok {

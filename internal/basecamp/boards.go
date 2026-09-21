@@ -151,12 +151,19 @@ func fileOrder(cards []placedCard) error {
 // two were created in the same moment. A time is read for ordering only: a
 // bundle carries it the way Basecamp wrote it.
 func oldestFirst[T any](items []T, what string, key func(T) (id int64, createdAt string)) error {
+	_, err := oldestFirstWithMoments(items, what, key)
+	return err
+}
+
+// oldestFirstWithMoments orders like oldestFirst and hands out the moments it
+// read, by ID, for whoever goes on to compare them.
+func oldestFirstWithMoments[T any](items []T, what string, key func(T) (id int64, createdAt string)) (map[int64]time.Time, error) {
 	created := make(map[int64]time.Time, len(items))
 	for _, item := range items {
 		id, createdAt := key(item)
 		parsed, err := time.Parse(time.RFC3339Nano, createdAt)
 		if err != nil {
-			return &Error{Kind: API, Message: fmt.Sprintf("Basecamp says that %s %d was created at something that is no time", what, id)}
+			return nil, &Error{Kind: API, Message: fmt.Sprintf("Basecamp says that %s %d was created at something that is no time", what, id)}
 		}
 		created[id] = parsed
 	}
@@ -168,7 +175,7 @@ func oldestFirst[T any](items []T, what string, key func(T) (id int64, createdAt
 		}
 		return a < b
 	})
-	return nil
+	return created, nil
 }
 
 // extractBoards adds the columns and cards of the boards of one project, and
@@ -407,6 +414,7 @@ func (e *Extractor) writeCard(ctx context.Context, w *bundle.Writer, bucket int6
 	if err := w.Add(bundle.Cards, record); err != nil {
 		return err
 	}
+	e.measure(bundle.Cards, description)
 	e.cardsByStatus[found.Status]++
 	if found.onHold {
 		e.cardsOnHold++
@@ -415,13 +423,18 @@ func (e *Extractor) writeCard(ctx context.Context, w *bundle.Writer, bucket int6
 	if err := e.writeSteps(ctx, w, projectID, toolID, found.card); err != nil {
 		return err
 	}
-	comments, err := e.writeComments(ctx, w, bucket, bundle.ParentCard, found.ID, found.CommentsCount)
+	return e.writeDiscussion(ctx, w, bucket, bundle.ParentCard, bundle.TargetCard, found.ID, found.CommentsCount, found.BoostsCount)
+}
+
+// writeDiscussion adds what hangs on a card or a post: its comments, its
+// boosts, and the boosts of its comments, which stand behind its own.
+func (e *Extractor) writeDiscussion(ctx context.Context, w *bundle.Writer, bucket int64, parentKind, targetKind string, id int64, commentsCount, boostsCount int) error {
+	comments, err := e.writeComments(ctx, w, bucket, parentKind, id, commentsCount)
 	if err != nil {
 		return err
 	}
-	// The boosts of a card stand before those of its comments.
-	if found.BoostsCount > 0 {
-		if err := e.writeBoosts(ctx, w, bucket, bundle.TargetCard, found.ID); err != nil {
+	if boostsCount > 0 {
+		if err := e.writeBoosts(ctx, w, bucket, targetKind, id); err != nil {
 			return err
 		}
 	}
@@ -542,14 +555,15 @@ func (e *Extractor) writeComments(ctx context.Context, w *bundle.Writer, bucket 
 		if err != nil {
 			return nil, err
 		}
+		e.measure(bundle.Comments, body)
 	}
 	return comments, nil
 }
 
-// writeBoosts adds the boosts of a card or a comment as reactions, oldest
-// first. A boost does not name what it answers; whoever asks for it knows. It
-// is written as it is, a text of some words included: what Minka takes for a
-// reaction is the applier's to decide.
+// writeBoosts adds the boosts of a card, a post, a comment or a line as
+// reactions, oldest first. A boost does not name what it answers; whoever asks
+// for it knows. It is written as it is, a text of some words included: what
+// Minka takes for a reaction is the applier's to decide.
 func (e *Extractor) writeBoosts(ctx context.Context, w *bundle.Writer, bucket int64, targetKind string, target int64) error {
 	boosts, err := getList[boost](ctx, e.Source, fmt.Sprintf("buckets/%d/recordings/%d/boosts.json", bucket, target))
 	if err != nil {

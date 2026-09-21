@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -23,6 +24,12 @@ type importEnv struct {
 	account *fakebasecamp.Account
 	now     time.Time
 	env     *testEnv
+	// source stands between the CLI and the account, where a test needs more
+	// than the account does by itself.
+	source basecamp.Source
+	// pauses are the pauses a run asked for before it asked a request again.
+	// No test waits for one.
+	pauses []time.Duration
 }
 
 func newImportEnv(t *testing.T) *importEnv {
@@ -42,8 +49,15 @@ func (e *importEnv) run(args ...string) result {
 	e.t.Helper()
 	return e.env.runWith(func(a *app) {
 		a.basecampSource = e.account
+		if e.source != nil {
+			a.basecampSource = e.source
+		}
 		a.avatarFetcher = e.account
 		a.now = func() time.Time { return e.now }
+		a.retryPause = func(ctx context.Context, pause time.Duration) error {
+			e.pauses = append(e.pauses, pause)
+			return ctx.Err()
+		}
 	}, "", args...)
 }
 
@@ -93,15 +107,21 @@ func TestImportBasecampWritesABundleAndReportsWhatItHolds(t *testing.T) {
 			map[string]any{"kind": "todoset", "enabled": true, "count": float64(2)},
 			map[string]any{"kind": "vault", "enabled": true, "count": float64(1)},
 		},
-		"missingFiles": []any{}, "invalidAddresses": []any{}, "peopleLeftOut": float64(1),
+		"missingFiles": []any{}, "invalidAddresses": []any{}, "peopleLeftOut": float64(3),
 		"cardsByStatus": map[string]any{"active": float64(0), "archived": float64(0), "trashed": float64(0)},
 		"cardsOnHold":   float64(0), "cardsLeftOut": float64(0), "commentsTrashed": float64(0),
-		"mentionsUnresolved": float64(0), "filesInBodies": float64(0), "filesDropped": float64(0),
+		"mentionsUnresolved": float64(0), "filesInBodies": float64(0), "filesDropped": float64(0), "linkPreviews": float64(0), "picturesLinked": float64(0),
+		"postsByStatus": map[string]any{"active": float64(0), "archived": float64(0), "trashed": float64(0)},
+		"postsLeftOut":  float64(0), "postsWithEmptyBody": float64(0),
+		"messagesByType":     map[string]any{"text": float64(0), "richText": float64(0), "upload": float64(0), "integration": float64(0)},
+		"uploadLinesLeftOut": float64(0), "messagesWithEmptyBody": float64(0),
+		"longestBody":     map[string]any{"cards": float64(0), "comments": float64(0), "posts": float64(0), "messages": float64(0)},
+		"requestsRetried": float64(0),
 	}
 	if got := decode(t, env.Data); !reflect.DeepEqual(got, want) {
 		t.Errorf("data:\n got %v\nwant %v", got, want)
 	}
-	if !env.OK || !strings.Contains(env.Summary, "5 people, 2 projects, 5 tools, 0 cards") {
+	if !env.OK || !strings.Contains(env.Summary, "5 people, 2 projects, 5 tools, 0 cards, 0 posts, 0 messages") {
 		t.Errorf("ok %v, summary %q", env.OK, env.Summary)
 	}
 
@@ -387,14 +407,19 @@ func TestImportFailuresHaveTheCodeOfTheirClass(t *testing.T) {
 		exit      int
 		retryable bool
 		hint      string
+		// asked is how often the request went out: once, or as often as a
+		// request is tried when its failure may pass.
+		asked int
 	}{
-		{"the Basecamp CLI is missing", basecamp.NotInstalled, CodeConfig, ExitUsage, false, "basecamp auth login"},
-		{"not signed in", basecamp.AuthRequired, CodeAuth, ExitAuth, false, "basecamp auth login"},
-		{"forbidden", basecamp.Forbidden, CodeForbidden, ExitForbidden, false, ""},
-		{"rate limited", basecamp.RateLimited, CodeAPI, ExitAPI, true, ""},
-		{"network", basecamp.Network, CodeNetwork, ExitNetwork, true, ""},
-		{"interrupted", basecamp.Interrupted, CodeNetwork, ExitNetwork, false, ""},
-		{"API", basecamp.API, CodeAPI, ExitAPI, false, ""},
+		{"the Basecamp CLI is missing", basecamp.NotInstalled, CodeConfig, ExitUsage, false, "basecamp auth login", 1},
+		{"not found", basecamp.NotFound, CodeNotFound, ExitNotFound, false, "", 1},
+		{"not signed in", basecamp.AuthRequired, CodeAuth, ExitAuth, false, "basecamp auth login", 1},
+		{"forbidden", basecamp.Forbidden, CodeForbidden, ExitForbidden, false, "", 1},
+		{"rate limited", basecamp.RateLimited, CodeAPI, ExitAPI, true, "", 4},
+		{"network", basecamp.Network, CodeNetwork, ExitNetwork, true, "", 4},
+		{"Basecamp or a gateway failed", basecamp.Unavailable, CodeAPI, ExitAPI, true, "try again", 4},
+		{"interrupted", basecamp.Interrupted, CodeNetwork, ExitNetwork, false, "", 1},
+		{"API", basecamp.API, CodeAPI, ExitAPI, false, "", 1},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -413,7 +438,199 @@ func TestImportFailuresHaveTheCodeOfTheirClass(t *testing.T) {
 			if entries, _ := os.ReadDir(parent); len(entries) != 0 {
 				t.Errorf("left %v", entries)
 			}
+			if asked := timesAsked(e.account.Requests, "projects/7001/people.json?page=1"); asked != c.asked {
+				t.Errorf("asked %d times, want %d", asked, c.asked)
+			}
+			if want := basecamp.RetryPauses[:c.asked-1]; !slices.Equal(e.pauses, want) {
+				t.Errorf("waited %v, want %v", e.pauses, want)
+			}
 		})
+	}
+}
+
+// timesAsked is how often one request went out.
+func timesAsked(requests []string, wanted string) int {
+	count := 0
+	for _, request := range requests {
+		if request == wanted {
+			count++
+		}
+	}
+	return count
+}
+
+func TestARequestThatFailsAndThenAnswersDoesNotCostTheRun(t *testing.T) {
+	e := newImportEnv(t)
+	out := filepath.Join(t.TempDir(), "bundle")
+	e.account.Fail["projects/7001/people.json"] = &basecamp.Error{Kind: basecamp.Unavailable, Message: "Basecamp: Request failed (HTTP 525)"}
+	e.account.FailFirst["projects/7001/people.json"] = 2
+
+	env, r := e.runJSON("import", "basecamp", "--project", "7001", "--out", out)
+	expectCode(t, r, ExitOK)
+	if got := decode(t, env.Data)["requestsRetried"]; got != float64(2) {
+		t.Errorf("requestsRetried %v, want 2", got)
+	}
+	if asked := timesAsked(e.account.Requests, "projects/7001/people.json?page=1"); asked != 3 {
+		t.Errorf("asked %d times, want 3", asked)
+	}
+	if want := []time.Duration{2 * time.Second, 10 * time.Second}; !slices.Equal(e.pauses, want) {
+		t.Errorf("waited %v, want %v", e.pauses, want)
+	}
+	if strings.Contains(r.stdout, "525") || strings.Contains(r.stdout, "people.json") {
+		t.Errorf("a run that ended well names the failure or the request: %s", r.stdout)
+	}
+
+	e.account.FailFirst["projects/7001/people.json"] = 1
+	r = e.run("import", "basecamp", "--project", "7001", "--out", out, "--styled")
+	expectCode(t, r, ExitOK)
+	if want := "Requests asked again after a failure that passed: 1\n"; !strings.Contains(r.stdout, want) {
+		t.Errorf("the text lacks %q:\n%s", want, r.stdout)
+	}
+
+	r = e.run("import", "basecamp", "--project", "7001", "--out", out, "--styled")
+	expectCode(t, r, ExitOK)
+	if strings.Contains(r.stdout, "asked again") {
+		t.Errorf("a run without a failure talks of one:\n%s", r.stdout)
+	}
+}
+
+// stumbling fails every request the first times it is asked, of whatever kind
+// it is, and passes it on after that: once, when times is 0.
+type stumbling struct {
+	account *fakebasecamp.Account
+	times   int
+	asked   map[string]int
+	failed  int
+}
+
+func (s *stumbling) Get(ctx context.Context, path string) ([]byte, error) {
+	if s.asked == nil {
+		s.asked = map[string]int{}
+	}
+	if s.asked[path] < max(s.times, 1) {
+		s.asked[path]++
+		s.failed++
+		return nil, &basecamp.Error{Kind: basecamp.Unavailable, Message: "Basecamp: Gateway error (502)"}
+	}
+	return s.account.Get(ctx, path)
+}
+
+// A project per run: every request of a run stumbles, and a run asks no more
+// requests again than MaxRetriesOfARun.
+func TestARunWhoseEveryRequestIsAskedAgainWritesTheSameBytes(t *testing.T) {
+	files, stumbled := 0, 0
+	for _, project := range []string{"7001", "7003", "7004"} {
+		calm := newImportEnv(t)
+		calmOut := filepath.Join(t.TempDir(), "bundle")
+		calmEnv, r := calm.runJSON("import", "basecamp", "--out", calmOut, "--project", project)
+		expectCode(t, r, ExitOK)
+
+		e := newImportEnv(t)
+		source := &stumbling{account: e.account}
+		e.source = source
+		out := filepath.Join(t.TempDir(), "bundle")
+		env, r := e.runJSON("import", "basecamp", "--out", out, "--project", project)
+		expectCode(t, r, ExitOK)
+
+		want, got := filesUnder(t, calmOut), filesUnder(t, out)
+		if !reflect.DeepEqual(got, want) {
+			t.Errorf("project %s: the bundles differ:\n got %v\nwant %v", project, got, want)
+		}
+		if !slices.Equal(e.account.Requests, calm.account.Requests) {
+			t.Errorf("project %s: the account was asked for other things, or in another order", project)
+		}
+
+		// Every request of every kind stumbled once: none goes round the retries.
+		if source.failed > basecamp.MaxRetriesOfARun {
+			t.Fatalf("project %s takes %d requests, more than a run asks again: the test needs a smaller walk", project, source.failed)
+		}
+		if source.failed != len(calm.account.Requests) {
+			t.Fatalf("project %s: %d requests failed once, of %d the run makes", project, source.failed, len(calm.account.Requests))
+		}
+		data, calmData := decode(t, env.Data), decode(t, calmEnv.Data)
+		if data["requestsRetried"] != float64(source.failed) || calmData["requestsRetried"] != float64(0) {
+			t.Errorf("project %s: requestsRetried %v and %v, want %d and 0", project, data["requestsRetried"], calmData["requestsRetried"], source.failed)
+		}
+		for _, pause := range e.pauses {
+			if pause != basecamp.RetryPauses[0] {
+				t.Fatalf("project %s: waited %v before a second attempt", project, pause)
+			}
+		}
+		delete(data, "requestsRetried")
+		delete(calmData, "requestsRetried")
+		data["bundle"], calmData["bundle"] = "", ""
+		if !reflect.DeepEqual(data, calmData) {
+			t.Errorf("project %s: the reports differ in more than the retries:\n got %v\nwant %v", project, data, calmData)
+		}
+		files, stumbled = files+len(want), stumbled+source.failed
+	}
+	if files < 20 || stumbled < 50 {
+		t.Errorf("%d files and %d requests are too little to tell", files, stumbled)
+	}
+}
+
+// Every request passes on its third attempt: no request uses up its attempts,
+// and the run would take the pauses of all of them.
+func TestARunWhoseSourceKeepsFailingEndsInsteadOfWaitingForEveryRequest(t *testing.T) {
+	for name, args := range map[string][]string{
+		"a run":     {"--out", "bundle"},
+		"a dry run": {"--dry-run"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			e := newImportEnv(t)
+			source := &stumbling{account: e.account, times: 2}
+			e.source = source
+			parent := t.TempDir()
+			if args[0] == "--out" {
+				args = []string{"--out", filepath.Join(parent, args[1])}
+			}
+
+			env, r := e.runJSON(append([]string{"import", "basecamp", "--project", "7003", "--project", "7004"}, args...)...)
+			expectCode(t, r, ExitAPI)
+			if env.Code != CodeAPI || !env.Retryable {
+				t.Errorf("code %q, retryable %v", env.Code, env.Retryable)
+			}
+			if env.Error != "Basecamp: Gateway error (502); Basecamp kept failing: 100 requests of this run were asked again already, and no further one is" {
+				t.Errorf("the message does not say that Basecamp kept failing: %q", env.Error)
+			}
+			if len(e.pauses) != 100 || source.failed != 101 {
+				t.Errorf("waited %d times and met %d failures, want 100 and one more", len(e.pauses), source.failed)
+			}
+			if entries, _ := os.ReadDir(parent); len(entries) != 0 {
+				t.Errorf("left %v", entries)
+			}
+		})
+	}
+}
+
+func TestADryRunAsksAgainTheWayARealRunDoes(t *testing.T) {
+	projects := []string{"--project", "7004"}
+
+	e := newImportEnv(t)
+	source := &stumbling{account: e.account}
+	e.source = source
+	parent := t.TempDir()
+	env, r := e.runJSON(append([]string{"import", "basecamp", "--out", filepath.Join(parent, "bundle"), "--dry-run"}, projects...)...)
+	expectCode(t, r, ExitOK)
+	if got := decode(t, env.Data)["requestsRetried"]; source.failed < 20 || got != float64(source.failed) {
+		t.Errorf("requestsRetried %v, want %d", got, source.failed)
+	}
+	if len(e.pauses) != source.failed {
+		t.Errorf("waited %d times, want %d", len(e.pauses), source.failed)
+	}
+
+	failing := newImportEnv(t)
+	failing.account.Fail["projects/7004/people.json"] = &basecamp.Error{Kind: basecamp.Unavailable, Message: "Basecamp: Request failed (HTTP 525)"}
+	env, r = failing.runJSON(append([]string{"import", "basecamp", "--dry-run"}, projects...)...)
+	expectCode(t, r, ExitAPI)
+	if env.Code != CodeAPI || !env.Retryable || env.Error != "Basecamp: Request failed (HTTP 525)" {
+		t.Errorf("code %q, retryable %v, error %q", env.Code, env.Retryable, env.Error)
+	}
+	if asked := timesAsked(failing.account.Requests, "projects/7004/people.json?page=1"); asked != 4 {
+		t.Errorf("asked %d times, want 4", asked)
+	}
+	if entries, _ := os.ReadDir(parent); len(entries) != 0 {
+		t.Errorf("a dry run wrote %v", entries)
 	}
 }
 
@@ -558,7 +775,7 @@ func TestMaskedAddressesAreForbiddenAndNeverShown(t *testing.T) {
 		r := e.run(append([]string{"import", "basecamp", "--project", "7001", "--out", filepath.Join(parent, "made", "bundle")}, mode...)...)
 		expectCode(t, r, ExitForbidden)
 		output := r.stdout + r.stderr
-		for _, want := range []string{"2 of 5", "may not see the e-mail addresses"} {
+		for _, want := range []string{"2 of 6", "may not see the e-mail addresses"} {
 			if !strings.Contains(output, want) {
 				t.Errorf("%v: the output lacks %q:\n%s", mode, want, output)
 			}
@@ -603,7 +820,7 @@ func TestSomebodyWithAnAddressThatIsNoneComesWithoutALoginAndTheRunSucceeds(t *t
 
 		switch mode[0] {
 		case "--styled":
-			if !strings.Contains(r.stdout, "Invalid addresses: 3 (person 99, 102, 103)") || !strings.Contains(r.stdout, "left out: 1") {
+			if !strings.Contains(r.stdout, "Invalid addresses: 3 (person 99, 102, 103)") || !strings.Contains(r.stdout, "left out: 3") {
 				t.Errorf("the text:\n%s", r.stdout)
 			}
 		case "--quiet":
@@ -632,13 +849,13 @@ func TestSomebodyWithAnAddressThatIsNoneComesWithoutALoginAndTheRunSucceeds(t *t
 
 func TestMostAddressesBeingNoneEndsTheRunWithNothingWritten(t *testing.T) {
 	e := newImportEnv(t)
-	for _, i := range []int{0, 3, 4} {
+	for _, i := range []int{0, 3, 4, 6} {
 		e.account.People[i].Email = "x***@*****.***"
 	}
 	parent := t.TempDir()
 	env, r := e.runJSON("import", "basecamp", "--project", "7001", "--out", filepath.Join(parent, "made", "bundle"))
 	expectCode(t, r, ExitAPI)
-	if env.Code != CodeAPI || !strings.Contains(env.Error, "3 of 5") || !strings.Contains(env.Hint, "identity") || strings.Contains(r.stdout, "***") {
+	if env.Code != CodeAPI || !strings.Contains(env.Error, "4 of 6") || !strings.Contains(env.Hint, "identity") || strings.Contains(r.stdout, "***") {
 		t.Errorf("code %q, error %q, hint %q", env.Code, env.Error, env.Hint)
 	}
 	if entries, _ := os.ReadDir(parent); len(entries) != 0 {
@@ -653,7 +870,7 @@ func TestPeopleNothingRefersToAreLeftOutAndCounted(t *testing.T) {
 	expectCode(t, r, ExitOK)
 
 	data := decode(t, env.Data)
-	if data["peopleLeftOut"] != float64(4) || decode(t, env.Data)["counts"].(map[string]any)["people"] != float64(1) {
+	if data["peopleLeftOut"] != float64(6) || decode(t, env.Data)["counts"].(map[string]any)["people"] != float64(1) {
 		t.Errorf("left out %v, counts %v", data["peopleLeftOut"], data["counts"])
 	}
 	files := filesUnder(t, out)
@@ -719,23 +936,190 @@ func TestImportBasecampReportsTheBoardsOfAProject(t *testing.T) {
 	}
 }
 
-func TestADryRunCountsTheBoardsTheWayARealRunDoes(t *testing.T) {
-	e := newImportEnv(t)
-	real, r := e.runJSON("import", "basecamp", "--project", "7003", "--out", filepath.Join(t.TempDir(), "bundle"))
-	expectCode(t, r, ExitOK)
+func TestADryRunCountsTheBoardsAndTheTalksTheWayARealRunDoes(t *testing.T) {
+	for _, project := range []string{"7003", "7004"} {
+		e := newImportEnv(t)
+		real, r := e.runJSON("import", "basecamp", "--project", project, "--out", filepath.Join(t.TempDir(), "bundle"))
+		expectCode(t, r, ExitOK)
 
-	parent := t.TempDir()
-	dry, r := e.runJSON("import", "basecamp", "--project", "7003", "--out", filepath.Join(parent, "bundle"), "--dry-run")
-	expectCode(t, r, ExitOK)
+		parent := t.TempDir()
+		dry, r := e.runJSON("import", "basecamp", "--project", project, "--out", filepath.Join(parent, "bundle"), "--dry-run")
+		expectCode(t, r, ExitOK)
 
-	want, got := decode(t, real.Data), decode(t, dry.Data)
-	delete(want, "bundle")
-	want["dryRun"] = true
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("a dry run reports\n%v\na real one\n%v", got, want)
+		want, got := decode(t, real.Data), decode(t, dry.Data)
+		delete(want, "bundle")
+		want["dryRun"] = true
+		if !reflect.DeepEqual(got, want) {
+			t.Errorf("project %s: a dry run reports\n%v\na real one\n%v", project, got, want)
+		}
+		if real.Notice != dry.Notice {
+			t.Errorf("project %s: a dry run warns %q, a real one %q", project, dry.Notice, real.Notice)
+		}
+		if entries, _ := os.ReadDir(parent); len(entries) != 0 {
+			t.Errorf("project %s: a dry run wrote %v", project, entries)
+		}
 	}
-	if entries, _ := os.ReadDir(parent); len(entries) != 0 {
-		t.Errorf("a dry run wrote %v", entries)
+}
+
+func TestImportBasecampReportsThePostsAndTheChatsOfAProject(t *testing.T) {
+	e := newImportEnv(t)
+	e.account.Projects[3].Dock[5].Lines[0].Content = " "
+	out := filepath.Join(t.TempDir(), "bundle")
+
+	env, r := e.runJSON("import", "basecamp", "--project", "7004", "--out", out)
+	expectCode(t, r, ExitOK)
+	data := decode(t, env.Data)
+	parts := []any{"messages-0001.jsonl", "messages-0002.jsonl"}
+	want := map[string]any{
+		"counts": map[string]any{"people": float64(7), "projects": float64(1), "tools": float64(5), "categories": float64(4),
+			"posts": float64(6), "messages": float64(8), "comments": float64(3), "reactions": float64(4), "attachments": float64(6)},
+		"parts":         map[string]any{"messages": parts},
+		"postsByStatus": map[string]any{"active": float64(4), "archived": float64(1), "trashed": float64(1)},
+		"postsLeftOut":  float64(1), "postsWithEmptyBody": float64(1),
+		"messagesByType":     map[string]any{"text": float64(3), "richText": float64(2), "upload": float64(2), "integration": float64(1)},
+		"uploadLinesLeftOut": float64(1), "messagesWithEmptyBody": float64(1), "picturesLinked": float64(1),
+		"longestBody":   map[string]any{"cards": float64(0), "comments": float64(94), "posts": float64(212), "messages": float64(218)},
+		"filesInBodies": float64(4), "filesDropped": float64(2), "linkPreviews": float64(3), "mentionsUnresolved": float64(0),
+	}
+	for key, value := range want {
+		if !reflect.DeepEqual(data[key], value) {
+			t.Errorf("%s: got %v, want %v", key, data[key], value)
+		}
+	}
+	if !strings.Contains(env.Summary, "7 people, 1 project, 5 tools, 0 cards, 6 posts, 8 messages") {
+		t.Errorf("summary %q", env.Summary)
+	}
+	for _, notice := range []string{"2 files embedded in texts or dropped into chats", "1 line of a chat is left out"} {
+		if !strings.Contains(env.Notice, notice) {
+			t.Errorf("notice %q does not say %q", env.Notice, notice)
+		}
+	}
+
+	// The manifest names the parts the way the report does, and the bundle
+	// holds them and not the one file beside them.
+	files := filesUnder(t, out)
+	var manifest map[string]any
+	if err := json.Unmarshal([]byte(files["manifest.json"]), &manifest); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(manifest["parts"], want["parts"]) || !reflect.DeepEqual(manifest["counts"], want["counts"]) {
+		t.Errorf("the manifest names the parts %v and counts %v", manifest["parts"], manifest["counts"])
+	}
+	for name, lines := range map[string]int{"categories.jsonl": 4, "posts.jsonl": 6, "messages-0001.jsonl": 7, "messages-0002.jsonl": 1, "messages.jsonl": 0, "messages-0003.jsonl": 0} {
+		if got := strings.Count(files[name], "\n"); got != lines {
+			t.Errorf("%s holds %d lines, want %d", name, got, lines)
+		}
+	}
+	if _, has := files["messages.jsonl"]; has {
+		t.Error("the bundle carries the one file beside its parts")
+	}
+
+	r = e.run("import", "basecamp", "--project", "7004", "--out", out, "--styled")
+	expectCode(t, r, ExitOK)
+	for _, want := range []string{
+		"categories   4", "posts        6", "messages     8",
+		"Posts: 4 active, 1 archived, 1 trashed; 1 of them without a text",
+		"posts of a message board that is not extracted, left out: 1",
+		"Messages: 3 text, 2 rich text, 2 upload, 1 integration",
+		"Lines that say nothing, left out: 1",
+		"Messages are written in 2 parts, messages-0001.jsonl to messages-0002.jsonl",
+		"Lines that were files Basecamp names none of, left out: 1",
+		"In the texts: 4 files referred to, 2 files Basecamp lists nothing for dropped, 0 mentions left as names, 3 previews of links turned into links, 1 picture at a foreign address turned into a link",
+		"Longest text in characters: cards 0, comments 94, posts 212, messages 218",
+	} {
+		if !strings.Contains(r.stdout, want) {
+			t.Errorf("the text lacks %q:\n%s", want, r.stdout)
+		}
+	}
+	if !strings.Contains(r.stderr, "Warning: 1 line of a chat is left out") {
+		t.Errorf("stderr: %s", r.stderr)
+	}
+}
+
+func TestABundleWithOneSmallChatCarriesTheOneFileAndNamesNoParts(t *testing.T) {
+	e := newImportEnv(t)
+	e.account.Projects[3].Dock[5].Lines = nil
+	out := filepath.Join(t.TempDir(), "bundle")
+
+	env, r := e.runJSON("import", "basecamp", "--project", "7004", "--out", out)
+	expectCode(t, r, ExitOK)
+	if _, has := decode(t, env.Data)["parts"]; has {
+		t.Errorf("the report names parts: %s", env.Data)
+	}
+	files := filesUnder(t, out)
+	if strings.Count(files["messages.jsonl"], "\n") != 7 || strings.Contains(files["manifest.json"], "parts") {
+		t.Errorf("messages.jsonl holds %d lines; the manifest:\n%s", strings.Count(files["messages.jsonl"], "\n"), files["manifest.json"])
+	}
+	if _, has := files["messages-0001.jsonl"]; has {
+		t.Error("the bundle carries a part beside the one file")
+	}
+
+	r = e.run("import", "basecamp", "--project", "7004", "--out", out, "--styled")
+	expectCode(t, r, ExitOK)
+	if strings.Contains(r.stdout, "parts") {
+		t.Errorf("the text speaks of parts:\n%s", r.stdout)
+	}
+}
+
+// What people wrote is in the bundle and nowhere else: no output says what a
+// post is called, what somebody said in a chat or who did.
+func TestNoOutputSaysWhatStandsInAPostOrAChat(t *testing.T) {
+	written := []string{
+		"News", "Pitches", "Attic", "Campfire", "Side room", "Office move", "Reminder", "house rules", "tea club", "book shelf",
+		"Announcement", "faq", "Heartbeat", "Pitch", "📢", "💡", "Count me in", "plants", "fern", "Good morning", "Build 42", "Goodbye", "Ping",
+		"minutes.pdf", "whiteboard.png", "route.png", "nowhere.png", "0a1b2c3d", "not a key", "Shelves", "weather", "Click", "alert",
+		"Grace", "Ada", "Former", "Robot", "Deleted Somebody", "example.test", "👏",
+	}
+	lines := func(a *fakebasecamp.Account) []fakebasecamp.Line { return a.Projects[3].Dock[3].Lines }
+	posts := func(a *fakebasecamp.Account) []fakebasecamp.Post { return a.Projects[3].Dock[0].Posts }
+	failures := map[string]func(*fakebasecamp.Account){
+		"nothing fails":               func(*fakebasecamp.Account) {},
+		"a kind of line nobody knows": func(a *fakebasecamp.Account) { lines(a)[1].Type = "Chat::Lines::Poll" },
+		"a line in the trash":         func(a *fakebasecamp.Account) { lines(a)[1].Status = "trashed" },
+		"a line at no time":           func(a *fakebasecamp.Account) { lines(a)[1].CreatedAt = "when Grace said it" },
+		"a draft":                     func(a *fakebasecamp.Account) { posts(a)[0].ShownStatus = "draft" },
+		"a post without a time":       func(a *fakebasecamp.Account) { posts(a)[0].UpdatedAt = "" },
+		"a boost of nobody":           func(a *fakebasecamp.Account) { posts(a)[0].Boosts[0].Booster = nil },
+		"lines that fail": func(a *fakebasecamp.Account) {
+			a.Fail["buckets/7004/chats/9033/lines.json"] = &basecamp.Error{Kind: basecamp.Network, Message: "connection reset"}
+		},
+	}
+	for name, change := range failures {
+		for _, mode := range [][]string{{"--json"}, {"--quiet"}, {"--styled"}, {"--json", "--dry-run"}} {
+			e := newImportEnv(t)
+			change(e.account)
+			r := e.run(append([]string{"import", "basecamp", "--project", "7004", "--out", filepath.Join(t.TempDir(), "bundle")}, mode...)...)
+			if (r.code == ExitOK) != (name == "nothing fails") {
+				t.Errorf("%s %v: exit %d", name, mode, r.code)
+			}
+			for _, text := range written {
+				if strings.Contains(r.stdout+r.stderr, text) {
+					t.Errorf("%s %v: the output says %q:\n%s%s", name, mode, text, r.stdout, r.stderr)
+				}
+			}
+		}
+	}
+}
+
+func TestALineOrAPostABundleCannotCarryIsAnErrorOfTheAPIThatNamesItByID(t *testing.T) {
+	for name, c := range map[string]struct {
+		change  func(*fakebasecamp.Account)
+		message string
+	}{
+		"a kind of line nobody knows": {func(a *fakebasecamp.Account) { a.Projects[3].Dock[3].Lines[1].Type = "Chat::Lines::Poll" }, `line 9802 of chat 9033 is of the type "Chat::Lines::Poll"`},
+		"a draft":                     {func(a *fakebasecamp.Account) { a.Projects[3].Dock[0].Posts[0].ShownStatus = "draft" }, `post 9701 has the status "draft"`},
+	} {
+		e := newImportEnv(t)
+		c.change(e.account)
+		parent := t.TempDir()
+		env, r := e.runJSON("import", "basecamp", "--project", "7004", "--out", filepath.Join(parent, "bundle"))
+		expectCode(t, r, ExitAPI)
+		if env.Code != CodeAPI || !strings.Contains(env.Error, c.message) {
+			t.Errorf("%s: code %q, error %q", name, env.Code, env.Error)
+		}
+		if entries, _ := os.ReadDir(parent); len(entries) != 0 {
+			t.Errorf("%s: the run left %v", name, entries)
+		}
 	}
 }
 

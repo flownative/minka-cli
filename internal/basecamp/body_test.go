@@ -45,6 +45,7 @@ func bodyExtractor(t *testing.T) *Extractor {
 	if err != nil {
 		t.Fatal(err)
 	}
+	timed(e.people)
 	return e
 }
 
@@ -368,6 +369,126 @@ func TestABrokenEmbedCostsNoMoreThanItself(t *testing.T) {
 		got, err := e.rewriteBody(text, "", nil)
 		if err != nil || got != want {
 			t.Errorf("%q:\n got %q (%v)\nwant %q", text, got, err, want)
+		}
+	}
+}
+
+const previewOpen = `<bc-attachment content-type="application/vnd.basecamp.opengraph-embed"`
+
+func TestThePreviewOfALinkBecomesTheLink(t *testing.T) {
+	for name, c := range map[string]struct{ embed, want string }{
+		"with a title":               {` url="https://example.test/a" href="https://example.test/a" title="A page" caption="example.test"></bc-attachment>`, `<a href="https://example.test/a">A page</a>`},
+		"the address as the text":    {` href="https://example.test/a?b=1&amp;c=2"></bc-attachment>`, `<a href="https://example.test/a?b=1&amp;c=2">https://example.test/a?b=1&amp;c=2</a>`},
+		"a title that is escaped":    {` href="http://example.test/" title="&lt;b&gt; &amp; &quot;more&quot;"></bc-attachment>`, `<a href="http://example.test/">&lt;b&gt; &amp; &#34;more&#34;</a>`},
+		"an address with a quote":    {` href='https://example.test/"onmouseover="x' title="A page"></bc-attachment>`, `<a href="https://example.test/&#34;onmouseover=&#34;x">A page</a>`},
+		"a title over several rows":  {` href="https://example.test/" title=" A&#10;  page "></bc-attachment>`, `<a href="https://example.test/">A page</a>`},
+		"what Basecamp rendered":     {` href="https://example.test/" title="A page"><figure><img src="p"><figcaption>Shown</figcaption></figure></bc-attachment>`, `<a href="https://example.test/">A page</a>`},
+		"one that closes itself":     {` href="https://example.test/" title="A page"/>`, `<a href="https://example.test/">A page</a>`},
+		"what url says without href": {` url="https://example.test/b" title="A page"></bc-attachment>`, `<a href="https://example.test/b">A page</a>`},
+		"href before url":            {` url="https://example.test/b" href="https://example.test/a" title="A page"></bc-attachment>`, `<a href="https://example.test/a">A page</a>`},
+		"with a signed ID":           {` sgid="` + fileSGID + `" href="https://example.test/" title="A page"></bc-attachment>`, `<a href="https://example.test/">A page</a>`},
+		"the kind in another case":   {``, ``},
+		// Only an address of the web becomes a link: the title stays as text.
+		"a script":                   {` href="javascript:alert(1)" title="Click &lt;me&gt;"></bc-attachment>`, `Click &lt;me&gt;`},
+		"a script in capitals":       {` href=" JavaScript:alert(1)" title="Click"></bc-attachment>`, `Click`},
+		"data":                       {` href="data:text/html,hello" title="Click"></bc-attachment>`, `Click`},
+		"a path":                     {` href="/4242/projects" title="Click"></bc-attachment>`, `Click`},
+		"an address without host":    {` href="https:///nowhere" title="Click"></bc-attachment>`, `Click`},
+		"another protocol":           {` href="ftp://example.test/" title="Click"></bc-attachment>`, `Click`},
+		"no address":                 {` title="Click"></bc-attachment>`, `Click`},
+		"a script beside an address": {` url="https://example.test/" href="javascript:alert(1)" title="Click"></bc-attachment>`, `Click`},
+		"nothing at all":             {`></bc-attachment>`, ``},
+		"a script without title":     {` href="javascript:alert(1)"></bc-attachment>`, ``},
+	} {
+		e := bodyExtractor(t)
+		embed := previewOpen + c.embed
+		if c.embed == "" {
+			embed = `<bc-attachment content-type="Application/VND.Basecamp.OpenGraph-Embed; charset=utf-8"></bc-attachment>`
+		}
+		got := rewritten(t, e, `<div>See `+embed+`!</div>`, "")
+		if want := `<div>See ` + c.want + `!</div>`; got != want {
+			t.Errorf("%s:\n got %q\nwant %q", name, got, want)
+		}
+		// Only what became a link is counted as one.
+		want := BodyCounts{}
+		if strings.HasPrefix(c.want, "<a ") {
+			want.LinkPreviews = 1
+		}
+		if e.bodies != want {
+			t.Errorf("%s: counted %+v, want %+v", name, e.bodies, want)
+		}
+	}
+}
+
+func TestAnEmbeddedFrameOutsideAnEmbedStaysAsItIs(t *testing.T) {
+	e := bodyExtractor(t)
+	text := `<div>Watch</div><figure><iframe src="https://video.example.test/embed/42" allowfullscreen></iframe><figcaption>A film</figcaption></figure>` +
+		previewOpen + ` href="https://example.test/" title="A page"></bc-attachment><figure><iframe src="https://video.example.test/embed/43"></iframe></figure>`
+	want := `<div>Watch</div><figure><iframe src="https://video.example.test/embed/42" allowfullscreen></iframe><figcaption>A film</figcaption></figure>` +
+		`<a href="https://example.test/">A page</a><figure><iframe src="https://video.example.test/embed/43"></iframe></figure>`
+	if got := rewritten(t, e, text, ""); got != want {
+		t.Errorf("\n got %q\nwant %q", got, want)
+	}
+}
+
+func TestTheKeyOfAStoredFileStandsWhereItIsDownloadedOrPreviewed(t *testing.T) {
+	for address, want := range map[string]string{
+		"https://3.basecampapi.test/4242/blobs/k-one/download/a%20file.png": "k-one",
+		"https://preview.basecamp.test/4242/blobs/k-one/previews/full":      "k-one",
+		"https://preview.basecamp.test/4242/blobs/k-one/previews/full?x=1":  "k-one",
+		"https://preview.basecamp.test/4242/blobs/k-one/thumbnails/full":    "",
+		"https://preview.basecamp.test/4242/blobs/k-one":                    "",
+		"https://preview.basecamp.test/4242/k-one/previews/full":            "",
+		"https://preview.basecamp.test/4242/blobs//previews/full":           "",
+		"://%zz": "",
+		"":       "",
+	} {
+		if got := blobKey(address); got != want {
+			t.Errorf("%s: the key is %q, want %q", address, got, want)
+		}
+	}
+}
+
+// A picture by an address of somebody else is no stored file: nothing is
+// fetched, and it becomes a link to where it lies.
+func TestAPictureAtAForeignAddressBecomesALinkToIt(t *testing.T) {
+	const open = `<bc-attachment content-type="image"`
+	for name, c := range map[string]struct {
+		embed, want string
+		pictures    int
+	}{
+		"with a caption":          {open + ` url="https://pictures.example.test/a.png" width="640" height="480" caption="A &amp; B"></bc-attachment>`, `<a href="https://pictures.example.test/a.png">A &amp; B</a>`, 1},
+		"the address as the text": {open + ` url="https://pictures.example.test/a.png?w=1&amp;h=2"></bc-attachment>`, `<a href="https://pictures.example.test/a.png?w=1&amp;h=2">https://pictures.example.test/a.png?w=1&amp;h=2</a>`, 1},
+		"what Basecamp rendered":  {open + ` url="https://pictures.example.test/a.png" caption="Seen"><figure><img src="https://pictures.example.test/a.png"><figcaption>Seen</figcaption></figure></bc-attachment>`, `<a href="https://pictures.example.test/a.png">Seen</a>`, 1},
+		"the kind with its case":  {`<bc-attachment content-type="Image; x=y" url="https://pictures.example.test/a.png" caption="Seen"></bc-attachment>`, `<a href="https://pictures.example.test/a.png">Seen</a>`, 1},
+		// Only what became a link is counted as one.
+		"a script":               {open + ` url="javascript:alert(1)" caption="Click &lt;me&gt;"></bc-attachment>`, `Click &lt;me&gt;`, 0},
+		"a path":                 {open + ` url="/4242/blobs/k/previews/full" caption="Seen"></bc-attachment>`, `Seen`, 0},
+		"no address, no caption": {open + `></bc-attachment>`, ``, 0},
+		// A stored file has a signed ID, and a kind such as image/png is none of this.
+		"a stored picture":       {open + ` sgid="` + fileSGID + `" url="https://pictures.example.test/a.png"><figure><figcaption>sketch.png</figcaption></figure></bc-attachment>`, `<import-attachment ref="attachment-5001"></import-attachment>`, 0},
+		"a picture of some kind": {`<bc-attachment content-type="image/png" url="https://pictures.example.test/a.png" caption="Seen"></bc-attachment>`, `<bc-attachment content-type="image/png" url="https://pictures.example.test/a.png" caption="Seen"></bc-attachment>`, 0},
+	} {
+		e := bodyExtractor(t)
+		got := rewritten(t, e, `<div>See `+c.embed+`!</div>`, "", bodyFile{ID: 5001, SGID: fileSGID})
+		if want := `<div>See ` + c.want + `!</div>`; got != want {
+			t.Errorf("%s:\n got %q\nwant %q", name, got, want)
+		}
+		if e.bodies.PicturesLinked != c.pictures || e.bodies.LinkPreviews != 0 {
+			t.Errorf("%s: counted %+v", name, e.bodies)
+		}
+	}
+}
+
+func TestWhatAReaderSeesNothingOfSaysNothing(t *testing.T) {
+	for body, want := range map[string]bool{
+		"": true, " \n\t": true, "&nbsp; ": true, "\u200b": true, "<div>\u200b\u200c\u200d\u2060\ufeff &#8203;</div>": true, "\u200ba\u200b": false, "<br>": true, "<BR/>": true, "<div><p> <br></p></div>": true, "</div>": true, "<!-- x -->": true,
+		"a": false, "&amp;": false, "<hr>": false, "<span></span>": false, "<img src=x>": false, `<a href="https://example.test/"></a>`: false,
+		`<import-attachment ref="blob-k"></import-attachment>`: false, `<import-mention ref="102"></import-mention>`: false,
+		`<figure><iframe src="https://video.example.test/"></iframe></figure>`: false,
+	} {
+		if got := saysNothing(body); got != want {
+			t.Errorf("%q says nothing: %v, want %v", body, got, want)
 		}
 	}
 }

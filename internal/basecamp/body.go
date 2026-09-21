@@ -17,6 +17,10 @@ const (
 	embedTag       = "bc-attachment"
 	mentionType    = "application/vnd.basecamp.mention"
 	horizontalRule = "application/vnd.basecamp.horizontal-rule.html"
+	linkPreview    = "application/vnd.basecamp.opengraph-embed"
+	// foreignPicture is a picture that lies at an address of somebody else,
+	// where it carries no signed ID: no stored file, and nothing to fetch.
+	foreignPicture = "image"
 )
 
 // bodyFile is a file Basecamp lists next to the text it is embedded in. Its ID
@@ -35,19 +39,26 @@ type BodyCounts struct {
 	MentionsUnresolved int
 	// Files are the references to a file that were written.
 	Files int
-	// FilesDropped are embedded files Basecamp lists no file for.
+	// FilesDropped are embedded files Basecamp lists no file for, and uploaded
+	// ones whose stored file it does not name.
 	FilesDropped int
+	// LinkPreviews are the previews of a link that became the link: one whose
+	// address is none of the web leaves its title and is not counted.
+	LinkPreviews int
+	// PicturesLinked are pictures at a foreign address that became a link to
+	// it, counted the same way.
+	PicturesLinked int
 }
 
 // rewriteBody turns the HTML of Basecamp into the HTML of a bundle. A bundle
 // never carries the embeds of its source: a mention becomes an
-// <import-mention>, a file an <import-attachment>, a rule an <hr>, each in the
-// place of the whole embed with what Basecamp rendered into it. Every other
-// token passes through with the bytes it was read from, because the applier
-// sanitises a body anyway and every change here would be a second opinion.
-// What goes besides an embed is what belongs to one: whitespace between an
-// embed and its rendering, an end tag of an embed without its beginning, and
-// a tag the text breaks off in.
+// <import-mention>, a file an <import-attachment>, a rule an <hr>, the preview
+// of a link the link, a picture at a foreign address a link to it, each in the
+// place of the whole embed with what Basecamp rendered into it. Every other token passes through with the bytes it was
+// read from, because the applier sanitises a body anyway and every change
+// here would be a second opinion. What goes besides an embed is what belongs
+// to one: whitespace between an embed and its rendering, an end tag of an
+// embed without its beginning, and a tag the text breaks off in.
 //
 // The text is read token by token and never built into a tree: a tree moves a
 // figure out of a paragraph, and the embed would lose what belongs to it.
@@ -95,7 +106,8 @@ func (e *Extractor) rewriteBody(text, rendered string, files []bodyFile) (string
 		}
 
 		sgid, contentType := token.attribute("sgid"), mediaType(token.attribute("content-type"))
-		if contentType != mentionType && contentType != horizontalRule && sgid == "" {
+		linkedPicture := contentType == foreignPicture && sgid == ""
+		if contentType != mentionType && contentType != horizontalRule && contentType != linkPreview && !linkedPicture && sgid == "" {
 			// One that closes itself has no end tag to let through.
 			if token.kind == nethtml.StartTagToken {
 				passing++
@@ -117,6 +129,14 @@ func (e *Extractor) rewriteBody(text, rendered string, files []bodyFile) (string
 			out.WriteString(replacement)
 		case contentType == horizontalRule:
 			out.WriteString("<hr>")
+		case contentType == linkPreview:
+			address := token.attribute("href")
+			if address == "" {
+				address = token.attribute("url")
+			}
+			out.WriteString(link(address, token.attribute("title"), &e.bodies.LinkPreviews))
+		case linkedPicture:
+			out.WriteString(link(token.attribute("url"), token.attribute("caption"), &e.bodies.PicturesLinked))
 		default:
 			if file, listed := embeddedFile(files, token); listed {
 				e.bodies.Files++
@@ -129,6 +149,51 @@ func (e *Extractor) rewriteBody(text, rendered string, files []bodyFile) (string
 		}
 	}
 }
+
+// link is what an embed becomes that shows what lies at an address: the link,
+// with the title of the page or the caption of the picture as its text, or the
+// address where it has none. Never a picture: a bundle fetches nothing from
+// an address somebody wrote into a text. Only an address of the web becomes a
+// link, because whoever wrote the text chose what the embed says: any other
+// leaves the title as plain text. What became a link is counted.
+func link(address, title string, linked *int) string {
+	title, address = strings.Join(strings.Fields(title), " "), strings.TrimSpace(address)
+	parsed, err := url.Parse(address)
+	if err != nil || parsed.Host == "" || parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return html.EscapeString(title)
+	}
+	if title == "" {
+		title = address
+	}
+	*linked++
+	return fmt.Sprintf(`<a href="%s">%s</a>`, html.EscapeString(address), html.EscapeString(title))
+}
+
+// saysNothing tells whether a text of a bundle is empty for whoever reads it:
+// whitespace, characters without a width, line breaks and the empty blocks an
+// editor leaves behind. Anything else says something, a reference to a file or a person, a link, a
+// rule and an embedded frame included.
+func saysNothing(body string) bool {
+	reader := newBodyReader(body)
+	for {
+		token, more := reader.next()
+		switch {
+		case !more:
+			return true
+		case token.kind == nethtml.TextToken:
+			if strings.TrimSpace(widthless.Replace(html.UnescapeString(token.raw))) != "" {
+				return false
+			}
+		case token.kind == nethtml.CommentToken || token.kind == nethtml.DoctypeToken:
+		case token.name != "br" && token.name != "div" && token.name != "p":
+			return false
+		}
+	}
+}
+
+// widthless takes away the characters that have no width and no meaning by
+// themselves, which an editor and a paste leave in a text.
+var widthless = strings.NewReplacer("\u200b", "", "\u200c", "", "\u200d", "", "\u2060", "", "\ufeff", "")
 
 // mediaType is a content type without its parameters, in lower case.
 func mediaType(contentType string) string {
@@ -167,7 +232,7 @@ func embeddedFile(files []bodyFile, embed bodyToken) (bodyFile, bool) {
 }
 
 // blobKey takes the key of a stored file out of the address it is downloaded
-// from: …/blobs/<key>/download/<filename>.
+// or previewed at: …/blobs/<key>/download/<filename>, …/blobs/<key>/previews/….
 func blobKey(address string) string {
 	parsed, err := url.Parse(address)
 	if err != nil {
@@ -175,7 +240,7 @@ func blobKey(address string) string {
 	}
 	segments := strings.Split(parsed.Path, "/")
 	for i := 0; i+2 < len(segments); i++ {
-		if segments[i] == "blobs" && segments[i+2] == "download" {
+		if segments[i] == "blobs" && (segments[i+2] == "download" || segments[i+2] == "previews") {
 			return segments[i+1]
 		}
 	}
