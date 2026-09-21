@@ -52,6 +52,8 @@ type Tool struct {
 	UpdatedAt string
 	Creator   *Person
 	URL       string
+	// Lists are the lists of a card table.
+	Lists []List
 }
 
 // Account is the fake. It is a basecamp.Source and a basecamp.AvatarFetcher,
@@ -68,6 +70,16 @@ type Account struct {
 	// MemberEmail replaces the address of a person in the list of a project.
 	MemberEmail map[int64]string
 
+	// OnHoldInColumn lists the cards that are set aside among the cards of
+	// their column as well.
+	OnHoldInColumn bool
+	// OnHoldListEmpty leaves the list of the cards that are set aside empty.
+	OnHoldListEmpty bool
+	// InlineSteps is how many of its steps a card shows itself; all when 0.
+	InlineSteps int
+	// SubtasksURL replaces the address a card names for the list of its steps.
+	SubtasksURL map[int64]string
+
 	// Fail makes the request of a path, without its page, end in an error.
 	Fail map[string]error
 	// FailAvatarOf makes the download of one person's avatar end in an error.
@@ -77,10 +89,11 @@ type Account struct {
 	AvatarRequests []string
 }
 
-// New is an account with five people, one of whom no project has to do with,
-// two projects and a dock that holds every case: several tools of a kind,
-// tools Minka has nothing for, tools that are switched off, and a tool whose
-// creator has left.
+// New is an account with five people, one of whom the first two projects have
+// nothing to do with. Those two have a dock that holds every case: several
+// tools of a kind, tools Minka has nothing for, tools that are switched off,
+// and a tool whose creator has left; their one board is empty. The third
+// project holds the boards.
 func New() *Account {
 	ada := Person{ID: 101, Name: "Ada Example", Email: "ada@example.test", CreatedAt: "2020-01-01T08:00:00.000Z", UpdatedAt: "2024-01-01T08:00:00.000Z"}
 	grace := Person{ID: 102, Name: "Grace Sample", Email: "grace@example.test", CreatedAt: "2020-02-01T08:00:00.000Z", UpdatedAt: "2024-02-01T08:00:00.000Z"}
@@ -92,6 +105,12 @@ func New() *Account {
 	tool := func(id int64, name, kind, title string, enabled bool, position int, creator *Person) Tool {
 		return Tool{ID: id, Name: name, Type: kind, Title: title, Enabled: enabled, Position: position, Creator: creator,
 			CreatedAt: fmt.Sprintf("2022-05-%02dT10:00:00.000Z", id-9000), UpdatedAt: fmt.Sprintf("2025-05-%02dT10:00:00.000Z", id-9000)}
+	}
+
+	bugs := tool(9003, "kanban_board", "card_tables", "Bugs", true, 3, &former)
+	for i, kind := range []string{Triage, NotNow, Done} {
+		bugs.Lists = append(bugs.Lists, List{ID: 9091 + int64(i), Type: kind, Title: "A column every table has", Creator: &former,
+			CreatedAt: bugs.CreatedAt, UpdatedAt: bugs.UpdatedAt})
 	}
 
 	return &Account{
@@ -108,7 +127,7 @@ func New() *Account {
 				Dock: []Tool{
 					tool(9001, "chat", "chats", "Campfire", true, 1, &ada),
 					tool(9002, "message_board", "message_boards", "Announcements", true, 2, &ada),
-					tool(9003, "kanban_board", "card_tables", "Bugs", true, 3, &former),
+					bugs,
 					tool(9004, "chat", "chats", "Second chat", true, 4, &grace),
 					tool(9005, "todoset", "todosets", "To-dos", true, 5, &ada),
 					tool(9006, "schedule", "schedules", "Schedule", false, 0, &ada),
@@ -123,7 +142,9 @@ func New() *Account {
 				Members: []int64{101},
 				Dock:    []Tool{tool(9010, "chat", "chats", "Campfire", true, 1, nil)},
 			},
+			boardProject(ada, grace, linus, edsger, former, tool),
 		},
+		SubtasksURL:  map[int64]string{},
 		Fail:         map[string]error{},
 		FailAvatarOf: map[int64]error{},
 	}
@@ -203,9 +224,16 @@ func (a *Account) Get(_ context.Context, path string) ([]byte, error) {
 					if tool.Creator != nil {
 						answer["creator"] = a.person(*tool.Creator)
 					}
+					if tool.Type == "card_tables" {
+						answer["lists"] = a.listsJSON(p, tool.Lists)
+					}
 					return encode(answer), nil
 				}
 			}
+		}
+	default:
+		if answer, known := a.boards(path, page); known {
+			return answer, nil
 		}
 	}
 	return nil, &basecamp.Error{Kind: basecamp.NotFound, Message: "Basecamp: Resource not found: " + a.root() + path}
