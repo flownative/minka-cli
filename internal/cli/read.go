@@ -170,7 +170,11 @@ func (a *app) newBoardsShowCmd() *cobra.Command {
 		Long: `Shows the columns of a board in board order, each with its cards.
 
 Column types are triage, column (a working column), not_now and done. Done
-lists only the 25 cards completed last; its cardCount counts all of them.`,
+lists only the 25 cards completed last; its cardCount counts all of them.
+
+A working column with an area for cards on hold lists them apart, in
+onHoldCards with their own count onHoldCardCount; cards and cardCount leave
+them out.`,
 		Args: requireArgs("boardId"),
 		RunE: func(_ *cobra.Command, args []string) error {
 			s, err := a.session()

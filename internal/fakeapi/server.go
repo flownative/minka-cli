@@ -66,7 +66,11 @@ type Column struct {
 	ID          string
 	Type        string
 	CustomTitle *string
-	Cards       []*Card
+	// Cards holds both areas of the column. The cards on hold keep their
+	// order among themselves, the others theirs; how the two interleave here
+	// means nothing.
+	Cards         []*Card
+	OnHoldEnabled bool // only a working column can have an area for cards on hold
 }
 
 type Card struct {
@@ -86,6 +90,7 @@ type Card struct {
 	SubscriberIDs []string
 	OffIDs        []string // people who took themselves off and are not put back by Minka
 	DueOn         *string  // YYYY-MM-DD, nil for none
+	OnHold        bool     // waiting in the area on hold of its column
 	Steps         []*Step
 	Comments      []*Comment
 }
@@ -403,6 +408,7 @@ func New(t testing.TB) (*Server, *Fixture) {
 	mux.HandleFunc("POST /api/v1/boards/{boardId}/cards", s.authenticated(s.addCard))
 	mux.HandleFunc("PATCH /api/v1/cards/{cardId}", s.authenticated(s.updateCard))
 	mux.HandleFunc("POST /api/v1/cards/{cardId}/moves", s.authenticated(s.moveCard))
+	mux.HandleFunc("PUT /api/v1/columns/{columnId}/on-hold", s.authenticated(s.setColumnOnHold))
 	mux.HandleFunc("POST /api/v1/cards/{cardId}/comments", s.authenticated(s.writeComment))
 	mux.HandleFunc("POST /api/v1/cards/{cardId}/comments/{commentId}/reactions", s.authenticated(s.reactToComment))
 	mux.HandleFunc("DELETE /api/v1/cards/{cardId}/comments/{commentId}/reactions", s.authenticated(s.unreactFromComment))
@@ -651,34 +657,52 @@ func (s *Server) board(w http.ResponseWriter, r *http.Request, person *Person) {
 
 	columns := []any{}
 	for _, column := range board.Columns {
-		cards := []any{}
-		listed := column.Cards
-		if column.Type == "done" {
-			// Done is ordered by completion, the card completed last first.
-			listed = slices.Clone(listed)
-			slices.SortStableFunc(listed, func(a, b *Card) int { return completion(b).Compare(completion(a)) })
-			if len(listed) > 25 {
-				listed = listed[:25]
-			}
-		}
-		for _, card := range listed {
-			cards = append(cards, map[string]any{
-				"id": card.ID, "shortId": nullable(card.ShortID), "title": card.Title, "hasDescription": card.Description != "",
-				"stepCount": len(card.Steps), "completedStepCount": completedStepCount(card),
-				"commentCount": len(card.Comments), "createdAt": timestamp(card.CreatedAt),
-				"creator": s.personReference(card.CreatorID), "completedAt": timestampOrNil(card.CompletedAt),
-				"completedBy": s.personReferenceOrNil(card.CompletedByID), "assignees": s.assigneeReferences(card),
-				"dueOn": card.DueOn, "appUrl": s.cardURL(board, card),
-			})
-		}
-		columns = append(columns, map[string]any{
-			"id": column.ID, "type": column.Type, "title": columnTitle(column), "customTitle": column.CustomTitle,
-			"cardCount": len(column.Cards), "cards": cards,
-		})
+		columns = append(columns, s.columnResource(board, column))
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"id": board.ID, "projectId": board.ProjectID, "title": board.Title, "appUrl": s.boardURL(board), "columns": columns,
 	})
+}
+
+// columnResource lists the cards of a column in its two areas, and counts the
+// ones on hold apart from the rest.
+func (s *Server) columnResource(board *Board, column *Column) map[string]any {
+	var listed, onHold []*Card
+	for _, card := range column.Cards {
+		if card.OnHold {
+			onHold = append(onHold, card)
+		} else {
+			listed = append(listed, card)
+		}
+	}
+	count := len(listed)
+	if column.Type == "done" {
+		// Done is ordered by completion, the card completed last first.
+		slices.SortStableFunc(listed, func(a, b *Card) int { return completion(b).Compare(completion(a)) })
+		if len(listed) > 25 {
+			listed = listed[:25]
+		}
+	}
+	return map[string]any{
+		"id": column.ID, "type": column.Type, "title": columnTitle(column), "customTitle": column.CustomTitle,
+		"cardCount": count, "cards": s.boardCardResources(board, listed),
+		"onHoldEnabled": column.OnHoldEnabled, "onHoldCardCount": len(onHold), "onHoldCards": s.boardCardResources(board, onHold),
+	}
+}
+
+func (s *Server) boardCardResources(board *Board, cards []*Card) []any {
+	list := []any{}
+	for _, card := range cards {
+		list = append(list, map[string]any{
+			"id": card.ID, "shortId": nullable(card.ShortID), "title": card.Title, "hasDescription": card.Description != "",
+			"stepCount": len(card.Steps), "completedStepCount": completedStepCount(card),
+			"commentCount": len(card.Comments), "createdAt": timestamp(card.CreatedAt),
+			"creator": s.personReference(card.CreatorID), "completedAt": timestampOrNil(card.CompletedAt),
+			"completedBy": s.personReferenceOrNil(card.CompletedByID), "assignees": s.assigneeReferences(card),
+			"dueOn": card.DueOn, "appUrl": s.cardURL(board, card),
+		})
+	}
+	return list
 }
 
 // myCards lists the cards the person is assigned to, in the order the server
@@ -898,7 +922,8 @@ func (s *Server) moveCard(w http.ResponseWriter, r *http.Request, person *Person
 	position, ok2 := stringField(w, fields, "position")
 	previousID, ok3 := stringField(w, fields, "previousCardId")
 	nextID, ok4 := stringField(w, fields, "nextCardId")
-	if !ok1 || !ok2 || !ok3 || !ok4 {
+	onHold, ok5 := booleanField(w, fields, "onHold")
+	if !ok1 || !ok2 || !ok3 || !ok4 || !ok5 {
 		return
 	}
 	if columnID == nil || strings.TrimSpace(*columnID) == "" {
@@ -934,22 +959,17 @@ func (s *Server) moveCard(w http.ResponseWriter, r *http.Request, person *Person
 			return
 		}
 	}
-	if to == nil {
+	// A column without an area on hold answers a move onto hold the way a
+	// column that does not exist does.
+	toHold := onHold != nil && *onHold
+	if to == nil || toHold && !to.OnHoldEnabled {
 		notFound(w)
 		return
 	}
 
 	from.Cards = slices.DeleteFunc(from.Cards, func(c *Card) bool { return c == card })
-	index := 0
-	switch {
-	case position != nil && *position == "bottom":
-		index = len(to.Cards)
-	case previousID != nil && indexOf(to.Cards, *previousID) >= 0:
-		index = indexOf(to.Cards, *previousID) + 1
-	case nextID != nil && indexOf(to.Cards, *nextID) >= 0:
-		index = indexOf(to.Cards, *nextID)
-	}
-	to.Cards = slices.Insert(to.Cards, index, card)
+	card.OnHold = toHold
+	to.Cards = slices.Insert(to.Cards, placeInArea(to.Cards, toHold, position, previousID, nextID), card)
 
 	if to.Type == "done" && from.Type != "done" {
 		now := s.now
@@ -961,6 +981,79 @@ func (s *Server) moveCard(w http.ResponseWriter, r *http.Request, person *Person
 		card.CompletedByID = ""
 	}
 	writeJSON(w, http.StatusOK, s.cardResource(board, to, card))
+}
+
+// placeInArea is where a card lands among the cards of one area of a column.
+// A neighbour from the other area, or from no area at all, counts as none,
+// and the card goes to the top of its area.
+func placeInArea(cards []*Card, onHold bool, position, previousID, nextID *string) int {
+	inArea := func(id *string) int {
+		if id == nil {
+			return -1
+		}
+		i := indexOf(cards, *id)
+		if i < 0 || cards[i].OnHold != onHold {
+			return -1
+		}
+		return i
+	}
+	switch {
+	case position != nil && *position == "bottom":
+		return len(cards)
+	case inArea(previousID) >= 0:
+		return inArea(previousID) + 1
+	case inArea(nextID) >= 0:
+		return inArea(nextID)
+	}
+	return 0
+}
+
+// setColumnOnHold switches the area for cards on hold of a working column.
+// Switching it off hands its cards back to the end of the column, in the
+// order they stood on hold. Triage, Not now and Done answer like a column
+// that does not exist.
+func (s *Server) setColumnOnHold(w http.ResponseWriter, r *http.Request, person *Person) {
+	fields, ok := readBody(w, r)
+	if !ok {
+		return
+	}
+	enabled, ok := booleanField(w, fields, "onHoldEnabled")
+	if !ok {
+		return
+	}
+	if enabled == nil {
+		unprocessable(w, "onHoldEnabledMissing", "Say whether the column is to have an area for the cards on hold.")
+		return
+	}
+
+	board, column := s.visibleColumn(r.PathValue("columnId"), person)
+	if column == nil {
+		notFound(w)
+		return
+	}
+	if s.refusedAsArchived(w, s.projectOf(board)) {
+		return
+	}
+	if column.Type != "column" {
+		notFound(w)
+		return
+	}
+
+	column.OnHoldEnabled = *enabled
+	if !*enabled {
+		var waiting []*Card
+		column.Cards = slices.DeleteFunc(column.Cards, func(c *Card) bool {
+			if c.OnHold {
+				waiting = append(waiting, c)
+			}
+			return c.OnHold
+		})
+		for _, card := range waiting {
+			card.OnHold = false
+		}
+		column.Cards = append(column.Cards, waiting...)
+	}
+	writeJSON(w, http.StatusOK, s.columnResource(board, column))
 }
 
 func (s *Server) people(w http.ResponseWriter, r *http.Request, person *Person) {
@@ -2038,6 +2131,7 @@ func (s *Server) restoreCard(w http.ResponseWriter, r *http.Request, person *Per
 	}
 
 	s.Trash = slices.Delete(s.Trash, index, index+1)
+	trashed.Card.OnHold = false
 	trashed.Column.Cards = append([]*Card{trashed.Card}, trashed.Column.Cards...)
 	writeJSON(w, http.StatusOK, s.cardResource(board, trashed.Column, trashed.Card))
 }
@@ -2107,6 +2201,20 @@ func (s *Server) visibleBoard(id string, person *Person) *Board {
 	return nil
 }
 
+func (s *Server) visibleColumn(id string, person *Person) (*Board, *Column) {
+	for _, b := range s.Boards {
+		if s.visibleProject(b.ProjectID, person) == nil {
+			continue
+		}
+		for _, c := range b.Columns {
+			if c.ID == id {
+				return b, c
+			}
+		}
+	}
+	return nil, nil
+}
+
 func (s *Server) visibleCard(id string, person *Person) (*Board, *Column, *Card) {
 	for _, b := range s.Boards {
 		if s.visibleProject(b.ProjectID, person) == nil {
@@ -2139,7 +2247,7 @@ func (s *Server) cardResource(board *Board, column *Column, card *Card) map[stri
 		"commentCount": len(card.Comments), "createdAt": timestamp(card.CreatedAt),
 		"creator": s.personReference(card.CreatorID), "completedAt": timestampOrNil(card.CompletedAt),
 		"completedBy": s.personReferenceOrNil(card.CompletedByID), "assignees": s.assigneeReferences(card),
-		"dueOn": card.DueOn, "steps": stepResources(card), "subscribers": s.subscriberReferences(card),
+		"dueOn": card.DueOn, "onHold": card.OnHold, "steps": stepResources(card), "subscribers": s.subscriberReferences(card),
 		"comments": comments,
 		"appUrl":   s.cardURL(board, card),
 	}
@@ -2228,6 +2336,19 @@ func stringField(w http.ResponseWriter, fields map[string]any, name string) (*st
 		return nil, false
 	}
 	return &s, true
+}
+
+func booleanField(w http.ResponseWriter, fields map[string]any, name string) (*bool, bool) {
+	value, present := fields[name]
+	if !present || value == nil {
+		return nil, true
+	}
+	b, ok := value.(bool)
+	if !ok {
+		malformed(w, fmt.Sprintf("The field %q has to be true or false.", name))
+		return nil, false
+	}
+	return &b, true
 }
 
 func validTitle(w http.ResponseWriter, title string) bool {

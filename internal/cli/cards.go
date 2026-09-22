@@ -356,7 +356,7 @@ func (a *app) newCardsEditCmd() *cobra.Command {
 
 func (a *app) newCardsMoveCmd() *cobra.Command {
 	var column, after, before string
-	var top, bottom bool
+	var top, bottom, onHold bool
 
 	cmd := &cobra.Command{
 		Use:   "move <cardId>",
@@ -365,11 +365,17 @@ func (a *app) newCardsMoveCmd() *cobra.Command {
 column. Moving into Done completes the card, moving out of Done reopens it.
 Done is ordered by completion, so it takes no placement.
 
+--on-hold puts the card into the area on hold of the column, which only a
+working column can have and which "minka columns on-hold" switches on. There
+the placement is one among the cards on hold. A card on hold that is moved
+without --on-hold comes off hold, also within its own column.
+
 ` + columnHelp,
 		Example: `  minka cards move 0199... --column Doing --bottom
   minka cards move 0199... --column Doing --after 0199...
   minka cards move MNK-1A --column Doing --after MNK-2B
-  minka cards move 0199... --column triage`,
+  minka cards move 0199... --column triage
+  minka cards move MNK-1A --column Doing --on-hold --bottom`,
 		Args: requireArgs("cardId"),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			placements := 0
@@ -434,13 +440,29 @@ Done is ordered by completion, so it takes no placement.
 					Hint:    "Leave out --bottom, --after and --before, or run: minka cards done " + card.Value.ID,
 				}
 			}
-			// The server puts a card whose neighbour is not in the column at the
-			// top without saying so.
-			if neighbour != "" && !columnHasCard(target, neighbour) {
-				return usageErrorf(cmd, "card %s is not in column %s", neighbour, target.Title)
+			// The server answers a move onto hold in a column without the area
+			// with a 404, which would read as a card that is gone.
+			if onHold && !target.OnHoldEnabled {
+				hint := "Only a working column can have an area for cards on hold."
+				if target.Type == api.ColumnWork {
+					hint = "Switch it on with: minka columns on-hold " + target.ID
+				}
+				return &Error{
+					Code:    CodeUsage,
+					Message: fmt.Sprintf("column %s has no area for cards on hold", target.Title),
+					Hint:    hint,
+				}
+			}
+			// The server puts a card whose neighbour is not in the same area of
+			// the column at the top of that area without saying so.
+			if neighbour != "" && !areaHasCard(target, onHold, neighbour) {
+				if onHold {
+					return usageErrorf(cmd, "card %s is not on hold in column %s", neighbour, target.Title)
+				}
+				return usageErrorf(cmd, "card %s is not in column %s, apart from the cards on hold", neighbour, target.Title)
 			}
 
-			input := api.MoveCardInput{ColumnID: target.ID}
+			input := api.MoveCardInput{ColumnID: target.ID, OnHold: onHold}
 			switch {
 			case top:
 				input.Position = "top"
@@ -457,12 +479,16 @@ Done is ordered by completion, so it takes no placement.
 				return s.fail(err)
 			}
 
+			where := moved.Value.Column.Title
+			if moved.Value.OnHold {
+				where += ", on hold"
+			}
 			return a.ok(success{
 				data:        moved.Raw,
-				summary:     fmt.Sprintf("Moved card %s to %s", moved.Value.Title, moved.Value.Column.Title),
+				summary:     fmt.Sprintf("Moved card %s to %s", moved.Value.Title, where),
 				breadcrumbs: cardBreadcrumbs(moved.Value.ID),
 				text: func(w io.Writer) {
-					fmt.Fprintf(w, "Moved card %s to %s: %s\n%s\n", moved.Value.ID, moved.Value.Column.Title, moved.Value.Title, moved.Value.AppURL)
+					fmt.Fprintf(w, "Moved card %s to %s: %s\n%s\n", moved.Value.ID, where, moved.Value.Title, moved.Value.AppURL)
 				},
 			})
 		},
@@ -474,6 +500,7 @@ Done is ordered by completion, so it takes no placement.
 	flags.BoolVar(&bottom, "bottom", false, "Put the card at the bottom of the column")
 	flags.StringVar(&after, "after", "", "Put the card below this card (ID or short identifier)")
 	flags.StringVar(&before, "before", "", "Put the card above this card (ID or short identifier)")
+	flags.BoolVar(&onHold, "on-hold", false, "Put the card into the area on hold of the column")
 	_ = cmd.MarkFlagRequired("column")
 
 	return cmd
@@ -653,8 +680,14 @@ func resolveColumn(board api.Board, value string) (api.Column, error) {
 	}
 }
 
-func columnHasCard(column api.Column, cardID string) bool {
-	for _, card := range column.Cards {
+// areaHasCard says whether a card is among the cards on hold of a column, or
+// among the rest of it.
+func areaHasCard(column api.Column, onHold bool, cardID string) bool {
+	cards := column.Cards
+	if onHold {
+		cards = column.OnHoldCards
+	}
+	for _, card := range cards {
 		if card.ID == cardID {
 			return true
 		}

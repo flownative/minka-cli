@@ -51,13 +51,19 @@ type Board struct {
 	Columns   []Column `json:"columns"`
 }
 
+// Column is one column of a board. A working column can have an area for the
+// cards on hold: they stay in the column, apart from the rest and in an order
+// of their own.
 type Column struct {
-	ID          string      `json:"id"`
-	Type        string      `json:"type"`
-	Title       string      `json:"title"`
-	CustomTitle *string     `json:"customTitle"`
-	CardCount   int         `json:"cardCount"` // all cards in the column; Done lists only the ones completed last
-	Cards       []BoardCard `json:"cards"`
+	ID              string      `json:"id"`
+	Type            string      `json:"type"`
+	Title           string      `json:"title"`
+	CustomTitle     *string     `json:"customTitle"`
+	CardCount       int         `json:"cardCount"` // the cards of the column without the ones on hold; Done lists only the ones completed last
+	Cards           []BoardCard `json:"cards"`     // without the cards on hold
+	OnHoldEnabled   bool        `json:"onHoldEnabled"`
+	OnHoldCardCount int         `json:"onHoldCardCount"`
+	OnHoldCards     []BoardCard `json:"onHoldCards"` // in the order they stand on hold; empty where the area is switched off
 }
 
 type BoardCard struct {
@@ -133,6 +139,7 @@ type Card struct {
 	// and mentions freshly signed. Sending it back keeps them.
 	DescriptionSource string            `json:"descriptionSource"`
 	Column            ColumnReference   `json:"column"`
+	OnHold            bool              `json:"onHold"` // waiting in the area on hold of its column
 	CommentCount      int               `json:"commentCount"`
 	CreatedAt         string            `json:"createdAt"`
 	Creator           PersonReference   `json:"creator"`
@@ -243,12 +250,14 @@ type UpdateCardInput struct {
 }
 
 // MoveCardInput names a column and either a position or one neighbour. Without
-// both the card goes to the top of the column.
+// both the card goes to the top of the column. The place is one in the area
+// the move names: without OnHold a card on hold comes off hold.
 type MoveCardInput struct {
 	ColumnID       string `json:"columnId"`
 	Position       string `json:"position,omitempty"` // "top" or "bottom"
 	PreviousCardID string `json:"previousCardId,omitempty"`
 	NextCardID     string `json:"nextCardId,omitempty"`
+	OnHold         bool   `json:"onHold,omitempty"` // into the area on hold, which the column must have
 }
 
 // Upload is a file that was put into a project. AttachmentSource is the one
