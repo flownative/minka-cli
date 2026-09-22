@@ -18,42 +18,60 @@ func renderBoard(w io.Writer, board api.Board) {
 	fmt.Fprintf(w, "Board: %s\nProject: %s\nURL: %s\n", board.ID, board.ProjectID, board.AppURL)
 
 	for _, column := range board.Columns {
-		count := plural(column.CardCount, "card", "cards")
-		if len(column.Cards) < column.CardCount {
-			count += fmt.Sprintf(", the %d completed last are listed", len(column.Cards))
+		fmt.Fprintln(w)
+		renderColumn(w, column)
+	}
+}
+
+// renderColumn lists the cards of a column and, where it has the area, the
+// cards on hold below them.
+func renderColumn(w io.Writer, column api.Column) {
+	count := plural(column.CardCount, "card", "cards")
+	if len(column.Cards) < column.CardCount {
+		count += fmt.Sprintf(", the %d completed last are listed", len(column.Cards))
+	}
+	if column.OnHoldEnabled {
+		count += fmt.Sprintf(", %d on hold", column.OnHoldCardCount)
+	}
+	fmt.Fprintf(w, "## %s\n", column.Title)
+	fmt.Fprintf(w, "Column: %s (%s, %s)\n", column.ID, column.Type, count)
+	renderBoardCards(w, column.Cards)
+	if column.OnHoldEnabled {
+		fmt.Fprintf(w, "\n### On hold in %s\n", column.Title)
+		renderBoardCards(w, column.OnHoldCards)
+	}
+}
+
+func renderBoardCards(w io.Writer, cards []api.BoardCard) {
+	if len(cards) == 0 {
+		fmt.Fprintln(w, "(no cards)")
+		return
+	}
+	for _, card := range cards {
+		var details []string
+		if card.HasDescription {
+			details = append(details, "description")
 		}
-		fmt.Fprintf(w, "\n## %s\n", column.Title)
-		fmt.Fprintf(w, "Column: %s (%s, %s)\n", column.ID, column.Type, count)
-		if len(column.Cards) == 0 {
-			fmt.Fprintln(w, "(no cards)")
-			continue
+		if card.CommentCount > 0 {
+			details = append(details, plural(card.CommentCount, "comment", "comments"))
 		}
-		for _, card := range column.Cards {
-			var details []string
-			if card.HasDescription {
-				details = append(details, "description")
-			}
-			if card.CommentCount > 0 {
-				details = append(details, plural(card.CommentCount, "comment", "comments"))
-			}
-			if card.StepCount > 0 {
-				details = append(details, fmt.Sprintf("steps %d/%d", card.CompletedStepCount, card.StepCount))
-			}
-			if len(card.Assignees) > 0 {
-				details = append(details, "assigned to "+assigneeNames(card.Assignees))
-			}
-			if card.DueOn != nil {
-				details = append(details, "due "+*card.DueOn)
-			}
-			if card.CompletedAt != nil {
-				details = append(details, "completed "+formatTime(*card.CompletedAt))
-			}
-			line := fmt.Sprintf("- %s  %s%s", card.ID, shortIDBefore(card.ShortID), card.Title)
-			if len(details) > 0 {
-				line += " (" + strings.Join(details, ", ") + ")"
-			}
-			fmt.Fprintln(w, line)
+		if card.StepCount > 0 {
+			details = append(details, fmt.Sprintf("steps %d/%d", card.CompletedStepCount, card.StepCount))
 		}
+		if len(card.Assignees) > 0 {
+			details = append(details, "assigned to "+assigneeNames(card.Assignees))
+		}
+		if card.DueOn != nil {
+			details = append(details, "due "+*card.DueOn)
+		}
+		if card.CompletedAt != nil {
+			details = append(details, "completed "+formatTime(*card.CompletedAt))
+		}
+		line := fmt.Sprintf("- %s  %s%s", card.ID, shortIDBefore(card.ShortID), card.Title)
+		if len(details) > 0 {
+			line += " (" + strings.Join(details, ", ") + ")"
+		}
+		fmt.Fprintln(w, line)
 	}
 }
 
@@ -78,6 +96,9 @@ func renderMyCards(w io.Writer, cards []api.Card, today string) {
 			fmt.Fprintf(w, "## %s\n", where)
 		}
 		details := []string{card.Column.Title}
+		if card.OnHold {
+			details = append(details, "on hold")
+		}
 		if card.DueOn != nil {
 			due := "due " + *card.DueOn
 			if *card.DueOn < today {
@@ -114,6 +135,9 @@ func renderCard(w io.Writer, card api.Card) {
 	}
 	fmt.Fprintf(w, "Card: %s\nBoard: %s\nProject: %s\n", card.ID, card.BoardID, card.ProjectID)
 	fmt.Fprintf(w, "Column: %s (%s, %s)\n", card.Column.Title, card.Column.Type, card.Column.ID)
+	if card.OnHold {
+		fmt.Fprintln(w, "On hold: yes")
+	}
 	fmt.Fprintf(w, "Created: %s by %s\n", formatTime(card.CreatedAt), card.Creator.Name)
 	if len(card.Assignees) > 0 {
 		fmt.Fprintf(w, "Assigned to: %s\n", assigneeNames(card.Assignees))

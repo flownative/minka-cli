@@ -34,6 +34,7 @@ func everyWrite(e *testEnv) map[string][]string {
 		"cards unassign":    {"cards", "unassign", card, f.Anke.ID},
 		"cards subscribe":   {"cards", "subscribe", card, f.Anke.ID},
 		"cards unsubscribe": {"cards", "unsubscribe", card, f.Anke.ID},
+		"columns on-hold":   {"columns", "on-hold", f.Doing.ID},
 		"steps create":      {"steps", "create", card, "Another step"},
 		"steps complete":    {"steps", "complete", card, "A step"},
 		"steps reopen":      {"steps", "reopen", card, "A step"},

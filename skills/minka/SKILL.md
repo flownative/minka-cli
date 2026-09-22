@@ -3,7 +3,7 @@ name: minka
 description: >
   Work with a Minka instance through the minka CLI: list projects and boards,
   read a board with its columns and cards, show a card with description and
-  comments, create and edit cards, move and complete them, comment on them,
+  comments, create and edit cards, move, hold and complete them, comment on them,
   read and write chat messages.
   Use for any task on a Minka board, such as tracking development tasks.
 ---
@@ -77,7 +77,7 @@ fine), `commentNotReadable`, `cardDueDateNotADate`, `personNotAProjectMember`, `
 `stepMissing`, `stepTooLong`, `stepHasControlCharacters`, `stepCompletedMissing`,
 `chatMessageMissing`, `chatMessageTooLong`, `chatMessageHasControlCharacters`,
 `chatMessageNotReadable`, `chatMessageDraftNotAnIdentifier`, `chatMessagesLimitNotANumber`,
-`chatReadSeqMissing`, `nothingToChange`, `columnIdMissing`, `malformedBody`,
+`chatReadSeqMissing`, `nothingToChange`, `columnIdMissing`, `onHoldEnabledMissing`, `malformedBody`,
 `unsupportedMediaType`, `projectArchived`.
 
 Minka answers everything you may not see with 404, never 403, so exit 4 is
@@ -130,10 +130,11 @@ minka cards mine --json
 minka cards show <cardId> --json
 minka cards create --board <boardId> --title "Title" [--column <column>] [--assignee <person>]... [--due YYYY-MM-DD] [--description - < body.md] --json
 minka cards edit <cardId> [--title "New"] [--due YYYY-MM-DD] [--description - < body.md] --json
-minka cards move <cardId> --column <column> [--top | --bottom | --after <cardId> | --before <cardId>] --json
+minka cards move <cardId> --column <column> [--on-hold] [--top | --bottom | --after <cardId> | --before <cardId>] --json
 minka cards done <cardId> --json
 minka cards delete <cardId> --json
 minka cards restore <cardId> --json
+minka columns on-hold <column> [--board <boardId>] [--off] --json
 minka trash list <projectId> --json
 minka people list <projectId> --json
 minka conversations people <conversationId> --json
@@ -230,8 +231,28 @@ such as `Doing`.
   by completion and refuses `--bottom`, `--after` and `--before`.
 - A column title that equals a type or another column's title is ambiguous
   (exit 8); the hint lists the candidate IDs.
-- Done lists only the 25 cards completed last; `cardCount` counts all.
-  Read an older card by its ID.
+- Done lists only the 25 cards completed last; `cardCount` counts all of
+  them. Read an older card by its ID.
+
+## Cards on hold
+
+- A working column can have an area for the cards that are waiting. Triage,
+  Not now and Done cannot. A card on hold stays in its column, apart from the
+  rest and in an order of its own.
+- A column carries `onHoldEnabled`, `onHoldCardCount` and `onHoldCards`, in
+  the order they stand on hold. `cards` and `cardCount` leave the cards on
+  hold out. A card carries `onHold`.
+- `columns on-hold <column>` switches the area on, `--off` switches it off and
+  hands its cards back to the end of the column, in the order they stood on
+  hold. Without `--board`, `<column>` has to be its ID. A system column exits
+  1 with `--board` and 2 without.
+- `cards move <cardId> --column <column> --on-hold` puts a card on hold; the
+  placement flags then place it among the cards on hold. A column without the
+  area exits 1 before anything is sent. A move without `--on-hold` takes a
+  card off hold, also within its own column.
+- A card cannot be created on hold, by design: it comes into being in a
+  column and goes on hold by a move. A card restored
+  from the trash comes back off hold.
 
 ## People and assignments
 
