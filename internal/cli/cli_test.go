@@ -1474,7 +1474,7 @@ func TestTheCatalogListsEveryCommandWithItsFlags(t *testing.T) {
 	for _, cmd := range catalog.Commands {
 		byName[cmd.Command] = cmd
 	}
-	for _, name := range []string{"minka auth login", "minka me", "minka projects list", "minka boards list", "minka boards show", "minka cards show", "minka cards create", "minka cards edit", "minka cards move", "minka cards done", "minka cards delete", "minka cards assign", "minka cards unassign", "minka people list", "minka steps list", "minka steps create", "minka steps complete", "minka steps reopen", "minka steps delete", "minka comments create", "minka chats list", "minka chats mark-read", "minka messages list", "minka messages create", "minka messages edit", "minka messages delete", "minka cards subscribe", "minka cards unsubscribe", "minka comments edit", "minka comments delete", "minka uploads create", "minka cards mine", "minka cards restore", "minka conversations list", "minka conversations with", "minka conversations people", "minka trash list", "minka comments react", "minka comments unreact", "minka messages react", "minka messages unreact"} {
+	for _, name := range []string{"minka auth login", "minka me", "minka projects list", "minka boards list", "minka boards show", "minka cards show", "minka cards create", "minka cards edit", "minka cards move", "minka cards done", "minka cards delete", "minka cards assign", "minka cards unassign", "minka people list", "minka steps list", "minka steps create", "minka steps complete", "minka steps reopen", "minka steps delete", "minka comments create", "minka chats list", "minka chats mark-read", "minka messages list", "minka messages create", "minka messages edit", "minka messages delete", "minka cards subscribe", "minka cards unsubscribe", "minka comments edit", "minka comments delete", "minka uploads create", "minka cards mine", "minka cards restore", "minka conversations list", "minka conversations with", "minka conversations people", "minka trash list", "minka comments react", "minka comments unreact", "minka messages react", "minka messages unreact", "minka columns on-hold"} {
 		if _, ok := byName[name]; !ok {
 			t.Errorf("catalog misses %q", name)
 		}
@@ -1483,7 +1483,7 @@ func TestTheCatalogListsEveryCommandWithItsFlags(t *testing.T) {
 	for _, flag := range byName["minka cards move"].Flags {
 		moveFlags = append(moveFlags, flag.Name)
 	}
-	if strings.Join(moveFlags, ",") != "after,before,bottom,column,top" {
+	if strings.Join(moveFlags, ",") != "after,before,bottom,column,on-hold,top" {
 		t.Errorf("flags of cards move: %v", moveFlags)
 	}
 	if len(catalog.GlobalFlags) == 0 {

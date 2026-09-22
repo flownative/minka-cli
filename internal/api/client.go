@@ -148,6 +148,16 @@ func (c *Client) MoveCard(ctx context.Context, cardID string, input MoveCardInpu
 	return request[Card](ctx, c, http.MethodPost, "/cards/"+url.PathEscape(cardID)+"/moves", input)
 }
 
+// SetColumnOnHold switches the area for cards on hold of a working column on
+// or off and answers with the column. Switching it off hands its cards back to
+// the end of the column.
+func (c *Client) SetColumnOnHold(ctx context.Context, columnID string, enabled bool) (Result[Column], error) {
+	body := struct {
+		OnHoldEnabled bool `json:"onHoldEnabled"`
+	}{enabled}
+	return request[Column](ctx, c, http.MethodPut, "/columns/"+url.PathEscape(columnID)+"/on-hold", body)
+}
+
 // Subscribe puts a member of the project on the list of people a card
 // notifies. Somebody on the list already succeeds as well.
 func (c *Client) Subscribe(ctx context.Context, cardID, personID string) (Result[Card], error) {

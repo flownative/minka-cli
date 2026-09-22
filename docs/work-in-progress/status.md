@@ -6,10 +6,10 @@ stands where the work currently is.
 ## Where we are
 
 The CLI serves what `/api/v1` offers: projects, boards, cards including the
-trash, columns, assignees, due dates, steps, subscribers, comments, chats,
-private conversations, uploads, mentions, reactions and one's own cards across
-all projects. `minka commands` lists them all, built from the command tree
-itself.
+trash, columns with their area for cards on hold, assignees, due dates,
+steps, subscribers, comments, chats, private conversations, uploads,
+mentions, reactions and one's own cards across all projects. `minka
+commands` lists them all, built from the command tree itself.
 
 `minka import basecamp` extracts the structure, the boards, the message
 boards and the chats of Basecamp projects into an import bundle for Minka's
@@ -40,7 +40,7 @@ Everything else is tested against the fake API and checked live — the chain
 upload → attachment in the text → display as well as private conversations in
 both directions. What is checked against the fake only is listed below.
 
-Coordination of the API: the Minka session `minka-02`. It reports changes,
+Coordination of the API: the Minka session `minka-14`. It reports changes,
 which are checked against the Minka code; deviations go back to it.
 
 Versions are released by publishing a release in GitHub and installed through
@@ -138,6 +138,13 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
 - A known limit of the files: a run that ends hard loses the files it
   fetched, because files are taken over from a bundle in place only. The
   first complete run over an account is the expensive one.
+- Cards on hold: `columns on-hold`, `cards move --on-hold`, the area and its
+  count in the board, the column and the card. Read in the Minka code and its
+  tests, not yet run live: that switching the area off hands the cards back
+  to the end of the column, that a neighbour from the other area places a
+  card at the top of its area, that a system column, a column without the
+  area and a foreign column answer 404, and that a card restored from the
+  trash comes back off hold.
 - "agent for X" in `people list` has been seen live, an agent that stepped
   down has not — it is in no list any more.
 
@@ -147,11 +154,9 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
 - Paging Done beyond 25 cards does not exist; needed once dogfooding needs it.
 - Flow answers a wrong HTTP method with HTML instead of JSON.
 - Column colours come later, read-only.
-
-## Waiting for the client
-
-- Whether Minka gets a holding area in a column. The bundle carries `onHold`
-  already.
+- A move onto hold into a column without the area, and switching the area
+  of Triage, Not now or Done, answer a bare 404 until Minka gives them a 422
+  code of their own; the CLI checks both itself before sending.
 
 ## Next steps
 
@@ -172,7 +177,7 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   gains a build provenance attestation with instructions for verifying it, and
   the macOS binaries get notarised, which waits for an Apple Developer ID.
 
-- React to messages from `minka-02`: check against the code, fake first,
+- React to messages from `minka-14`: check against the code, fake first,
   then the CLI, test and sabotage proof, check live, documentation in the
   same commit.
 - Prepare the internal alpha: change the token, proofread the SKILL.md.
