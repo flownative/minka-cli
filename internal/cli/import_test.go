@@ -120,6 +120,7 @@ func TestImportBasecampWritesABundleAndReportsWhatItHolds(t *testing.T) {
 		"messagesByType":     map[string]any{"text": float64(0), "richText": float64(0), "upload": float64(0), "integration": float64(0)},
 		"uploadLinesLeftOut": float64(0), "messagesWithEmptyBody": float64(0),
 		"longestBody":     map[string]any{"cards": float64(0), "comments": float64(0), "posts": float64(0), "messages": float64(0)},
+		"references":      map[string]any{"cards": float64(0), "posts": float64(0), "tools": float64(0)},
 		"requestsRetried": float64(0),
 	}
 	if got := decode(t, env.Data); !reflect.DeepEqual(got, want) {
@@ -1468,5 +1469,28 @@ func TestNoOutputSaysWhatAFileIsCalledOrWhereItLies(t *testing.T) {
 				}
 			}
 		}
+	}
+}
+
+func TestImportBasecampReportsTheLinksThatBecameReferences(t *testing.T) {
+	e := newImportEnv(t)
+
+	env, r := e.runJSON("import", "basecamp", "--project", "7006", "--dry-run")
+	expectCode(t, r, ExitOK)
+	want := map[string]any{"cards": float64(4), "posts": float64(2), "tools": float64(3)}
+	if got := decode(t, env.Data)["references"]; !reflect.DeepEqual(got, want) {
+		t.Errorf("references: got %v, want %v", got, want)
+	}
+
+	r = e.run("import", "basecamp", "--project", "7006", "--dry-run", "--styled")
+	expectCode(t, r, ExitOK)
+	if want := "Links turned into references: 4 to cards, 2 to posts, 3 to chats"; !strings.Contains(r.stdout, want) {
+		t.Errorf("the text lacks %q:\n%s", want, r.stdout)
+	}
+	// A run without such a link has no line for them.
+	r = e.run("import", "basecamp", "--project", "7001", "--dry-run", "--styled")
+	expectCode(t, r, ExitOK)
+	if strings.Contains(r.stdout, "references") {
+		t.Errorf("a run without a reference shows a line for them:\n%s", r.stdout)
 	}
 }

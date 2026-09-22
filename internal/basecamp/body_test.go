@@ -67,9 +67,34 @@ func TestATextWithoutEmbedsStaysAsItIs(t *testing.T) {
 		"plain",
 		`<DIV class='a'>Fish &amp; chips&nbsp;&lt;3 <BR/><a href="https://example.test/?a=1&b=2">it's</a></div><p>unclosed`,
 		`<html><body>somebody wrote this</body></html>`,
+		// A tag the text breaks off in is the text's own, and so is what only
+		// looks like the beginning of a tag.
+		"a<a",
+		"if 3<abc then",
+		`x <a href="y`,
+		`<a href="https://example.test/">x</a> and 3<abc`,
+		`see <a href="https://3.basecamp.com/4242/buckets/7/card_tables/cards/2`,
+		"a <abbr>b</abbr> <area> <b>x</",
+		"a<",
 	} {
 		if got := rewritten(t, e, text, ""); got != text {
 			t.Errorf("got %q, want %q", got, text)
+		}
+		// A plain line of a chat goes the same way.
+		got, _, err := e.lineBody(line{Type: "Chat::Lines::Text", Content: text})
+		if err != nil || got != text {
+			t.Errorf("line: got %q (%v), want %q", got, err, text)
+		}
+	}
+}
+
+func TestOnlyATagOfALinkIsALink(t *testing.T) {
+	for text, want := range map[string]bool{
+		"<a>": true, "<a href": true, "<a\nhref": true, "<a\thref": true, "<a/>": true, "x <a\fb": true, "<a\rb": true,
+		"<abbr>": false, "<area>": false, "a<a": false, "<article>": false, "</a>": false, "<a": false,
+	} {
+		if got := linkTag.MatchString(text); got != want {
+			t.Errorf("%q: got %v, want %v", text, got, want)
 		}
 	}
 }
@@ -356,6 +381,10 @@ func TestABrokenEmbedCostsNoMoreThanItself(t *testing.T) {
 		`a ` + mentionOpen + `/> <figure><figcaption>kept</figcaption></figure> tail`:                                         "a  <figure><figcaption>kept</figcaption></figure> tail",
 		// Cut off in the middle of the tag.
 		`a <bc-attachment sgid="` + fileSGID: "a ",
+		`a <BC-Attachment sgid="` + fileSGID: "a ",
+		`<hr> <bc-attachment content-type="application/vnd.basecamp.horizontal-rule.html"></bc-attachment> 3<abc`: "<hr> <hr> 3<abc",
+		// A tag the text breaks off in right behind an embed stays.
+		"a " + mentionOpen + "><b": "a <b",
 		// What looks like an embed inside a text area is text.
 		"<textarea>" + file + "</textarea>": "<textarea>" + file + "</textarea>",
 		// An embed of another kind that closes itself has no end to let through.
@@ -690,6 +719,9 @@ func TestABrokenFrameCostsNoMoreThanItself(t *testing.T) {
 		`a <iframe src="` + frameAddress + `"/> gone</iframe> tail`: `a ` + embed + ` tail`,
 		// Cut off in the middle of the tag.
 		`a <iframe src="` + frameAddress: `a `,
+		`a <IFRAME src="` + frameAddress: `a `,
+		// Behind a frame that is never closed the text is read anew, to its end.
+		`a <iframe src="` + frameAddress + `"> b <i`: `a ` + embed + ` b <i`,
 		// A figure and a caption that are never closed.
 		`a <figure>` + frame + ` tail <b>bold</b>`:                                                 `a ` + embed + ` tail <b>bold</b>`,
 		`a <figure>` + frame + `<figcaption>A film</figure> tail`:                                  `a ` + embed + `<p>A film</p> tail`,
