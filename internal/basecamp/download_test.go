@@ -281,18 +281,38 @@ func TestADownloadThatKeepsBringingBytesIsNotGivenUp(t *testing.T) {
 	}
 }
 
+// notedPID is the process ID the stand-in noted, if it has noted one yet.
+func notedPID(binary string) (int, bool) {
+	content, err := os.ReadFile(binary + ".pid")
+	if err != nil {
+		return 0, false
+	}
+	pid, err := strconv.Atoi(strings.TrimSpace(string(content)))
+	return pid, err == nil
+}
+
 // running tells whether the process the stand-in noted is still there.
 func running(t *testing.T, binary string) bool {
 	t.Helper()
-	content, err := os.ReadFile(binary + ".pid")
-	if err != nil {
-		t.Fatal(err)
-	}
-	pid, err := strconv.Atoi(strings.TrimSpace(string(content)))
-	if err != nil {
-		t.Fatal(err)
+	pid, ok := notedPID(binary)
+	if !ok {
+		t.Fatal("the stand-in noted no process")
 	}
 	return syscall.Kill(pid, 0) == nil
+}
+
+// cancelOnceStarted stops a download only once the stand-in has noted its
+// process. A stop that comes earlier has no process to end, and the test
+// could not tell whether one was left behind.
+func cancelOnceStarted(binary string, cancel context.CancelFunc) {
+	go func() {
+		defer cancel()
+		for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline); time.Sleep(10 * time.Millisecond) {
+			if _, ok := notedPID(binary); ok {
+				return
+			}
+		}
+	}()
 }
 
 func TestADownloadThatHangsOrNeverEndsIsEndedWithTheBasecampCLI(t *testing.T) {
@@ -343,8 +363,12 @@ func TestADownloadThatIsStoppedIsInterruptedAndEndsTheBasecampCLI(t *testing.T) 
 	}
 
 	for _, file := range []int{fileSlow, fileHangs} {
+		// The process of the file before must not count for this one.
+		if err := os.Remove(binary + ".pid"); err != nil && !errors.Is(err, os.ErrNotExist) {
+			t.Fatal(err)
+		}
 		going, cancel := context.WithCancel(t.Context())
-		time.AfterFunc(150*time.Millisecond, cancel)
+		cancelOnceStarted(binary, cancel)
 		started := time.Now()
 		err = Downloader{Binary: binary}.Download(going, storageAddressOf(file), &got)
 		expectKind(t, err, Interrupted)
