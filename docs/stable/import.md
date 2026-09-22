@@ -358,11 +358,11 @@ rate Basecamp allows.
 
 ### Texts
 
-A bundle never carries the embeds of its source, and writes three tags of
-its own in their place: `<import-mention>`, `<import-attachment>` and
-`<import-embed>`. In the note of a card, the body of a post, of a comment and
-of a line, every `<bc-attachment>` is replaced as a whole, with the figure
-Basecamp rendered into it:
+A bundle never carries the embeds of its source, and writes four tags of its
+own in their place: `<import-mention>`, `<import-attachment>`,
+`<import-embed>` and `<import-reference>`. In the note of a card, the body of
+a post, of a comment and of a line, every `<bc-attachment>` is replaced as a
+whole, with the figure Basecamp rendered into it:
 
 - A mention becomes `<import-mention ref="<personId>">Name</import-mention>`,
   with the name the list of the account has. The person is looked for in the
@@ -397,10 +397,12 @@ Basecamp rendered into it:
   preview has no title (`linkPreviews`). The address is the `href` of the
   embed, else its `url`. Only an absolute address over http or https becomes
   a link: of any other, the title stays as plain text, or nothing, and it is
-  not counted.
+  not counted. A link to a card, a post or a chat of the account becomes a
+  reference, see below, and counts as a link all the same.
 - A picture at a foreign address, an embed of the kind `image` without a
   signed ID, is no stored file. It becomes a link to its `url` with its
-  `caption` as the text, by the rules of the preview of a link, and never a
+  `caption` as the text, by the rules of the preview of a link, a reference
+  included, and never a
   picture: a bundle fetches nothing from an address somebody wrote into a
   text (`picturesLinked`, which counts what became a link). A picture with a
   signed ID, and one of a kind such as `image/png`, is a file as above.
@@ -457,6 +459,58 @@ provider from another and asks nobody about the address.
   `<iframe>` reaches a body, and such an embed may never end.
 - No output names an address.
 
+A link to a card, a message or a chat of the account, and to a line of a
+chat, becomes a reference to that record (C-031):
+
+```
+<import-reference kind="cards|posts|tools" ref="<sourceId>" href="<address>">words</import-reference>
+```
+
+- `kind` is the kind of record in a bundle: `cards` for a card, `posts` for a
+  message, `tools` for a chat. A line of a chat is a reference to its chat.
+  `ref` is the source ID of that record, which is the ID of Basecamp in the
+  address, without the zeros it may begin with: the ID of a card, of a
+  message, and of a chat, which is also the ID of the chat's tool. `href` is
+  the address as it stood, escaped as an attribute value once, an anchor
+  included. Nothing else of the link comes along.
+- The words of the link stand between the tags as plain text, escaped once:
+  the text of the link without any tag, a blank for a line break. An embed
+  in them gives its words and refers to nothing: a mention the name the
+  list of the account has, the one a person of the bundle carries, and the
+  name Basecamp rendered only for somebody the list does not know; a preview
+  its title, a picture or a file its caption, a rule nothing, a frame
+  nothing. Nobody and no file comes into the bundle for it. A link without
+  words gives an empty reference.
+- Every such link is marked, whatever its words, and whether the record is in
+  the bundle or not: the applier resolves what it knows and makes the link
+  anew of what it does not, from `href` and the words.
+- The address is asked without the whitespace around it. It begins with
+  `http://` or `https://` in any case, its host is `3.basecamp.com` or
+  `app.basecamp.com` in any case, without a port and without a name before an
+  `@`, and its path, without query and fragment, is
+  `/<account>/buckets/<n>/card_tables/cards/<id>`,
+  `/<account>/buckets/<n>/messages/<id>` or
+  `/<account>/buckets/<n>/chats/<id>`, where the account is the one of the
+  run and every `<…>` is digits. A chat may be followed by `@<line>`, and each
+  of them by `/` and anything, such as `/lines/<line>` or the menu of a line.
+  The path is asked with its escapes read and its `.` and `..` segments
+  resolved, so a path that climbs out of a page shows what it climbs to. A
+  path that begins with `//` shows nothing: Basecamp writes none. An ID of
+  more digits than a number holds is none.
+- Any other link stays as it stands: a to-do, a document, a file, a card
+  table, a message board, a project, another account, another host, a stored
+  file, and a link without an address.
+- A link ends where its end tag stands, where the next link begins, as it
+  does for a browser, where a block such as a paragraph, a list item or a
+  figure begins or ends, before the end tag of an element that began before
+  the link, and at the end of the text, where the reference is closed. The
+  block and the end tag stay as they were written, so an element ends where
+  it did; an end tag without a link passes as it stands. An element that
+  begins within the words gives its words, and the end of an element that has
+  none, such as `</br>`, ends nothing.
+- The references are counted by kind (`references`: `cards`, `posts`,
+  `tools`).
+
 A line of a chat that is a file somebody dropped has no text. Its body is one
 `<import-attachment ref="blob-<key>"></import-attachment>` per file, in the
 order of the line, without a caption, and counts as `filesInBodies`. Basecamp
@@ -469,7 +523,8 @@ and is a file no run can ask for, see Files. A file
 without such a key is dropped and counted (`filesDropped`); a line that keeps
 no file is left out with its boosts and counted (`uploadLinesLeftOut`), and
 nobody comes into the bundle for it. A plain line and the line of a bot go
-the way of every text and, holding no embed, pass byte for byte.
+the way of every text and, holding no embed and no link to a record, pass
+byte for byte.
 
 The kind of an embed is its content type without parameters, in any case. A
 signed ID is base64, `--` and a signature, which stands behind the last `--`
@@ -481,11 +536,14 @@ addresses, with or without padding. A global ID counts as a whole: nothing of
 a word before it, nothing of a number or a path after it.
 
 Every other token passes through with the bytes it was read from: Minka
-sanitises a body, and the extractor adds no second opinion. A text that holds
-neither an embed nor a frame is not read at all and passes as it is. What
-goes besides an embed is what belongs to one: whitespace between an embed and
-its rendering, an end tag of an embed without its beginning, and a tag the
-text breaks off in. A text is read token by token, never parsed into a tree,
+sanitises a body, and the extractor adds no second opinion. A text is read
+only when it holds `bc-attachment` or `<iframe`, or `<a` followed by
+whitespace, `>` or `/`, all in any case; any other text passes as it is.
+What goes besides an embed is what belongs to one: whitespace between an
+embed and its rendering, an end tag of an embed without its beginning, and
+an embed or a frame the text breaks off in. Any other tag a text breaks off
+in stays as it was written, at the end, so a text loses no byte to being
+read. A text is read token by token, never parsed into a tree,
 because a tree moves a figure out of a paragraph; an embed that is never
 closed costs no more of the text than its figure, and one that closes itself
 nothing.
@@ -662,7 +720,7 @@ files of its texts the same way.
   `filesDropped`, `filesExpected`, `filesBytesExpected`, `filesBytes`,
   `filesFetched`, `filesReused`, `filesGone`, `fileNamesChanged`,
   `captionsDropped`, `filesOfSeveralOwners`, `linkPreviews`,
-  `picturesLinked`, `embeds`, `embedsLeftOut`, `longestBody`,
+  `picturesLinked`, `embeds`, `embedsLeftOut`, `references`, `longestBody`,
   `requestsRetried` and the absolute path of the bundle. `filesBytes` is
   what the files of the bundle weigh, fetched or taken over; it and
   `filesFetched`, `filesReused` and `filesGone` are 0 in a dry run.
@@ -670,7 +728,7 @@ files of its texts the same way.
   and `messages`, in characters: whoever sets the limits of where a bundle
   goes has to know it. `requestsRetried` is a number, 0 for a run that met no
   failure; the text shows its line only when it is more, and so it does for
-  `embeds` and `embedsLeftOut`.
+  `embeds`, `embedsLeftOut` and `references`.
   No output names a title, a person or what stands in a text.
 - A run prints nothing while it goes on, in any mode: the output contract
   knows results, warnings and errors only.

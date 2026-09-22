@@ -147,6 +147,13 @@ func (r *registry) referByID(id int64) (*string, string, error) {
 	return reference, p.Name, err
 }
 
+// nameOf is the name the list of the account has for somebody, without
+// bringing them into the bundle.
+func (r *registry) nameOf(id int64) (string, bool) {
+	p, listed := r.account[id]
+	return p.Name, listed
+}
+
 // refuseMasks ends a run over masked addresses. The error says how many, and
 // never which: neither an address nor whose it is belongs into a message that
 // ends up in a log.

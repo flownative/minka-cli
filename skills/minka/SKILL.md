@@ -523,7 +523,12 @@ minka cards edit <cardId> --description - --description-format html < text.html
   `data.embeds` counts them, `data.embedsLeftOut` the frames that are left
   out because Minka would not take their address, which a `notice` counts as
   well. A line that was a video alone is a message; one whose only frame is
-  left out says nothing. `data.longestBody` is the longest text per kind
+  left out says nothing. A link to a card, a message or a chat of the
+  account, or to a line of a chat, becomes `<import-reference kind="…"
+  ref="…" href="…">words</import-reference>`, whether the record is in the
+  bundle or not, with the address as it stood and the words of the link as
+  plain text: `data.references` counts them by `cards`, `posts` and
+  `tools`. `data.longestBody` is the longest text per kind
   (`cards`, `comments`, `posts`, `messages`) in characters. None of them
   fails a run.
 - Every reference to a file has a record in `attachments.jsonl` with the same

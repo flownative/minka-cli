@@ -193,6 +193,7 @@ func New() *Account {
 			boardProject(ada, grace, linus, edsger, former, tool),
 			talkProject(ada, grace, linus, edsger, former, bot, deleted, tool),
 			fileProject(ada, grace, tool),
+			referenceProject(ada, grace, tool),
 		},
 		SubtasksURL:  map[int64]string{},
 		Fail:         map[string]error{},
