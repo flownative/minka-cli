@@ -369,3 +369,17 @@ a name the extractor makes plain; a file the old bundle holds intact is linked.
 source chose, and a run that replaces the bundle would fetch thousands again.
 **Implemented as:** `basecamp.Downloader`, `Extractor.attachFile`,
 `bundle.Writer.StoreFile` and `ReuseFile`, see [Importing](stable/import.md).
+
+<a id="c-031"></a>
+## C-031 — Every link to a card, a post or a chat of the account is a reference
+
+*Applies to: `import basecamp`, every text of a bundle*
+
+A link whose address shows a card, a message, a chat or a line of a chat of
+the account becomes an `<import-reference>`, whatever its words and whether
+the record is in the bundle or not; any other link stays a link.
+
+**Why:** The applier resolves what it knows and falls back to the link for
+the rest, so marking more loses nothing and marking less loses a reference.
+**Implemented as:** `Extractor.referenceTo`, `links`, see
+[Importing](stable/import.md).

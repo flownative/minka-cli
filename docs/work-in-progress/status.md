@@ -20,10 +20,12 @@ categories, comments and boosts, and of each chat its lines as messages with
 their boosts, written in parts of one chat and some 10,000 lines each.
 Mentions in the texts are references, the preview of a link is the link, a
 video or a player embedded in a text is an `<import-embed>` with its address,
-and the files of the texts and the files dropped into a chat come with a record
-and their bytes, streamed from the Basecamp CLI or taken over from the bundle
-the run replaces. It reads through the Basecamp CLI and is tested against the
-invented account in `internal/fakebasecamp`.
+a link to a card, a message or a chat of the account is an
+`<import-reference>`, and the files of the texts and the files dropped
+into a chat come with a record and their bytes, streamed from the
+Basecamp CLI or taken over from the bundle the run replaces. It reads
+through the Basecamp CLI and is tested against the invented account in
+`internal/fakebasecamp`.
 It has been run live, as a dry run and into a bundle outside the repository,
 under an identity that sees addresses, the posts and the chats included: all
 references of that bundle resolve and its parts are the ones its manifest
@@ -123,6 +125,16 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   and no embed of Basecamp left in a text. The rule of which address becomes
   a tag is read from Minka's `RichText::isEmbeddableUrl` and kept stricter
   where PHP reads a port more loosely.
+- Of the references of `import basecamp`: every rule of which link becomes an
+  `<import-reference>`. No run has written one yet. Read out of the bundle of
+  both projects, which has them as plain links: 93 links of the account to
+  46 cards, 33 messages and 14 lines of chats, at `3.basecamp.com` and at
+  `app.basecamp.com`, some with the anchor of a comment
+  (`#__recording_<id>`), a line as `chats/<chat>@<line>` and once as
+  `chats/<chat>/lines/<line>/options`; about half of their targets lie in the
+  bundle. No link to a chat itself, none of another account and no query
+  were seen. Minka's applier of references is still being built, and its
+  format documents do not name the tag yet.
 - A known limit of the files: a run that ends hard loses the files it
   fetched, because files are taken over from a bundle in place only. The
   first complete run over an account is the expensive one.

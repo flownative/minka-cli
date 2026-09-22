@@ -80,6 +80,9 @@ type BodyCounts struct {
 	// EmbedsLeftOut are the embedded frames that became nothing, because their
 	// address is none an embed may carry.
 	EmbedsLeftOut int
+	// References are the links to a card, a post or a chat of the account that
+	// became an <import-reference>.
+	References ReferenceCounts
 }
 
 // rewriteBody turns the HTML of Basecamp into the HTML of a bundle. A bundle
@@ -87,11 +90,14 @@ type BodyCounts struct {
 // <import-mention>, a file an <import-attachment>, a rule an <hr>, the preview
 // of a link the link, a picture at a foreign address a link to it, each in the
 // place of the whole embed with what Basecamp rendered into it. An embedded
-// frame becomes an <import-embed>, see frames. Every other token passes through
-// with the bytes it was read from, because the applier sanitises a body anyway
-// and every change here would be a second opinion. What goes besides an embed
-// is what belongs to one: whitespace between an embed and its rendering, an
-// end tag of an embed without its beginning, and a tag the text breaks off in.
+// frame becomes an <import-embed>, see frames, and a link to a card, a post or
+// a chat of the account an <import-reference>, see links. Every other token
+// passes through with the bytes it was read from, because the applier
+// sanitises a body anyway and every change here would be a second opinion.
+// What goes besides an embed is what belongs to one: whitespace between an
+// embed and its rendering, an end tag of an embed without its beginning, and
+// an embed or a frame the text breaks off in. Any other tag the text breaks
+// off in stays as it was written.
 //
 // The text is read token by token and never built into a tree: a tree moves a
 // figure out of a paragraph, and the embed would lose what belongs to it.
@@ -104,7 +110,7 @@ type BodyCounts struct {
 func (e *Extractor) rewriteBody(text, rendered string, files []bodyFile) (string, []sourceFile, error) {
 	lowered := strings.ToLower(text)
 	framed := strings.Contains(lowered, "<"+frameTag)
-	if !framed && !strings.Contains(lowered, embedTag) {
+	if !framed && !strings.Contains(lowered, embedTag) && !linkTag.MatchString(lowered) {
 		return text, nil, nil
 	}
 
@@ -125,6 +131,7 @@ func (e *Extractor) rewriteBody(text, rendered string, files []bodyFile) (string
 	var referred []sourceFile
 	reader := newBodyReader(text)
 	frames := frames{counts: &e.bodies}
+	links := links{extractor: e}
 	if framed {
 		frames.unwrapped = figuresAroundFrames(text)
 	}
@@ -133,21 +140,36 @@ func (e *Extractor) rewriteBody(text, rendered string, files []bodyFile) (string
 	for {
 		token, more := reader.next()
 		if !more {
+			out.WriteString(links.end())
 			out.WriteString(frames.end())
+			// A tag the text breaks off in is the text's own, unless it would
+			// bring an embed or a frame into the bundle.
+			if !opensEmbedOrFrame(reader.rest) {
+				out.WriteString(reader.rest)
+			}
 			return out.String(), referred, nil
 		}
 		if token.kind == nethtml.EndTagToken && token.name == embedTag {
 			// An end tag without its embed is a leftover of one that was replaced.
 			if passing > 0 {
 				passing--
-				out.WriteString(token.raw)
+				if !links.referring {
+					out.WriteString(token.raw)
+				}
 			}
 			continue
 		}
 		if !token.opens(embedTag) {
 			// No frame reaches a bundle, whatever holds it: an embed that passes
 			// through may never end, and would keep every frame behind it.
-			replacement, replaced := frames.rewrite(token, reader)
+			out.WriteString(links.endAt(token))
+			replacement, replaced := links.rewrite(token)
+			if !replaced && links.referring {
+				replacement, replaced = words(token, reader), true
+			}
+			if !replaced {
+				replacement, replaced = frames.rewrite(token, reader)
+			}
 			if !replaced {
 				replacement = token.raw
 			}
@@ -162,13 +184,19 @@ func (e *Extractor) rewriteBody(text, rendered string, files []bodyFile) (string
 			if token.kind == nethtml.StartTagToken {
 				passing++
 			}
-			out.WriteString(token.raw)
+			if !links.referring {
+				out.WriteString(token.raw)
+			}
 			continue
 		}
 		// An embed that closes itself holds nothing: what follows it is text.
 		seen := rendering{fileCaption: token.attribute("caption"), presentation: token.attribute("presentation")}
 		if token.kind == nethtml.StartTagToken {
 			seen = reader.skipRendering().of(seen)
+		}
+		if links.referring {
+			out.WriteString(html.EscapeString(e.wordsOf(contentType, linkedPicture, token, renderingOf(sgid, seen))))
+			continue
 		}
 		switch {
 		case contentType == mentionType:
@@ -184,9 +212,9 @@ func (e *Extractor) rewriteBody(text, rendered string, files []bodyFile) (string
 			if address == "" {
 				address = token.attribute("url")
 			}
-			out.WriteString(link(address, token.attribute("title"), &e.bodies.LinkPreviews))
+			out.WriteString(e.link(address, token.attribute("title"), &e.bodies.LinkPreviews))
 		case linkedPicture:
-			out.WriteString(link(token.attribute("url"), token.attribute("caption"), &e.bodies.PicturesLinked))
+			out.WriteString(e.link(token.attribute("url"), token.attribute("caption"), &e.bodies.PicturesLinked))
 		default:
 			if file, listed := embeddedFile(files, token); listed {
 				e.bodies.Files++
@@ -227,8 +255,10 @@ func (e *Extractor) fileReference(ref string, seen rendering) string {
 // address where it has none. Never a picture: a bundle fetches nothing from
 // an address somebody wrote into a text. Only an address of the web becomes a
 // link, because whoever wrote the text chose what the embed says: any other
-// leaves the title as plain text. What became a link is counted.
-func link(address, title string, linked *int) string {
+// leaves the title as plain text. What became a link is counted. A link to a
+// card, a post or a chat of the account is a reference, like any other link
+// to one.
+func (e *Extractor) link(address, title string, linked *int) string {
 	title, address = strings.Join(strings.Fields(title), " "), strings.TrimSpace(address)
 	parsed, err := url.Parse(address)
 	if err != nil || parsed.Host == "" || parsed.Scheme != "http" && parsed.Scheme != "https" {
@@ -238,6 +268,9 @@ func link(address, title string, linked *int) string {
 		title = address
 	}
 	*linked++
+	if kind, ref, found := e.referenceTo(address); found {
+		return e.openReference(kind, ref, address) + html.EscapeString(title) + closeReference
+	}
 	return fmt.Sprintf(`<a href="%s">%s</a>`, html.EscapeString(address), html.EscapeString(title))
 }
 
@@ -438,6 +471,13 @@ func embeddable(address string) bool {
 		host = host[:colon]
 	}
 	return host != ""
+}
+
+// opensEmbedOrFrame tells whether what a text breaks off in is the beginning
+// of an embed or of a frame, in any case.
+func opensEmbedOrFrame(rest string) bool {
+	lowered := strings.ToLower(rest)
+	return strings.HasPrefix(lowered, "<"+embedTag) || strings.HasPrefix(lowered, "<"+frameTag)
 }
 
 // saysNothing tells whether a text of a bundle is empty for whoever reads it:
@@ -723,6 +763,9 @@ type bodyReader struct {
 	// framesStayOpen says that no frame of the rest of the text is closed, so
 	// that what follows a frame is read as the text it is.
 	framesStayOpen bool
+	// rest is what stands behind the last token: a tag the text breaks off in.
+	rest  string
+	ended bool
 }
 
 func newBodyReader(text string) *bodyReader {
@@ -735,8 +778,13 @@ func (r *bodyReader) next() (bodyToken, bool) {
 		r.peeked = nil
 		return token, true
 	}
+	if r.ended {
+		return bodyToken{}, false
+	}
 	kind := r.tokenizer.Next()
 	if kind == nethtml.ErrorToken {
+		// Only the first error of a tokenizer says what is left of the text.
+		r.rest, r.ended = string(r.tokenizer.Raw()), true
 		return bodyToken{}, false
 	}
 	token := bodyToken{kind: kind, raw: string(r.tokenizer.Raw()), index: r.read}
@@ -782,6 +830,7 @@ func (r *bodyReader) skipFrame() {
 	switch {
 	case !more:
 		r.tokenizer, r.framesStayOpen = nethtml.NewTokenizer(strings.NewReader(held)), true
+		r.rest, r.ended = "", false
 	case token.kind == nethtml.EndTagToken && token.name == frameTag:
 		r.next()
 	}
