@@ -142,9 +142,10 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   count in the board, the column and the card. Read in the Minka code and its
   tests, not yet run live: that switching the area off hands the cards back
   to the end of the column, that a neighbour from the other area places a
-  card at the top of its area, that a system column, a column without the
-  area and a foreign column answer 404, and that a card restored from the
-  trash comes back off hold.
+  card at the top of its area, that a column of the board without the area
+  and a system column answer 422 with a code of their own while a foreign
+  column answers 404, and that a card restored from the trash comes back off
+  hold.
 - "agent for X" in `people list` has been seen live, an agent that stepped
   down has not — it is in no list any more.
 
@@ -154,9 +155,6 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
 - Paging Done beyond 25 cards does not exist; needed once dogfooding needs it.
 - Flow answers a wrong HTTP method with HTML instead of JSON.
 - Column colours come later, read-only.
-- A move onto hold into a column without the area, and switching the area
-  of Triage, Not now or Done, answer a bare 404 until Minka gives them a 422
-  code of their own; the CLI checks both itself before sending.
 
 ## Next steps
 

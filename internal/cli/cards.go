@@ -440,22 +440,11 @@ without --on-hold comes off hold, also within its own column.
 					Hint:    "Leave out --bottom, --after and --before, or run: minka cards done " + card.Value.ID,
 				}
 			}
-			// The server answers a move onto hold in a column without the area
-			// with a 404, which would read as a card that is gone.
-			if onHold && !target.OnHoldEnabled {
-				hint := "Only a working column can have an area for cards on hold."
-				if target.Type == api.ColumnWork {
-					hint = "Switch it on with: minka columns on-hold " + target.ID
-				}
-				return &Error{
-					Code:    CodeUsage,
-					Message: fmt.Sprintf("column %s has no area for cards on hold", target.Title),
-					Hint:    hint,
-				}
-			}
 			// The server puts a card whose neighbour is not in the same area of
-			// the column at the top of that area without saying so.
-			if neighbour != "" && !areaHasCard(target, onHold, neighbour) {
+			// the column at the top of that area without saying so. Where the
+			// area the move names is not there at all, the server says so
+			// itself, and that is the answer somebody needs.
+			if neighbour != "" && (!onHold || target.OnHoldEnabled) && !areaHasCard(target, onHold, neighbour) {
 				if onHold {
 					return usageErrorf(cmd, "card %s is not on hold in column %s", neighbour, target.Title)
 				}
@@ -476,7 +465,14 @@ without --on-hold comes off hold, also within its own column.
 
 			moved, err := s.client.MoveCard(a.ctx, card.Value.ID, input)
 			if err != nil {
-				return s.fail(err)
+				e := s.fail(err)
+				if e.APICode == apiCodeColumnHasNoOnHoldArea {
+					e.Hint = "Only a working column can have an area for cards on hold."
+					if target.Type == api.ColumnWork {
+						e.Hint = "Switch it on with: minka columns on-hold " + target.ID
+					}
+				}
+				return e
 			}
 
 			where := moved.Value.Column.Title
