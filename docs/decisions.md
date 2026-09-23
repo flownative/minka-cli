@@ -414,3 +414,18 @@ be https. Every request carrying JSON still follows nothing.
 relying on it would hand the token to a neighbour of our own host.
 **Implemented as:** `api.Client.followTheBytes`, see
 [Token, hosts and requests](stable/security.md).
+
+<a id="c-034"></a>
+## C-034 — The bytes are fetched where they lie, not through Minka
+
+*Applies to: `uploads download`*
+
+The request for the bytes carries no `?download=1`, which would keep every
+answer inside Minka and spare the client the redirect.
+
+**Why:** A picture that is shown where it stands is the one file Minka hands
+over to its store; asking the redirect away would send every one of those
+through a worker of the application instead. Everything else comes through it
+either way.
+**Implemented as:** `api.Client.FileBytes`, which follows under the rules of
+[C-033](#c-033).

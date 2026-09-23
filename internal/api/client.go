@@ -27,9 +27,24 @@ const bodyTimeout = 10 * time.Minute
 // gives up on them.
 const maxRedirects = 5
 
+// CodeRedirectRefused is what a caller reads where the bytes of a file were
+// to be fetched at an address this client does not go to.
+const CodeRedirectRefused = "redirectRefused"
+
 // ErrRedirectRefused marks a redirect this client does not follow. It is a
 // refusal, not a failure of the network: trying again changes nothing.
 var ErrRedirectRefused = errors.New("redirect refused")
+
+// refusedRedirect is such a refusal together with the answer that sent it on,
+// so that a caller can say which status it was turned away at.
+type refusedRedirect struct {
+	status int
+	reason string
+}
+
+func (e *refusedRedirect) Error() string { return ErrRedirectRefused.Error() + ": " + e.reason }
+
+func (e *refusedRedirect) Is(target error) bool { return target == ErrRedirectRefused }
 
 // Client talks to one Minka host with one access token.
 type Client struct {
@@ -79,17 +94,51 @@ func New(host, token, userAgent string) *Client {
 // the one signed in to, whatever Go would have done with it, and an address
 // that is not https is not followed at all.
 func (c *Client) followTheBytes(request *http.Request, via []*http.Request) error {
-	if len(via) > maxRedirects {
-		return fmt.Errorf("%w: more than %d in a row", ErrRedirectRefused, maxRedirects)
+	// The answer that sent us on rides on the request Go built from it.
+	status := 0
+	if request.Response != nil {
+		status = request.Response.StatusCode
 	}
-	if c.address != nil && request.URL.Scheme == c.address.Scheme && request.URL.Host == c.address.Host {
+
+	if len(via) > maxRedirects {
+		return &refusedRedirect{status, fmt.Sprintf("more than %d in a row", maxRedirects)}
+	}
+	if c.isTheHostSignedInTo(request.URL) {
 		return nil
 	}
 	request.Header.Del("Authorization")
 	if request.URL.Scheme != "https" {
-		return fmt.Errorf("%w: it leads to %s, which is not https", ErrRedirectRefused, request.URL.Host)
+		return &refusedRedirect{status, fmt.Sprintf("it leads to %s, which is not https", request.URL.Hostname())}
 	}
 	return nil
+}
+
+// isTheHostSignedInTo says whether an address is the host of this client. A
+// host name does not care about its case, and the standard port of a scheme
+// is the same address as none at all: an answer that names one of the two
+// spellings still leads home and keeps the token.
+func (c *Client) isTheHostSignedInTo(address *url.URL) bool {
+	if c.address == nil {
+		return false
+	}
+	return address.Scheme == c.address.Scheme &&
+		strings.EqualFold(address.Hostname(), c.address.Hostname()) &&
+		portOf(address) == portOf(c.address)
+}
+
+// portOf is the port an address speaks to, written out where the scheme
+// leaves it unsaid.
+func portOf(address *url.URL) string {
+	if port := address.Port(); port != "" {
+		return port
+	}
+	switch address.Scheme {
+	case "https":
+		return "443"
+	case "http":
+		return "80"
+	}
+	return ""
 }
 
 // Result is a decoded resource together with the JSON the server sent for it.
@@ -418,8 +467,14 @@ func (c *Client) FileBytes(ctx context.Context, blobID, variant string) (*FileBy
 
 	resp, err := c.downloads.Do(req)
 	if err != nil {
-		if errors.Is(err, ErrRedirectRefused) {
-			return nil, &Error{Method: http.MethodGet, Code: "redirectRefused", Message: redirectCause(err) + "."}
+		var refusal *refusedRedirect
+		if errors.As(err, &refusal) {
+			return nil, &Error{
+				Method:     http.MethodGet,
+				StatusCode: refusal.status,
+				Code:       CodeRedirectRefused,
+				Message:    "The bytes were to be fetched elsewhere: " + refusal.reason + ".",
+			}
 		}
 		return nil, &NetworkError{Method: http.MethodGet, Err: err}
 	}
@@ -437,16 +492,6 @@ func (c *Client) FileBytes(ctx context.Context, blobID, variant string) (*FileBy
 		ByteSize:    resp.ContentLength,
 		Body:        resp.Body,
 	}, nil
-}
-
-// redirectCause leaves the address out of a refused redirect: it may be a
-// signed one of a store, which is a secret of a kind while it lasts.
-func redirectCause(err error) string {
-	var failed *url.Error
-	if errors.As(err, &failed) {
-		return failed.Err.Error()
-	}
-	return err.Error()
 }
 
 // request sends a request to a path below /api/v1. Every identifier in the

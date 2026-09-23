@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"slices"
 	"strings"
 	"testing"
@@ -194,21 +195,68 @@ func TestTheBytesAreNotFetchedFromAnAddressThatIsNotHttps(t *testing.T) {
 	defer elsewhere.Close()
 
 	minka := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, elsewhere.URL+"/signed", http.StatusFound)
+		http.Redirect(w, r, elsewhere.URL+"/signed?signature=secret", http.StatusFound)
 	}))
 	defer minka.Close()
 
 	_, err := New(minka.URL, "minka_pat_x", "").FileBytes(context.Background(), "b", "original")
 	var apiErr *Error
-	if !errors.As(err, &apiErr) || apiErr.Code != "redirectRefused" {
+	if !errors.As(err, &apiErr) || apiErr.Code != CodeRedirectRefused {
 		t.Fatalf("got %#v", err)
 	}
-	if strings.Contains(apiErr.Message, elsewhere.URL) {
-		t.Errorf("the refusal repeats the address: %q", apiErr.Message)
+	// The status is the one the answer carried, not a zero that would read
+	// like no server having said anything.
+	if apiErr.StatusCode != http.StatusFound {
+		t.Errorf("status %d, want the %d that sent us on", apiErr.StatusCode, http.StatusFound)
+	}
+	// An address of a store is signed, and what signs it is a secret while it
+	// lasts, so the refusal names the host and nothing else of it.
+	for _, secret := range []string{"signed", "signature"} {
+		if strings.Contains(apiErr.Message, secret) {
+			t.Errorf("the refusal repeats the address: %q", apiErr.Message)
+		}
 	}
 	if asked != 0 {
 		t.Errorf("%d requests to an address that is not https", asked)
 	}
+}
+
+// An answer may spell the host it sends us to differently from the way it was
+// signed in to, and the two are still the same address: the token belongs on
+// that request, and taking it off would turn a download into a 401. What only
+// looks like it belongs is another host and keeps nothing.
+func TestTheHostSignedInToIsRecognisedHoweverItIsSpelled(t *testing.T) {
+	client := New("https://minka.example.com", "minka_pat_x", "")
+
+	for _, address := range []string{
+		"https://minka.example.com/api/v1/uploads/b/original",
+		"https://MINKA.Example.com/x",
+		"https://minka.example.com:443/x",
+	} {
+		if !client.isTheHostSignedInTo(mustParse(t, address)) {
+			t.Errorf("%s is the host signed in to and was taken for another", address)
+		}
+	}
+
+	for _, address := range []string{
+		"http://minka.example.com/x",        // the same name, in the clear
+		"https://files.minka.example.com/x", // a host below ours is not ours
+		"https://minka.example.com:8443/x",
+		"https://minka.example.com.example.net/x",
+	} {
+		if client.isTheHostSignedInTo(mustParse(t, address)) {
+			t.Errorf("%s is another host and was taken for ours", address)
+		}
+	}
+}
+
+func mustParse(t *testing.T, raw string) *url.URL {
+	t.Helper()
+	parsed, err := url.Parse(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return parsed
 }
 
 // A client with a redirect check of its own gets none of Go's, so the number
