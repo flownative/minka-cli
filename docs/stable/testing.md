@@ -31,6 +31,22 @@ then repeat the proof.
 
 The copy lives in the scratchpad, never in the repository.
 
+## What a test may demand of time
+
+A test may set an upper bound, one so wide that only a break trips it: the
+seconds within which a download that was given up has to be back say that the
+Basecamp CLI was ended and not waited out. What a test may not do is make the
+pace of another program its precondition — that it gets going, or brings its
+next byte, within a span the test set. That is a bet on the load of the
+machine, and it is lost sooner or later (C-035).
+
+What a test has to know about a program it runs, it therefore takes from the
+code that runs it, not from the program: one that is ended before it has run a
+line of its own leaves no note behind.
+
+Where the pace is the behaviour itself, the test is the named exception and
+stands with its reason in the [Status](../work-in-progress/status.md).
+
 ## Checking live
 
 A live run shows what no fake shows: the real answers of the server. Rules
