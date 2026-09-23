@@ -146,6 +146,9 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   and a system column answer 422 with a code of their own while a foreign
   column answers 404, and that a card restored from the trash comes back off
   hold.
+- The fake API knows no archived card, so what Minka answers a move of one is
+  not mirrored: that an archived card is named before a column without the
+  area on hold is read in the Minka code alone.
 - "agent for X" in `people list` has been seen live, an agent that stepped
   down has not — it is in no list any more.
 
