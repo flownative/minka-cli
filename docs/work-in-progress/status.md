@@ -74,7 +74,8 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   back or that no message carries, the read mark and its hint taking the
   highest number of a page, one's own messages never unread, and the refusals.
 - Of `import basecamp`: a Basecamp CLI that is not signed in, forbidden by
-  Basecamp or rate limited, a creator who left the account, and that an
+  Basecamp or rate limited, a creator who left the account, a dock entry
+  asked for the creator of a project that the identity may not see, and that an
   address which is none comes out as `null` with its person named in
   `invalidAddresses`: the account holds such an address, but on nobody the
   projects extracted refer to, and it holds nobody retired. A run that is
@@ -165,11 +166,6 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
 - Column colours come later, read-only.
 
 ## Next steps
-
-- Small things put off in the extractor: a `forbidden` on one of the extra
-  dock entries asked for the creator of a project ends the run instead of
-  being passed over, and no test pins which creator wins when tools made with
-  a project name different people.
 
 - The bundle with the posts and the chats waits for Minka's appliers of
   posts and of chat lines; what those runs find comes back through the

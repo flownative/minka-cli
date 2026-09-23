@@ -36,6 +36,10 @@ type importReport struct {
 	// PeopleLeftOut are the people of the account no record of the bundle
 	// refers to; counts.people is who was written.
 	PeopleLeftOut int `json:"peopleLeftOut"`
+	// CreatorProbesRefused are the dock entries asked for the creator of a
+	// project that Basecamp refused: they are passed over, and a project may
+	// come without a creator because of it.
+	CreatorProbesRefused int `json:"creatorProbesRefused"`
 	// CardsByStatus splits counts.cards; CardsOnHold are those of them that
 	// were set aside within their column.
 	CardsByStatus map[string]int `json:"cardsByStatus"`
@@ -236,8 +240,9 @@ it has been applied.`,
 				SkippedTools:   result.Skipped,
 				MissingFiles:   result.Missing,
 
-				InvalidAddresses: result.InvalidAddresses,
-				PeopleLeftOut:    result.PeopleLeftOut,
+				InvalidAddresses:     result.InvalidAddresses,
+				PeopleLeftOut:        result.PeopleLeftOut,
+				CreatorProbesRefused: result.CreatorProbesRefused,
 
 				CardsByStatus:      result.CardsByStatus,
 				CardsOnHold:        result.CardsOnHold,
@@ -275,6 +280,11 @@ it has been applied.`,
 			var notices []string
 			if count := len(report.InvalidAddresses); count > 0 {
 				notices = append(notices, plural(count, "person comes", "people come")+" without an e-mail address, and so without a login, because the one Basecamp holds is none; data.invalidAddresses names them by ID, and only the source can repair it")
+			}
+			if count := report.CreatorProbesRefused; count > 0 {
+				notices = append(notices, plural(count,
+					"tool of a project could not be asked who created the project, because Basecamp refuses it to this identity; a project may therefore come without a creator",
+					"tools of projects could not be asked who created their project, because Basecamp refuses them to this identity; a project may therefore come without a creator"))
 			}
 			if count := report.FilesDropped; count > 0 {
 				notices = append(notices, plural(count,
@@ -353,6 +363,9 @@ func renderImportReport(w io.Writer, report importReport) {
 	fmt.Fprintf(w, "People of the account nothing refers to, left out: %d\n", report.PeopleLeftOut)
 	if count := len(report.InvalidAddresses); count > 0 {
 		fmt.Fprintf(w, "Invalid addresses: %d (person %s)\n", count, strings.Join(report.InvalidAddresses, ", "))
+	}
+	if report.CreatorProbesRefused > 0 {
+		fmt.Fprintf(w, "Tools this identity may not see, asked for the creator of a project and passed over: %d\n", report.CreatorProbesRefused)
 	}
 
 	fmt.Fprintf(w, "\nCards: %d active, %d archived, %d trashed; %d of them on hold\n",
