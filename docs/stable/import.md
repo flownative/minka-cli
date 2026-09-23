@@ -214,10 +214,12 @@ on: those of cards, those of posts, those of lines.
   that was made within five seconds after the project
   (`projectCreationWindow`), compared as moments; a tool somebody added later
   never names the creator, and without such a tool `createdBy` is `null`. The
-  tools the run extracts are looked at first. Only when none of them answers
-  are up to three others asked for (`maxCreatorProbes`), those that are
-  switched off included, in the order of their IDs, which is the order they
-  were made in, and only until one answers. Such a tool that is not there, or
+  tools the run extracts are looked at first, in the order of their IDs, which
+  is the order they were made in, so that the oldest of them decides where
+  several were made with the project and name different people. Only when none
+  of them answers are up to three others asked for (`maxCreatorProbes`), those
+  that are switched off included, in the same order, and only until one
+  answers. Such a tool that is not there, or
   that lies outside the account, is passed over. The creator comes into the
   bundle like anybody a record names.
   The description is plain text there and HTML in the bundle: escaped, a
