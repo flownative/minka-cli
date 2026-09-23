@@ -353,7 +353,7 @@ func (e *Extractor) extractProject(ctx context.Context, id int64, w *bundle.Writ
 	var made []recording
 	var others []dockEntry
 	dock := append([]dockEntry(nil), p.Dock...)
-	sort.Slice(dock, func(i, j int) bool { return dock[i].ID < dock[j].ID })
+	sort.SliceStable(dock, func(i, j int) bool { return dock[i].ID < dock[j].ID })
 	for _, entry := range dock {
 		if _, known := toolKinds[entry.Name]; !known || !entry.Enabled {
 			e.skipped[skippedKey{kind: entry.Name, enabled: entry.Enabled}]++
