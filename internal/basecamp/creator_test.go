@@ -47,6 +47,47 @@ func TestWhoMadeAToolTogetherWithAProjectCreatedTheProject(t *testing.T) {
 	}
 }
 
+// The tools of the first project were all made an hour after it, so none of
+// them answers until a test says otherwise.
+func TestTheOldestToolMadeWithAProjectNamesItsCreator(t *testing.T) {
+	ada := fakebasecamp.Person{ID: 101, Name: "Ada Example", Email: "ada@example.test"}
+	grace := fakebasecamp.Person{ID: 102, Name: "Grace Sample", Email: "grace@example.test"}
+	edsger := fakebasecamp.Person{ID: 104, Name: "Edsger Invented", Email: "edsger@example.test"}
+
+	// Two tools of the bundle were made with the project and name different
+	// people: the one with the smaller ID, which was made first, decides.
+	account := fakebasecamp.New()
+	dock := account.Projects[0].Dock
+	dock[1].CreatedAt, dock[1].Creator = withTheProject, &grace
+	dock[3].CreatedAt, dock[3].Creator = withTheProject, &ada
+	if got := creatorOfProject(t, account, "7001"); got != "102" {
+		t.Errorf("created by %v, want 102: tool 9002 was made before tool 9004", got)
+	}
+
+	// The order the dock comes in says nothing.
+	account = fakebasecamp.New()
+	dock = account.Projects[0].Dock
+	dock[1].CreatedAt, dock[1].Creator = withTheProject, &grace
+	dock[3].CreatedAt, dock[3].Creator = withTheProject, &ada
+	slices.Reverse(account.Projects[0].Dock)
+	if got := creatorOfProject(t, account, "7001"); got != "102" {
+		t.Errorf("created by %v, want 102 whatever order the dock comes in", got)
+	}
+
+	// A tool of the bundle answers before one that would only be asked for,
+	// whoever of them was made first.
+	account = fakebasecamp.New()
+	dock = account.Projects[0].Dock
+	dock[4].ID, dock[4].CreatedAt, dock[4].Creator = 9000, withTheProject, &edsger
+	dock[3].CreatedAt, dock[3].Creator = withTheProject, &ada
+	if got := creatorOfProject(t, account, "7001"); got != "101" {
+		t.Errorf("created by %v, want 101: the to-dos are no tool of the bundle", got)
+	}
+	if requests := toolRequests(account); len(requests) != 0 {
+		t.Errorf("asked for %v although a tool of the bundle answers", requests)
+	}
+}
+
 func TestAToolAddedLaterNeverNamesTheCreatorOfAProject(t *testing.T) {
 	for what, createdAt := range map[string]string{
 		"days later":                     "",
