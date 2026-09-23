@@ -63,6 +63,7 @@ var notAWriteIntoAProject = []string{
 	"cards mine", "cards show", "steps list", "chats list", "messages list",
 	"chats mark-read", "conversations list", "conversations with", "conversations people",
 	"uploads create", "uploads download", "import basecamp",
+	"work start", "work stop", "work list", "heartbeat", "hooks install", "hooks status",
 }
 
 // A command that is new has to be put into one of the two lists, so that a way

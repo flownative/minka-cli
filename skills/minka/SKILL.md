@@ -4,7 +4,8 @@ description: >
   Work with a Minka instance through the minka CLI: list projects and boards,
   read a board with its columns and cards, show a card with description and
   comments, create and edit cards, move, hold and complete them, comment on them,
-  read and write chat messages.
+  read and write chat messages, and say which cards you are working on right
+  now.
   Use for any task on a Minka board, such as tracking development tasks.
 ---
 
@@ -34,6 +35,10 @@ when stdout is not a terminal, so an agent gets structured output by default.
 - Exit 9 with `meta.apiCode` `projectArchived` means the project is archived:
   it can be read, nothing can be written, and trying again does not help. Tell
   the person; putting it back in use is done in Minka on the web.
+- Say what you have in hand: `minka work start <card>` when you begin on a
+  card and `minka work stop <card>` when you are done with it. It shows on the
+  board only while `minka heartbeat` keeps reporting it, which
+  `minka hooks install` sets up once and for all.
 - `minka cards done` is safe to repeat: a card already in Done is left alone.
 - `minka cards delete` moves a card to the trash. Repeating it changes
   nothing on the server, but a card in the trash reads like one that never
@@ -165,6 +170,12 @@ minka conversations list --json
 minka conversations with <person> [--project <projectId>] --json
 minka uploads create <file> (--project <projectId> | --conversation <conversationId>) [--name <name>] [--content-type <type>] --json
 minka uploads download <blobId> [--variant original|display] [-o <path>|-o -] [--force] --json
+minka work start <card> --json
+minka work stop [<card>] [--all] --json
+minka work list --json
+minka heartbeat --json
+minka hooks install [--file <path>] [--command <command line>] --json
+minka hooks status [--file <path>] --json
 minka import basecamp --project <basecampProjectId> [--project <basecampProjectId>]... (--out <dir> | --dry-run) --json
 ```
 
@@ -515,6 +526,65 @@ minka cards edit <cardId> --description - --description-format html < text.html
   answer an identifier that names nothing gives: the two cannot be told apart.
 - What arrives has to weigh what the file says it weighs. Anything else exits
   7 and nothing is kept.
+
+## Saying which cards you are working on
+
+The board can show a card as alive while somebody works on it. Only an agent
+can say so — with a person's token every signal is refused — and it works like
+this:
+
+- **`minka work start <card>` alone shows nothing.** It only remembers the
+  card on this machine. What tells Minka is `minka heartbeat`, and until one
+  has run, no board has heard a word. `work start` says so in its `notice`
+  while nothing has ever reported from this machine.
+- `minka hooks install` writes a `PostToolUse` hook into
+  `~/.claude/settings.json` that runs `minka heartbeat` after every tool call.
+  Install it once, then `work start` is all a session does. Without it, run
+  `minka heartbeat` yourself after every few steps. `minka hooks status --json`
+  says whether it is there; `data.state` is `installed`, `current` or
+  `not installed`. Other hooks in the file are kept, and a settings file this
+  command does not understand is refused (exit 1) with the entry to add by hand
+  in `hint`.
+- Leave the default alone unless you are asked otherwise. The list, the client
+  and the signal belong to the machine, so a hook for one project reports that
+  project's sessions and no others. If you do write one for a project, take
+  `--file .claude/settings.local.json`, never `.claude/settings.json`: that one
+  is committed, and the entry names a path of this machine which no other
+  checkout has. Read the `notice`, which says when the file lies in a working
+  tree, and pass `--command minka` there.
+- `minka work stop <card>` takes a card out again, and the next signal gives it
+  up at once. Do it when you are done with a card; otherwise it stays alive
+  until it runs out. It asks nothing of the network and the card may be named
+  by its short identifier, but it needs a host like every other command, so
+  without a sign-in it exits 3.
+- `minka work stop` without a card stops the one card that is remembered. With
+  several it exits 1 and changes nothing, because the list is shared with every
+  other session on this machine: name the card, or take them all with `--all`.
+- `minka work list --json` shows that list: `data.cards` with `id`, `shortId`,
+  `title` and `startedAt`, `data.sentAt` when a signal last went out,
+  `data.reportedAt` when one last arrived, and `data.failure` what the host
+  made of the last one that did not. The `notice` advises `minka hooks install`
+  only while nothing has ever gone out; a signal that was turned away is no
+  reason to install anything.
+- `minka heartbeat` always exits 0 and prints nothing unless you ask with
+  `--json`. Not signed in, no network, a token that was revoked: none of it
+  stops your work, and none of it is reported as a failure. If the board shows
+  nothing, run `minka heartbeat --json` and read `data.sent` and `data.reason`,
+  which names the case with the status and the code of the API, such as
+  "(HTTP 403, agentsOnly)" for a token that belongs to a person and not to an
+  agent. `minka work list --json` carries the same words in `failure` for the
+  last signal that reached the host.
+- The list belongs to the machine, not to your session, and every signal
+  reports all of it together. Never write the store yourself.
+- Minka forgets a card three minutes after the last signal, so a session that
+  ends without `work stop` goes quiet by itself.
+- The list gives a card up eight hours after it was started, counted from the
+  `work start` and from nothing else. On a card you sit at for longer than a
+  working day, say `minka work start` again now and then; otherwise the tile
+  goes dark in the middle of the work. `work list` carries a `notice` when a
+  card was given up that way.
+- A card you may not see exits 2 at `work start`; the server itself would pass
+  it over without a word. There is no way to read back what Minka holds.
 
 ## Importing from Basecamp
 
