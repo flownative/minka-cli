@@ -46,6 +46,22 @@ const (
 
 var uuidPattern = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
 
+// maxClientIDLength and clientIDPattern are the shape of the name one client
+// of an agent goes by.
+const maxClientIDLength = 64
+
+var clientIDPattern = regexp.MustCompile(`^[A-Za-z0-9._-]{1,` + strconv.Itoa(maxClientIDLength) + `}$`)
+
+// AtWork is one card one client of an agent says it is working on. The server
+// keeps every signal it was sent; it does not forget one after the three
+// minutes a real Minka counts it for.
+type AtWork struct {
+	AgentID    string
+	ClientID   string
+	CardID     string
+	LastSeenAt time.Time
+}
+
 type Person struct {
 	ID          string
 	Name        string
@@ -366,12 +382,14 @@ type Server struct {
 	requests []RecordedRequest
 	failWith int
 	now      time.Time
+	atWork   []AtWork
 }
 
 // Fixture names the data New seeds, for tests to refer to.
 type Fixture struct {
 	Token         string
 	StrangerToken string
+	AgentToken    string
 	Bruno         *Person
 	Anke          *Person // a member of the project besides Bruno
 	Stranger      *Person // no member of the project
@@ -454,6 +472,7 @@ func New(t testing.TB) (*Server, *Fixture) {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v1/me", s.authenticated(s.me))
+	mux.HandleFunc("PUT /api/v1/me/work", s.authenticated(s.noteAtWork))
 	mux.HandleFunc("GET /api/v1/projects", s.authenticated(s.projects))
 	mux.HandleFunc("GET /api/v1/projects/{projectId}/boards", s.authenticated(s.boards))
 	mux.HandleFunc("GET /api/v1/boards/{boardId}", s.authenticated(s.board))
@@ -505,7 +524,7 @@ func New(t testing.TB) (*Server, *Fixture) {
 	t.Cleanup(s.Close)
 
 	return s, &Fixture{
-		Token: "minka_pat_bruno", StrangerToken: "minka_pat_stranger",
+		Token: "minka_pat_bruno", StrangerToken: "minka_pat_stranger", AgentToken: "minka_pat_agent",
 		Bruno: bruno, Anke: anke, Stranger: stranger, Agent: agent, RetiredAgent: retired, Project: project, Board: board,
 		Triage: triage, Doing: doing, NotNow: notNow, Done: done,
 		CardInTriage: cardInTriage, CardInDoing: cardInDoing,
@@ -606,6 +625,105 @@ func (s *Server) me(w http.ResponseWriter, _ *http.Request, person *Person) {
 		"kind": kindOf(person), "retired": person.Retired, "principal": s.principalOf(person),
 		"organizationRole": "member",
 	})
+}
+
+// noteAtWork takes the whole set of cards one client of an agent is at work
+// on. The set replaces what that client said before, and an empty one says
+// that it has stopped.
+//
+// A person's token is turned away before anything of the body is read, so that
+// nobody learns from the refusal what the body would have had to be. A card
+// the agent may not see, and an identifier that is no UUID, are passed over
+// without a word: the answer must not say whether a card somebody made up
+// exists.
+func (s *Server) noteAtWork(w http.ResponseWriter, r *http.Request, person *Person) {
+	if kindOf(person) != "agent" {
+		writeJSON(w, http.StatusForbidden, errorBody("agentsOnly", "Only an agent says which cards it is working on."))
+		return
+	}
+	fields, ok := readBody(w, r)
+	if !ok {
+		return
+	}
+	clientID, ok := agentClientID(w, fields)
+	if !ok {
+		return
+	}
+	named, ok := stringListField(w, fields, "cardIds")
+	if !ok {
+		return
+	}
+
+	cards := []string{}
+	for _, name := range named {
+		// A card written out by hand may arrive in capitals and names the
+		// same card.
+		id := strings.ToLower(name)
+		if !uuidPattern.MatchString(id) {
+			continue
+		}
+		if _, _, card := s.visibleCard(id, person); card == nil {
+			continue
+		}
+		cards = append(cards, id)
+	}
+
+	s.atWork = slices.DeleteFunc(s.atWork, func(row AtWork) bool {
+		return row.AgentID == person.ID && row.ClientID == clientID
+	})
+	for _, card := range cards {
+		s.atWork = append(s.atWork, AtWork{AgentID: person.ID, ClientID: clientID, CardID: card, LastSeenAt: s.now})
+	}
+
+	// 204 and no body, not even a content type.
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// agentClientID reads which client of an agent is speaking. A name that is too
+// long or carries anything else is refused rather than read as the client that
+// names none: two clients quietly sharing one set of cards is the mix-up the
+// field is there to prevent.
+func agentClientID(w http.ResponseWriter, fields map[string]any) (string, bool) {
+	named, ok := stringField(w, fields, "clientId")
+	if !ok {
+		return "", false
+	}
+	if named == nil || *named == "" {
+		return "", true
+	}
+	if !clientIDPattern.MatchString(*named) {
+		malformed(w, fmt.Sprintf("The field \"clientId\" takes at most %d letters, digits, \".\", \"-\" and \"_\".", maxClientIDLength))
+		return "", false
+	}
+	return *named, true
+}
+
+// AtWorkOf is the set one client of an agent last said it is working on.
+func (s *Server) AtWorkOf(agentID, clientID string) []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	cards := []string{}
+	for _, row := range s.atWork {
+		if row.AgentID == agentID && row.ClientID == clientID {
+			cards = append(cards, row.CardID)
+		}
+	}
+	slices.Sort(cards)
+	return cards
+}
+
+// CardsAtWork is every card somebody is at work on, whoever said so.
+func (s *Server) CardsAtWork() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	cards := []string{}
+	for _, row := range s.atWork {
+		if !slices.Contains(cards, row.CardID) {
+			cards = append(cards, row.CardID)
+		}
+	}
+	slices.Sort(cards)
+	return cards
 }
 
 // kindOf says what sort of being somebody is: an account that acts for a human
