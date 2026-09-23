@@ -383,3 +383,18 @@ the record is in the bundle or not; any other link stays a link.
 the rest, so marking more loses nothing and marking less loses a reference.
 **Implemented as:** `Extractor.referenceTo`, `links`, see
 [Importing](stable/import.md).
+
+<a id="c-033"></a>
+## C-033 — The bytes of a file follow a redirect, the token does not
+
+*Applies to: `GET /uploads/{blobId}/{variant}`*
+
+This one request follows up to five redirects, because a store that keeps the
+bytes answers with an address of its own. The `Authorization` header comes off
+for every address that is not the host signed in to, and such an address has to
+be https. Every request carrying JSON still follows nothing.
+
+**Why:** Go keeps the header within a domain, a host below it included, so
+relying on it would hand the token to a neighbour of our own host.
+**Implemented as:** `api.Client.followTheBytes`, see
+[Token, hosts and requests](stable/security.md).
