@@ -110,8 +110,9 @@ func TestImportBasecampWritesABundleAndReportsWhatItHolds(t *testing.T) {
 			map[string]any{"kind": "vault", "enabled": true, "count": float64(1)},
 		},
 		"missingFiles": []any{}, "invalidAddresses": []any{}, "peopleLeftOut": float64(3),
-		"cardsByStatus": map[string]any{"active": float64(0), "archived": float64(0), "trashed": float64(0)},
-		"cardsOnHold":   float64(0), "cardsLeftOut": float64(0), "commentsTrashed": float64(0),
+		"creatorProbesRefused": float64(0),
+		"cardsByStatus":        map[string]any{"active": float64(0), "archived": float64(0), "trashed": float64(0)},
+		"cardsOnHold":          float64(0), "cardsLeftOut": float64(0), "commentsTrashed": float64(0),
 		"mentionsUnresolved": float64(0), "filesInBodies": float64(0), "filesDropped": float64(0), "linkPreviews": float64(0), "picturesLinked": float64(0), "embeds": float64(0), "embedsLeftOut": float64(0),
 		"filesExpected": float64(0), "filesBytesExpected": float64(0), "filesBytes": float64(0), "filesFetched": float64(0), "filesReused": float64(0),
 		"filesGone": float64(0), "fileNamesChanged": float64(0), "captionsDropped": float64(0), "filesOfSeveralOwners": float64(0),
@@ -1492,5 +1493,32 @@ func TestImportBasecampReportsTheLinksThatBecameReferences(t *testing.T) {
 	expectCode(t, r, ExitOK)
 	if strings.Contains(r.stdout, "references") {
 		t.Errorf("a run without a reference shows a line for them:\n%s", r.stdout)
+	}
+}
+
+func TestAToolTheIdentityMayNotSeeIsSaidToBePassedOver(t *testing.T) {
+	for _, mode := range [][]string{{"--json"}, {"--styled"}} {
+		e := newImportEnv(t)
+		for _, path := range []string{"buckets/7001/todosets/9005.json", "buckets/7001/schedules/9006.json"} {
+			e.account.Fail[path] = &basecamp.Error{Kind: basecamp.Forbidden, Message: "Basecamp forbids it"}
+		}
+		out := filepath.Join(t.TempDir(), "bundle")
+
+		r := e.run(append([]string{"import", "basecamp", "--project", "7001", "--out", out}, mode...)...)
+		expectCode(t, r, ExitOK)
+		output := r.stdout + r.stderr
+		if !strings.Contains(output, "2 tools of projects could not be asked who created their project") {
+			t.Errorf("%v: no notice says that tools were refused:\n%s", mode, output)
+		}
+		if mode[0] == "--styled" && !strings.Contains(r.stdout, "asked for the creator of a project and passed over: 2") {
+			t.Errorf("the text:\n%s", r.stdout)
+		}
+	}
+
+	e := newImportEnv(t)
+	env, r := e.runJSON("import", "basecamp", "--project", "7001", "--out", filepath.Join(t.TempDir(), "bundle"))
+	expectCode(t, r, ExitOK)
+	if strings.Contains(env.Notice, "could not be asked who created") {
+		t.Errorf("a run that met no refusal says one: %q", env.Notice)
 	}
 }

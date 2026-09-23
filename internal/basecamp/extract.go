@@ -98,6 +98,10 @@ type Result struct {
 	// PeopleLeftOut counts the people of the account nothing in the bundle
 	// refers to, who are therefore not in it.
 	PeopleLeftOut int
+	// CreatorProbesRefused counts the dock entries asked for the creator of a
+	// project that Basecamp refused the identity. They are passed over, so a
+	// project may come without a creator it would otherwise have.
+	CreatorProbesRefused int
 	// CardsByStatus counts the cards of the bundle: active, archived, trashed.
 	CardsByStatus map[string]int
 	// CardsOnHold counts the cards that were set aside within their column.
@@ -150,6 +154,9 @@ type Extractor struct {
 	apiRoot string
 	skipped map[skippedKey]int
 	missing []MissingFile
+	// creatorProbesRefused counts the dock entries asked for the creator of a
+	// project that the identity may not see.
+	creatorProbesRefused int
 	// talks are the message boards and chats of the projects walked so far.
 	talks []talk
 
@@ -207,6 +214,7 @@ func (e *Extractor) Extract(ctx context.Context, projectIDs []string, w *bundle.
 	e.people = newRegistry()
 	e.skipped = map[skippedKey]int{}
 	e.missing = []MissingFile{}
+	e.creatorProbesRefused = 0
 	e.account, e.apiRoot = "", ""
 	e.cardsByStatus = map[string]int{bundle.StatusActive: 0, bundle.StatusArchived: 0, bundle.StatusTrashed: 0}
 	e.cardsOnHold, e.cardsLeftOut, e.commentsTrashed, e.bodies = 0, 0, 0, BodyCounts{}
@@ -260,16 +268,17 @@ func (e *Extractor) Extract(ctx context.Context, projectIDs []string, w *bundle.
 		}
 	}
 	return Result{
-		SourceInstance:   e.account,
-		Skipped:          e.skippedTools(),
-		Avatars:          avatars,
-		Missing:          e.missing,
-		InvalidAddresses: e.people.invalidAddresses(),
-		PeopleLeftOut:    e.people.leftOut(),
-		CardsByStatus:    e.cardsByStatus,
-		CardsOnHold:      e.cardsOnHold,
-		CardsLeftOut:     e.cardsLeftOut,
-		CommentsTrashed:  e.commentsTrashed,
+		SourceInstance:       e.account,
+		Skipped:              e.skippedTools(),
+		Avatars:              avatars,
+		Missing:              e.missing,
+		InvalidAddresses:     e.people.invalidAddresses(),
+		PeopleLeftOut:        e.people.leftOut(),
+		CreatorProbesRefused: e.creatorProbesRefused,
+		CardsByStatus:        e.cardsByStatus,
+		CardsOnHold:          e.cardsOnHold,
+		CardsLeftOut:         e.cardsLeftOut,
+		CommentsTrashed:      e.commentsTrashed,
 
 		PostsByStatus:      e.postsByStatus,
 		PostsLeftOut:       e.postsLeftOut,
@@ -344,7 +353,7 @@ func (e *Extractor) extractProject(ctx context.Context, id int64, w *bundle.Writ
 	var made []recording
 	var others []dockEntry
 	dock := append([]dockEntry(nil), p.Dock...)
-	sort.Slice(dock, func(i, j int) bool { return dock[i].ID < dock[j].ID })
+	sort.SliceStable(dock, func(i, j int) bool { return dock[i].ID < dock[j].ID })
 	for _, entry := range dock {
 		if _, known := toolKinds[entry.Name]; !known || !entry.Enabled {
 			e.skipped[skippedKey{kind: entry.Name, enabled: entry.Enabled}]++
@@ -427,11 +436,19 @@ const (
 // is the creator of the project; a tool added later, by whomever, says
 // nothing. Without such a tool the project comes without a creator.
 //
-// The tools the run extracts are looked at first. Only when none of them was
-// made with the project are a few of the others asked for, those that are
-// switched off included, which answer like any other. They go in the order of
-// their IDs, which is the order they were made in, up to the first that
-// answers the question.
+// The tools the run extracts are looked at first, in the order of their IDs,
+// so that the oldest of them decides wherever several were made with the
+// project. Only when none of them answers are a few of the others asked for,
+// those that are switched off included, which answer like any other. They go
+// in the order of their IDs, which is the order they were made in, up to the
+// first that answers the question.
+//
+// Such a tool is a question on the side, not a record of the bundle: one that
+// is not there, and one the identity may not see, is passed over and the run
+// takes what the rest gives. A single entry somebody may not open says nothing
+// about the project, whereas an identity that may see nothing is refused where
+// the run asks for the people of the account and for the project itself. A
+// refusal that is passed over is counted, so that no run stays silent about it.
 func (e *Extractor) projectCreator(ctx context.Context, p project, extracted []recording, others []dockEntry) (*string, error) {
 	created, err := time.Parse(time.RFC3339Nano, p.CreatedAt)
 	if err != nil {
@@ -463,7 +480,10 @@ func (e *Extractor) projectCreator(ctx context.Context, p project, extracted []r
 		probes++
 		tool, err := getOne[recording](ctx, e.Source, path)
 		var failed *Error
-		if errors.As(err, &failed) && failed.Kind == NotFound {
+		if errors.As(err, &failed) && (failed.Kind == NotFound || failed.Kind == Forbidden) {
+			if failed.Kind == Forbidden {
+				e.creatorProbesRefused++
+			}
 			continue
 		}
 		if err != nil {
