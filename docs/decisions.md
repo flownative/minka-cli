@@ -428,3 +428,73 @@ through a worker of the application instead. Everything else comes through it
 either way.
 **Implemented as:** `api.Client.FileBytes`, which follows under the rules of
 [C-033](#c-033).
+
+<a id="c-036"></a>
+## C-036 — The cards being worked on are one list per machine
+
+*Applies to: `work start`, `work stop`, `work list`, `heartbeat`*
+
+They lie in `work.json` beside the configuration, read and written under a lock
+of the kernel, and every signal reports their union.
+
+**Why:** The server keeps one set per agent and client, so sessions with lists
+of their own would take each other's cards away with every signal.
+**Implemented as:** `internal/work`, see
+[Saying what you are working on](stable/at-work.md).
+
+<a id="c-037"></a>
+## C-037 — The client of an agent is a name that means nothing
+
+*Applies to: the field `clientId` of every signal*
+
+It is made once at random and kept in the configuration, never the host name
+and nothing about the machine or the person.
+
+**Why:** It travels into Minka's database and its logs, where a host name would
+say who sits at which machine for as long as those are kept.
+**Implemented as:** `config.NewClientID`, `config.File.ClientID`, see
+[Saying what you are working on](stable/at-work.md).
+
+<a id="c-038"></a>
+## C-038 — The signal never disturbs the work it runs in
+
+*Applies to: `heartbeat`*
+
+It exits 0 whatever happens, says nothing unless asked, and where nothing is
+remembered it asks nothing of the network at all.
+
+**Why:** It runs after every tool call, and an expired token, a host that is
+down or a person's token is nothing the agent could act on from there.
+**Implemented as:** `cli.app.signal`, see
+[Saying what you are working on](stable/at-work.md).
+
+<a id="c-039"></a>
+## C-039 — The settings of Claude Code are added to, or left alone
+
+*Applies to: `hooks install`*
+
+Everything the file holds is kept, a hook that is already there is not written
+twice, and a file shaped otherwise than Claude Code writes it is refused with
+the entry to add by hand.
+
+**Why:** That file belongs to whoever wrote it, and a command that mangles it
+is worse than one that refuses. **Implemented as:** `cli.addHeartbeatHook`,
+`heartbeatHookIn`, see [Saying what you are working on](stable/at-work.md).
+
+<a id="c-040"></a>
+## C-040 — A card nobody starts again is given up after eight hours
+
+*Applies to: the list of `internal/work`*
+
+A card is dropped when it has stood eight hours without a `work start` of its
+own. Nothing of the contract asks for this; the server forgets a card three
+minutes after the last signal, and this is the client's own rule.
+
+**Why:** A session that dies says nothing more about its cards, and every other
+session on the machine would keep reporting them for as long as it runs. Eight
+hours is a working day: long enough for the work itself, short enough that
+nothing glows through the night. It hangs on the moment a card was started, so
+it can cut a long piece of work short as well — `work start` again says that
+the card is still the one.
+**Implemented as:** `work.Host.ForgetWhatRanOut`, see
+[Saying what you are working on](stable/at-work.md).
