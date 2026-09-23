@@ -497,6 +497,10 @@ minka cards edit <cardId> --description - --description-format html < text.html
   none; `notice` says how many. The run still exits 0 and running it again
   changes nothing: only somebody with access to the account can repair the
   address there. Never look the address up to quote it.
+- `data.creatorProbesRefused` counts the tools asked for who created a project
+  that Basecamp refuses this identity. They are passed over and a `notice`
+  says how many: the run exits 0, and a project may come without a creator
+  because of it. An identity that may see nothing at all still exits 4.
 - So far a bundle holds the structure, the boards, the message boards and the
   chats: the people the projects refer to (members and whoever a record
   names; `data.peopleLeftOut` counts the rest of the account's list, which

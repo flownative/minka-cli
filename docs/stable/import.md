@@ -214,11 +214,20 @@ on: those of cards, those of posts, those of lines.
   that was made within five seconds after the project
   (`projectCreationWindow`), compared as moments; a tool somebody added later
   never names the creator, and without such a tool `createdBy` is `null`. The
-  tools the run extracts are looked at first. Only when none of them answers
-  are up to three others asked for (`maxCreatorProbes`), those that are
-  switched off included, in the order of their IDs, which is the order they
-  were made in, and only until one answers. Such a tool that is not there, or
-  that lies outside the account, is passed over. The creator comes into the
+  tools the run extracts are looked at first, in the order of their IDs,
+  which is the order they were made in, so that the oldest of them decides
+  where several were made with the project and name different people. Only
+  when none of them answers are up to three others asked for
+  (`maxCreatorProbes`), those that are switched off included, in the same
+  order, and only until one answers; a refusal counts like an answer and uses
+  one of the three up, so a tool behind it is never reached. Such a tool that
+  is not there, that lies outside the account, or that the identity may not
+  see, is passed over: one entry somebody may not open says nothing about the
+  project, and the run takes what the rest gives. A refusal is counted
+  (`creatorProbesRefused`) and a `notice` says so, because the project may
+  come without a creator for it. An identity that may see nothing at all is
+  refused where the people of the account, the project and its members are
+  asked for, which ends the run as it always did. The creator comes into the
   bundle like anybody a record names.
   The description is plain text there and HTML in the bundle: escaped, a
   paragraph per block, a `<br>` per line break.
@@ -712,11 +721,11 @@ files of its texts the same way.
   not look at what a run could take over. It needs no `--out`; given one, it
   checks it the way the real run does, so the refusal shows beforehand.
 - The report carries `counts` as the manifest has them, `avatars`,
-  `skippedTools`, `missingFiles`, `cardsByStatus`, `cardsOnHold`,
-  `cardsLeftOut`, `commentsTrashed`, `postsByStatus`, `postsLeftOut`,
-  `postsWithEmptyBody`, `messagesByType` (`text`, `richText`, `upload`,
-  `integration`), `messagesWithEmptyBody`, `uploadLinesLeftOut`, `parts` as
-  the manifest has them, `mentionsUnresolved`, `filesInBodies`,
+  `skippedTools`, `missingFiles`, `creatorProbesRefused`, `cardsByStatus`,
+  `cardsOnHold`, `cardsLeftOut`, `commentsTrashed`, `postsByStatus`,
+  `postsLeftOut`, `postsWithEmptyBody`, `messagesByType` (`text`, `richText`,
+  `upload`, `integration`), `messagesWithEmptyBody`, `uploadLinesLeftOut`,
+  `parts` as the manifest has them, `mentionsUnresolved`, `filesInBodies`,
   `filesDropped`, `filesExpected`, `filesBytesExpected`, `filesBytes`,
   `filesFetched`, `filesReused`, `filesGone`, `fileNamesChanged`,
   `captionsDropped`, `filesOfSeveralOwners`, `linkPreviews`,
@@ -728,7 +737,7 @@ files of its texts the same way.
   and `messages`, in characters: whoever sets the limits of where a bundle
   goes has to know it. `requestsRetried` is a number, 0 for a run that met no
   failure; the text shows its line only when it is more, and so it does for
-  `embeds`, `embedsLeftOut` and `references`.
+  `creatorProbesRefused`, `embeds`, `embedsLeftOut` and `references`.
   No output names a title, a person or what stands in a text.
 - A run prints nothing while it goes on, in any mode: the output contract
   knows results, warnings and errors only.
