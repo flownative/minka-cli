@@ -52,6 +52,16 @@ when files could not be fetched (C-025).
 failed write may have arrived; there the `hint` advises reading the state back
 (C-012).
 
+## When the answer is a file
+
+`uploads download` fetches bytes, and bytes are no envelope. They go to disk,
+and the envelope says what happened: `data` is `{file, variant, path,
+byteSize}`, where `file` is the resource of the API unchanged and the three
+others are what the CLI did with it. With `-o -` the bytes themselves are the
+answer, so standard output carries them alone and the word about them goes to
+stderr; `--json` and `--quiet` are refused there, because standard output
+cannot carry two answers at once.
+
 ## Commands
 
 Plural group plus action (`cards move`, `comments react`). A command that
