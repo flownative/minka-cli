@@ -77,7 +77,8 @@ fine), `commentNotReadable`, `cardDueDateNotADate`, `personNotAProjectMember`, `
 `stepMissing`, `stepTooLong`, `stepHasControlCharacters`, `stepCompletedMissing`,
 `chatMessageMissing`, `chatMessageTooLong`, `chatMessageHasControlCharacters`,
 `chatMessageNotReadable`, `chatMessageDraftNotAnIdentifier`, `chatMessagesLimitNotANumber`,
-`chatReadSeqMissing`, `nothingToChange`, `columnIdMissing`, `onHoldEnabledMissing`, `malformedBody`,
+`chatReadSeqMissing`, `nothingToChange`, `columnIdMissing`, `onHoldEnabledMissing`,
+`columnHasNoOnHoldArea`, `systemColumnHasNoOnHoldArea`, `malformedBody`,
 `unsupportedMediaType`, `projectArchived`.
 
 Minka answers everything you may not see with 404, never 403, so exit 4 is
@@ -245,11 +246,13 @@ such as `Doing`.
 - `columns on-hold <column>` switches the area on, `--off` switches it off and
   hands its cards back to the end of the column, in the order they stood on
   hold. Without `--board`, `<column>` has to be its ID. A system column exits
-  1 with `--board` and 2 without.
+  9 with `meta.apiCode` `systemColumnHasNoOnHoldArea`, on and off alike.
 - `cards move <cardId> --column <column> --on-hold` puts a card on hold; the
-  placement flags then place it among the cards on hold. A column without the
-  area exits 1 before anything is sent. A move without `--on-hold` takes a
-  card off hold, also within its own column.
+  placement flags then place it among the cards on hold. A column of the board
+  that has no such area exits 9 with `meta.apiCode` `columnHasNoOnHoldArea`,
+  Triage, Not now and Done among them: on a move that code is the answer, not
+  `systemColumnHasNoOnHoldArea`. A move without `--on-hold` takes a card off
+  hold, also within its own column.
 - A card cannot be created on hold, by design: it comes into being in a
   column and goes on hold by a move. A card restored
   from the trash comes back off hold.

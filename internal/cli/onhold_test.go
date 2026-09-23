@@ -9,6 +9,9 @@ import (
 	"github.com/flownative/minka-cli/internal/api"
 )
 
+// unknownID is a well-formed identifier that names nothing in the fixture.
+const unknownID = "00000000-0000-4000-8000-000000000000"
+
 // switchOnHold gives Doing its area for cards on hold, the way a person would.
 func switchOnHold(e *testEnv) {
 	e.t.Helper()
@@ -153,8 +156,8 @@ func TestMoveWithoutOnHoldTakesACardOffHold(t *testing.T) {
 	}
 }
 
-// The server answers a move onto hold into a column without the area with a
-// 404, which reads as a card that is gone; the CLI says what is missing.
+// A column of the card's board that carries no area on hold names its
+// refusal, and the hint says how the area is to be had where it can be had.
 func TestMoveOnHoldIntoAColumnWithoutTheAreaIsRefused(t *testing.T) {
 	for _, test := range []struct{ column, hint string }{
 		{"Doing", "minka columns on-hold "},
@@ -164,14 +167,34 @@ func TestMoveOnHoldIntoAColumnWithoutTheAreaIsRefused(t *testing.T) {
 		t.Run(test.column, func(t *testing.T) {
 			e := newTestEnv(t)
 			env, r := e.runJSON("", "cards", "move", e.fixture.CardInTriage.ID, "--column", test.column, "--on-hold")
-			expectCode(t, r, ExitUsage)
-			if !strings.Contains(env.Error, "no area for cards on hold") || !strings.Contains(env.Hint, test.hint) {
+			expectCode(t, r, ExitValidation)
+			if env.Meta["apiCode"] != "columnHasNoOnHoldArea" || env.Meta["httpStatus"] != float64(422) {
+				t.Errorf("meta %v", env.Meta)
+			}
+			if !strings.Contains(env.Error, "no area for the cards on hold") || !strings.Contains(env.Hint, test.hint) {
 				t.Errorf("error %q, hint %q", env.Error, env.Hint)
 			}
-			if len(e.server.WritingRequests()) != 0 {
-				t.Error("the card was moved")
+			card, _ := e.runJSON("", "cards", "show", e.fixture.CardInTriage.ID)
+			if decode(t, card.Data)["onHold"] != false {
+				t.Errorf("the card went on hold: %s", card.Data)
+			}
+			if cardIDs(columnOf(e, e.fixture.Triage.ID).Cards) != e.fixture.CardInTriage.ID {
+				t.Error("the card left Triage")
 			}
 		})
+	}
+}
+
+// A neighbour says where a card lands among the cards on hold, which answers
+// nothing where that area is not there: the refusal of the server does.
+func TestMoveOnHoldNextToACardWithoutTheAreaIsRefusedByTheServer(t *testing.T) {
+	e := newTestEnv(t)
+	f := e.fixture
+
+	env, r := e.runJSON("", "cards", "move", f.CardInTriage.ID, "--column", "Doing", "--on-hold", "--after", f.CardInDoing.ID)
+	expectCode(t, r, ExitValidation)
+	if env.Meta["apiCode"] != "columnHasNoOnHoldArea" {
+		t.Errorf("meta %v, error %q", env.Meta, env.Error)
 	}
 }
 
@@ -195,23 +218,26 @@ func TestMoveNextToACardInTheOtherAreaIsRefused(t *testing.T) {
 	}
 }
 
-// The server answers a system column like one that does not exist.
+// Triage, Not now and Done carry no area for the cards on hold and say so,
+// whether it is to be switched on or off, by their title and by their ID.
 func TestColumnsOnHoldRefusesASystemColumn(t *testing.T) {
 	e := newTestEnv(t)
 
 	env, r := e.runJSON("", "columns", "on-hold", "done", "--board", e.fixture.Board.ID)
-	expectCode(t, r, ExitUsage)
-	if !strings.Contains(env.Hint, "Only a working column") {
-		t.Errorf("hint %q", env.Hint)
+	expectCode(t, r, ExitValidation)
+	if env.Meta["apiCode"] != "systemColumnHasNoOnHoldArea" || env.Meta["httpStatus"] != float64(422) {
+		t.Errorf("meta %v", env.Meta)
 	}
-	if len(e.server.WritingRequests()) != 0 {
-		t.Error("a request to switch was sent")
+	if !strings.Contains(env.Error, "carry no area for the cards on hold") {
+		t.Errorf("error %q", env.Error)
 	}
 
-	env, r = e.runJSON("", "columns", "on-hold", e.fixture.Triage.ID)
-	expectCode(t, r, ExitNotFound)
-	if env.Meta["apiCode"] != "notFound" || !strings.Contains(env.Hint, "not a working column") {
-		t.Errorf("apiCode %v, hint %q", env.Meta["apiCode"], env.Hint)
+	for _, args := range [][]string{{}, {"--off"}} {
+		env, r = e.runJSON("", append([]string{"columns", "on-hold", e.fixture.Triage.ID}, args...)...)
+		expectCode(t, r, ExitValidation)
+		if env.Meta["apiCode"] != "systemColumnHasNoOnHoldArea" {
+			t.Errorf("%v: meta %v", args, env.Meta)
+		}
 	}
 	if columnOf(e, e.fixture.Triage.ID).OnHoldEnabled {
 		t.Error("Triage got an area on hold")
@@ -246,13 +272,25 @@ func TestColumnsOnHoldShowsTheWayToTheBoard(t *testing.T) {
 	}
 }
 
+// A column nobody may see, and one that is not there at all, stay the 404 an
+// address that names nothing gets: neither hears of an area on hold.
 func TestColumnsOnHoldOfAForeignColumnIsNotFound(t *testing.T) {
 	e := newTestEnv(t)
 	foreign := e.fixture.OtherBoard.Columns[0]
 	foreign.Type = api.ColumnWork
 
-	_, r := e.runJSON("", "columns", "on-hold", foreign.ID)
-	expectCode(t, r, ExitNotFound)
+	for _, columnID := range []string{foreign.ID, unknownID} {
+		env, r := e.runJSON("", "columns", "on-hold", columnID)
+		expectCode(t, r, ExitNotFound)
+		if env.Meta["apiCode"] != "notFound" {
+			t.Errorf("%s: meta %v", columnID, env.Meta)
+		}
+		// The hint is the help here: it names what such an answer can mean,
+		// and a system column is no longer one of the meanings.
+		if env.Hint != "It does not exist or belongs to a project you are not a member of." {
+			t.Errorf("%s: hint %q", columnID, env.Hint)
+		}
+	}
 	if foreign.OnHoldEnabled {
 		t.Error("a column of another project got an area on hold")
 	}
@@ -328,8 +366,42 @@ func TestTheFakeRefusesAnOnHoldSwitchThatSaysNothing(t *testing.T) {
 	if status, code := sendRaw(e, http.MethodPost, moves, `{"columnId":"`+f.Doing.ID+`","onHold":1}`); status != 400 || code != "malformedBody" {
 		t.Errorf("a number for onHold: %d %s", status, code)
 	}
-	if status, _ := sendRaw(e, http.MethodPost, moves, `{"columnId":"`+f.Doing.ID+`","onHold":true}`); status != 404 {
-		t.Errorf("onto hold without the area: %d", status)
+	if status, code := sendRaw(e, http.MethodPost, moves, `{"columnId":"`+f.Doing.ID+`","onHold":true}`); status != 422 || code != "columnHasNoOnHoldArea" {
+		t.Errorf("onto hold without the area: %d %s", status, code)
+	}
+}
+
+// The refusal speaks only of a column the card could have gone to. A column
+// on another board and one that is not there at all stay the 404 an address
+// that names nothing gets, whatever they carry.
+func TestTheFakeSendsAColumnBeyondTheBoardNowhere(t *testing.T) {
+	e := newTestEnv(t)
+	f := e.fixture
+	moves := "/cards/" + f.CardInTriage.ID + "/moves"
+
+	for _, columnID := range []string{f.OtherBoard.Columns[0].ID, unknownID} {
+		status, code := sendRaw(e, http.MethodPost, moves, `{"columnId":"`+columnID+`","onHold":true}`)
+		if status != 404 || code != "notFound" {
+			t.Errorf("%s: %d %s", columnID, status, code)
+		}
+	}
+	if columnOf(e, f.Triage.ID).Cards[0].ID != f.CardInTriage.ID {
+		t.Error("the card left Triage")
+	}
+}
+
+// The column that carries no area names the refusal of a move onto hold,
+// whatever else the move got wrong: a neighbour that is no identifier is
+// answered with the case, not with the address that names nothing.
+func TestTheFakeNamesTheMissingAreaBeforeANeighbourThatIsNoIdentifier(t *testing.T) {
+	e := newTestEnv(t)
+	f := e.fixture
+
+	status, code := sendRaw(e, http.MethodPost, "/cards/"+f.CardInTriage.ID+"/moves",
+		`{"columnId":"`+f.Doing.ID+`","onHold":true,"previousCardId":"nope"}`)
+
+	if status != 422 || code != "columnHasNoOnHoldArea" {
+		t.Errorf("%d %s", status, code)
 	}
 }
 

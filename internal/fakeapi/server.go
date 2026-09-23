@@ -953,16 +953,21 @@ func (s *Server) moveCard(w http.ResponseWriter, r *http.Request, person *Person
 			to = c
 		}
 	}
+	// A column of the board that carries no area on hold names its refusal,
+	// and it names it before anything else the move got wrong. A column on
+	// another board or on none stays an address that names nothing.
+	toHold := onHold != nil && *onHold
+	if toHold && to != nil && !to.OnHoldEnabled {
+		unprocessable(w, "columnHasNoOnHoldArea", "This column has no area for the cards on hold.")
+		return
+	}
 	for _, id := range []*string{previousID, nextID} {
 		if id != nil && *id != "" && !uuidPattern.MatchString(*id) {
 			notFound(w)
 			return
 		}
 	}
-	// A column without an area on hold answers a move onto hold the way a
-	// column that does not exist does.
-	toHold := onHold != nil && *onHold
-	if to == nil || toHold && !to.OnHoldEnabled {
+	if to == nil {
 		notFound(w)
 		return
 	}
@@ -1010,8 +1015,8 @@ func placeInArea(cards []*Card, onHold bool, position, previousID, nextID *strin
 
 // setColumnOnHold switches the area for cards on hold of a working column.
 // Switching it off hands its cards back to the end of the column, in the
-// order they stood on hold. Triage, Not now and Done answer like a column
-// that does not exist.
+// order they stood on hold. Triage, Not now and Done name their refusal,
+// on and off alike.
 func (s *Server) setColumnOnHold(w http.ResponseWriter, r *http.Request, person *Person) {
 	fields, ok := readBody(w, r)
 	if !ok {
@@ -1035,7 +1040,7 @@ func (s *Server) setColumnOnHold(w http.ResponseWriter, r *http.Request, person 
 		return
 	}
 	if column.Type != "column" {
-		notFound(w)
+		unprocessable(w, "systemColumnHasNoOnHoldArea", "Triage, Not now and Done carry no area for the cards on hold.")
 		return
 	}
 
