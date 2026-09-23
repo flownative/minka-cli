@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/flownative/minka-cli/internal/api"
 	"github.com/spf13/cobra"
 )
 
@@ -56,15 +55,6 @@ such as "Doing".`,
 				if err != nil {
 					return err
 				}
-				// The server answers a system column like one that does not
-				// exist, which would send somebody looking for a wrong ID.
-				if target.Type != api.ColumnWork {
-					return &Error{
-						Code:    CodeUsage,
-						Message: fmt.Sprintf("%s cannot have an area for cards on hold", target.Title),
-						Hint:    "Only a working column can have one.",
-					}
-				}
 				column = target.ID
 			}
 
@@ -72,7 +62,7 @@ such as "Doing".`,
 			if err != nil {
 				e := s.fail(err)
 				if e.Code == CodeNotFound {
-					e.Hint = "It does not exist, is not a working column (Triage, Not now and Done have no area on hold), or belongs to a project you are not a member of."
+					e.Hint = "It does not exist or belongs to a project you are not a member of."
 				}
 				return e
 			}

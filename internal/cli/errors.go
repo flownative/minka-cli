@@ -93,6 +93,10 @@ func usageErrorf(cmd *cobra.Command, format string, args ...any) *Error {
 // archived project.
 const apiCodeProjectArchived = "projectArchived"
 
+// apiCodeColumnHasNoOnHoldArea is what Minka answers a move onto hold into a
+// column of the card's board that carries no area for the cards on hold.
+const apiCodeColumnHasNoOnHoldArea = "columnHasNoOnHoldArea"
+
 // apiError classifies a failed request.
 //
 // Only a failed read is retryable. A write can have been applied before the
