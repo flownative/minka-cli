@@ -59,10 +59,14 @@ before any byte travels.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// The bytes are the answer here, so standard output carries them
 			// and nothing else. A caller that asked for an envelope there
-			// asked for two answers in one stream.
+			// asked for two answers in one stream; from here on everything
+			// this command has to say, a failure included, goes the other way.
 			toStandardOutput := out == "-"
-			if toStandardOutput && (a.jsonFlag || a.quietFlag) {
-				return usageErrorf(cmd, "-o - puts the bytes on standard output, where --json and --quiet put their own answer")
+			if toStandardOutput {
+				if a.jsonFlag || a.quietFlag {
+					return usageErrorf(cmd, "-o - puts the bytes on standard output, where --json and --quiet put their own answer")
+				}
+				a.bytesAreTheOutput = true
 			}
 
 			s, err := a.session()
@@ -102,8 +106,11 @@ before any byte travels.`,
 			fetched, err := s.client.FileBytes(a.ctx, args[0], wanted.Name)
 			if err != nil {
 				e := s.fail(err)
-				if e.APICode == apiCodeVariantNotAvailable {
+				switch e.APICode {
+				case apiCodeVariantNotAvailable:
 					e.Hint = "The rendering was gone by the time the bytes were asked for. Fetch the original instead: --variant original"
+				case api.CodeRedirectRefused:
+					e.Hint = "The file is served from another address, and only an https one is followed there. Whoever runs " + s.host + " can say where its files come from."
 				}
 				return e
 			}
@@ -114,11 +121,15 @@ before any byte travels.`,
 				return err
 			}
 			if written != wanted.ByteSize {
+				kept := "Nothing was kept."
+				if toStandardOutput {
+					kept = "What arrived is on standard output already and is not the whole file."
+				}
 				return &Error{
 					Code: CodeAPI,
 					Message: fmt.Sprintf("%s sent %s of %s where the file says %s",
 						s.host, fileSize(written), file.Value.Filename, fileSize(wanted.ByteSize)),
-					Hint: "Nothing was kept. Try again; if it repeats, the file on the server is not what it says it is.",
+					Hint: kept + " Try again; if it repeats, the file on the server is not what it says it is.",
 				}
 			}
 
@@ -129,27 +140,26 @@ before any byte travels.`,
 			summary := fmt.Sprintf("Fetched %s (%s, %s, %s) to %s",
 				file.Value.Filename, wanted.Name, wanted.ContentType, fileSize(written), where)
 
-			// With the bytes on standard output there is no room for an
-			// answer beside them, so the word about them goes to standard
-			// error whatever the output mode is.
+			data := map[string]any{
+				"file":     file.Raw,
+				"variant":  wanted.Name,
+				"path":     pathOrNothing(target),
+				"byteSize": written,
+			}
 			if toStandardOutput {
-				if notice := a.staleSkillNotice(); notice != "" {
-					a.warn([]string{notice})
-				}
-				fmt.Fprintf(a.stderr, "%s.\n", summary)
-				return nil
+				data["path"] = nil
 			}
 
 			return a.ok(success{
-				data: map[string]any{
-					"file":     file.Raw,
-					"variant":  wanted.Name,
-					"path":     pathOrNothing(target),
-					"byteSize": written,
-				},
+				data:        data,
 				summary:     summary,
 				breadcrumbs: renderingBreadcrumbs(file.Value, wanted.Name),
 				text: func(w io.Writer) {
+					// Standard output carries the bytes, so the word about
+					// them goes the other way.
+					if toStandardOutput {
+						w = a.stderr
+					}
 					fmt.Fprintf(w, "%s.\n", summary)
 				},
 			})
@@ -181,13 +191,23 @@ func (a *app) writeTheBytes(target string, toStandardOutput, force bool, byteSiz
 		return written, nil
 	}
 
-	flags := os.O_WRONLY | os.O_CREATE | os.O_EXCL
+	if entry, err := os.Lstat(target); err == nil && entry.IsDir() {
+		return 0, &Error{Code: CodeUsage, Message: fmt.Sprintf("%s is a directory, not a file", target)}
+	}
+	// The name of the file comes out of an answer, so the server has a say in
+	// which entry of this directory is meant. --force therefore takes that
+	// entry away first — the link itself, never what it points at — and the
+	// bytes then land in a file of this command's own making, as they do
+	// without --force: created and nothing else, so that a link is never
+	// written through and the mode below is the mode the file really has.
 	if force {
-		flags = os.O_WRONLY | os.O_CREATE | os.O_TRUNC
+		if err := os.Remove(target); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			return 0, &Error{Code: CodeUsage, Message: fmt.Sprintf("cannot replace %s: %v", target, err)}
+		}
 	}
 	// The file comes out of a project only its members see, and it is written
 	// so that it stays that way.
-	file, err := os.OpenFile(target, flags, 0o600)
+	file, err := os.OpenFile(target, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
 	if err != nil {
 		e := &Error{Code: CodeUsage, Message: fmt.Sprintf("cannot write %s: %v", target, err)}
 		if errors.Is(err, fs.ErrExist) {

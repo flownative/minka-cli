@@ -48,8 +48,14 @@ const (
 
 // format decides between text and JSON. Without a flag, a terminal gets text
 // and anything else, such as an agent reading the output, gets JSON.
+//
+// Where the bytes of a file are the output, nothing may be written beside
+// them: the answer is then a line of text, and the command sends it to
+// standard error itself.
 func (a *app) format() format {
 	switch {
+	case a.bytesAreTheOutput:
+		return formatText
 	case a.quietFlag:
 		return formatQuiet
 	case a.jsonFlag:
@@ -114,7 +120,7 @@ func (a *app) fail(e *Error) {
 	}
 
 	a.warn(e.Notices)
-	if e.Text != nil {
+	if e.Text != nil && !a.bytesAreTheOutput {
 		e.Text(a.stdout)
 	}
 	message := e.Message

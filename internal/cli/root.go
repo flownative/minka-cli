@@ -67,6 +67,11 @@ type app struct {
 	// skillIsTheTopic is set by a command that reports on the installed skill
 	// itself, so that it does not say the same thing twice.
 	skillIsTheTopic bool
+
+	// bytesAreTheOutput is set by a command that writes a file to standard
+	// output. Everything it has to say then goes to standard error, a failure
+	// included: half a file followed by an envelope is neither.
+	bytesAreTheOutput bool
 }
 
 // Signals are what ends a command early: Ctrl-C on a terminal, and the

@@ -73,11 +73,12 @@ accepted for loopback only. Other paths are refused.
   CLI reads at most 16 MB of a response; the bytes of a file are streamed to
   disk instead, and one byte more than the file says it weighs is read, so
   that an answer which does not stop is noticed rather than kept.
-- A file that is fetched is written with 0600 and never over a file that is
-  already there. The name out of an answer has to be a plain name: one
-  carrying `/` or `\`, or being `.` or `..`, is refused instead of cut down,
-  because it would lead somewhere other than where the command was run
-  (C-032).
+- A file that is fetched is created with `O_EXCL` and 0600 and never written
+  over a file that is already there; `--force` takes that entry away first —
+  the link itself, never what it points at — and a directory under the name is
+  refused. The name out of an answer has to be a plain name: one carrying `/`
+  or `\`, or being `.` or `..`, is refused instead of cut down, because it
+  would lead somewhere other than where the command was run (C-032).
 - What the server is sure to refuse, the CLI refuses first: a file over 50
   MiB, a directory, a call without a circle. That saves a useless transfer and
   gives a clearer error (C-013).
