@@ -138,14 +138,19 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
 - A known limit of the files: a run that ends hard loses the files it
   fetched, because files are taken over from a bundle in place only. The
   first complete run over an account is the expensive one.
-- Cards on hold: `columns on-hold`, `cards move --on-hold`, the area and its
-  count in the board, the column and the card. Read in the Minka code and its
-  tests, not yet run live: that switching the area off hands the cards back
-  to the end of the column, that a neighbour from the other area places a
-  card at the top of its area, that a column of the board without the area
-  and a system column answer 422 with a code of their own while a foreign
-  column answers 404, and that a card restored from the trash comes back off
-  hold.
+- Of the cards on hold, two things. That a column of another board answers 404
+  needs an instance with a second board that may be written to, `columns
+  on-hold` finding a column wherever it stands. That the server puts a card
+  whose neighbour stands in the other area at the top of its own area is
+  reached by no call of the CLI, which refuses such a neighbour itself.
+  Everything else of the area is seen live: switching it on and off, by
+  the ID of the column and by its title with `--board`, a second switch that
+  changes nothing, a card put on hold and taken off again, three cards handed
+  back to the end of the column in the order they stood on hold, a placement
+  among the cards on hold, a card that comes back from the trash off hold, the
+  refusals of a working column without the area, of the system columns and of a
+  column that is not there, each with its code, and the area with its count in
+  the text view of the board and of the card.
 - The fake API knows no archived card, so what Minka answers a move of one is
   not mirrored: that an archived card is named before a column without the
   area on hold is read in the Minka code alone.
