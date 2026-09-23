@@ -1,6 +1,7 @@
 package basecamp_test
 
 import (
+	"errors"
 	"slices"
 	"testing"
 
@@ -179,6 +180,77 @@ func TestAToolThatCannotAnswerDoesNotEndTheRun(t *testing.T) {
 	extractor := basecamp.Extractor{Source: account, Avatars: account, Files: account}
 	if _, err := extractor.Extract(t.Context(), []string{"7001"}, bundle.Discard()); err == nil {
 		t.Error("a request that failed was passed over")
+	}
+}
+
+func forbidden() *basecamp.Error {
+	return &basecamp.Error{Kind: basecamp.Forbidden, Message: "Basecamp forbids it"}
+}
+
+func TestAToolThisIdentityMayNotSeeIsPassedOverAndCounted(t *testing.T) {
+	// The first of the others is refused and the second answers: the run goes
+	// on with what it can get, and says how often it was refused.
+	account := fakebasecamp.New()
+	account.Fail["buckets/7001/todosets/9005.json"] = forbidden()
+	account.Projects[0].Dock[5].CreatedAt = withTheProject
+	dir, result := extract(t, account, "7001")
+	if got := recordWithID(t, records(t, dir, bundle.Projects), "7001")["createdBy"]; got != "101" {
+		t.Errorf("created by %v, want 101", got)
+	}
+	if result.CreatorProbesRefused != 1 {
+		t.Errorf("%d refusals counted, want 1", result.CreatorProbesRefused)
+	}
+
+	// A refusal counts like an answer and uses up one of the three requests,
+	// so the tool behind them is never reached and the project comes without
+	// a creator it would otherwise have.
+	account = fakebasecamp.New()
+	account.Fail["buckets/7001/todosets/9005.json"] = forbidden()
+	account.Projects[0].Dock[7].CreatedAt = withTheProject
+	dir, result = extract(t, account, "7001")
+	if got := recordWithID(t, records(t, dir, bundle.Projects), "7001")["createdBy"]; got != nil {
+		t.Errorf("created by %v, want nobody: the refusal used up a request", got)
+	}
+	if result.CreatorProbesRefused != 1 {
+		t.Errorf("%d refusals counted, want 1", result.CreatorProbesRefused)
+	}
+	want := []string{"buckets/7001/card_tables/9007.json", "buckets/7001/schedules/9006.json", "buckets/7001/todosets/9005.json"}
+	if got := toolRequests(account); !slices.Equal(got, want) {
+		t.Errorf("asked for %v, want %v: the vault behind them is never reached", got, want)
+	}
+
+	// Every tool that could answer is refused: the project comes without a
+	// creator.
+	account = fakebasecamp.New()
+	for _, path := range []string{"buckets/7001/todosets/9005.json", "buckets/7001/schedules/9006.json", "buckets/7001/card_tables/9007.json"} {
+		account.Fail[path] = forbidden()
+	}
+	dir, result = extract(t, account, "7001")
+	if got := recordWithID(t, records(t, dir, bundle.Projects), "7001")["createdBy"]; got != nil {
+		t.Errorf("created by %v, want nobody", got)
+	}
+	if result.CreatorProbesRefused != 3 {
+		t.Errorf("%d refusals counted, want 3", result.CreatorProbesRefused)
+	}
+}
+
+// One entry somebody may not open says nothing about the project; an identity
+// that may see nothing at all is a refusal the run must not swallow.
+func TestARefusalOfAnythingButAToolAskedOnTheSideEndsTheRun(t *testing.T) {
+	for what, path := range map[string]string{
+		"the people of the account": "people.json",
+		"a project":                 "projects/7001.json",
+		"the members of a project":  "projects/7001/people.json",
+		"a tool of the bundle":      "buckets/7001/chats/9001.json",
+	} {
+		account := fakebasecamp.New()
+		account.Fail[path] = forbidden()
+		extractor := basecamp.Extractor{Source: account, Avatars: account, Files: account}
+		_, err := extractor.Extract(t.Context(), []string{"7001"}, bundle.Discard())
+		var failed *basecamp.Error
+		if !errors.As(err, &failed) || failed.Kind != basecamp.Forbidden {
+			t.Errorf("%s refused: got %v, want forbidden", what, err)
+		}
 	}
 }
 
