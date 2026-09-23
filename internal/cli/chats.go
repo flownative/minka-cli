@@ -425,6 +425,9 @@ func renderMessages(w io.Writer, messages []api.ChatMessage) {
 			header += " (edited)"
 		}
 		fmt.Fprintf(w, "%s\n%s\n", header, messageText(message))
+		if line := fileLine(message.Attachments); line != "" {
+			fmt.Fprintf(w, "%s\n", line)
+		}
 		if line := reactionLine(message.Reactions); line != "" {
 			fmt.Fprintf(w, "%s\n", line)
 		}

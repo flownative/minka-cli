@@ -384,6 +384,22 @@ the rest, so marking more loses nothing and marking less loses a reference.
 **Implemented as:** `Extractor.referenceTo`, `links`, see
 [Importing](stable/import.md).
 
+<a id="c-032"></a>
+## C-032 — A fetched file is written where it was named, over nothing
+
+*Applies to: `uploads download`*
+
+Without `-o` the file goes into the current directory under the name it has in
+Minka, which has to be a plain name; a file of that name that is already there
+stands, and `--force` replaces it. `-o -` makes the bytes the whole of standard
+output, which `--json` and `--quiet` are refused beside. What is written is
+0600, and what does not weigh what the file says is taken away again.
+
+**Why:** A command that fetches must not destroy anything, write where a name
+out of an answer leads, or mix two answers into one stream.
+**Implemented as:** `cli.newUploadsDownloadCmd`, `writeTheBytes`, see
+[Output](stable/output-contract.md).
+
 <a id="c-033"></a>
 ## C-033 — The bytes of a file follow a redirect, the token does not
 

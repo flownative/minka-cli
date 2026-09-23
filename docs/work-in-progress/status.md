@@ -11,6 +11,11 @@ steps, subscribers, comments, chats, private conversations, uploads,
 mentions, reactions and one's own cards across all projects. `minka
 commands` lists them all, built from the command tree itself.
 
+A file goes both ways: `uploads create` puts one in, `uploads download`
+fetches its bytes back. Every text says which files hang in it, so reading a
+card, a comment or a message gives the identifier a download takes, without
+anything being taken out of the text.
+
 `minka import basecamp` extracts the structure, the boards, the message
 boards and the chats of Basecamp projects into an import bundle for Minka's
 applier: people with avatars, projects with members, the boards, chats and
@@ -164,9 +169,26 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   area on hold is read in the Minka code alone.
 - "agent for X" in `people list` has been seen live, an agent that stepped
   down has not — it is in no list any more.
+- Of `uploads download`, everything: fetching a file has not been run live
+  yet. The fake decides from the longer side of a picture whether there is a
+  smaller rendering to show, as the server does, but what it renders is a
+  shorter run of bytes and no picture. Not mirrored: the entity tag and the
+  304 and 416 that go with it, the ranges a recording is played in, and that a
+  recording keeps its own media type where every other download leaves as an
+  octet stream. The CLI sends neither a range nor `If-None-Match`, so none of
+  it is reached from here.
+- That the bytes may come from a store of their own is shown for the client
+  alone, against servers of a test: the token stays behind, an address that is
+  not https is not followed, and five hops are the end. No command of the CLI
+  has ever fetched a file over a redirect — the fake can answer one, but no
+  test sets `StoreURL`, and a test that did would need a store speaking https.
+  It waits.
 
 ## Open in the API
 
+- A file may weigh 100 MiB, `uploads create` still refuses one over 50 MiB
+  before it travels and `security.md` says so. To be set right together.
+- Posts have `attachments` too, and the CLI has no commands for posts at all.
 - Renaming and reordering steps does not exist.
 - Paging Done beyond 25 cards does not exist; needed once dogfooding needs it.
 - Flow answers a wrong HTTP method with HTML instead of JSON.
