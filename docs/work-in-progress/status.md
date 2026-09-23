@@ -29,8 +29,9 @@ through the Basecamp CLI and is tested against the invented account in
 It has been run live, as a dry run and into a bundle outside the repository,
 under an identity that sees addresses, the posts and the chats included: all
 references of that bundle resolve and its parts are the ones its manifest
-names. The files and the embeds have been run live for both projects:
-every file fetched, every embed written, see below.
+names. The files, the embeds, the references and the mentions have been run
+live for both projects: every file fetched, every embed written, every
+reference and every mention as the format asks, see below.
 A run needs a Basecamp identity that may see the e-mail addresses of others,
 which is somebody of the account's own company or an admin. Under one that
 may not, masked addresses were seen live ending the run as `forbidden`. Only
@@ -111,13 +112,14 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   foreign address as links, and five parts of one chat each.
 - Of the files of `import basecamp`: a download that breaks off, a file
   whose size differs from what Basecamp says, a file that is gone, a name that
-  has to be changed, a caption too long, one file under two owners, and files
-  taken over from the bundle a run replaces, which no live run has done yet.
+  has to be changed, a caption too long, and one file under two owners.
   Seen live, in a bundle of both projects that was checked file by file,
   size and digest computed anew, and that Minka's `Build/verify-bundle.sh`
   passes: some 2,700 files of 6.1 GiB fetched in about an hour, none missing,
   the largest of 273 MiB, files dropped into a chat, files in posts and comments,
-  pictures, PDFs, videos and sound. That the Basecamp CLI asks for the path of
+  pictures, PDFs, videos and sound; and a run into a clone of that bundle,
+  which took 2,687 of its 2,688 files over and fetched the one that was new,
+  twenty minutes instead of an hour. That the Basecamp CLI asks for the path of
   an address without its escapes was read in its SDK, not seen.
 - Of the embeds of `import basecamp`: a frame that gets no tag, a caption in
   a figure, a frame outside a figure and broken markup. Seen live, in the
@@ -125,16 +127,21 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   and no embed of Basecamp left in a text. The rule of which address becomes
   a tag is read from Minka's `RichText::isEmbeddableUrl` and kept stricter
   where PHP reads a port more loosely.
-- Of the references of `import basecamp`: every rule of which link becomes an
-  `<import-reference>`. No run has written one yet. Read out of the bundle of
-  both projects, which has them as plain links: 93 links of the account to
-  46 cards, 33 messages and 14 lines of chats, at `3.basecamp.com` and at
-  `app.basecamp.com`, some with the anchor of a comment
-  (`#__recording_<id>`), a line as `chats/<chat>@<line>` and once as
-  `chats/<chat>/lines/<line>/options`; about half of their targets lie in the
-  bundle. No link to a chat itself, none of another account and no query
-  were seen. Minka's applier of references is still being built, and its
-  format documents do not name the tag yet.
+- Of the references of `import basecamp`: a link to a chat itself, one of
+  another account and one carrying a query. Seen live, in the bundle of both
+  projects, checked one by one against Minka's format: 93 references to 46
+  cards, 33 messages and 14 chats, each carrying `kind`, `ref` and the address
+  as it stood, plain text between the tags and nothing else; a line of a chat
+  points at the chat it stands in, `tools` stands for no board and no message
+  board, and no plain link to a card, a message or a chat of the account was
+  left behind. Of the 93, 39 point into projects the bundle does not carry:
+  Minka's applier makes those links again and counts them, so they are marked
+  all the same.
+- Of the mentions of `import basecamp`, now seen live in the same bundle: 784
+  of them, each with one `ref` that names somebody the bundle carries, and
+  between the tags the plain name of the account's list. Eight name somebody
+  who is no member of the project the text lives in, whom Minka's applier
+  turns back into plain words.
 - A known limit of the files: a run that ends hard loses the files it
   fetched, because files are taken over from a bundle in place only. The
   first complete run over an account is the expensive one.
@@ -174,8 +181,6 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
 - The bundle with the posts and the chats waits for Minka's appliers of
   posts and of chat lines; what those runs find comes back through the
   coordination.
-- A second run into a bundle that holds its files, to see them taken over
-  instead of fetched again.
 - Install through Homebrew once and play `minka setup` through by hand on a
   terminal: the release workflow has built a version and written the formula,
   but nobody has installed from it yet, and `setup` is covered by tests only.
