@@ -498,10 +498,13 @@ minka cards edit <cardId> --description - --description-format html < text.html
   about the file, `path` where the bytes were written, `byteSize` how many
   arrived.
 - `--variant` asks for one rendering. `original` is the file as it was
-  uploaded and is always there. `display` is the smaller rendering a wide
-  picture got — only `file.variants` says whether a file has one, so never
-  assume it. Asking for a rendering a file has not got exits 1 before any
-  byte travels and names the renderings it does have.
+  uploaded and is always there. `display` is the smaller rendering a large
+  picture got — only `variants` says whether a file has one, so never assume
+  it. There is no command that asks for `variants` alone: they stand in
+  `data.file.variants` of a download that worked, and a `--variant` the file
+  has not got exits 1 before any byte travels, with `hint` naming the ones it
+  does have. Fetching the original and reading `variants` off it is the way to
+  find out.
 - A file of a project or a conversation you are not in exits 2, the same
   answer an identifier that names nothing gives: the two cannot be told apart.
 - What arrives has to weigh what the file says it weighs. Anything else exits

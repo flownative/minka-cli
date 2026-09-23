@@ -385,20 +385,19 @@ the rest, so marking more loses nothing and marking less loses a reference.
 [Importing](stable/import.md).
 
 <a id="c-032"></a>
-## C-032 — A fetched file is written where it was named, over nothing
+## C-032 — A fetched file is one this command made itself
 
-*Applies to: `uploads download`*
+*Applies to: `uploads download`, the file it writes*
 
-Without `-o` the file goes into the current directory under the name it has in
-Minka, which has to be a plain name; a file of that name that is already there
-stands, and `--force` replaces it. `-o -` makes the bytes the whole of standard
-output, which `--json` and `--quiet` are refused beside. What is written is
-0600, and what does not weigh what the file says is taken away again.
+A name out of an answer has to be a plain name, and the bytes land in a file
+created with `O_EXCL` and 0600. A file of that name that is already there
+stands; `--force` takes the entry away first — the link itself, never what it
+points at — and a directory under that name is refused.
 
-**Why:** A command that fetches must not destroy anything, write where a name
-out of an answer leads, or mix two answers into one stream.
-**Implemented as:** `cli.newUploadsDownloadCmd`, `writeTheBytes`, see
-[Output](stable/output-contract.md).
+**Why:** The server has a say in which entry of the directory is meant, so
+nothing standing under that name may be followed, kept or destroyed.
+**Implemented as:** `cli.writeTheBytes`, see
+[Token, hosts and requests](stable/security.md).
 
 <a id="c-033"></a>
 ## C-033 — The bytes of a file follow a redirect, the token does not

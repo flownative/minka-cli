@@ -179,6 +179,107 @@ func TestTheLongerSideDecidesWhetherAPictureHasASecondRendering(t *testing.T) {
 	}
 }
 
+// The file comes out of a project only its members see, and it is written so
+// that it stays that way — on the way over an older file as much as on the
+// first one.
+func TestAFetchedFileIsReadableByItsOwnerAlone(t *testing.T) {
+	e := newTestEnv(t)
+	upload := e.uploaded(onePixelPNG(), "plan.png")
+	here := t.TempDir()
+	t.Chdir(here)
+
+	expectCode(t, e.run("", "uploads", "download", blobID(t, upload), "--json"), ExitOK)
+	expectMode(t, filepath.Join(here, "plan.png"), 0o600)
+
+	// A file that is already there is replaced by one of this command's own
+	// making, so the mode of the old one decides nothing.
+	loose := filepath.Join(here, "loose.png")
+	if err := os.WriteFile(loose, []byte("anybody may read this"), 0o666); err != nil {
+		t.Fatal(err)
+	}
+	expectCode(t, e.run("", "uploads", "download", blobID(t, upload), "-o", loose, "--force", "--json"), ExitOK)
+	expectMode(t, loose, 0o600)
+}
+
+// The name of the file comes out of an answer, so the server has a say in
+// which entry of the directory is written. A link under that name is taken
+// away, never followed: with --force it would otherwise write wherever the
+// link points, and outside the directory the command runs in.
+func TestForceReplacesALinkInsteadOfWritingThroughIt(t *testing.T) {
+	e := newTestEnv(t)
+	upload := e.uploaded(onePixelPNG(), "plan.png")
+	elsewhere := t.TempDir()
+	theirs := filepath.Join(elsewhere, "somebody-elses.txt")
+	mine := []byte("something of my own")
+	if err := os.WriteFile(theirs, mine, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	here := t.TempDir()
+	t.Chdir(here)
+	if err := os.Symlink(theirs, filepath.Join(here, "plan.png")); err != nil {
+		t.Fatal(err)
+	}
+
+	expectCode(t, e.run("", "uploads", "download", blobID(t, upload), "--force", "--json"), ExitOK)
+
+	kept, err := os.ReadFile(theirs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(kept, mine) {
+		t.Fatalf("the file the link pointed at was written through: %q", kept)
+	}
+	written, err := os.Lstat(filepath.Join(here, "plan.png"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if written.Mode()&os.ModeSymlink != 0 {
+		t.Fatal("the link is still a link, so the bytes went through it")
+	}
+	expectMode(t, filepath.Join(here, "plan.png"), 0o600)
+}
+
+// A directory is no file to write. Taking it away to make room would be the
+// very destroying this command does not do, whatever --force says.
+func TestADirectoryUnderTheNameIsRefusedAndNotRemoved(t *testing.T) {
+	e := newTestEnv(t)
+	upload := e.uploaded(onePixelPNG(), "plan.png")
+	here := t.TempDir()
+	t.Chdir(here)
+	inTheWay := filepath.Join(here, "plan.png")
+	if err := os.Mkdir(inTheWay, 0o700); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, force := range []bool{false, true} {
+		args := []string{"uploads", "download", blobID(t, upload)}
+		if force {
+			args = append(args, "--force")
+		}
+
+		env, r := e.runJSON("", args...)
+		expectCode(t, r, ExitUsage)
+		if !strings.Contains(env.Error, "directory") {
+			t.Errorf("--force %v: error %q does not say what stands in the way", force, env.Error)
+		}
+		entry, err := os.Lstat(inTheWay)
+		if err != nil || !entry.IsDir() {
+			t.Fatalf("--force %v: the directory is gone: %v", force, err)
+		}
+	}
+}
+
+func expectMode(t *testing.T, path string, want os.FileMode) {
+	t.Helper()
+	info, err := os.Lstat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := info.Mode().Perm(); got != want {
+		t.Errorf("%s is %04o, want %04o", path, got, want)
+	}
+}
+
 // With -o - the bytes are the answer, so standard output carries them alone
 // and the word about them goes the other way.
 func TestTheBytesGoToStandardOutputWhenTheyAreAskedForThere(t *testing.T) {
@@ -199,6 +300,27 @@ func TestTheBytesGoToStandardOutputWhenTheyAreAskedForThere(t *testing.T) {
 	expectCode(t, r, ExitUsage)
 	if env.Code != CodeUsage {
 		t.Errorf("code %q", env.Code)
+	}
+}
+
+// A failure must not follow half a file into the same stream. Standard output
+// is not a terminal here, which is where an envelope would otherwise go.
+func TestAFailureBesideTheBytesGoesToStandardErrorAsWell(t *testing.T) {
+	e := newTestEnv(t)
+	upload := e.uploaded([]byte("a few words of text"), "notes.txt")
+	t.Chdir(t.TempDir())
+	e.server.SendsAFileShort = true
+
+	r := e.run("", "uploads", "download", blobID(t, upload), "-o", "-")
+	expectCode(t, r, ExitAPI)
+	if strings.Contains(r.stdout, `"ok"`) || strings.Contains(r.stdout, "error") {
+		t.Errorf("an envelope followed the bytes into standard output: %q", r.stdout)
+	}
+	if !strings.Contains(r.stderr, "Error:") {
+		t.Errorf("stderr %q does not say that it went wrong", r.stderr)
+	}
+	if !strings.Contains(r.stderr, "standard output already") {
+		t.Errorf("hint %q claims nothing was kept, but the bytes are out", r.stderr)
 	}
 }
 
