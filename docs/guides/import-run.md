@@ -53,6 +53,13 @@ A run that ends hard leaves the earlier bundle in place and loses the files it
 fetched. A single failure of a gateway ends no run any more, the request is
 asked again.
 
+A further run goes into a clone of the newest bundle rather than into an empty
+directory: `cp -Rc <bundle> <new bundle>` is done in a second and costs no
+space, the files being shared until one of them is written, and the run takes
+them over instead of fetching them again. Both projects with their 2,700 files
+come down to twenty minutes that way. The bundle that was cloned stays as it
+is, which is what a bundle somebody else is trying out needs.
+
 ## The bundles and the coordination
 
 | Path | Holds |
@@ -61,6 +68,7 @@ asked again.
 | `~/minka-import/basecamp-3923521-chats` | the posts and the chats as well, released to the coordination |
 | `~/minka-import/basecamp-3923521-random` | one project whole, with its files and embeds, released to the coordination |
 | `~/minka-import/basecamp-3923521-full` | both projects whole, with their files and embeds, applied on minka-2 and hard-linked into it: never written again, a new run goes into a new directory |
+| `~/minka-import/basecamp-3923521-references` | both projects whole, with the links back into the source, released to the coordination |
 
 The format coordination copies from a bundle for its trial runs. Tell it
 before a directory is written again, and again when it is ready, with counts.
