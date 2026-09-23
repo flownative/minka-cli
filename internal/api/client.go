@@ -183,6 +183,25 @@ func (c *Client) Me(ctx context.Context) (Result[Me], error) {
 	return request[Me](ctx, c, http.MethodGet, "/me", nil)
 }
 
+// NoteAtWork tells the host which cards one client of this agent is working on
+// right now. It is the whole set every time: a card left out is given up in
+// the same breath, and an empty set says that the client has stopped.
+//
+// Only an agent may say so, and only for itself. A card the agent may not see
+// and an identifier that is no UUID are passed over by the server without a
+// word, so a set that names nothing it knows arrives as an empty one.
+func (c *Client) NoteAtWork(ctx context.Context, clientID string, cardIDs []string) error {
+	if cardIDs == nil {
+		cardIDs = []string{}
+	}
+	body := struct {
+		ClientID string   `json:"clientId"`
+		CardIDs  []string `json:"cardIds"`
+	}{clientID, cardIDs}
+	_, err := request[struct{}](ctx, c, http.MethodPut, "/me/work", body)
+	return err
+}
+
 // Projects lists the projects in use, or the archived ones instead.
 func (c *Client) Projects(ctx context.Context, archived bool) (Result[[]Project], error) {
 	path := "/projects"
