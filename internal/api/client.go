@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -18,28 +19,56 @@ import (
 // at most 25 cards in Done, so real responses stay far below it.
 const maxResponseBytes = 16 << 20
 
-// uploadTimeout is what sending the bytes of a file may take. It is far above
-// the timeout of the other requests, which carry nothing but JSON.
-const uploadTimeout = 10 * time.Minute
+// bodyTimeout is what sending or fetching the bytes of a file may take. It is
+// far above the timeout of the other requests, which carry nothing but JSON.
+const bodyTimeout = 10 * time.Minute
+
+// maxRedirects is how many hops the bytes of a file may take before the client
+// gives up on them.
+const maxRedirects = 5
+
+// CodeRedirectRefused is what a caller reads where the bytes of a file were
+// to be fetched at an address this client does not go to.
+const CodeRedirectRefused = "redirectRefused"
+
+// ErrRedirectRefused marks a redirect this client does not follow. It is a
+// refusal, not a failure of the network: trying again changes nothing.
+var ErrRedirectRefused = errors.New("redirect refused")
+
+// refusedRedirect is such a refusal together with the answer that sent it on,
+// so that a caller can say which status it was turned away at.
+type refusedRedirect struct {
+	status int
+	reason string
+}
+
+func (e *refusedRedirect) Error() string { return ErrRedirectRefused.Error() + ": " + e.reason }
+
+func (e *refusedRedirect) Is(target error) bool { return target == ErrRedirectRefused }
 
 // Client talks to one Minka host with one access token.
 type Client struct {
 	host      string
+	address   *url.URL // the host as an address, to hold a redirect against
 	token     string
 	userAgent string
 	http      *http.Client
 	uploads   *http.Client
+	downloads *http.Client
 }
 
 // New returns a client for a host such as "https://minka.localbeach.net".
 //
-// The client never follows a redirect. A redirect would carry the token to an
-// address the user did not name, and the API has no reason to send one.
+// No request that carries JSON follows a redirect: it would take the token to
+// an address the user did not name, and the API has no reason to send one.
+// The bytes of a file are the exception, because a store that serves them
+// itself is answered with an address of its own; that request follows, and
+// the token stays behind as soon as the address is not the host signed in to.
 func New(host, token, userAgent string) *Client {
 	noRedirect := func(*http.Request, []*http.Request) error {
 		return http.ErrUseLastResponse
 	}
-	return &Client{
+	c := &Client{
 		host:      strings.TrimRight(host, "/"),
 		token:     token,
 		userAgent: userAgent,
@@ -48,10 +77,68 @@ func New(host, token, userAgent string) *Client {
 			CheckRedirect: noRedirect,
 		},
 		uploads: &http.Client{
-			Timeout:       uploadTimeout,
+			Timeout:       bodyTimeout,
 			CheckRedirect: noRedirect,
 		},
 	}
+	c.address, _ = url.Parse(c.host)
+	c.downloads = &http.Client{Timeout: bodyTimeout, CheckRedirect: c.followTheBytes}
+	return c
+}
+
+// followTheBytes decides where the bytes of a file may be fetched from.
+//
+// Go leaves the Authorization header on a redirect that stays within the same
+// domain, a host below it included, so a host below ours would be handed the
+// token. The header is therefore taken off here for every address that is not
+// the one signed in to, whatever Go would have done with it, and an address
+// that is not https is not followed at all.
+func (c *Client) followTheBytes(request *http.Request, via []*http.Request) error {
+	// The answer that sent us on rides on the request Go built from it.
+	status := 0
+	if request.Response != nil {
+		status = request.Response.StatusCode
+	}
+
+	if len(via) > maxRedirects {
+		return &refusedRedirect{status, fmt.Sprintf("more than %d in a row", maxRedirects)}
+	}
+	if c.isTheHostSignedInTo(request.URL) {
+		return nil
+	}
+	request.Header.Del("Authorization")
+	if request.URL.Scheme != "https" {
+		return &refusedRedirect{status, fmt.Sprintf("it leads to %s, which is not https", request.URL.Hostname())}
+	}
+	return nil
+}
+
+// isTheHostSignedInTo says whether an address is the host of this client. A
+// host name does not care about its case, and the standard port of a scheme
+// is the same address as none at all: an answer that names one of the two
+// spellings still leads home and keeps the token.
+func (c *Client) isTheHostSignedInTo(address *url.URL) bool {
+	if c.address == nil {
+		return false
+	}
+	return address.Scheme == c.address.Scheme &&
+		strings.EqualFold(address.Hostname(), c.address.Hostname()) &&
+		portOf(address) == portOf(c.address)
+}
+
+// portOf is the port an address speaks to, written out where the scheme
+// leaves it unsaid.
+func portOf(address *url.URL) string {
+	if port := address.Port(); port != "" {
+		return port
+	}
+	switch address.Scheme {
+	case "https":
+		return "443"
+	case "http":
+		return "80"
+	}
+	return ""
 }
 
 // Result is a decoded resource together with the JSON the server sent for it.
@@ -356,6 +443,57 @@ func uploadTo(ctx context.Context, c *Client, path, filename, contentType string
 	return send[Upload](ctx, c, c.uploads, http.MethodPost, path+"?filename="+url.QueryEscape(filename), content, contentType, size)
 }
 
+// File says what an uploaded file is and which renderings of it exist. The
+// address names the file alone: which project or conversation it went into is
+// looked up by the server, and being in that circle is what decides.
+func (c *Client) File(ctx context.Context, blobID string) (Result[File], error) {
+	return request[File](ctx, c, http.MethodGet, "/uploads/"+url.PathEscape(blobID), nil)
+}
+
+// FileBytes opens one rendering of a file for reading. The caller closes it.
+//
+// The address is built here rather than taken from the answer that named the
+// rendering: scheme, host and path are the client's own, so nothing a server
+// writes into a field decides where the bytes are fetched from.
+func (c *Client) FileBytes(ctx context.Context, blobID, variant string) (*FileBytes, error) {
+	path := "/uploads/" + url.PathEscape(blobID) + "/" + url.PathEscape(variant)
+	req, err := c.newRequest(ctx, http.MethodGet, path, nil, "", -1)
+	if err != nil {
+		return nil, err
+	}
+	// The answer is a file and not JSON, and this is the one address of the
+	// API that says so.
+	req.Header.Set("Accept", "*/*")
+
+	resp, err := c.downloads.Do(req)
+	if err != nil {
+		var refusal *refusedRedirect
+		if errors.As(err, &refusal) {
+			return nil, &Error{
+				Method:     http.MethodGet,
+				StatusCode: refusal.status,
+				Code:       CodeRedirectRefused,
+				Message:    "The bytes were to be fetched elsewhere: " + refusal.reason + ".",
+			}
+		}
+		return nil, &NetworkError{Method: http.MethodGet, Err: err}
+	}
+
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		defer resp.Body.Close()
+		raw, _ := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes))
+		apiErr := errorFromResponse(resp.StatusCode, raw)
+		apiErr.Method = http.MethodGet
+		return nil, apiErr
+	}
+
+	return &FileBytes{
+		ContentType: resp.Header.Get("Content-Type"),
+		ByteSize:    resp.ContentLength,
+		Body:        resp.Body,
+	}, nil
+}
+
 // request sends a request to a path below /api/v1. Every identifier in the
 // path has to be escaped by the caller, or an identifier like "../me" would
 // address another resource.
@@ -378,20 +516,9 @@ func request[T any](ctx context.Context, c *Client, method, path string, body an
 func send[T any](ctx context.Context, c *Client, httpClient *http.Client, method, path string, body io.Reader, contentType string, size int64) (Result[T], error) {
 	var result Result[T]
 
-	req, err := http.NewRequestWithContext(ctx, method, c.host+"/api/v1"+path, body)
+	req, err := c.newRequest(ctx, method, path, body, contentType, size)
 	if err != nil {
-		return result, fmt.Errorf("building the request: %w", err)
-	}
-	req.Header.Set("Authorization", "Bearer "+c.token)
-	req.Header.Set("Accept", "application/json")
-	if c.userAgent != "" {
-		req.Header.Set("User-Agent", c.userAgent)
-	}
-	if contentType != "" {
-		req.Header.Set("Content-Type", contentType)
-	}
-	if size >= 0 {
-		req.ContentLength = size
+		return result, err
 	}
 
 	resp, err := httpClient.Do(req)
@@ -425,6 +552,27 @@ func send[T any](ctx context.Context, c *Client, httpClient *http.Client, method
 	result.Raw = raw
 
 	return result, nil
+}
+
+// newRequest builds a request to a path below /api/v1, signed with the token
+// of this client. A size of less than zero means that it has no body.
+func (c *Client) newRequest(ctx context.Context, method, path string, body io.Reader, contentType string, size int64) (*http.Request, error) {
+	req, err := http.NewRequestWithContext(ctx, method, c.host+"/api/v1"+path, body)
+	if err != nil {
+		return nil, fmt.Errorf("building the request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+c.token)
+	req.Header.Set("Accept", "application/json")
+	if c.userAgent != "" {
+		req.Header.Set("User-Agent", c.userAgent)
+	}
+	if contentType != "" {
+		req.Header.Set("Content-Type", contentType)
+	}
+	if size >= 0 {
+		req.ContentLength = size
+	}
+	return req, nil
 }
 
 func errorFromResponse(statusCode int, raw []byte) *Error {

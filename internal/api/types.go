@@ -1,5 +1,7 @@
 package api
 
+import "io"
+
 // Column types as the API names them.
 const (
 	ColumnTriage = "triage"
@@ -137,20 +139,23 @@ type Card struct {
 	Description string           `json:"description"` // the stored HTML, empty when the card has none
 	// DescriptionSource is the description as the editor opens it: attachments
 	// and mentions freshly signed. Sending it back keeps them.
-	DescriptionSource string            `json:"descriptionSource"`
-	Column            ColumnReference   `json:"column"`
-	OnHold            bool              `json:"onHold"` // waiting in the area on hold of its column
-	CommentCount      int               `json:"commentCount"`
-	CreatedAt         string            `json:"createdAt"`
-	Creator           PersonReference   `json:"creator"`
-	CompletedAt       *string           `json:"completedAt"`
-	CompletedBy       *PersonReference  `json:"completedBy"`
-	Assignees         []PersonReference `json:"assignees"`   // in the order they were assigned
-	DueOn             *string           `json:"dueOn"`       // the day it is due as YYYY-MM-DD, nil for a card without one
-	Steps             []Step            `json:"steps"`       // in the order the card shows them; only a single card carries them
-	Subscribers       []PersonReference `json:"subscribers"` // everybody the card notifies, by name; only a single card carries them
-	Comments          []Comment         `json:"comments"`
-	AppURL            string            `json:"appUrl"`
+	DescriptionSource string `json:"descriptionSource"`
+	// Attachments are the files hanging in the description, and in no comment
+	// of the card.
+	Attachments  []Attachment      `json:"attachments"`
+	Column       ColumnReference   `json:"column"`
+	OnHold       bool              `json:"onHold"` // waiting in the area on hold of its column
+	CommentCount int               `json:"commentCount"`
+	CreatedAt    string            `json:"createdAt"`
+	Creator      PersonReference   `json:"creator"`
+	CompletedAt  *string           `json:"completedAt"`
+	CompletedBy  *PersonReference  `json:"completedBy"`
+	Assignees    []PersonReference `json:"assignees"`   // in the order they were assigned
+	DueOn        *string           `json:"dueOn"`       // the day it is due as YYYY-MM-DD, nil for a card without one
+	Steps        []Step            `json:"steps"`       // in the order the card shows them; only a single card carries them
+	Subscribers  []PersonReference `json:"subscribers"` // everybody the card notifies, by name; only a single card carries them
+	Comments     []Comment         `json:"comments"`
+	AppURL       string            `json:"appUrl"`
 }
 
 type Step struct {
@@ -160,13 +165,14 @@ type Step struct {
 }
 
 type Comment struct {
-	ID         string          `json:"id"`
-	Author     PersonReference `json:"author"`
-	Body       string          `json:"body"`       // the stored HTML; plain text for comments written before the editor
-	BodySource string          `json:"bodySource"` // the body as the editor opens it
-	CreatedAt  string          `json:"createdAt"`
-	EditedAt   *string         `json:"editedAt"`
-	Reactions  []Reaction      `json:"reactions"`
+	ID          string          `json:"id"`
+	Author      PersonReference `json:"author"`
+	Body        string          `json:"body"`        // the stored HTML; plain text for comments written before the editor
+	BodySource  string          `json:"bodySource"`  // the body as the editor opens it
+	Attachments []Attachment    `json:"attachments"` // the files hanging in the body
+	CreatedAt   string          `json:"createdAt"`
+	EditedAt    *string         `json:"editedAt"`
+	Reactions   []Reaction      `json:"reactions"`
 }
 
 // Reaction is what people said about a comment or a message, the same content
@@ -212,17 +218,18 @@ type Conversation struct {
 // message: a list is ordered by CreatedAt, so the numbers down it need not
 // rise, and some are missing.
 type ChatMessage struct {
-	ID         string          `json:"id"`
-	Seq        int             `json:"seq"`
-	ChangeSeq  int             `json:"changeSeq"` // raised with every change of the message
-	Author     PersonReference `json:"author"`
-	BodyHTML   string          `json:"bodyHtml"`   // empty for a removed message
-	BodyText   string          `json:"bodyText"`   // empty for a removed message
-	BodySource string          `json:"bodySource"` // the body as the editor opens it, empty for a removed message
-	CreatedAt  string          `json:"createdAt"`
-	EditedAt   *string         `json:"editedAt"`
-	Removed    bool            `json:"removed"` // true only in an answer to After: the message is gone
-	Reactions  []Reaction      `json:"reactions"`
+	ID          string          `json:"id"`
+	Seq         int             `json:"seq"`
+	ChangeSeq   int             `json:"changeSeq"` // raised with every change of the message
+	Author      PersonReference `json:"author"`
+	BodyHTML    string          `json:"bodyHtml"`    // empty for a removed message
+	BodyText    string          `json:"bodyText"`    // empty for a removed message
+	BodySource  string          `json:"bodySource"`  // the body as the editor opens it, empty for a removed message
+	Attachments []Attachment    `json:"attachments"` // the files hanging in the body
+	CreatedAt   string          `json:"createdAt"`
+	EditedAt    *string         `json:"editedAt"`
+	Removed     bool            `json:"removed"` // true only in an answer to After: the message is gone
+	Reactions   []Reaction      `json:"reactions"`
 }
 
 // MessagesQuery chooses the messages of a chat. Without Before and After it is
@@ -272,4 +279,46 @@ type Upload struct {
 	Kind             string `json:"kind"` // "image" is shown where it stands, "file" is handed over
 	AppURL           string `json:"appUrl"`
 	AttachmentSource string `json:"attachmentSource"`
+}
+
+// File is an uploaded file as the API describes it: what it is, and which
+// renderings of it can be fetched. ContentType and ByteSize are those of the
+// file as it was uploaded; every rendering says its own.
+type File struct {
+	ID          string        `json:"id"`
+	Filename    string        `json:"filename"`
+	ContentType string        `json:"contentType"`
+	ByteSize    int64         `json:"byteSize"`
+	IsImage     bool          `json:"isImage"`
+	Variants    []FileVariant `json:"variants"` // "original" first, then what else exists
+}
+
+// FileVariant is one rendering of a file. Only "original" is there for every
+// file; "display" is the smaller rendering a large picture got.
+type FileVariant struct {
+	Name        string `json:"name"`
+	ContentType string `json:"contentType"`
+	ByteSize    int64  `json:"byteSize"`
+	URL         string `json:"url"` // where the bytes are, absolute
+}
+
+// Attachment is one file hanging in a text, named beside it so that a client
+// that reads the text can fetch the file without taking anything apart. It is
+// described as it was uploaded; URL leads to what the file is, not to its
+// bytes.
+type Attachment struct {
+	ID          string `json:"id"`
+	Filename    string `json:"filename"`
+	ContentType string `json:"contentType"`
+	ByteSize    int64  `json:"byteSize"`
+	IsImage     bool   `json:"isImage"`
+	URL         string `json:"url"`
+}
+
+// FileBytes is one rendering of a file, open for reading. Whoever takes it
+// closes it.
+type FileBytes struct {
+	ContentType string
+	ByteSize    int64 // what the answer says it sends, -1 where it says nothing
+	Body        io.ReadCloser
 }

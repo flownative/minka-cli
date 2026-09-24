@@ -383,3 +383,48 @@ the record is in the bundle or not; any other link stays a link.
 the rest, so marking more loses nothing and marking less loses a reference.
 **Implemented as:** `Extractor.referenceTo`, `links`, see
 [Importing](stable/import.md).
+
+<a id="c-032"></a>
+## C-032 — A fetched file is one this command made itself
+
+*Applies to: `uploads download`, the file it writes*
+
+A name out of an answer has to be a plain name, and the bytes land in a file
+created with `O_EXCL` and 0600. A file of that name that is already there
+stands; `--force` takes the entry away first — the link itself, never what it
+points at — and a directory under that name is refused.
+
+**Why:** The server has a say in which entry of the directory is meant, so
+nothing standing under that name may be followed, kept or destroyed.
+**Implemented as:** `cli.writeTheBytes`, see
+[Token, hosts and requests](stable/security.md).
+
+<a id="c-033"></a>
+## C-033 — The bytes of a file follow a redirect, the token does not
+
+*Applies to: `GET /uploads/{blobId}/{variant}`*
+
+This one request follows up to five redirects, because a store that keeps the
+bytes answers with an address of its own. The `Authorization` header comes off
+for every address that is not the host signed in to, and such an address has to
+be https. Every request carrying JSON still follows nothing.
+
+**Why:** Go keeps the header within a domain, a host below it included, so
+relying on it would hand the token to a neighbour of our own host.
+**Implemented as:** `api.Client.followTheBytes`, see
+[Token, hosts and requests](stable/security.md).
+
+<a id="c-034"></a>
+## C-034 — The bytes are fetched where they lie, not through Minka
+
+*Applies to: `uploads download`*
+
+The request for the bytes carries no `?download=1`, which would keep every
+answer inside Minka and spare the client the redirect.
+
+**Why:** A picture that is shown where it stands is the one file Minka hands
+over to its store; asking the redirect away would send every one of those
+through a worker of the application instead. Everything else comes through it
+either way.
+**Implemented as:** `api.Client.FileBytes`, which follows under the rules of
+[C-033](#c-033).

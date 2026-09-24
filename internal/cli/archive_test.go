@@ -62,7 +62,7 @@ var notAWriteIntoAProject = []string{
 	"projects list", "boards list", "boards show", "people list", "trash list",
 	"cards mine", "cards show", "steps list", "chats list", "messages list",
 	"chats mark-read", "conversations list", "conversations with", "conversations people",
-	"uploads create", "import basecamp",
+	"uploads create", "uploads download", "import basecamp",
 }
 
 // A command that is new has to be put into one of the two lists, so that a way

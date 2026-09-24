@@ -38,11 +38,16 @@ accepted for loopback only. Other paths are refused.
 
 ## Requests
 
-- Redirects are never followed: a redirect would carry the token to an address
-  nobody named. The one exception carries no token: the download of an avatar
-  for an import follows at most five redirects, and only to https. A redirect
-  that is refused is a refusal, not a failure of the network, and not
-  retryable.
+- A request that carries JSON never follows a redirect: it would take the
+  token to an address nobody named. Two requests do follow, at most five
+  redirects each, and neither takes the token anywhere new. The download of an
+  avatar for an import carries none to begin with and goes only to https. The
+  bytes of a file follow the redirect Minka answers with where a store serves
+  them itself: the `Authorization` header comes off for every address that is
+  not the host signed in to, and such an address has to be https (C-033). Go
+  leaves the header on within a domain, a host below it included, so it is
+  taken off here rather than left to the library. A redirect that is refused
+  is a refusal, not a failure of the network, and not retryable.
 - Every ID is checked locally as a UUID — one that is not ends with exit 1,
   without a request going out — and additionally escaped in the path. A card
   may be named by its short identifier instead, whose shape is checked the
@@ -64,8 +69,16 @@ accepted for loopback only. Other paths are refused.
 - The download of a file for an import has no limit of size and is streamed
   to disk. It is ended when no byte comes for 60 seconds, and after an hour
   at the latest.
-- Timeout 30 seconds, 10 minutes for the body of an upload. The CLI reads at
-  most 16 MB of a response.
+- Timeout 30 seconds, 10 minutes for the body of an upload or a download. The
+  CLI reads at most 16 MB of a response; the bytes of a file are streamed to
+  disk instead, and one byte more than the file says it weighs is read, so
+  that an answer which does not stop is noticed rather than kept.
+- A file that is fetched is created with `O_EXCL` and 0600 and never written
+  over a file that is already there; `--force` takes that entry away first —
+  the link itself, never what it points at — and a directory under the name is
+  refused. The name out of an answer has to be a plain name: one carrying `/`
+  or `\`, or being `.` or `..`, is refused instead of cut down, because it
+  would lead somewhere other than where the command was run (C-032).
 - What the server is sure to refuse, the CLI refuses first: a file over 50
   MiB, a directory, a call without a circle. That saves a useless transfer and
   gives a clearer error (C-013).

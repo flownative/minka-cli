@@ -11,6 +11,11 @@ steps, subscribers, comments, chats, private conversations, uploads,
 mentions, reactions and one's own cards across all projects. `minka
 commands` lists them all, built from the command tree itself.
 
+A file goes both ways: `uploads create` puts one in, `uploads download`
+fetches its bytes back. Every text says which files hang in it, so reading a
+card, a comment or a message gives the identifier a download takes, without
+anything being taken out of the text.
+
 `minka import basecamp` extracts the structure, the boards, the message
 boards and the chats of Basecamp projects into an import bundle for Minka's
 applier: people with avatars, projects with members, the boards, chats and
@@ -38,8 +43,9 @@ may not, masked addresses were seen live ending the run as `forbidden`. Only
 the people the chosen projects refer to come into a bundle.
 
 Everything else is tested against the fake API and checked live — the chain
-upload → attachment in the text → display as well as private conversations in
-both directions. What is checked against the fake only is listed below.
+upload → attachment in the text → display → the bytes back, as well as private
+conversations in both directions. What is checked against the fake only is
+listed below.
 
 Coordination of the API: the Minka session `minka-14`. It reports changes,
 which are checked against the Minka code; deviations go back to it.
@@ -164,9 +170,41 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   area on hold is read in the Minka code alone.
 - "agent for X" in `people list` has been seen live, an agent that stepped
   down has not — it is in no list any more.
+- Of `uploads download`, what is left: a file of a project one is not in, for
+  which the local instance offers no second account; the entity tag with the
+  304 and the 416 that go with it; the ranges an audio file is played in; and
+  an answer that weighs something other than the file says. The CLI sends
+  neither a range nor `If-None-Match`, so none of that is reached from here.
+  Not mirrored by the fake either: that a picture and an audio file keep their
+  own media type where every other download leaves as an octet stream, and
+  that the server writes a picture anew when it takes it in — the fake keeps
+  the bytes that arrived, so the `original` of a picture weighs there what it
+  weighed here, and live it does not. Everything else of the command is seen
+  live: the chain from upload through the description and `cards show` back to
+  the bytes, a picture of 2400 × 1350 whose pixels come back unchanged, its
+  display rendering at 1600 × 900, a picture that has none, `--variant`
+  refused for a rendering the file has not got and for one that is no
+  rendering, `-o <name>`, `-o -` with the bytes alone on standard output and
+  the word about them on standard error, `--json` and `--quiet` refused beside
+  `-o -`, a file that is already there and `--force` over one, every written
+  file 0600 whatever stood there before, an identifier that names nothing as
+  2 `notFound` and one that is no UUID as 1 without a request, `attachments`
+  of a comment and of a chat message with the card naming none of its
+  comments' files, and the text view of all of it.
+- No redirect to a store happens on the local instance: it keeps its files in
+  its own file system, and only a Google Cloud Storage target signs an address
+  to send a client to, then only for a picture that is not asked for as a
+  download and whose name matches its media type. So the following of a
+  redirect is shown for the client alone, against servers of a test: the token
+  stays behind, an address that is not https is not followed, and five hops
+  are the end. No command of the CLI has ever fetched a file over a redirect.
+  It waits for an instance whose files lie in such a store.
 
 ## Open in the API
 
+- A file may weigh 100 MiB, `uploads create` still refuses one over 50 MiB
+  before it travels and `security.md` says so. To be set right together.
+- Posts have `attachments` too, and the CLI has no commands for posts at all.
 - Renaming and reordering steps does not exist.
 - Paging Done beyond 25 cards does not exist; needed once dogfooding needs it.
 - Flow answers a wrong HTTP method with HTML instead of JSON.
