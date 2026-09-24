@@ -6,6 +6,8 @@
 package config
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -21,6 +23,7 @@ import (
 
 type File struct {
 	DefaultHost string               `json:"defaultHost,omitempty"`
+	ClientID    string               `json:"clientId,omitempty"`
 	Hosts       map[string]HostEntry `json:"hosts"`
 }
 
@@ -122,6 +125,20 @@ func (f *File) Save(path string) error {
 	}
 
 	return nil
+}
+
+// NewClientID makes the name this installation of minka goes by where the
+// server keeps one set of things per client.
+//
+// It is random and means nothing on purpose: the name travels to the server,
+// into its database and into its logs, and a host name or a user name there
+// would say who sits at which machine, for as long as those logs are kept.
+func NewClientID() (string, error) {
+	var bytes [16]byte
+	if _, err := rand.Read(bytes[:]); err != nil {
+		return "", fmt.Errorf("making a client id: %w", err)
+	}
+	return hex.EncodeToString(bytes[:]), nil
 }
 
 // RemoveHost forgets the token of a host. If it was the default host, another
