@@ -47,6 +47,14 @@ type Downloader struct {
 }
 
 func (d Downloader) Download(ctx context.Context, address string, into io.Writer) error {
+	return d.download(ctx, address, into, nil)
+}
+
+// download is Download, and says which process the Basecamp CLI is as soon as
+// there is one. Whoever watches a download knows from then on what has to be
+// gone when it ends, and need not wait for the CLI to say so itself: a
+// download may be given up before the CLI has run a single line of its own.
+func (d Downloader) download(ctx context.Context, address string, into io.Writer, started func(pid int)) error {
 	if err := checkStorageAddress(address); err != nil {
 		return err
 	}
@@ -79,7 +87,13 @@ func (d Downloader) Download(ctx context.Context, address string, into io.Writer
 	stdout := &watchedOutput{into: into, alive: func() { idle.Reset(idleTimeout) }}
 	cmd.Stdout = stdout
 
-	err := cmd.Run()
+	err := cmd.Start()
+	if err == nil {
+		if started != nil {
+			started(cmd.Process.Pid)
+		}
+		err = cmd.Wait()
+	}
 	var exitErr *exec.ExitError
 	switch {
 	case stdout.failed != nil:

@@ -429,6 +429,21 @@ either way.
 **Implemented as:** `api.Client.FileBytes`, which follows under the rules of
 [C-033](#c-033).
 
+<a id="c-035"></a>
+## C-035 — A test bounds time, it does not bet on the pace of a program
+
+*Applies to: tests that run the Basecamp CLI or another program*
+
+A test may set an upper bound that only a break trips. It may not make the pace
+of a program its precondition, and what it has to know about a process it takes
+from the code that started it, not from the program. A test where the pace is
+the behaviour itself is the named exception.
+
+**Why:** A program that is ended before it has run a line of its own leaves no
+note about itself, so a test that waits for one fails for the load of the
+machine. **Implemented as:** `basecamp.Downloader.download`, which names the
+process as soon as there is one, see [Testing](stable/testing.md).
+
 <a id="c-036"></a>
 ## C-036 — The cards being worked on are one list per machine
 

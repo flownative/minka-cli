@@ -235,6 +235,22 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   are the end. No command of the CLI has ever fetched a file over a redirect.
   It waits for an instance whose files lie in such a store.
 
+## Known limits of the tests
+
+- `TestADownloadThatKeepsBringingBytesIsNotGivenUp` demands a byte of the
+  stand-in every 300 milliseconds and goes red when the machine is loaded
+  enough that one of them is late. The reserve is a trade: the stand-in ticks
+  every 20 milliseconds, and a wider reserve makes every run of the test
+  longer, because the run has to outlast twice the idle allowance to show
+  anything. It is the one test that makes the pace of another program its
+  precondition, the named exception to [C-035](../decisions.md#c-035).
+- `TestARunThatIsStoppedIsInterruptedNotFailed` needs SIGINT to reach the
+  stand-in, which sends it to itself. A shell sets SIGINT to ignored for a
+  command it starts in the background, and a program inherits that, so the
+  test goes red whenever the test binary runs as a background job — in a
+  session of an agent, say. In the foreground it is green, under load as
+  well, and so it is in CI.
+
 ## Open in the API
 
 - A file may weigh 100 MiB, `uploads create` still refuses one over 50 MiB
