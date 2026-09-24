@@ -3,8 +3,10 @@ package api
 import (
 	"context"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"slices"
 	"strings"
 	"testing"
@@ -123,5 +125,161 @@ func TestWhatRidesInTheQueryIsEscaped(t *testing.T) {
 	}
 	if !slices.Equal(queries, want) {
 		t.Errorf("queries\n got: %q\nwant: %q", queries, want)
+	}
+}
+
+// The bytes of a file may come from a store of their own, and the token must
+// not travel there: the store knows nothing of Minka's tokens, and one that
+// arrives is a secret in a log that does not belong to it.
+func TestTheTokenStaysBehindWhereTheBytesComeFromSomewhereElse(t *testing.T) {
+	var sentToTheStore http.Header
+	store := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		sentToTheStore = r.Header.Clone()
+		_, _ = io.WriteString(w, "the bytes")
+	}))
+	defer store.Close()
+
+	minka := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, store.URL+"/signed", http.StatusFound)
+	}))
+	defer minka.Close()
+
+	client := New(minka.URL, "minka_pat_x", "")
+	client.downloads.Transport = store.Client().Transport
+
+	bytes, err := client.FileBytes(context.Background(), "b", "original")
+	if err != nil {
+		t.Fatalf("got %v", err)
+	}
+	defer bytes.Body.Close()
+
+	if got := sentToTheStore.Get("Authorization"); got != "" {
+		t.Errorf("the store was sent %q", got)
+	}
+	content, _ := io.ReadAll(bytes.Body)
+	if string(content) != "the bytes" {
+		t.Errorf("content %q", content)
+	}
+}
+
+// Within the host that was signed in to the token belongs on the request, so
+// a redirect that stays there carries it.
+func TestTheTokenTravelsOnWithinTheHostSignedInTo(t *testing.T) {
+	var seen []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seen = append(seen, r.Header.Get("Authorization"))
+		if r.URL.Path != "/elsewhere" {
+			http.Redirect(w, r, "/elsewhere", http.StatusFound)
+			return
+		}
+		_, _ = io.WriteString(w, "the bytes")
+	}))
+	defer server.Close()
+
+	bytes, err := New(server.URL, "minka_pat_x", "").FileBytes(context.Background(), "b", "original")
+	if err != nil {
+		t.Fatalf("got %v", err)
+	}
+	defer bytes.Body.Close()
+
+	if len(seen) != 2 || seen[0] != "Bearer minka_pat_x" || seen[1] != "Bearer minka_pat_x" {
+		t.Errorf("authorization headers %q", seen)
+	}
+}
+
+// A refused redirect is a refusal and not a failure of the network: trying
+// again leads to the same address.
+func TestTheBytesAreNotFetchedFromAnAddressThatIsNotHttps(t *testing.T) {
+	asked := 0
+	elsewhere := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { asked++ }))
+	defer elsewhere.Close()
+
+	minka := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, elsewhere.URL+"/signed?signature=secret", http.StatusFound)
+	}))
+	defer minka.Close()
+
+	_, err := New(minka.URL, "minka_pat_x", "").FileBytes(context.Background(), "b", "original")
+	var apiErr *Error
+	if !errors.As(err, &apiErr) || apiErr.Code != CodeRedirectRefused {
+		t.Fatalf("got %#v", err)
+	}
+	// The status is the one the answer carried, not a zero that would read
+	// like no server having said anything.
+	if apiErr.StatusCode != http.StatusFound {
+		t.Errorf("status %d, want the %d that sent us on", apiErr.StatusCode, http.StatusFound)
+	}
+	// An address of a store is signed, and what signs it is a secret while it
+	// lasts, so the refusal names the host and nothing else of it.
+	for _, secret := range []string{"signed", "signature"} {
+		if strings.Contains(apiErr.Message, secret) {
+			t.Errorf("the refusal repeats the address: %q", apiErr.Message)
+		}
+	}
+	if asked != 0 {
+		t.Errorf("%d requests to an address that is not https", asked)
+	}
+}
+
+// An answer may spell the host it sends us to differently from the way it was
+// signed in to, and the two are still the same address: the token belongs on
+// that request, and taking it off would turn a download into a 401. What only
+// looks like it belongs is another host and keeps nothing.
+func TestTheHostSignedInToIsRecognisedHoweverItIsSpelled(t *testing.T) {
+	client := New("https://minka.example.com", "minka_pat_x", "")
+
+	for _, address := range []string{
+		"https://minka.example.com/api/v1/uploads/b/original",
+		"https://MINKA.Example.com/x",
+		"https://minka.example.com:443/x",
+	} {
+		if !client.isTheHostSignedInTo(mustParse(t, address)) {
+			t.Errorf("%s is the host signed in to and was taken for another", address)
+		}
+	}
+
+	for _, address := range []string{
+		"http://minka.example.com/x",        // the same name, in the clear
+		"https://files.minka.example.com/x", // a host below ours is not ours
+		"https://minka.example.com:8443/x",
+		"https://minka.example.com.example.net/x",
+	} {
+		if client.isTheHostSignedInTo(mustParse(t, address)) {
+			t.Errorf("%s is another host and was taken for ours", address)
+		}
+	}
+}
+
+func mustParse(t *testing.T, raw string) *url.URL {
+	t.Helper()
+	parsed, err := url.Parse(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return parsed
+}
+
+// A client with a redirect check of its own gets none of Go's, so the number
+// of hops is counted here or not at all. The server gives up sending people on
+// long before a client without a limit would, so the test says how many hops
+// were taken and does not wait for a timeout to say it.
+func TestTheBytesFollowAtMostFiveRedirects(t *testing.T) {
+	hops := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if hops++; hops > maxRedirects+3 {
+			_, _ = io.WriteString(w, "the bytes")
+			return
+		}
+		http.Redirect(w, r, "/again", http.StatusFound)
+	}))
+	defer server.Close()
+
+	_, err := New(server.URL, "minka_pat_x", "").FileBytes(context.Background(), "b", "original")
+	var apiErr *Error
+	if !errors.As(err, &apiErr) || apiErr.Code != "redirectRefused" {
+		t.Fatalf("got %#v after %d hops", err, hops)
+	}
+	if hops > maxRedirects+1 {
+		t.Errorf("%d hops, want no more than %d", hops, maxRedirects+1)
 	}
 }

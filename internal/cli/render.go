@@ -168,6 +168,13 @@ func renderCard(w io.Writer, card api.Card) {
 		fmt.Fprintf(w, "\n## Description\n\n%s\n", description)
 	}
 
+	if len(card.Attachments) > 0 {
+		fmt.Fprintf(w, "\n## Files (%d)\n\n", len(card.Attachments))
+		for _, file := range card.Attachments {
+			fmt.Fprintf(w, "- %s  %s (%s, %s)\n", file.ID, file.Filename, file.ContentType, fileSize(file.ByteSize))
+		}
+	}
+
 	if len(card.Comments) > 0 {
 		fmt.Fprintf(w, "\n## Comments (%d)\n", len(card.Comments))
 		for _, comment := range card.Comments {
@@ -180,11 +187,28 @@ func renderCard(w io.Writer, card api.Card) {
 				body = richtext.ToMarkdown(body)
 			}
 			fmt.Fprintf(w, "\n### %s, %s%s\n\n%s\n", comment.Author.Name, formatTime(comment.CreatedAt), edited, body)
+			if line := fileLine(comment.Attachments); line != "" {
+				fmt.Fprintf(w, "%s\n", line)
+			}
 			if line := reactionLine(comment.Reactions); line != "" {
 				fmt.Fprintf(w, "%s\n", line)
 			}
 		}
 	}
+}
+
+// fileLine names the files hanging in a comment or a message, in one line,
+// and nothing at all where none hang in it. The identifier is there so that
+// somebody who reads the text can fetch the file with "uploads download".
+func fileLine(attachments []api.Attachment) string {
+	if len(attachments) == 0 {
+		return ""
+	}
+	parts := make([]string, len(attachments))
+	for i, file := range attachments {
+		parts[i] = fmt.Sprintf("%s (%s, %s, %s)", file.Filename, file.ContentType, fileSize(file.ByteSize), file.ID)
+	}
+	return "Files: " + strings.Join(parts, "; ")
 }
 
 // reactionLine says what people said about a comment or a message, in one

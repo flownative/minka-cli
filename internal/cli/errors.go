@@ -97,6 +97,10 @@ const apiCodeProjectArchived = "projectArchived"
 // column of the card's board that carries no area for the cards on hold.
 const apiCodeColumnHasNoOnHoldArea = "columnHasNoOnHoldArea"
 
+// apiCodeVariantNotAvailable is what Minka answers for a rendering a file has
+// not got, and for a name that is no rendering at all.
+const apiCodeVariantNotAvailable = "variantNotAvailable"
+
 // apiError classifies a failed request.
 //
 // Only a failed read is retryable. A write can have been applied before the

@@ -7,14 +7,21 @@
 package fakeapi
 
 import (
+	"bytes"
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"html"
+	"image"
+	_ "image/gif"  // so that a picture of this kind says how wide it is
+	_ "image/jpeg" // so that a picture of this kind says how wide it is
+	_ "image/png"  // so that a picture of this kind says how wide it is
 	"io"
 	"math"
+	"mime"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"regexp"
 	"slices"
 	"strconv"
@@ -160,15 +167,53 @@ const TrashEntries = 200
 // MaxUploadBytes is what Minka takes for one file.
 const MaxUploadBytes = 50 << 20
 
-// Upload is a file somebody put into a project. The bytes themselves are of no
-// interest here; what matters is that the answer carries an attachment whose
-// handle only this project has.
+// DisplayEdge is how long the longer side of a picture has to be before Minka
+// renders a smaller one to show beside it. Anything below it has the original
+// and nothing else, however the two sides are shared out.
+const DisplayEdge = 1600
+
+// Variant names as the API names them.
+const (
+	VariantOriginal = "original"
+	VariantDisplay  = "display"
+)
+
+// Upload is a file somebody put into a project. The answer carries an
+// attachment whose handle only this project has, and the bytes are kept so
+// that the file can be asked for again.
 type Upload struct {
 	ID          string
 	Circle      string // the project, or "conversation:" and the conversation
 	Filename    string
 	ContentType string
 	Size        int
+	Content     []byte
+	// Display is the smaller rendering a wide picture got, and is empty for
+	// every other file. Nothing here reads a picture, so it is a shorter run
+	// of bytes of its own rather than a rendering of the original.
+	Display []byte
+}
+
+// renderings are the names this file can be asked for, the original first and
+// the rest by name, as the server orders them.
+func (u *Upload) renderings() []string {
+	names := []string{VariantOriginal}
+	if len(u.Display) > 0 {
+		names = append(names, VariantDisplay)
+	}
+	return names
+}
+
+// bytesOf is one rendering of a file, or nil where the file has no such
+// rendering and where the name is none at all.
+func (u *Upload) bytesOf(variant string) []byte {
+	switch variant {
+	case VariantOriginal:
+		return u.Content
+	case VariantDisplay:
+		return u.Display
+	}
+	return nil
 }
 
 // handle stands for the signature the server puts on the pair of circle and
@@ -307,6 +352,16 @@ type Server struct {
 	// answer it cannot use must not depend on that.
 	AnswersCardsWithoutID bool
 
+	// StoreURL stands for a file store that serves the bytes itself. Where it
+	// is set, a picture is answered with a redirect there, the way an
+	// installation with such a store answers it.
+	StoreURL string
+
+	// SendsAFileShort hands a file out one byte shorter than it was said to
+	// be, which no Minka does: what a client makes of bytes that are not the
+	// ones announced must not depend on the server being right about them.
+	SendsAFileShort bool
+
 	mu       sync.Mutex
 	requests []RecordedRequest
 	failWith int
@@ -437,6 +492,8 @@ func New(t testing.TB) (*Server, *Fixture) {
 	mux.HandleFunc("DELETE /api/v1/chats/{chatId}/messages/{messageId}", s.authenticated(s.removeMessage))
 	mux.HandleFunc("POST /api/v1/chats/{chatId}/read", s.authenticated(s.markChatRead))
 	mux.HandleFunc("POST /api/v1/projects/{projectId}/uploads", s.authenticated(s.upload))
+	mux.HandleFunc("GET /api/v1/uploads/{blobId}", s.authenticated(s.file))
+	mux.HandleFunc("GET /api/v1/uploads/{blobId}/{variant}", s.answeringInBytes(s.fileBytes))
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		// Flow answers an unknown path or a wrong method with an HTML page.
 		w.Header().Set("Content-Type", "text/html")
@@ -513,9 +570,20 @@ func (s *Server) recording(next http.Handler) http.Handler {
 type handler func(w http.ResponseWriter, r *http.Request, person *Person)
 
 func (s *Server) authenticated(next handler) http.HandlerFunc {
+	return s.signedIn(true, next)
+}
+
+// answeringInBytes is the one address that answers a file instead of JSON.
+// What the request accepts is therefore no reason to turn it away: a client
+// asking for the very picture it is about to be handed would be refused.
+func (s *Server) answeringInBytes(next handler) http.HandlerFunc {
+	return s.signedIn(false, next)
+}
+
+func (s *Server) signedIn(answersInJSON bool, next handler) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		accept := r.Header.Get("Accept")
-		if accept != "" && !strings.Contains(accept, "application/json") && !strings.Contains(accept, "*/*") {
+		if answersInJSON && accept != "" && !strings.Contains(accept, "application/json") && !strings.Contains(accept, "*/*") {
 			w.WriteHeader(http.StatusNotAcceptable)
 			return
 		}
@@ -1468,7 +1536,7 @@ func (s *Server) messages(w http.ResponseWriter, r *http.Request, person *Person
 
 	list := []any{}
 	for _, message := range page {
-		list = append(list, s.chatMessageResource(message))
+		list = append(list, s.chatMessageResource(chat, message))
 	}
 	writeJSON(w, http.StatusOK, list)
 }
@@ -1522,12 +1590,12 @@ func (s *Server) postMessage(w http.ResponseWriter, r *http.Request, person *Per
 	if deref(clientMessageID) != "" {
 		for _, message := range chat.Messages {
 			if message.ClientMessageID == *clientMessageID && message.AuthorID == person.ID {
-				writeJSON(w, http.StatusOK, s.chatMessageResource(message))
+				writeJSON(w, http.StatusOK, s.chatMessageResource(chat, message))
 				return
 			}
 		}
 	}
-	writeJSON(w, http.StatusCreated, s.chatMessageResource(chat.post(person.ID, text, deref(clientMessageID), s.now)))
+	writeJSON(w, http.StatusCreated, s.chatMessageResource(chat, chat.post(person.ID, text, deref(clientMessageID), s.now)))
 }
 
 // authoredMessage is the message of this chat that the person wrote and has
@@ -1572,7 +1640,7 @@ func (s *Server) editMessage(w http.ResponseWriter, r *http.Request, person *Per
 		message.BodyText, message.BodyHTML, message.EditedAt = chatText(text), chatHTML(text), &now
 		chat.noteChange(message)
 	}
-	writeJSON(w, http.StatusOK, s.chatMessageResource(message))
+	writeJSON(w, http.StatusOK, s.chatMessageResource(chat, message))
 }
 
 func (s *Server) removeMessage(w http.ResponseWriter, r *http.Request, person *Person) {
@@ -1628,7 +1696,7 @@ const maxReactionLength = 20
 // the two ways to take a reaction away. Both texts behave the same, so the
 // work is in reactTo and unreactFrom.
 func (s *Server) reactToComment(w http.ResponseWriter, r *http.Request, person *Person) {
-	_, _, card := s.visibleCard(r.PathValue("cardId"), person)
+	board, _, card := s.visibleCard(r.PathValue("cardId"), person)
 	comment := commentOf(card, r.PathValue("commentId"))
 	if comment == nil {
 		notFound(w)
@@ -1642,7 +1710,7 @@ func (s *Server) reactToComment(w http.ResponseWriter, r *http.Request, person *
 		return
 	}
 	status := reactTo(&comment.Reactions, content, person.ID)
-	writeJSON(w, status, s.commentResource(comment))
+	writeJSON(w, status, s.commentResource(board.ProjectID, comment))
 }
 
 func (s *Server) unreactFromComment(w http.ResponseWriter, r *http.Request, person *Person) {
@@ -1678,7 +1746,7 @@ func (s *Server) reactToMessage(w http.ResponseWriter, r *http.Request, person *
 	if status == http.StatusCreated {
 		chat.noteChange(message)
 	}
-	writeJSON(w, status, s.chatMessageResource(message))
+	writeJSON(w, status, s.chatMessageResource(chat, message))
 }
 
 func (s *Server) unreactFromMessage(w http.ResponseWriter, r *http.Request, person *Person) {
@@ -1851,13 +1919,35 @@ func (s *Server) upload(w http.ResponseWriter, r *http.Request, person *Person) 
 
 	upload := &Upload{
 		ID: newID(), Circle: circle, Filename: filename, ContentType: stored, Size: len(content),
+		Content: content, Display: displayRenderingOf(content, stored),
 	}
 	s.Uploads = append(s.Uploads, upload)
 	writeJSON(w, http.StatusCreated, s.uploadResource(upload))
 }
 
+// rasterTypes are the pictures a browser draws without help, and they are the
+// only files Minka ever shows where they stand. An SVG is a document here,
+// however its type reads: it can carry scripts.
+var rasterTypes = []string{"image/avif", "image/gif", "image/jpeg", "image/png", "image/webp"}
+
 func isPicture(contentType string) bool {
-	return strings.HasPrefix(contentType, "image/")
+	return slices.Contains(rasterTypes, contentType)
+}
+
+// displayRenderingOf is the smaller rendering a picture gets when it is large
+// enough to need one, and nothing for every other file. The longer of the two
+// sides decides, as it does on the server, so a tall picture gets one as
+// readily as a wide one. What the rendering weighs is of no interest beyond
+// weighing less than the file it was made from.
+func displayRenderingOf(content []byte, contentType string) []byte {
+	if !isPicture(contentType) {
+		return nil
+	}
+	config, _, err := image.DecodeConfig(bytes.NewReader(content))
+	if err != nil || max(config.Width, config.Height) <= DisplayEdge {
+		return nil
+	}
+	return content[:len(content)/2]
 }
 
 func (s *Server) uploadResource(upload *Upload) map[string]any {
@@ -1879,6 +1969,157 @@ func (s *Server) uploadResource(upload *Upload) map[string]any {
 	}
 }
 
+// file says what an uploaded file is and where each of its renderings can be
+// had. The address names the file alone; which circle it went into is looked
+// up here, and being in that circle is what decides.
+func (s *Server) file(w http.ResponseWriter, r *http.Request, person *Person) {
+	upload := s.visibleUpload(r.PathValue("blobId"), person)
+	if upload == nil {
+		notFound(w)
+		return
+	}
+	writeJSON(w, http.StatusOK, s.fileResource(upload))
+}
+
+// fileBytes hands one rendering over. A rendering the file has not got is
+// named as such rather than answered with the file in its place, and a name
+// that is no rendering at all reads the same way.
+func (s *Server) fileBytes(w http.ResponseWriter, r *http.Request, person *Person) {
+	upload := s.visibleUpload(r.PathValue("blobId"), person)
+	if upload == nil {
+		notFound(w)
+		return
+	}
+	variant := r.PathValue("variant")
+	content := upload.bytesOf(variant)
+	if content == nil {
+		writeJSON(w, http.StatusNotFound, errorBody("variantNotAvailable", fmt.Sprintf(`This file has no rendering called "%s".`, variant)))
+		return
+	}
+
+	download := r.URL.Query().Get("download") == "1"
+	// A picture that is shown where it stands may come from the store itself,
+	// and that answer carries none of the headers below. The name of the file
+	// has the last word, because it is what the store derives the type of its
+	// object from: a picture named after something else leaves from here.
+	if s.StoreURL != "" && !download && isPicture(upload.ContentType) && namesItsOwnType(upload) {
+		w.Header().Set("Location", s.StoreURL+"/"+upload.ID+"/"+variant)
+		w.Header().Set("Cache-Control", "private, no-store")
+		w.Header().Set("Vary", "Authorization")
+		w.WriteHeader(http.StatusFound)
+		return
+	}
+
+	if s.SendsAFileShort && len(content) > 0 {
+		content = content[:len(content)-1]
+	}
+
+	disposition := "attachment"
+	mediaType := "application/octet-stream"
+	if isPicture(upload.ContentType) && !download {
+		disposition, mediaType = "inline", upload.ContentType
+	}
+	w.Header().Set("Content-Type", mediaType)
+	w.Header().Set("Content-Disposition", fmt.Sprintf("%s; filename=%q", disposition, upload.Filename))
+	w.Header().Set("Content-Length", strconv.Itoa(len(content)))
+	w.Header().Set("Cache-Control", "private, max-age=3600")
+	w.Header().Set("Vary", "Authorization")
+	// Nothing a member uploaded is ever rendered inside Minka's own origin.
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("Content-Security-Policy", "default-src 'none'; sandbox")
+	w.Header().Set("Cross-Origin-Resource-Policy", "same-origin")
+	w.WriteHeader(http.StatusOK)
+	if r.Method != http.MethodHead {
+		_, _ = w.Write(content)
+	}
+}
+
+// visibleUpload is the file behind an identifier, and nothing at all for
+// somebody outside the circle it went into: a file of somebody else has to
+// read like an address that names nothing.
+func (s *Server) visibleUpload(blobID string, person *Person) *Upload {
+	if !uuidPattern.MatchString(blobID) {
+		return nil
+	}
+	for _, upload := range s.Uploads {
+		if upload.ID != blobID {
+			continue
+		}
+		if conversationID, private := strings.CutPrefix(upload.Circle, "conversation:"); private {
+			if chat := s.visibleChat(conversationID, person); chat != nil && chat.isConversation() {
+				return upload
+			}
+			return nil
+		}
+		if s.visibleProject(upload.Circle, person) != nil {
+			return upload
+		}
+		return nil
+	}
+	return nil
+}
+
+func (s *Server) fileResource(upload *Upload) map[string]any {
+	variants := []any{}
+	for _, name := range upload.renderings() {
+		variants = append(variants, map[string]any{
+			"name": name, "contentType": upload.ContentType, "byteSize": len(upload.bytesOf(name)),
+			"url": s.URL + "/api/v1/uploads/" + upload.ID + "/" + name,
+		})
+	}
+	return map[string]any{
+		"id": upload.ID, "filename": upload.Filename, "contentType": upload.ContentType,
+		"byteSize": len(upload.Content), "isImage": isPicture(upload.ContentType), "variants": variants,
+	}
+}
+
+// attachmentsIn names the files hanging in one text, in the order they stand
+// in it. The question is put to the files of this circle, so a handle issued
+// for another one names nothing here.
+func (s *Server) attachmentsIn(circle, text string) []any {
+	type hanging struct {
+		at     int
+		upload *Upload
+	}
+	var found []hanging
+	for _, upload := range s.Uploads {
+		if upload.Circle != circle {
+			continue
+		}
+		if at := strings.Index(text, `sgid="`+upload.handle()+`"`); at >= 0 {
+			found = append(found, hanging{at, upload})
+		}
+	}
+	slices.SortFunc(found, func(a, b hanging) int { return a.at - b.at })
+
+	list := []any{}
+	for _, one := range found {
+		list = append(list, map[string]any{
+			"id": one.upload.ID, "filename": one.upload.Filename, "contentType": one.upload.ContentType,
+			// A file is described beside a text as it was uploaded, whatever
+			// the smaller rendering of it weighs.
+			"byteSize": len(one.upload.Content), "isImage": isPicture(one.upload.ContentType),
+			"url": s.URL + "/api/v1/uploads/" + one.upload.ID,
+		})
+	}
+	return list
+}
+
+// namesItsOwnType says whether the name of a file stands for the type the
+// file turned out to be, which is what a store would go by.
+func namesItsOwnType(upload *Upload) bool {
+	return mediaType(mime.TypeByExtension(strings.ToLower(filepath.Ext(upload.Filename)))) == upload.ContentType
+}
+
+// circleOf is the circle a chat belongs to: its project, or the conversation
+// itself where two people talk privately.
+func circleOf(chat *Chat) string {
+	if chat.isConversation() {
+		return "conversation:" + chat.ID
+	}
+	return chat.ProjectID
+}
+
 func tooLarge(w http.ResponseWriter) {
 	writeJSON(w, http.StatusRequestEntityTooLarge, errorBody("tooLarge", fmt.Sprintf("A file must not be larger than %d bytes.", MaxUploadBytes)))
 }
@@ -1888,11 +2129,12 @@ func mediaType(header string) string {
 	return strings.TrimSpace(strings.Split(header, ";")[0])
 }
 
-func (s *Server) chatMessageResource(message *ChatMessage) map[string]any {
+func (s *Server) chatMessageResource(chat *Chat, message *ChatMessage) map[string]any {
 	return map[string]any{
 		"id": message.ID, "seq": message.Seq, "changeSeq": message.ChangeSeq,
 		"author": s.personReference(message.AuthorID), "bodyHtml": message.BodyHTML, "bodyText": message.BodyText, "bodySource": message.BodyHTML,
-		"createdAt": timestamp(message.CreatedAt), "editedAt": timestampOrNil(message.EditedAt), "removed": message.Removed,
+		"attachments": s.attachmentsIn(circleOf(chat), message.BodyHTML),
+		"createdAt":   timestamp(message.CreatedAt), "editedAt": timestampOrNil(message.EditedAt), "removed": message.Removed,
 		"reactions": s.reactionResources(message.Reactions),
 	}
 }
@@ -1980,7 +2222,7 @@ func (s *Server) editComment(w http.ResponseWriter, r *http.Request, person *Per
 	if !ok {
 		return
 	}
-	_, _, card := s.visibleCard(r.PathValue("cardId"), person)
+	board, _, card := s.visibleCard(r.PathValue("cardId"), person)
 	if card == nil {
 		notFound(w)
 		return
@@ -2013,7 +2255,7 @@ func (s *Server) editComment(w http.ResponseWriter, r *http.Request, person *Per
 		now := s.now
 		comment.Body, comment.EditedAt = text, &now
 	}
-	writeJSON(w, http.StatusOK, s.commentResource(comment))
+	writeJSON(w, http.StatusOK, s.commentResource(board.ProjectID, comment))
 }
 
 // isCommentControl is a control character a comment may not hold: all of
@@ -2174,7 +2416,7 @@ func (s *Server) writeComment(w http.ResponseWriter, r *http.Request, person *Pe
 		return
 	}
 
-	_, _, card := s.visibleCard(r.PathValue("cardId"), person)
+	board, _, card := s.visibleCard(r.PathValue("cardId"), person)
 	if card == nil {
 		notFound(w)
 		return
@@ -2185,7 +2427,7 @@ func (s *Server) writeComment(w http.ResponseWriter, r *http.Request, person *Pe
 	comment := &Comment{ID: newID(), AuthorID: person.ID, Body: text, CreatedAt: s.now}
 	card.subscribe(person.ID)
 	card.Comments = append(card.Comments, comment)
-	writeJSON(w, http.StatusCreated, s.commentResource(comment))
+	writeJSON(w, http.StatusCreated, s.commentResource(board.ProjectID, comment))
 }
 
 func (s *Server) visibleProject(id string, person *Person) *Project {
@@ -2239,7 +2481,7 @@ func (s *Server) visibleCard(id string, person *Person) (*Board, *Column, *Card)
 func (s *Server) cardResource(board *Board, column *Column, card *Card) map[string]any {
 	comments := []any{}
 	for _, comment := range card.Comments {
-		comments = append(comments, s.commentResource(comment))
+		comments = append(comments, s.commentResource(board.ProjectID, comment))
 	}
 	project := s.projectOf(board)
 	return map[string]any{
@@ -2248,6 +2490,7 @@ func (s *Server) cardResource(board *Board, column *Column, card *Card) map[stri
 		"board":       map[string]any{"id": board.ID, "title": board.Title},
 		"title":       card.Title,
 		"description": card.Description, "descriptionSource": card.Description,
+		"attachments":  s.attachmentsIn(board.ProjectID, card.Description),
 		"column":       map[string]any{"id": column.ID, "type": column.Type, "title": columnTitle(column), "customTitle": column.CustomTitle},
 		"commentCount": len(card.Comments), "createdAt": timestamp(card.CreatedAt),
 		"creator": s.personReference(card.CreatorID), "completedAt": timestampOrNil(card.CompletedAt),
@@ -2270,11 +2513,12 @@ func (s *Server) reactionResources(reactions []*Reaction) []any {
 	return list
 }
 
-func (s *Server) commentResource(comment *Comment) map[string]any {
+func (s *Server) commentResource(circle string, comment *Comment) map[string]any {
 	return map[string]any{
 		"id": comment.ID, "author": s.personReference(comment.AuthorID), "body": comment.Body, "bodySource": comment.Body,
-		"reactions": s.reactionResources(comment.Reactions),
-		"createdAt": timestamp(comment.CreatedAt), "editedAt": timestampOrNil(comment.EditedAt),
+		"attachments": s.attachmentsIn(circle, comment.Body),
+		"reactions":   s.reactionResources(comment.Reactions),
+		"createdAt":   timestamp(comment.CreatedAt), "editedAt": timestampOrNil(comment.EditedAt),
 	}
 }
 
