@@ -18,7 +18,7 @@ import (
 // maxUploadBytes is what Minka takes for one file. The server decides it and
 // refuses a larger file with 413, but a file that is certainly too big is
 // better refused before it travels.
-const maxUploadBytes = 50 << 20
+const maxUploadBytes = 100 << 20
 
 func (a *app) newUploadsCmd() *cobra.Command {
 	return group("uploads", "Put files into a project or a conversation and hang them in texts",

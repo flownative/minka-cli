@@ -181,7 +181,7 @@ type TrashedCard struct {
 const TrashEntries = 200
 
 // MaxUploadBytes is what Minka takes for one file.
-const MaxUploadBytes = 50 << 20
+const MaxUploadBytes = 100 << 20
 
 // DisplayEdge is how long the longer side of a picture has to be before Minka
 // renders a smaller one to show beside it. Anything below it has the original
