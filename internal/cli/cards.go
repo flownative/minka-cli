@@ -22,7 +22,7 @@ and links Minka does not keep become plain text, each with a warning.
 Use --description - to read it from stdin.`
 
 func (a *app) newCardsCmd() *cobra.Command {
-	return group("cards", "Show, create, edit, move, assign, complete and delete cards",
+	return group("cards", "Show, create, edit, move, assign, complete and delete cards, read and write their notes",
 		a.newCardsMineCmd(),
 		a.newCardsShowCmd(),
 		a.newCardsCreateCmd(),
@@ -35,6 +35,7 @@ func (a *app) newCardsCmd() *cobra.Command {
 		a.newCardsDoneCmd(),
 		a.newCardsDeleteCmd(),
 		a.newCardsRestoreCmd(),
+		a.newCardsNotesCmd(),
 	)
 }
 

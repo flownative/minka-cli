@@ -234,6 +234,7 @@ func cardBreadcrumbs(cardID string) []Breadcrumb {
 		{Action: "move", Cmd: "minka cards move " + cardID + " --column <column>", Description: "Move the card to another column"},
 		{Action: "done", Cmd: "minka cards done " + cardID, Description: "Complete the card"},
 		{Action: "comment", Cmd: "minka comments create " + cardID + " <text|->", Description: "Comment on the card"},
+		{Action: "notes", Cmd: "minka cards notes show " + cardID, Description: "Read the working notes on the back of the card"},
 	}
 }
 
