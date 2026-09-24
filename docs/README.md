@@ -36,7 +36,7 @@ the documentation says what holds; how it came about is in git.
   what the heartbeat does in every case it can meet, how the hook is written —
   before any work on `work`, `heartbeat` or `hooks`.
 - [Testing](stable/testing.md): Fake API, sabotage proofs, what a test pins
-  down — read before your first test.
+  down, what it may demand of time — read before your first test.
 
 ## Guides
 

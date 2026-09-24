@@ -43,7 +43,7 @@ const (
 )
 
 // downloadStandIn takes the place of the Basecamp CLI for downloads. It keeps
-// a line per call and its process ID next to itself.
+// a line per call next to itself.
 func downloadStandIn(t *testing.T) string {
 	t.Helper()
 	if runtime.GOOS == "windows" {
@@ -53,7 +53,6 @@ func downloadStandIn(t *testing.T) string {
 	script := `#!/bin/sh
 for last; do :; done
 echo "$*" >> "$0.calls"
-echo $$ > "$0.pid"
 network='{
   "code": "network",
   "error": "Get \"https://storage.example.test/4242/blobs/key/download/secret%20name.pdf\": connection reset",
@@ -281,38 +280,15 @@ func TestADownloadThatKeepsBringingBytesIsNotGivenUp(t *testing.T) {
 	}
 }
 
-// notedPID is the process ID the stand-in noted, if it has noted one yet.
-func notedPID(binary string) (int, bool) {
-	content, err := os.ReadFile(binary + ".pid")
-	if err != nil {
-		return 0, false
-	}
-	pid, err := strconv.Atoi(strings.TrimSpace(string(content)))
-	return pid, err == nil
-}
-
-// running tells whether the process the stand-in noted is still there.
-func running(t *testing.T, binary string) bool {
+// stillRunning tells whether the Basecamp CLI of a download is still there. A
+// download says which process it is as soon as there is one, so the test knows
+// what to look for however far the CLI itself got before it was ended.
+func stillRunning(t *testing.T, pid int) bool {
 	t.Helper()
-	pid, ok := notedPID(binary)
-	if !ok {
-		t.Fatal("the stand-in noted no process")
+	if pid == 0 {
+		t.Fatal("no Basecamp CLI was started")
 	}
 	return syscall.Kill(pid, 0) == nil
-}
-
-// cancelOnceStarted stops a download only once the stand-in has noted its
-// process. A stop that comes earlier has no process to end, and the test
-// could not tell whether one was left behind.
-func cancelOnceStarted(binary string, cancel context.CancelFunc) {
-	go func() {
-		defer cancel()
-		for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline); time.Sleep(10 * time.Millisecond) {
-			if _, ok := notedPID(binary); ok {
-				return
-			}
-		}
-	}()
 }
 
 func TestADownloadThatHangsOrNeverEndsIsEndedWithTheBasecampCLI(t *testing.T) {
@@ -328,8 +304,9 @@ func TestADownloadThatHangsOrNeverEndsIsEndedWithTheBasecampCLI(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			c.downloader.Binary = downloadStandIn(t)
 			var got bytes.Buffer
+			var cli int
 			started := time.Now()
-			err := c.downloader.Download(t.Context(), storageAddressOf(c.file), &got)
+			err := c.downloader.download(t.Context(), storageAddressOf(c.file), &got, func(pid int) { cli = pid })
 			var failed *Error
 			if !errors.As(err, &failed) || failed.Kind != Network || !strings.Contains(failed.Message, c.says) {
 				t.Fatalf("got %v, want a failure of the network that says %q", err, c.says)
@@ -337,7 +314,7 @@ func TestADownloadThatHangsOrNeverEndsIsEndedWithTheBasecampCLI(t *testing.T) {
 			if time.Since(started) > 4*time.Second {
 				t.Error("the Basecamp CLI was waited for instead of ended")
 			}
-			if running(t, c.downloader.Binary) {
+			if stillRunning(t, cli) {
 				t.Error("the Basecamp CLI is still running")
 			}
 		})
@@ -363,19 +340,20 @@ func TestADownloadThatIsStoppedIsInterruptedAndEndsTheBasecampCLI(t *testing.T) 
 	}
 
 	for _, file := range []int{fileSlow, fileHangs} {
-		// The process of the file before must not count for this one.
-		if err := os.Remove(binary + ".pid"); err != nil && !errors.Is(err, os.ErrNotExist) {
-			t.Fatal(err)
-		}
 		going, cancel := context.WithCancel(t.Context())
-		cancelOnceStarted(binary, cancel)
+		var cli int
 		started := time.Now()
-		err = Downloader{Binary: binary}.Download(going, storageAddressOf(file), &got)
+		err = Downloader{Binary: binary}.download(going, storageAddressOf(file), &got, func(pid int) {
+			// A stop that comes before the Basecamp CLI runs has no process to
+			// end, and the test could not tell whether one was left behind.
+			cli = pid
+			cancel()
+		})
 		expectKind(t, err, Interrupted)
 		if time.Since(started) > 3*time.Second {
 			t.Error("the Basecamp CLI was waited for instead of stopped")
 		}
-		if running(t, binary) {
+		if stillRunning(t, cli) {
 			t.Error("the Basecamp CLI is still running")
 		}
 	}
