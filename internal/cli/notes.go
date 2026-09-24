@@ -25,6 +25,11 @@ const apiCodeNotesChanged = "notesChanged"
 // expectNone is the value of --expect for notes nobody has written yet.
 const expectNone = "none"
 
+// notesTimeLayout is the one form updatedAt has in the API: UTC with
+// microseconds. --expect takes nothing else, so that a guard always names a
+// time the server can match exactly.
+const notesTimeLayout = "2006-01-02T15:04:05.000000Z"
+
 func (a *app) newCardsNotesCmd() *cobra.Command {
 	return group("notes", "Read and write the working notes on the back of a card",
 		a.newCardsNotesShowCmd(),
@@ -152,8 +157,12 @@ func notesGuard(cmd *cobra.Command, expect string, force bool) (*api.NotesGuard,
 	case expect == expectNone:
 		return &api.NotesGuard{}, nil
 	}
-	if _, err := time.Parse(time.RFC3339Nano, expect); err != nil {
-		return nil, usageErrorf(cmd, "--expect takes the updatedAt of the notes, such as 2026-09-24T11:53:14.123456Z, or none")
+	if _, err := time.Parse(notesTimeLayout, expect); err != nil {
+		return nil, &Error{
+			Code:    CodeUsage,
+			Message: fmt.Sprintf("--expect takes the updatedAt of the notes as Minka gives it, such as 2026-09-24T11:53:14.123456Z, or none; %q is not", expect),
+			Hint:    "minka cards notes show <cardId> gives the updatedAt to copy.",
+		}
 	}
 	return &api.NotesGuard{UpdatedAt: &expect}, nil
 }

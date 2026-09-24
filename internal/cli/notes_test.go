@@ -72,6 +72,18 @@ func TestNotesSetNeedsToKnowWhatItMayReplace(t *testing.T) {
 		r := e.run("text", append([]string{"cards", "notes", "set", e.fixture.CardInTriage.ID, "-"}, args...)...)
 		expectCode(t, r, ExitUsage)
 	}
+	for _, expect := range []string{
+		"2026-09-24T11:53:14Z",
+		"2026-09-24T11:53:14.123Z",
+		"2026-09-24T11:53:14.123456789Z",
+		"2026-09-24T13:53:14.123456+02:00",
+	} {
+		env, r := e.runJSON("text", "cards", "notes", "set", e.fixture.CardInTriage.ID, "-", "--expect", expect)
+		expectCode(t, r, ExitUsage)
+		if !strings.Contains(env.Hint, "cards notes show") {
+			t.Errorf("--expect %s: hint %q does not point to cards notes show", expect, env.Hint)
+		}
+	}
 	if writes := e.server.WritingRequests(); len(writes) != 0 {
 		t.Errorf("%d writes were sent", len(writes))
 	}
