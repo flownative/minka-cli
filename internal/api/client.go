@@ -304,7 +304,6 @@ func (c *Client) UnassignCard(ctx context.Context, cardID, personID string) erro
 	return err
 }
 
-// AddStep adds a step at the end of the list of a card.
 // CardNotes reads the notes on the back of a card.
 func (c *Client) CardNotes(ctx context.Context, cardID string) (Result[CardNotes], error) {
 	return request[CardNotes](ctx, c, http.MethodGet, "/cards/"+url.PathEscape(cardID)+"/notes", nil)
@@ -321,6 +320,7 @@ func (c *Client) WriteCardNotes(ctx context.Context, cardID, body string, guard 
 	return request[CardNotes](ctx, c, http.MethodPut, "/cards/"+url.PathEscape(cardID)+"/notes", fields)
 }
 
+// AddStep adds a step at the end of the list of a card.
 func (c *Client) AddStep(ctx context.Context, cardID, title string) (Result[Card], error) {
 	return request[Card](ctx, c, http.MethodPost, "/cards/"+url.PathEscape(cardID)+"/steps", map[string]string{"title": title})
 }
