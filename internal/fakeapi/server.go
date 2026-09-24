@@ -1436,6 +1436,17 @@ func (s *Server) writeCardNotes(w http.ResponseWriter, r *http.Request, person *
 	if !ok {
 		return
 	}
+	expected, guarded := fields["expectedUpdatedAt"]
+	var expectedAt *time.Time
+	if guarded && expected != nil {
+		value, isString := expected.(string)
+		at, err := time.Parse(timestampLayout, value)
+		if !isString || err != nil {
+			malformed(w, `The field "expectedUpdatedAt" has to be a point in time as "updatedAt" gives it, or null.`)
+			return
+		}
+		expectedAt = &at
+	}
 	if body == nil {
 		unprocessable(w, "cardNotesMissing", `Writing the notes of a card needs the field "body"; an empty string clears them.`)
 		return
@@ -1449,17 +1460,6 @@ func (s *Server) writeCardNotes(w http.ResponseWriter, r *http.Request, person *
 		unprocessable(w, "cardNotesTooLong", "The notes of a card must not be longer than 100000 characters.")
 		return
 	}
-	expected, guarded := fields["expectedUpdatedAt"]
-	var expectedAt *time.Time
-	if guarded && expected != nil {
-		text, isString := expected.(string)
-		at, err := time.Parse(time.RFC3339Nano, text)
-		if !isString || err != nil {
-			malformed(w, `The field "expectedUpdatedAt" has to be a point in time as "updatedAt" gives it, or null.`)
-			return
-		}
-		expectedAt = &at
-	}
 
 	board, _, card := s.visibleCard(r.PathValue("cardId"), person)
 	if card == nil {
@@ -1469,14 +1469,16 @@ func (s *Server) writeCardNotes(w http.ResponseWriter, r *http.Request, person *
 	if s.refusedAsArchived(w, s.projectOfCard(card.ID)) {
 		return
 	}
-	if card.NotesUpdatedAt != nil && card.Notes == text {
+	// The text the notes hold already is no write and no conflict, and that
+	// includes an empty text on a card nobody has written notes for.
+	if card.Notes == text {
 		writeJSON(w, http.StatusOK, s.notesResource(board, card))
 		return
 	}
 	if guarded && card.NotesUpdatedAt != nil && (expectedAt == nil || !expectedAt.Equal(*card.NotesUpdatedAt)) {
-		body := errorBody("notesChanged", `The notes of this card were changed since they were read. Nothing was written; "notes" holds them as they stand.`)
-		body["notes"] = s.notesResource(board, card)
-		writeJSON(w, http.StatusConflict, body)
+		refusal := errorBody("notesChanged", `The notes of this card were changed since they were read. Nothing was written; "notes" holds them as they stand.`)
+		refusal["notes"] = s.notesResource(board, card)
+		writeJSON(w, http.StatusConflict, refusal)
 		return
 	}
 	// Every write stands a second after the one before, so that each has a
@@ -2893,8 +2895,12 @@ func writeRaw(w http.ResponseWriter, status int, body string) {
 	_, _ = io.WriteString(w, body)
 }
 
+// timestampLayout is the one form the API gives points in time in: UTC with
+// microseconds.
+const timestampLayout = "2006-01-02T15:04:05.000000Z"
+
 func timestamp(t time.Time) string {
-	return t.UTC().Format("2006-01-02T15:04:05.000000Z")
+	return t.UTC().Format(timestampLayout)
 }
 
 func timestampOrNil(t *time.Time) any {
