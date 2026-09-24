@@ -1431,6 +1431,20 @@ func TestAnUploadIsRefusedWhenTheFileOrItsTypeIsWrong(t *testing.T) {
 	if !strings.Contains(env.Error, "is a directory, not a file") {
 		t.Errorf("a directory: %q", env.Error)
 	}
+	// One byte over what Minka takes, and the bytes are never written: the
+	// guard asks the directory entry for the size and opens nothing.
+	tooBig := filepath.Join(dir, "video.mp4")
+	if err := os.WriteFile(tooBig, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Truncate(tooBig, maxUploadBytes+1); err != nil {
+		t.Fatal(err)
+	}
+	env, r = e.runJSON("", "uploads", "create", tooBig, "--project", e.fixture.Project.ID)
+	expectCode(t, r, ExitUsage)
+	if !strings.Contains(env.Error, "Minka takes at most") {
+		t.Errorf("a file over the limit: %q", env.Error)
+	}
 	if now := len(e.server.Requests()); now != sent {
 		t.Errorf("%d requests for files that cannot be sent", now-sent)
 	}

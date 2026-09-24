@@ -155,7 +155,7 @@ True for reading requests and for `messages create` with
 
 *Applies to: uploads, IDs, required flags*
 
-A file over 50 MiB, a directory, an ID that is not a UUID, a call without a
+A file over 100 MiB, a directory, an ID that is not a UUID, a call without a
 circle: exit 1, without a request.
 
 **Why:** Saves a useless transfer and gives an error that says what to do.

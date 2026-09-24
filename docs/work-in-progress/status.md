@@ -205,6 +205,11 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   shapes that are refused unrepaired with the entry to add by hand.
 - "agent for X" in `people list` has been seen live, an agent that stepped
   down has not — it is in no list any more.
+- What Minka takes for one file is 100 MiB. The CLI refuses a byte over that
+  itself, which is tested, and the 413 of the server is played by a stand-in
+  answer. No file of that order has ever been sent live, neither before the
+  limit was raised nor after; the number is read in Minka's `uploads.maxBytes`
+  and in the controller that takes an upload of the API.
 - Of `uploads download`, what is left: a file of a project one is not in, for
   which the local instance offers no second account; the entity tag with the
   304 and the 416 that go with it; the ranges an audio file is played in; and
@@ -253,8 +258,6 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
 
 ## Open in the API
 
-- A file may weigh 100 MiB, `uploads create` still refuses one over 50 MiB
-  before it travels and `security.md` says so. To be set right together.
 - Posts have `attachments` too, and the CLI has no commands for posts at all.
 - Renaming and reordering steps does not exist.
 - Paging Done beyond 25 cards does not exist; needed once dogfooding needs it.

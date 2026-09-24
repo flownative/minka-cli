@@ -79,6 +79,6 @@ accepted for loopback only. Other paths are refused.
   refused. The name out of an answer has to be a plain name: one carrying `/`
   or `\`, or being `.` or `..`, is refused instead of cut down, because it
   would lead somewhere other than where the command was run (C-032).
-- What the server is sure to refuse, the CLI refuses first: a file over 50
+- What the server is sure to refuse, the CLI refuses first: a file over 100
   MiB, a directory, a call without a circle. That saves a useless transfer and
   gives a clearer error (C-013).
