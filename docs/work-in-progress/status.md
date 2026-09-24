@@ -42,6 +42,13 @@ which is somebody of the account's own company or an admin. Under one that
 may not, masked addresses were seen live ending the run as `forbidden`. Only
 the people the chosen projects refer to come into a bundle.
 
+An agent says which cards it has in hand: `work start` and `work stop` keep
+one list per machine, `heartbeat` reports it to `PUT /me/work`, and `hooks
+install` writes the hook of Claude Code that calls it after every tool call.
+The list, the refusals, the throttle and the hook are seen live; the report
+itself is not, the local instance knowing only a person, whom `PUT /me/work`
+turns away as `agentsOnly`, see below.
+
 Everything else is tested against the fake API and checked live — the chain
 upload → attachment in the text → display → the bytes back, as well as private
 conversations in both directions. What is checked against the fake only is
@@ -72,7 +79,9 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   as it should.
 - A `shortId` that is not null, and a card found by it: live, every card
   carries the field and the address answers, but no board that can be read
-  there shows short identifiers, so only the 404 was seen.
+  there shows short identifiers, so only the 404 was seen, for `cards show`
+  and for `work start` alike; and no card that `work stop` could find under
+  one has ever lain in the list.
 - The order of a chat where only an import shows it: numbers out of order down
   a list, and imported lines that are never unread. Nor have unread messages
   of other people been seen, the smoke account being the only one. Live,
@@ -168,6 +177,32 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
 - The fake API knows no archived card, so what Minka answers a move of one is
   not mirrored: that an archived card is named before a column without the
   area on hold is read in the Minka code alone.
+- Of saying what one is working on, the report that gets through: the 204 of
+  `PUT /me/work`, a tile that lights up and one that goes quiet, and the hook
+  running in a real session. The only account that may write on the local
+  instance is a person, and the address turns such a token away with 403
+  `agentsOnly`, so no signal of a live run has ever been taken in. The order
+  of the refusals is tested against the fake and read in Minka's code, its
+  tests and E-184. What the fake does not mirror: it never forgets a signal
+  after the three minutes Minka counts it for, because nothing the CLI does
+  depends on that; and an `Accept` without JSON gets 406 there before the
+  token is looked at, which no request of this CLI sends.
+  Everything else is seen live: the refusal of a person's token, silent and
+  exit 0 as a hook needs it, with its reason afterwards in `work list` as
+  `failure`; `work start` by ID and its 404 for a card nobody can see;
+  `work stop` by ID, without an argument for the one card and refused for
+  several, `--all`, and a card that is not in the list; the auth refusal of
+  `list`, `start` and `stop` on a machine signed in nowhere; ten processes at
+  once losing no card, and ten stopping beside signals without one going
+  astray; the throttle across processes, which reports at once when the list
+  changed, keeps quiet for the minute after and reports again beyond it; a
+  signal bounded to five seconds where a host does not answer, against the
+  thirty of every other command; nothing remembered returning without a
+  request and without making a directory; the eight hours taking a card out
+  for every reader; and the text view of all of it. `hooks install` and
+  `hooks status` are seen on real files: a fresh one, one carrying other
+  hooks, one carrying ours, a `hooks` that stands there as `null`, and the
+  shapes that are refused unrepaired with the entry to add by hand.
 - "agent for X" in `people list` has been seen live, an agent that stepped
   down has not — it is in no list any more.
 - Of `uploads download`, what is left: a file of a project one is not in, for
@@ -222,6 +257,9 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   gains a build provenance attestation with instructions for verifying it, and
   the macOS binaries get notarised, which waits for an Apple Developer ID.
 
+- Report live with an agent's token, on a board that shows the tile: the 204
+  of `PUT /me/work`, a card that lights up and one that goes quiet at once,
+  and the hook running in a real session.
 - React to messages from `minka-14`: check against the code, fake first,
   then the CLI, test and sabotage proof, check live, documentation in the
   same commit.
