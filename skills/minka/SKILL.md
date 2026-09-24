@@ -148,6 +148,8 @@ minka cards assign <cardId> <person> --json
 minka cards unassign <cardId> <person> --json
 minka cards subscribe <cardId> <person> --json
 minka cards unsubscribe <cardId> <person> --json
+minka cards notes show <cardId> --json
+minka cards notes set <cardId> - --expect <updatedAt|none> --json < notes.md
 minka steps list <cardId> --json
 minka steps create <cardId> "Text" --json
 minka steps complete <cardId> <step> --json
@@ -306,6 +308,29 @@ such as `Doing`.
 - Completing a completed step, reopening an open one and deleting a step that
   is gone all succeed. Deleting does not ask.
 - Renaming and reordering steps are not possible through the API yet.
+
+## Working notes
+
+- The back of a card holds one text of working notes: plans, findings, the
+  state of the work. It is light Markdown, stored and printed as it is, never
+  converted. Writing it notifies nobody and leaves no line in the timeline.
+- `cards notes show <cardId>` gives `{cardId, body, updatedAt, updatedBy,
+  appUrl}`. Notes nobody has written have `body` `""` and `updatedAt` and
+  `updatedBy` null. The card itself does not say whether it has notes.
+- `cards notes set <cardId> -` replaces the notes as a whole with stdin; `""`
+  clears them. It needs `--expect` or `--force`:
+  - `--expect <updatedAt>` with the `updatedAt` you read, `--expect none` for
+    notes nobody had written yet. Notes somebody changed since are left as
+    they stand: exit 7, `meta.apiCode` `notesChanged`, and `data` holds the
+    notes as they stand now. Merge your text into their `body` and send it
+    again with their `updatedAt`. Sending the text that stands already is no
+    conflict.
+  - `--force` writes over whatever stands. Use it only for notes that are
+    yours alone.
+- At most 100000 characters (exit 1 before sending); control characters other
+  than line breaks and tabs exit 9 with `cardNotesHasControlCharacters`.
+- A card in its board's archive can be read, not written: exit 9 with
+  `cardArchived`.
 
 ## Due dates
 

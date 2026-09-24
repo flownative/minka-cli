@@ -530,3 +530,18 @@ glowing says the opposite; the server cannot do it instead, because a signal
 carries the whole set and the last one holds.
 **Implemented as:** `cli.app.letGoOfTheCard`, see
 [Saying what you are working on](stable/at-work.md).
+
+<a id="c-042"></a>
+## C-042 — A write over the notes of a card says what it replaces
+
+*Applies to: `cards notes set`*
+
+The command needs `--expect <updatedAt>` (or `none`) or `--force`; there is no
+default. It does not read the notes itself to send what it read.
+
+**Why:** Notes are overwritten as a whole, and agents and people write the
+same card. A guard only protects what the writer read before it began to
+write; one read by the command a moment before its write would guard nothing
+and only look safe. Naming `--force` makes writing over another's edit a
+choice, not an accident.
+**Implemented as:** `cli.notesGuard`, see the skill, section "Working notes".

@@ -265,17 +265,11 @@ func TestTheSkillNamesEveryCommandAndNoOther(t *testing.T) {
 	root := newApp(t.Context(), strings.NewReader(""), &bytes.Buffer{}, &bytes.Buffer{}, func(string) string { return "" }).newRootCmd()
 	skill := string(skills.Minka)
 
-	existing := map[string]bool{}
-	for _, group := range root.Commands() {
-		if group.Hidden || group.Name() == "help" {
-			continue
-		}
-		if !group.HasSubCommands() {
-			existing[group.Name()] = true
-			continue
-		}
-		for _, cmd := range group.Commands() {
-			existing[group.Name()+" "+cmd.Name()] = true
+	existing, groups := map[string]bool{}, map[string]bool{}
+	for _, path := range commandPaths(root) {
+		existing[path] = true
+		for i := strings.LastIndex(path, " "); i > 0; i = strings.LastIndex(path[:i], " ") {
+			groups[path[:i]] = true
 		}
 	}
 
@@ -294,7 +288,7 @@ func TestTheSkillNamesEveryCommandAndNoOther(t *testing.T) {
 
 	for _, match := range minkaCall.FindAllStringSubmatch(skill, -1) {
 		path := match[1]
-		if existing[path] {
+		if existing[path] || groups[path] {
 			continue
 		}
 		if first, _, _ := strings.Cut(path, " "); existing[first] {

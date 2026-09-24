@@ -322,3 +322,19 @@ type FileBytes struct {
 	ByteSize    int64 // what the answer says it sends, -1 where it says nothing
 	Body        io.ReadCloser
 }
+
+// CardNotes is the back of a card. Notes nobody has written have an empty
+// body and neither a time nor an author.
+type CardNotes struct {
+	CardID    string           `json:"cardId"`
+	Body      string           `json:"body"`
+	UpdatedAt *string          `json:"updatedAt"`
+	UpdatedBy *PersonReference `json:"updatedBy"`
+	AppURL    string           `json:"appUrl"`
+}
+
+// NotesGuard names the notes a write may replace: the updatedAt they were
+// read with, or nil for notes nobody had written yet.
+type NotesGuard struct {
+	UpdatedAt *string
+}

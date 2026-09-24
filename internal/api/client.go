@@ -157,6 +157,7 @@ type Error struct {
 	StatusCode int
 	Code       string // the code of the error body, or one derived from the status
 	Message    string
+	Body       json.RawMessage // the answer as sent, for a refusal that carries more than its error
 }
 
 func (e *Error) Error() string {
@@ -304,6 +305,22 @@ func (c *Client) UnassignCard(ctx context.Context, cardID, personID string) erro
 }
 
 // AddStep adds a step at the end of the list of a card.
+// CardNotes reads the notes on the back of a card.
+func (c *Client) CardNotes(ctx context.Context, cardID string) (Result[CardNotes], error) {
+	return request[CardNotes](ctx, c, http.MethodGet, "/cards/"+url.PathEscape(cardID)+"/notes", nil)
+}
+
+// WriteCardNotes replaces the notes of a card as a whole. With a guard the
+// server writes only over the notes the guard names and answers anything
+// else with notesChanged.
+func (c *Client) WriteCardNotes(ctx context.Context, cardID, body string, guard *NotesGuard) (Result[CardNotes], error) {
+	fields := map[string]any{"body": body}
+	if guard != nil {
+		fields["expectedUpdatedAt"] = guard.UpdatedAt
+	}
+	return request[CardNotes](ctx, c, http.MethodPut, "/cards/"+url.PathEscape(cardID)+"/notes", fields)
+}
+
 func (c *Client) AddStep(ctx context.Context, cardID, title string) (Result[Card], error) {
 	return request[Card](ctx, c, http.MethodPost, "/cards/"+url.PathEscape(cardID)+"/steps", map[string]string{"title": title})
 }
@@ -554,6 +571,9 @@ func send[T any](ctx context.Context, c *Client, httpClient *http.Client, method
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		apiErr := errorFromResponse(resp.StatusCode, raw)
 		apiErr.Method = method
+		if json.Valid(raw) {
+			apiErr.Body = raw
+		}
 		return result, apiErr
 	}
 
