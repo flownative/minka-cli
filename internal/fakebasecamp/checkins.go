@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"regexp"
 	"strconv"
-	"time"
 )
 
 // Question is a question of a questionnaire, which Basecamp asks on a schedule.
@@ -61,12 +60,6 @@ type Answer struct {
 	Files     []File
 	// Twice has the list of answers hold this one twice.
 	Twice bool
-}
-
-// ADayAhead is a day that has not come whenever the tests run, for a schedule
-// that ends in the future.
-func ADayAhead() string {
-	return time.Now().UTC().AddDate(1, 0, 0).Format("2006-01-02")
 }
 
 // checkinProject is a project with a questionnaire that holds every case: one

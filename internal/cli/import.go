@@ -245,7 +245,7 @@ it has been applied.`,
 			// Every request of the run goes through the one source that asks
 			// again, whatever kind it is of and whether anything is written.
 			source := basecamp.NewRetrying(a.basecampSource, a.retryPause)
-			extractor := basecamp.Extractor{Source: source, Avatars: a.avatarFetcher, Files: a.basecampFiles}
+			extractor := basecamp.Extractor{Source: source, Avatars: a.avatarFetcher, Files: a.basecampFiles, Now: a.now}
 			result, err := extractor.Extract(a.ctx, projects, writer)
 			if err != nil {
 				return basecampError(err)

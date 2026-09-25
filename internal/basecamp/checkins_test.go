@@ -263,7 +263,7 @@ func TestNobodyIsAskedWhomMinkaCouldNotAsk(t *testing.T) {
 // that made it impossible. Its answers go with it: an answer without its
 // question has nothing to hang on.
 func TestAScheduleMinkaCannotExpressLeavesTheQuestionOutWithItsAnswers(t *testing.T) {
-	today := time.Now().UTC().Format("2006-01-02")
+	today := runDay.Format("2006-01-02")
 	cases := map[string]struct {
 		field  string
 		change func(*fakebasecamp.Question)
@@ -281,7 +281,7 @@ func TestAScheduleMinkaCannotExpressLeavesTheQuestionOutWithItsAnswers(t *testin
 		"every other week on several weekdays": {"days", func(q *fakebasecamp.Question) {
 			q.Schedule.Frequency, q.Schedule.Days = "every_other_week", []int{1, 3}
 		}},
-		"a schedule that ends later": {"end_date", func(q *fakebasecamp.Question) { q.Schedule.EndDate = fakebasecamp.ADayAhead() }},
+		"a schedule that ends later": {"end_date", func(q *fakebasecamp.Question) { q.Schedule.EndDate = "2026-06-01" }},
 		"a schedule that ends today": {"end_date", func(q *fakebasecamp.Question) { q.Schedule.EndDate = today }},
 		"an end that is no day":      {"end_date", func(q *fakebasecamp.Question) { q.Schedule.EndDate = "2024-3-1" }},
 		"a start that is no day":     {"start_date", func(q *fakebasecamp.Question) { q.Schedule.StartDate = "2024-2-5" }},
@@ -639,7 +639,7 @@ func TestEveryRecordOfACheckinNamesRecordsOfTheBundle(t *testing.T) {
 // failure it ended with.
 func extractExpectingAnError(t *testing.T, account *fakebasecamp.Account, projects ...string) *basecamp.Error {
 	t.Helper()
-	extractor := basecamp.Extractor{Source: account, Avatars: account, Files: account}
+	extractor := basecamp.Extractor{Source: account, Avatars: account, Files: account, Now: func() time.Time { return runDay }}
 	_, err := extractor.Extract(t.Context(), projects, bundle.Discard())
 
 	var failed *basecamp.Error

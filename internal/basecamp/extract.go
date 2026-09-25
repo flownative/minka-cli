@@ -168,6 +168,9 @@ type Extractor struct {
 	// MessagesPerPart is how many lines of a chat one file of a bundle holds
 	// at most; messagesPerPart when 0.
 	MessagesPerPart int
+	// Now is the moment the run is made, which a schedule that has run out is
+	// held against; the clock of the machine when nil.
+	Now func() time.Time
 
 	people  *registry
 	account string
@@ -335,6 +338,14 @@ func (e *Extractor) Extract(ctx context.Context, projectIDs []string, w *bundle.
 		Bodies:                e.bodies,
 		Files:                 e.files,
 	}, nil
+}
+
+// now is the moment of the run.
+func (e *Extractor) now() time.Time {
+	if e.Now == nil {
+		return time.Now()
+	}
+	return e.Now()
 }
 
 func sortedIDs(values []string) ([]int64, error) {

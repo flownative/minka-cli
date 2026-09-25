@@ -23,12 +23,12 @@ type question struct {
 	Status string `json:"status"`
 	Title  string `json:"title"`
 	// Paused is a question that asks nobody until somebody starts it again.
-	Paused   bool     `json:"paused"`
-	Schedule schedule `json:"schedule"`
+	Paused       bool     `json:"paused"`
+	Schedule     schedule `json:"schedule"`
+	AnswersCount int      `json:"answers_count"`
 	// AnswersURL is where the answers of the question are listed, at an address
 	// of the account and not of the project.
-	AnswersCount int    `json:"answers_count"`
-	AnswersURL   string `json:"answers_url"`
+	AnswersURL string `json:"answers_url"`
 }
 
 // schedule is when Basecamp asks a question. Days count Sunday as 0 and
@@ -175,7 +175,7 @@ func (e *Extractor) writeQuestion(ctx context.Context, w *bundle.Writer, bucket,
 	if err != nil {
 		return err
 	}
-	when, impossible, err := scheduleOf(found, time.Now().UTC())
+	when, impossible, err := scheduleOf(found, e.now().UTC())
 	if err != nil {
 		return err
 	}
@@ -354,8 +354,11 @@ func scheduleOf(found question, now time.Time) (checkinSchedule, string, error) 
 	if rhythm != bundle.RhythmDaily && len(weekdays) != 1 {
 		return checkinSchedule{}, "days", nil
 	}
-	if s.Hour < 0 || s.Hour > 23 || s.Minute < 0 || s.Minute > 59 {
+	if s.Hour < 0 || s.Hour > 23 {
 		return checkinSchedule{}, "hour", nil
+	}
+	if s.Minute < 0 || s.Minute > 59 {
+		return checkinSchedule{}, "minute", nil
 	}
 	when.rhythm, when.weekdays = rhythm, weekdays
 	when.timeOfDay = fmt.Sprintf("%02d:%02d", s.Hour, s.Minute)
