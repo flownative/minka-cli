@@ -110,6 +110,9 @@ func TestACardTakenUpAnewGoesByTheNewMoment(t *testing.T) {
 
 	again := first.Add(2 * time.Hour)
 	entry.Start(Card{ID: "a-card", StartedAt: again, Session: "mine"})
+	if seen := entry.Cards[0].SeenAt; !seen.IsZero() {
+		t.Errorf("the card taken up anew carries the sign of life %s of the work before", seen)
+	}
 	if got := lastSeen(entry.Cards[0]); !got.Equal(again) {
 		t.Errorf("the card was last seen at %s, want the moment it was taken up anew", got)
 	}
