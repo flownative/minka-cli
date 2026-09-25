@@ -18,6 +18,8 @@ const (
 	Cards       Kind = "cards"
 	Steps       Kind = "steps"
 	Posts       Kind = "posts"
+	Questions   Kind = "questions"
+	Answers     Kind = "answers"
 	Messages    Kind = "messages"
 	Comments    Kind = "comments"
 	Reactions   Kind = "reactions"
@@ -26,13 +28,15 @@ const (
 
 // Kinds lists every kind in the order of the format, which is the order a
 // report shows them in.
-var Kinds = []Kind{People, Projects, Tools, Categories, Columns, Cards, Steps, Posts, Messages, Comments, Reactions, Attachments}
+var Kinds = []Kind{People, Projects, Tools, Categories, Columns, Cards, Steps, Posts, Questions, Answers, Messages, Comments, Reactions, Attachments}
 
 const (
-	ToolBoard = "board"
-	ToolChat  = "chat"
-	ToolPosts = "posts"
+	ToolBoard    = "board"
+	ToolChat     = "chat"
+	ToolPosts    = "posts"
+	ToolCheckins = "checkins"
 
+	OwnerAnswer  = "answer"
 	OwnerCard    = "card"
 	OwnerComment = "comment"
 	OwnerMessage = "message"
@@ -48,13 +52,22 @@ const (
 	StatusArchived = "archived"
 	StatusTrashed  = "trashed"
 
-	ParentCard = "card"
-	ParentPost = "post"
+	ParentAnswer = "answer"
+	ParentCard   = "card"
+	ParentPost   = "post"
 
+	TargetAnswer  = "answer"
 	TargetCard    = "card"
 	TargetComment = "comment"
 	TargetMessage = "message"
 	TargetPost    = "post"
+
+	// The four rhythms a question can be asked in. Daily means on each of the
+	// chosen weekdays.
+	RhythmDaily          = "daily"
+	RhythmWeekly         = "weekly"
+	RhythmEveryOtherWeek = "everyOtherWeek"
+	RhythmMonthly        = "monthly"
 )
 
 // Record is what every record carries. CreatedBy is nil when the source does
@@ -152,6 +165,40 @@ type Post struct {
 	Body             string  `json:"body"`
 	PinnedAt         *string `json:"pinnedAt"`
 	Status           string  `json:"status"`
+}
+
+// Question is a question a Check-ins tool asks on a schedule. Weekdays count
+// from 1 for Monday to 7 for Sunday, one or more of them for the rhythm daily
+// and exactly one for every other rhythm; TimeOfDay is HH:MM. StartsOn is the
+// day the rhythm is counted from, which decides which week an everyOtherWeek
+// question falls in. Paused is a question that asks nobody any more.
+//
+// Nothing hangs on a question: it carries no comments and no reactions, and
+// the format has no word for either of a question.
+type Question struct {
+	Record
+	ProjectSourceID string   `json:"projectSourceId"`
+	ToolSourceID    string   `json:"toolSourceId"`
+	Title           string   `json:"title"`
+	Rhythm          string   `json:"rhythm"`
+	Weekdays        []int    `json:"weekdays"`
+	TimeOfDay       string   `json:"timeOfDay"`
+	StartsOn        string   `json:"startsOn"`
+	Asked           []string `json:"asked"`
+	Paused          bool     `json:"paused"`
+	Status          string   `json:"status"`
+}
+
+// Answer is what somebody answered a question on one day. GroupOn is that day,
+// as the source has it: it is never held against the schedule, so an answer may
+// sit on a day the question never asked on.
+type Answer struct {
+	Record
+	ProjectSourceID  string `json:"projectSourceId"`
+	ToolSourceID     string `json:"toolSourceId"`
+	QuestionSourceID string `json:"questionSourceId"`
+	GroupOn          string `json:"groupOn"`
+	Body             string `json:"body"`
 }
 
 // Message is one line of a chat.

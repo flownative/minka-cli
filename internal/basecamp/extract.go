@@ -26,8 +26,11 @@ type person struct {
 	// PersonableType is the kind of person: a user, a bot, what is left of
 	// somebody who was deleted, and others.
 	PersonableType string `json:"personable_type"`
-	CreatedAt      string `json:"created_at"`
-	UpdatedAt      string `json:"updated_at"`
+	// TimeZone is the zone the person lives in, which is the zone a day of
+	// theirs is read in where the source names none.
+	TimeZone  string `json:"time_zone"`
+	CreatedAt string `json:"created_at"`
+	UpdatedAt string `json:"updated_at"`
 }
 
 type project struct {
@@ -63,6 +66,7 @@ var toolKinds = map[string]string{
 	"kanban_board":  bundle.ToolBoard,
 	"chat":          bundle.ToolChat,
 	"message_board": bundle.ToolPosts,
+	"questionnaire": bundle.ToolCheckins,
 }
 
 // SkippedTools counts dock entries of one kind that a run left out, either
@@ -129,6 +133,25 @@ type Result struct {
 	// UploadLinesLeftOut counts the lines that were files alone, of which
 	// Basecamp names none in a way a bundle can refer to.
 	UploadLinesLeftOut int
+	// QuestionsLeftOut are the questions left out because Minka has no words
+	// for their schedule, each with the field that made it impossible.
+	QuestionsLeftOut []ImpossibleQuestion
+	// AnchorsInferred are the questions asked every other week whose startsOn
+	// was taken from the day an answer belongs to.
+	AnchorsInferred []InferredAnchor
+	// NobodyAsked are the questions that come asking nobody at all, each with
+	// how many people the bundle could not name as asked.
+	NobodyAsked []NobodyAsked
+	// AskedLeftOut counts the people a question is asked of that a bundle
+	// cannot say are asked.
+	AskedLeftOut AskedLeftOut
+	// AnswersWithoutABody counts the answers that say nothing and
+	// AnswersTrashed those in the trash; both are left out. AnswersWithoutADay
+	// counts those Basecamp names no day for, which take the day they were
+	// written on.
+	AnswersWithoutABody int
+	AnswersWithoutADay  int
+	AnswersTrashed      int
 	// LongestBody is the longest text of a kind, in characters.
 	LongestBody map[bundle.Kind]int
 	Bodies      BodyCounts
@@ -148,6 +171,9 @@ type Extractor struct {
 	// MessagesPerPart is how many lines of a chat one file of a bundle holds
 	// at most; messagesPerPart when 0.
 	MessagesPerPart int
+	// Now is the moment the run is made, which a schedule that has run out is
+	// held against; the clock of the machine when nil.
+	Now func() time.Time
 
 	people  *registry
 	account string
@@ -157,8 +183,12 @@ type Extractor struct {
 	// creatorProbesRefused counts the dock entries asked for the creator of a
 	// project that the identity may not see.
 	creatorProbesRefused int
-	// talks are the message boards and chats of the projects walked so far.
+	// talks are the message boards, chats and questionnaires of the projects
+	// walked so far.
 	talks []talk
+	// members names, per project, whom the bundle carries as a member of it.
+	// Only they can be asked a question of that project.
+	members map[int64]map[int64]bool
 
 	cardsByStatus      map[string]int
 	cardsOnHold        int
@@ -174,6 +204,14 @@ type Extractor struct {
 	longestBody           map[bundle.Kind]int
 	bodies                BodyCounts
 
+	questionsLeftOut    []ImpossibleQuestion
+	anchorsInferred     []InferredAnchor
+	nobodyAsked         []NobodyAsked
+	askedLeftOut        AskedLeftOut
+	answersWithoutABody int
+	answersWithoutADay  int
+	answersTrashed      int
+
 	// fileOwners names the first owner of every file the walk has met, and
 	// fileRecords are the records of those files in the order they were met.
 	fileOwners  map[string]string
@@ -181,12 +219,13 @@ type Extractor struct {
 	files       FileCounts
 }
 
-// talk names the tools of one project that hold posts and lines, each kind in
-// the order of the tools.
+// talk names the tools of one project that hold posts, lines and questions,
+// each kind in the order of the tools.
 type talk struct {
-	bucket        int64
-	messageBoards []int64
-	chats         []int64
+	bucket         int64
+	messageBoards  []int64
+	chats          []int64
+	questionnaires []int64
 }
 
 type skippedKey struct {
@@ -207,9 +246,9 @@ func ValidProjectID(value string) bool {
 // gets the same records, except that no avatar and no file is downloaded.
 //
 // The walk goes kind by kind: the projects with their tools and boards, then
-// the message boards of all of them, then the chats. So the comments and the
-// reactions of a bundle stand in the order of what they hang on: those of
-// cards, those of posts, those of lines.
+// the message boards of all of them, then the chats, then the questionnaires.
+// So the comments and the reactions of a bundle stand in the order of what they
+// hang on: those of cards, those of posts, those of lines, those of answers.
 func (e *Extractor) Extract(ctx context.Context, projectIDs []string, w *bundle.Writer) (Result, error) {
 	e.people = newRegistry()
 	e.skipped = map[skippedKey]int{}
@@ -218,14 +257,16 @@ func (e *Extractor) Extract(ctx context.Context, projectIDs []string, w *bundle.
 	e.account, e.apiRoot = "", ""
 	e.cardsByStatus = map[string]int{bundle.StatusActive: 0, bundle.StatusArchived: 0, bundle.StatusTrashed: 0}
 	e.cardsOnHold, e.cardsLeftOut, e.commentsTrashed, e.bodies = 0, 0, 0, BodyCounts{}
-	e.talks = nil
+	e.talks, e.members = nil, map[int64]map[int64]bool{}
+	e.questionsLeftOut, e.anchorsInferred, e.nobodyAsked = []ImpossibleQuestion{}, []InferredAnchor{}, []NobodyAsked{}
+	e.askedLeftOut, e.answersWithoutABody, e.answersWithoutADay, e.answersTrashed = AskedLeftOut{}, 0, 0, 0
 	e.postsByStatus = map[string]int{bundle.StatusActive: 0, bundle.StatusArchived: 0, bundle.StatusTrashed: 0}
 	e.postsLeftOut, e.postsWithEmptyBody, e.uploadLinesLeftOut, e.messagesWithEmptyBody = 0, 0, 0, 0
 	e.messagesByType = map[string]int{}
 	for _, name := range lineTypes {
 		e.messagesByType[name] = 0
 	}
-	e.longestBody = map[bundle.Kind]int{bundle.Cards: 0, bundle.Comments: 0, bundle.Posts: 0, bundle.Messages: 0}
+	e.longestBody = map[bundle.Kind]int{bundle.Cards: 0, bundle.Comments: 0, bundle.Posts: 0, bundle.Messages: 0, bundle.Answers: 0}
 	e.fileOwners, e.fileRecords, e.files = map[string]string{}, nil, FileCounts{}
 
 	ids, err := sortedIDs(projectIDs)
@@ -253,6 +294,9 @@ func (e *Extractor) Extract(ctx context.Context, projectIDs []string, w *bundle.
 		}
 	}
 	if err := e.extractChats(ctx, w); err != nil {
+		return Result{}, err
+	}
+	if err := e.extractCheckins(ctx, w); err != nil {
 		return Result{}, err
 	}
 
@@ -286,11 +330,27 @@ func (e *Extractor) Extract(ctx context.Context, projectIDs []string, w *bundle.
 		MessagesByType:     e.messagesByType,
 		UploadLinesLeftOut: e.uploadLinesLeftOut,
 
+		QuestionsLeftOut:    e.questionsLeftOut,
+		AnchorsInferred:     e.anchorsInferred,
+		NobodyAsked:         e.nobodyAsked,
+		AskedLeftOut:        e.askedLeftOut,
+		AnswersWithoutABody: e.answersWithoutABody,
+		AnswersWithoutADay:  e.answersWithoutADay,
+		AnswersTrashed:      e.answersTrashed,
+
 		MessagesWithEmptyBody: e.messagesWithEmptyBody,
 		LongestBody:           e.longestBody,
 		Bodies:                e.bodies,
 		Files:                 e.files,
 	}, nil
+}
+
+// now is the moment of the run.
+func (e *Extractor) now() time.Time {
+	if e.Now == nil {
+		return time.Now()
+	}
+	return e.Now()
 }
 
 func sortedIDs(values []string) ([]int64, error) {
@@ -335,6 +395,7 @@ func (e *Extractor) extractProject(ctx context.Context, id int64, w *bundle.Writ
 	}
 	memberIDs := make([]string, 0, len(members))
 	sort.Slice(members, func(i, j int) bool { return members[i].ID < members[j].ID })
+	e.members[id] = map[int64]bool{}
 	for i := range members {
 		reference, err := e.people.refer(&members[i], true)
 		if err != nil {
@@ -342,6 +403,7 @@ func (e *Extractor) extractProject(ctx context.Context, id int64, w *bundle.Writ
 		}
 		if reference != nil {
 			memberIDs = append(memberIDs, *reference)
+			e.members[id][members[i].ID] = true
 		}
 	}
 
@@ -413,6 +475,8 @@ func (e *Extractor) extractProject(ctx context.Context, id int64, w *bundle.Writ
 			talks.messageBoards = append(talks.messageBoards, tool.entry.ID)
 		case bundle.ToolChat:
 			talks.chats = append(talks.chats, tool.entry.ID)
+		case bundle.ToolCheckins:
+			talks.questionnaires = append(talks.questionnaires, tool.entry.ID)
 		}
 	}
 	e.talks = append(e.talks, talks)
