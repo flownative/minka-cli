@@ -160,3 +160,29 @@ func TestSayingItAgainIsWrittenDownOnceAMinute(t *testing.T) {
 		t.Error("a card was refreshed by a session that does not hold it")
 	}
 }
+
+// The safeguard: a card that was taken up where nothing said who was asking
+// belongs to nobody, so no sign of life reaches it — neither one that names a
+// session nor one that names none, which is what a heartbeat outside a session
+// brings. Such a card goes by the moment it was started.
+func TestACardWithoutASessionIsKeptAliveByNobody(t *testing.T) {
+	began := time.Date(2026, 9, 23, 9, 0, 0, 0, time.UTC)
+	entry := &Host{Cards: []Card{{ID: "of a person at a terminal", StartedAt: began}}}
+
+	for hour := 1; hour <= 9; hour++ {
+		at := began.Add(time.Duration(hour) * time.Hour)
+		if entry.StillAtIt("a session at work", at) {
+			t.Fatalf("a session that holds no card refreshed it after %d hours", hour)
+		}
+		if entry.StillAtIt("", at) {
+			t.Fatalf("a sign of life that names no session refreshed the card after %d hours", hour)
+		}
+	}
+
+	if forgotten := entry.ForgetWhatRanOut(began.Add(ForgottenAfter + time.Minute)); forgotten != 1 {
+		t.Fatalf("%d cards were forgotten, want the one nobody said anything about", forgotten)
+	}
+	if cards := entry.CardIDs(); len(cards) != 0 {
+		t.Errorf("%v is left, want none", cards)
+	}
+}

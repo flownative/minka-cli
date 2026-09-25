@@ -183,13 +183,12 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   that goes quiet. The signal itself got through on `minka.flownative.com`,
   which knows this CLI as an agent, and the hook has reported out of a real
   session; on the local instance the only account that may write is a person,
-  whom the address turns away with 403 `agentsOnly`. On the board two cards
-  stood in "In Arbeit" that were being worked on and showed nothing, because
-  they had fallen out of the list of the machine eight hours after they were
-  started, which is what the CLI does and what nobody wants, see the next
-  steps. The order
-  of the refusals is tested against the fake and read in Minka's code, its
-  tests and E-184. What the fake does not mirror: it never forgets a signal
+  whom the address turns away with 403 `agentsOnly`. The sign of life is tested
+  against the fake alone: that the heartbeat of the session which took a card
+  up keeps it in the list beyond the eight hours, and that a card of a session
+  which says nothing more runs out while the machine around it works on. The
+  order of the refusals is tested against the fake and read in Minka's code,
+  its tests and E-184. What the fake does not mirror: it never forgets a signal
   after the three minutes Minka counts it for, because nothing the CLI does
   depends on that; and an `Accept` without JSON gets 406 there before the
   token is looked at, which no request of this CLI sends.
@@ -205,7 +204,10 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   signal bounded to five seconds where a host does not answer, against the
   thirty of every other command; nothing remembered returning without a
   request and without making a directory; the eight hours taking a card out
-  for every reader; and the text view of all of it. `hooks install` and
+  for every reader; and the text view of all of it. Measured outside a test,
+  though not on a board: a tool call of a subagent carries the session of
+  whoever spawned it and runs the hook, so a session that works through
+  subagents keeps the sign of life of its cards. `hooks install` and
   `hooks status` are seen on real files: a fresh one, one carrying other
   hooks, one carrying ours, a `hooks` that stands there as `null`, and the
   shapes that are refused unrepaired with the entry to add by hand.
@@ -291,15 +293,7 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   gains a build provenance attestation with instructions for verifying it, and
   the macOS binaries get notarised, which waits for an Apple Developer ID.
 
-- See a tile live: one that lights up and one that goes quiet at once. Both
-  wait on the two changes below, which decide when a card leaves the list.
-- `cards move` and `cards done` take the card out of the list of the machine
-  themselves and report at once, so that a card somebody moves on stops
-  glowing instead of waiting for the next signal.
-- A card leaves the list eight hours after it was started, even where the
-  session that started it is still at work; a piece of work longer than a
-  working day therefore goes quiet under the hands of whoever does it. It
-  should go by the last sign of life instead.
+- See a tile live: one that lights up and one that goes quiet at once.
 - Commands for the to-dos of a project: the addresses are on Minka's `main`
   and unreleased, the contract stands in its `authorization.md` and E-190.
 - Commands for the check-ins of a project: likewise unreleased, the contract
