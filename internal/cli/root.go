@@ -64,6 +64,11 @@ type app struct {
 	quietFlag  bool
 	styledFlag bool
 
+	// keepalive is set on the process that keeps reporting while the session
+	// around it is busy with one long tool call. It is at no work of its own, so
+	// it writes neither the sign of life of a card nor the mark of a beat.
+	keepalive bool
+
 	// skillIsTheTopic is set by a command that reports on the installed skill
 	// itself, so that it does not say the same thing twice.
 	skillIsTheTopic bool
