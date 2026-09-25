@@ -100,8 +100,10 @@ type importReport struct {
 	// cannot say are asked.
 	AskedLeftOut basecamp.AskedLeftOut `json:"askedLeftOut"`
 	// AnswersWithoutABody are the answers that say nothing and AnswersTrashed
-	// those in the trash; both are left out.
+	// those in the trash; both are left out. AnswersWithoutADay are those
+	// Basecamp names no day for, which take the day they were written on.
 	AnswersWithoutABody int `json:"answersWithoutABody"`
+	AnswersWithoutADay  int `json:"answersWithoutADay"`
 	AnswersTrashed      int `json:"answersTrashed"`
 	// MessagesByType splits counts.messages by what a line was in its chat.
 	// MessagesWithEmptyBody are lines somebody wrote that say nothing,
@@ -290,6 +292,7 @@ it has been applied.`,
 				AnchorsInferred:     result.AnchorsInferred,
 				AskedLeftOut:        result.AskedLeftOut,
 				AnswersWithoutABody: result.AnswersWithoutABody,
+				AnswersWithoutADay:  result.AnswersWithoutADay,
 				AnswersTrashed:      result.AnswersTrashed,
 
 				MessagesWithEmptyBody: result.MessagesWithEmptyBody,
@@ -339,6 +342,11 @@ it has been applied.`,
 				notices = append(notices, plural(count,
 					"person a question asks cannot be said to be asked, because they are no member of the project, have left, or come without an address; the question comes without them",
 					"people questions ask cannot be said to be asked, because they are no members of their project, have left, or come without an address; the questions come without them"))
+			}
+			if count := report.AnswersWithoutADay; count > 0 {
+				notices = append(notices, plural(count,
+					"answer of a check-in belongs to no day of its own and is dated by the day it was written, read in the zone of whoever wrote it",
+					"answers of check-ins belong to no day of their own and are dated by the days they were written, read in the zones of whoever wrote them"))
 			}
 			if count := report.AnswersWithoutABody; count > 0 {
 				notices = append(notices, plural(count,
@@ -502,6 +510,7 @@ func renderCheckins(w io.Writer, report importReport) {
 		report.AskedLeftOut.NotInTheProject, report.AskedLeftOut.Retired, report.AskedLeftOut.WithoutAnAddress)
 	fmt.Fprintf(w, "Answers that say nothing, left out: %d; answers in the trash, left out: %d\n",
 		report.AnswersWithoutABody, report.AnswersTrashed)
+	fmt.Fprintf(w, "Answers Basecamp names no day for, dated by when they were written: %d\n", report.AnswersWithoutADay)
 }
 
 // incompleteImport is the end of a run that wrote its bundle without some of

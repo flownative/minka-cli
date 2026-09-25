@@ -122,7 +122,7 @@ func TestImportBasecampWritesABundleAndReportsWhatItHolds(t *testing.T) {
 		"uploadLinesLeftOut": float64(0), "messagesWithEmptyBody": float64(0),
 		"questionsLeftOut": []any{}, "anchorsInferred": []any{},
 		"askedLeftOut":        map[string]any{"notInTheProject": float64(0), "retired": float64(0), "withoutAnAddress": float64(0)},
-		"answersWithoutABody": float64(0), "answersTrashed": float64(0),
+		"answersWithoutABody": float64(0), "answersWithoutADay": float64(0), "answersTrashed": float64(0),
 		"longestBody":     map[string]any{"cards": float64(0), "comments": float64(0), "posts": float64(0), "messages": float64(0), "answers": float64(0)},
 		"references":      map[string]any{"cards": float64(0), "posts": float64(0), "tools": float64(0)},
 		"requestsRetried": float64(0),

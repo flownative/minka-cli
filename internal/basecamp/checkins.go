@@ -6,6 +6,9 @@ import (
 	"sort"
 	"strings"
 	"time"
+	// The zone database travels in the binary: which day a record belongs to
+	// must not depend on what a machine happens to have installed.
+	_ "time/tzdata"
 	"unicode"
 	"unicode/utf8"
 
@@ -210,7 +213,9 @@ func (e *Extractor) writeQuestion(ctx context.Context, w *bundle.Writer, bucket,
 		StartsOn:        when.startsOn,
 		Asked:           asked,
 		Paused:          when.paused,
-		Status:          questionStatus(found),
+		// What the source says of a question comes through: one it has shelved
+		// would otherwise arrive active and start asking people again.
+		Status: found.Status,
 	})
 	if err != nil {
 		return err
@@ -266,14 +271,6 @@ func (e *Extractor) writeAnswers(ctx context.Context, w *bundle.Writer, bucket, 
 // writes down is a number nobody can check.
 func (e *Extractor) leaveQuestionOut(id int64, field string) {
 	e.questionsLeftOut = append(e.questionsLeftOut, ImpossibleQuestion{QuestionSourceID: sourceID(id), Field: field})
-}
-
-// questionStatus is the status a question comes in. What Basecamp says of a
-// question does not reach the bundle: a questionnaire lists the questions it
-// asks, so every question a run meets is an active one. Return found.Status
-// here to carry what the source says, once that is decided.
-func questionStatus(found question) string {
-	return bundle.StatusActive
 }
 
 // questionTitle is the title of a question as a bundle carries it, without the
@@ -520,7 +517,7 @@ func (e *Extractor) answersOf(ctx context.Context, found question) ([]answered, 
 
 	all := make([]answered, 0, len(answers))
 	for _, one := range answers {
-		on, err := dayAnsweredOn(one)
+		on, err := e.dayAnsweredOn(one)
 		if err != nil {
 			return nil, err
 		}
@@ -533,8 +530,13 @@ func (e *Extractor) answersOf(ctx context.Context, found question) ([]answered, 
 // taken over and never worked out from the schedule: Minka stores the day as it
 // comes and holds it against nothing, so an answer may well sit on a day the
 // question never asked on, which is what the source says and therefore right.
-func dayAnsweredOn(one answer) (time.Time, error) {
+//
+// An answer Basecamp names no day for takes the day it was written, and is
+// counted: one answer of another day than the source meant is worth knowing
+// about, however few of them there are.
+func (e *Extractor) dayAnsweredOn(one answer) (time.Time, error) {
 	if one.GroupOn == "" {
+		e.answersWithoutADay++
 		return dayOf("answer", one.ID, one.CreatedAt, one.Creator)
 	}
 	day, aDate := aDay(one.GroupOn)
@@ -544,20 +546,28 @@ func dayAnsweredOn(one answer) (time.Time, error) {
 	return day, nil
 }
 
-// dayOf is the day something was written where Basecamp says nothing about the
-// day itself. Basecamp writes every time as UTC and Minka knows no zone of an
-// organisation, so which zone a day is read in is a decision and not a
-// convenience: it is the zone of whoever wrote it, because that is the day they
-// meant. The zone is chosen here and nowhere else.
+// dayOf is the day something was written where Basecamp names no day of its
+// own. Basecamp writes every time as UTC and Minka knows no zone of an
+// organisation, so the day is the one whoever wrote the record saw: their own
+// zone, as Basecamp names it. Without a zone, or with one nobody knows, the run
+// ends instead of guessing: a day that is off by one is a day nobody can tell
+// from a right one afterwards.
 func dayOf(what string, id int64, timestamp string, author *person) (time.Time, error) {
 	moment, err := time.Parse(time.RFC3339Nano, timestamp)
 	if err != nil {
 		return time.Time{}, &Error{Kind: API, Message: fmt.Sprintf("Basecamp says that %s %d was created at something that is no time", what, id)}
 	}
-	zone := time.UTC
-	if author != nil && author.TimeZone != "" {
-		if theirs, err := time.LoadLocation(author.TimeZone); err == nil {
-			zone = theirs
+	if author == nil || author.TimeZone == "" {
+		return time.Time{}, &Error{
+			Kind:    API,
+			Message: fmt.Sprintf("Basecamp names no day for %s %d, and no zone of whoever wrote it to take the day from", what, id),
+		}
+	}
+	zone, err := time.LoadLocation(author.TimeZone)
+	if err != nil {
+		return time.Time{}, &Error{
+			Kind:    API,
+			Message: fmt.Sprintf("Basecamp names no day for %s %d, and names the zone of whoever wrote it as one nobody knows", what, id),
 		}
 	}
 	return dayOfMoment(moment.In(zone)), nil

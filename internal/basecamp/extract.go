@@ -143,8 +143,11 @@ type Result struct {
 	// cannot say are asked.
 	AskedLeftOut AskedLeftOut
 	// AnswersWithoutABody counts the answers that say nothing and
-	// AnswersTrashed those in the trash; both are left out.
+	// AnswersTrashed those in the trash; both are left out. AnswersWithoutADay
+	// counts those Basecamp names no day for, which take the day they were
+	// written on.
 	AnswersWithoutABody int
+	AnswersWithoutADay  int
 	AnswersTrashed      int
 	// LongestBody is the longest text of a kind, in characters.
 	LongestBody map[bundle.Kind]int
@@ -199,6 +202,7 @@ type Extractor struct {
 	anchorsInferred     []InferredAnchor
 	askedLeftOut        AskedLeftOut
 	answersWithoutABody int
+	answersWithoutADay  int
 	answersTrashed      int
 
 	// fileOwners names the first owner of every file the walk has met, and
@@ -248,7 +252,7 @@ func (e *Extractor) Extract(ctx context.Context, projectIDs []string, w *bundle.
 	e.cardsOnHold, e.cardsLeftOut, e.commentsTrashed, e.bodies = 0, 0, 0, BodyCounts{}
 	e.talks, e.members = nil, map[int64]map[int64]bool{}
 	e.questionsLeftOut, e.anchorsInferred = []ImpossibleQuestion{}, []InferredAnchor{}
-	e.askedLeftOut, e.answersWithoutABody, e.answersTrashed = AskedLeftOut{}, 0, 0
+	e.askedLeftOut, e.answersWithoutABody, e.answersWithoutADay, e.answersTrashed = AskedLeftOut{}, 0, 0, 0
 	e.postsByStatus = map[string]int{bundle.StatusActive: 0, bundle.StatusArchived: 0, bundle.StatusTrashed: 0}
 	e.postsLeftOut, e.postsWithEmptyBody, e.uploadLinesLeftOut, e.messagesWithEmptyBody = 0, 0, 0, 0
 	e.messagesByType = map[string]int{}
@@ -323,6 +327,7 @@ func (e *Extractor) Extract(ctx context.Context, projectIDs []string, w *bundle.
 		AnchorsInferred:     e.anchorsInferred,
 		AskedLeftOut:        e.askedLeftOut,
 		AnswersWithoutABody: e.answersWithoutABody,
+		AnswersWithoutADay:  e.answersWithoutADay,
 		AnswersTrashed:      e.answersTrashed,
 
 		MessagesWithEmptyBody: e.messagesWithEmptyBody,
