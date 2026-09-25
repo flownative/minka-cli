@@ -232,3 +232,25 @@ func TestSetupSaysNothingTwiceAboutADifferingSkill(t *testing.T) {
 		t.Fatalf("setup warns about the skill it just asked about: %s", r.stderr)
 	}
 }
+
+// setup is what repairs a configuration by hand, so it has to walk over a default
+// host that cannot be read. It neither prints that value in its question — where
+// a password written into it would reach a transcript — nor offers it as the
+// answer, which taking would only be refused.
+func TestSetupOffersNoDefaultHostThatCannotBeRead(t *testing.T) {
+	const password = "s3cr3t-password"
+	e := newSetupEnv(t)
+	e.writeConfig(`{"defaultHost":"https://robert:` + password + `@minka.example.com","hosts":{}}`)
+
+	// An empty answer first, which has nothing to fall back on here.
+	r := e.runWith(onATerminal(e.fixture.Token), "\n"+e.server.URL+"\n\n", "setup")
+	expectCode(t, r, ExitOK)
+	out := r.stdout + r.stderr
+	if strings.Contains(out, password) {
+		t.Errorf("setup printed the password: %s", out)
+	}
+	if !strings.Contains(out, "Minka host, such as https://minka.example.com: ") {
+		t.Errorf("setup offered an answer it cannot take: %s", out)
+	}
+	expectCode(t, e.run("", "auth", "status", "--json"), ExitOK)
+}

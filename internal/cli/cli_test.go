@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -1645,29 +1646,61 @@ func TestARefusedHostKeepsItsPasswordOutOfTheOutput(t *testing.T) {
 	}
 }
 
-// A default host the configuration holds by hand is handed on as it stands,
-// because a store and a lock are keyed by it. What is printed of it is the
-// address alone: a password written into that entry would otherwise reach a log
-// through the refusal. The hint has to stay a command line that works, so it
-// names the address without it.
-func TestAHandWrittenDefaultHostIsRefusedWithoutItsPassword(t *testing.T) {
+// A default host the configuration cannot read is no host: it is refused where
+// it is read, and no command comes to a session under it. That is what keeps the
+// value out of everything that prints a host — a status, a report, the hint of a
+// refusal — and out of the argv of the keepalive. What the refusal says of the
+// value is the address alone, and it names the file to repair.
+func TestADefaultHostThatCannotBeReadIsNoHost(t *testing.T) {
 	const password = "s3cr3t-password"
 	const withCredentials = "https://robert:" + password + "@minka.example.com"
 	e := newTestEnv(t)
 	delete(e.vars, "MINKA_HOST")
 	delete(e.vars, "MINKA_TOKEN")
-	e.writeConfig(`{"defaultHost":"` + withCredentials + `","hosts":{}}`)
+	// The dangerous shape: a token stands under the entry as it is written, so
+	// nothing but the reading of the host stops a session from coming about.
+	e.writeConfig(`{"defaultHost":"` + withCredentials + `","hosts":{"` + withCredentials + `":{"token":"minka_pat_written_by_hand"}}}`)
 
-	env, r := e.runJSON("", "me")
-	expectCode(t, r, ExitAuth)
+	// A session, and the store beside it, are the two ways into such an entry.
+	for _, command := range [][]string{{"me"}, {"auth", "status"}, {"work", "list"}, {"work", "stop"}} {
+		what := strings.Join(command, " ")
+		env, r := e.runJSON("", append(command, "--json")...)
+		expectCode(t, r, ExitUsage)
+		if out := r.stdout + r.stderr; strings.Contains(out, password) {
+			t.Errorf("%s hands the password on: %s", what, out)
+		}
+		if env.Code != CodeConfig {
+			t.Errorf("%s answers with code %q", what, env.Code)
+		}
+		if !strings.Contains(env.Error, "the default host in "+e.vars["MINKA_CONFIG"]+" cannot be read") {
+			t.Errorf("%s does not say that the default host of the configuration cannot be read: %s", what, env.Error)
+		}
+		if !strings.Contains(env.Error, "minka.example.com") {
+			t.Errorf("%s does not say which host it is about: %s", what, env.Error)
+		}
+		if !strings.Contains(env.Hint, `"defaultHost"`) || !strings.Contains(env.Hint, "minka auth login --host https://minka.example.com") {
+			t.Errorf("%s gives no way out: %s", what, env.Hint)
+		}
+	}
+
+	// The report says it too, and never as a host that answers.
+	reported, r := e.runJSON("", "doctor")
+	expectCode(t, r, ExitOK)
 	if out := r.stdout + r.stderr; strings.Contains(out, password) {
-		t.Errorf("the refusal hands the password on: %s", out)
+		t.Errorf("the report hands the password on: %s", out)
 	}
-	if !strings.Contains(env.Error, "minka.example.com") {
-		t.Errorf("the refusal does not say which host it is about: %s", env.Error)
+	var report doctorReport
+	if err := json.Unmarshal(reported.Data, &report); err != nil {
+		t.Fatal(err)
 	}
-	if !strings.Contains(env.Hint, "minka auth login --host https://minka.example.com") {
-		t.Errorf("the hint is no command line to paste: %s", env.Hint)
+	for _, name := range []string{"sign-in", "host"} {
+		if status := report.check(t, name).Status; status == checkOK {
+			t.Errorf("the report calls %s fine", name)
+		}
+	}
+
+	if n := len(e.server.Requests()); n != 0 {
+		t.Errorf("%d requests were sent", n)
 	}
 
 	// Of an entry that cannot be read at all, what may be printed is too little
@@ -1678,8 +1711,8 @@ func TestAHandWrittenDefaultHostIsRefusedWithoutItsPassword(t *testing.T) {
 	delete(unreadable.vars, "MINKA_TOKEN")
 	unreadable.writeConfig(`{"defaultHost":"https://robert:` + password + `@minka.example.com\u007f","hosts":{}}`)
 
-	env, r = unreadable.runJSON("", "me")
-	expectCode(t, r, ExitAuth)
+	env, r := unreadable.runJSON("", "me")
+	expectCode(t, r, ExitUsage)
 	if out := r.stdout + r.stderr; strings.Contains(out, password) {
 		t.Errorf("the refusal hands the password on: %s", out)
 	}
@@ -1726,12 +1759,87 @@ func TestSigningOutOfAHandWrittenEntryPrintsNoPassword(t *testing.T) {
 	}
 }
 
-// A request that cannot be made says which address it was, and the standard
-// library replaces the password in the error it writes. The hint beside it must
-// not undo that in the same envelope — and this hint appears after every failed
-// request, not only where a sign-in is at stake.
-func TestTheHintAfterAFailedRequestCarriesNoPassword(t *testing.T) {
-	const password = "s3cr3t-password"
+// An entry nothing else can reach is still to be got rid of: no command lists the
+// hosts of the configuration, and a token left standing there stays valid on the
+// server. Signing out sends nothing anywhere, so it takes the entry as the file
+// writes it, whether that can be read as a host or not.
+func TestSigningOutOfAnEntryThatCannotBeRead(t *testing.T) {
+	const secret = "minka_pat_in_the_wrong_place"
+	const written = "https://minka.example.com;t=" + secret
+	e := newTestEnv(t)
+	delete(e.vars, "MINKA_HOST")
+	delete(e.vars, "MINKA_TOKEN")
+	e.writeConfig(`{"defaultHost":"` + e.server.URL + `","hosts":{` +
+		`"` + e.server.URL + `":{"token":"minka_pat_signed_in"},` +
+		`"` + written + `":{"token":"minka_pat_written_by_hand"}}}`)
+
+	env, r := e.runJSON("", "auth", "logout", "--host", written)
+	expectCode(t, r, ExitOK)
+	if out := r.stdout + r.stderr; strings.Contains(out, secret) {
+		t.Errorf("signing out hands on what stood behind the host: %s", out)
+	}
+	if data := decode(t, env.Data); data["host"] != "https://minka.example.com" || data["removed"] != true {
+		t.Errorf("data of the sign-out: %v", data)
+	}
+	file, err := config.Load(e.vars["MINKA_CONFIG"])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := file.Hosts[written]; ok {
+		t.Error("the entry that cannot be read is still there")
+	}
+	if _, ok := file.Hosts[e.server.URL]; !ok {
+		t.Error("the entry of another host was taken away with it")
+	}
+
+	// A value that stands nowhere in the file is a refusal all the same.
+	_, r = e.runJSON("", "auth", "logout", "--host", "https://other.example.com;t=x")
+	expectCode(t, r, ExitUsage)
+}
+
+// An entry written in a form a sign-in would not write is reached as it stands as
+// well. Read first, a sign-out would look for the canonical spelling, find
+// nothing and leave the token where it is — the very case the CLI itself teaches
+// about. The other way round, with the canonical host named and the odd one in
+// the file, the answer says which entry holds the token.
+func TestSigningOutOfAnEntryWrittenAnotherWay(t *testing.T) {
+	const written = "https://hand.example.com/"
+	e := newTestEnv(t)
+	delete(e.vars, "MINKA_HOST")
+	delete(e.vars, "MINKA_TOKEN")
+	e.writeConfig(`{"defaultHost":"` + e.server.URL + `","hosts":{` +
+		`"` + e.server.URL + `":{"token":"minka_pat_signed_in"},` +
+		`"` + written + `":{"token":"minka_pat_written_by_hand"}}}`)
+
+	env, r := e.runJSON("", "auth", "logout", "--host", "https://hand.example.com")
+	expectCode(t, r, ExitOK)
+	if data := decode(t, env.Data); data["removed"] != false {
+		t.Errorf("data of the sign-out: %v", data)
+	}
+	if !strings.Contains(env.Notice, written) {
+		t.Errorf("the answer does not say which entry holds the token: %q", env.Notice)
+	}
+
+	env, r = e.runJSON("", "auth", "logout", "--host", written)
+	expectCode(t, r, ExitOK)
+	if data := decode(t, env.Data); data["removed"] != true {
+		t.Errorf("data of the sign-out: %v", data)
+	}
+	file, err := config.Load(e.vars["MINKA_CONFIG"])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := file.Hosts[written]; ok {
+		t.Error("the entry written another way is still there")
+	}
+	if _, ok := file.Hosts[e.server.URL]; !ok {
+		t.Error("the entry of another host was taken away with it")
+	}
+}
+
+// A request that cannot be made says which address it was reaching for, so that
+// whoever reads the refusal knows what to look at.
+func TestTheHintAfterAFailedRequestNamesWhatCouldNotBeReached(t *testing.T) {
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
@@ -1741,19 +1849,35 @@ func TestTheHintAfterAFailedRequestCarriesNoPassword(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	host := "http://robert:" + password + "@" + address
 	e := newTestEnv(t)
-	delete(e.vars, "MINKA_HOST")
-	delete(e.vars, "MINKA_TOKEN")
-	e.writeConfig(`{"defaultHost":"` + host + `","hosts":{"` + host + `":{"token":"minka_pat_written_by_hand"}}}`)
+	e.vars["MINKA_HOST"] = "http://" + address
 
 	env, r := e.runJSON("", "me")
 	expectCode(t, r, ExitNetwork)
-	if out := r.stdout + r.stderr; strings.Contains(out, password) {
-		t.Errorf("the failed request hands the password on: %s", out)
-	}
 	if !strings.Contains(env.Hint, "127.0.0.1") {
 		t.Errorf("the hint does not say what could not be reached: %s", env.Hint)
+	}
+}
+
+// The error of a request has the address in it with the password replaced, the
+// way the standard library writes one. The hint beside it renders the host and
+// must not undo that in the same envelope. No host a session is built on carries
+// a credential any more, so the hint is held to the rule here rather than through
+// a run — and it appears after every failed request, not only where a sign-in is
+// at stake.
+func TestTheHintAfterAFailedRequestCarriesNoPassword(t *testing.T) {
+	const password = "s3cr3t-password"
+	failed := &api.NetworkError{
+		Method: http.MethodGet,
+		Err:    errors.New(`Get "http://robert:xxxxx@minka.example.com/api/v1/me": dial tcp: connection refused`),
+	}
+
+	e := apiError(failed, "http://robert:"+password+"@minka.example.com")
+	if strings.Contains(e.Hint, password) {
+		t.Errorf("the hint hands the password on: %s", e.Hint)
+	}
+	if !strings.Contains(e.Hint, "minka.example.com") {
+		t.Errorf("the hint does not say what could not be reached: %s", e.Hint)
 	}
 }
 

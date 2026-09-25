@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flownative/minka-cli/internal/config"
 	"github.com/flownative/minka-cli/internal/work"
 )
 
@@ -305,6 +306,15 @@ func (a *app) cardsInTheList(path, host string) (int, error) {
 // meant for the agent away from it, and a directory that holds no project, so
 // that a working tree somebody deletes does not take it along.
 func spawnKeepalive(host string, environment []string) error {
+	// An argument is read by every process on the machine, which is why no token
+	// comes through a flag either. Only a host that has been read may go there:
+	// what the configuration holds reaches this seam through the commands that
+	// refuse an unreadable value, and the seam holds that whether they do or not.
+	// The refusal names nothing of the value; there is nothing in it to say.
+	if _, err := config.NormalizeHost(host); err != nil {
+		return errors.New("the host it would report to is not one that was read")
+	}
+
 	program, err := os.Executable()
 	if err != nil {
 		return err
