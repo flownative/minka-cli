@@ -336,7 +336,9 @@ those of answers.
   `every_week`, `every_other_week` and `every_month`. The first three all carry
   the days they are asked on, so they are the same thing and come to `weekly` or
   `daily` by the number of days; `every_other_week` becomes `everyOtherWeek` and
-  `every_month` becomes `monthly`, both of which take exactly one weekday.
+  `every_month` becomes `monthly`, both of which take exactly one weekday: what
+  Basecamp asks on one weekday every month is the first such day of the month,
+  which is what Minka's `monthly` means.
   `timeOfDay` is `HH:MM`.
   `status` is the one the source has, so a question it has shelved does not
   arrive active and start asking people again. `paused` is `true` for a question
@@ -353,11 +355,13 @@ those of answers.
   day.
   `asked` comes from the subscribers of the question, which is whom Basecamp
   hands it to and not whoever answered it, and holds only those Minka can ask
-  (C-045). Nothing hangs on a question: it carries no comment and no reaction,
+  (C-045), in the order of their IDs and each once. A question that comes asking
+  nobody at all is named in `nobodyAsked` with how many of its people fell out:
+  it will ask nobody again, because the first run settles `asked`. Nothing hangs on a question: it carries no comment and no reaction,
   the format has no word for either of one, and none is asked for.
   A question whose schedule Minka has no words for is left out with its
-  answers and counted in `questionsLeftOut` with the field that made it
-  impossible: `week_instance`, `week_interval`, `month_interval`, `duration`, a
+  answers, and the run goes on (C-048); `questionsLeftOut` names it with the
+  field that made it impossible: `week_instance`, `week_interval`, `month_interval`, `duration`, a
   `frequency` nobody knows, `days` that are empty, outside 0…6 or more than one
   where the rhythm takes one, an `end_date` that has not passed, a `start_date`
   or an `end_date` of another shape than `YYYY-MM-DD`, an `hour` or a `minute`
@@ -790,7 +794,8 @@ files of its texts the same way.
   `filesFetched`, `filesReused`, `filesGone`, `fileNamesChanged`,
   `captionsDropped`, `filesOfSeveralOwners`, `linkPreviews`,
   `picturesLinked`, `embeds`, `embedsLeftOut`, `references`,
-  `questionsLeftOut`, `anchorsInferred`, `askedLeftOut` (`notInTheProject`,
+  `questionsLeftOut`, `anchorsInferred`, `nobodyAsked`, `askedLeftOut`
+  (`notInTheProject`,
   `retired`, `withoutAnAddress`), `answersWithoutABody`, `answersWithoutADay`,
   `answersTrashed`, `longestBody`, `requestsRetried` and the absolute path of
   the bundle. The lines about check-ins are shown only by a run that met a

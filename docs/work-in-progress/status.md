@@ -34,12 +34,12 @@ Basecamp CLI or taken over from the bundle the run replaces. It reads
 through the Basecamp CLI and is tested against the invented account in
 `internal/fakebasecamp`.
 The check-ins are checked against the fake alone: no extraction has met a
-questionnaire live yet. Which frequencies Basecamp sends was measured on the real
-account: `every_day`, `every_week` and `every_month` stand there, and
-`on_certain_days` and `every_other_week` are known besides; the fake holds one
-question in each of the five. A frequency nobody knows leaves the question out
-and is reported with its field, so such a run says what is missing instead of
-writing a schedule nobody chose.
+questionnaire live yet. The frequencies Basecamp sends are `every_day`,
+`on_certain_days`, `every_week`, `every_other_week` and `every_month`, and the
+fake holds one question in each of the five; `every_month` on one weekday is the
+first such day of the month, as Minka's `monthly` is. A frequency nobody knows
+leaves the question out and is reported with its field, so such a run says what
+is missing instead of writing a schedule nobody chose.
 It has been run live, as a dry run and into a bundle outside the repository,
 under an identity that sees addresses, the posts and the chats included: all
 references of that bundle resolve and its parts are the ones its manifest
