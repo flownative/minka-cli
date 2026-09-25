@@ -219,14 +219,15 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   changed, keeps quiet for the minute after and reports again beyond it; a
   signal bounded to five seconds where a host does not answer, against the
   thirty of every other command; nothing remembered returning without a
-  request and without making a directory; the eight hours taking a card out
-  for every reader; and the text view of all of it. Measured outside a test,
-  though not on a board: a tool call of a subagent carries the session of
-  whoever spawned it and runs the hook, so a session that works through
-  subagents keeps the sign of life of its cards. `hooks install` and
-  `hooks status` are seen on real files: a fresh one, one carrying other
-  hooks, one carrying ours, a `hooks` that stands there as `null`, and the
-  shapes that are refused unrepaired with the entry to add by hand.
+  request and without making a directory; the eight hours taking out, for every
+  reader, a card nobody said anything more about; and the text view of all of
+  it. Measured outside a test, though not on a board: a tool call of a subagent
+  carries the session of whoever spawned it and runs the hook, so a session
+  that works through subagents keeps the sign of life of its cards.
+  `hooks install` and `hooks status` are seen on real files: a fresh one, one
+  carrying other hooks, one carrying ours, a `hooks` that stands there as
+  `null`, and the shapes that are refused unrepaired with the entry to add by
+  hand.
 - "agent for X" in `people list` has been seen live, an agent that stepped
   down has not — it is in no list any more.
 - What Minka takes for one file is 100 MiB. The CLI refuses a byte over that
@@ -308,7 +309,6 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
 - Once the repository is public: the formula installs the archives, a release
   gains a build provenance attestation with instructions for verifying it, and
   the macOS binaries get notarised, which waits for an Apple Developer ID.
-
 - See a tile live: one that lights up and one that goes quiet at once.
 - Commands for the to-dos of a project: the addresses are on Minka's `main`
   and unreleased, the contract stands in its `authorization.md` and E-190.

@@ -99,6 +99,22 @@ func TestStartingACardAgainSaysItIsStillTheTurnOfThatCard(t *testing.T) {
 	}
 }
 
+// A card that is taken up anew goes by that moment. It is taken up whole, so
+// the sign of life of the work before says nothing about the work that starts
+// now — and it is on that that the window of a card rests.
+func TestACardTakenUpAnewGoesByTheNewMoment(t *testing.T) {
+	first := time.Date(2026, 9, 23, 9, 0, 0, 0, time.UTC)
+	entry := &Host{}
+	entry.Start(Card{ID: "a-card", StartedAt: first, Session: "mine"})
+	entry.StillAtIt("mine", first.Add(time.Hour))
+
+	again := first.Add(2 * time.Hour)
+	entry.Start(Card{ID: "a-card", StartedAt: again, Session: "mine"})
+	if got := lastSeen(entry.Cards[0]); !got.Equal(again) {
+		t.Errorf("the card was last seen at %s, want the moment it was taken up anew", got)
+	}
+}
+
 // A session that dies says nothing more about its cards, and nobody else knows
 // they are over: what nothing refreshes runs out by itself.
 func TestACardNobodyStartedAgainRunsOut(t *testing.T) {
