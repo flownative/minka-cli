@@ -339,9 +339,9 @@ How to keep it:
 - **Read the back before you begin,** and never write without having read.
 - **`show` first, then `set` with `--expect <updatedAt>`.** The guard is what
   makes a write that would wipe out somebody else's notes fail instead. With
-  `--json` both commands hand the `set` with the right `--expect` in their
-  `breadcrumbs`, a write that went through with the time it just wrote, so a
-  second write in the same session needs no second read.
+  `--json`, `show` hands you the `set` to run with `--expect` filled in, in its
+  `breadcrumbs`; a `set` that went through hands back the same with the time it
+  has just written, so a second write in the same session needs no second read.
 - **`--force` is how one session writes over another's notes unasked.** It is
   not the way past a refusal: a refusal means somebody wrote while you were
   writing, and their text is in `data`. Merge yours into their `body` and send
