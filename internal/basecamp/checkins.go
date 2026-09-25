@@ -215,6 +215,50 @@ func (e *Extractor) writeQuestion(ctx context.Context, w *bundle.Writer, bucket,
 	if err != nil {
 		return err
 	}
+	return e.writeAnswers(ctx, w, bucket, tool, found.ID, answers)
+}
+
+// writeAnswers adds the answers of a question, oldest first, each with its
+// files, its comments and its boosts. Whatever hangs on a check-in hangs on an
+// answer: a question carries none of it, and the format has no word for a
+// comment or a reaction of one.
+//
+// An answer that says nothing is left out and counted: Minka refuses a body
+// that says nothing, and nobody answered anything there.
+func (e *Extractor) writeAnswers(ctx context.Context, w *bundle.Writer, bucket, tool, question int64, answers []answered) error {
+	for _, one := range answers {
+		body, files, err := e.rewriteBody(one.Content, "", one.Files)
+		if err != nil {
+			return err
+		}
+		if saysNothing(body) {
+			e.answersWithoutABody++
+			continue
+		}
+		origin, err := e.record("answer", one.ID, one.recording)
+		if err != nil {
+			return err
+		}
+		err = w.Add(bundle.Answers, bundle.Answer{
+			Record:           origin,
+			ProjectSourceID:  sourceID(bucket),
+			ToolSourceID:     sourceID(tool),
+			QuestionSourceID: sourceID(question),
+			GroupOn:          one.on.Format(dayFormat),
+			Body:             body,
+		})
+		if err != nil {
+			return err
+		}
+		e.measure(bundle.Answers, body)
+		if err := e.attachFiles(ctx, w, bundle.OwnerAnswer, origin, files); err != nil {
+			return err
+		}
+		err = e.writeDiscussion(ctx, w, bucket, bundle.ParentAnswer, bundle.TargetAnswer, one.ID, one.CommentsCount, one.BoostsCount)
+		if err != nil {
+			return err
+		}
+	}
 	return nil
 }
 

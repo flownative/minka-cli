@@ -242,7 +242,7 @@ func (e *Extractor) Extract(ctx context.Context, projectIDs []string, w *bundle.
 	for _, name := range lineTypes {
 		e.messagesByType[name] = 0
 	}
-	e.longestBody = map[bundle.Kind]int{bundle.Cards: 0, bundle.Comments: 0, bundle.Posts: 0, bundle.Messages: 0}
+	e.longestBody = map[bundle.Kind]int{bundle.Cards: 0, bundle.Comments: 0, bundle.Posts: 0, bundle.Messages: 0, bundle.Answers: 0}
 	e.fileOwners, e.fileRecords, e.files = map[string]string{}, nil, FileCounts{}
 
 	ids, err := sortedIDs(projectIDs)

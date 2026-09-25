@@ -120,7 +120,7 @@ func TestImportBasecampWritesABundleAndReportsWhatItHolds(t *testing.T) {
 		"postsLeftOut":  float64(0), "postsWithEmptyBody": float64(0),
 		"messagesByType":     map[string]any{"text": float64(0), "richText": float64(0), "upload": float64(0), "integration": float64(0)},
 		"uploadLinesLeftOut": float64(0), "messagesWithEmptyBody": float64(0),
-		"longestBody":     map[string]any{"cards": float64(0), "comments": float64(0), "posts": float64(0), "messages": float64(0)},
+		"longestBody":     map[string]any{"cards": float64(0), "comments": float64(0), "posts": float64(0), "messages": float64(0), "answers": float64(0)},
 		"references":      map[string]any{"cards": float64(0), "posts": float64(0), "tools": float64(0)},
 		"requestsRetried": float64(0),
 	}
@@ -989,7 +989,7 @@ func TestImportBasecampReportsThePostsAndTheChatsOfAProject(t *testing.T) {
 		"postsLeftOut":  float64(1), "postsWithEmptyBody": float64(1),
 		"messagesByType":     map[string]any{"text": float64(3), "richText": float64(2), "upload": float64(2), "integration": float64(1)},
 		"uploadLinesLeftOut": float64(1), "messagesWithEmptyBody": float64(1), "picturesLinked": float64(1),
-		"longestBody":   map[string]any{"cards": float64(0), "comments": float64(94), "posts": float64(212), "messages": float64(213)},
+		"longestBody":   map[string]any{"cards": float64(0), "comments": float64(94), "posts": float64(212), "messages": float64(213), "answers": float64(0)},
 		"filesInBodies": float64(4), "filesDropped": float64(2), "linkPreviews": float64(3), "mentionsUnresolved": float64(0),
 		"embeds": float64(1), "embedsLeftOut": float64(0),
 	}
