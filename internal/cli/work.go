@@ -526,30 +526,46 @@ func (a *app) hostOfTheStore() (string, error) {
 	if host != "" {
 		return host, nil
 	}
-	_, file, err := a.loadConfig()
+	path, file, err := a.loadConfig()
 	if err != nil {
 		return "", err
 	}
-	if file.DefaultHost == "" {
+	host, err = defaultHostOf(file, path)
+	if err != nil {
+		return "", err
+	}
+	if host == "" {
 		return "", &Error{Code: CodeAuth, Message: "not signed in to any Minka host", Hint: "Run: minka auth login --host https://minka.example.com"}
 	}
-	return defaultHostOf(file), nil
+	return host, nil
 }
 
 // defaultHostOf is the host of the configuration, read the way a sign-in writes
-// it. It is a key of the store and part of the name of a lock, so every process
-// has to make the same string of it: a host written into the file by hand, with a
-// slash at the end or a capital in it, would have one process looking at another
-// list and another lock than the next.
+// it, and empty where the configuration names none. It is a key of the store and
+// part of the name of a lock, so every process has to make the same string of it:
+// a host written into the file by hand, with a slash at the end or a capital in
+// it, would have one process looking at another list and another lock than the
+// next.
 //
-// A value nothing can be made of is handed on as it stands, so that what says so
-// is the command looking for a token under it and not every command at once.
-func defaultHostOf(file *config.File) string {
+// A value that cannot be read at all is no host, and it is refused here rather
+// than handed on. Handed on, it would stand in the session of every command that
+// follows and from there reach whatever prints a host — and the argv of the
+// keepalive, where every process on the machine reads along.
+func defaultHostOf(file *config.File, path string) (string, error) {
+	if file.DefaultHost == "" {
+		return "", nil
+	}
 	host, err := config.NormalizeHost(file.DefaultHost)
 	if err != nil {
-		return file.DefaultHost
+		shown := config.HostForOutput(file.DefaultHost)
+		return "", &Error{
+			Code:    CodeConfig,
+			Message: "the default host in " + path + " cannot be read: " + err.Error(),
+			Hint:    "Correct \"defaultHost\" in that file, or sign in again: minka auth login --host " + hostToPaste(shown),
+		}
 	}
-	return host
+
+	return host, nil
 }
 
 // findCard reads a card by its ID or by the short identifier people call it

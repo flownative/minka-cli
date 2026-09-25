@@ -567,3 +567,18 @@ keep a card alight for a working day with nobody left to stop it.
 **Implemented as:** `cli.app.keepTilesAlive`, `cli.tick.decide`,
 `cli.app.somebodyIsAtWork`, `work.HoldKeepalive`, see
 [Saying what you are working on](stable/at-work.md).
+
+<a id="c-044"></a>
+## C-044 — A host is read, or it is no host
+
+*Applies to: `--host`, `$MINKA_HOST`, the default host of the configuration*
+
+A value that names no machine is refused, and a default host the CLI cannot read
+is refused where it is read, so that no session comes about under it. Signing out
+without `--host` is the one command that takes the entry as the file writes it.
+
+**Why:** Such a value would become a key of the configuration, a key of the list
+of cards and part of the name of a lock, and a session under it would carry it
+into everything that prints a host and into the argv of the keepalive.
+**Implemented as:** `config.NormalizeHost`, `cli.defaultHostOf`, see
+[Token, hosts and requests](stable/security.md).
