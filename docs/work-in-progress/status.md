@@ -42,6 +42,15 @@ which is somebody of the account's own company or an admin. Under one that
 may not, masked addresses were seen live ending the run as `forbidden`. Only
 the people the chosen projects refer to come into a bundle.
 
+The working notes on the back of a card are read with `cards notes show` and
+written with `cards notes set`, which needs `--expect` or `--force` (C-042).
+Seen live against the local instance, which runs Minka's main with the notes
+not yet released: reading notes nobody wrote, the first write with `--expect
+none`, a refusal as `notesChanged` for a stale time and for `none` over
+existing notes with the notes as they stand, a write with the right time,
+clearing with `--force`, and a 404 for an unknown card. The card resource
+does not say whether a card has notes, so `cards show` only points to them.
+
 An agent says which cards it has in hand: `work start` and `work stop` keep
 one list per machine, `heartbeat` reports it to `PUT /me/work`, and `hooks
 install` writes the hook of Claude Code that calls it after every tool call.
@@ -67,6 +76,13 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
 (account Bruno, local instance) gets revoked then.
 
 ## Checked against the fake only
+
+- Of the notes of a card: `cardNotesHasControlCharacters`, and `cardArchived`
+  for a card in its board's archive, which the fake does not know either.
+  Notes over 100000 characters are refused before sending, counted as the
+  server counts them since it was brought into line. The fake refuses in the
+  controller's order, the text before the guard, and reads a guard's time in
+  the forms the server reads and no wider. All of it read in the Minka code.
 
 - That a conversation with somebody from a foreign organisation gives 404: the
   fake API knows no organisations. Read in the Minka code.

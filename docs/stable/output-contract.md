@@ -40,7 +40,7 @@ all of it: `data` is the result it would have printed, `notice` its warnings.
 | 6 | `network` | no complete response |
 | 7 | `api_error` | server or protocol error |
 | 8 | `ambiguous` | ambiguous input |
-| 9 | `validation` | refused by Minka |
+| 9 | `validation` | refused by Minka, a write somebody else got in before included |
 
 Such a command fails so that a caller notices, and the result is not lost:
 the error envelope with `data` is printed with `--quiet` as well, and the text
