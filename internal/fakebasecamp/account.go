@@ -22,9 +22,12 @@ type Person struct {
 	Name string
 	// Kind is what Basecamp calls the personable type: "User" when empty,
 	// "Integration" for a bot, "Tombstone" for somebody who was deleted.
-	Kind      string
-	Email     string
-	NoAvatar  bool
+	Kind     string
+	Email    string
+	NoAvatar bool
+	// TimeZone is the zone the person lives in, as Basecamp names it; it is
+	// left out of the answer when empty.
+	TimeZone  string
 	CreatedAt string
 	UpdatedAt string
 }
@@ -65,6 +68,9 @@ type Tool struct {
 	// Lines are the lines of a chat, oldest first; the account lists them the
 	// other way round, as Basecamp does.
 	Lines []Line
+	// Questions are the questions of a questionnaire, in the order the account
+	// lists them.
+	Questions []Question
 }
 
 // Account is the fake. It is a basecamp.Source, a basecamp.AvatarFetcher and
@@ -194,6 +200,7 @@ func New() *Account {
 			talkProject(ada, grace, linus, edsger, former, bot, deleted, tool),
 			fileProject(ada, grace, tool),
 			referenceProject(ada, grace, tool),
+			checkinProject(ada, grace, linus, edsger, niklaus, deleted, tool),
 		},
 		SubtasksURL:  map[int64]string{},
 		Fail:         map[string]error{},
@@ -224,6 +231,9 @@ func (a *Account) person(p Person) map[string]any {
 	answer := map[string]any{
 		"id": p.ID, "name": p.Name, "email_address": p.Email, "avatar_url": a.avatarURL(p),
 		"created_at": p.CreatedAt, "updated_at": p.UpdatedAt, "personable_type": "User",
+	}
+	if p.TimeZone != "" {
+		answer["time_zone"] = p.TimeZone
 	}
 	switch p.Kind {
 	case "":
@@ -305,6 +315,9 @@ func (a *Account) Get(_ context.Context, path string) ([]byte, error) {
 			return answer, nil
 		}
 		if answer, known := a.talks(path, page); known {
+			return answer, nil
+		}
+		if answer, known := a.checkins(path, page); known {
 			return answer, nil
 		}
 	}
