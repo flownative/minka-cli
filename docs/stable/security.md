@@ -78,14 +78,14 @@ fragment. The fault itself is named in words, so the refusal stays as clear as
 it was.
 
 A host that a session carries has been through this reading, so printing it
-needs nothing further: `auth status`, the report of `doctor`, the hint of a 401
-and the text of a failed request name it as it stands, and there is nothing in
-it to render away. Rendered is what comes straight out of the configuration or
-straight from whoever typed it, before anything has read it, and those are four
-places: the refusal of a host that was given, the refusal of the default host,
-the entry a sign-out takes away, and the entry a refusal names as the same host
-written another way. Whoever prints a value that has not been read adds a
-fifth.
+needs nothing further: `auth status`, the report of `doctor` and the hint of a
+401 name it as it stands, and there is nothing in it to render away. Rendered
+is what has not been read where it is printed, and those are five places: the
+refusal of a host that was given, the refusal of the default host, the entry a
+sign-out takes away, the entry a refusal names as the same host written another
+way, and the hint after a request that could not be made, where the host
+arrives as a bare argument from wherever the caller had it. Whoever prints a
+value that has not been read adds a sixth.
 
 A hint is a command line. It names the address without the credential, and
 where nothing of the value is left it names what is to be filled in: a plain

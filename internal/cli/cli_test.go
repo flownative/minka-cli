@@ -1797,6 +1797,46 @@ func TestSigningOutOfAnEntryThatCannotBeRead(t *testing.T) {
 	expectCode(t, r, ExitUsage)
 }
 
+// An entry written in a form a sign-in would not write is reached as it stands as
+// well. Read first, a sign-out would look for the canonical spelling, find
+// nothing and leave the token where it is — the very case the CLI itself teaches
+// about. The other way round, with the canonical host named and the odd one in
+// the file, the answer says which entry holds the token.
+func TestSigningOutOfAnEntryWrittenAnotherWay(t *testing.T) {
+	const written = "https://hand.example.com/"
+	e := newTestEnv(t)
+	delete(e.vars, "MINKA_HOST")
+	delete(e.vars, "MINKA_TOKEN")
+	e.writeConfig(`{"defaultHost":"` + e.server.URL + `","hosts":{` +
+		`"` + e.server.URL + `":{"token":"minka_pat_signed_in"},` +
+		`"` + written + `":{"token":"minka_pat_written_by_hand"}}}`)
+
+	env, r := e.runJSON("", "auth", "logout", "--host", "https://hand.example.com")
+	expectCode(t, r, ExitOK)
+	if data := decode(t, env.Data); data["removed"] != false {
+		t.Errorf("data of the sign-out: %v", data)
+	}
+	if !strings.Contains(env.Notice, written) {
+		t.Errorf("the answer does not say which entry holds the token: %q", env.Notice)
+	}
+
+	env, r = e.runJSON("", "auth", "logout", "--host", written)
+	expectCode(t, r, ExitOK)
+	if data := decode(t, env.Data); data["removed"] != true {
+		t.Errorf("data of the sign-out: %v", data)
+	}
+	file, err := config.Load(e.vars["MINKA_CONFIG"])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := file.Hosts[written]; ok {
+		t.Error("the entry written another way is still there")
+	}
+	if _, ok := file.Hosts[e.server.URL]; !ok {
+		t.Error("the entry of another host was taken away with it")
+	}
+}
+
 // A request that cannot be made says which address it was reaching for, so that
 // whoever reads the refusal knows what to look at.
 func TestTheHintAfterAFailedRequestNamesWhatCouldNotBeReached(t *testing.T) {
