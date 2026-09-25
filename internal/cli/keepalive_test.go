@@ -43,6 +43,19 @@ func (e *testEnv) storedHost() map[string]any {
 	return entry
 }
 
+// writeConfig puts a configuration file where the CLI of these tests reads one,
+// with the permissions it insists on.
+func (e *testEnv) writeConfig(content string) {
+	e.t.Helper()
+	path := e.vars["MINKA_CONFIG"]
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		e.t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		e.t.Fatal(err)
+	}
+}
+
 // asStored is a moment the way the store writes it down.
 func asStored(at time.Time) string {
 	return at.UTC().Format(time.RFC3339)
@@ -215,6 +228,39 @@ func TestABeatWithACardInHandStartsTheKeepalive(t *testing.T) {
 	}
 	if started := e.keepalives.Load(); started != 1 {
 		t.Errorf("%d keepalives were started, want the one", started)
+	}
+}
+
+// The keepalive is told which host it reports for. A beat that was given --host
+// reports somewhere other than the host this machine is signed in to by default,
+// and a child left to decide for itself would report the default one's cards
+// while the tiles of the host that was named went dark — and, its lock being
+// free, every beat after it would start another child.
+func TestTheKeepaliveIsToldTheHostTheBeatDecidedOn(t *testing.T) {
+	e := newAgentEnv(t)
+	began := time.Date(2026, 9, 23, 10, 0, 0, 0, time.UTC)
+	named, byDefault := e.server.URL, "https://elsewhere.example.com"
+
+	// Signed in to two hosts, the other one of them by default.
+	e.writeConfig(`{"defaultHost": "` + byDefault + `", "hosts": {
+		"` + byDefault + `": {"token": "minka_pat_elsewhere"},
+		"` + named + `": {"token": "` + e.fixture.AgentToken + `"}}}`)
+	delete(e.vars, "MINKA_HOST")
+	delete(e.vars, "MINKA_TOKEN")
+
+	expectCode(t, e.runAt(began, "work", "start", e.fixture.CardInDoing.ID, "--host", named, "--json"), ExitOK)
+	env, r := e.runWithJSON(began, "heartbeat", "--host", named)
+	expectCode(t, r, ExitOK)
+	if became := decode(t, env.Data)["keepalive"]; became != keepaliveStarted {
+		t.Fatalf("the keepalive %v", became)
+	}
+	if told, _ := e.keepaliveHost.Load().(string); told != named {
+		t.Errorf("the keepalive was told %q, want %s", told, named)
+	}
+
+	// And that is how the child is called.
+	if called := strings.Join(keepaliveArguments(named), " "); called != "heartbeat --keepalive --host "+named {
+		t.Errorf("the child is called with %q", called)
 	}
 }
 

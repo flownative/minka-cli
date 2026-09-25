@@ -27,9 +27,11 @@ type testEnv struct {
 	fixture *fakeapi.Fixture
 	vars    map[string]string
 
-	// keepalives counts the processes a run would have started. No test forks
-	// one: what is under test is the decision to start it.
-	keepalives atomic.Int32
+	// keepalives counts the processes a run would have started, keepaliveHost
+	// holds the host the last of them was to report to. No test forks one: what
+	// is under test is the decision to start it and what it is told.
+	keepalives    atomic.Int32
+	keepaliveHost atomic.Value
 }
 
 type result struct {
@@ -77,8 +79,9 @@ func (e *testEnv) runWith(configure func(*app), stdin string, args ...string) re
 	e.t.Helper()
 	var stdout, stderr bytes.Buffer
 	a := newApp(context.Background(), strings.NewReader(stdin), &stdout, &stderr, func(name string) string { return e.vars[name] })
-	a.startKeepalive = func() error {
+	a.startKeepalive = func(host string) error {
 		e.keepalives.Add(1)
+		e.keepaliveHost.Store(host)
 		return nil
 	}
 	if configure != nil {
