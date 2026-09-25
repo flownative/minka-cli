@@ -147,6 +147,17 @@ func (r *registry) referByID(id int64) (*string, string, error) {
 	return reference, p.Name, err
 }
 
+// known is what the bundle holds about somebody a record has already brought
+// in: the address and the kind of person as they will be written, which is what
+// decides whether anybody else may refer to them again.
+func (r *registry) known(id int64) (seenPerson, bool) {
+	seen, referred := r.referred[id]
+	if !referred {
+		return seenPerson{}, false
+	}
+	return *seen, true
+}
+
 // nameOf is the name the list of the account has for somebody, without
 // bringing them into the bundle.
 func (r *registry) nameOf(id int64) (string, bool) {
