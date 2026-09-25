@@ -361,7 +361,7 @@ func (a *app) session() (*session, error) {
 	token := file.Hosts[host].Token
 	if token == "" {
 		shown := config.HostForOutput(host)
-		e := &Error{Code: CodeAuth, Message: fmt.Sprintf("not signed in to %s", shown), Hint: "Run: minka auth login --host " + host}
+		e := &Error{Code: CodeAuth, Message: fmt.Sprintf("not signed in to %q", shown), Hint: "Run: minka auth login --host " + host}
 		if _, err := config.NormalizeHost(host); err != nil {
 			e.Hint = "The default host in the configuration cannot be read the way a sign-in writes it. Run: minka auth login --host " + hostToPaste(shown)
 		} else if written := hostWrittenAnotherWay(file, host); written != "" {
@@ -377,14 +377,15 @@ func (a *app) session() (*session, error) {
 
 // hostToPaste is the host a hint may put into a command line. Where nothing of
 // the value is left to paste — a password stood in it and is gone from what may
-// be printed — the line names an address to fill in instead of one that cannot
-// work.
+// be printed — the line names what is to be filled in. It is no address on
+// purpose: whoever runs the line as it stands, a person or an agent, must not
+// reach a host that is not theirs.
 func hostToPaste(shown string) string {
 	if host, err := config.NormalizeHost(shown); err == nil {
 		return host
 	}
 
-	return "https://minka.example.com"
+	return "<the address of your Minka instance>"
 }
 
 // hostWrittenAnotherWay names an entry of the configuration that means the host

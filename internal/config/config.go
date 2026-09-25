@@ -226,21 +226,29 @@ func HostForOutput(raw string) string {
 	if !strings.Contains(value, "://") {
 		value = "https://" + value
 	}
-	// Where the value parses, the parts decide what is shown, because a
-	// password may hold a slash, a question mark or a hash and would take the
-	// end of the user information out of reach of any search through the text.
-	if u, err := url.Parse(value); err == nil && u.Host != "" {
+	// Where the value parses and no separator of user information is left in the
+	// address, its parts say what is shown. Where one is left, the user
+	// information did not end where a URL has it end: a password holding a
+	// slash, a question mark or a hash moves that end into the path, and the
+	// host and the path then carry the credential themselves.
+	if u, err := url.Parse(value); err == nil && u.Host != "" && !holdsASeparator(u.Host+u.EscapedPath()) {
 		return u.Scheme + "://" + u.Host + u.EscapedPath()
 	}
 
 	return hostTextWithoutCredentials(value)
 }
 
-// hostTextWithoutCredentials renders a value that cannot be parsed as a URL at
-// all. Such a value is refused as well and may carry just as much, so it is
-// shown deliberately short: everything up to and including the last @ is
-// replaced, and of what follows only as much as leads up to a path, a query or
-// a fragment.
+// holdsASeparator says whether a part of an address still carries the sign that
+// user information ends there, written plainly or percent-encoded.
+func holdsASeparator(value string) bool {
+	return strings.Contains(value, "@") || strings.Contains(strings.ToUpper(value), "%40")
+}
+
+// hostTextWithoutCredentials renders a value whose address cannot be trusted to
+// say where the user information ends. Such a value is refused as well and may
+// carry just as much, so it is shown deliberately short: everything up to and
+// including the last @ is replaced, and of what follows only as much as leads up
+// to a path, a query or a fragment.
 func hostTextWithoutCredentials(value string) string {
 	scheme := ""
 	if i := strings.Index(value, "://"); i >= 0 {

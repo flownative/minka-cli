@@ -168,6 +168,17 @@ func TestNormalizeHostRefusesWithoutRepeatingACredential(t *testing.T) {
 		"https://" + user + ":pass/" + password + "@minka.localbeach.net",
 		"https://" + user + ":pass?" + password + "@minka.localbeach.net",
 		"https://" + user + ":pass#" + password + "@minka.localbeach.net",
+		// A password beginning with digits and holding a slash makes a host and a
+		// path of itself that a URL can be read from, and the @ then stands
+		// behind the first slash, where user information no longer ends.
+		"https://" + user + ":2024/" + password + "@minka.localbeach.net",
+		"https://" + user + ":/" + password + "@minka.localbeach.net",
+		// One slash too few is a typo somebody makes, and it moves the whole
+		// address into the path.
+		"https:/" + user + ":" + password + "@minka.localbeach.net",
+		// An address without a scheme and without a host leaves the parts nothing
+		// to say.
+		"//" + user + ":" + password + "@minka.localbeach.net",
 		// A separator written percent-encoded leaves no literal @ or : to find.
 		"https://" + user + ":" + password + "%40minka.localbeach.net",
 		"https://" + user + "%3A" + password + "%40minka.localbeach.net",
