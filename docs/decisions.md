@@ -586,3 +586,52 @@ nothing walks the hosts of that list, so it is inert, and the file is written
 with the mode of the configuration beside it. **Implemented as:**
 `config.NormalizeHost`, `cli.defaultHostOf`, `cli.app.hostToSignOutOf`, see
 [Token, hosts and requests](stable/security.md).
+
+<a id="c-045"></a>
+## C-045 — A check-in asks its subscribers, and only those Minka can ask
+
+*Applies to: `asked` of `questions.jsonl`*
+
+`asked` comes from the subscribers of the question, not from whoever answered
+it, and holds only those the bundle carries as members of the project who are
+still there and have an address. The first run decides: a later one never
+touches `asked` again.
+
+**Why:** The subscribers are whom Basecamp hands the question to; whoever
+answered is neither all of them nor only them. Somebody Minka cannot ask ends
+its run in a failure that carries no file and no line while its dry run stays
+green, and the next run hits the same wall. The filter guards against the case,
+not against the version of the applier that happens to stand today.
+**Implemented as:** `basecamp.Extractor.askedOf`, see
+[Importing from Basecamp](stable/import.md).
+
+<a id="c-046"></a>
+## C-046 — A check-in asked every other week is anchored on the day it was last answered
+
+*Applies to: `startsOn` of an `everyOtherWeek` question*
+
+`startsOn` is the most recent day an answer of the question belongs to, stepped
+back to the weekday it is asked on. A question nobody ever answered is left out
+instead of anchored.
+
+**Why:** Minka counts the weeks from the first matching day at or after
+`startsOn`, and Basecamp says nothing about which of two weeks it asks in. The
+last day answered is the one day that proves which week the source is in. A
+guess would put half of these questions a week out, and nothing in Minka would
+notice. **Implemented as:** `basecamp.anchoredOn`, see
+[Importing from Basecamp](stable/import.md).
+
+<a id="c-047"></a>
+## C-047 — A day the source does not name is the day its author saw
+
+*Applies to: `groupOn` of an answer, `startsOn` of a question without a start*
+
+Where Basecamp names no day, the day is read from the time the record was
+written, in the zone of whoever wrote it as Basecamp names it. Without a zone,
+or with one nobody knows, the run ends. The zone database travels in the binary.
+
+**Why:** Basecamp writes every time as UTC and Minka knows no zone of an
+organisation, so any other zone would give the day of nobody. A day that is off
+by one is a day nobody can tell from a right one afterwards, which is worth more
+than a run that goes through. **Implemented as:** `basecamp.dayOf`, see
+[Importing from Basecamp](stable/import.md).

@@ -17,12 +17,14 @@ card, a comment or a message gives the identifier a download takes, without
 anything being taken out of the text.
 
 `minka import basecamp` extracts the structure, the boards, the message
-boards and the chats of Basecamp projects into an import bundle for Minka's
-applier: people with avatars, projects with members, the boards, chats and
-message boards as tools, of each board the columns, cards, steps, comments
-and boosts, of each message board the posts of every status with their
-categories, comments and boosts, and of each chat its lines as messages with
-their boosts, written in parts of one chat and some 10,000 lines each.
+boards, the chats and the check-ins of Basecamp projects into an import bundle
+for Minka's applier: people with avatars, projects with members, the boards,
+chats, message boards and questionnaires as tools, of each board the columns,
+cards, steps, comments and boosts, of each message board the posts of every
+status with their categories, comments and boosts, of each chat its lines as
+messages with their boosts, written in parts of one chat and some 10,000 lines
+each, and of each questionnaire its questions with the schedule Minka has words
+for and their answers with what hangs on them.
 Mentions in the texts are references, the preview of a link is the link, a
 video or a player embedded in a text is an `<import-embed>` with its address,
 a link to a card, a message or a chat of the account is an
@@ -31,6 +33,11 @@ into a chat come with a record and their bytes, streamed from the
 Basecamp CLI or taken over from the bundle the run replaces. It reads
 through the Basecamp CLI and is tested against the invented account in
 `internal/fakebasecamp`.
+The check-ins are checked against the fake alone: no run against the real
+account has met a questionnaire yet, so what Basecamp sends under a frequency
+other than `every_day`, `on_certain_days` and `every_other_week` is unknown. A
+frequency nobody knows leaves the question out and is reported with its field,
+so such a run says what is missing instead of writing a schedule nobody chose.
 It has been run live, as a dry run and into a bundle outside the repository,
 under an identity that sees addresses, the posts and the chats included: all
 references of that bundle resolve and its parts are the ones its manifest
@@ -351,9 +358,11 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   and unreleased, the contract stands in its `authorization.md` and E-190.
 - Commands for the check-ins of a project: likewise unreleased, the contract
   in `authorization.md` and E-191.
-- `import basecamp` brings the to-dos and the check-ins of a project along:
-  the appliers of both are on Minka's `main`, the format in its
-  `import-format.md`.
+- `import basecamp` brings the to-dos of a project along: the applier is on
+  Minka's `main`, the format in its `import-format.md`.
+- Run the check-ins live, against a real questionnaire: which frequencies
+  Basecamp sends, whether a question ever comes without a `start_date`, and
+  whether an answer ever comes without a `group_on`.
 - React to messages from `minka-ca`: check against the code, fake first,
   then the CLI, test and sabotage proof, check live, documentation in the
   same commit.

@@ -142,15 +142,29 @@ e-mail addresses of other people; Basecamp masks them for anybody else, and
 the run ends with exit 4. Nothing is written to Basecamp, and no Minka
 host or token is needed.
 
-So far a bundle holds the structure, the boards, the message boards and the
-chats: the people the named projects refer to with their avatars (their
-members and whoever a record names, not the rest of the account), the projects
-with their members, of each project the card tables, chats and message boards
-that are switched on, of each card table the columns, the cards with the
-archived and the trashed ones, their steps, comments and boosts, of each
-message board the messages with the archived and the trashed ones as posts,
-their categories, comments and boosts, and of each chat its lines with their
-boosts as messages. Other tools and tools that are switched off are counted as
+So far a bundle holds the structure, the boards, the message boards, the chats
+and the check-ins: the people the named projects refer to with their avatars
+(their members and whoever a record names, not the rest of the account), the
+projects with their members, of each project the card tables, chats, message
+boards and questionnaires that are switched on, of each card table the columns,
+the cards with the archived and the trashed ones, their steps, comments and
+boosts, of each message board the messages with the archived and the trashed
+ones as posts, their categories, comments and boosts, of each chat its lines
+with their boosts as messages, and of each questionnaire its questions with
+their answers, comments and boosts.
+
+A question comes with the schedule Minka has words for: the weekdays counted
+from Monday, the time of day, the day the rhythm is counted from, and whom it is
+asked of, which are the subscribers of the question and not whoever answered it.
+Only a member of the project who is still there and has an address can be asked
+(askedLeftOut). A question whose schedule Minka cannot express is left out with
+its answers and named with the field that made it impossible
+(questionsLeftOut); one whose schedule has run out comes paused; one asked every
+other week is anchored on the day it was last answered (anchorsInferred) and
+left out where nobody ever answered it. An answer that says nothing or lies in
+the trash is left out (answersWithoutABody, answersTrashed), and one Basecamp
+names no day for takes the day it was written in the zone of whoever wrote it
+(answersWithoutADay). Other tools and tools that are switched off are counted as
 skipped. A mention and a file in a text become a reference, and so does a file
 dropped into a chat. A video or a player embedded in a text, an iframe,
 becomes an embed that carries its address and nothing else (embeds); one whose
