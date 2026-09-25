@@ -102,6 +102,19 @@ func (e *testEnv) runJSON(stdin string, args ...string) (envelope, result) {
 	return env, r
 }
 
+// writeConfig puts a configuration file where the CLI of these tests reads one,
+// with the permissions it insists on.
+func (e *testEnv) writeConfig(content string) {
+	e.t.Helper()
+	path := e.vars["MINKA_CONFIG"]
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		e.t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		e.t.Fatal(err)
+	}
+}
+
 func (e *testEnv) lastWriteBody() map[string]any {
 	e.t.Helper()
 	writes := e.server.WritingRequests()
@@ -222,6 +235,30 @@ func TestAConfigFileOthersCanReadIsNotUsed(t *testing.T) {
 	}
 	if len(e.server.Requests()) != 0 {
 		t.Error("a request was sent with the token of an insecure file")
+	}
+}
+
+// A configuration written by hand can keep a host in a form no sign-in writes.
+// The token under such an entry is never found, and a refusal that named only the
+// host it looked for would name one that stands nowhere in the file and send
+// somebody looking at the wrong end.
+func TestAHostTheConfigurationWritesAnotherWayIsSaidSo(t *testing.T) {
+	e := newTestEnv(t)
+	delete(e.vars, "MINKA_TOKEN")
+	delete(e.vars, "MINKA_HOST")
+	written := e.server.URL + "/"
+	e.writeConfig(`{"defaultHost": "` + written + `", "hosts": {"` + written + `": {"token": "` + e.fixture.Token + `"}}}`)
+
+	env, r := e.runJSON("", "me")
+	expectCode(t, r, ExitAuth)
+	if env.Code != CodeAuth {
+		t.Errorf("code %q", env.Code)
+	}
+	if !strings.Contains(env.Hint, written) || !strings.Contains(env.Hint, "another way") {
+		t.Errorf("the hint %q does not say that the configuration keeps the host in another form", env.Hint)
+	}
+	if !strings.Contains(env.Hint, "minka auth login --host "+e.server.URL) {
+		t.Errorf("the hint %q does not say what puts it right", env.Hint)
 	}
 }
 

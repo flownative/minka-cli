@@ -360,10 +360,32 @@ func (a *app) session() (*session, error) {
 	}
 	token := file.Hosts[host].Token
 	if token == "" {
-		return nil, &Error{Code: CodeAuth, Message: fmt.Sprintf("not signed in to %s", host), Hint: "Run: minka auth login --host " + host}
+		e := &Error{Code: CodeAuth, Message: fmt.Sprintf("not signed in to %s", host), Hint: "Run: minka auth login --host " + host}
+		if written := hostWrittenAnotherWay(file, host); written != "" {
+			e.Hint = "The configuration keeps this host as " + written +
+				", the same host written another way, and the token under that entry is looked for under " + host +
+				". Run: minka auth login --host " + host + " — or write that entry as " + host + "."
+		}
+		return nil, e
 	}
 
 	return &session{client: api.New(host, token, userAgent()), host: host, tokenSource: tokenFromConfig, configPath: path}, nil
+}
+
+// hostWrittenAnotherWay names an entry of the configuration that means the host
+// asked for but is not written the way a sign-in writes it. The token under such
+// an entry is never found, and a refusal that named only the host it looked for
+// would name one that stands nowhere in the file.
+func hostWrittenAnotherWay(file *config.File, host string) string {
+	for written, entry := range file.Hosts {
+		if written == host || entry.Token == "" {
+			continue
+		}
+		if same, err := config.NormalizeHost(written); err == nil && same == host {
+			return written
+		}
+	}
+	return ""
 }
 
 const neighbourCard = "the neighbour"
