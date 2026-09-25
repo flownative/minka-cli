@@ -181,28 +181,55 @@ there is no token or the host does not accept it.`,
 	}
 }
 
+// hostToSignOutOf is the entry a sign-out takes away: the host it was told, else
+// the default host of the configuration, and either of them as the file writes
+// it.
+//
+// Taking a token away has to reach the entry that is there. A host read the way
+// a sign-in writes it would leave one written by hand standing with its token,
+// and a host that cannot be read at all — refused everywhere else, because a
+// session under it would carry the value into everything that prints a host —
+// still names an entry where it matches one letter for letter. Nothing goes
+// anywhere from here, so strictness would buy nothing and cost the only way to
+// be rid of such an entry: no command lists the hosts, and its token stays
+// valid on the server.
+func (a *app) hostToSignOutOf(file *config.File) (string, error) {
+	host, err := a.explicitHost()
+	if err == nil {
+		if host == "" {
+			return file.DefaultHost, nil
+		}
+		return host, nil
+	}
+	given := a.hostFlag
+	if given == "" {
+		given = a.getenv("MINKA_HOST")
+	}
+	if _, written := file.Hosts[given]; written {
+		return given, nil
+	}
+
+	return "", err
+}
+
 func (a *app) newAuthLogoutCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "logout",
 		Short: "Remove the token of a host from the config file",
 		Long: `Removes the token of the host from the config file. The token itself stays
-valid until it is revoked on the server.`,
+valid until it is revoked on the server.
+
+Without --host it is the host signed in to last. The entry is reached as the
+file writes it, so an address written in by hand can be taken out again.`,
 		Args: requireArgs(),
 		RunE: func(*cobra.Command, []string) error {
-			host, err := a.explicitHost()
-			if err != nil {
-				return err
-			}
 			path, file, err := a.loadConfig()
 			if err != nil {
 				return err
 			}
-			// The default host as the file writes it, not as a sign-in would:
-			// taking a token away has to reach the entry that is there, and one
-			// written by hand in another form would be left standing with its
-			// token by a host that was read straight.
-			if host == "" {
-				host = file.DefaultHost
+			host, err := a.hostToSignOutOf(file)
+			if err != nil {
+				return err
 			}
 			if host == "" {
 				return a.ok(success{

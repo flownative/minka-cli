@@ -1759,6 +1759,44 @@ func TestSigningOutOfAHandWrittenEntryPrintsNoPassword(t *testing.T) {
 	}
 }
 
+// An entry nothing else can reach is still to be got rid of: no command lists the
+// hosts of the configuration, and a token left standing there stays valid on the
+// server. Signing out sends nothing anywhere, so it takes the entry as the file
+// writes it, whether that can be read as a host or not.
+func TestSigningOutOfAnEntryThatCannotBeRead(t *testing.T) {
+	const secret = "minka_pat_in_the_wrong_place"
+	const written = "https://minka.example.com;t=" + secret
+	e := newTestEnv(t)
+	delete(e.vars, "MINKA_HOST")
+	delete(e.vars, "MINKA_TOKEN")
+	e.writeConfig(`{"defaultHost":"` + e.server.URL + `","hosts":{` +
+		`"` + e.server.URL + `":{"token":"minka_pat_signed_in"},` +
+		`"` + written + `":{"token":"minka_pat_written_by_hand"}}}`)
+
+	env, r := e.runJSON("", "auth", "logout", "--host", written)
+	expectCode(t, r, ExitOK)
+	if out := r.stdout + r.stderr; strings.Contains(out, secret) {
+		t.Errorf("signing out hands on what stood behind the host: %s", out)
+	}
+	if data := decode(t, env.Data); data["host"] != "https://minka.example.com" || data["removed"] != true {
+		t.Errorf("data of the sign-out: %v", data)
+	}
+	file, err := config.Load(e.vars["MINKA_CONFIG"])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := file.Hosts[written]; ok {
+		t.Error("the entry that cannot be read is still there")
+	}
+	if _, ok := file.Hosts[e.server.URL]; !ok {
+		t.Error("the entry of another host was taken away with it")
+	}
+
+	// A value that stands nowhere in the file is a refusal all the same.
+	_, r = e.runJSON("", "auth", "logout", "--host", "https://other.example.com;t=x")
+	expectCode(t, r, ExitUsage)
+}
+
 // A request that cannot be made says which address it was reaching for, so that
 // whoever reads the refusal knows what to look at.
 func TestTheHintAfterAFailedRequestNamesWhatCouldNotBeReached(t *testing.T) {

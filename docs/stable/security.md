@@ -54,10 +54,13 @@ to repair and the way out. Where the configuration keeps the same host in anothe
 form, the refusal says which entry that is: the token is there, it is only written
 where nothing looks for it.
 
-Signing out without `--host` is the one command that takes the entry as the file
-writes it. It has to reach the entry that is there, and one written by hand in
-another form would be left standing with its token by a host that was read
-straight.
+Signing out is the one command that takes the entry as the file writes it, the
+host it was told as much as the default one. It has to reach the entry that is
+there: one written in another form would be left standing with its token by a
+host that was read straight, and one that cannot be read at all is matched
+letter for letter. Nothing goes anywhere from here, and no command lists the
+hosts, so an entry that could not be signed out of would be invisible and
+unremovable with its token valid on the server.
 
 A host is said back to whoever gave it, and from there it travels into a
 transcript, a ticket and a log. What is printed of it is the address alone:
