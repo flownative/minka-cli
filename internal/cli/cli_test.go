@@ -260,6 +260,11 @@ func TestAHostTheConfigurationWritesAnotherWayIsSaidSo(t *testing.T) {
 	if !strings.Contains(env.Hint, "minka auth login --host "+e.server.URL) {
 		t.Errorf("the hint %q does not say what puts it right", env.Hint)
 	}
+	// It names an entry of the file the token lies in, and an agent puts what it
+	// reads into a log.
+	if strings.Contains(env.Hint, e.fixture.Token) || strings.Contains(env.Error, e.fixture.Token) {
+		t.Errorf("the refusal carries the token: %q %q", env.Error, env.Hint)
+	}
 }
 
 func TestLogoutRemovesTheToken(t *testing.T) {
