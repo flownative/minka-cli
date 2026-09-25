@@ -108,6 +108,26 @@ func TestAKeepaliveHoldsTheLockOnlyWhileItReports(t *testing.T) {
 	}
 }
 
+// Nothing the keepalive meets is a failure, the way nothing a beat meets is
+// one: a machine that is signed in nowhere makes it stop and say why, and it
+// exits 0 all the same.
+func TestAKeepaliveWithNoHostToReportToStopsAndSaysSo(t *testing.T) {
+	e := newAgentEnv(t)
+	began := time.Date(2026, 9, 23, 10, 0, 0, 0, time.UTC)
+	expectCode(t, e.runAt(began, "work", "start", e.fixture.CardInDoing.ID, "--json"), ExitOK)
+	delete(e.vars, "MINKA_TOKEN")
+	delete(e.vars, "MINKA_HOST")
+
+	env, r := e.runKeepaliveThatIsToldToStop(began.Add(time.Second))
+	expectCode(t, r, ExitOK)
+	if !env.OK {
+		t.Fatalf("the keepalive failed: %s", env.Error)
+	}
+	if ended, _ := decode(t, env.Data)["ended"].(string); !strings.Contains(ended, "no host") {
+		t.Errorf("the keepalive ended for %q", ended)
+	}
+}
+
 // A beat that finds a card in hand starts the keepalive, and says so where
 // anybody asks: a tile that stays dark is diagnosed from that word and nothing
 // else. Where one is reporting already, no second is started.
