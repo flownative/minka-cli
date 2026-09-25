@@ -69,7 +69,9 @@ func (a *app) newCommandsCmd(root *cobra.Command) *cobra.Command {
 func flagsOf(set *pflag.FlagSet) []catalogFlag {
 	var flags []catalogFlag
 	set.VisitAll(func(flag *pflag.Flag) {
-		if flag.Name == "help" {
+		// A flag the help keeps to itself is minka's own business, and the
+		// catalog is the help of whoever reads JSON.
+		if flag.Name == "help" || flag.Hidden {
 			return
 		}
 		defaultValue := flag.DefValue

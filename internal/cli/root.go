@@ -59,10 +59,19 @@ type app struct {
 	retryPause basecamp.Pause
 	now        func() time.Time
 
+	// startKeepalive starts the process that reports for one host while a tool
+	// call runs. It is an injection point so that no test forks a process.
+	startKeepalive func(host string) error
+
 	hostFlag   string
 	jsonFlag   bool
 	quietFlag  bool
 	styledFlag bool
+
+	// keepalive is set on the process that keeps reporting while the session
+	// around it is busy with one long tool call. It is at no work of its own, so
+	// it writes neither the sign of life of a card nor the mark of a beat.
+	keepalive bool
 
 	// skillIsTheTopic is set by a command that reports on the installed skill
 	// itself, so that it does not say the same thing twice.
@@ -90,6 +99,9 @@ func newApp(ctx context.Context, stdin io.Reader, stdout, stderr io.Writer, gete
 	a.basecampFiles = basecamp.Downloader{}
 	a.avatarFetcher = basecamp.NewAvatarClient()
 	a.now = time.Now
+	a.startKeepalive = func(host string) error {
+		return spawnKeepalive(host, environmentWithoutTheSession(os.Environ()))
+	}
 	a.stdinIsTerminal = func() bool { return isTerminal(stdin) }
 	a.stdoutIsTerminal = func() bool { return isTerminal(stdout) }
 	a.readSecret = func() (string, error) {
@@ -341,17 +353,39 @@ func (a *app) session() (*session, error) {
 		return nil, err
 	}
 	if host == "" {
-		host = file.DefaultHost
+		host = defaultHostOf(file)
 	}
 	if host == "" {
 		return nil, &Error{Code: CodeAuth, Message: "not signed in to any Minka host", Hint: "Run: minka auth login --host https://minka.example.com"}
 	}
 	token := file.Hosts[host].Token
 	if token == "" {
-		return nil, &Error{Code: CodeAuth, Message: fmt.Sprintf("not signed in to %s", host), Hint: "Run: minka auth login --host " + host}
+		e := &Error{Code: CodeAuth, Message: fmt.Sprintf("not signed in to %s", host), Hint: "Run: minka auth login --host " + host}
+		if written := hostWrittenAnotherWay(file, host); written != "" {
+			e.Hint = "The configuration keeps this host as " + written +
+				", the same host written another way, and the token under that entry is looked for under " + host +
+				". Run: minka auth login --host " + host + " — or write that entry as " + host + "."
+		}
+		return nil, e
 	}
 
 	return &session{client: api.New(host, token, userAgent()), host: host, tokenSource: tokenFromConfig, configPath: path}, nil
+}
+
+// hostWrittenAnotherWay names an entry of the configuration that means the host
+// asked for but is not written the way a sign-in writes it. The token under such
+// an entry is never found, and a refusal that named only the host it looked for
+// would name one that stands nowhere in the file.
+func hostWrittenAnotherWay(file *config.File, host string) string {
+	for written, entry := range file.Hosts {
+		if written == host || entry.Token == "" {
+			continue
+		}
+		if same, err := config.NormalizeHost(written); err == nil && same == host {
+			return written
+		}
+	}
+	return ""
 }
 
 const neighbourCard = "the neighbour"

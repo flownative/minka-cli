@@ -550,3 +550,20 @@ and only look safe. Naming `--force` makes writing over another's edit a
 choice, not an accident.
 **Implemented as:** `cli.notesGuard`, see
 [Rich text in both directions](stable/rich-text.md).
+
+<a id="c-043"></a>
+## C-043 — One process per host reports while nobody else can
+
+*Applies to: `minka heartbeat`, and the keepalive it starts*
+
+A beat that finds a card in hand and no keepalive of its host starts one,
+detached and under a lock of its own. It is at no work: no session name, and
+neither mark written. It reports an empty list before it stops; a silent store
+and a jumped clock stop it without a word.
+
+**Why:** A long tool call makes no signal for longer than the three minutes the
+server counts one for, and a process that could pass for a session at work would
+keep a card alight for a working day with nobody left to stop it.
+**Implemented as:** `cli.app.keepTilesAlive`, `cli.tick.decide`,
+`cli.app.somebodyIsAtWork`, `work.HoldKeepalive`, see
+[Saying what you are working on](stable/at-work.md).

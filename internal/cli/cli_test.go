@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -25,6 +26,12 @@ type testEnv struct {
 	server  *fakeapi.Server
 	fixture *fakeapi.Fixture
 	vars    map[string]string
+
+	// keepalives counts the processes a run would have started, keepaliveHost
+	// holds the host the last of them was to report to. No test forks one: what
+	// is under test is the decision to start it and what it is told.
+	keepalives    atomic.Int32
+	keepaliveHost atomic.Value
 }
 
 type result struct {
@@ -72,6 +79,11 @@ func (e *testEnv) runWith(configure func(*app), stdin string, args ...string) re
 	e.t.Helper()
 	var stdout, stderr bytes.Buffer
 	a := newApp(context.Background(), strings.NewReader(stdin), &stdout, &stderr, func(name string) string { return e.vars[name] })
+	a.startKeepalive = func(host string) error {
+		e.keepalives.Add(1)
+		e.keepaliveHost.Store(host)
+		return nil
+	}
 	if configure != nil {
 		configure(a)
 	}
@@ -88,6 +100,19 @@ func (e *testEnv) runJSON(stdin string, args ...string) (envelope, result) {
 		e.t.Fatalf("output is not a JSON envelope: %v\nstdout: %s\nstderr: %s", err, r.stdout, r.stderr)
 	}
 	return env, r
+}
+
+// writeConfig puts a configuration file where the CLI of these tests reads one,
+// with the permissions it insists on.
+func (e *testEnv) writeConfig(content string) {
+	e.t.Helper()
+	path := e.vars["MINKA_CONFIG"]
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		e.t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		e.t.Fatal(err)
+	}
 }
 
 func (e *testEnv) lastWriteBody() map[string]any {
@@ -210,6 +235,35 @@ func TestAConfigFileOthersCanReadIsNotUsed(t *testing.T) {
 	}
 	if len(e.server.Requests()) != 0 {
 		t.Error("a request was sent with the token of an insecure file")
+	}
+}
+
+// A configuration written by hand can keep a host in a form no sign-in writes.
+// The token under such an entry is never found, and a refusal that named only the
+// host it looked for would name one that stands nowhere in the file and send
+// somebody looking at the wrong end.
+func TestAHostTheConfigurationWritesAnotherWayIsSaidSo(t *testing.T) {
+	e := newTestEnv(t)
+	delete(e.vars, "MINKA_TOKEN")
+	delete(e.vars, "MINKA_HOST")
+	written := e.server.URL + "/"
+	e.writeConfig(`{"defaultHost": "` + written + `", "hosts": {"` + written + `": {"token": "` + e.fixture.Token + `"}}}`)
+
+	env, r := e.runJSON("", "me")
+	expectCode(t, r, ExitAuth)
+	if env.Code != CodeAuth {
+		t.Errorf("code %q", env.Code)
+	}
+	if !strings.Contains(env.Hint, written) || !strings.Contains(env.Hint, "another way") {
+		t.Errorf("the hint %q does not say that the configuration keeps the host in another form", env.Hint)
+	}
+	if !strings.Contains(env.Hint, "minka auth login --host "+e.server.URL) {
+		t.Errorf("the hint %q does not say what puts it right", env.Hint)
+	}
+	// It names an entry of the file the token lies in, and an agent puts what it
+	// reads into a log.
+	if strings.Contains(env.Hint, e.fixture.Token) || strings.Contains(env.Error, e.fixture.Token) {
+		t.Errorf("the refusal carries the token: %q %q", env.Error, env.Hint)
 	}
 }
 

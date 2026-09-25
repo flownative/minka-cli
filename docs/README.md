@@ -13,8 +13,9 @@ the documentation says what holds; how it came about is in git.
   modes, the envelope, the table of exit codes, how commands are cut — read
   before any work on a command.
 - [Token, hosts and requests](stable/security.md): How the token is kept and
-  sent, what is fixed about the HTTP client, which check happens before a
-  request — before any work on sign-in, client or IDs.
+  sent, how a host name is read whoever wrote it, what is fixed about the HTTP
+  client, which check happens before a request — before any work on sign-in,
+  client or IDs.
 - [Rich text in both directions](stable/rich-text.md): Markdown to HTML and
   back, the allowlist of the server, sources, files and mentions — before any
   work on descriptions, comments or messages.
@@ -34,8 +35,9 @@ the documentation says what holds; how it came about is in git.
 - [Saying what you are working on](stable/at-work.md): Where the cards of
   `work start` are kept and why the machine shares one list, when a card is
   given up and what keeps it, what the client is, what the heartbeat does in
-  every case it can meet, how the hook is written — before any work on `work`,
-  `heartbeat` or `hooks`.
+  every case it can meet, what the keepalive reports while one long tool call
+  runs, how the hook is written — before any work on `work`, `heartbeat` or
+  `hooks`.
 - [Testing](stable/testing.md): Fake API, sabotage proofs, what a test pins
   down, what it may demand of time — read before your first test.
 
