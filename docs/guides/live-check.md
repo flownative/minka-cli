@@ -33,6 +33,17 @@ project of others — is a decision of Robert or Shaun, not of the coordinator.
 6. What the run showed goes into the status; what it uncovered in the CLI gets
    fixed at once.
 
+## The keepalive
+
+Checking the keepalive live means watching a tile through a tool call that runs
+for longer than the three minutes a signal counts for: `work start`, one beat,
+then something that takes five minutes, and the tile alight all through it.
+Afterwards `minka heartbeat --json` says in `keepalive` that one is reporting,
+`work stop` empties the list and the tile goes out at once, and no keepalive is
+left behind — the lock beside the store is free again. What no run can show in
+an afternoon is a machine that really sleeps; that one is seen by closing the
+lid with a card in hand and looking at the board an hour later.
+
 ## Images
 
 A test image should be visible. A 1×1 pixel does arrive correctly, but nobody
