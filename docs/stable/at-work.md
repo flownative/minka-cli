@@ -32,16 +32,19 @@ their own would take each other's cards away with every signal.
 - A card is given up eight hours after the session that took it up was last at
   it (C-040), and the next `work list` says so. A card remembers that session
   by the name it finds in `CLAUDE_CODE_SESSION_ID`, and every heartbeat of that
-  session writes the moment down again, at most once a minute. So a piece of
-  work that lasts longer than a day keeps its card by being worked on, while
-  the card of a session that died runs out however busy the machine around it
-  is — which the sign of life would not manage if it were the signal, because
-  a signal carries the whole list of the machine.
+  session writes the moment down again, at most once a minute and whether or
+  not a signal goes out with it. So a piece of work that lasts longer than a
+  day keeps its card by being worked on, while the card of a session that died
+  runs out however busy the machine around it is — which the sign of life would
+  not manage if it were the signal, because a signal carries the whole list of
+  the machine. A tool call of a subagent counts as the session that spawned it:
+  it carries the same name and runs the hook like any other, so a session that
+  works through subagents keeps its cards without having to do anything about
+  it.
 - A card taken up where nothing says who is asking, a person at a terminal for
   instance, carries no session and goes by the moment it was started. So does a
-  card of a session that never gets as far as a signal, because no hook is
-  installed. Saying `work start` again brings such a card back, and that is
-  what the notice advises.
+  card of a session that never runs the heartbeat. Saying `work start` again
+  brings such a card back, and that is what the notice advises.
 - `cards move` and `cards done` take the card out of the list themselves and
   report at once (C-041), so that a card somebody has moved on stops glowing
   without waiting for the next tool call. What counts as moving on is landing
