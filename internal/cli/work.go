@@ -246,12 +246,13 @@ was turned away; what the last signal that went out made of it also stands in
 			if cards == nil {
 				cards = []string{}
 			}
+			keepalive := a.whatBecameOfTheKeepalive()
 
 			if a.nobodyIsListening() {
 				return nil
 			}
 			return a.ok(success{
-				data:    map[string]any{"sent": sent, "reason": reason, "cardIds": cards},
+				data:    map[string]any{"sent": sent, "reason": reason, "cardIds": cards, "keepalive": keepalive},
 				summary: heartbeatSummary(sent, reason, cards),
 				text:    func(w io.Writer) { fmt.Fprintln(w, heartbeatSummary(sent, reason, cards)) },
 			})
@@ -700,6 +701,9 @@ func nullable(text string) any {
 	return text
 }
 
+// sessionVariable is where a session of an agent says what it is called.
+const sessionVariable = "CLAUDE_CODE_SESSION_ID"
+
 // agentSession is what a session of an agent calls itself, where it says so in
 // the environment. It binds a card to whoever took it up: the list belongs to
 // the machine and a signal carries all of it, so a sign of life without a name
@@ -708,5 +712,5 @@ func nullable(text string) any {
 // A card taken up where nothing says who is asking — a person at a terminal —
 // carries no name and goes by the moment it was started.
 func (a *app) agentSession() string {
-	return a.getenv("CLAUDE_CODE_SESSION_ID")
+	return a.getenv(sessionVariable)
 }
