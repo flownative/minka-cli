@@ -124,10 +124,13 @@ func (a *app) reportWhileNobodyElseDoes() error {
 // keepTilesAlive reports the cards of this machine on a timer of its own, for as
 // long as somebody is at work on them.
 //
-// A session makes no signal of its own while one tool call runs — a test run, a
-// build, an extraction of an hour, the time an answer from the person takes —
-// and the server forgets a card three minutes after the last signal, so the tile
-// would go dark while the work goes on. This is what reports in between.
+// A session makes no signal of its own while one tool call runs, and the server
+// forgets a card three minutes after the last signal, so the tile would go dark
+// while the work goes on. This is what reports in between, and what it is worth
+// is twenty-five minutes from the last beat of the session: nothing is at the
+// store while that one call runs, so the mark of a beat stands still with it and
+// the keepalive stops that long after it. A call that lasts longer outlives its
+// tiles.
 //
 // Nothing it meets is a failure, the way nothing a beat meets is one: it says
 // why it stopped and leaves it at that.
