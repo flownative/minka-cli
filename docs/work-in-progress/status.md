@@ -82,7 +82,7 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   Notes over 100000 characters are refused before sending, counted as the
   server counts them since it was brought into line. The fake refuses in the
   controller's order, the text before the guard, and reads a guard's time in
-  every form the server reads. All of it read in the Minka code.
+  the forms the server reads and no wider. All of it read in the Minka code.
 
 - That a conversation with somebody from a foreign organisation gives 404: the
   fake API knows no organisations. Read in the Minka code.
