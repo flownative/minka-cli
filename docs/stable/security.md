@@ -46,6 +46,13 @@ command at once. Where the configuration keeps the same host in another form, th
 refusal says which entry that is: the token is there, it is only written where
 nothing looks for it.
 
+A refused host is said back to whoever gave it, and from there it travels into
+a transcript and into a log. What is said back leaves out the places a
+credential hides in — the user information before the `@`, a query, a fragment —
+and names the fault in words instead: a scheme, a host, a port and a path are
+repeated, a user name and a password never. This holds for a value that cannot
+be parsed at all as well, which may carry just as much.
+
 ## Requests
 
 - A request that carries JSON never follows a redirect: it would take the

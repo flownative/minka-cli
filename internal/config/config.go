@@ -178,23 +178,30 @@ func NormalizeHost(raw string) (string, error) {
 	if !strings.Contains(value, "://") {
 		value = "https://" + value
 	}
+	shown := withoutCredentials(raw)
 
 	u, err := url.Parse(value)
 	if err != nil {
-		return "", fmt.Errorf("%q is not a valid host URL", raw)
+		return "", fmt.Errorf("%q is not a valid host URL", shown)
 	}
 	if u.Scheme != "https" && u.Scheme != "http" {
-		return "", fmt.Errorf("%q has to start with https://", raw)
+		return "", fmt.Errorf("%q has to start with https://", shown)
 	}
-	if u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
-		return "", fmt.Errorf("%q is not a valid host URL", raw)
+	if u.User != nil {
+		return "", fmt.Errorf("%q carries a user name and password before the @; give the address of the Minka instance alone, and sign in with a token", shown)
+	}
+	if u.RawQuery != "" || u.Fragment != "" {
+		return "", fmt.Errorf("%q carries a query or a fragment; give the address of the Minka instance alone, such as https://minka.example.com", shown)
+	}
+	if u.Host == "" {
+		return "", fmt.Errorf("%q is not a valid host URL", shown)
 	}
 	path := strings.TrimSuffix(strings.TrimRight(u.Path, "/"), "/api/v1")
 	if path != "" {
-		return "", fmt.Errorf("%q has a path; give the address of the Minka instance, such as https://minka.example.com", raw)
+		return "", fmt.Errorf("%q has a path; give the address of the Minka instance, such as https://minka.example.com", shown)
 	}
 	if u.Scheme == "http" && !isLoopback(u.Hostname()) {
-		return "", fmt.Errorf("%q uses plain http, which would send the token unencrypted; use https", raw)
+		return "", fmt.Errorf("%q uses plain http, which would send the token unencrypted; use https", shown)
 	}
 
 	host := strings.ToLower(u.Host)
@@ -203,6 +210,36 @@ func NormalizeHost(raw string) (string, error) {
 	}
 
 	return u.Scheme + "://" + host, nil
+}
+
+// withoutCredentials renders a host the way a refusal may repeat it: the user
+// information before the @ and everything behind a ? or a # are left out.
+// A refused host is said back to whoever gave it, and from there it travels
+// into a transcript and into a log; a password or a token written into the
+// address must not travel with it. What is wrong with such a value is said in
+// words instead, so the refusal stays as clear as it was.
+//
+// It works on the raw text rather than on a parsed URL, because a value that
+// cannot be parsed at all is refused as well and may carry just as much.
+func withoutCredentials(raw string) string {
+	value := strings.TrimSpace(raw)
+
+	scheme := ""
+	if i := strings.Index(value, "://"); i >= 0 {
+		scheme, value = value[:i+3], value[i+3:]
+	}
+	if i := strings.IndexAny(value, "?#"); i >= 0 {
+		value = value[:i]
+	}
+	authority, path := value, ""
+	if i := strings.Index(value, "/"); i >= 0 {
+		authority, path = value[:i], value[i:]
+	}
+	if i := strings.LastIndex(authority, "@"); i >= 0 {
+		authority = "***@" + authority[i+1:]
+	}
+
+	return scheme + authority + path
 }
 
 func isLoopback(hostname string) bool {

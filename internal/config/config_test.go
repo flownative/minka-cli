@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -141,5 +142,56 @@ func TestNormalizeHost(t *testing.T) {
 		if got, err := NormalizeHost(input); err == nil {
 			t.Errorf("NormalizeHost(%q) = %q, want an error", input, got)
 		}
+	}
+}
+
+// A refused host is said back to whoever gave it and ends up in a transcript
+// and in a log. A password written into the address must not get there, while
+// the refusal still has to say which host it is about and what is wrong with
+// it — a message that said nothing would keep the secret too.
+func TestNormalizeHostRefusesWithoutRepeatingACredential(t *testing.T) {
+	const user = "robert"
+	const password = "s3cr3t-password"
+
+	hosts := []string{
+		"https://" + user + ":" + password + "@minka.localbeach.net",
+		user + ":" + password + "@minka.localbeach.net",
+		"https://" + user + ":" + password + "@minka.localbeach.net/api/v1",
+		"http://" + user + ":" + password + "@minka.localbeach.net",
+		"https://" + password + "@minka.localbeach.net",
+		// A value with a control character in it cannot be parsed as a URL at
+		// all and is refused before anything of it is understood.
+		"https://" + user + ":" + password + "@minka.localbeach.net\x7f",
+		"https://minka.localbeach.net?token=" + password,
+		"https://minka.localbeach.net#" + password,
+	}
+	for _, host := range hosts {
+		got, err := NormalizeHost(host)
+		if err == nil {
+			t.Errorf("NormalizeHost(%q) = %q, want an error", host, got)
+			continue
+		}
+		message := err.Error()
+		for _, secret := range []string{password, user} {
+			if strings.Contains(message, secret) {
+				t.Errorf("the refusal of %q hands on %q: %s", host, secret, message)
+			}
+		}
+		if !strings.Contains(message, "minka.localbeach.net") {
+			t.Errorf("the refusal of %q does not say which host it is about: %s", host, message)
+		}
+	}
+}
+
+// The refusal of a host that carries user information says what is wrong with
+// it, so that whoever wrote the password into the address knows what to take
+// out of it.
+func TestNormalizeHostNamesUserInformationAsTheFault(t *testing.T) {
+	_, err := NormalizeHost("https://robert:s3cr3t-password@minka.localbeach.net")
+	if err == nil {
+		t.Fatal("a host with user information was accepted")
+	}
+	if !strings.Contains(err.Error(), "user name and password before the @") {
+		t.Errorf("the refusal does not name what is wrong: %s", err)
 	}
 }
