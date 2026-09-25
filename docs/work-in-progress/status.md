@@ -79,8 +79,10 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
 
 - Of the notes of a card: `cardNotesHasControlCharacters`, and `cardArchived`
   for a card in its board's archive, which the fake does not know either.
-  Notes over 100000 characters are refused before sending. Read in the Minka
-  code.
+  Notes over 100000 characters are refused before sending, counted as the
+  server counts them since it was brought into line. The fake refuses in the
+  controller's order, the text before the guard, and reads a guard's time in
+  every form the server reads. All of it read in the Minka code.
 
 - That a conversation with somebody from a foreign organisation gives 404: the
   fake API knows no organisations. Read in the Minka code.

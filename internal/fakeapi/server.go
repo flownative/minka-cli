@@ -1427,6 +1427,17 @@ func (s *Server) cardNotes(w http.ResponseWriter, r *http.Request, person *Perso
 // given writes only over the notes it names, or over none for null; notes
 // that say the sent text already are no conflict, and notes nobody has
 // written yet are created whatever was expected.
+// aPointInTime reads a moment the way Minka reads the one a guard names: up to
+// six digits of a second, under Z or an offset written either way.
+func aPointInTime(value string) (time.Time, bool) {
+	for _, layout := range []string{"2006-01-02T15:04:05.999999Z07:00", "2006-01-02T15:04:05.999999Z0700"} {
+		if at, err := time.Parse(layout, value); err == nil {
+			return at, true
+		}
+	}
+	return time.Time{}, false
+}
+
 func (s *Server) writeCardNotes(w http.ResponseWriter, r *http.Request, person *Person) {
 	fields, ok := readBody(w, r)
 	if !ok {
@@ -1436,17 +1447,9 @@ func (s *Server) writeCardNotes(w http.ResponseWriter, r *http.Request, person *
 	if !ok {
 		return
 	}
-	expected, guarded := fields["expectedUpdatedAt"]
-	var expectedAt *time.Time
-	if guarded && expected != nil {
-		value, isString := expected.(string)
-		at, err := time.Parse(timestampLayout, value)
-		if !isString || err != nil {
-			malformed(w, `The field "expectedUpdatedAt" has to be a point in time as "updatedAt" gives it, or null.`)
-			return
-		}
-		expectedAt = &at
-	}
+	// The text is looked at before the guard, as the controller does it: a
+	// body that is no text is the one thing wrong with the request itself, and
+	// everything else about the text is a refusal of what it says.
 	if body == nil {
 		unprocessable(w, "cardNotesMissing", `Writing the notes of a card needs the field "body"; an empty string clears them.`)
 		return
@@ -1459,6 +1462,18 @@ func (s *Server) writeCardNotes(w http.ResponseWriter, r *http.Request, person *
 	case utf8.RuneCountInString(text) > maxNotesLength:
 		unprocessable(w, "cardNotesTooLong", "The notes of a card must not be longer than 100000 characters.")
 		return
+	}
+
+	expected, guarded := fields["expectedUpdatedAt"]
+	var expectedAt *time.Time
+	if guarded && expected != nil {
+		value, isString := expected.(string)
+		at, read := aPointInTime(value)
+		if !isString || !read {
+			malformed(w, `The field "expectedUpdatedAt" has to be a point in time as "updatedAt" gives it, or null.`)
+			return
+		}
+		expectedAt = &at
 	}
 
 	board, _, card := s.visibleCard(r.PathValue("cardId"), person)

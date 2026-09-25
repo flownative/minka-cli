@@ -22,11 +22,16 @@ func TestNotesShowPrintsTheMarkdownAndWhoChangedItLast(t *testing.T) {
 	updatedAt := withNotes(e)
 	e.fixture.CardInTriage.ShortID = "MNK-3T"
 
+	// What stands on the one stream is the notes and nothing else, so that
+	// somebody can put them in a file and send them back unchanged.
 	r := e.run("", "cards", "notes", "show", "mnk-3t", "--styled")
 	expectCode(t, r, ExitOK)
-	for _, want := range []string{"## Plan\n\n- order the tent\n\n", "Last changed by " + e.fixture.Anke.Name, "--expect " + updatedAt} {
-		if !strings.Contains(r.stdout, want) {
-			t.Errorf("text lacks %q:\n%s", want, r.stdout)
+	if r.stdout != "## Plan\n\n- order the tent\n" {
+		t.Errorf("stdout is not the notes as they stand:\n%q", r.stdout)
+	}
+	for _, want := range []string{"Last changed by " + e.fixture.Anke.Name, "--expect " + updatedAt} {
+		if !strings.Contains(r.stderr, want) {
+			t.Errorf("the word about them lacks %q:\n%s", want, r.stderr)
 		}
 	}
 
@@ -72,11 +77,13 @@ func TestNotesSetNeedsToKnowWhatItMayReplace(t *testing.T) {
 		r := e.run("text", append([]string{"cards", "notes", "set", e.fixture.CardInTriage.ID, "-"}, args...)...)
 		expectCode(t, r, ExitUsage)
 	}
+	// Minka reads six digits of a second and no more, and Go would read any
+	// number of them, so a longer one has to be refused here.
 	for _, expect := range []string{
-		"2026-09-24T11:53:14Z",
-		"2026-09-24T11:53:14.123Z",
 		"2026-09-24T11:53:14.123456789Z",
-		"2026-09-24T13:53:14.123456+02:00",
+		"2026-09-24 11:53:14Z",
+		"yesterday",
+		"2026-09-24T11:53:14",
 	} {
 		env, r := e.runJSON("text", "cards", "notes", "set", e.fixture.CardInTriage.ID, "-", "--expect", expect)
 		expectCode(t, r, ExitUsage)
@@ -86,6 +93,62 @@ func TestNotesSetNeedsToKnowWhatItMayReplace(t *testing.T) {
 	}
 	if writes := e.server.WritingRequests(); len(writes) != 0 {
 		t.Errorf("%d writes were sent", len(writes))
+	}
+}
+
+// Every form Minka reads a guard's time in goes through as it was typed:
+// refusing here what the server would have taken would send an agent after a
+// problem it does not have.
+func TestNotesSetTakesEveryTimeMinkaReads(t *testing.T) {
+	e := newTestEnv(t)
+	for _, expect := range []string{
+		"2026-09-24T11:53:14Z",
+		"2026-09-24T11:53:14.123Z",
+		"2026-09-24T11:53:14.123456Z",
+		"2026-09-24T13:53:14.123456+02:00",
+		"2026-09-24T13:53:14+0200",
+	} {
+		before := len(e.server.WritingRequests())
+		expectCode(t, e.run("text", "cards", "notes", "set", e.fixture.CardInTriage.ID, "-", "--expect", expect, "--json"), ExitOK)
+		writes := e.server.WritingRequests()
+		if len(writes) != before+1 {
+			t.Fatalf("--expect %s sent %d writes", expect, len(writes)-before)
+		}
+		var sent struct {
+			ExpectedUpdatedAt *string `json:"expectedUpdatedAt"`
+		}
+		if err := json.Unmarshal(writes[len(writes)-1].Body, &sent); err != nil {
+			t.Fatal(err)
+		}
+		if sent.ExpectedUpdatedAt == nil || *sent.ExpectedUpdatedAt != expect {
+			t.Errorf("--expect %s went out as %v", expect, sent.ExpectedUpdatedAt)
+		}
+	}
+}
+
+// A guard on notes nobody has written yet guards nothing: the write creates
+// them, because there is no earlier version anybody could have overwritten.
+func TestAGuardOnNotesThatDoNotExistYetWrites(t *testing.T) {
+	e := newTestEnv(t)
+	env, r := e.runJSON("", "cards", "notes", "set", e.fixture.CardInTriage.ID, "First word", "--expect", "2026-09-24T11:53:14.123456Z")
+	expectCode(t, r, ExitOK)
+	if env.Meta["apiCode"] != nil {
+		t.Errorf("envelope %+v", env)
+	}
+	if e.fixture.CardInTriage.Notes != "First word" {
+		t.Errorf("the notes are %q", e.fixture.CardInTriage.Notes)
+	}
+}
+
+// A card nobody can see is a card nobody writes notes on.
+func TestNotesOfACardThatIsNotThere(t *testing.T) {
+	e := newTestEnv(t)
+	for _, args := range [][]string{
+		{"show", "0192f3a4-5b6c-4d7e-8f90-a1b2c3d4e5f6"},
+		{"set", "0192f3a4-5b6c-4d7e-8f90-a1b2c3d4e5f6", "text", "--force"},
+	} {
+		_, r := e.runJSON("", append([]string{"cards", "notes"}, args...)...)
+		expectCode(t, r, ExitNotFound)
 	}
 }
 
@@ -135,8 +198,8 @@ func TestNotesChangedSinceTheyWereReadAreLeftAndShown(t *testing.T) {
 	withNotes(e)
 
 	env, r := e.runJSON("", "cards", "notes", "set", e.fixture.CardInTriage.ID, "Mine", "--expect", "2026-09-24T10:00:00.000000Z")
-	expectCode(t, r, ExitAPI)
-	if env.Code != CodeAPI || env.Meta["apiCode"] != "notesChanged" || env.Retryable {
+	expectCode(t, r, ExitValidation)
+	if env.Code != CodeValidation || env.Meta["apiCode"] != "notesChanged" || env.Retryable {
 		t.Errorf("envelope %+v", env)
 	}
 	var current api.CardNotes
@@ -151,7 +214,7 @@ func TestNotesChangedSinceTheyWereReadAreLeftAndShown(t *testing.T) {
 	}
 
 	r = e.run("", "cards", "notes", "set", e.fixture.CardInTriage.ID, "Mine", "--expect", "none", "--styled")
-	expectCode(t, r, ExitAPI)
+	expectCode(t, r, ExitValidation)
 	if !strings.Contains(r.stdout, "- order the tent") || !strings.Contains(r.stderr, "changed since they were read") {
 		t.Errorf("stdout:\n%s\nstderr:\n%s", r.stdout, r.stderr)
 	}
@@ -160,8 +223,10 @@ func TestNotesChangedSinceTheyWereReadAreLeftAndShown(t *testing.T) {
 func TestNotesLongerThanMinkaKeepsAreRefusedWithoutARequest(t *testing.T) {
 	e := newTestEnv(t)
 
+	// The same refusal the server gives, so the caller reads one exit code for
+	// it whichever side decided.
 	r := e.run(strings.Repeat("ä", maxNotesLength)+"\r\n", "cards", "notes", "set", e.fixture.CardInTriage.ID, "-", "--force")
-	expectCode(t, r, ExitUsage)
+	expectCode(t, r, ExitValidation)
 	if writes := e.server.WritingRequests(); len(writes) != 0 {
 		t.Errorf("%d writes were sent", len(writes))
 	}
