@@ -357,16 +357,17 @@ those of answers.
   hands it to and not whoever answered it, and holds only those Minka can ask
   (C-045), in the order of their IDs and each once. A question that comes asking
   nobody at all is named in `nobodyAsked` with how many of its people fell out:
-  it will ask nobody again, because the first run settles `asked`. Nothing hangs on a question: it carries no comment and no reaction,
-  the format has no word for either of one, and none is asked for.
+  it will ask nobody again, because the first run settles `asked`. Nothing hangs
+  on a question: it carries no comment and no reaction, the format has no word
+  for either of one, and none is asked for.
   A question whose schedule Minka has no words for is left out with its
   answers, and the run goes on (C-048); `questionsLeftOut` names it with the
-  field that made it impossible: `week_instance`, `week_interval`, `month_interval`, `duration`, a
-  `frequency` nobody knows, `days` that are empty, outside 0…6 or more than one
-  where the rhythm takes one, an `end_date` that has not passed, a `start_date`
-  or an `end_date` of another shape than `YYYY-MM-DD`, an `hour` or a `minute`
-  of no day, and `group_on` for an `everyOtherWeek` question nobody ever
-  answered. A title the applier refuses ends the run as `api_error`, named by
+  field that made it impossible: `week_instance`, `week_interval`,
+  `month_interval`, `duration`, a `frequency` nobody knows, `days` that are
+  empty, outside 0…6 or more than one where the rhythm takes one, an `end_date`
+  that has not passed, a `start_date` or an `end_date` of another shape than
+  `YYYY-MM-DD`, an `hour` or a `minute` of no day, and `group_on` for an
+  `everyOtherWeek` question nobody ever answered. A title the applier refuses ends the run as `api_error`, named by
   ID: empty, longer than 200 characters, or with a character nobody can see. The
   whitespace around a title is taken off, as Minka takes it off.
 - **Answers** are what somebody answered a question, per question oldest first,

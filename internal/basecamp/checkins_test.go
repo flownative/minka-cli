@@ -1,7 +1,9 @@
 package basecamp_test
 
 import (
+	"encoding/json"
 	"errors"
+	"fmt"
 	"reflect"
 	"slices"
 	"strconv"
@@ -209,17 +211,6 @@ func TestOneWeekdayIsWeeklyAndSeveralAreDaily(t *testing.T) {
 // failure that names no file and no line.
 func TestWhoIsAskedComesFromTheSubscribersAndNotFromWhoAnswered(t *testing.T) {
 	account := fakebasecamp.New()
-	// The account lists the subscribers in another order than their IDs and one
-	// of them twice, so that the order and the dedupe of asked are held here too.
-	var listed []int64
-	each := map[int64]bool{}
-	for _, subscriber := range busyQuestion(account).Subscribers {
-		listed = append(listed, subscriber.ID)
-		each[subscriber.ID] = true
-	}
-	if slices.IsSorted(listed) || len(each) == len(listed) {
-		t.Fatalf("the account lists the subscribers sorted or each once: %v", listed)
-	}
 	dir, result := extract(t, account, checkinProject)
 
 	// Of the six subscribers, three can be named: one is no member of the
@@ -245,6 +236,19 @@ func TestWhoIsAskedComesFromTheSubscribersAndNotFromWhoAnswered(t *testing.T) {
 	// The question nobody ever answered is left out before anybody is asked.
 	if got, want := asked(account, "subscription.json"), 6; len(got) != want {
 		t.Errorf("the subscribers were asked for with %v, want %d requests", got, want)
+	}
+
+	// Asked last, because it is a request of its own: the account answered with
+	// the subscribers in another order than their IDs and one of them twice, so
+	// that the order and the dedupe of asked are held here too. Read from the
+	// answer the run was given and not from what the account holds.
+	listed := idsAnswered(t, account, "buckets/7007/recordings/9310/subscription.json")
+	each := map[string]bool{}
+	for _, id := range listed {
+		each[id] = true
+	}
+	if slices.IsSorted(listed) || len(each) == len(listed) {
+		t.Fatalf("the account answered with the subscribers sorted or each once: %v", listed)
 	}
 }
 
@@ -551,19 +555,21 @@ func TestAnAnswerWithoutADayAndWithoutAZoneEndsTheRun(t *testing.T) {
 // so a word nobody knows would reach the applier.
 func TestAStatusNoBundleKnowsEndsTheRun(t *testing.T) {
 	cases := map[string]struct {
-		named  string
-		change func(*fakebasecamp.Account)
+		message string
+		change  func(*fakebasecamp.Account)
 	}{
-		"a question": {"9311", func(a *fakebasecamp.Account) { weekendQuestion(a).Status = "draft" }},
-		"an answer":  {"9321", func(a *fakebasecamp.Account) { busyQuestion(a).Answers[1].Status = "pending" }},
+		"a question": {`question 9311 has the status "draft", which a bundle does not know`,
+			func(a *fakebasecamp.Account) { weekendQuestion(a).Status = "draft" }},
+		"an answer": {`answer 9321 has the status "pending", which a bundle does not know`,
+			func(a *fakebasecamp.Account) { busyQuestion(a).Answers[1].Status = "pending" }},
 	}
 	for what, one := range cases {
 		account := fakebasecamp.New()
 		one.change(account)
 
 		err := extractExpectingAnError(t, account, checkinProject)
-		if !strings.Contains(err.Error(), one.named) {
-			t.Errorf("%s: the run ended with %q, which does not name it", what, err)
+		if err.Message != one.message {
+			t.Errorf("%s: the run ended with %q, want %q", what, err.Message, one.message)
 		}
 	}
 }
@@ -573,16 +579,15 @@ func TestAStatusNoBundleKnowsEndsTheRun(t *testing.T) {
 // an unchanged account has to write the same bytes twice.
 func TestTheQuestionsOfAQuestionnaireAreWrittenOldestFirst(t *testing.T) {
 	account := fakebasecamp.New()
-	// The account lists them in another order than they were made in.
-	listed := make([]string, 0, len(questionnaire(account).Questions))
-	for _, question := range questionnaire(account).Questions {
-		listed = append(listed, sourceOf(question.ID))
-	}
+	dir, _ := extract(t, account, checkinProject)
+
+	// Read from the answers the account gave, not from what it holds: a source
+	// that listed them oldest first would leave nothing for the order to do.
+	listed := idsAnswered(t, account, "buckets/7007/questionnaires/9070/questions.json")
 	if slices.IsSorted(listed) {
-		t.Fatalf("the account lists the questions in the order of their age: %v", listed)
+		t.Fatalf("the account listed the questions in the order of their age: %v", listed)
 	}
 
-	dir, _ := extract(t, account, checkinProject)
 	written := sourceIDs(records(t, dir, bundle.Questions))
 	if want := []string{"9310", "9311", "9312", "9313", "9315", "9316"}; !slices.Equal(written, want) {
 		t.Errorf("the questions are written %v, want %v", written, want)
@@ -741,4 +746,44 @@ func extractExpectingAnError(t *testing.T, account *fakebasecamp.Account, projec
 // sourceOf is the ID of a record of the account as a bundle writes it.
 func sourceOf(id int64) string {
 	return strconv.FormatInt(id, 10)
+}
+
+// idsAnswered are the IDs the account answered a path with, in that order, over
+// every page of it. Whatever a fake holds, this is what a run was given.
+func idsAnswered(t *testing.T, account *fakebasecamp.Account, path string) []string {
+	t.Helper()
+	var ids []string
+	for page := 1; ; page++ {
+		content, err := account.Get(t.Context(), fmt.Sprintf("%s?page=%d", path, page))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var listed []struct {
+			ID          int64 `json:"id"`
+			Subscribers []struct {
+				ID int64 `json:"id"`
+			} `json:"subscribers"`
+		}
+		// A subscription is one object and no list, and names the people in it.
+		var one struct {
+			Subscribers []struct {
+				ID int64 `json:"id"`
+			} `json:"subscribers"`
+		}
+		if json.Unmarshal(content, &listed) != nil {
+			if err := json.Unmarshal(content, &one); err != nil {
+				t.Fatalf("%s: %v", path, err)
+			}
+			for _, subscriber := range one.Subscribers {
+				ids = append(ids, sourceOf(subscriber.ID))
+			}
+			return ids
+		}
+		if len(listed) == 0 {
+			return ids
+		}
+		for _, entry := range listed {
+			ids = append(ids, sourceOf(entry.ID))
+		}
+	}
 }

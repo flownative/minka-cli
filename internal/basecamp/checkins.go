@@ -477,9 +477,11 @@ func (e *Extractor) askedOf(ctx context.Context, bucket, question int64) ([]stri
 			continue
 		}
 		taken[subscriber.ID] = true
-		known, carried := e.people.known(subscriber.ID)
+		// Whoever the bundle has in the project came in where the project was
+		// written, so a member of it is somebody it knows.
+		known, _ := e.people.known(subscriber.ID)
 		switch {
-		case !members[subscriber.ID] || !carried:
+		case !members[subscriber.ID]:
 			e.askedLeftOut.NotInTheProject++
 			leftOut++
 		case known.retired():
