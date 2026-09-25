@@ -58,19 +58,6 @@ func (e *testEnv) hostsOfTheStore() []string {
 	return slices.Sorted(maps.Keys(e.storedHosts()))
 }
 
-// writeConfig puts a configuration file where the CLI of these tests reads one,
-// with the permissions it insists on.
-func (e *testEnv) writeConfig(content string) {
-	e.t.Helper()
-	path := e.vars["MINKA_CONFIG"]
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-		e.t.Fatal(err)
-	}
-	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
-		e.t.Fatal(err)
-	}
-}
-
 // theApp is the CLI as one run of it at a moment, for the few things a test asks
 // of it directly instead of through a command line.
 func (e *testEnv) theApp(at time.Time) *app {

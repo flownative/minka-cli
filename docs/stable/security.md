@@ -36,6 +36,16 @@ configuration file, or a refusal — never the token of the first host (C-004).
 `https://` is added, `/api/v1` and a default port are removed. `http://` is
 accepted for loopback only. Other paths are refused.
 
+This holds for the default host of the configuration as well, whoever wrote it
+there. The host is a key of the list of cards and part of the name of a lock
+beside it, so every process has to make the same string of a host, and a value
+written by hand in another form would have one process looking at another list
+than the next. A host that cannot be read at all is passed on as it stands, so
+that what says so is the one command looking for a token under it and not every
+command at once. Where the configuration keeps the same host in another form, the
+refusal says which entry that is: the token is there, it is only written where
+nothing looks for it.
+
 ## Requests
 
 - A request that carries JSON never follows a redirect: it would take the
