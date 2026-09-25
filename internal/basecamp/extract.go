@@ -139,6 +139,9 @@ type Result struct {
 	// AnchorsInferred are the questions asked every other week whose startsOn
 	// was taken from the day an answer belongs to.
 	AnchorsInferred []InferredAnchor
+	// NobodyAsked are the questions that come asking nobody at all, each with
+	// how many people the bundle could not name as asked.
+	NobodyAsked []NobodyAsked
 	// AskedLeftOut counts the people a question is asked of that a bundle
 	// cannot say are asked.
 	AskedLeftOut AskedLeftOut
@@ -203,6 +206,7 @@ type Extractor struct {
 
 	questionsLeftOut    []ImpossibleQuestion
 	anchorsInferred     []InferredAnchor
+	nobodyAsked         []NobodyAsked
 	askedLeftOut        AskedLeftOut
 	answersWithoutABody int
 	answersWithoutADay  int
@@ -254,7 +258,7 @@ func (e *Extractor) Extract(ctx context.Context, projectIDs []string, w *bundle.
 	e.cardsByStatus = map[string]int{bundle.StatusActive: 0, bundle.StatusArchived: 0, bundle.StatusTrashed: 0}
 	e.cardsOnHold, e.cardsLeftOut, e.commentsTrashed, e.bodies = 0, 0, 0, BodyCounts{}
 	e.talks, e.members = nil, map[int64]map[int64]bool{}
-	e.questionsLeftOut, e.anchorsInferred = []ImpossibleQuestion{}, []InferredAnchor{}
+	e.questionsLeftOut, e.anchorsInferred, e.nobodyAsked = []ImpossibleQuestion{}, []InferredAnchor{}, []NobodyAsked{}
 	e.askedLeftOut, e.answersWithoutABody, e.answersWithoutADay, e.answersTrashed = AskedLeftOut{}, 0, 0, 0
 	e.postsByStatus = map[string]int{bundle.StatusActive: 0, bundle.StatusArchived: 0, bundle.StatusTrashed: 0}
 	e.postsLeftOut, e.postsWithEmptyBody, e.uploadLinesLeftOut, e.messagesWithEmptyBody = 0, 0, 0, 0
@@ -328,6 +332,7 @@ func (e *Extractor) Extract(ctx context.Context, projectIDs []string, w *bundle.
 
 		QuestionsLeftOut:    e.questionsLeftOut,
 		AnchorsInferred:     e.anchorsInferred,
+		NobodyAsked:         e.nobodyAsked,
 		AskedLeftOut:        e.askedLeftOut,
 		AnswersWithoutABody: e.answersWithoutABody,
 		AnswersWithoutADay:  e.answersWithoutADay,

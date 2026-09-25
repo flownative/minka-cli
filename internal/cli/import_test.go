@@ -120,7 +120,7 @@ func TestImportBasecampWritesABundleAndReportsWhatItHolds(t *testing.T) {
 		"postsLeftOut":  float64(0), "postsWithEmptyBody": float64(0),
 		"messagesByType":     map[string]any{"text": float64(0), "richText": float64(0), "upload": float64(0), "integration": float64(0)},
 		"uploadLinesLeftOut": float64(0), "messagesWithEmptyBody": float64(0),
-		"questionsLeftOut": []any{}, "anchorsInferred": []any{},
+		"questionsLeftOut": []any{}, "anchorsInferred": []any{}, "nobodyAsked": []any{},
 		"askedLeftOut":        map[string]any{"notInTheProject": float64(0), "retired": float64(0), "withoutAnAddress": float64(0)},
 		"answersWithoutABody": float64(0), "answersWithoutADay": float64(0), "answersTrashed": float64(0),
 		"longestBody":     map[string]any{"cards": float64(0), "comments": float64(0), "posts": float64(0), "messages": float64(0), "answers": float64(0)},
@@ -1538,6 +1538,7 @@ func TestImportBasecampReportsTheCheckinsOfAProject(t *testing.T) {
 			"questions": float64(6), "answers": float64(6), "comments": float64(1), "reactions": float64(2), "attachments": float64(6)},
 		"questionsLeftOut": []any{map[string]any{"questionSourceId": "9314", "field": "group_on"}},
 		"anchorsInferred":  []any{map[string]any{"questionSourceId": "9312", "from": "2024-02-28"}},
+		"nobodyAsked":      []any{},
 		"askedLeftOut": map[string]any{
 			"notInTheProject": float64(1), "retired": float64(1), "withoutAnAddress": float64(1)},
 		"answersWithoutABody": float64(1), "answersWithoutADay": float64(0), "answersTrashed": float64(0),
@@ -1604,5 +1605,36 @@ func TestNoOutputSaysWhatSomebodyAnsweredACheckin(t *testing.T) {
 				t.Errorf("%s says %q", what, text)
 			}
 		}
+	}
+}
+
+// A question whose every subscriber is somebody the bundle cannot name as asked
+// comes asking nobody, and asks nobody again: a later run never touches asked.
+// So it is named on its own and not only counted.
+func TestAQuestionThatComesAskingNobodyIsNamed(t *testing.T) {
+	e := newImportEnv(t)
+	// Of the weekend question's one subscriber the bundle knows no address.
+	questions := e.account.Projects[6].Dock[0].Questions
+	for i := range questions {
+		if questions[i].ID == 9311 {
+			questions[i].Subscribers = []fakebasecamp.Person{{ID: 103}}
+		}
+	}
+	out := filepath.Join(t.TempDir(), "bundle")
+
+	env, r := e.runJSON("import", "basecamp", "--project", "7007", "--out", out)
+	expectCode(t, r, ExitOK)
+	want := []any{map[string]any{"questionSourceId": "9311", "leftOut": float64(1)}}
+	if got := decode(t, env.Data)["nobodyAsked"]; !reflect.DeepEqual(got, want) {
+		t.Errorf("nobodyAsked: got %v, want %v", got, want)
+	}
+	if !strings.Contains(env.Notice, "1 question of a check-in comes asking nobody at all") {
+		t.Errorf("notice %q", env.Notice)
+	}
+
+	styled := e.run("import", "basecamp", "--project", "7007", "--out", out, "--styled")
+	expectCode(t, styled, ExitOK)
+	if !strings.Contains(styled.stdout, "Questions that come asking nobody at all: 1 — 9311 (1 left out)") {
+		t.Errorf("the text lacks the question:\n%s", styled.stdout)
 	}
 }
