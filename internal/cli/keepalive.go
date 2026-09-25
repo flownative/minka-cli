@@ -252,7 +252,7 @@ func (a *app) whatBecameOfTheKeepalive() string {
 	if reporting {
 		return keepaliveReporting
 	}
-	if err := a.startKeepalive(); err != nil {
+	if err := a.startKeepalive(host); err != nil {
 		return notStarted(err.Error())
 	}
 	return keepaliveStarted
@@ -282,7 +282,13 @@ func (a *app) cardsInTheList(path, host string) (int, error) {
 	return len(entry.Cards), nil
 }
 
-// spawnKeepalive starts the keepalive as a process of its own.
+// spawnKeepalive starts the keepalive as a process of its own, for the host the
+// beat that starts it decided on.
+//
+// The host travels as an argument because the child decides nothing for itself:
+// a beat told another host with --host would otherwise start a keepalive for the
+// default one, which reports cards nobody asked about while the tiles of the
+// host that was named go dark.
 //
 // Claude Code reads the output of a hook through a pipe, and a child that holds
 // the write end of it keeps that pipe from ever reaching its end: the tool call
@@ -291,7 +297,7 @@ func (a *app) cardsInTheList(path, host string) (int, error) {
 // the child. It gets a session of its own, which is also what keeps the Ctrl-C
 // meant for the agent away from it, and a directory that holds no project, so
 // that a working tree somebody deletes does not take it along.
-func spawnKeepalive(environment []string) error {
+func spawnKeepalive(host string, environment []string) error {
 	program, err := os.Executable()
 	if err != nil {
 		return err
@@ -302,12 +308,19 @@ func spawnKeepalive(environment []string) error {
 	}
 	defer null.Close()
 
-	started := exec.Command(program, "heartbeat", "--keepalive")
+	started := exec.Command(program, keepaliveArguments(host)...)
 	started.Stdin, started.Stdout, started.Stderr = null, null, null
 	started.Dir = os.TempDir()
 	started.Env = environment
 	detach(started)
 	return started.Start()
+}
+
+// keepaliveArguments is how the child is called: as the keepalive of one host,
+// named so that it reports where the beat that started it reports and nowhere
+// else.
+func keepaliveArguments(host string) []string {
+	return []string{"heartbeat", "--keepalive", "--host", host}
 }
 
 // environmentWithoutTheSession is what the keepalive is started with: the

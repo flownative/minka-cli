@@ -59,9 +59,9 @@ type app struct {
 	retryPause basecamp.Pause
 	now        func() time.Time
 
-	// startKeepalive starts the process that reports while a tool call runs. It
-	// is an injection point so that no test forks a process of its own.
-	startKeepalive func() error
+	// startKeepalive starts the process that reports for one host while a tool
+	// call runs. It is an injection point so that no test forks a process.
+	startKeepalive func(host string) error
 
 	hostFlag   string
 	jsonFlag   bool
@@ -99,7 +99,9 @@ func newApp(ctx context.Context, stdin io.Reader, stdout, stderr io.Writer, gete
 	a.basecampFiles = basecamp.Downloader{}
 	a.avatarFetcher = basecamp.NewAvatarClient()
 	a.now = time.Now
-	a.startKeepalive = func() error { return spawnKeepalive(environmentWithoutTheSession(os.Environ())) }
+	a.startKeepalive = func(host string) error {
+		return spawnKeepalive(host, environmentWithoutTheSession(os.Environ()))
+	}
 	a.stdinIsTerminal = func() bool { return isTerminal(stdin) }
 	a.stdoutIsTerminal = func() bool { return isTerminal(stdout) }
 	a.readSecret = func() (string, error) {
