@@ -1644,6 +1644,77 @@ func TestARefusedHostKeepsItsPasswordOutOfTheOutput(t *testing.T) {
 	}
 }
 
+// A default host the configuration holds by hand is handed on as it stands,
+// because a store and a lock are keyed by it. What is printed of it is the
+// address alone: a password written into that entry would otherwise reach a log
+// through the refusal. The hint has to stay a command line that works, so it
+// names the address without it.
+func TestAHandWrittenDefaultHostIsRefusedWithoutItsPassword(t *testing.T) {
+	const password = "s3cr3t-password"
+	const withCredentials = "https://robert:" + password + "@minka.example.com"
+	e := newTestEnv(t)
+	delete(e.vars, "MINKA_HOST")
+	delete(e.vars, "MINKA_TOKEN")
+	e.writeConfig(`{"defaultHost":"` + withCredentials + `","hosts":{}}`)
+
+	env, r := e.runJSON("", "me")
+	expectCode(t, r, ExitAuth)
+	if out := r.stdout + r.stderr; strings.Contains(out, password) {
+		t.Errorf("the refusal hands the password on: %s", out)
+	}
+	if !strings.Contains(env.Error, "minka.example.com") {
+		t.Errorf("the refusal does not say which host it is about: %s", env.Error)
+	}
+	if !strings.Contains(env.Hint, "minka auth login --host https://minka.example.com") {
+		t.Errorf("the hint is no command line to paste: %s", env.Hint)
+	}
+
+	// Of an entry that cannot be read at all, what may be printed is too little
+	// to sign in with, and a command line with the replacement in it would not
+	// work. The hint then names an address to fill in.
+	unreadable := newTestEnv(t)
+	delete(unreadable.vars, "MINKA_HOST")
+	delete(unreadable.vars, "MINKA_TOKEN")
+	unreadable.writeConfig(`{"defaultHost":"https://robert:` + password + `@minka.example.com\u007f","hosts":{}}`)
+
+	env, r = unreadable.runJSON("", "me")
+	expectCode(t, r, ExitAuth)
+	if out := r.stdout + r.stderr; strings.Contains(out, password) {
+		t.Errorf("the refusal hands the password on: %s", out)
+	}
+	if strings.Contains(env.Hint, "***") || !strings.Contains(env.Hint, "minka auth login --host https://") {
+		t.Errorf("the hint is no command line to paste: %s", env.Hint)
+	}
+}
+
+// Signing out reaches the entry the file holds, and says so with the address
+// alone.
+func TestSigningOutOfAHandWrittenEntryPrintsNoPassword(t *testing.T) {
+	const password = "s3cr3t-password"
+	const withCredentials = "https://robert:" + password + "@minka.example.com"
+	e := newTestEnv(t)
+	delete(e.vars, "MINKA_HOST")
+	delete(e.vars, "MINKA_TOKEN")
+	e.writeConfig(`{"defaultHost":"` + withCredentials + `","hosts":{"` + withCredentials + `":{"token":"minka_pat_written_by_hand"}}}`)
+
+	env, r := e.runJSON("", "auth", "logout")
+	expectCode(t, r, ExitOK)
+	if out := r.stdout + r.stderr; strings.Contains(out, password) {
+		t.Errorf("signing out hands the password on: %s", out)
+	}
+	data := decode(t, env.Data)
+	if data["host"] != "https://minka.example.com" || data["removed"] != true {
+		t.Errorf("data of the sign-out: %v", data)
+	}
+	file, err := config.Load(e.vars["MINKA_CONFIG"])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := file.Hosts[withCredentials]; ok {
+		t.Error("the entry the file holds was not the one that was removed")
+	}
+}
+
 func TestAFailedWriteTellsToReadBackBeforeRetrying(t *testing.T) {
 	e := newTestEnv(t)
 	e.server.FailNextWith(http.StatusBadGateway)

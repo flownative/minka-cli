@@ -152,6 +152,7 @@ func TestNormalizeHost(t *testing.T) {
 func TestNormalizeHostRefusesWithoutRepeatingACredential(t *testing.T) {
 	const user = "robert"
 	const password = "s3cr3t-password"
+	const another = "other-s3cr3t"
 
 	hosts := []string{
 		"https://" + user + ":" + password + "@minka.localbeach.net",
@@ -159,6 +160,22 @@ func TestNormalizeHostRefusesWithoutRepeatingACredential(t *testing.T) {
 		"https://" + user + ":" + password + "@minka.localbeach.net/api/v1",
 		"http://" + user + ":" + password + "@minka.localbeach.net",
 		"https://" + password + "@minka.localbeach.net",
+		"ftp://" + user + ":" + password + "@minka.localbeach.net",
+		// A password of its own making holds whatever characters it was given.
+		// One with a slash, a question mark or a hash in it moves the end of the
+		// user information out of reach of a search through the text, so what is
+		// shown is built from the parts of the address instead.
+		"https://" + user + ":pass/" + password + "@minka.localbeach.net",
+		"https://" + user + ":pass?" + password + "@minka.localbeach.net",
+		"https://" + user + ":pass#" + password + "@minka.localbeach.net",
+		// A separator written percent-encoded leaves no literal @ or : to find.
+		"https://" + user + ":" + password + "%40minka.localbeach.net",
+		"https://" + user + "%3A" + password + "%40minka.localbeach.net",
+		// A second @ belongs to the user information as well, so the last one
+		// ends it — here where the address still parses, and below where a
+		// control character keeps it from parsing at all.
+		"https://a:" + password + "@b:" + another + "@minka.localbeach.net",
+		"https://a:" + password + "@b:" + another + "@minka.localbeach.net\x7f",
 		// A value with a control character in it cannot be parsed as a URL at
 		// all and is refused before anything of it is understood.
 		"https://" + user + ":" + password + "@minka.localbeach.net\x7f",
@@ -172,7 +189,7 @@ func TestNormalizeHostRefusesWithoutRepeatingACredential(t *testing.T) {
 			continue
 		}
 		message := err.Error()
-		for _, secret := range []string{password, user} {
+		for _, secret := range []string{password, user, another} {
 			if strings.Contains(message, secret) {
 				t.Errorf("the refusal of %q hands on %q: %s", host, secret, message)
 			}

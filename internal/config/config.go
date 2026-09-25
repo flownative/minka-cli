@@ -178,7 +178,7 @@ func NormalizeHost(raw string) (string, error) {
 	if !strings.Contains(value, "://") {
 		value = "https://" + value
 	}
-	shown := withoutCredentials(raw)
+	shown := HostForOutput(raw)
 
 	u, err := url.Parse(value)
 	if err != nil {
@@ -188,10 +188,10 @@ func NormalizeHost(raw string) (string, error) {
 		return "", fmt.Errorf("%q has to start with https://", shown)
 	}
 	if u.User != nil {
-		return "", fmt.Errorf("%q carries a user name and password before the @; give the address of the Minka instance alone, and sign in with a token", shown)
+		return "", fmt.Errorf("%q was given with a user name and password before the @; leave them out and sign in with a token", shown)
 	}
 	if u.RawQuery != "" || u.Fragment != "" {
-		return "", fmt.Errorf("%q carries a query or a fragment; give the address of the Minka instance alone, such as https://minka.example.com", shown)
+		return "", fmt.Errorf("%q was given with a query or a fragment; give the address of the Minka instance alone", shown)
 	}
 	if u.Host == "" {
 		return "", fmt.Errorf("%q is not a valid host URL", shown)
@@ -212,34 +212,51 @@ func NormalizeHost(raw string) (string, error) {
 	return u.Scheme + "://" + host, nil
 }
 
-// withoutCredentials renders a host the way a refusal may repeat it: the user
-// information before the @ and everything behind a ? or a # are left out.
-// A refused host is said back to whoever gave it, and from there it travels
-// into a transcript and into a log; a password or a token written into the
-// address must not travel with it. What is wrong with such a value is said in
-// words instead, so the refusal stays as clear as it was.
+// HostForOutput renders a host the way it may be printed: scheme, host, port
+// and path, and nothing that a credential can hide in.
 //
-// It works on the raw text rather than on a parsed URL, because a value that
-// cannot be parsed at all is refused as well and may carry just as much.
-func withoutCredentials(raw string) string {
+// A host is said back to whoever gave it, and from there it travels into a
+// transcript, a ticket and a log. A password or a token written into the
+// address must not travel that far, and what is wrong with such a value is
+// said in words instead. Inside the CLI the value stays as it was given: it
+// is a key of a store and part of the name of a lock, and only what is
+// printed is rendered this way.
+func HostForOutput(raw string) string {
 	value := strings.TrimSpace(raw)
+	if !strings.Contains(value, "://") {
+		value = "https://" + value
+	}
+	// Where the value parses, the parts decide what is shown, because a
+	// password may hold a slash, a question mark or a hash and would take the
+	// end of the user information out of reach of any search through the text.
+	if u, err := url.Parse(value); err == nil && u.Host != "" {
+		return u.Scheme + "://" + u.Host + u.EscapedPath()
+	}
 
+	return hostTextWithoutCredentials(value)
+}
+
+// hostTextWithoutCredentials renders a value that cannot be parsed as a URL at
+// all. Such a value is refused as well and may carry just as much, so it is
+// shown deliberately short: everything up to and including the last @ is
+// replaced, and of what follows only as much as leads up to a path, a query or
+// a fragment.
+func hostTextWithoutCredentials(value string) string {
 	scheme := ""
 	if i := strings.Index(value, "://"); i >= 0 {
 		scheme, value = value[:i+3], value[i+3:]
 	}
-	if i := strings.IndexAny(value, "?#"); i >= 0 {
+	// A separator written percent-encoded separates just as well once whoever
+	// reads the address decodes it.
+	value = strings.NewReplacer("%40", "@", "%3A", ":", "%3a", ":").Replace(value)
+	if i := strings.LastIndex(value, "@"); i >= 0 {
+		scheme, value = scheme+"***@", value[i+1:]
+	}
+	if i := strings.IndexAny(value, "/?#"); i >= 0 {
 		value = value[:i]
 	}
-	authority, path := value, ""
-	if i := strings.Index(value, "/"); i >= 0 {
-		authority, path = value[:i], value[i:]
-	}
-	if i := strings.LastIndex(authority, "@"); i >= 0 {
-		authority = "***@" + authority[i+1:]
-	}
 
-	return scheme + authority + path
+	return scheme + value
 }
 
 func isLoopback(hostname string) bool {
