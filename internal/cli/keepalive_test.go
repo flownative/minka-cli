@@ -110,8 +110,10 @@ func TestASecondKeepaliveOfTheSameHostReportsNothing(t *testing.T) {
 	if ended, _ := decode(t, env.Data)["ended"].(string); !strings.Contains(ended, "is reporting") {
 		t.Errorf("the second keepalive ended for %q, want the one that is reporting", ended)
 	}
-	if len(e.signals()) != 0 {
-		t.Errorf("%d signals went out from a keepalive that got no lock", len(e.signals()))
+	// It reports before its timer once it has the lock, so what says it did
+	// nothing at all is the moment of a signal that was never claimed.
+	if got := e.storedHost()["sentAt"]; got != asStored(time.Time{}) {
+		t.Errorf("a keepalive that got no lock claimed the signal of %v", got)
 	}
 }
 
@@ -134,9 +136,10 @@ func TestTheFlagPutsTheRunIntoTheModeThatIsAtNoWork(t *testing.T) {
 	}
 	entry := e.storedHost()
 	// The moment of a signal is claimed in the store before the request goes out,
-	// so this is what says that the keepalive was at the store before its timer.
-	if entry["sentAt"] == nil {
-		t.Fatalf("the keepalive claimed no signal before its timer: %v", entry)
+	// so this is what says that the keepalive reported at all, and that it did so
+	// before its timer.
+	if got := entry["sentAt"]; got != asStored(began.Add(2*time.Minute)) {
+		t.Fatalf("the keepalive claimed the signal of %v, want the moment it started", got)
 	}
 	if got := entry["beatAt"]; got != asStored(began) {
 		t.Errorf("the mark of a beat stands at %v, want the moment the card was taken up", got)
