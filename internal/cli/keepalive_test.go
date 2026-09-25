@@ -573,3 +573,54 @@ func TestWhatSaysThatSomebodyIsStillAtTheStore(t *testing.T) {
 		t.Errorf("work stop left the mark at %v, want %s", got, asStored(stopped))
 	}
 }
+
+// The keepalive carries the host in the argv of its child, where every process on
+// the machine reads along — which is why this CLI takes no token as a flag
+// either. A default host that cannot be read never gets that far: the beat has no
+// host of the store to go by and starts nothing, whatever stands in the store
+// under that value.
+func TestTheKeepaliveIsNeverToldAHostThatCannotBeRead(t *testing.T) {
+	const password = "s3cr3t-password"
+	e := newAgentEnv(t)
+	began := time.Date(2026, 9, 23, 10, 0, 0, 0, time.UTC)
+	written := "https://robert:" + password + "@minka.example.com"
+	e.writeConfig(`{"defaultHost": "` + written + `", "hosts": {"` + written + `": {"token": "` + e.fixture.AgentToken + `"}}}`)
+	delete(e.vars, "MINKA_HOST")
+	delete(e.vars, "MINKA_TOKEN")
+	// A card in hand under that very value, the way a version that took such a
+	// host would have left the store: a beat that went by it would find work to
+	// keep alive and put the value into the argv of a child.
+	e.rememberACardUnder(written, began)
+
+	env, r := e.runWithJSON(began, "heartbeat")
+	expectCode(t, r, ExitOK)
+	if became, _ := decode(t, env.Data)["keepalive"].(string); !strings.HasPrefix(became, notStarted("")) {
+		t.Errorf("the keepalive %q", became)
+	}
+	if started := e.keepalives.Load(); started != 0 {
+		t.Errorf("%d keepalives were started", started)
+	}
+	if told, _ := e.keepaliveHost.Load().(string); told != "" {
+		t.Errorf("the keepalive was told %q", told)
+	}
+	if out := r.stdout + r.stderr; strings.Contains(out, password) {
+		t.Errorf("the beat hands the password on: %s", out)
+	}
+}
+
+// rememberACardUnder writes a card into the store under a host of its own, the
+// way a version that took such a host would have left it.
+func (e *testEnv) rememberACardUnder(host string, at time.Time) {
+	e.t.Helper()
+	handle, err := work.Open(e.storePath(), waitForTheStore)
+	if err != nil {
+		e.t.Fatal(err)
+	}
+	defer handle.Close()
+	entry := handle.File.Host(host)
+	entry.Start(work.Card{ID: e.fixture.CardInDoing.ID, StartedAt: at})
+	entry.BeatAt = at
+	if err := handle.Save(); err != nil {
+		e.t.Fatal(err)
+	}
+}
