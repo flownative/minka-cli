@@ -538,3 +538,207 @@ func TestTheServerKeepsOneSetPerClientAndPassesOverWhatItDoesNotKnow(t *testing.
 		t.Errorf("the server holds %v, want the card of the client with no name", got)
 	}
 }
+
+// cardIDsOfTheList is what a listing of this machine's cards names.
+func cardIDsOfTheList(t *testing.T, env envelope) []string {
+	t.Helper()
+	var ids []string
+	for _, card := range decode(t, env.Data)["cards"].([]any) {
+		ids = append(ids, fmt.Sprint(card.(map[string]any)["id"]))
+	}
+	return ids
+}
+
+// A card somebody moves on is one nobody is at work on any more. The list is
+// the machine's and holds the cards of every session on it, so the one card
+// leaves and the rest stay, and the board is told before the next tool call
+// rather than after it.
+func TestMovingACardOnTakesItOutOfTheListAtOnce(t *testing.T) {
+	e := newAgentEnv(t)
+	now := time.Date(2026, 9, 23, 10, 0, 0, 0, time.UTC)
+	moved, kept := e.fixture.CardInDoing.ID, e.fixture.CardInTriage.ID
+
+	expectCode(t, e.runAt(now, "work", "start", moved, "--json"), ExitOK)
+	expectCode(t, e.runAt(now, "work", "start", kept, "--json"), ExitOK)
+	expectCode(t, e.runAt(now, "heartbeat", "--json"), ExitOK)
+	if got := e.server.CardsAtWork(); len(got) != 2 {
+		t.Fatalf("the server holds %v, want both cards", got)
+	}
+
+	env, r := e.runWithJSON(now, "cards", "move", moved, "--column", "not_now")
+	expectCode(t, r, ExitOK)
+	if !strings.Contains(env.Notice, "no longer among the cards") || !strings.Contains(env.Notice, "told at once") {
+		t.Errorf("the move said nothing about the list: %q", env.Notice)
+	}
+	listing, _ := e.runWithJSON(now, "work", "list")
+	if left := cardIDsOfTheList(t, listing); len(left) != 1 || left[0] != kept {
+		t.Errorf("%v is left in the list, want the card nobody moved", left)
+	}
+	if got := e.server.CardsAtWork(); len(got) != 1 || got[0] != kept {
+		t.Errorf("the server holds %v, want %s", got, kept)
+	}
+
+	// A card nobody said they were at work on changes nothing, and a move that
+	// changes nothing asks nothing of the network — two minutes on, where no
+	// throttle would hold a signal back.
+	signals := len(e.signals())
+	env, r = e.runWithJSON(now.Add(2*time.Minute), "cards", "move", moved, "--column", "Doing")
+	expectCode(t, r, ExitOK)
+	if env.Notice != "" {
+		t.Errorf("a card nobody is working on: %q", env.Notice)
+	}
+	if sent := len(e.signals()); sent != signals {
+		t.Errorf("%d signals for a move that changed no list", sent-signals)
+	}
+}
+
+// A card that only changes place within its column is one nobody has let go
+// of; one that is put aside has been let go of, the column notwithstanding.
+func TestACardThatOnlyChangesPlaceStaysInTheList(t *testing.T) {
+	e := newAgentEnv(t)
+	card := e.fixture.CardInDoing.ID
+	expectCode(t, e.run("", "columns", "on-hold", e.fixture.Doing.ID, "--json"), ExitOK)
+	expectCode(t, e.run("", "work", "start", card, "--json"), ExitOK)
+	expectCode(t, e.run("", "heartbeat", "--json"), ExitOK)
+
+	env, r := e.runJSON("", "cards", "move", card, "--column", "Doing", "--bottom")
+	expectCode(t, r, ExitOK)
+	if env.Notice != "" {
+		t.Errorf("a card that stayed where it was: %q", env.Notice)
+	}
+	if got := e.server.CardsAtWork(); len(got) != 1 || got[0] != card {
+		t.Fatalf("the server holds %v, want %s", got, card)
+	}
+
+	env, r = e.runJSON("", "cards", "move", card, "--column", "Doing", "--on-hold")
+	expectCode(t, r, ExitOK)
+	if !strings.Contains(env.Notice, "no longer among the cards") {
+		t.Errorf("a card put aside: %q", env.Notice)
+	}
+	if got := e.server.CardsAtWork(); len(got) != 0 {
+		t.Errorf("the server still holds %v", got)
+	}
+
+	// Taken up again and pushed about among the cards on hold: it was aside
+	// before and is aside after, so nothing has been let go of here.
+	expectCode(t, e.run("", "work", "start", card, "--json"), ExitOK)
+	expectCode(t, e.run("", "heartbeat", "--json"), ExitOK)
+	env, r = e.runJSON("", "cards", "move", card, "--column", "Doing", "--on-hold", "--bottom")
+	expectCode(t, r, ExitOK)
+	if env.Notice != "" {
+		t.Errorf("a card that was aside before and after: %q", env.Notice)
+	}
+	if got := e.server.CardsAtWork(); len(got) != 1 {
+		t.Errorf("the server holds %v, want the card", got)
+	}
+}
+
+// Done is the end of a card whichever command puts it there, and a card that
+// lies there already is no exception.
+func TestAMoveIntoDoneLetsGoOfTheCard(t *testing.T) {
+	e := newAgentEnv(t)
+	card := e.fixture.CardInDoing.ID
+	expectCode(t, e.run("", "work", "start", card, "--json"), ExitOK)
+	expectCode(t, e.run("", "heartbeat", "--json"), ExitOK)
+
+	env, r := e.runJSON("", "cards", "move", card, "--column", "done")
+	expectCode(t, r, ExitOK)
+	if !strings.Contains(env.Notice, "no longer among the cards") {
+		t.Errorf("a card moved into Done: %q", env.Notice)
+	}
+
+	// Again, on a card that is in Done already: `cards done` takes such a card
+	// out of the list, and a move has no reason to do otherwise.
+	expectCode(t, e.run("", "work", "start", card, "--json"), ExitOK)
+	env, r = e.runJSON("", "cards", "move", card, "--column", "done")
+	expectCode(t, r, ExitOK)
+	if !strings.Contains(env.Notice, "no longer among the cards") {
+		t.Errorf("a card that was in Done already: %q", env.Notice)
+	}
+	if got := e.server.CardsAtWork(); len(got) != 0 {
+		t.Errorf("the server still holds %v", got)
+	}
+}
+
+// A card that ran out while the command was running is not the card the
+// command moved, and the word about it belongs to the card that was moved.
+func TestAMoveSaysNothingAboutACardItDidNotMove(t *testing.T) {
+	e := newAgentEnv(t)
+	began := time.Date(2026, 9, 23, 9, 0, 0, 0, time.UTC)
+	ranOut, moved := e.fixture.CardInTriage.ID, e.fixture.CardInDoing.ID
+	expectCode(t, e.runAt(began, "work", "start", ranOut, "--json"), ExitOK)
+
+	// A working day on, the one card is given up by the sweep and the other
+	// was never in the list at all.
+	env, r := e.runWithJSON(began.Add(work.ForgottenAfter+time.Minute), "cards", "move", moved, "--column", "not_now")
+	expectCode(t, r, ExitOK)
+	if env.Notice != "" {
+		t.Errorf("a move that let go of nothing: %q", env.Notice)
+	}
+}
+
+// The move is done and stays done whatever becomes of the signal, and the word
+// about it promises no more than happened.
+func TestAMoveWhoseSignalIsRefusedStandsAllTheSame(t *testing.T) {
+	// A person's token: the server answers the signal 403 agentsOnly, and
+	// everything else as usual.
+	e := newTestEnv(t)
+	now := time.Date(2026, 9, 23, 10, 0, 0, 0, time.UTC)
+	card := e.fixture.CardInDoing.ID
+	expectCode(t, e.runAt(now, "work", "start", card, "--json"), ExitOK)
+	expectCode(t, e.runAt(now, "heartbeat"), ExitOK)
+
+	env, r := e.runWithJSON(now, "cards", "move", card, "--column", "not_now")
+	expectCode(t, r, ExitOK)
+	if !strings.Contains(env.Notice, "next signal") {
+		t.Errorf("the notice promises more than happened: %q", env.Notice)
+	}
+	listing, _ := e.runWithJSON(now, "work", "list")
+	if left := cardIDsOfTheList(t, listing); len(left) != 0 {
+		t.Errorf("%v is left in the list", left)
+	}
+	// The one the heartbeat sent, and the one the move sent after it: a list
+	// that was reported once has to be taken back even where nobody listens.
+	if len(e.signals()) != 2 {
+		t.Errorf("%d signals, want the two that were refused", len(e.signals()))
+	}
+}
+
+// Completing a card is the other way a card leaves the hand, and a card that
+// was done already is done all the same.
+func TestCompletingACardTakesItOutOfTheListAtOnce(t *testing.T) {
+	e := newAgentEnv(t)
+	done, kept := e.fixture.CardInDoing.ID, e.fixture.CardInTriage.ID
+
+	expectCode(t, e.run("", "work", "start", done, "--json"), ExitOK)
+	expectCode(t, e.run("", "work", "start", kept, "--json"), ExitOK)
+	expectCode(t, e.run("", "heartbeat", "--json"), ExitOK)
+
+	env, r := e.runJSON("", "cards", "done", done)
+	expectCode(t, r, ExitOK)
+	if !strings.Contains(env.Notice, "no longer among the cards") {
+		t.Errorf("done said nothing about the list: %q", env.Notice)
+	}
+	listing, _ := e.runJSON("", "work", "list")
+	if left := cardIDsOfTheList(t, listing); len(left) != 1 || left[0] != kept {
+		t.Errorf("%v is left in the list, want the card nobody completed", left)
+	}
+	if got := e.server.CardsAtWork(); len(got) != 1 || got[0] != kept {
+		t.Errorf("the server holds %v, want %s", got, kept)
+	}
+
+	// Somebody who says it again of a card that is done takes it out too.
+	expectCode(t, e.run("", "work", "start", done, "--json"), ExitOK)
+	env, r = e.runJSON("", "cards", "done", done)
+	expectCode(t, r, ExitOK)
+	if !strings.Contains(env.Summary, "already done") {
+		t.Fatalf("summary %q", env.Summary)
+	}
+	if !strings.Contains(env.Notice, "no longer among the cards") {
+		t.Errorf("a card that was done already: %q", env.Notice)
+	}
+	listing, _ = e.runJSON("", "work", "list")
+	if left := cardIDsOfTheList(t, listing); len(left) != 1 || left[0] != kept {
+		t.Errorf("%v is left in the list, want the card nobody completed", left)
+	}
+}

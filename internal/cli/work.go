@@ -27,8 +27,10 @@ const (
 	signalTimeout = 5 * time.Second
 
 	// waitForTheStore is how long a command a person or an agent typed waits
-	// for the lock. A signal waits not at all: where somebody else is at the
-	// store, there will be another signal in a minute.
+	// for the lock. The heartbeat waits not at all: where somebody else is at
+	// the store, there will be another signal in a minute. A command that
+	// reports on its own behalf waits like the command it is part of, because
+	// for it there is no next time.
 	waitForTheStore = 2 * time.Second
 )
 
@@ -52,7 +54,10 @@ after every tool call: until one of them has run, 'work start' has changed
 nothing but this machine's own list.
 
 The list belongs to the machine, not to this session: every session on it
-reports the same list together, and 'work stop' takes a card out again.`,
+reports the same list together, and 'work stop' takes a card out again. So do
+'cards move' and 'cards done': a card that is moved on is one nobody is at
+work on any more, so take a card up in that order — move it first, then say
+'work start'.`,
 		Example: `  minka work start MNK-1A
   minka work start 0199... --json`,
 		Args: requireArgs("cardId"),
@@ -223,7 +228,7 @@ was turned away; what the last signal that went out made of it also stands in
 'minka work list'.`,
 		Args: requireArgs(),
 		RunE: func(*cobra.Command, []string) error {
-			sent, reason, cards := a.signal()
+			sent, reason, cards := a.signal(0)
 			if cards == nil {
 				cards = []string{}
 			}
@@ -246,7 +251,7 @@ was turned away; what the last signal that went out made of it also stands in
 // that does not answer, a token a person owns. Whoever reads a hook's exit
 // code is in the middle of other work, and none of these is something they
 // could do anything about from there.
-func (a *app) signal() (sent bool, reason string, cards []string) {
+func (a *app) signal(wait time.Duration) (sent bool, reason string, cards []string) {
 	path, err := a.storePath()
 	if err != nil || work.Untouched(path) {
 		return false, "nothing is remembered on this machine", nil
@@ -256,7 +261,7 @@ func (a *app) signal() (sent bool, reason string, cards []string) {
 		return false, "not signed in", nil
 	}
 
-	claimed, reason := a.claimTheSignal(path, s.host)
+	claimed, reason := a.claimTheSignal(path, s.host, wait)
 	if claimed == nil {
 		return false, reason, nil
 	}
@@ -287,8 +292,8 @@ type claim struct {
 // signal is a process of its own: two that start together must not both
 // report, and one that fails must not have the next tool call try again at
 // once. It claims nothing where nothing is to be sent, and says why.
-func (a *app) claimTheSignal(path, host string) (*claim, string) {
-	handle, err := work.Open(path, 0)
+func (a *app) claimTheSignal(path, host string, wait time.Duration) (*claim, string) {
+	handle, err := work.Open(path, wait)
 	if err != nil {
 		return nil, "the store is busy or unreadable"
 	}
@@ -359,6 +364,56 @@ func (a *app) noteTheOutcome(path, host string, failed error) {
 		entry.FailedAt = time.Time{}
 	}
 	_ = handle.Save()
+}
+
+// noLongerInHand is what a command says when it took the card out of the list
+// of this machine on its own. The list is shared with every other session on
+// the machine, so nothing changes it without a word, and the word says how far
+// the change has got.
+func noLongerInHand(told bool) string {
+	if told {
+		return "the card is no longer among the cards this machine is working on, and the board was told at once"
+	}
+	return "the card is no longer among the cards this machine is working on; the board hears of it with the next signal"
+}
+
+// letGoOfTheCard takes a card out of the list of this machine and reports the
+// list at once, so that a card somebody has moved on stops glowing instead of
+// waiting for the signal after the next tool call. It says whether the card was
+// in the list at all, and whether the report got through.
+//
+// Whatever it meets on the way it passes over in silence: the card has been
+// moved, and neither a store another session holds at that moment nor a signal
+// that does not get through makes that untrue.
+func (a *app) letGoOfTheCard(host, cardID string) (letGo, told bool) {
+	if !a.takeOutOfTheList(host, cardID) {
+		return false, false
+	}
+	sent, _, _ := a.signal(waitForTheStore)
+	return true, sent
+}
+
+// takeOutOfTheList is the half that holds the lock, kept apart so that it is
+// given back before the signal, which takes it for itself.
+func (a *app) takeOutOfTheList(host, cardID string) bool {
+	handle, err := a.openStore(waitForTheStore)
+	if err != nil {
+		return false
+	}
+	defer handle.Close()
+
+	entry, known := handle.File.Hosts[host]
+	if !known {
+		return false
+	}
+	// Whoever writes the store sweeps it, so that what ran out is gone for the
+	// next reader as well; the card of this command is a different question.
+	swept := entry.ForgetWhatRanOut(a.now()) > 0
+	gone := entry.Stop(cardID)
+	if !gone && !swept {
+		return false
+	}
+	return handle.Save() == nil && gone
 }
 
 // clientID is the name this installation of minka goes by. It is made once and
