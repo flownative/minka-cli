@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/spf13/cobra"
 )
 
 // everyWrite is one call per command that writes into a project, against the
@@ -34,6 +36,7 @@ func everyWrite(e *testEnv) map[string][]string {
 		"cards unassign":    {"cards", "unassign", card, f.Anke.ID},
 		"cards subscribe":   {"cards", "subscribe", card, f.Anke.ID},
 		"cards unsubscribe": {"cards", "unsubscribe", card, f.Anke.ID},
+		"cards notes set":   {"cards", "notes", "set", card, "Notes", "--force"},
 		"columns on-hold":   {"columns", "on-hold", f.Doing.ID},
 		"steps create":      {"steps", "create", card, "Another step"},
 		"steps complete":    {"steps", "complete", card, "A step"},
@@ -60,7 +63,7 @@ var notAWriteIntoAProject = []string{
 	"auth login", "auth logout", "auth status", "setup", "doctor", "me", "version", "commands",
 	"skill show", "skill install", "skill status",
 	"projects list", "boards list", "boards show", "people list", "trash list",
-	"cards mine", "cards show", "steps list", "chats list", "messages list",
+	"cards mine", "cards show", "cards notes show", "steps list", "chats list", "messages list",
 	"chats mark-read", "conversations list", "conversations with", "conversations people",
 	"uploads create", "uploads download", "import basecamp",
 	"work start", "work stop", "work list", "heartbeat", "hooks install", "hooks status",
@@ -82,23 +85,11 @@ func TestEveryCommandIsKnownToWriteIntoAProjectOrNot(t *testing.T) {
 	}
 
 	root := newApp(t.Context(), strings.NewReader(""), &bytes.Buffer{}, &bytes.Buffer{}, func(string) string { return "" }).newRootCmd()
-	for _, group := range root.Commands() {
-		if group.Hidden || group.Name() == "help" {
-			continue
+	for _, name := range commandPaths(root) {
+		if !known[name] {
+			t.Errorf("%q is in neither list: does it write into a project?", name)
 		}
-		names := []string{group.Name()}
-		if group.HasSubCommands() {
-			names = nil
-			for _, cmd := range group.Commands() {
-				names = append(names, group.Name()+" "+cmd.Name())
-			}
-		}
-		for _, name := range names {
-			if !known[name] {
-				t.Errorf("%q is in neither list: does it write into a project?", name)
-			}
-			delete(known, name)
-		}
+		delete(known, name)
 	}
 	for name := range known {
 		t.Errorf("%q is listed but no command", name)
@@ -274,4 +265,25 @@ func TestProjectsInUseAreNeverPassedOffAsArchived(t *testing.T) {
 	if env.Hint == "" {
 		t.Fatal("no hint")
 	}
+}
+
+// commandPaths names every command that runs something, below the groups that
+// only hold others, the way it is called without "minka".
+func commandPaths(root *cobra.Command) []string {
+	var paths []string
+	var walk func(parent *cobra.Command, prefix string)
+	walk = func(parent *cobra.Command, prefix string) {
+		for _, cmd := range parent.Commands() {
+			if cmd.Hidden || cmd.Name() == "help" {
+				continue
+			}
+			if cmd.HasSubCommands() {
+				walk(cmd, prefix+cmd.Name()+" ")
+				continue
+			}
+			paths = append(paths, prefix+cmd.Name())
+		}
+	}
+	walk(root, "")
+	return paths
 }
