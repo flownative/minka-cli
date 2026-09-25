@@ -729,8 +729,9 @@ this:
   which are the subscribers of the question and not whoever answered it. Only a
   member of the project who is still there and has an address can be asked;
   `data.askedLeftOut` counts the rest by reason, and `data.nobodyAsked` names
-  every question that comes asking nobody at all, which will ask nobody again. A question whose schedule Minka
-  cannot express is left out with its answers, and `data.questionsLeftOut` names
+  every question that comes asking nobody at all, which will ask nobody again.
+  A question whose schedule Minka cannot express is left out with its answers,
+  and `data.questionsLeftOut` names
   it with the field that made it impossible; one whose schedule has run out comes
   paused; one asked every other week is anchored on the day it was last answered,
   which `data.anchorsInferred` names, and left out where nobody ever answered it.
