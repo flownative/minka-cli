@@ -74,6 +74,16 @@ func TestAQuestionComesWithItsScheduleAndWhomItIsAskedOf(t *testing.T) {
 			"rhythm": "weekly", "weekdays": []any{float64(5)},
 			"timeOfDay": "16:00", "startsOn": "2024-01-05",
 			"asked": []any{"101", "102"}, "paused": true, "status": "active"},
+		{"sourceId": "9315", "createdAt": "2024-02-01T13:00:00.000Z", "updatedAt": "2024-02-01T13:00:00.000Z", "createdBy": "102",
+			"projectSourceId": "7007", "toolSourceId": "9070", "title": "How was your week?",
+			"rhythm": "weekly", "weekdays": []any{float64(1)},
+			"timeOfDay": "09:00", "startsOn": "2024-02-05",
+			"asked": []any{"101", "102"}, "paused": false, "status": "active"},
+		{"sourceId": "9316", "createdAt": "2024-02-01T14:00:00.000Z", "updatedAt": "2024-02-01T14:00:00.000Z", "createdBy": "101",
+			"projectSourceId": "7007", "toolSourceId": "9070", "title": "Anything for the month?",
+			"rhythm": "monthly", "weekdays": []any{float64(1)},
+			"timeOfDay": "08:00", "startsOn": "2024-02-01",
+			"asked": []any{"101"}, "paused": false, "status": "active"},
 	}
 	if got := records(t, dir, bundle.Questions); !reflect.DeepEqual(got, want) {
 		t.Errorf("questions:\n got %v\nwant %v", got, want)
@@ -121,16 +131,49 @@ func TestTheWeekdaysOfAQuestionComeOnceAndInOrder(t *testing.T) {
 	}
 }
 
-// A question asked every day carries the days it is asked on like any other, so
-// it is the same thing as one asked on certain days.
-func TestEveryDayAndOnCertainDaysComeToTheSameRhythm(t *testing.T) {
-	account := fakebasecamp.New()
-	weekendQuestion(account).Schedule.Frequency = "on_certain_days"
-	dir, _ := extract(t, account, checkinProject)
+// Every frequency Basecamp is known to send has a rhythm of Minka's. A question
+// asked every day, one asked on certain days and one asked every week all carry
+// the days they are asked on, so the three are the same thing; a frequency
+// nobody here knows leaves the question out and is reported with its field,
+// rather than a schedule nobody chose being written.
+func TestEveryFrequencyBasecampSendsHasARhythmOfMinkas(t *testing.T) {
+	several := []int{1, 4}
+	one := []int{4}
+	cases := map[string]struct {
+		frequency string
+		days      []int
+		rhythm    string
+	}{
+		"every day on several days":        {"every_day", several, bundle.RhythmDaily},
+		"every day on one day":             {"every_day", one, bundle.RhythmWeekly},
+		"on certain days, several":         {"on_certain_days", several, bundle.RhythmDaily},
+		"on certain days, one":             {"on_certain_days", one, bundle.RhythmWeekly},
+		"every week on several days":       {"every_week", several, bundle.RhythmDaily},
+		"every week on one day":            {"every_week", one, bundle.RhythmWeekly},
+		"every month on the first weekday": {"every_month", one, bundle.RhythmMonthly},
+	}
+	for what, one := range cases {
+		account := fakebasecamp.New()
+		weekendQuestion(account).Schedule.Frequency, weekendQuestion(account).Schedule.Days = one.frequency, one.days
+		dir, _ := extract(t, account, checkinProject)
 
-	question := recordWithID(t, records(t, dir, bundle.Questions), "9311")
-	if question["rhythm"] != bundle.RhythmDaily {
-		t.Errorf("a question asked on certain days has the rhythm %v", question["rhythm"])
+		question := recordWithID(t, records(t, dir, bundle.Questions), "9311")
+		if question["rhythm"] != one.rhythm {
+			t.Errorf("%s: the rhythm is %v, want %s", what, question["rhythm"], one.rhythm)
+		}
+	}
+
+	// The fake holds one question in every frequency, so a later hand cannot
+	// take a word out of the table without a test saying so.
+	dir, _ := extract(t, fakebasecamp.New(), checkinProject)
+	questions := records(t, dir, bundle.Questions)
+	for id, rhythm := range map[string]string{
+		"9310": bundle.RhythmDaily, "9311": bundle.RhythmDaily, "9312": bundle.RhythmEveryOtherWeek,
+		"9313": bundle.RhythmWeekly, "9315": bundle.RhythmWeekly, "9316": bundle.RhythmMonthly,
+	} {
+		if got := recordWithID(t, questions, id)["rhythm"]; got != rhythm {
+			t.Errorf("question %s has the rhythm %v, want %s", id, got, rhythm)
+		}
 	}
 }
 
@@ -182,7 +225,7 @@ func TestWhoIsAskedComesFromTheSubscribersAndNotFromWhoAnswered(t *testing.T) {
 		t.Errorf("somebody who only answered is asked: %v", asked)
 	}
 	// The question nobody ever answered is left out before anybody is asked.
-	if got, want := asked(account, "subscription.json"), 4; len(got) != want {
+	if got, want := asked(account, "subscription.json"), 6; len(got) != want {
 		t.Errorf("the subscribers were asked for with %v, want %d requests", got, want)
 	}
 }
@@ -232,11 +275,17 @@ func TestAScheduleMinkaCannotExpressLeavesTheQuestionOutWithItsAnswers(t *testin
 		"a frequency nobody knows":     {"frequency", func(q *fakebasecamp.Question) { q.Schedule.Frequency = "every_n_weeks" }},
 		"no day at all":                {"days", func(q *fakebasecamp.Question) { q.Schedule.Days = []int{} }},
 		"a day of no week":             {"days", func(q *fakebasecamp.Question) { q.Schedule.Days = []int{7} }},
-		"a schedule that ends later":   {"end_date", func(q *fakebasecamp.Question) { q.Schedule.EndDate = fakebasecamp.ADayAhead() }},
-		"a schedule that ends today":   {"end_date", func(q *fakebasecamp.Question) { q.Schedule.EndDate = today }},
-		"an end that is no day":        {"end_date", func(q *fakebasecamp.Question) { q.Schedule.EndDate = "2024-3-1" }},
-		"a start that is no day":       {"start_date", func(q *fakebasecamp.Question) { q.Schedule.StartDate = "2024-2-5" }},
-		"an hour of no day":            {"hour", func(q *fakebasecamp.Question) { q.Schedule.Hour = 24 }},
+		"a month on several weekdays": {"days", func(q *fakebasecamp.Question) {
+			q.Schedule.Frequency, q.Schedule.Days = "every_month", []int{1, 3}
+		}},
+		"every other week on several weekdays": {"days", func(q *fakebasecamp.Question) {
+			q.Schedule.Frequency, q.Schedule.Days = "every_other_week", []int{1, 3}
+		}},
+		"a schedule that ends later": {"end_date", func(q *fakebasecamp.Question) { q.Schedule.EndDate = fakebasecamp.ADayAhead() }},
+		"a schedule that ends today": {"end_date", func(q *fakebasecamp.Question) { q.Schedule.EndDate = today }},
+		"an end that is no day":      {"end_date", func(q *fakebasecamp.Question) { q.Schedule.EndDate = "2024-3-1" }},
+		"a start that is no day":     {"start_date", func(q *fakebasecamp.Question) { q.Schedule.StartDate = "2024-2-5" }},
+		"an hour of no day":          {"hour", func(q *fakebasecamp.Question) { q.Schedule.Hour = 24 }},
 	}
 
 	for what, one := range cases {

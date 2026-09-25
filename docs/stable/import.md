@@ -331,10 +331,13 @@ those of answers.
   7, so every day but Sunday keeps its number and only Sunday moves; a day named
   twice is one day, and they come in order. `rhythm` is `weekly` where one
   weekday is chosen and `daily` where several are, because Minka's `daily` means
-  "on each of the chosen weekdays" and the two are the same thing for one day. A
-  question Basecamp asks `every_day` carries the days it is asked on like any
-  other and is therefore the same thing as one asked `on_certain_days`; an
-  `every_other_week` question becomes `everyOtherWeek`. `timeOfDay` is `HH:MM`.
+  "on each of the chosen weekdays" and the two are the same thing for one day.
+  The frequencies Basecamp sends are `every_day`, `on_certain_days`,
+  `every_week`, `every_other_week` and `every_month`. The first three all carry
+  the days they are asked on, so they are the same thing and come to `weekly` or
+  `daily` by the number of days; `every_other_week` becomes `everyOtherWeek` and
+  `every_month` becomes `monthly`, both of which take exactly one weekday.
+  `timeOfDay` is `HH:MM`.
   `status` is the one the source has, so a question it has shelved does not
   arrive active and start asking people again. `paused` is `true` for a question
   the source has paused and for one whose schedule has run out, because Minka's
