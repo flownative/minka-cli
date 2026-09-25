@@ -1427,17 +1427,6 @@ func (s *Server) cardNotes(w http.ResponseWriter, r *http.Request, person *Perso
 // given writes only over the notes it names, or over none for null; notes
 // that say the sent text already are no conflict, and notes nobody has
 // written yet are created whatever was expected.
-// aPointInTime reads a moment the way Minka reads the one a guard names: up to
-// six digits of a second, under Z or an offset written either way.
-func aPointInTime(value string) (time.Time, bool) {
-	for _, layout := range []string{"2006-01-02T15:04:05.999999Z07:00", "2006-01-02T15:04:05.999999Z0700"} {
-		if at, err := time.Parse(layout, value); err == nil {
-			return at, true
-		}
-	}
-	return time.Time{}, false
-}
-
 func (s *Server) writeCardNotes(w http.ResponseWriter, r *http.Request, person *Person) {
 	fields, ok := readBody(w, r)
 	if !ok {
@@ -1505,6 +1494,24 @@ func (s *Server) writeCardNotes(w http.ResponseWriter, r *http.Request, person *
 	card.Notes, card.NotesUpdatedAt, card.NotesUpdatedByID = text, &writtenAt, person.ID
 	writeJSON(w, http.StatusOK, s.notesResource(board, card))
 }
+
+// aPointInTime reads a moment the way Minka reads the one a guard names: up to
+// six digits of a second, under Z or an offset written either way. The shape
+// is looked at first, because Go reads a fraction of any length whatever the
+// layout says.
+func aPointInTime(value string) (time.Time, bool) {
+	if !guardTimePattern.MatchString(value) {
+		return time.Time{}, false
+	}
+	for _, layout := range []string{"2006-01-02T15:04:05.999999Z07:00", "2006-01-02T15:04:05.999999Z0700"} {
+		if at, err := time.Parse(layout, value); err == nil {
+			return at, true
+		}
+	}
+	return time.Time{}, false
+}
+
+var guardTimePattern = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,6})?(Z|[+-]\d{2}:?\d{2})$`)
 
 func (s *Server) notesResource(board *Board, card *Card) map[string]any {
 	return map[string]any{

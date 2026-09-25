@@ -49,10 +49,16 @@ func TestNotesShowPrintsTheMarkdownAndWhoChangedItLast(t *testing.T) {
 func TestNotesShowOfACardWithoutNotes(t *testing.T) {
 	e := newTestEnv(t)
 
+	// Nothing on the stream the notes have to themselves: an empty text is
+	// what notes nobody has written are, and the word about it goes the other
+	// way like every other word about them.
 	r := e.run("", "cards", "notes", "show", e.fixture.CardInTriage.ID, "--styled")
 	expectCode(t, r, ExitOK)
-	if strings.TrimSpace(r.stdout) != "No working notes yet." {
-		t.Errorf("text:\n%s", r.stdout)
+	if r.stdout != "" {
+		t.Errorf("stdout:\n%q", r.stdout)
+	}
+	if strings.TrimSpace(r.stderr) != "No working notes yet." {
+		t.Errorf("stderr:\n%s", r.stderr)
 	}
 
 	env, _ := e.runJSON("", "cards", "notes", "show", e.fixture.CardInTriage.ID)

@@ -137,7 +137,7 @@ stands, and one of the two flags is required.`,
 			}
 			notes, err := s.client.WriteCardNotes(a.ctx, args[0], text, guard)
 			if err != nil {
-				return notesFailure(s.fail(err), err)
+				return a.notesFailure(s.fail(err), err)
 			}
 
 			summary := "Wrote the working notes of the card"
@@ -206,7 +206,7 @@ func isATimeMinkaReads(value string) bool {
 
 // notesFailure adds to a refused write what an agent needs to merge: the notes
 // as they stand, as the data of the error and printed for a person.
-func notesFailure(e *Error, err error) *Error {
+func (a *app) notesFailure(e *Error, err error) *Error {
 	var apiErr *api.Error
 	if e.APICode != apiCodeNotesChanged || !errors.As(err, &apiErr) || apiErr.StatusCode != http.StatusConflict {
 		return e
@@ -222,29 +222,30 @@ func notesFailure(e *Error, err error) *Error {
 	e.Message = "the working notes were changed since they were read, nothing was written"
 	e.Data = body.Notes
 	e.Hint = "Merge your text into the notes as they stand and send it again with --expect " + expectationOf(current) + "."
+	// The notes as they stand are what the caller merges its text into, so
+	// they stand on their own stream here as they do in cards notes show.
 	e.Text = func(w io.Writer) {
-		fmt.Fprintln(w, "The notes as they stand:")
-		fmt.Fprintln(w)
+		fmt.Fprintln(a.stderr, "The notes as they stand:")
+		fmt.Fprintln(a.stderr)
 		renderNotes(w, current)
-		notesFooter(w, current)
+		notesFooter(a.stderr, current)
 	}
 	return e
 }
 
-// renderNotes prints the notes as they are stored and nothing else.
+// renderNotes prints the notes as they are stored and nothing else. Notes
+// nobody has written print nothing at all: an empty text is what they are.
 func renderNotes(w io.Writer, notes api.CardNotes) {
-	if notes.UpdatedAt == nil {
-		fmt.Fprintln(w, "No working notes yet.")
+	if notes.UpdatedAt == nil || notes.Body == "" {
 		return
 	}
-	if notes.Body != "" {
-		fmt.Fprintln(w, strings.TrimRight(notes.Body, "\n"))
-	}
+	fmt.Fprintln(w, strings.TrimRight(notes.Body, "\n"))
 }
 
 // notesFooter says who wrote them last and what writes over them.
 func notesFooter(w io.Writer, notes api.CardNotes) {
 	if notes.UpdatedAt == nil {
+		fmt.Fprintln(w, "No working notes yet.")
 		return
 	}
 	fmt.Fprintf(w, "\nLast changed by %s, %s. To write over it: --expect %s\n", changedBy(notes), formatTime(*notes.UpdatedAt), *notes.UpdatedAt)
