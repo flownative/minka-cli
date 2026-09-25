@@ -40,7 +40,7 @@ func TestAQuestionnaireComesAsACheckinsTool(t *testing.T) {
 	dir, _ := extract(t, fakebasecamp.New(), checkinProject)
 
 	want := []map[string]any{
-		{"sourceId": "9070", "createdAt": "2024-02-01T07:00:00.000Z", "updatedAt": "2024-02-28T12:00:00.000Z", "createdBy": "101",
+		{"sourceId": "9070", "createdAt": "2024-02-01T07:00:00.000Z", "updatedAt": "2024-02-28T12:00:00.000Z", "createdBy": "105",
 			"projectSourceId": "7007", "kind": "checkins", "name": "Check-ins", "position": float64(1)},
 	}
 	if got := records(t, dir, bundle.Tools); !reflect.DeepEqual(got, want) {

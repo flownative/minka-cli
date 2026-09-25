@@ -75,6 +75,11 @@ func ADayAhead() string {
 // answers to anchor it by, one whose schedule has ended, and one asked every
 // other week that nobody ever answered. Among the answers are one by somebody
 // the question is not asked of and one that says nothing.
+//
+// The questionnaire was made by somebody who is no member of the project any
+// more, and who is a subscriber of its first question: so whoever is asked has
+// to be held against the members of the project, and not merely against whom
+// the bundle happens to carry.
 func checkinProject(ada, grace, linus, edsger, niklaus, deleted Person, tool func(int64, string, string, string, bool, int, *Person) Tool) Project {
 	at := func(day, hour int) string { return fmt.Sprintf("2024-02-%02dT%02d:00:00.000Z", day, hour) }
 
@@ -134,7 +139,7 @@ func checkinProject(ada, grace, linus, edsger, niklaus, deleted Person, tool fun
 		Subscribers: []Person{grace},
 	}
 
-	checkins := tool(9070, "questionnaire", "questionnaires", "Check-ins", true, 1, &ada)
+	checkins := tool(9070, "questionnaire", "questionnaires", "Check-ins", true, 1, &niklaus)
 	checkins.CreatedAt, checkins.UpdatedAt = at(1, 7), at(28, 12)
 	checkins.Questions = []Question{today, weekend, roadmap, retro, unanswered}
 
