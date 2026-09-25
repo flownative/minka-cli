@@ -90,6 +90,19 @@ type importReport struct {
 	PostsByStatus      map[string]int `json:"postsByStatus"`
 	PostsLeftOut       int            `json:"postsLeftOut"`
 	PostsWithEmptyBody int            `json:"postsWithEmptyBody"`
+	// QuestionsLeftOut are the questions left out because Minka has no words
+	// for their schedule, each with the field that made it impossible.
+	// AnchorsInferred are the questions asked every other week whose startsOn
+	// was taken from the day an answer belongs to.
+	QuestionsLeftOut []basecamp.ImpossibleQuestion `json:"questionsLeftOut"`
+	AnchorsInferred  []basecamp.InferredAnchor     `json:"anchorsInferred"`
+	// AskedLeftOut counts the people a question is asked of that the bundle
+	// cannot say are asked.
+	AskedLeftOut basecamp.AskedLeftOut `json:"askedLeftOut"`
+	// AnswersWithoutABody are the answers that say nothing and AnswersTrashed
+	// those in the trash; both are left out.
+	AnswersWithoutABody int `json:"answersWithoutABody"`
+	AnswersTrashed      int `json:"answersTrashed"`
 	// MessagesByType splits counts.messages by what a line was in its chat.
 	// MessagesWithEmptyBody are lines somebody wrote that say nothing,
 	// UploadLinesLeftOut lines that were files alone, none of which can be
@@ -273,6 +286,12 @@ it has been applied.`,
 				MessagesByType:     result.MessagesByType,
 				UploadLinesLeftOut: result.UploadLinesLeftOut,
 
+				QuestionsLeftOut:    result.QuestionsLeftOut,
+				AnchorsInferred:     result.AnchorsInferred,
+				AskedLeftOut:        result.AskedLeftOut,
+				AnswersWithoutABody: result.AnswersWithoutABody,
+				AnswersTrashed:      result.AnswersTrashed,
+
 				MessagesWithEmptyBody: result.MessagesWithEmptyBody,
 				LongestBody:           result.LongestBody,
 				RequestsRetried:       source.Retried(),
@@ -305,6 +324,26 @@ it has been applied.`,
 				notices = append(notices, plural(count,
 					"embedded frame is left out of its text, because its address is none an embed may carry",
 					"embedded frames are left out of their texts, because their addresses are none an embed may carry"))
+			}
+			if count := len(report.QuestionsLeftOut); count > 0 {
+				notices = append(notices, plural(count,
+					"question of a check-in is left out, because Minka's schedule has no words for what Basecamp asks; data.questionsLeftOut names it with the field that made it impossible, and its answers are left out with it",
+					"questions of check-ins are left out, because Minka's schedule has no words for what Basecamp asks; data.questionsLeftOut names each with the field that made it impossible, and their answers are left out with them"))
+			}
+			if count := len(report.AnchorsInferred); count > 0 {
+				notices = append(notices, plural(count,
+					"question asked every other week is anchored on the day it was last answered, because Basecamp does not say which of two weeks it asks in; data.anchorsInferred names it with that day",
+					"questions asked every other week are anchored on the days they were last answered, because Basecamp does not say which of two weeks they ask in; data.anchorsInferred names each with that day"))
+			}
+			if count := report.AskedLeftOut.NotInTheProject + report.AskedLeftOut.Retired + report.AskedLeftOut.WithoutAnAddress; count > 0 {
+				notices = append(notices, plural(count,
+					"person a question asks cannot be said to be asked, because they are no member of the project, have left, or come without an address; the question comes without them",
+					"people questions ask cannot be said to be asked, because they are no members of their project, have left, or come without an address; the questions come without them"))
+			}
+			if count := report.AnswersWithoutABody; count > 0 {
+				notices = append(notices, plural(count,
+					"answer of a check-in is left out, because it says nothing",
+					"answers of check-ins are left out, because they say nothing"))
 			}
 			if count := report.UploadLinesLeftOut; count > 0 {
 				notices = append(notices, plural(count,
@@ -382,6 +421,7 @@ func renderImportReport(w io.Writer, report importReport) {
 		fmt.Fprintf(w, "Messages are written in %d parts, %s to %s\n", len(names), names[0], names[len(names)-1])
 	}
 	fmt.Fprintf(w, "Lines that were files Basecamp names none of, left out: %d\n", report.UploadLinesLeftOut)
+	renderCheckins(w, report)
 	fmt.Fprintf(w, "In the texts: %s referred to, %s Basecamp lists nothing for dropped, %s, %s, %s\n",
 		plural(report.FilesInBodies, "file", "files"), plural(report.FilesDropped, "file", "files"),
 		plural(report.MentionsUnresolved, "mention left as a name", "mentions left as names"),
@@ -405,8 +445,9 @@ func renderImportReport(w io.Writer, report importReport) {
 	}
 	fmt.Fprintf(w, "Names of files changed: %d; captions too long for a reference, left off: %d; files met under a second owner: %d\n",
 		report.FileNamesChanged, report.CaptionsDropped, report.FilesOfSeveralOwners)
-	fmt.Fprintf(w, "Longest text in characters: cards %d, comments %d, posts %d, messages %d\n",
-		report.LongestBody[bundle.Cards], report.LongestBody[bundle.Comments], report.LongestBody[bundle.Posts], report.LongestBody[bundle.Messages])
+	fmt.Fprintf(w, "Longest text in characters: cards %d, comments %d, posts %d, messages %d, answers %d\n",
+		report.LongestBody[bundle.Cards], report.LongestBody[bundle.Comments], report.LongestBody[bundle.Posts], report.LongestBody[bundle.Messages],
+		report.LongestBody[bundle.Answers])
 
 	if report.RequestsRetried > 0 {
 		fmt.Fprintf(w, "Requests asked again after a failure that passed: %d\n", report.RequestsRetried)
@@ -429,6 +470,38 @@ func renderImportReport(w io.Writer, report importReport) {
 			fmt.Fprintf(w, "  %-16s %-18s %d\n", skipped.Kind, state, skipped.Count)
 		}
 	}
+}
+
+// renderCheckins says what became of the questions of the check-ins a run met.
+// A run that met none says nothing about them.
+func renderCheckins(w io.Writer, report importReport) {
+	_, met := report.Counts[bundle.Questions]
+	if !met && len(report.QuestionsLeftOut) == 0 {
+		return
+	}
+
+	impossible := make([]string, 0, len(report.QuestionsLeftOut))
+	for _, left := range report.QuestionsLeftOut {
+		impossible = append(impossible, fmt.Sprintf("%s (%s)", left.QuestionSourceID, left.Field))
+	}
+	fmt.Fprintf(w, "Questions whose schedule Minka has no words for, left out: %d", len(impossible))
+	if len(impossible) > 0 {
+		fmt.Fprintf(w, " — %s", strings.Join(impossible, ", "))
+	}
+	fmt.Fprintln(w)
+
+	if len(report.AnchorsInferred) > 0 {
+		anchored := make([]string, 0, len(report.AnchorsInferred))
+		for _, anchor := range report.AnchorsInferred {
+			anchored = append(anchored, anchor.QuestionSourceID+" from "+anchor.From)
+		}
+		fmt.Fprintf(w, "Questions asked every other week anchored on the day they were last answered: %d — %s\n",
+			len(anchored), strings.Join(anchored, ", "))
+	}
+	fmt.Fprintf(w, "People a question asks that the bundle cannot say are asked: %d no member of the project, %d no longer there, %d without an address\n",
+		report.AskedLeftOut.NotInTheProject, report.AskedLeftOut.Retired, report.AskedLeftOut.WithoutAnAddress)
+	fmt.Fprintf(w, "Answers that say nothing, left out: %d; answers in the trash, left out: %d\n",
+		report.AnswersWithoutABody, report.AnswersTrashed)
 }
 
 // incompleteImport is the end of a run that wrote its bundle without some of

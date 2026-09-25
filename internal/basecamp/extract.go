@@ -133,6 +133,19 @@ type Result struct {
 	// UploadLinesLeftOut counts the lines that were files alone, of which
 	// Basecamp names none in a way a bundle can refer to.
 	UploadLinesLeftOut int
+	// QuestionsLeftOut are the questions left out because Minka has no words
+	// for their schedule, each with the field that made it impossible.
+	QuestionsLeftOut []ImpossibleQuestion
+	// AnchorsInferred are the questions asked every other week whose startsOn
+	// was taken from the day an answer belongs to.
+	AnchorsInferred []InferredAnchor
+	// AskedLeftOut counts the people a question is asked of that a bundle
+	// cannot say are asked.
+	AskedLeftOut AskedLeftOut
+	// AnswersWithoutABody counts the answers that say nothing and
+	// AnswersTrashed those in the trash; both are left out.
+	AnswersWithoutABody int
+	AnswersTrashed      int
 	// LongestBody is the longest text of a kind, in characters.
 	LongestBody map[bundle.Kind]int
 	Bodies      BodyCounts
@@ -305,6 +318,12 @@ func (e *Extractor) Extract(ctx context.Context, projectIDs []string, w *bundle.
 		PostsWithEmptyBody: e.postsWithEmptyBody,
 		MessagesByType:     e.messagesByType,
 		UploadLinesLeftOut: e.uploadLinesLeftOut,
+
+		QuestionsLeftOut:    e.questionsLeftOut,
+		AnchorsInferred:     e.anchorsInferred,
+		AskedLeftOut:        e.askedLeftOut,
+		AnswersWithoutABody: e.answersWithoutABody,
+		AnswersTrashed:      e.answersTrashed,
 
 		MessagesWithEmptyBody: e.messagesWithEmptyBody,
 		LongestBody:           e.longestBody,
