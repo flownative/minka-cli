@@ -234,7 +234,11 @@ terminal: a hook that fails loudly after every tool call would cost the agent
 its attention for something it cannot act on. Asked, it says in 'reason' what
 it made of the moment, with the status and the code of the API where a request
 was turned away; what the last signal that went out made of it also stands in
-'minka work list'.`,
+'minka work list'.
+
+With a card in hand it also sees to it that one process of this host keeps
+reporting on a timer, so that a tool call running for minutes does not let a
+tile go dark. 'keepalive' says what became of that.`,
 		Args: requireArgs(),
 		RunE: func(*cobra.Command, []string) error {
 			if asTheKeepalive {
@@ -378,7 +382,8 @@ func (a *app) somebodyIsAtWork(entry *work.Host) bool {
 		return false
 	}
 	written := entry.StillAtIt(a.agentSession(), a.now())
-	return entry.Beat(a.now()) || written
+	marked := entry.Beat(a.now())
+	return written || marked
 }
 
 // saving writes the store where the sweep changed something and hands the
