@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -25,6 +26,10 @@ type testEnv struct {
 	server  *fakeapi.Server
 	fixture *fakeapi.Fixture
 	vars    map[string]string
+
+	// keepalives counts the processes a run would have started. No test forks
+	// one: what is under test is the decision to start it.
+	keepalives atomic.Int32
 }
 
 type result struct {
@@ -72,6 +77,10 @@ func (e *testEnv) runWith(configure func(*app), stdin string, args ...string) re
 	e.t.Helper()
 	var stdout, stderr bytes.Buffer
 	a := newApp(context.Background(), strings.NewReader(stdin), &stdout, &stderr, func(name string) string { return e.vars[name] })
+	a.startKeepalive = func() error {
+		e.keepalives.Add(1)
+		return nil
+	}
 	if configure != nil {
 		configure(a)
 	}

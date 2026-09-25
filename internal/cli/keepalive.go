@@ -4,6 +4,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
+	"os/exec"
+	"strings"
 	"time"
 
 	"github.com/flownative/minka-cli/internal/work"
@@ -193,4 +196,118 @@ func (a *app) whatTheStoreSays(path, host string) (beat time.Time, cards int, re
 		_ = handle.Save()
 	}
 	return entry.BeatAt, len(entry.Cards), true
+}
+
+// What heartbeat says became of the keepalive.
+const (
+	keepaliveStarted   = "started"
+	keepaliveReporting = "already reporting"
+)
+
+// whatBecameOfTheKeepalive starts the process that reports while this session is
+// busy with one long tool call, and says what became of it. Somebody looking
+// into a tile that stays dark has nothing else to go on.
+func (a *app) whatBecameOfTheKeepalive() string {
+	path, err := a.storePath()
+	if err != nil {
+		return notStarted(err.Error())
+	}
+	if work.Untouched(path) {
+		return notStarted("nothing is remembered on this machine")
+	}
+	host, err := a.hostOfTheStore()
+	if err != nil {
+		return notStarted(err.Error())
+	}
+
+	cards, read := a.cardsInTheList(path, host)
+	switch {
+	case !read:
+		return notStarted("the store is busy")
+	case cards == 0:
+		return notStarted("no card is in hand")
+	}
+
+	reporting, err := work.SomebodyKeepsAlive(path, host)
+	if err != nil {
+		return notStarted(err.Error())
+	}
+	if reporting {
+		return keepaliveReporting
+	}
+	if err := a.startKeepalive(); err != nil {
+		return notStarted(err.Error())
+	}
+	return keepaliveStarted
+}
+
+func notStarted(why string) string {
+	return "not started: " + why
+}
+
+// cardsInTheList is how many cards this host holds, and whether the store could
+// be read at all.
+//
+// The signal beside it says only what it carried, and the throttle holds most
+// beats back, so whoever has to know whether anybody is at work asks the store.
+// It waits for nobody: where somebody else holds the store, the next beat asks
+// again.
+func (a *app) cardsInTheList(path, host string) (int, bool) {
+	handle, err := work.Open(path, 0)
+	if err != nil {
+		return 0, false
+	}
+	defer handle.Close()
+
+	entry, known := handle.File.Hosts[host]
+	if !known {
+		return 0, true
+	}
+	return len(entry.Cards), true
+}
+
+// spawnKeepalive starts the keepalive as a process of its own.
+//
+// Claude Code reads the output of a hook through a pipe, and a child that holds
+// the write end of it keeps that pipe from ever reaching its end: the tool call
+// would then wait for as long as the keepalive lives, which is the opposite of
+// what it is for. So all three streams go to the null device and nobody waits for
+// the child. It gets a session of its own, which is also what keeps the Ctrl-C
+// meant for the agent away from it, and a directory that holds no project, so
+// that a working tree somebody deletes does not take it along.
+func spawnKeepalive(environment []string) error {
+	program, err := os.Executable()
+	if err != nil {
+		return err
+	}
+	null, err := os.OpenFile(os.DevNull, os.O_RDWR, 0)
+	if err != nil {
+		return err
+	}
+	defer null.Close()
+
+	started := exec.Command(program, "heartbeat", "--keepalive")
+	started.Stdin, started.Stdout, started.Stderr = null, null, null
+	started.Dir = os.TempDir()
+	started.Env = environment
+	detach(started)
+	return started.Start()
+}
+
+// environmentWithoutTheSession is what the keepalive is started with: the
+// environment of the beat that starts it, less the name of the session.
+//
+// A card binds itself to the session it finds in that variable, and the
+// keepalive is at no work of its own. Its beats say nothing about the work
+// whatever they find in the environment; not being given the name is the other
+// half of the same rule.
+func environmentWithoutTheSession(environment []string) []string {
+	kept := make([]string, 0, len(environment))
+	for _, entry := range environment {
+		if strings.HasPrefix(entry, sessionVariable+"=") {
+			continue
+		}
+		kept = append(kept, entry)
+	}
+	return kept
 }

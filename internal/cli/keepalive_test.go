@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -104,6 +105,99 @@ func TestAKeepaliveHoldsTheLockOnlyWhileItReports(t *testing.T) {
 	}
 	if reporting, err := work.SomebodyKeepsAlive(e.storePath(), e.vars["MINKA_HOST"]); err != nil || reporting {
 		t.Errorf("the lock is still held after the keepalive stopped: %v, %v", reporting, err)
+	}
+}
+
+// A beat that finds a card in hand starts the keepalive, and says so where
+// anybody asks: a tile that stays dark is diagnosed from that word and nothing
+// else. Where one is reporting already, no second is started.
+func TestABeatWithACardInHandStartsTheKeepalive(t *testing.T) {
+	e := newAgentEnv(t)
+	began := time.Date(2026, 9, 23, 10, 0, 0, 0, time.UTC)
+	expectCode(t, e.runAt(began, "work", "start", e.fixture.CardInDoing.ID, "--json"), ExitOK)
+
+	env, r := e.runWithJSON(began, "heartbeat")
+	expectCode(t, r, ExitOK)
+	if became := decode(t, env.Data)["keepalive"]; became != keepaliveStarted {
+		t.Errorf("the keepalive %v", became)
+	}
+	if started := e.keepalives.Load(); started != 1 {
+		t.Fatalf("%d keepalives were started, want 1", started)
+	}
+
+	held, err := work.HoldKeepalive(e.storePath(), e.vars["MINKA_HOST"])
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer held.Release()
+
+	env, r = e.runWithJSON(began.Add(2*time.Minute), "heartbeat")
+	expectCode(t, r, ExitOK)
+	if became := decode(t, env.Data)["keepalive"]; became != keepaliveReporting {
+		t.Errorf("the keepalive %v, want the one that is reporting", became)
+	}
+	if started := e.keepalives.Load(); started != 1 {
+		t.Errorf("%d keepalives were started, want the one", started)
+	}
+}
+
+// A beat with nothing in hand starts nothing, and where nothing was ever
+// remembered it does not so much as make the directory of the store.
+func TestABeatWithNothingInHandStartsNoKeepalive(t *testing.T) {
+	e := newAgentEnv(t)
+	began := time.Date(2026, 9, 23, 10, 0, 0, 0, time.UTC)
+
+	env, r := e.runWithJSON(began, "heartbeat")
+	expectCode(t, r, ExitOK)
+	if became, _ := decode(t, env.Data)["keepalive"].(string); !strings.HasPrefix(became, "not started") {
+		t.Errorf("the keepalive %q", became)
+	}
+	if _, err := os.Stat(filepath.Dir(e.storePath())); err == nil {
+		t.Error("the beat made a store although nothing was remembered")
+	}
+
+	// And with a list that was emptied: the cards are what it keeps alive.
+	expectCode(t, e.runAt(began, "work", "start", e.fixture.CardInDoing.ID, "--json"), ExitOK)
+	expectCode(t, e.runAt(began, "work", "stop", "--all", "--json"), ExitOK)
+	env, r = e.runWithJSON(began.Add(time.Minute), "heartbeat")
+	expectCode(t, r, ExitOK)
+	if became, _ := decode(t, env.Data)["keepalive"].(string); !strings.Contains(became, "no card is in hand") {
+		t.Errorf("the keepalive %q", became)
+	}
+	if started := e.keepalives.Load(); started != 0 {
+		t.Errorf("%d keepalives were started with nothing in hand", started)
+	}
+}
+
+// The keepalive is started with the environment of the beat that starts it, less
+// the name of the session: a card binds itself to that name, and the keepalive is
+// at no work of its own.
+func TestTheKeepaliveIsGivenNoSessionToBeAtWorkAs(t *testing.T) {
+	given := environmentWithoutTheSession([]string{
+		"MINKA_HOST=https://minka.example.com",
+		sessionVariable + "=the session that spawned it",
+		sessionVariable + "X=something else entirely",
+		"PATH=/usr/bin",
+	})
+
+	for _, entry := range given {
+		if strings.HasPrefix(entry, sessionVariable+"=") {
+			t.Errorf("the keepalive is given %q", entry)
+		}
+	}
+	if len(given) != 3 {
+		t.Errorf("the keepalive is given %v, want everything but the name of the session", given)
+	}
+}
+
+// The keepalive is minka's own business: the catalog every agent reads offers no
+// way to call it.
+func TestTheKeepaliveIsInNoCatalog(t *testing.T) {
+	e := newTestEnv(t)
+	r := e.run("", "commands", "--json")
+	expectCode(t, r, ExitOK)
+	if strings.Contains(r.stdout, "keepalive") {
+		t.Error("the catalog offers the keepalive")
 	}
 }
 
