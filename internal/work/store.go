@@ -31,6 +31,11 @@ const ForgottenAfter = 8 * time.Hour
 // cost the store something and say nothing new.
 const SeenEvery = time.Minute
 
+// BeatEvery is how often the moment of a beat is written down. It is read
+// against a window of many minutes, so writing it oftener would cost the store
+// something and say nothing new.
+const BeatEvery = time.Minute
+
 // ErrBusy means another process holds the lock on the store.
 var ErrBusy = errors.New("another minka is writing the store")
 
@@ -61,6 +66,11 @@ type Card struct {
 // away was at the host all the same, and whoever reads the list has to be able
 // to tell "nothing has ever reported from here" from "it reports, and the host
 // says no".
+//
+// BeatAt is the last moment somebody who is at work was at the store: a beat
+// out of a session, or a command somebody typed. It hangs on the invocation and
+// not on a request going out, because a signal is held back for a minute at a
+// time and a busy session would otherwise look silent.
 type Host struct {
 	Cards []Card `json:"cards"`
 
@@ -69,6 +79,7 @@ type Host struct {
 	ReportedAt time.Time `json:"reportedAt,omitempty"`
 	Failure    string    `json:"failure,omitempty"`
 	FailedAt   time.Time `json:"failedAt,omitempty"`
+	BeatAt     time.Time `json:"beatAt,omitempty"`
 }
 
 // File is the store as it lies on disk.
@@ -224,6 +235,18 @@ func (h *Host) StillAtIt(session string, now time.Time) bool {
 		written = true
 	}
 	return written
+}
+
+// Beat writes down that somebody who is at work was here, and answers whether
+// that was worth writing down. Whoever is at no work says nothing here: the
+// mark is what tells a machine where somebody is working from one where nothing
+// but minka itself is left running.
+func (h *Host) Beat(now time.Time) bool {
+	if now.Sub(h.BeatAt) < BeatEvery {
+		return false
+	}
+	h.BeatAt = now
+	return true
 }
 
 // ForgetWhatRanOut drops the cards of a session that never said it was done.

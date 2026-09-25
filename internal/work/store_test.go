@@ -180,6 +180,29 @@ func TestSayingItAgainIsWrittenDownOnceAMinute(t *testing.T) {
 	}
 }
 
+// The mark of a beat is read against a window of many minutes, so it is written
+// down once a minute like the sign of life and not once a tool call.
+func TestTheMarkOfABeatIsWrittenDownOnceAMinute(t *testing.T) {
+	began := time.Date(2026, 9, 23, 9, 0, 0, 0, time.UTC)
+	entry := &Host{Cards: []Card{{ID: "one", StartedAt: began, Session: "mine"}}}
+
+	if !entry.Beat(began) {
+		t.Fatal("the first beat was not written down")
+	}
+	if !entry.BeatAt.Equal(began) {
+		t.Errorf("the mark stands at %s, want %s", entry.BeatAt, began)
+	}
+	if entry.Beat(began.Add(BeatEvery / 2)) {
+		t.Error("a second beat within the minute was written down")
+	}
+	if !entry.Beat(began.Add(BeatEvery + time.Second)) {
+		t.Error("the beat after the minute was not written down")
+	}
+	if !entry.BeatAt.Equal(began.Add(BeatEvery + time.Second)) {
+		t.Errorf("the mark stands at %s after the second beat", entry.BeatAt)
+	}
+}
+
 // The safeguard: a card that was taken up where nothing said who was asking
 // belongs to nobody, so no sign of life reaches it — neither one that names a
 // session nor one that names none, which is what a heartbeat outside a session
