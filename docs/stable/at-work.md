@@ -37,10 +37,10 @@ their own would take each other's cards away with every signal.
   day keeps its card by being worked on, while the card of a session that died
   runs out however busy the machine around it is — which the sign of life would
   not manage if it were the signal, because a signal carries the whole list of
-  the machine. A tool call of a subagent counts as the session that spawned it:
-  it carries the same name and runs the hook like any other, so a session that
-  works through subagents keeps its cards without having to do anything about
-  it.
+  the machine. What binds a card to a session is that name and nothing else:
+  every heartbeat that finds the same name in the variable keeps the card, one
+  out of a subagent as well, wherever a subagent is given the name of the
+  session that spawned it.
 - A card taken up where nothing says who is asking, a person at a terminal for
   instance, carries no session and goes by the moment it was started. So does a
   card of a session that never runs the heartbeat. Saying `work start` again

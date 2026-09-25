@@ -832,3 +832,33 @@ func TestTheSignOfLifeIsWrittenWhereNoSignalGoesOut(t *testing.T) {
 		t.Fatalf("%v is left, want the card of the session whose beat sent nothing", left)
 	}
 }
+
+// The safeguard: what has run out is given up before the sign of life is
+// written. A session that comes back after a day away was not at its card, so
+// the beat it brings must not raise a card that is over — and the board has to
+// hear that it is over.
+func TestABeatThatComesTooLateRaisesNothing(t *testing.T) {
+	e := newAgentEnv(t)
+	began := time.Date(2026, 9, 23, 9, 0, 0, 0, time.UTC)
+	card := e.fixture.CardInDoing.ID
+
+	e.vars["CLAUDE_CODE_SESSION_ID"] = "the one that goes away"
+	expectCode(t, e.runAt(began, "work", "start", card, "--json"), ExitOK)
+	expectCode(t, e.runAt(began.Add(time.Minute), "heartbeat", "--json"), ExitOK)
+	if got := e.server.CardsAtWork(); len(got) != 1 {
+		t.Fatalf("the server holds %v, want the card that was taken up", got)
+	}
+
+	// A day later the same session beats again, its card long run out.
+	tooLate := began.Add(24 * time.Hour)
+	expectCode(t, e.runAt(tooLate, "heartbeat", "--json"), ExitOK)
+	if got := e.server.CardsAtWork(); len(got) != 0 {
+		t.Errorf("the server still holds %v after the card ran out", got)
+	}
+
+	env, r := e.runWithJSON(tooLate.Add(time.Minute), "work", "list")
+	expectCode(t, r, ExitOK)
+	if left := cardIDsOfTheList(t, env); len(left) != 0 {
+		t.Errorf("%v was raised by a beat that came a day late", left)
+	}
+}

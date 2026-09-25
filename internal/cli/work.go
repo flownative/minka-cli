@@ -309,9 +309,10 @@ func (a *app) claimTheSignal(path, host string, wait time.Duration) (*claim, str
 	if !known {
 		return nil, "nothing is remembered for " + host
 	}
-	// The session says it is still at its cards before anything else, because
-	// that holds whether or not a signal goes out from here: the throttle is
-	// about the host's ear, and this is about the work.
+	// What has run out is given up before anybody says they are still at it, so
+	// that a beat which comes after the window cannot raise a card that is
+	// over. The sign of life stands whatever the throttle then makes of the
+	// moment: it is about the work, not about the host's ear.
 	changed := entry.ForgetWhatRanOut(a.now()) > 0
 	if entry.StillAtIt(a.agentSession(), a.now()) {
 		changed = true
@@ -664,9 +665,9 @@ func nullable(text string) any {
 	return text
 }
 
-// session_ is what a session of an agent calls itself, where it says so in the
-// environment. It binds a card to whoever took it up: the list belongs to the
-// machine and a signal carries all of it, so a sign of life without a name
+// agentSession is what a session of an agent calls itself, where it says so in
+// the environment. It binds a card to whoever took it up: the list belongs to
+// the machine and a signal carries all of it, so a sign of life without a name
 // would make one session's work keep every other session's cards alive.
 //
 // A card taken up where nothing says who is asking — a person at a terminal —

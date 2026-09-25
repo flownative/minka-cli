@@ -234,13 +234,14 @@ func (h *Host) ForgetWhatRanOut(now time.Time) int {
 }
 
 // lastSeen is when the session that took a card up was last known to be at it:
-// the moment it said so, or the moment it began where it has said nothing
-// since and where it never gave a name to say it under.
+// the moment it said so, or the moment the card was taken up where it has said
+// nothing since and where it never gave a name to say it under. A card that is
+// taken up anew is taken up whole, so it has said nothing yet.
 func lastSeen(card Card) time.Time {
-	if card.SeenAt.After(card.StartedAt) {
-		return card.SeenAt
+	if card.SeenAt.IsZero() {
+		return card.StartedAt
 	}
-	return card.StartedAt
+	return card.SeenAt
 }
 
 // CardIDs is what a signal carries: every card of the store, sorted, so that
