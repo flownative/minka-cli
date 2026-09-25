@@ -4,7 +4,9 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+	"unicode"
 )
 
 func TestSaveWritesAFileOnlyItsOwnerCanRead(t *testing.T) {
@@ -141,5 +143,121 @@ func TestNormalizeHost(t *testing.T) {
 		if got, err := NormalizeHost(input); err == nil {
 			t.Errorf("NormalizeHost(%q) = %q, want an error", input, got)
 		}
+	}
+}
+
+// A refused host is said back to whoever gave it and ends up in a transcript
+// and in a log. A password written into the address must not get there, while
+// the refusal still has to say which host it is about and what is wrong with
+// it — a message that said nothing would keep the secret too.
+func TestNormalizeHostRefusesWithoutRepeatingACredential(t *testing.T) {
+	const user = "robert"
+	const password = "s3cr3t-password"
+	const another = "other-s3cr3t"
+
+	hosts := []string{
+		"https://" + user + ":" + password + "@minka.localbeach.net",
+		user + ":" + password + "@minka.localbeach.net",
+		"https://" + user + ":" + password + "@minka.localbeach.net/api/v1",
+		"http://" + user + ":" + password + "@minka.localbeach.net",
+		"https://" + password + "@minka.localbeach.net",
+		"ftp://" + user + ":" + password + "@minka.localbeach.net",
+		// A password of its own making holds whatever characters it was given.
+		// One with a slash, a question mark or a hash in it moves the end of the
+		// user information out of reach of a search through the text, so what is
+		// shown is built from the parts of the address instead.
+		"https://" + user + ":pass/" + password + "@minka.localbeach.net",
+		"https://" + user + ":pass?" + password + "@minka.localbeach.net",
+		"https://" + user + ":pass#" + password + "@minka.localbeach.net",
+		// A password beginning with digits and holding a slash makes a host and a
+		// path of itself that a URL can be read from, and the @ then stands
+		// behind the first slash, where user information no longer ends.
+		"https://" + user + ":2024/" + password + "@minka.localbeach.net",
+		"https://" + user + ":/" + password + "@minka.localbeach.net",
+		// One slash too few is a typo somebody makes, and it moves the whole
+		// address into the path.
+		"https:/" + user + ":" + password + "@minka.localbeach.net",
+		// An address without a scheme and without a host leaves the parts nothing
+		// to say.
+		"//" + user + ":" + password + "@minka.localbeach.net",
+		// A separator written percent-encoded leaves no literal @ or : to find.
+		"https://" + user + ":" + password + "%40minka.localbeach.net",
+		// Here the address can be read, and it is the percent-encoded separator
+		// alone that says the user information does not end where it seems to.
+		"https://" + user + ":2024/" + password + "%40minka.localbeach.net",
+		"https://" + user + "%3A" + password + "%40minka.localbeach.net",
+		// A second @ belongs to the user information as well, so the last one
+		// ends it — here where the address still parses, and below where a
+		// control character keeps it from parsing at all.
+		"https://a:" + password + "@b:" + another + "@minka.localbeach.net",
+		"https://a:" + password + "@b:" + another + "@minka.localbeach.net\x7f",
+		// A value with a control character in it cannot be parsed as a URL at
+		// all and is refused before anything of it is understood.
+		"https://" + user + ":" + password + "@minka.localbeach.net\x7f",
+		"https://minka.localbeach.net?token=" + password,
+		"https://minka.localbeach.net#" + password,
+	}
+	for _, host := range hosts {
+		got, err := NormalizeHost(host)
+		if err == nil {
+			t.Errorf("NormalizeHost(%q) = %q, want an error", host, got)
+			continue
+		}
+		message := err.Error()
+		// The refusal is one reader of the rendering; every other place that
+		// prints a host reads the same one, so both are held to it here.
+		shown := HostForOutput(host)
+		for _, secret := range []string{password, user, another} {
+			if strings.Contains(message, secret) {
+				t.Errorf("the refusal of %q hands on %q: %s", host, secret, message)
+			}
+			if strings.Contains(shown, secret) {
+				t.Errorf("what may be printed of %q hands on %q: %s", host, secret, shown)
+			}
+		}
+		// Where the credential moved into the path, no part of the value means
+		// the host any more, and the refusal quotes none of it; everywhere else
+		// it has to say which host it is about, or it would keep the secret by
+		// saying nothing.
+		if !strings.Contains(message, "minka.localbeach.net") && !strings.Contains(message, "the address given") {
+			t.Errorf("the refusal of %q says neither which host it is about nor that the address given is at fault: %s", host, message)
+		}
+	}
+}
+
+// What a host is rendered to is printed, and a control character in a printed
+// line is read as an order of its own by a terminal and by a log. None reaches
+// the result, whichever part of the value it stood in.
+func TestHostForOutputDropsWhatNoAddressIsMadeOf(t *testing.T) {
+	hosts := []string{
+		"https://minka.localbeach.net\x7f",
+		"https://minka.local\x1bbeach.net",
+		"https://robert:s3cr3t-password@minka.localbeach.net\x7f",
+		"https://minka.localbeach.net/\x00api/v1",
+		"https://minka.localbeach.net\r\n/api/v1",
+	}
+	for _, host := range hosts {
+		shown := HostForOutput(host)
+		for _, r := range shown {
+			if unicode.IsControl(r) {
+				t.Errorf("HostForOutput(%q) = %q, which holds %q", host, shown, r)
+			}
+		}
+		if !strings.Contains(shown, "minka.local") {
+			t.Errorf("HostForOutput(%q) = %q, which says no host", host, shown)
+		}
+	}
+}
+
+// The refusal of a host that carries user information says what is wrong with
+// it, so that whoever wrote the password into the address knows what to take
+// out of it.
+func TestNormalizeHostNamesUserInformationAsTheFault(t *testing.T) {
+	_, err := NormalizeHost("https://robert:s3cr3t-password@minka.localbeach.net")
+	if err == nil {
+		t.Fatal("a host with user information was accepted")
+	}
+	if !strings.Contains(err.Error(), "user name and password before the @") {
+		t.Errorf("the refusal does not name what is wrong: %s", err)
 	}
 }

@@ -219,12 +219,15 @@ valid until it is revoked on the server.`,
 				}
 			}
 
-			summary := "Not signed in to " + host
+			// The entry is reached by the value the file holds; what is printed
+			// of it is the address alone, which is not where a password belongs.
+			shown := config.HostForOutput(host)
+			summary := "Not signed in to " + shown
 			if removed {
-				summary = "Signed out of " + host
+				summary = "Signed out of " + shown
 			}
 			return a.ok(success{
-				data:    map[string]any{"host": host, "removed": removed},
+				data:    map[string]any{"host": shown, "removed": removed},
 				summary: summary,
 				text: func(w io.Writer) {
 					if !removed {
