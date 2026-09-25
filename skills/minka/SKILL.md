@@ -39,6 +39,11 @@ when stdout is not a terminal, so an agent gets structured output by default.
   card and `minka work stop <card>` when you are done with it. It shows on the
   board only while `minka heartbeat` keeps reporting it, which
   `minka hooks install` sets up once and for all.
+- Take a card up from its back: `minka cards notes show <card>` before you
+  begin, because whoever was on it before left the state of the work there,
+  and `minka cards notes set` at every milestone, so that the next session can
+  take the card over. Comments are the other thing — the conversation with
+  people.
 - `minka cards done` is safe to repeat: a card already in Done is left alone.
 - `minka cards delete` moves a card to the trash. Repeating it changes
   nothing on the server, but a card in the trash reads like one that never
@@ -311,22 +316,50 @@ such as `Doing`.
 
 ## Working notes
 
-- The back of a card holds one text of working notes: plans, findings, the
-  state of the work. It is light Markdown, stored and printed as it is, never
-  converted. Writing it notifies nobody and leaves no line in the timeline.
+The back of a card is where the session working on it keeps the state of that
+work, instead of in a chat or in a file of its own: what the card is scoped to,
+the decisions taken, the packages, branches and pull requests with what became
+of them, the next step, the open questions. It is the handover — another
+session, on another machine, takes the card over by reading it. Comments are
+the other thing: the conversation with people.
+
+How to keep it:
+
+- **Replace, do not append.** The back is a state, not a log. Rewrite what
+  changed and drop what no longer holds. What happened is in the comments, in
+  Git and in the pull requests.
+- **Keep it short.** Whoever takes the card over reads all of it. Say where the
+  work stands, not how it got there.
+- **Write at the milestones**, not as you go: work taken up, a review come
+  back, a pull request opened, something merged, a decision taken, a question
+  you cannot answer yourself. In between, work.
+- **Read the back before you begin** on a card anybody else may have touched,
+  and never write without having read.
+- **`show` first, then `set` with `--expect <updatedAt>`.** The guard is what
+  makes a write that would wipe out somebody else's notes fail instead.
+  `cards notes show --json` hands the `set` with the right `--expect` in its
+  `breadcrumbs`.
+- **`--force` is how one session writes over another's notes unasked.** It is
+  not the way past a refusal: a refusal means somebody wrote while you were
+  writing, and their text is in `data`. Merge yours into their `body` and send
+  it again with their `updatedAt`. Take `--force` only for notes nobody else
+  writes.
+
+What the two commands do:
+
+- The back holds one text. It is light Markdown, stored and printed as it is,
+  never converted. Writing it notifies nobody and leaves no line in the
+  timeline.
 - `cards notes show <cardId>` gives `{cardId, body, updatedAt, updatedBy,
   appUrl}`. Notes nobody has written have `body` `""` and `updatedAt` and
   `updatedBy` null. The card itself does not say whether it has notes.
 - `cards notes set <cardId> -` replaces the notes as a whole with stdin; `""`
-  clears them. It needs `--expect` or `--force`:
-  - `--expect <updatedAt>` with the `updatedAt` you read, `--expect none` for
-    notes nobody had written yet. Notes somebody changed since are left as
-    they stand: exit 9, `meta.apiCode` `notesChanged`, and `data` holds the
-    notes as they stand now. Merge your text into their `body` and send it
-    again with their `updatedAt`. Sending the text that stands already is no
-    conflict.
-  - `--force` writes over whatever stands. Use it only for notes that are
-    yours alone.
+  clears them. It needs `--expect <updatedAt>` — the `updatedAt` you read, or
+  `none` for notes nobody had written yet — or `--force`, and the two exclude
+  each other (exit 1). Notes somebody changed since the time `--expect` names
+  are left as they stand: exit 9, `meta.apiCode` `notesChanged`, and `data`
+  holds the notes as they stand now. Sending the text that stands already is no
+  conflict.
 - At most 100000 characters, counted as Minka stores them; a longer text exits
   9 with `cardNotesTooLong` before it is sent. Control characters other than
   line breaks and tabs exit 9 with `cardNotesHasControlCharacters`.
@@ -787,6 +820,15 @@ Tokens can only be revoked on the command line.
 - list tokens of a person
 - revoke with confirmation
 EOF
+```
+
+Take a card over and write its state back:
+
+```bash
+minka cards notes show <cardId> --quiet > back.json
+jq -r .body back.json > back.md
+# rewrite back.md into the state as it stands now, then send it back
+minka cards notes set <cardId> - --expect "$(jq -r '.updatedAt // "none"' back.json)" --json < back.md
 ```
 
 Finish a task and leave a note:
