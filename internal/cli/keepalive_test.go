@@ -624,3 +624,17 @@ func (e *testEnv) rememberACardUnder(host string, at time.Time) {
 		e.t.Fatal(err)
 	}
 }
+
+// The host reaches the child as an argument, where every process on the machine
+// reads along. The seam itself holds that only a host which has been read gets
+// there, so a way to it that forgot to refuse one cannot undo that.
+func TestNoKeepaliveIsStartedForAHostThatWasNotRead(t *testing.T) {
+	const password = "s3cr3t-password"
+	err := spawnKeepalive("https://robert:"+password+"@minka.example.com", nil)
+	if err == nil {
+		t.Fatal("a keepalive was started for a host that cannot be read")
+	}
+	if strings.Contains(err.Error(), password) {
+		t.Errorf("the refusal hands the password on: %s", err)
+	}
+}
