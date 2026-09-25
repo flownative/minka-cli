@@ -353,7 +353,7 @@ func (a *app) session() (*session, error) {
 		return nil, err
 	}
 	if host == "" {
-		host = file.DefaultHost
+		host = defaultHostOf(file)
 	}
 	if host == "" {
 		return nil, &Error{Code: CodeAuth, Message: "not signed in to any Minka host", Hint: "Run: minka auth login --host https://minka.example.com"}
