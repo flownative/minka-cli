@@ -304,6 +304,7 @@ func TestAScheduleMinkaCannotExpressLeavesTheQuestionOutWithItsAnswers(t *testin
 		"an end that is no day":      {"end_date", func(q *fakebasecamp.Question) { q.Schedule.EndDate = "2024-3-1" }},
 		"a start that is no day":     {"start_date", func(q *fakebasecamp.Question) { q.Schedule.StartDate = "2024-2-5" }},
 		"an hour of no day":          {"hour", func(q *fakebasecamp.Question) { q.Schedule.Hour = 24 }},
+		"a minute of no hour":        {"minute", func(q *fakebasecamp.Question) { q.Schedule.Minute = 60 }},
 	}
 
 	for what, one := range cases {
