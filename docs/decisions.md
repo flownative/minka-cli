@@ -497,22 +497,26 @@ is worse than one that refuses. **Implemented as:** `cli.addHeartbeatHook`,
 `heartbeatHookIn`, see [Saying what you are working on](stable/at-work.md).
 
 <a id="c-040"></a>
-## C-040 — A card nobody starts again is given up after eight hours
+## C-040 — A card is given up eight hours after its session was last at it
 
 *Applies to: the list of `internal/work`*
 
-A card is dropped when it has stood eight hours without a `work start` of its
-own. Nothing of the contract asks for this; the server forgets a card three
-minutes after the last signal, and this is the client's own rule.
+A card remembers the session that took it up, and that session says after every
+tool call that it is still at it, at most once a minute. Eight hours after the
+last of those the card is dropped. A card taken up where nothing says who is
+asking goes by the moment it was started. Nothing of the contract asks for any
+of this; the server forgets a card three minutes after the last signal, and
+this is the client's own rule.
 
 **Why:** A session that dies says nothing more about its cards, and every other
-session on the machine would keep reporting them for as long as it runs. Eight
-hours is a working day: long enough for the work itself, short enough that
-nothing glows through the night. It hangs on the moment a card was started, so
-it can cut a long piece of work short as well — `work start` again says that
-the card is still the one.
-**Implemented as:** `work.Host.ForgetWhatRanOut`, see
-[Saying what you are working on](stable/at-work.md).
+session on the machine would keep reporting them for as long as it runs — which
+is why the sign of life has to be the session's and not the machine's: a signal
+carries the whole list, so a signal as the sign of life would make one session
+at work keep every dead session's cards alive. Eight hours is a working day:
+long enough for the work itself, short enough that nothing glows through the
+night.
+**Implemented as:** `work.Host.StillAtIt`, `ForgetWhatRanOut` and `lastSeen`,
+see [Saying what you are working on](stable/at-work.md).
 
 <a id="c-041"></a>
 ## C-041 — A card that is moved on is one nobody has in hand

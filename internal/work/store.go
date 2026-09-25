@@ -20,11 +20,16 @@ import (
 	"time"
 )
 
-// ForgottenAfter is how long a card stays in the store without being started
-// again. A session that dies says nothing more about its cards, and nobody
-// else knows they are over; a working day is long enough for the work itself
-// and short enough that no tile glows through the night.
+// ForgottenAfter is how long a card stays in the store without a sign of life.
+// A session that dies says nothing more about its cards, and nobody else knows
+// they are over; a working day is long enough for the work itself and short
+// enough that no tile glows through the night.
 const ForgottenAfter = 8 * time.Hour
+
+// SeenEvery is how often a session writes down that it is still at its cards.
+// The moment is read against a window of hours, so writing it oftener would
+// cost the store something and say nothing new.
+const SeenEvery = time.Minute
 
 // ErrBusy means another process holds the lock on the store.
 var ErrBusy = errors.New("another minka is writing the store")
@@ -37,6 +42,13 @@ type Card struct {
 	ShortID   string    `json:"shortId,omitempty"`
 	Title     string    `json:"title,omitempty"`
 	StartedAt time.Time `json:"startedAt"`
+
+	// Session is who took the card up, where a session said who it was, and
+	// SeenAt the last moment that session said it was still at it. The list
+	// belongs to the machine and a signal carries all of it, so without the
+	// name the sign of life of one card would be the busyness of every other.
+	Session string    `json:"session,omitempty"`
+	SeenAt  time.Time `json:"seenAt,omitempty"`
 }
 
 // Host is what is remembered for one Minka host.
@@ -196,11 +208,39 @@ func (h *Host) Stop(cardID string) bool {
 	return len(h.Cards) < before
 }
 
+// StillAtIt says again that a session is at work on the cards it took up, and
+// answers whether that was worth writing down. A session that gave no name
+// says nothing here: its cards go by the moment they were started.
+func (h *Host) StillAtIt(session string, now time.Time) bool {
+	if session == "" {
+		return false
+	}
+	written := false
+	for i := range h.Cards {
+		if h.Cards[i].Session != session || now.Sub(h.Cards[i].SeenAt) < SeenEvery {
+			continue
+		}
+		h.Cards[i].SeenAt = now
+		written = true
+	}
+	return written
+}
+
 // ForgetWhatRanOut drops the cards of a session that never said it was done.
 func (h *Host) ForgetWhatRanOut(now time.Time) int {
 	before := len(h.Cards)
-	h.Cards = slices.DeleteFunc(h.Cards, func(c Card) bool { return now.Sub(c.StartedAt) >= ForgottenAfter })
+	h.Cards = slices.DeleteFunc(h.Cards, func(c Card) bool { return now.Sub(lastSeen(c)) >= ForgottenAfter })
 	return before - len(h.Cards)
+}
+
+// lastSeen is when the session that took a card up was last known to be at it:
+// the moment it said so, or the moment it began where it has said nothing
+// since and where it never gave a name to say it under.
+func lastSeen(card Card) time.Time {
+	if card.SeenAt.After(card.StartedAt) {
+		return card.SeenAt
+	}
+	return card.StartedAt
 }
 
 // CardIDs is what a signal carries: every card of the store, sorted, so that

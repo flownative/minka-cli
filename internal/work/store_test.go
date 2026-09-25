@@ -115,3 +115,48 @@ func TestACardNobodyStartedAgainRunsOut(t *testing.T) {
 		t.Errorf("%v is left", cards)
 	}
 }
+
+// The list belongs to the machine and a signal carries all of it, so the sign
+// of life has to belong to the session that took a card up: otherwise one
+// session at work would keep the cards of a session that died alive.
+func TestOnlyTheSessionThatTookACardUpKeepsItAlive(t *testing.T) {
+	began := time.Date(2026, 9, 23, 9, 0, 0, 0, time.UTC)
+	entry := &Host{Cards: []Card{
+		{ID: "of the busy session", StartedAt: began, Session: "busy"},
+		{ID: "of the session that died", StartedAt: began, Session: "gone"},
+		{ID: "of a person at a terminal", StartedAt: began},
+	}}
+
+	// The one session says it is still at it, every hour of a working day.
+	for hour := 1; hour <= 9; hour++ {
+		entry.StillAtIt("busy", began.Add(time.Duration(hour)*time.Hour))
+	}
+
+	if forgotten := entry.ForgetWhatRanOut(began.Add(ForgottenAfter + time.Minute)); forgotten != 2 {
+		t.Fatalf("%d cards were forgotten, want the two nobody said anything about", forgotten)
+	}
+	if cards := entry.CardIDs(); len(cards) != 1 || cards[0] != "of the busy session" {
+		t.Errorf("%v is left, want the card of the session that kept working", cards)
+	}
+}
+
+// Saying it again costs a write, and the moment is read against a window of
+// hours, so it is written down once a minute and not once a tool call.
+func TestSayingItAgainIsWrittenDownOnceAMinute(t *testing.T) {
+	began := time.Date(2026, 9, 23, 9, 0, 0, 0, time.UTC)
+	entry := &Host{Cards: []Card{{ID: "one", StartedAt: began, Session: "mine"}}}
+
+	if !entry.StillAtIt("mine", began.Add(SeenEvery)) {
+		t.Fatal("the first sign of life was not written down")
+	}
+	if entry.StillAtIt("mine", began.Add(SeenEvery+SeenEvery/2)) {
+		t.Error("a second sign of life within the minute was written down")
+	}
+	if !entry.StillAtIt("mine", began.Add(2*SeenEvery+time.Second)) {
+		t.Error("the sign of life after the minute was not written down")
+	}
+	// A session that is not this one, and a session with no name at all.
+	if entry.StillAtIt("somebody else", began.Add(time.Hour)) || entry.StillAtIt("", began.Add(time.Hour)) {
+		t.Error("a card was refreshed by a session that does not hold it")
+	}
+}
