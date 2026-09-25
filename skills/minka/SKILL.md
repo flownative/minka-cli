@@ -691,19 +691,20 @@ this:
   that Basecamp refuses this identity. They are passed over and a `notice`
   says how many: the run exits 0, and a project may come without a creator
   because of it. An identity that may see nothing at all still exits 4.
-- So far a bundle holds the structure, the boards, the message boards and the
-  chats: the people the projects refer to (members and whoever a record
-  names; `data.peopleLeftOut` counts the rest of the account's list, which
-  holds more for an admin than for anybody else, the people written do not
-  differ) with their
-  avatars, the projects with their members, the card tables, chats and
-  message boards that are switched on, of each card table the columns, the
-  cards with the archived and the trashed ones, their steps, comments and
-  boosts, of each message board its messages as posts, the archived and the
-  trashed ones included, with their categories, comments and boosts, and of
-  each chat its lines as messages with their boosts. `data.skippedTools`
-  counts what was left out, per kind and whether it was switched on;
-  `data.counts` is what the manifest says.
+- So far a bundle holds the structure, the boards, the message boards, the
+  chats and the check-ins: the people the projects refer to (members and
+  whoever a record names; `data.peopleLeftOut` counts the rest of the
+  account's list, which holds more for an admin than for anybody else, the
+  people written do not differ) with their
+  avatars, the projects with their members, the card tables, chats, message
+  boards and questionnaires that are switched on, of each card table the
+  columns, the cards with the archived and the trashed ones, their steps,
+  comments and boosts, of each message board its messages as posts, the
+  archived and the trashed ones included, with their categories, comments and
+  boosts, of each chat its lines as messages with their boosts, and of each
+  questionnaire its questions with their answers, comments and boosts.
+  `data.skippedTools` counts what was left out, per kind and whether it was
+  switched on; `data.counts` is what the manifest says.
 - A person comes with `retired: true` unless Basecamp calls them a user: a
   bot, somebody who was deleted and an outsider are authors and nothing more,
   whichever identity ran the import.
@@ -723,6 +724,19 @@ this:
   `data.uploadLinesLeftOut` counts the lines of which Basecamp names no
   file, which are left out and which a `notice` counts as well. Lines
   somebody deleted and the lines Basecamp writes itself are not in its API.
+- A question of a check-in carries the rhythm, the weekdays counted from Monday,
+  the time of day, the day the rhythm is counted from and whom it is asked of,
+  which are the subscribers of the question and not whoever answered it. Only a
+  member of the project who is still there and has an address can be asked;
+  `data.askedLeftOut` counts the rest by reason. A question whose schedule Minka
+  cannot express is left out with its answers, and `data.questionsLeftOut` names
+  it with the field that made it impossible; one whose schedule has run out comes
+  paused; one asked every other week is anchored on the day it was last answered,
+  which `data.anchorsInferred` names, and left out where nobody ever answered it.
+  Comments, boosts and files hang on an answer, never on a question.
+  `data.answersWithoutABody` and `data.answersTrashed` count the answers left
+  out, `data.answersWithoutADay` those Basecamp names no day for, which take the
+  day they were written in the zone of whoever wrote them.
 - The messages are written in parts, `messages-0001.jsonl` and on, each with
   lines of one chat; a part ends once it holds 10,000 lines, where the second
   changes, so it may hold somewhat more. `data.parts.messages` and the
