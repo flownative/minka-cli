@@ -3,6 +3,12 @@
 Descriptions, comments and messages are rich text. The CLI accepts Markdown and
 prints Markdown, so that a text it shows can be edited and sent back (C-008).
 
+The working notes on the back of a card are the one text that is none of this.
+Minka keeps them as they arrive and hands them back as they were kept, so the
+CLI converts nothing in either direction and prints the body alone on standard
+output — what it has to say about the notes goes the other way, so that what
+was shown can be sent back byte for byte (C-042).
+
 ## Markdown → HTML
 
 `internal/markdown` converts with goldmark and writes only elements and

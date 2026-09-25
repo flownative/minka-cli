@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -25,10 +26,17 @@ const apiCodeNotesChanged = "notesChanged"
 // expectNone is the value of --expect for notes nobody has written yet.
 const expectNone = "none"
 
-// notesTimeLayout is the one form updatedAt has in the API: UTC with
-// microseconds. --expect takes nothing else, so that a guard always names a
-// time the server can match exactly.
-const notesTimeLayout = "2006-01-02T15:04:05.000000Z"
+// notesTimeLayouts are the forms Minka reads a guard's time in: up to six
+// digits of a second, and Z or an offset written either way. It has to be the
+// stored time to the last digit, so the only thing worth giving is the
+// updatedAt as it was read; taking less than the server takes would refuse
+// here what it would have accepted.
+var notesTimeLayouts = []string{
+	"2006-01-02T15:04:05.999999Z07:00",
+	"2006-01-02T15:04:05.999999Z0700",
+}
+
+var notesTimePattern = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,6})?(Z|[+-]\d{2}:?\d{2})$`)
 
 func (a *app) newCardsNotesCmd() *cobra.Command {
 	return group("notes", "Read and write the working notes on the back of a card",
@@ -68,7 +76,13 @@ of the notes is what cards notes set --expect takes to write over them.`,
 				data:        notes.Raw,
 				summary:     summary,
 				breadcrumbs: notesBreadcrumbs(notes.Value),
-				text:        func(w io.Writer) { renderNotes(w, notes.Value) },
+				// The notes themselves are the answer here, and a person who
+				// pipes them into a file wants the text and not a word about
+				// it: what the command has to say goes the other way.
+				text: func(w io.Writer) {
+					renderNotes(w, notes.Value)
+					notesFooter(a.stderr, notes.Value)
+				},
 			})
 		},
 	}
@@ -88,7 +102,7 @@ text to read it from stdin. Writing notifies nobody.
 Somebody else may have changed the notes since you read them. Give the
 updatedAt you read with --expect, or --expect none for notes nobody had
 written yet: notes changed since are then left as they stand, the command
-prints them and exits with 7 (meta.apiCode notesChanged). Merge your text into
+prints them and exits with 9 (meta.apiCode notesChanged). Merge your text into
 them and send it again with their updatedAt. --force writes over whatever
 stands, and one of the two flags is required.`,
 		Example: `  minka cards notes set MNK-3T - --expect 2026-09-24T11:53:14.123456Z < notes.md
@@ -104,8 +118,14 @@ stands, and one of the two flags is required.`,
 			if err != nil {
 				return err
 			}
+			// The same refusal the server would give, so that one refusal has
+			// one exit code wherever it is decided.
 			if n := utf8.RuneCountInString(strings.ReplaceAll(text, "\r\n", "\n")); n > maxNotesLength {
-				return &Error{Code: CodeUsage, Message: fmt.Sprintf("the notes have %d characters, Minka keeps at most %d", n, maxNotesLength)}
+				return &Error{
+					Code:    CodeValidation,
+					APICode: "cardNotesTooLong",
+					Message: fmt.Sprintf("the notes have %d characters, Minka keeps at most %d", n, maxNotesLength),
+				}
 			}
 
 			s, err := a.session()
@@ -157,7 +177,7 @@ func notesGuard(cmd *cobra.Command, expect string, force bool) (*api.NotesGuard,
 	case expect == expectNone:
 		return &api.NotesGuard{}, nil
 	}
-	if _, err := time.Parse(notesTimeLayout, expect); err != nil {
+	if !isATimeMinkaReads(expect) {
 		return nil, &Error{
 			Code:    CodeUsage,
 			Message: fmt.Sprintf("--expect takes the updatedAt of the notes as Minka gives it, such as 2026-09-24T11:53:14.123456Z, or none; %q is not", expect),
@@ -165,6 +185,23 @@ func notesGuard(cmd *cobra.Command, expect string, force bool) (*api.NotesGuard,
 		}
 	}
 	return &api.NotesGuard{UpdatedAt: &expect}, nil
+}
+
+// isATimeMinkaReads says whether the server would read the value as a point in
+// time at all. Whether it is the right one is the server's to say.
+//
+// The shape is looked at first, because Go reads a fraction of any length
+// whatever the layout says, and Minka reads six digits and no more.
+func isATimeMinkaReads(value string) bool {
+	if !notesTimePattern.MatchString(value) {
+		return false
+	}
+	for _, layout := range notesTimeLayouts {
+		if _, err := time.Parse(layout, value); err == nil {
+			return true
+		}
+	}
+	return false
 }
 
 // notesFailure adds to a refused write what an agent needs to merge: the notes
@@ -189,10 +226,12 @@ func notesFailure(e *Error, err error) *Error {
 		fmt.Fprintln(w, "The notes as they stand:")
 		fmt.Fprintln(w)
 		renderNotes(w, current)
+		notesFooter(w, current)
 	}
 	return e
 }
 
+// renderNotes prints the notes as they are stored and nothing else.
 func renderNotes(w io.Writer, notes api.CardNotes) {
 	if notes.UpdatedAt == nil {
 		fmt.Fprintln(w, "No working notes yet.")
@@ -200,9 +239,15 @@ func renderNotes(w io.Writer, notes api.CardNotes) {
 	}
 	if notes.Body != "" {
 		fmt.Fprintln(w, strings.TrimRight(notes.Body, "\n"))
-		fmt.Fprintln(w)
 	}
-	fmt.Fprintf(w, "Last changed by %s, %s. To write over it: --expect %s\n", changedBy(notes), formatTime(*notes.UpdatedAt), *notes.UpdatedAt)
+}
+
+// notesFooter says who wrote them last and what writes over them.
+func notesFooter(w io.Writer, notes api.CardNotes) {
+	if notes.UpdatedAt == nil {
+		return
+	}
+	fmt.Fprintf(w, "\nLast changed by %s, %s. To write over it: --expect %s\n", changedBy(notes), formatTime(*notes.UpdatedAt), *notes.UpdatedAt)
 }
 
 // lastChange names who wrote the notes last and when, in local time.

@@ -321,14 +321,21 @@ such as `Doing`.
   clears them. It needs `--expect` or `--force`:
   - `--expect <updatedAt>` with the `updatedAt` you read, `--expect none` for
     notes nobody had written yet. Notes somebody changed since are left as
-    they stand: exit 7, `meta.apiCode` `notesChanged`, and `data` holds the
+    they stand: exit 9, `meta.apiCode` `notesChanged`, and `data` holds the
     notes as they stand now. Merge your text into their `body` and send it
     again with their `updatedAt`. Sending the text that stands already is no
     conflict.
   - `--force` writes over whatever stands. Use it only for notes that are
     yours alone.
-- At most 100000 characters (exit 1 before sending); control characters other
-  than line breaks and tabs exit 9 with `cardNotesHasControlCharacters`.
+- At most 100000 characters, counted as Minka stores them; a longer text exits
+  9 with `cardNotesTooLong` before it is sent. Control characters other than
+  line breaks and tabs exit 9 with `cardNotesHasControlCharacters`.
+- `--expect` takes the time in any form Minka reads it: up to six digits of a
+  second, under `Z` or an offset. It has to be the stored time exactly, so
+  send back the `updatedAt` you read and nothing built by hand.
+- In text output `notes show` prints the body alone; who changed it last and
+  the `--expect` to write over it go to standard error, so that the notes can
+  be piped into a file and sent back unchanged.
 - A card in its board's archive can be read, not written: exit 9 with
   `cardArchived`.
 

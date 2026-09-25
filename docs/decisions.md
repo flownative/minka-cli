@@ -544,4 +544,5 @@ same card. A guard only protects what the writer read before it began to
 write; one read by the command a moment before its write would guard nothing
 and only look safe. Naming `--force` makes writing over another's edit a
 choice, not an accident.
-**Implemented as:** `cli.notesGuard`, see the skill, section "Working notes".
+**Implemented as:** `cli.notesGuard`, see
+[Rich text in both directions](stable/rich-text.md).
