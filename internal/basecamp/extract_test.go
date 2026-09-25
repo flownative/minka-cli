@@ -13,11 +13,17 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/flownative/minka-cli/internal/basecamp"
 	"github.com/flownative/minka-cli/internal/bundle"
 	"github.com/flownative/minka-cli/internal/fakebasecamp"
 )
+
+// runDay is the moment every extraction of a test is made at: a schedule that
+// has run out or ends today is held against it, so no test depends on the day it
+// is run on.
+var runDay = time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
 
 // extract runs an extraction into a bundle in a temporary directory and
 // returns where it stands.
@@ -36,7 +42,8 @@ func extractInParts(t *testing.T, account *fakebasecamp.Account, perPart int, pr
 	}
 	defer writer.Abort()
 
-	extractor := basecamp.Extractor{Source: account, Avatars: account, Files: account, MessagesPerPart: perPart}
+	extractor := basecamp.Extractor{Source: account, Avatars: account, Files: account, MessagesPerPart: perPart,
+		Now: func() time.Time { return runDay }}
 	result, err := extractor.Extract(t.Context(), projects, writer)
 	if err != nil {
 		t.Fatal(err)
