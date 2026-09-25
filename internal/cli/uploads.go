@@ -20,6 +20,11 @@ import (
 // better refused before it travels.
 const maxUploadBytes = 100 << 20
 
+// maxUploadSize is how that limit is said. Every size this command prints is
+// counted in thousands, which turns a round limit into 104.9 MB and leaves the
+// reader to work out what would fit.
+const maxUploadSize = "100 MiB"
+
 func (a *app) newUploadsCmd() *cobra.Command {
 	return group("uploads", "Put files into a project or a conversation and hang them in texts",
 		a.newUploadsCreateCmd(),
@@ -346,7 +351,7 @@ the bytes itself and refuses a file that contradicts what the type says.`,
 			case info.Size() > maxUploadBytes:
 				return &Error{
 					Code:    CodeUsage,
-					Message: fmt.Sprintf("%s is %s, and Minka takes at most %s", path, fileSize(info.Size()), fileSize(maxUploadBytes)),
+					Message: fmt.Sprintf("%s is %s, and Minka takes at most %s", path, fileSize(info.Size()), maxUploadSize),
 				}
 			}
 
@@ -382,7 +387,7 @@ the bytes itself and refuses a file that contradicts what the type says.`,
 				case "notReadable":
 					e.Hint = "The picture is broken or in a format Minka cannot read."
 				case "tooLarge":
-					e.Hint = "Minka takes at most " + fileSize(maxUploadBytes) + " for one file."
+					e.Hint = "Minka takes at most " + maxUploadSize + " for one file."
 				}
 				return e
 			}

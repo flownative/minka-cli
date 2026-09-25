@@ -1432,7 +1432,7 @@ func TestAnUploadIsRefusedWhenTheFileOrItsTypeIsWrong(t *testing.T) {
 		t.Errorf("a directory: %q", env.Error)
 	}
 	// One byte over what Minka takes, and the bytes are never written: the
-	// guard asks the directory entry for the size and opens nothing.
+	// guard goes by the size the file says it has and reads none of it.
 	tooBig := filepath.Join(dir, "video.mp4")
 	if err := os.WriteFile(tooBig, nil, 0o600); err != nil {
 		t.Fatal(err)
@@ -1457,6 +1457,19 @@ func TestAnUploadIsRefusedWhenTheFileOrItsTypeIsWrong(t *testing.T) {
 	expectCode(t, r, ExitValidation)
 	if env.Retryable {
 		t.Errorf("envelope %+v", env)
+	}
+}
+
+// What Minka takes for one file stands in three places: here, in the fake and
+// in Minka's own uploads.maxBytes. A number that drifts apart here refuses
+// files the server would have kept, which is what happened once already.
+func TestTheSizeOfAFileIsTheOneMinkaTakes(t *testing.T) {
+	const minkaTakes = 104857600
+	if maxUploadBytes != minkaTakes {
+		t.Errorf("the CLI takes %d bytes, Minka takes %d", maxUploadBytes, minkaTakes)
+	}
+	if fakeapi.MaxUploadBytes != minkaTakes {
+		t.Errorf("the fake takes %d bytes, Minka takes %d", fakeapi.MaxUploadBytes, minkaTakes)
 	}
 }
 

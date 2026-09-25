@@ -46,8 +46,8 @@ An agent says which cards it has in hand: `work start` and `work stop` keep
 one list per machine, `heartbeat` reports it to `PUT /me/work`, and `hooks
 install` writes the hook of Claude Code that calls it after every tool call.
 The list, the refusals, the throttle and the hook are seen live, and the
-report with them: on the production instance, where this CLI is signed in as
-an agent, `work start`, `heartbeat` and `work stop` get through, and the hook
+report with them: on `minka.flownative.com`, where this CLI is signed in as an
+agent, `work start`, `heartbeat` and `work stop` get through, and the hook
 reports out of a session of its own. What nobody has seen yet is a tile alive
 on the board, see below.
 
@@ -180,13 +180,13 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   not mirrored: that an archived card is named before a column without the
   area on hold is read in the Minka code alone.
 - Of saying what one is working on, what is left: a tile that lights up and one
-  that goes quiet. The signal itself got through on the production instance,
+  that goes quiet. The signal itself got through on `minka.flownative.com`,
   which knows this CLI as an agent, and the hook has reported out of a real
   session; on the local instance the only account that may write is a person,
-  whom the address turns away with 403 `agentsOnly`. Looked at, the board
-  showed two cards in "In Arbeit" standing still that were being worked on —
-  the cards had fallen out of the list of the machine eight hours after they
-  were started, which is what the CLI does and what nobody wants, see the next
+  whom the address turns away with 403 `agentsOnly`. On the board two cards
+  stood in "In Arbeit" that were being worked on and showed nothing, because
+  they had fallen out of the list of the machine eight hours after they were
+  started, which is what the CLI does and what nobody wants, see the next
   steps. The order
   of the refusals is tested against the fake and read in Minka's code, its
   tests and E-184. What the fake does not mirror: it never forgets a signal
@@ -212,10 +212,12 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
 - "agent for X" in `people list` has been seen live, an agent that stepped
   down has not — it is in no list any more.
 - What Minka takes for one file is 100 MiB. The CLI refuses a byte over that
-  itself, which is tested, and the 413 of the server is played by a stand-in
-  answer. No file of that order has ever been sent live, neither before the
-  limit was raised nor after; the number is read in Minka's `uploads.maxBytes`
-  and in the controller that takes an upload of the API.
+  itself, which is tested; what a server answers above the limit is played by a
+  stand-in that gives the bare status, so neither the `tooLarge` of the fake nor
+  the hint the CLI has for it is reached by any test. No file of that order has
+  ever been sent live either, neither before the limit was raised nor after;
+  the number is read in Minka's `uploads.maxBytes` and in the controller that
+  takes an upload of the API.
 - Of `uploads download`, what is left: a file of a project one is not in, for
   which the local instance offers no second account; the entity tag with the
   304 and the 416 that go with it; the ranges an audio file is played in; and
@@ -261,6 +263,13 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   test goes red whenever the test binary runs as a background job — in a
   session of an agent, say. In the foreground it is green, under load as
   well, and so it is in CI.
+
+## Open elsewhere
+
+- The live check knows two instances by name, the test instance and the local
+  one. `minka.flownative.com`, where the signal of an agent was seen, is in
+  neither row, so the guide does not say what may be written there. Whose
+  decision that is is Robert's and Shaun's, not the coordinator's.
 
 ## Open in the API
 
