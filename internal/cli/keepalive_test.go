@@ -245,6 +245,31 @@ func TestABeatWithACardInHandStartsTheKeepalive(t *testing.T) {
 	}
 }
 
+// A beat says which of the two it met: a store somebody holds for the moment is
+// one to ask again about, a store that cannot be read is not. Whoever reads a
+// dark tile has only this word to go on, and the two call for different things.
+func TestABeatOverAStoreThatCannotBeReadSaysSo(t *testing.T) {
+	e := newAgentEnv(t)
+	began := time.Date(2026, 9, 23, 10, 0, 0, 0, time.UTC)
+	expectCode(t, e.runAt(began, "work", "start", e.fixture.CardInDoing.ID, "--json"), ExitOK)
+	if err := os.WriteFile(e.storePath(), []byte("{ this is no store"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	env, r := e.runWithJSON(began.Add(time.Second), "heartbeat")
+	expectCode(t, r, ExitOK)
+	became, _ := decode(t, env.Data)["keepalive"].(string)
+	if !strings.Contains(became, "cannot be read") {
+		t.Errorf("the keepalive %q, want the store it cannot read", became)
+	}
+	if strings.Contains(became, "busy") {
+		t.Errorf("the keepalive %q, and a store nobody holds is called busy", became)
+	}
+	if started := e.keepalives.Load(); started != 0 {
+		t.Errorf("%d keepalives were started over a store that cannot be read", started)
+	}
+}
+
 // The keepalive is told which host it reports for. A beat that was given --host
 // reports somewhere other than the host this machine is signed in to by default,
 // and a child left to decide for itself would report the default one's cards
