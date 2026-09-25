@@ -302,13 +302,13 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   mode it does it in — is reached by a run that is told to stop, so only the
   waiting and what follows it stand outside. Of the endings, the empty list
   reported before the exit is the one no test reaches.
-- That a jump is measured on the wall clock cannot be held by a test at all, and
-  that is the language of Go, not a choice: a reading of the monotonic clock can
-  only be made to differ from the wall clock by a machine that really sleeps or
-  by a clock that is really set, and every way of moving a moment in a test
-  either shifts both readings together or strips the monotonic one. So dropping
-  the `Round(0)` in `tick.decide` leaves every test green, and the sleeping
-  machine of the live check is what says whether it is there.
+- What a tick decides under a machine that really slept is held by no test: a
+  reading of the monotonic clock differs from the wall clock only where a machine
+  was really away or a clock was really set, and in a test every way of moving a
+  moment either shifts both readings together or strips the monotonic one. So the
+  `Round(0)` in `tick.decide`, which is what makes the sleeping machine a jump,
+  can be dropped with every test staying green, and the sleeping machine of the
+  live check is what says whether it is there.
 - `TestARunThatIsStoppedIsInterruptedNotFailed` needs SIGINT to reach the
   stand-in, which sends it to itself. A shell sets SIGINT to ignored for a
   command it starts in the background, and a program inherits that, so the
