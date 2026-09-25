@@ -181,28 +181,53 @@ there is no token or the host does not accept it.`,
 	}
 }
 
+// hostToSignOutOf is the entry a sign-out takes away: the host it was told, else
+// the default host of the configuration, and either of them as the file writes
+// it.
+//
+// Taking a token away has to reach the entry that is there, so a value that
+// matches one letter for letter is that entry, before anything is read of it: a
+// host read the way a sign-in writes it would look past an entry written in
+// another form and leave its token where it stands, and one written in a form
+// nothing can read at all — refused everywhere else, because a session under it
+// would carry the value into everything that prints a host — would have no way
+// out of the file at all. Nothing goes anywhere from here, so strictness would
+// buy nothing and cost the only way to be rid of such an entry: no command lists
+// the hosts, and its token stays valid on the server. A canonical entry is
+// untouched by this, because a canonical value matches it letter for letter.
+func (a *app) hostToSignOutOf(file *config.File) (string, error) {
+	given := a.hostFlag
+	if given == "" {
+		given = a.getenv("MINKA_HOST")
+	}
+	if given == "" {
+		return file.DefaultHost, nil
+	}
+	if _, written := file.Hosts[given]; written {
+		return given, nil
+	}
+
+	return a.explicitHost()
+}
+
 func (a *app) newAuthLogoutCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "logout",
 		Short: "Remove the token of a host from the config file",
 		Long: `Removes the token of the host from the config file. The token itself stays
-valid until it is revoked on the server.`,
+valid until it is revoked on the server.
+
+Without --host it is the host signed in to last. The entry is reached as the
+file writes it, so an address written in by hand can be taken out again.`,
 		Args: requireArgs(),
 		RunE: func(*cobra.Command, []string) error {
-			host, err := a.explicitHost()
-			if err != nil {
-				return err
-			}
 			path, file, err := a.loadConfig()
 			if err != nil {
 				return err
 			}
-			// The default host as the file writes it, not as a sign-in would:
-			// taking a token away has to reach the entry that is there, and one
-			// written by hand in another form would be left standing with its
-			// token by a host that was read straight.
-			if host == "" {
-				host = file.DefaultHost
+			host, err := a.hostToSignOutOf(file)
+			if err != nil {
+				return err
 			}
 			if host == "" {
 				return a.ok(success{
@@ -226,7 +251,7 @@ valid until it is revoked on the server.`,
 			if removed {
 				summary = "Signed out of " + shown
 			}
-			return a.ok(success{
+			answer := success{
 				data:    map[string]any{"host": shown, "removed": removed},
 				summary: summary,
 				text: func(w io.Writer) {
@@ -236,7 +261,18 @@ valid until it is revoked on the server.`,
 					}
 					fmt.Fprintf(w, "%s. The token stays valid on the server until it is revoked.\n", summary)
 				},
-			})
+			}
+			// Saying that there is nothing here would be the whole answer only if
+			// no token stood under the same host written another way. It does, and
+			// nothing looks for it there, so the answer says where it is.
+			if !removed {
+				if written := hostWrittenAnotherWay(file, host); written != "" {
+					elsewhere := config.HostForOutput(written)
+					answer.notices = append(answer.notices, "the configuration keeps a token under "+elsewhere+
+						", the same host written another way; take that entry out with: minka auth logout --host "+elsewhere)
+				}
+			}
+			return a.ok(answer)
 		},
 	}
 }

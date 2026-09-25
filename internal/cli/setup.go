@@ -57,7 +57,7 @@ func (a *app) runSetup(cmd *cobra.Command) error {
 	// Setup says itself what it does about the skill.
 	a.skillIsTheTopic = true
 
-	host, err := a.setupHost(input, file.DefaultHost)
+	host, err := a.setupHost(input, hostToOfferAgain(file))
 	if err != nil {
 		return err
 	}
@@ -87,6 +87,19 @@ func (a *app) runSetup(cmd *cobra.Command) error {
 			fmt.Fprintf(w, "\nAll set. Try:\n  minka projects list\n  minka cards mine\n  minka doctor\n")
 		},
 	})
+}
+
+// hostToOfferAgain is the host of the configuration where it can be read, and
+// nothing where it cannot. An entry setup is there to repair is no answer to
+// offer: taking it would only be refused, and putting it in the question would
+// print a value that may hold anything.
+func hostToOfferAgain(file *config.File) string {
+	host, err := config.NormalizeHost(file.DefaultHost)
+	if err != nil {
+		return ""
+	}
+
+	return host
 }
 
 // setupHost is --host or $MINKA_HOST when given, else what the person types;
