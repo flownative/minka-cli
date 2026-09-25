@@ -370,9 +370,10 @@ working column can have and which "minka columns on-hold" switches on. There
 the placement is one among the cards on hold. A card on hold that is moved
 without --on-hold comes off hold, also within its own column.
 
-A card this machine says it is working on leaves that list here, whatever the
-column it goes to, and the board is told at once. An agent that takes a card
-up moves it first and says 'minka work start' afterwards.
+A card this machine says it is working on leaves that list here as soon as it
+lands in another column or goes on hold, and the board is told at once; a card
+that only changes place within its column stays in the list. An agent that
+takes a card up moves it first and says 'minka work start' afterwards.
 
 ` + columnHelp,
 		Example: `  minka cards move 0199... --column Doing --bottom
@@ -483,9 +484,14 @@ up moves it first and says 'minka work start' afterwards.
 			if moved.Value.OnHold {
 				where += ", on hold"
 			}
+			// A card that stays where it was, in the order of its column, is one
+			// nobody has let go of; one that is put aside has been let go of
+			// even where the column is the same.
 			var notices []string
-			if a.theCardIsOutOfHand(s.host, moved.Value.ID) {
-				notices = append(notices, noLongerInHand)
+			if moved.Value.Column.ID != card.Value.Column.ID || moved.Value.OnHold {
+				if letGo, told := a.letGoOfTheCard(s.host, moved.Value.ID); letGo {
+					notices = append(notices, noLongerInHand(told))
+				}
 			}
 			return a.ok(success{
 				data:        moved.Raw,
@@ -536,8 +542,8 @@ is told at once.`,
 
 			if card.Value.Column.Type == api.ColumnDone {
 				var notices []string
-				if a.theCardIsOutOfHand(s.host, card.Value.ID) {
-					notices = append(notices, noLongerInHand)
+				if letGo, told := a.letGoOfTheCard(s.host, card.Value.ID); letGo {
+					notices = append(notices, noLongerInHand(told))
 				}
 				return a.ok(success{
 					data:        card.Raw,
@@ -570,8 +576,8 @@ is told at once.`,
 			}
 
 			var notices []string
-			if a.theCardIsOutOfHand(s.host, moved.Value.ID) {
-				notices = append(notices, noLongerInHand)
+			if letGo, told := a.letGoOfTheCard(s.host, moved.Value.ID); letGo {
+				notices = append(notices, noLongerInHand(told))
 			}
 			return a.ok(success{
 				data:        moved.Raw,

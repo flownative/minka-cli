@@ -519,14 +519,13 @@ the card is still the one.
 
 *Applies to: `cards move`, `cards done`*
 
-Both take the card out of the list of the machine and report at once, whatever
-column it goes to. Where the card was not in the list, nothing is written and
-no signal goes out.
+A card that lands in another column, goes on hold or is completed leaves the
+list of the machine, and the list is reported at once; one that only changes
+place within its column stays. Where the card was not in the list, nothing is
+written and no signal goes out.
 
 **Why:** Whoever moves a card on has let go of it, and a tile that keeps
-glowing says the opposite. The server cannot do it instead: a signal carries
-the whole set and the last one holds, so a card it dropped on a move would be
-back within the minute. What it costs is the order in which a card is taken
-up — move it first, then `work start`.
-**Implemented as:** `cli.app.theCardIsOutOfHand`, see
+glowing says the opposite; the server cannot do it instead, because a signal
+carries the whole set and the last one holds.
+**Implemented as:** `cli.app.letGoOfTheCard`, see
 [Saying what you are working on](stable/at-work.md).
