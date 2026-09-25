@@ -198,7 +198,10 @@ func NormalizeHost(raw string) (string, error) {
 		return "", fmt.Errorf("%q is not a valid host URL", shown)
 	}
 	if !readsAsAHost(u) {
-		return "", fmt.Errorf("%q names no machine; a host is a DNS name or an IP address, with a port at most", shown)
+		if namesNothing(shown) {
+			return "", errors.New("the address given names no machine; give the address of the Minka instance, such as https://minka.example.com")
+		}
+		return "", fmt.Errorf("%q names no machine; a host is the name or the address of one, with a port at most", shown)
 	}
 	path := strings.TrimSuffix(strings.TrimRight(u.Path, "/"), "/api/v1")
 	if path != "" {
@@ -256,10 +259,10 @@ func readsAsAHost(u *url.URL) bool {
 	}
 	// In brackets stands an IP address, which the parser has read as one
 	// already. Behind a percent stands the interface a link-local address is
-	// reached over.
+	// reached over, and an empty one the parser refuses by itself.
 	if strings.HasPrefix(u.Host, "[") {
-		address, zone, zoned := strings.Cut(hostname, "%")
-		return net.ParseIP(address) != nil && (!zoned || zone != "")
+		address, _, _ := strings.Cut(hostname, "%")
+		return net.ParseIP(address) != nil
 	}
 	for _, r := range hostname {
 		if !partOfAHostName(r) {
@@ -268,6 +271,16 @@ func readsAsAHost(u *url.URL) bool {
 	}
 
 	return true
+}
+
+// namesNothing says whether what may be printed of a value is a scheme and
+// nothing more, which happens where the very first character of the host is one
+// no name is made of. Quoting that would name no host at all, so the refusal
+// says that the address given is at fault instead.
+func namesNothing(shown string) bool {
+	_, host, found := strings.Cut(shown, "://")
+
+	return !found || host == ""
 }
 
 // hostAsFarAsItReads is the authority up to the first character no name and no

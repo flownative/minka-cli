@@ -578,9 +578,11 @@ is refused where it is read, so that no session comes about under it. Signing ou
 is the one command that takes an entry as the file writes it, so that one written
 by hand can be taken out again.
 
-**Why:** Such a value would become a key of the configuration, a key of the list
-of cards and part of the name of a lock, and a session under it would carry it
-into everything that prints a host and into the argv of the keepalive.
-**Implemented as:** `config.NormalizeHost`, `cli.defaultHostOf`,
-`cli.app.hostToSignOutOf`, see
+**Why:** Such a value would become a key of the configuration, a key of the
+list of cards and part of the name of a lock, and a session under it would
+carry it into everything that prints a host and into the argv of the keepalive.
+A key such a value already made in the list of cards is left where it lies:
+nothing walks the hosts of that list, so it is inert, and the file is written
+with the mode of the configuration beside it. **Implemented as:**
+`config.NormalizeHost`, `cli.defaultHostOf`, `cli.app.hostToSignOutOf`, see
 [Token, hosts and requests](stable/security.md).
