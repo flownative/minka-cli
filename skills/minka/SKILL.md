@@ -557,6 +557,12 @@ this:
   until it runs out. It asks nothing of the network and the card may be named
   by its short identifier, but it needs a host like every other command, so
   without a sign-in it exits 3.
+- `minka cards move` and `minka cards done` take the card out of the list by
+  themselves and tell the board at once, where the card lands in another
+  column, is put on hold or reaches Done; a card that only changes place where
+  it already is stays in the list. The `notice` says where it happened, and
+  whether the board has heard of it yet. So take a card up in that order: move
+  it into the working column first, then `minka work start`.
 - `minka work stop` without a card stops the one card that is remembered. With
   several it exits 1 and changes nothing, because the list is shared with every
   other session on this machine: name the card, or take them all with `--all`.

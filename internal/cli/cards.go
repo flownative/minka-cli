@@ -370,6 +370,12 @@ working column can have and which "minka columns on-hold" switches on. There
 the placement is one among the cards on hold. A card on hold that is moved
 without --on-hold comes off hold, also within its own column.
 
+A card this machine says it is working on leaves that list here as soon as it
+lands in another column, is put on hold or reaches Done; a card that only
+changes place where it already is stays in the list. The board is told at
+once, or with the next signal where that does not get through. An agent that
+takes a card up moves it first and says 'minka work start' afterwards.
+
 ` + columnHelp,
 		Example: `  minka cards move 0199... --column Doing --bottom
   minka cards move 0199... --column Doing --after 0199...
@@ -479,9 +485,23 @@ without --on-hold comes off hold, also within its own column.
 			if moved.Value.OnHold {
 				where += ", on hold"
 			}
+			// A card that stays where it was, in the order of its column, is one
+			// nobody has let go of. Putting one aside is letting go of it even
+			// within the column, and so is finishing it — which a move into
+			// Done is, whether or not the card was there before.
+			letGo := moved.Value.Column.ID != card.Value.Column.ID ||
+				(moved.Value.OnHold && !card.Value.OnHold) ||
+				moved.Value.Column.Type == api.ColumnDone
+			var notices []string
+			if letGo {
+				if letGo, told := a.letGoOfTheCard(s.host, moved.Value.ID); letGo {
+					notices = append(notices, noLongerInHand(told))
+				}
+			}
 			return a.ok(success{
 				data:        moved.Raw,
 				summary:     fmt.Sprintf("Moved card %s to %s", moved.Value.Title, where),
+				notices:     notices,
 				breadcrumbs: cardBreadcrumbs(moved.Value.ID),
 				text: func(w io.Writer) {
 					fmt.Fprintf(w, "Moved card %s to %s: %s\n%s\n", moved.Value.ID, where, moved.Value.Title, moved.Value.AppURL)
@@ -507,7 +527,10 @@ func (a *app) newCardsDoneCmd() *cobra.Command {
 		Use:   "done <cardId>",
 		Short: "Complete a card by moving it to Done",
 		Long: `Moves a card into the Done column of its board, which completes it. A card that
-is already done stays as it is. To reopen a card, move it out of Done.`,
+is already done stays as it is. To reopen a card, move it out of Done.
+
+A card this machine says it is working on leaves that list here, and the board
+is told at once, or with the next signal where that does not get through.`,
 		Args: requireArgs("cardId"),
 		RunE: func(_ *cobra.Command, args []string) error {
 			s, err := a.session()
@@ -523,9 +546,14 @@ is already done stays as it is. To reopen a card, move it out of Done.`,
 			}
 
 			if card.Value.Column.Type == api.ColumnDone {
+				var notices []string
+				if letGo, told := a.letGoOfTheCard(s.host, card.Value.ID); letGo {
+					notices = append(notices, noLongerInHand(told))
+				}
 				return a.ok(success{
 					data:        card.Raw,
 					summary:     fmt.Sprintf("Card %s is already done", card.Value.Title),
+					notices:     notices,
 					breadcrumbs: cardBreadcrumbs(card.Value.ID),
 					text: func(w io.Writer) {
 						fmt.Fprintf(w, "Card %s is already done: %s\n%s\n", card.Value.ID, card.Value.Title, card.Value.AppURL)
@@ -552,9 +580,14 @@ is already done stays as it is. To reopen a card, move it out of Done.`,
 				return s.fail(err)
 			}
 
+			var notices []string
+			if letGo, told := a.letGoOfTheCard(s.host, moved.Value.ID); letGo {
+				notices = append(notices, noLongerInHand(told))
+			}
 			return a.ok(success{
 				data:        moved.Raw,
 				summary:     fmt.Sprintf("Completed card %s", moved.Value.Title),
+				notices:     notices,
 				breadcrumbs: cardBreadcrumbs(moved.Value.ID),
 				text: func(w io.Writer) {
 					fmt.Fprintf(w, "Completed card %s: %s\n%s\n", moved.Value.ID, moved.Value.Title, moved.Value.AppURL)
