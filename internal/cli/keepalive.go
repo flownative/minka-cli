@@ -55,6 +55,8 @@ type tick struct {
 	now    time.Time
 	before time.Time
 
+	// read says whether the store answered, beat when somebody at work was last
+	// there, cards how many are in hand.
 	read  bool
 	beat  time.Time
 	cards int
@@ -103,10 +105,7 @@ func whyItEnded(at verdict) string {
 // tick says it is over, and then says why. It keeps the manner of the beat it
 // was started from, silent unless somebody asked.
 func (a *app) reportWhileNobodyElseDoes() error {
-	ended, err := a.keepTilesAlive()
-	if err != nil {
-		return err
-	}
+	ended := a.keepTilesAlive()
 	if a.nobodyIsListening() {
 		return nil
 	}
@@ -125,22 +124,25 @@ func (a *app) reportWhileNobodyElseDoes() error {
 // build, an extraction of an hour, the time an answer from the person takes —
 // and the server forgets a card three minutes after the last signal, so the tile
 // would go dark while the work goes on. This is what reports in between.
-func (a *app) keepTilesAlive() (string, error) {
+//
+// Nothing it meets is a failure, the way nothing a beat meets is one: it says
+// why it stopped and leaves it at that.
+func (a *app) keepTilesAlive() string {
 	host, err := a.hostOfTheStore()
 	if err != nil {
-		return "", err
+		return "it has no host to report to: " + err.Error()
 	}
 	path, err := a.storePath()
 	if err != nil {
-		return "", err
+		return "it has no store to read: " + err.Error()
 	}
 
 	held, err := work.HoldKeepalive(path, host)
 	if err != nil {
 		if errors.Is(err, work.ErrBusy) {
-			return "another keepalive of " + host + " is reporting", nil
+			return "another keepalive of " + host + " is reporting"
 		}
-		return "", &Error{Code: CodeConfig, Message: err.Error()}
+		return "the lock beside the store cannot be taken: " + err.Error()
 	}
 	defer held.Release()
 
@@ -150,27 +152,27 @@ func (a *app) keepTilesAlive() (string, error) {
 	for {
 		select {
 		case <-a.ctx.Done():
-			return "it was told to stop", nil
+			return "it was told to stop"
 		case <-ticker.C:
 		}
 
 		now := a.now()
-		one := tick{now: now, before: before}
-		one.beat, one.cards, one.read = a.whatTheStoreSays(path, host)
+		beat, cards, read := a.whatTheStoreSays(path, host)
+		at := tick{now: now, before: before, read: read, beat: beat, cards: cards}.decide()
 		before = now
 
-		switch at := one.decide(); at {
+		switch at {
 		case tickPassesOver:
 		case tickReports:
 			a.signal(waitForTheStore)
+		case tickEndsOnAnEmptyList:
+			// The empty set goes out before the keepalive does, so that the tiles
+			// go out at once instead of after the three minutes the last signal
+			// counts for.
+			a.signal(waitForTheStore)
+			return whyItEnded(at)
 		default:
-			if at == tickEndsOnAnEmptyList {
-				// The empty set goes out before the keepalive does, so that the
-				// tiles go out at once instead of after the three minutes the
-				// last signal counts for.
-				a.signal(waitForTheStore)
-			}
-			return whyItEnded(at), nil
+			return whyItEnded(at)
 		}
 	}
 }
