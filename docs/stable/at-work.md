@@ -99,16 +99,21 @@ not have.
 
 ## One process reports while nobody else can
 
-One tool call that lasts — a test run, a build, an extraction of an hour, the
-time a session waits for an answer from the person — makes no signal at all,
-and the server forgets a card three minutes after the last one. The tile would
-go dark while the work goes on. So a beat that is not itself the keepalive and
-finds a card in hand starts `minka heartbeat --keepalive` (C-043): a process of
-its own that reports the list until nobody is at work on it any more.
+One tool call that lasts makes no signal at all, and the server forgets a card
+three minutes after the last one: the tile would go dark while the work goes on.
+So a beat that is not itself the keepalive and finds a card in hand starts
+`minka heartbeat --keepalive` (C-043): a process of its own that reports the
+list until nobody is at work on it any more.
 
-A subagent is no such case, measured and not assumed: its tool calls fire the
-hook, and under the name of the session that spawned it, so a session working
-through subagents reports by itself.
+What that is worth is twenty-five minutes from the last beat of the session.
+While the one call runs nothing is at the store, so the mark of a beat stands
+still with it and the keepalive stops that long after it. A test run or a build
+of a quarter of an hour keeps its tiles, and so does a question that waits that
+long for an answer; a call of an hour outlives them.
+
+A subagent is no such case: its tool calls fire the hook, and under the name of
+the session that spawned it, so a session working through subagents reports by
+itself.
 
 - **One per host.** The lock is an advisory lock of the kernel beside the
   store, named after the host it serves, and it is held for as long as the

@@ -56,9 +56,10 @@ one list per machine, `heartbeat` reports it to `PUT /me/work`, and `hooks
 install` writes the hook of Claude Code that calls it after every tool call.
 A beat that finds a card in hand and no keepalive of its host starts one
 (C-043), so a tool call that runs for longer than the three minutes a signal
-counts for keeps its tiles alight; that process is at no work itself and stops
-on an empty list, on twenty-five minutes in which nothing else was at the
-store, or on a clock that jumped.
+counts for keeps its tiles alight — up to twenty-five minutes after the last
+beat of the session, and no further. That process is at no work itself and stops
+on an empty list, on twenty-five minutes in which nothing else was at the store,
+or on a clock that jumped.
 The list, the refusals, the throttle and the hook are seen live, and the
 report with them: on `minka.flownative.com`, where this CLI is signed in as an
 agent, `work start`, `heartbeat` and `work stop` get through, and the hook
@@ -231,9 +232,14 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   that works through subagents keeps the sign of life of its cards.
   Of the keepalive, nothing at all is seen live yet, and against the fake not
   everything either: what a tick decides is tested as a plain function with a
-  moment handed to it, and the lock, the mark of a beat, the mode that is at no
-  work and what a beat says became of the keepalive are tested with no process
-  forked. What no test reaches stands under the limits below.
+  moment handed to it, and the lock, the mark of a beat, the sweep of a tick, the
+  mode that is at no work, the host the child is told, the store that cannot be
+  read and what a beat says became of the keepalive are tested with no process
+  forked. Seen by hand outside the tests, on a store of its own and against a
+  host that answers nothing: the output of a beat read through a pipe returns at
+  once although the child is running, that child has `ppid 1`, a session of its
+  own and all three streams at the null device, it reported once a minute, and it
+  left neither mark behind. What no test reaches stands under the limits below.
   `hooks install` and `hooks status` are seen on real files: a fresh one, one
   carrying other hooks, one carrying ours, a `hooks` that stands there as
   `null`, and the shapes that are refused unrepaired with the entry to add by
@@ -288,13 +294,21 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   precondition, the named exception to [C-035](../decisions.md#c-035).
 - Of the keepalive, three things are left untested on purpose, and the split is
   the point of [C-035](../decisions.md#c-035) rather than a new exception to it:
-  the detachment itself, the loop, and a machine that really sleeps. The
-  spawning is reached through an injection point on `app` that a stand-in fills,
-  so no test forks a detached process; the loop is reached only where it decides
-  something before its first tick, which is the lock; and the clock that jumped
-  is a moment handed to a plain function, not a machine put to sleep. With the
-  loop goes the one line that puts a run into the mode of the keepalive, which
-  is otherwise set by hand. All of it belongs to the live check.
+  the detachment itself, the waiting of the loop, and a machine that really
+  sleeps. The spawning is reached through an injection point on `app` that a
+  stand-in fills, so no test forks a detached process; the decision of a tick is
+  a moment handed to a plain function, not a machine put to sleep; and what the
+  loop does on its first turn — take the lock, read the store, report, and the
+  mode it does it in — is reached by a run that is told to stop, so only the
+  waiting and what follows it stand outside. Of the endings, the empty list
+  reported before the exit is the one no test reaches.
+- That a jump is measured on the wall clock cannot be held by a test at all, and
+  that is the language of Go, not a choice: a reading of the monotonic clock can
+  only be made to differ from the wall clock by a machine that really sleeps or
+  by a clock that is really set, and every way of moving a moment in a test
+  either shifts both readings together or strips the monotonic one. So dropping
+  the `Round(0)` in `tick.decide` leaves every test green, and the sleeping
+  machine of the live check is what says whether it is there.
 - `TestARunThatIsStoppedIsInterruptedNotFailed` needs SIGINT to reach the
   stand-in, which sends it to itself. A shell sets SIGINT to ignored for a
   command it starts in the background, and a program inherits that, so the

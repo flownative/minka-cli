@@ -39,10 +39,15 @@ Checking the keepalive live means watching a tile through a tool call that runs
 for longer than the three minutes a signal counts for: `work start`, one beat,
 then something that takes five minutes, and the tile alight all through it.
 Afterwards `minka heartbeat --json` says in `keepalive` that one is reporting,
-`work stop` empties the list and the tile goes out at once, and no keepalive is
-left behind — the lock beside the store is free again. What no run can show in
-an afternoon is a machine that really sleeps; that one is seen by closing the
-lid with a card in hand and looking at the board an hour later.
+and `work stop` empties the list, whereupon the tile goes out at once.
+
+That nothing is left behind is seen on the process, not on the file: the lock
+beside the configuration stays where it is and says nothing about who holds it.
+So `pgrep -fl 'minka heartbeat --keepalive'` finds nothing a minute after the
+list was emptied, and `ps -o pid,ppid,sess,tty` on one that is running shows
+`ppid 1`, a session of its own and no terminal. What no run can show in an
+afternoon is a machine that really sleeps; that one is seen by closing the lid
+with a card in hand and looking at the board an hour later.
 
 ## Images
 
