@@ -2,6 +2,7 @@ package work
 
 import (
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -12,7 +13,8 @@ func TestTheLockOfAKeepaliveIsNamedAfterTheHostItServes(t *testing.T) {
 	store := filepath.Join(t.TempDir(), "minka", "work.json")
 
 	path := KeepaliveLockPath(store, "https://minka.example.com")
-	if name := filepath.Base(path); !strings.HasPrefix(name, "keepalive-minka.example.com-") || !strings.HasSuffix(name, ".lock") {
+	shaped := regexp.MustCompile(`^keepalive-minka\.example\.com-[0-9a-f]{16}\.lock$`)
+	if name := filepath.Base(path); !shaped.MatchString(name) {
 		t.Errorf("the lock is called %q, and nobody sees whose it is", name)
 	}
 
