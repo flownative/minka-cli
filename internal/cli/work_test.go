@@ -742,3 +742,123 @@ func TestCompletingACardTakesItOutOfTheListAtOnce(t *testing.T) {
 		t.Errorf("%v is left in the list, want the card nobody completed", left)
 	}
 }
+
+// Work that lasts longer than a working day keeps its card, because the
+// session says after every tool call that it is still at it. The session
+// beside it that died keeps nothing, however busy the machine.
+func TestTheSessionThatKeepsWorkingKeepsItsCard(t *testing.T) {
+	e := newAgentEnv(t)
+	began := time.Date(2026, 9, 23, 9, 0, 0, 0, time.UTC)
+	kept, lost := e.fixture.CardInDoing.ID, e.fixture.CardInTriage.ID
+
+	e.vars["CLAUDE_CODE_SESSION_ID"] = "the one that dies"
+	expectCode(t, e.runAt(began, "work", "start", lost, "--json"), ExitOK)
+	e.vars["CLAUDE_CODE_SESSION_ID"] = "the one that works on"
+	expectCode(t, e.runAt(began, "work", "start", kept, "--json"), ExitOK)
+
+	// Ten hours of tool calls, all of them from the session that is still at
+	// its card.
+	for hour := 0; hour <= 10; hour++ {
+		expectCode(t, e.runAt(began.Add(time.Duration(hour)*time.Hour), "heartbeat", "--json"), ExitOK)
+	}
+
+	env, r := e.runWithJSON(began.Add(10*time.Hour+time.Minute), "work", "list")
+	expectCode(t, r, ExitOK)
+	if left := cardIDsOfTheList(t, env); len(left) != 1 || left[0] != kept {
+		t.Fatalf("%v is left, want the card of the session that kept working", left)
+	}
+	if got := e.server.CardsAtWork(); len(got) != 1 || got[0] != kept {
+		t.Errorf("the server holds %v, want %s", got, kept)
+	}
+}
+
+// A card taken up where nothing says who is asking goes by the moment it was
+// started, and a machine that is busy around it changes nothing about that.
+func TestACardWithoutASessionGoesByItsBeginning(t *testing.T) {
+	e := newAgentEnv(t)
+	began := time.Date(2026, 9, 23, 9, 0, 0, 0, time.UTC)
+	expectCode(t, e.runAt(began, "work", "start", e.fixture.CardInTriage.ID, "--json"), ExitOK)
+
+	e.vars["CLAUDE_CODE_SESSION_ID"] = "somebody else entirely"
+	for hour := 0; hour <= 9; hour++ {
+		expectCode(t, e.runAt(began.Add(time.Duration(hour)*time.Hour), "heartbeat", "--json"), ExitOK)
+	}
+
+	// It is gone by the sweep of the signal that ran past the window, so the
+	// list has nothing left to give up and nothing to say about it.
+	env, r := e.runWithJSON(began.Add(9*time.Hour+time.Minute), "work", "list")
+	expectCode(t, r, ExitOK)
+	if left := cardIDsOfTheList(t, env); len(left) != 0 {
+		t.Errorf("%v is left, want none", left)
+	}
+}
+
+// The safeguard: the sign of life is written before the throttle decides
+// whether to send. A tool call says that the session is at its cards whether
+// or not a signal goes out from it, and the throttle looks at the whole list
+// of the machine — so a session whose beats fall into the minute of another
+// session's signal would lose its card under its own hands.
+func TestTheSignOfLifeIsWrittenWhereNoSignalGoesOut(t *testing.T) {
+	e := newAgentEnv(t)
+	began := time.Date(2026, 9, 23, 9, 0, 0, 0, time.UTC)
+	atWork, beside := e.fixture.CardInDoing.ID, e.fixture.CardInTriage.ID
+
+	e.vars["CLAUDE_CODE_SESSION_ID"] = "the one that keeps at it"
+	expectCode(t, e.runAt(began, "work", "start", atWork, "--json"), ExitOK)
+	e.vars["CLAUDE_CODE_SESSION_ID"] = "the one beside it"
+	expectCode(t, e.runAt(began, "work", "start", beside, "--json"), ExitOK)
+
+	// The session beside it reports first, so the minute of the throttle is
+	// spent on its signal.
+	expectCode(t, e.runAt(began.Add(10*time.Second), "heartbeat", "--json"), ExitOK)
+
+	// The other session beats within that minute: the list is the same one,
+	// nothing goes out, and the card is being worked on all the same.
+	e.vars["CLAUDE_CODE_SESSION_ID"] = "the one that keeps at it"
+	beat, r := e.runWithJSON(began.Add(40*time.Second), "heartbeat")
+	expectCode(t, r, ExitOK)
+	if sent, _ := decode(t, beat.Data)["sent"].(bool); sent {
+		t.Fatal("the beat within the minute sent a signal, so the throttle was not what held it")
+	}
+	if len(e.signals()) != 1 {
+		t.Fatalf("%d signals, want the one of the session beside it", len(e.signals()))
+	}
+
+	// A working day after the two cards were taken up: the one whose session
+	// beat is the one that is left.
+	env, r := e.runWithJSON(began.Add(work.ForgottenAfter+20*time.Second), "work", "list")
+	expectCode(t, r, ExitOK)
+	if left := cardIDsOfTheList(t, env); len(left) != 1 || left[0] != atWork {
+		t.Fatalf("%v is left, want the card of the session whose beat sent nothing", left)
+	}
+}
+
+// The safeguard: what has run out is given up before the sign of life is
+// written. A session that comes back after a day away was not at its card, so
+// the beat it brings must not raise a card that is over — and the board has to
+// hear that it is over.
+func TestABeatThatComesTooLateRaisesNothing(t *testing.T) {
+	e := newAgentEnv(t)
+	began := time.Date(2026, 9, 23, 9, 0, 0, 0, time.UTC)
+	card := e.fixture.CardInDoing.ID
+
+	e.vars["CLAUDE_CODE_SESSION_ID"] = "the one that goes away"
+	expectCode(t, e.runAt(began, "work", "start", card, "--json"), ExitOK)
+	expectCode(t, e.runAt(began.Add(time.Minute), "heartbeat", "--json"), ExitOK)
+	if got := e.server.CardsAtWork(); len(got) != 1 {
+		t.Fatalf("the server holds %v, want the card that was taken up", got)
+	}
+
+	// A day later the same session beats again, its card long run out.
+	tooLate := began.Add(24 * time.Hour)
+	expectCode(t, e.runAt(tooLate, "heartbeat", "--json"), ExitOK)
+	if got := e.server.CardsAtWork(); len(got) != 0 {
+		t.Errorf("the server still holds %v after the card ran out", got)
+	}
+
+	env, r := e.runWithJSON(tooLate.Add(time.Minute), "work", "list")
+	expectCode(t, r, ExitOK)
+	if left := cardIDsOfTheList(t, env); len(left) != 0 {
+		t.Errorf("%v was raised by a beat that came a day late", left)
+	}
+}

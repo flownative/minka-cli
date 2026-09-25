@@ -616,11 +616,13 @@ this:
   reports all of it together. Never write the store yourself.
 - Minka forgets a card three minutes after the last signal, so a session that
   ends without `work stop` goes quiet by itself.
-- The list gives a card up eight hours after it was started, counted from the
-  `work start` and from nothing else. On a card you sit at for longer than a
-  working day, say `minka work start` again now and then; otherwise the tile
-  goes dark in the middle of the work. `work list` carries a `notice` when a
-  card was given up that way.
+- The list gives a card up eight hours after the session that took it up was
+  last at it. Your heartbeat says so for the cards you started, so a card you
+  keep working on is kept however long the work lasts, and the card of a
+  session that ended runs out even while other sessions on the machine work on.
+  A card started outside a session — by a person at a terminal — goes by the
+  moment it was started instead. `work list` carries a `notice` when a card was
+  given up, and `minka work start` brings it back.
 - A card you may not see exits 2 at `work start`; the server itself would pass
   it over without a word. There is no way to read back what Minka holds.
 
