@@ -63,6 +63,7 @@ var toolKinds = map[string]string{
 	"kanban_board":  bundle.ToolBoard,
 	"chat":          bundle.ToolChat,
 	"message_board": bundle.ToolPosts,
+	"questionnaire": bundle.ToolCheckins,
 }
 
 // SkippedTools counts dock entries of one kind that a run left out, either
@@ -181,12 +182,13 @@ type Extractor struct {
 	files       FileCounts
 }
 
-// talk names the tools of one project that hold posts and lines, each kind in
-// the order of the tools.
+// talk names the tools of one project that hold posts, lines and questions,
+// each kind in the order of the tools.
 type talk struct {
-	bucket        int64
-	messageBoards []int64
-	chats         []int64
+	bucket         int64
+	messageBoards  []int64
+	chats          []int64
+	questionnaires []int64
 }
 
 type skippedKey struct {
@@ -413,6 +415,8 @@ func (e *Extractor) extractProject(ctx context.Context, id int64, w *bundle.Writ
 			talks.messageBoards = append(talks.messageBoards, tool.entry.ID)
 		case bundle.ToolChat:
 			talks.chats = append(talks.chats, tool.entry.ID)
+		case bundle.ToolCheckins:
+			talks.questionnaires = append(talks.questionnaires, tool.entry.ID)
 		}
 	}
 	e.talks = append(e.talks, talks)
