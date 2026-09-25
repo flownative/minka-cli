@@ -1,0 +1,538 @@
+package basecamp
+
+import (
+	"context"
+	"fmt"
+	"sort"
+	"strings"
+	"time"
+	"unicode"
+	"unicode/utf8"
+
+	"github.com/flownative/minka-cli/internal/bundle"
+)
+
+// question is a question of a questionnaire, which a bundle calls a question of
+// a Check-ins tool.
+type question struct {
+	recording
+	ID     int64  `json:"id"`
+	Status string `json:"status"`
+	Title  string `json:"title"`
+	// Paused is a question that asks nobody until somebody starts it again.
+	Paused   bool     `json:"paused"`
+	Schedule schedule `json:"schedule"`
+	// AnswersURL is where the answers of the question are listed, at an address
+	// of the account and not of the project.
+	AnswersCount int    `json:"answers_count"`
+	AnswersURL   string `json:"answers_url"`
+}
+
+// schedule is when Basecamp asks a question. Days count Sunday as 0 and
+// Saturday as 6. WeekInstance, WeekInterval, MonthInterval and Duration are
+// what a Basecamp schedule can say and Minka's cannot; each is null wherever a
+// schedule does not use it.
+type schedule struct {
+	Frequency     string `json:"frequency"`
+	Days          []int  `json:"days"`
+	Hour          int    `json:"hour"`
+	Minute        int    `json:"minute"`
+	StartDate     string `json:"start_date"`
+	EndDate       string `json:"end_date"`
+	WeekInstance  *int   `json:"week_instance"`
+	WeekInterval  *int   `json:"week_interval"`
+	MonthInterval *int   `json:"month_interval"`
+	Duration      *int   `json:"duration"`
+}
+
+// answer is what somebody answered a question on one day.
+type answer struct {
+	recording
+	ID     int64  `json:"id"`
+	Status string `json:"status"`
+	// Content is rendered, as that of a comment is.
+	Content string     `json:"content"`
+	Files   []bodyFile `json:"content_attachments"`
+	// GroupOn is the day the answer belongs to; Basecamp leaves it out of an
+	// answer that belongs to no day of its own.
+	GroupOn       string `json:"group_on"`
+	CommentsCount int    `json:"comments_count"`
+	BoostsCount   int    `json:"boosts_count"`
+}
+
+// answered is an answer with the day it belongs to.
+type answered struct {
+	answer
+	on time.Time
+}
+
+// subscription is who a recording is handed to.
+type subscription struct {
+	Subscribers []person `json:"subscribers"`
+}
+
+// ImpossibleQuestion is a question whose schedule Minka has no words for,
+// named with the field that makes it impossible. Such a question is left out
+// with its answers.
+type ImpossibleQuestion struct {
+	QuestionSourceID string `json:"questionSourceId"`
+	Field            string `json:"field"`
+}
+
+// InferredAnchor is a question asked every other week whose startsOn was taken
+// from the day of an answer, because Basecamp says nothing about which of two
+// weeks it asks in.
+type InferredAnchor struct {
+	QuestionSourceID string `json:"questionSourceId"`
+	From             string `json:"from"`
+}
+
+// AskedLeftOut counts, over all questions, the people a question is asked of
+// that a bundle cannot name as being asked.
+type AskedLeftOut struct {
+	NotInTheProject  int `json:"notInTheProject"`
+	Retired          int `json:"retired"`
+	WithoutAnAddress int `json:"withoutAnAddress"`
+}
+
+// dayFormat is how both Basecamp and Minka write a day.
+const dayFormat = "2006-01-02"
+
+// maxTitle is the length of a title Minka takes, in characters.
+const maxTitle = 200
+
+// rhythms are the frequencies of a Basecamp schedule that Minka has a rhythm
+// for. A question asked every day carries the days it is asked on like any
+// other, so every_day and on_certain_days are the same thing. Every other
+// frequency leaves the question out and is reported: whoever adds a word here
+// has seen what Basecamp sends under it.
+var rhythms = map[string]string{
+	"every_day":        bundle.RhythmDaily,
+	"on_certain_days":  bundle.RhythmDaily,
+	"every_other_week": bundle.RhythmEveryOtherWeek,
+}
+
+// extractCheckins adds the questions of every questionnaire and what was
+// answered to them, questionnaire by questionnaire in the order of the projects
+// and their tools.
+func (e *Extractor) extractCheckins(ctx context.Context, w *bundle.Writer) error {
+	for _, t := range e.talks {
+		for _, questionnaire := range t.questionnaires {
+			if err := e.extractQuestions(ctx, w, t.bucket, questionnaire); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// extractQuestions adds the questions of one questionnaire, oldest first. A
+// questionnaire lists the questions it asks; a walk is no snapshot, so a
+// question met twice is written once.
+func (e *Extractor) extractQuestions(ctx context.Context, w *bundle.Writer, bucket, tool int64) error {
+	listed, err := getList[question](ctx, e.Source, fmt.Sprintf("buckets/%d/questionnaires/%d/questions.json", bucket, tool))
+	if err != nil {
+		return err
+	}
+	seen := map[int64]bool{}
+	questions := make([]question, 0, len(listed))
+	for _, found := range listed {
+		if seen[found.ID] {
+			continue
+		}
+		seen[found.ID] = true
+		if err := met("question", found.ID, found.Status, found.recording); err != nil {
+			return err
+		}
+		questions = append(questions, found)
+	}
+	if err := oldestFirst(questions, "question", func(q question) (int64, string) { return q.ID, q.CreatedAt }); err != nil {
+		return err
+	}
+
+	for _, found := range questions {
+		if err := e.writeQuestion(ctx, w, bucket, tool, found); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// writeQuestion adds a question with its schedule and whom it is asked of.
+//
+// A question whose schedule Minka has no words for is left out and counted with
+// the field that made it impossible, and its answers go with it: an answer
+// without its question has nothing to hang on.
+func (e *Extractor) writeQuestion(ctx context.Context, w *bundle.Writer, bucket, tool int64, found question) error {
+	title, err := questionTitle(found)
+	if err != nil {
+		return err
+	}
+	when, impossible, err := scheduleOf(found, time.Now().UTC())
+	if err != nil {
+		return err
+	}
+	if impossible != "" {
+		e.leaveQuestionOut(found.ID, impossible)
+		return nil
+	}
+
+	answers, err := e.answersOf(ctx, found)
+	if err != nil {
+		return err
+	}
+	if when.anchored {
+		anchor, answered := lastDayAnswered(answers)
+		if !answered {
+			e.leaveQuestionOut(found.ID, "group_on")
+			return nil
+		}
+		when.startsOn = anchoredOn(anchor, when.weekdays[0])
+		e.anchorsInferred = append(e.anchorsInferred, InferredAnchor{QuestionSourceID: sourceID(found.ID), From: anchor.Format(dayFormat)})
+	}
+	asked, err := e.askedOf(ctx, bucket, found.ID)
+	if err != nil {
+		return err
+	}
+
+	origin, err := e.record("question", found.ID, found.recording)
+	if err != nil {
+		return err
+	}
+	err = w.Add(bundle.Questions, bundle.Question{
+		Record:          origin,
+		ProjectSourceID: sourceID(bucket),
+		ToolSourceID:    sourceID(tool),
+		Title:           title,
+		Rhythm:          when.rhythm,
+		Weekdays:        when.weekdays,
+		TimeOfDay:       when.timeOfDay,
+		StartsOn:        when.startsOn,
+		Asked:           asked,
+		Paused:          when.paused,
+		Status:          questionStatus(found),
+	})
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// leaveQuestionOut notes a question the bundle does not carry. A number nobody
+// writes down is a number nobody can check.
+func (e *Extractor) leaveQuestionOut(id int64, field string) {
+	e.questionsLeftOut = append(e.questionsLeftOut, ImpossibleQuestion{QuestionSourceID: sourceID(id), Field: field})
+}
+
+// questionStatus is the status a question comes in. What Basecamp says of a
+// question does not reach the bundle: a questionnaire lists the questions it
+// asks, so every question a run meets is an active one. Return found.Status
+// here to carry what the source says, once that is decided.
+func questionStatus(found question) string {
+	return bundle.StatusActive
+}
+
+// questionTitle is the title of a question as a bundle carries it, without the
+// whitespace around it that Minka takes off anyway. A title Minka refuses ends
+// the run instead of reaching it, as it would end the applier's.
+func questionTitle(found question) (string, error) {
+	title := strings.TrimSpace(found.Title)
+	switch {
+	case title == "":
+		return "", &Error{Kind: API, Message: fmt.Sprintf("question %d has no title", found.ID)}
+	case utf8.RuneCountInString(title) > maxTitle:
+		return "", &Error{Kind: API, Message: fmt.Sprintf("the title of question %d is longer than the %d characters a title may have", found.ID, maxTitle)}
+	case strings.ContainsFunc(title, unicode.IsControl):
+		return "", &Error{Kind: API, Message: fmt.Sprintf("the title of question %d holds a character nobody can see", found.ID)}
+	}
+	return title, nil
+}
+
+// checkinSchedule is a Basecamp schedule in the words Minka has.
+type checkinSchedule struct {
+	rhythm    string
+	weekdays  []int
+	timeOfDay string
+	startsOn  string
+	paused    bool
+	// anchored tells that startsOn has yet to be taken from an answer: Minka
+	// counts the weeks of an everyOtherWeek question from it.
+	anchored bool
+}
+
+// scheduleOf says a Basecamp schedule in the words Minka has, or names the one
+// field that makes it a schedule Minka cannot express.
+//
+// A schedule that has run out comes paused: the question asks nobody any more,
+// and Minka's schedule has no end to say so with. One that ends later is left
+// out altogether, because the question would go on asking for ever. Whether it
+// has run out is held against the day the run is made, read as Basecamp writes
+// its times: in UTC.
+func scheduleOf(found question, now time.Time) (checkinSchedule, string, error) {
+	s := found.Schedule
+	for _, beyond := range []struct {
+		field string
+		value *int
+	}{
+		{"week_instance", s.WeekInstance},
+		{"week_interval", s.WeekInterval},
+		{"month_interval", s.MonthInterval},
+		{"duration", s.Duration},
+	} {
+		if beyond.value != nil && *beyond.value != 0 {
+			return checkinSchedule{}, beyond.field, nil
+		}
+	}
+
+	when := checkinSchedule{paused: found.Paused}
+	if s.EndDate != "" {
+		end, aDate := aDay(s.EndDate)
+		if !aDate || !end.Before(dayOfMoment(now)) {
+			return checkinSchedule{}, "end_date", nil
+		}
+		when.paused = true
+	}
+
+	weekdays, canBeAsked := weekdaysOfMinka(s.Days)
+	if !canBeAsked {
+		return checkinSchedule{}, "days", nil
+	}
+	rhythm, known := rhythms[s.Frequency]
+	if !known {
+		return checkinSchedule{}, "frequency", nil
+	}
+	// Minka's daily and its weekly are the same thing where one weekday is
+	// chosen, and weekly is the word for it.
+	if rhythm == bundle.RhythmDaily && len(weekdays) == 1 {
+		rhythm = bundle.RhythmWeekly
+	}
+	if rhythm != bundle.RhythmDaily && len(weekdays) != 1 {
+		return checkinSchedule{}, "days", nil
+	}
+	if s.Hour < 0 || s.Hour > 23 || s.Minute < 0 || s.Minute > 59 {
+		return checkinSchedule{}, "hour", nil
+	}
+	when.rhythm, when.weekdays = rhythm, weekdays
+	when.timeOfDay = fmt.Sprintf("%02d:%02d", s.Hour, s.Minute)
+	when.anchored = rhythm == bundle.RhythmEveryOtherWeek
+
+	// A bundle always says which day a rhythm is counted from: without it Minka
+	// takes the day of createdAt in the offset the bundle wrote, which is
+	// Basecamp's UTC, so a question made late in the evening would start a day
+	// late.
+	if s.StartDate != "" {
+		if _, aDate := aDay(s.StartDate); !aDate {
+			return checkinSchedule{}, "start_date", nil
+		}
+		when.startsOn = s.StartDate
+		return when, "", nil
+	}
+	made, err := dayOf("question", found.ID, found.CreatedAt, found.Creator)
+	if err != nil {
+		return checkinSchedule{}, "", err
+	}
+	when.startsOn = made.Format(dayFormat)
+	return when, "", nil
+}
+
+// weekdayOfMinka turns a weekday of Basecamp into one of Minka. Basecamp counts
+// Sunday as 0 and Saturday as 6, Minka Monday as 1 and Sunday as 7: so every
+// day but Sunday has the same number in both, and only Sunday moves.
+func weekdayOfMinka(day int) int {
+	if day == 0 {
+		return 7
+	}
+	return day
+}
+
+// weekdaysOfMinka turns the days of a schedule into Minka's, each once and in
+// order. Minka refuses an empty list, so a schedule that names no day is one it
+// cannot express.
+func weekdaysOfMinka(days []int) ([]int, bool) {
+	seen := map[int]bool{}
+	var weekdays []int
+	for _, day := range days {
+		if day < 0 || day > 6 {
+			return nil, false
+		}
+		if minka := weekdayOfMinka(day); !seen[minka] {
+			seen[minka] = true
+			weekdays = append(weekdays, minka)
+		}
+	}
+	if len(weekdays) == 0 {
+		return nil, false
+	}
+	sort.Ints(weekdays)
+	return weekdays, true
+}
+
+// anchoredOn is the day Minka counts the weeks of an everyOtherWeek question
+// from. Minka asks on the first matching day at or after startsOn and then
+// every second week, so the day a question was last answered on, stepped back
+// to the weekday it is asked on, puts Minka in the week Basecamp is in.
+func anchoredOn(day time.Time, weekday int) string {
+	// Go counts the days of a week the way Basecamp does.
+	back := (weekdayOfMinka(int(day.Weekday())) - weekday + 7) % 7
+	return day.AddDate(0, 0, -back).Format(dayFormat)
+}
+
+// lastDayAnswered is the most recent day an answer of a question belongs to.
+func lastDayAnswered(answers []answered) (time.Time, bool) {
+	var latest time.Time
+	found := false
+	for _, one := range answers {
+		if !found || one.on.After(latest) {
+			latest, found = one.on, true
+		}
+	}
+	return latest, found
+}
+
+// askedOf are the people a question is asked of, in the order of their IDs.
+// Basecamp knows them as the subscribers of the question, which is whom it is
+// handed to, and not whoever happened to answer it. A later run never touches
+// them again, so the first one decides.
+//
+// Only somebody the bundle carries as a member of the project can be asked in
+// Minka, and only somebody Minka can hand a question to: whoever is not a
+// member, whoever has left and whoever comes without an address is left out and
+// counted. Minka's own run would otherwise end in a failure that names no file
+// and no line, while its dry run stayed green.
+func (e *Extractor) askedOf(ctx context.Context, bucket, question int64) ([]string, error) {
+	handedTo, err := getOne[subscription](ctx, e.Source, fmt.Sprintf("buckets/%d/recordings/%d/subscription.json", bucket, question))
+	if err != nil {
+		return nil, err
+	}
+
+	members := e.members[bucket]
+	taken := map[int64]bool{}
+	var ids []int64
+	for _, subscriber := range handedTo.Subscribers {
+		if subscriber.ID == 0 || taken[subscriber.ID] {
+			continue
+		}
+		taken[subscriber.ID] = true
+		known, carried := e.people.known(subscriber.ID)
+		switch {
+		case !members[subscriber.ID] || !carried:
+			e.askedLeftOut.NotInTheProject++
+		case known.retired():
+			e.askedLeftOut.Retired++
+		case known.EmailAddress == "":
+			e.askedLeftOut.WithoutAnAddress++
+		default:
+			ids = append(ids, subscriber.ID)
+		}
+	}
+	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+
+	asked := make([]string, 0, len(ids))
+	for _, id := range ids {
+		asked = append(asked, sourceID(id))
+	}
+	return asked, nil
+}
+
+// answersOf are the answers of a question, oldest first, each with the day it
+// belongs to. A question says how many answers it has, so one nobody answered
+// costs no request. Basecamp names the list at an address of the account, which
+// is read the way the steps of a card are.
+//
+// An answer in the trash is left out and counted, as a comment in the trash is:
+// somebody threw it away, and a bundle has no place to say so.
+func (e *Extractor) answersOf(ctx context.Context, found question) ([]answered, error) {
+	if found.AnswersCount == 0 {
+		return nil, nil
+	}
+	path, err := e.relativePath(fmt.Sprintf("the answers of question %d", found.ID), found.AnswersURL)
+	if err != nil {
+		return nil, err
+	}
+	listed, err := getList[answer](ctx, e.Source, path)
+	if err != nil {
+		return nil, err
+	}
+
+	seen := map[int64]bool{}
+	answers := make([]answer, 0, len(listed))
+	for _, one := range listed {
+		if seen[one.ID] {
+			continue
+		}
+		seen[one.ID] = true
+		if err := met("answer", one.ID, one.Status, one.recording); err != nil {
+			return nil, err
+		}
+		if one.Status == bundle.StatusTrashed {
+			e.answersTrashed++
+			continue
+		}
+		answers = append(answers, one)
+	}
+	if err := oldestFirst(answers, "answer", func(a answer) (int64, string) { return a.ID, a.CreatedAt }); err != nil {
+		return nil, err
+	}
+
+	all := make([]answered, 0, len(answers))
+	for _, one := range answers {
+		on, err := dayAnsweredOn(one)
+		if err != nil {
+			return nil, err
+		}
+		all = append(all, answered{answer: one, on: on})
+	}
+	return all, nil
+}
+
+// dayAnsweredOn is the day an answer belongs to, as Basecamp has it. It is
+// taken over and never worked out from the schedule: Minka stores the day as it
+// comes and holds it against nothing, so an answer may well sit on a day the
+// question never asked on, which is what the source says and therefore right.
+func dayAnsweredOn(one answer) (time.Time, error) {
+	if one.GroupOn == "" {
+		return dayOf("answer", one.ID, one.CreatedAt, one.Creator)
+	}
+	day, aDate := aDay(one.GroupOn)
+	if !aDate {
+		return time.Time{}, &Error{Kind: API, Message: fmt.Sprintf("answer %d belongs to a day of the shape %q, which is none", one.ID, one.GroupOn)}
+	}
+	return day, nil
+}
+
+// dayOf is the day something was written where Basecamp says nothing about the
+// day itself. Basecamp writes every time as UTC and Minka knows no zone of an
+// organisation, so which zone a day is read in is a decision and not a
+// convenience: it is the zone of whoever wrote it, because that is the day they
+// meant. The zone is chosen here and nowhere else.
+func dayOf(what string, id int64, timestamp string, author *person) (time.Time, error) {
+	moment, err := time.Parse(time.RFC3339Nano, timestamp)
+	if err != nil {
+		return time.Time{}, &Error{Kind: API, Message: fmt.Sprintf("Basecamp says that %s %d was created at something that is no time", what, id)}
+	}
+	zone := time.UTC
+	if author != nil && author.TimeZone != "" {
+		if theirs, err := time.LoadLocation(author.TimeZone); err == nil {
+			zone = theirs
+		}
+	}
+	return dayOfMoment(moment.In(zone)), nil
+}
+
+// dayOfMoment is the day a moment falls on, in the zone the moment is written
+// in.
+func dayOfMoment(moment time.Time) time.Time {
+	year, month, day := moment.Date()
+	return time.Date(year, month, day, 0, 0, 0, 0, moment.Location())
+}
+
+// aDay reads a day the way both Basecamp and Minka write one: four digits, two
+// and two. Go reads a date more loosely than that, and Minka refuses whatever
+// it does not write itself, so the reading has to come back as it went in.
+func aDay(value string) (time.Time, bool) {
+	day, err := time.Parse(dayFormat, value)
+	if err != nil || day.Format(dayFormat) != value {
+		return time.Time{}, false
+	}
+	return day, true
+}
