@@ -34,6 +34,12 @@ their own would take each other's cards away with every signal.
   which nothing but another `work start` moves: it therefore cuts a piece of
   work that runs longer than a day short as well. Saying `work start` again is
   what keeps such a card, and what the notice advises.
+- `cards move` and `cards done` take the card out of the list themselves and
+  report at once (C-041), so that a card somebody has moved on stops glowing
+  without waiting for the next tool call. Neither a store another session holds
+  at that moment nor a signal that does not get through makes the move untrue,
+  so both are passed over in silence; the answer says in its `notice` that the
+  card left the list, and says nothing where it was never in it.
 - `work stop` asks nothing of the network and finds a card under either of the
   names it was remembered with. It needs the host all the same, so on a machine
   that is signed in nowhere it ends like every other command, with exit 3.

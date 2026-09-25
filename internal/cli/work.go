@@ -52,7 +52,10 @@ after every tool call: until one of them has run, 'work start' has changed
 nothing but this machine's own list.
 
 The list belongs to the machine, not to this session: every session on it
-reports the same list together, and 'work stop' takes a card out again.`,
+reports the same list together, and 'work stop' takes a card out again. So do
+'cards move' and 'cards done': a card that is moved on is one nobody is at
+work on any more, so take a card up in that order — move it first, then say
+'work start'.`,
 		Example: `  minka work start MNK-1A
   minka work start 0199... --json`,
 		Args: requireArgs("cardId"),
@@ -359,6 +362,43 @@ func (a *app) noteTheOutcome(path, host string, failed error) {
 		entry.FailedAt = time.Time{}
 	}
 	_ = handle.Save()
+}
+
+// noLongerInHand is what a command says when it took the card out of the list
+// of this machine on its own. The list is shared with every other session on
+// the machine, so nothing changes it without a word.
+const noLongerInHand = "the card is no longer among the cards this machine is working on, and the board was told at once"
+
+// theCardIsOutOfHand takes a card out of the list of this machine and reports
+// the list at once, so that a card somebody has moved on stops glowing instead
+// of waiting for the signal after the next tool call. It says whether the card
+// was in the list at all, and reports only where it was.
+//
+// Whatever it meets on the way it passes over in silence: the card has been
+// moved, and neither a store another session holds at that moment nor a signal
+// that does not get through makes that untrue.
+func (a *app) theCardIsOutOfHand(host, cardID string) bool {
+	if !a.takeOutOfTheList(host, cardID) {
+		return false
+	}
+	a.signal()
+	return true
+}
+
+// takeOutOfTheList is the half that holds the lock, kept apart so that it is
+// given back before the signal, which takes it for itself.
+func (a *app) takeOutOfTheList(host, cardID string) bool {
+	handle, err := a.openStore(waitForTheStore)
+	if err != nil {
+		return false
+	}
+	defer handle.Close()
+
+	entry, known := handle.File.Hosts[host]
+	if !known || !entry.Stop(cardID) {
+		return false
+	}
+	return handle.Save() == nil
 }
 
 // clientID is the name this installation of minka goes by. It is made once and
