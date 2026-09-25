@@ -79,6 +79,7 @@ work on any more, so take a card up in that order — move it first, then say
 
 			entry := handle.File.Host(s.host)
 			forgotten := entry.ForgetWhatRanOut(a.now())
+			entry.Beat(a.now())
 			entry.Start(work.Card{
 				ID:        card.ID,
 				ShortID:   shortIdentifierOf(card),
@@ -134,6 +135,7 @@ has nothing to answer about.`,
 				return a.ok(sayingFirst("Nothing to stop", a.workSuccess(&work.Host{}, "Nothing to stop", map[string]any{"stopped": cardList(nil)}, 0)))
 			}
 			forgotten := entry.ForgetWhatRanOut(a.now())
+			beaten := entry.Beat(a.now())
 
 			var stopped []work.Card
 			switch {
@@ -156,7 +158,7 @@ has nothing to answer about.`,
 				}
 			}
 
-			if len(stopped) > 0 || forgotten > 0 {
+			if len(stopped) > 0 || forgotten > 0 || beaten {
 				if err := handle.Save(); err != nil {
 					return &Error{Code: CodeConfig, Message: err.Error()}
 				}
@@ -314,7 +316,7 @@ func (a *app) claimTheSignal(path, host string, wait time.Duration) (*claim, str
 	// over. The sign of life stands whatever the throttle then makes of the
 	// moment: it is about the work, not about the host's ear.
 	changed := entry.ForgetWhatRanOut(a.now()) > 0
-	if entry.StillAtIt(a.agentSession(), a.now()) {
+	if a.somebodyIsAtWork(entry) {
 		changed = true
 	}
 	cards := entry.CardIDs()
@@ -343,6 +345,23 @@ func (a *app) claimTheSignal(path, host string, wait time.Duration) (*claim, str
 		return nil, err.Error()
 	}
 	return &claim{clientID: clientID, cards: cards}, ""
+}
+
+// somebodyIsAtWork writes down what a beat says about the work behind it: that
+// the session which took its cards up is still at them, and that somebody was
+// at the store at all. It answers whether anything was written.
+//
+// A beat that keeps tiles alive while nothing else does says neither, whatever
+// its environment carries: it is the work that keeps a card, and a process on a
+// timer of its own is no work. Left to the environment alone, one stray
+// variable would be enough for a card to glow through a working day while
+// nothing ever tells the timer to stop.
+func (a *app) somebodyIsAtWork(entry *work.Host) bool {
+	if a.keepalive {
+		return false
+	}
+	written := entry.StillAtIt(a.agentSession(), a.now())
+	return entry.Beat(a.now()) || written
 }
 
 // saving writes the store where the sweep changed something and hands the
