@@ -37,8 +37,8 @@ their own would take each other's cards away with every signal.
 - `cards move` and `cards done` take the card out of the list themselves and
   report at once (C-041), so that a card somebody has moved on stops glowing
   without waiting for the next tool call. What counts as moving on is landing
-  in another column, going on hold or being completed; a card that only changes
-  place within its column is one nobody has let go of. Neither a store another
+  in another column, being put on hold or reaching Done; a card that only
+  changes place where it already is is one nobody has let go of. Neither a store another
   session holds at that moment nor a signal that does not get through makes the
   move untrue, so both are passed over in silence; the `notice` says that the
   card left the list and whether the board has heard of it yet, and says

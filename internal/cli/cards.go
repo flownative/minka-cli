@@ -371,8 +371,9 @@ the placement is one among the cards on hold. A card on hold that is moved
 without --on-hold comes off hold, also within its own column.
 
 A card this machine says it is working on leaves that list here as soon as it
-lands in another column or goes on hold, and the board is told at once; a card
-that only changes place within its column stays in the list. An agent that
+lands in another column, is put on hold or reaches Done; a card that only
+changes place where it already is stays in the list. The board is told at
+once, or with the next signal where that does not get through. An agent that
 takes a card up moves it first and says 'minka work start' afterwards.
 
 ` + columnHelp,
@@ -485,10 +486,14 @@ takes a card up moves it first and says 'minka work start' afterwards.
 				where += ", on hold"
 			}
 			// A card that stays where it was, in the order of its column, is one
-			// nobody has let go of; one that is put aside has been let go of
-			// even where the column is the same.
+			// nobody has let go of. Putting one aside is letting go of it even
+			// within the column, and so is finishing it — which a move into
+			// Done is, whether or not the card was there before.
+			letGo := moved.Value.Column.ID != card.Value.Column.ID ||
+				(moved.Value.OnHold && !card.Value.OnHold) ||
+				moved.Value.Column.Type == api.ColumnDone
 			var notices []string
-			if moved.Value.Column.ID != card.Value.Column.ID || moved.Value.OnHold {
+			if letGo {
 				if letGo, told := a.letGoOfTheCard(s.host, moved.Value.ID); letGo {
 					notices = append(notices, noLongerInHand(told))
 				}
@@ -525,7 +530,7 @@ func (a *app) newCardsDoneCmd() *cobra.Command {
 is already done stays as it is. To reopen a card, move it out of Done.
 
 A card this machine says it is working on leaves that list here, and the board
-is told at once.`,
+is told at once, or with the next signal where that does not get through.`,
 		Args: requireArgs("cardId"),
 		RunE: func(_ *cobra.Command, args []string) error {
 			s, err := a.session()
