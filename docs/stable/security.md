@@ -46,6 +46,36 @@ command at once. Where the configuration keeps the same host in another form, th
 refusal says which entry that is: the token is there, it is only written where
 nothing looks for it.
 
+A host is said back to whoever gave it, and from there it travels
+into a transcript, a ticket and a log. What is printed of it is the address
+alone: scheme, host, port and path, put together from the parts where the value
+can be read and nothing of the address still carries an `@`. Everything else is
+shown short, because the parts then say nothing dependable about where the user
+information ends: everything up to and including the last `@` is replaced, a
+separator written percent-encoded counts as one, and of what follows only as much
+as leads up to a path, a query or a fragment. The fault itself is named in words,
+so the refusal stays as clear as it was.
+
+Every place that prints a host renders it this way first — a message, a hint, a
+field of the envelope alike. This is a rule and not a list of places, and it has
+to be one: as soon as a token stands under an entry written by hand, a session
+comes about, and from there the value reaches anything that prints the host or a
+URL built from it, an error text of the standard library included. Such a text
+has the password replaced where the standard library wrote it, and nothing
+printed beside it may put it back.
+
+What the rule does not reach yet stands behind such a session: `auth status`,
+`doctor`, the hint of a 401, `setup` and the search for a card print the host as
+the file holds it, and the keepalive carries it in the argv of its child, where
+every local process sees it. That is open, and it is named here rather than left
+to be found. Inside the CLI the value stays as it was given anyway, as a key of
+the list of cards and part of the name of a lock beside it.
+
+A hint is a command line. It names the address without the credential, and where
+nothing of the value is left it names what is to be filled in: a plain word a
+shell hands on, and no address of its own, which whoever runs the line would
+reach instead of their own instance.
+
 ## Requests
 
 - A request that carries JSON never follows a redirect: it would take the

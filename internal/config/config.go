@@ -19,6 +19,7 @@ import (
 	"runtime"
 	"sort"
 	"strings"
+	"unicode"
 )
 
 type File struct {
@@ -178,23 +179,30 @@ func NormalizeHost(raw string) (string, error) {
 	if !strings.Contains(value, "://") {
 		value = "https://" + value
 	}
+	shown := HostForOutput(raw)
 
 	u, err := url.Parse(value)
 	if err != nil {
-		return "", fmt.Errorf("%q is not a valid host URL", raw)
+		return "", fmt.Errorf("%q is not a valid host URL", shown)
 	}
 	if u.Scheme != "https" && u.Scheme != "http" {
-		return "", fmt.Errorf("%q has to start with https://", raw)
+		return "", fmt.Errorf("%q has to start with https://", shown)
 	}
-	if u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
-		return "", fmt.Errorf("%q is not a valid host URL", raw)
+	if u.User != nil {
+		return "", fmt.Errorf("%q was given with a user name and password before the @; leave them out and sign in with a token", shown)
+	}
+	if u.RawQuery != "" || u.Fragment != "" {
+		return "", fmt.Errorf("%q was given with a query or a fragment; give the address of the Minka instance alone", shown)
+	}
+	if u.Host == "" {
+		return "", fmt.Errorf("%q is not a valid host URL", shown)
 	}
 	path := strings.TrimSuffix(strings.TrimRight(u.Path, "/"), "/api/v1")
 	if path != "" {
-		return "", fmt.Errorf("%q has a path; give the address of the Minka instance, such as https://minka.example.com", raw)
+		return "", errors.New("the address given has a path; give the address of the Minka instance, such as https://minka.example.com")
 	}
 	if u.Scheme == "http" && !isLoopback(u.Hostname()) {
-		return "", fmt.Errorf("%q uses plain http, which would send the token unencrypted; use https", raw)
+		return "", fmt.Errorf("%q uses plain http, which would send the token unencrypted; use https", shown)
 	}
 
 	host := strings.ToLower(u.Host)
@@ -203,6 +211,76 @@ func NormalizeHost(raw string) (string, error) {
 	}
 
 	return u.Scheme + "://" + host, nil
+}
+
+// HostForOutput renders a host the way it may be printed: scheme, host, port
+// and path, and nothing that a credential can hide in, nor anything that is no
+// part of an address at all.
+//
+// A host is said back to whoever gave it, and from there it travels into a
+// transcript, a ticket and a log. A password or a token written into the
+// address must not travel that far, and what is wrong with such a value is
+// said in words instead. Inside the CLI the value stays as it was given: it
+// is a key of a store and part of the name of a lock, and only what is
+// printed is rendered this way.
+func HostForOutput(raw string) string {
+	value := strings.TrimSpace(raw)
+	if !strings.Contains(value, "://") {
+		value = "https://" + value
+	}
+	// Where the value parses and no separator of user information is left in the
+	// address, its parts say what is shown. Where one is left, the user
+	// information did not end where a URL has it end: a password holding a
+	// slash, a question mark or a hash moves that end into the path, and the
+	// host and the path then carry the credential themselves.
+	if u, err := url.Parse(value); err == nil && u.Host != "" && !holdsASeparator(u.Host+u.EscapedPath()) {
+		return withoutControlCharacters(u.Scheme + "://" + u.Host + u.EscapedPath())
+	}
+
+	return withoutControlCharacters(hostTextWithoutCredentials(value))
+}
+
+// withoutControlCharacters drops what no address is made of. What is left is
+// printed, and a terminal, a transcript and a log read a control character as an
+// order of their own instead of as text, so no caller has to quote the result to
+// be safe.
+func withoutControlCharacters(value string) string {
+	return strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) {
+			return -1
+		}
+
+		return r
+	}, value)
+}
+
+// holdsASeparator says whether a part of an address still carries the sign that
+// user information ends there, written plainly or percent-encoded.
+func holdsASeparator(value string) bool {
+	return strings.Contains(value, "@") || strings.Contains(value, "%40")
+}
+
+// hostTextWithoutCredentials renders a value whose address cannot be trusted to
+// say where the user information ends. Such a value is refused as well and may
+// carry just as much, so it is shown deliberately short: everything up to and
+// including the last @ is replaced, and of what follows only as much as leads up
+// to a path, a query or a fragment.
+func hostTextWithoutCredentials(value string) string {
+	scheme := ""
+	if i := strings.Index(value, "://"); i >= 0 {
+		scheme, value = value[:i+3], value[i+3:]
+	}
+	// A separator written percent-encoded separates just as well once whoever
+	// reads the address decodes it.
+	value = strings.NewReplacer("%40", "@", "%3A", ":", "%3a", ":").Replace(value)
+	if i := strings.LastIndex(value, "@"); i >= 0 {
+		scheme, value = scheme+"***@", value[i+1:]
+	}
+	if i := strings.IndexAny(value, "/?#"); i >= 0 {
+		value = value[:i]
+	}
+
+	return scheme + value
 }
 
 func isLoopback(hostname string) bool {
