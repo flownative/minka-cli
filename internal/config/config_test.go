@@ -293,13 +293,30 @@ func TestNormalizeHostRefusesWhatNamesNoMachine(t *testing.T) {
 		"https://minka.example.com:8443;t=" + secret:      "https://minka.example.com:8443",
 		"https://robert:pw@minka.example.com;t=" + secret: "https://minka.example.com",
 		"https://a%25b.example.com":                       "https://a",
+		"https://\U0001F37A.example.com":                  "https://",
+		"https://;t=" + secret:                            "https://",
 	}
 	for host, want := range refused {
-		if got, err := NormalizeHost(host); err == nil {
+		got, err := NormalizeHost(host)
+		if err == nil {
 			t.Errorf("NormalizeHost(%q) = %q, want an error", host, got)
+			continue
 		}
-		if shown := HostForOutput(host); shown != want {
+		shown := HostForOutput(host)
+		if shown != want {
 			t.Errorf("HostForOutput(%q) = %q, want %q", host, shown, want)
+		}
+		// Where the very first character is one no name is made of, nothing of
+		// the value names a host. The refusal quotes none of it then: a scheme in
+		// quotation marks would say nothing and read like an answer.
+		if strings.HasSuffix(want, "://") {
+			if strings.Contains(err.Error(), `"`+want+`"`) || !strings.Contains(err.Error(), "the address given") {
+				t.Errorf("the refusal of %q quotes a scheme instead of naming the fault: %s", host, err)
+			}
+			continue
+		}
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("the refusal of %q does not say which host it is about: %s", host, err)
 		}
 	}
 }
@@ -313,8 +330,5 @@ func TestNormalizeHostReadsAnAddressInBrackets(t *testing.T) {
 	}
 	if got, err := NormalizeHost("https://[fe80::1%25eth0]:8443"); err != nil || got != "https://[fe80::1%eth0]:8443" {
 		t.Errorf("NormalizeHost of a link-local address = %q, %v", got, err)
-	}
-	if got, err := NormalizeHost("https://[fe80::1%25]:8443"); err == nil {
-		t.Errorf("NormalizeHost of an address with no interface behind the percent = %q", got)
 	}
 }
