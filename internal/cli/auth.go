@@ -197,6 +197,10 @@ valid until it is revoked on the server.`,
 			if err != nil {
 				return err
 			}
+			// The default host as the file writes it, not as a sign-in would:
+			// taking a token away has to reach the entry that is there, and one
+			// written by hand in another form would be left standing with its
+			// token by a host that was read straight.
 			if host == "" {
 				host = file.DefaultHost
 			}

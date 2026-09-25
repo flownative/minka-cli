@@ -79,6 +79,7 @@ work on any more, so take a card up in that order — move it first, then say
 
 			entry := handle.File.Host(s.host)
 			forgotten := entry.ForgetWhatRanOut(a.now())
+			entry.Beat(a.now())
 			entry.Start(work.Card{
 				ID:        card.ID,
 				ShortID:   shortIdentifierOf(card),
@@ -134,6 +135,7 @@ has nothing to answer about.`,
 				return a.ok(sayingFirst("Nothing to stop", a.workSuccess(&work.Host{}, "Nothing to stop", map[string]any{"stopped": cardList(nil)}, 0)))
 			}
 			forgotten := entry.ForgetWhatRanOut(a.now())
+			beaten := entry.Beat(a.now())
 
 			var stopped []work.Card
 			switch {
@@ -156,7 +158,7 @@ has nothing to answer about.`,
 				}
 			}
 
-			if len(stopped) > 0 || forgotten > 0 {
+			if len(stopped) > 0 || forgotten > 0 || beaten {
 				if err := handle.Save(); err != nil {
 					return &Error{Code: CodeConfig, Message: err.Error()}
 				}
@@ -216,7 +218,8 @@ nobody signed in, the store held by somebody else — leaves nothing behind;
 }
 
 func (a *app) newHeartbeatCmd() *cobra.Command {
-	return &cobra.Command{
+	var asTheKeepalive bool
+	cmd := &cobra.Command{
 		Use:   "heartbeat",
 		Short: "Report the cards this machine is working on",
 		Long: `Reports the cards of 'minka work start' to Minka, so their tiles stay alive.
@@ -231,24 +234,44 @@ terminal: a hook that fails loudly after every tool call would cost the agent
 its attention for something it cannot act on. Asked, it says in 'reason' what
 it made of the moment, with the status and the code of the API where a request
 was turned away; what the last signal that went out made of it also stands in
-'minka work list'.`,
+'minka work list'.
+
+With a card in hand it also sees to it that one process of this host keeps
+reporting on a timer, so that a tool call running for minutes does not let a
+tile go dark. 'keepalive' says what became of that.`,
 		Args: requireArgs(),
 		RunE: func(*cobra.Command, []string) error {
+			if asTheKeepalive {
+				a.keepalive = true
+				return a.reportWhileNobodyElseDoes()
+			}
+
 			sent, reason, cards := a.signal(0)
 			if cards == nil {
 				cards = []string{}
 			}
+			keepalive := a.whatBecameOfTheKeepalive()
 
-			if !a.jsonFlag && !a.quietFlag && !a.styledFlag && !a.stdoutIsTerminal() {
+			if a.nobodyIsListening() {
 				return nil
 			}
 			return a.ok(success{
-				data:    map[string]any{"sent": sent, "reason": reason, "cardIds": cards},
+				data:    map[string]any{"sent": sent, "reason": reason, "cardIds": cards, "keepalive": keepalive},
 				summary: heartbeatSummary(sent, reason, cards),
 				text:    func(w io.Writer) { fmt.Fprintln(w, heartbeatSummary(sent, reason, cards)) },
 			})
 		},
 	}
+	cmd.Flags().BoolVar(&asTheKeepalive, "keepalive", false, "Keep reporting on a timer of its own until nobody is at work; minka's own business")
+	_ = cmd.Flags().MarkHidden("keepalive")
+	return cmd
+}
+
+// nobodyIsListening says whether this run has nobody to say anything to: no flag
+// asked for output and no terminal to print it on. A hook that speaks after
+// every tool call costs the agent its attention for something it cannot act on.
+func (a *app) nobodyIsListening() bool {
+	return !a.jsonFlag && !a.quietFlag && !a.styledFlag && !a.stdoutIsTerminal()
 }
 
 // signal reports this machine's cards and says what it did.
@@ -314,7 +337,7 @@ func (a *app) claimTheSignal(path, host string, wait time.Duration) (*claim, str
 	// over. The sign of life stands whatever the throttle then makes of the
 	// moment: it is about the work, not about the host's ear.
 	changed := entry.ForgetWhatRanOut(a.now()) > 0
-	if entry.StillAtIt(a.agentSession(), a.now()) {
+	if a.somebodyIsAtWork(entry) {
 		changed = true
 	}
 	cards := entry.CardIDs()
@@ -343,6 +366,24 @@ func (a *app) claimTheSignal(path, host string, wait time.Duration) (*claim, str
 		return nil, err.Error()
 	}
 	return &claim{clientID: clientID, cards: cards}, ""
+}
+
+// somebodyIsAtWork writes down what a beat says about the work behind it: that
+// the session which took its cards up is still at them, and that somebody was
+// at the store at all. It answers whether anything was written.
+//
+// A beat that keeps tiles alive while nothing else does says neither, whatever
+// its environment carries: it is the work that keeps a card, and a process on a
+// timer of its own is no work. Left to the environment alone, one stray
+// variable would be enough for a card to glow through a working day while
+// nothing ever tells the timer to stop.
+func (a *app) somebodyIsAtWork(entry *work.Host) bool {
+	if a.keepalive {
+		return false
+	}
+	written := entry.StillAtIt(a.agentSession(), a.now())
+	marked := entry.Beat(a.now())
+	return written || marked
 }
 
 // saving writes the store where the sweep changed something and hands the
@@ -492,7 +533,23 @@ func (a *app) hostOfTheStore() (string, error) {
 	if file.DefaultHost == "" {
 		return "", &Error{Code: CodeAuth, Message: "not signed in to any Minka host", Hint: "Run: minka auth login --host https://minka.example.com"}
 	}
-	return file.DefaultHost, nil
+	return defaultHostOf(file), nil
+}
+
+// defaultHostOf is the host of the configuration, read the way a sign-in writes
+// it. It is a key of the store and part of the name of a lock, so every process
+// has to make the same string of it: a host written into the file by hand, with a
+// slash at the end or a capital in it, would have one process looking at another
+// list and another lock than the next.
+//
+// A value nothing can be made of is handed on as it stands, so that what says so
+// is the command looking for a token under it and not every command at once.
+func defaultHostOf(file *config.File) string {
+	host, err := config.NormalizeHost(file.DefaultHost)
+	if err != nil {
+		return file.DefaultHost
+	}
+	return host
 }
 
 // findCard reads a card by its ID or by the short identifier people call it
@@ -665,6 +722,9 @@ func nullable(text string) any {
 	return text
 }
 
+// sessionVariable is where a session of an agent says what it is called.
+const sessionVariable = "CLAUDE_CODE_SESSION_ID"
+
 // agentSession is what a session of an agent calls itself, where it says so in
 // the environment. It binds a card to whoever took it up: the list belongs to
 // the machine and a signal carries all of it, so a sign of life without a name
@@ -673,5 +733,5 @@ func nullable(text string) any {
 // A card taken up where nothing says who is asking — a person at a terminal —
 // carries no name and goes by the moment it was started.
 func (a *app) agentSession() string {
-	return a.getenv("CLAUDE_CODE_SESSION_ID")
+	return a.getenv(sessionVariable)
 }
