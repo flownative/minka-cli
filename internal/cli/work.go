@@ -218,7 +218,8 @@ nobody signed in, the store held by somebody else — leaves nothing behind;
 }
 
 func (a *app) newHeartbeatCmd() *cobra.Command {
-	return &cobra.Command{
+	var asTheKeepalive bool
+	cmd := &cobra.Command{
 		Use:   "heartbeat",
 		Short: "Report the cards this machine is working on",
 		Long: `Reports the cards of 'minka work start' to Minka, so their tiles stay alive.
@@ -236,12 +237,17 @@ was turned away; what the last signal that went out made of it also stands in
 'minka work list'.`,
 		Args: requireArgs(),
 		RunE: func(*cobra.Command, []string) error {
+			if asTheKeepalive {
+				a.keepalive = true
+				return a.reportWhileNobodyElseDoes()
+			}
+
 			sent, reason, cards := a.signal(0)
 			if cards == nil {
 				cards = []string{}
 			}
 
-			if !a.jsonFlag && !a.quietFlag && !a.styledFlag && !a.stdoutIsTerminal() {
+			if a.nobodyIsListening() {
 				return nil
 			}
 			return a.ok(success{
@@ -251,6 +257,16 @@ was turned away; what the last signal that went out made of it also stands in
 			})
 		},
 	}
+	cmd.Flags().BoolVar(&asTheKeepalive, "keepalive", false, "Keep reporting on a timer of its own until nobody is at work; minka's own business")
+	_ = cmd.Flags().MarkHidden("keepalive")
+	return cmd
+}
+
+// nobodyIsListening says whether this run has nobody to say anything to: no flag
+// asked for output and no terminal to print it on. A hook that speaks after
+// every tool call costs the agent its attention for something it cannot act on.
+func (a *app) nobodyIsListening() bool {
+	return !a.jsonFlag && !a.quietFlag && !a.styledFlag && !a.stdoutIsTerminal()
 }
 
 // signal reports this machine's cards and says what it did.

@@ -1,8 +1,10 @@
 package cli
 
 import (
+	"context"
 	"encoding/json"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -43,6 +45,66 @@ func (e *testEnv) storedHost() map[string]any {
 // asStored is a moment the way the store writes it down.
 func asStored(at time.Time) string {
 	return at.UTC().Format(time.RFC3339)
+}
+
+// runKeepaliveThatIsToldToStop runs the keepalive of a process that is told to
+// stop straight away, so that what a test reads is what it decided before its
+// first tick and never a timer.
+func (e *testEnv) runKeepaliveThatIsToldToStop(at time.Time) (envelope, result) {
+	e.t.Helper()
+	told, stop := context.WithCancel(context.Background())
+	stop()
+	r := e.runWith(func(a *app) {
+		a.now = func() time.Time { return at }
+		a.ctx = told
+	}, "", "heartbeat", "--keepalive", "--json")
+	var env envelope
+	if err := json.Unmarshal([]byte(r.stdout), &env); err != nil {
+		e.t.Fatalf("output is not a JSON envelope: %v\nstdout: %s\nstderr: %s", err, r.stdout, r.stderr)
+	}
+	return env, r
+}
+
+// The safeguard from the side of the command: a second keepalive of the same
+// host gives up before it has reported anything. Two of them would report the
+// same list on timers of their own, neither hearing when the other stopped, and
+// the one that outlived its session would report through the other's silence.
+func TestASecondKeepaliveOfTheSameHostReportsNothing(t *testing.T) {
+	e := newAgentEnv(t)
+	began := time.Date(2026, 9, 23, 10, 0, 0, 0, time.UTC)
+	expectCode(t, e.runAt(began, "work", "start", e.fixture.CardInDoing.ID, "--json"), ExitOK)
+
+	held, err := work.HoldKeepalive(e.storePath(), e.vars["MINKA_HOST"])
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer held.Release()
+
+	env, r := e.runKeepaliveThatIsToldToStop(began.Add(time.Second))
+	expectCode(t, r, ExitOK)
+	if ended, _ := decode(t, env.Data)["ended"].(string); !strings.Contains(ended, "is reporting") {
+		t.Errorf("the second keepalive ended for %q, want the one that is reporting", ended)
+	}
+	if len(e.signals()) != 0 {
+		t.Errorf("%d signals went out from a keepalive that got no lock", len(e.signals()))
+	}
+}
+
+// The keepalive holds the lock while it reports and gives it back when it stops,
+// so that the next long tool call can start one again.
+func TestAKeepaliveHoldsTheLockOnlyWhileItReports(t *testing.T) {
+	e := newAgentEnv(t)
+	began := time.Date(2026, 9, 23, 10, 0, 0, 0, time.UTC)
+	expectCode(t, e.runAt(began, "work", "start", e.fixture.CardInDoing.ID, "--json"), ExitOK)
+
+	env, r := e.runKeepaliveThatIsToldToStop(began.Add(time.Second))
+	expectCode(t, r, ExitOK)
+	if ended, _ := decode(t, env.Data)["ended"].(string); !strings.Contains(ended, "told to stop") {
+		t.Errorf("the keepalive ended for %q", ended)
+	}
+	if reporting, err := work.SomebodyKeepsAlive(e.storePath(), e.vars["MINKA_HOST"]); err != nil || reporting {
+		t.Errorf("the lock is still held after the keepalive stopped: %v, %v", reporting, err)
+	}
 }
 
 // The safeguard, among the four a tick can come to: a tick whose clock jumped
