@@ -126,6 +126,28 @@ func TestTheFlagPutsTheRunIntoTheModeThatIsAtNoWork(t *testing.T) {
 	}
 }
 
+// The safeguard: only a store somebody else holds for the moment is a moment to
+// pass over. One that cannot be read at all ends the keepalive, which otherwise
+// would tick until the machine is restarted, report nothing, and hold the lock
+// of its host against every beat that tried to start a live one.
+func TestAKeepaliveOverAStoreItCannotReadStopsAndLetsGoOfTheLock(t *testing.T) {
+	e := newAgentEnv(t)
+	began := time.Date(2026, 9, 23, 10, 0, 0, 0, time.UTC)
+	expectCode(t, e.runAt(began, "work", "start", e.fixture.CardInDoing.ID, "--json"), ExitOK)
+	if err := os.WriteFile(e.storePath(), []byte("{ this is no store"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	env, r := e.runKeepaliveThatIsToldToStop(began.Add(time.Second))
+	expectCode(t, r, ExitOK)
+	if ended, _ := decode(t, env.Data)["ended"].(string); !strings.Contains(ended, "cannot be read") {
+		t.Errorf("the keepalive ended for %q, want the store it cannot read", ended)
+	}
+	if reporting, err := work.SomebodyKeepsAlive(e.storePath(), e.vars["MINKA_HOST"]); err != nil || reporting {
+		t.Errorf("the lock is still held: %v, %v", reporting, err)
+	}
+}
+
 // The keepalive holds the lock while it reports and gives it back when it stops,
 // so that the next long tool call can start one again.
 func TestAKeepaliveHoldsTheLockOnlyWhileItReports(t *testing.T) {
