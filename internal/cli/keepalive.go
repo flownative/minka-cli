@@ -156,8 +156,15 @@ func (a *app) keepTilesAlive() string {
 	before := a.now()
 	for {
 		now := a.now()
-		beat, cards, read := a.whatTheStoreSays(path, host)
-		at := tick{now: now, before: before, read: read, beat: beat, cards: cards}.decide()
+		beat, cards, err := a.whatTheStoreSays(path, host)
+		// A store somebody else holds is a moment to pass over; a store that
+		// cannot be read is the end. Otherwise a keepalive over a broken store
+		// would tick until the machine is restarted, report nothing, and hold the
+		// lock of its host against every beat that tried to start a live one.
+		if err != nil && !errors.Is(err, work.ErrBusy) {
+			return "the store cannot be read: " + err.Error()
+		}
+		at := tick{now: now, before: before, read: err == nil, beat: beat, cards: cards}.decide()
 		before = now
 
 		switch at {
@@ -182,27 +189,28 @@ func (a *app) keepTilesAlive() string {
 	}
 }
 
-// whatTheStoreSays is what one tick decides on, and nothing at all where
-// somebody else holds the store for that moment.
+// whatTheStoreSays is what one tick decides on. ErrBusy says that somebody else
+// held the store for that moment and nothing else is wrong with it; any other
+// error is what it says.
 //
 // It gives up what ran out like every other writer: when a session dies the
 // keepalive is often the last process left on the machine, and a card nobody
 // gives up would be reported past the working day it is allowed.
-func (a *app) whatTheStoreSays(path, host string) (beat time.Time, cards int, read bool) {
+func (a *app) whatTheStoreSays(path, host string) (beat time.Time, cards int, err error) {
 	handle, err := work.Open(path, waitForTheStore)
 	if err != nil {
-		return time.Time{}, 0, false
+		return time.Time{}, 0, err
 	}
 	defer handle.Close()
 
 	entry, known := handle.File.Hosts[host]
 	if !known {
-		return time.Time{}, 0, true
+		return time.Time{}, 0, nil
 	}
 	if entry.ForgetWhatRanOut(a.now()) > 0 {
 		_ = handle.Save()
 	}
-	return entry.BeatAt, len(entry.Cards), true
+	return entry.BeatAt, len(entry.Cards), nil
 }
 
 // What heartbeat says became of the keepalive.
@@ -227,10 +235,12 @@ func (a *app) whatBecameOfTheKeepalive() string {
 		return notStarted(err.Error())
 	}
 
-	cards, read := a.cardsInTheList(path, host)
+	cards, err := a.cardsInTheList(path, host)
 	switch {
-	case !read:
+	case errors.Is(err, work.ErrBusy):
 		return notStarted("the store is busy")
+	case err != nil:
+		return notStarted("the store cannot be read: " + err.Error())
 	case cards == 0:
 		return notStarted("no card is in hand")
 	}
@@ -252,25 +262,24 @@ func notStarted(why string) string {
 	return "not started: " + why
 }
 
-// cardsInTheList is how many cards this host holds, and whether the store could
-// be read at all.
+// cardsInTheList is how many cards this host holds.
 //
 // The signal beside it says only what it carried, and the throttle holds most
 // beats back, so whoever has to know whether anybody is at work asks the store.
 // It waits for nobody: where somebody else holds the store, the next beat asks
 // again.
-func (a *app) cardsInTheList(path, host string) (int, bool) {
+func (a *app) cardsInTheList(path, host string) (int, error) {
 	handle, err := work.Open(path, 0)
 	if err != nil {
-		return 0, false
+		return 0, err
 	}
 	defer handle.Close()
 
 	entry, known := handle.File.Hosts[host]
 	if !known {
-		return 0, true
+		return 0, nil
 	}
-	return len(entry.Cards), true
+	return len(entry.Cards), nil
 }
 
 // spawnKeepalive starts the keepalive as a process of its own.
