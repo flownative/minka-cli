@@ -41,9 +41,9 @@ when stdout is not a terminal, so an agent gets structured output by default.
   `minka hooks install` sets up once and for all.
 - Take a card up from its back: `minka cards notes show <card>` before you
   begin, because whoever was on it before left the state of the work there,
-  and `minka cards notes set` at every milestone, so that the next session can
-  take the card over. Comments are the other thing — the conversation with
-  people.
+  and `minka cards notes set <card> - --expect <updatedAt>` at every milestone,
+  so that the next session can take the card over. Comments are the other
+  thing — the conversation with people.
 - `minka cards done` is safe to repeat: a card already in Done is left alone.
 - `minka cards delete` moves a card to the trash. Repeating it changes
   nothing on the server, but a card in the trash reads like one that never
@@ -323,6 +323,9 @@ of them, the next step, the open questions. It is the handover — another
 session, on another machine, takes the card over by reading it. Comments are
 the other thing: the conversation with people.
 
+The back is one text. It is light Markdown, stored and printed as it is, never
+converted, and writing it notifies nobody and leaves no line in the timeline.
+
 How to keep it:
 
 - **Replace, do not append.** The back is a state, not a log. Rewrite what
@@ -333,23 +336,21 @@ How to keep it:
 - **Write at the milestones**, not as you go: work taken up, a review come
   back, a pull request opened, something merged, a decision taken, a question
   you cannot answer yourself. In between, work.
-- **Read the back before you begin** on a card anybody else may have touched,
-  and never write without having read.
+- **Read the back before you begin,** and never write without having read.
 - **`show` first, then `set` with `--expect <updatedAt>`.** The guard is what
-  makes a write that would wipe out somebody else's notes fail instead.
-  `cards notes show --json` hands the `set` with the right `--expect` in its
-  `breadcrumbs`.
+  makes a write that would wipe out somebody else's notes fail instead. With
+  `--json` both commands hand the `set` with the right `--expect` in their
+  `breadcrumbs`, a write that went through with the time it just wrote, so a
+  second write in the same session needs no second read.
 - **`--force` is how one session writes over another's notes unasked.** It is
   not the way past a refusal: a refusal means somebody wrote while you were
   writing, and their text is in `data`. Merge yours into their `body` and send
-  it again with their `updatedAt`. Take `--force` only for notes nobody else
-  writes.
+  it again with their `updatedAt`. Take `--force` only where the person you work
+  for has asked for it — whether anybody else writes these notes is not
+  something you can know.
 
 What the two commands do:
 
-- The back holds one text. It is light Markdown, stored and printed as it is,
-  never converted. Writing it notifies nobody and leaves no line in the
-  timeline.
 - `cards notes show <cardId>` gives `{cardId, body, updatedAt, updatedBy,
   appUrl}`. Notes nobody has written have `body` `""` and `updatedAt` and
   `updatedBy` null. The card itself does not say whether it has notes.
@@ -825,13 +826,16 @@ EOF
 Take a card over and write its state back:
 
 ```bash
-minka cards notes show <cardId> --quiet > back.json
-jq -r .body back.json > back.md
+minka cards notes show <cardId> --json > back.json
+jq -rj .data.body back.json > back.md
 # rewrite back.md into the state as it stands now, then send it back
-minka cards notes set <cardId> - --expect "$(jq -r '.updatedAt // "none"' back.json)" --json < back.md
+minka cards notes set <cardId> - --expect "$(jq -r '.data.updatedAt // "none"' back.json)" --json < back.md
 ```
 
-Finish a task and leave a note:
+`jq -rj` writes the body without a line ending of its own, so what goes back is
+what was read.
+
+Finish a task and leave a comment:
 
 ```bash
 minka cards done <cardId> --json
