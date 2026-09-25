@@ -71,10 +71,11 @@ func KeepaliveLockPath(storePath, host string) string {
 
 // nameOfTheHost turns a host into the middle of a file name. What reads as a
 // host name is kept and everything else becomes a hyphen, so that whoever looks
-// into the directory sees whose lock this is; a short digest of the whole host
-// stands behind it, so that two hosts which read alike once shortened — one of
-// them on another port, say — do not come to share a lock and let a machine's
-// cards go dark without a word.
+// into the directory sees whose lock this is; sixty-four bits of a digest of the
+// whole host stand behind it, so that two hosts which read alike once shortened —
+// one of them on another port, say — do not come to share a lock and let a
+// machine's cards go dark without a word. The digest is wide enough that no
+// collection of hosts anybody signs one machine in to will collide.
 //
 // Nothing of the host reaches the file system as a path of its own this way: no
 // separator, no name made of dots, nothing longer than a directory takes.
@@ -93,5 +94,5 @@ func nameOfTheHost(host string) string {
 			letters = append(letters, '-')
 		}
 	}
-	return string(letters) + "-" + hex.EncodeToString(digest[:4])
+	return string(letters) + "-" + hex.EncodeToString(digest[:8])
 }
