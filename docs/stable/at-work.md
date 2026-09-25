@@ -97,6 +97,71 @@ not have.
 - bounds its request to five seconds, far below the timeout of every other
   command.
 
+## One process reports while nobody else can
+
+One tool call that lasts — a test run, a build, an extraction of an hour, the
+time a session waits for an answer from the person — makes no signal at all,
+and the server forgets a card three minutes after the last one. The tile would
+go dark while the work goes on. So a beat that is not itself the keepalive and
+finds a card in hand starts `minka heartbeat --keepalive` (C-043): a process of
+its own that reports the list until nobody is at work on it any more.
+
+A subagent is no such case, measured and not assumed: its tool calls fire the
+hook, and under the name of the session that spawned it, so a session working
+through subagents reports by itself.
+
+- **One per host.** The lock is an advisory lock of the kernel beside the
+  store, named after the host it serves, and it is held for as long as the
+  process reports. A beat that finds it taken starts nothing, and a keepalive
+  that was killed leaves nothing behind, the kernel giving the lock back with
+  the process. One lock for the whole machine would let the cards of a second
+  host go dark without a word, which is worse than a second process.
+- **It is at no work of its own,** and two things say so, both of them: the
+  child is given the environment of the beat that started it less
+  `CLAUDE_CODE_SESSION_ID`, and a beat in that mode writes neither the sign of
+  life of a card nor the mark of a beat, whatever the environment carries. The
+  filter alone would be one stray variable away from a card glowing through a
+  working day while nothing ever stopped the reporting.
+- **It is started detached:** all three streams at the null device, a session
+  of its own, nobody waiting for it, and a working directory that holds no
+  project. Claude Code reads the output of a hook through a pipe, and a child
+  that held the write end would keep the tool call waiting for as long as the
+  keepalive lives — the opposite of the point. The own session is also what
+  keeps the Ctrl-C meant for the agent away from it.
+- **It wakes every thirty seconds** and lets the throttle of the signal be the
+  reporting rate. A ticker of exactly a minute falls a hair short of the
+  throttle every second or third time, and the gap grows past the three minutes
+  the server counts a signal for: the tile would flicker.
+- **Every tick sweeps,** like every other writer of the store. When a session
+  dies the keepalive is often the last process left, and without the sweep it
+  would report a card past the eight hours of C-040.
+- **It ends in one of three ways, and they differ.** An empty list is reported
+  and only then is it over, so the tiles go out at once. Twenty-five minutes in
+  which nothing but the keepalive was at the store, and a wall clock that
+  jumped further than a tick can account for, end it without a signal: the
+  cards may still be in hand, and the server forgets them by itself. The jump
+  is measured on the wall clock, because the monotonic clock stands still while
+  a machine sleeps and would show no jump at all.
+- **What says that somebody is at work** is the moment of a beat or a typed
+  command, written into the store at most once a minute the way the sign of
+  life is: a beat that is not the keepalive, `work start`, `work stop`, and
+  what `cards move` and `cards done` reach through the signal. `work list`
+  writes nothing — looking at the list is not being at work, and a command that
+  reads does not become a writer for this. The deadline hangs on the invocation
+  and not on a request going out, because once the keepalive reports every
+  minute the throttle swallows most beats, and a deadline measured on requests
+  would expire in a busy session.
+- `heartbeat --json` says in `keepalive` what became of it: `started`, `already
+  reporting`, or `not started` with the reason. Without that word nobody could
+  tell a tile that stays dark from a keepalive that never ran. The text view and
+  the exit code of a hook are what they were: silent, exit 0. The keepalive says
+  in `ended` why it stopped, which nothing reads while it runs detached, and
+  nothing it meets is a failure either — a host it cannot find, a lock it cannot
+  take, a store nobody hands over: it stops and says so, and exits 0 like every
+  other heartbeat (C-038).
+- `--keepalive` is minka's own business: hidden from the help and from `minka
+  commands`, and nothing but a beat has reason to call it.
+
 ## The hook belongs to whoever wrote the settings
 
 `hooks install` adds a `PostToolUse` hook to `~/.claude/settings.json`, or to

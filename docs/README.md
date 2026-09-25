@@ -34,8 +34,9 @@ the documentation says what holds; how it came about is in git.
 - [Saying what you are working on](stable/at-work.md): Where the cards of
   `work start` are kept and why the machine shares one list, when a card is
   given up and what keeps it, what the client is, what the heartbeat does in
-  every case it can meet, how the hook is written — before any work on `work`,
-  `heartbeat` or `hooks`.
+  every case it can meet, what the keepalive reports while one long tool call
+  runs, how the hook is written — before any work on `work`, `heartbeat` or
+  `hooks`.
 - [Testing](stable/testing.md): Fake API, sabotage proofs, what a test pins
   down, what it may demand of time — read before your first test.
 

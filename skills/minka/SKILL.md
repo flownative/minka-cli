@@ -612,6 +612,13 @@ this:
   "(HTTP 403, agentsOnly)" for a token that belongs to a person and not to an
   agent. `minka work list --json` carries the same words in `failure` for the
   last signal that reached the host.
+- A tool call that runs for minutes keeps its tile alive by itself: the beat
+  before it starts a process of minka's own that reports while nothing else can,
+  and that process stops when nothing is in hand any more or when nobody has
+  been at work for a while. There is nothing for you to do about it, and
+  `--keepalive` is minka's own business — never call it yourself.
+  `minka heartbeat --json` says in `data.keepalive` whether one was `started`,
+  is `already reporting`, or was `not started` and why.
 - The list belongs to the machine, not to your session, and every signal
   reports all of it together. Never write the store yourself.
 - Minka forgets a card three minutes after the last signal, so a session that

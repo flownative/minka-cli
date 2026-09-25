@@ -54,6 +54,11 @@ does not say whether a card has notes, so `cards show` only points to them.
 An agent says which cards it has in hand: `work start` and `work stop` keep
 one list per machine, `heartbeat` reports it to `PUT /me/work`, and `hooks
 install` writes the hook of Claude Code that calls it after every tool call.
+A beat that finds a card in hand and no keepalive of its host starts one
+(C-043), so a tool call that runs for longer than the three minutes a signal
+counts for keeps its tiles alight; that process is at no work itself and stops
+on an empty list, on twenty-five minutes in which nothing else was at the
+store, or on a clock that jumped.
 The list, the refusals, the throttle and the hook are seen live, and the
 report with them: on `minka.flownative.com`, where this CLI is signed in as an
 agent, `work start`, `heartbeat` and `work stop` get through, and the hook
@@ -224,6 +229,11 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   it. Measured outside a test, though not on a board: a tool call of a subagent
   carries the session of whoever spawned it and runs the hook, so a session
   that works through subagents keeps the sign of life of its cards.
+  Of the keepalive, nothing at all is seen live yet, and against the fake not
+  everything either: what a tick decides is tested as a plain function with a
+  moment handed to it, and the lock, the mark of a beat, the mode that is at no
+  work and what a beat says became of the keepalive are tested with no process
+  forked. What no test reaches stands under the limits below.
   `hooks install` and `hooks status` are seen on real files: a fresh one, one
   carrying other hooks, one carrying ours, a `hooks` that stands there as
   `null`, and the shapes that are refused unrepaired with the entry to add by
@@ -276,6 +286,15 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   longer, because the run has to outlast twice the idle allowance to show
   anything. It is the one test that makes the pace of another program its
   precondition, the named exception to [C-035](../decisions.md#c-035).
+- Of the keepalive, three things are left untested on purpose, and the split is
+  the point of [C-035](../decisions.md#c-035) rather than a new exception to it:
+  the detachment itself, the loop, and a machine that really sleeps. The
+  spawning is reached through an injection point on `app` that a stand-in fills,
+  so no test forks a detached process; the loop is reached only where it decides
+  something before its first tick, which is the lock; and the clock that jumped
+  is a moment handed to a plain function, not a machine put to sleep. With the
+  loop goes the one line that puts a run into the mode of the keepalive, which
+  is otherwise set by hand. All of it belongs to the live check.
 - `TestARunThatIsStoppedIsInterruptedNotFailed` needs SIGINT to reach the
   stand-in, which sends it to itself. A shell sets SIGINT to ignored for a
   command it starts in the background, and a program inherits that, so the
@@ -310,6 +329,10 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   gains a build provenance attestation with instructions for verifying it, and
   the macOS binaries get notarised, which waits for an Apple Developer ID.
 - See a tile live: one that lights up and one that goes quiet at once.
+- Check the keepalive live, as the [live check](../guides/live-check.md) says: a
+  tile that stays alight through a tool call of five minutes, the word in
+  `heartbeat --json`, the tile going out with `work stop`, no keepalive left
+  behind afterwards — and, at some point, a machine that really slept.
 - Commands for the to-dos of a project: the addresses are on Minka's `main`
   and unreleased, the contract stands in its `authorization.md` and E-190.
 - Commands for the check-ins of a project: likewise unreleased, the contract
