@@ -635,3 +635,21 @@ organisation, so any other zone would give the day of nobody. A day that is off
 by one is a day nobody can tell from a right one afterwards, which is worth more
 than a run that goes through. **Implemented as:** `basecamp.dayOf`, see
 [Importing from Basecamp](stable/import.md).
+
+<a id="c-048"></a>
+## C-048 — A schedule Minka cannot express leaves the question out, and the run goes on
+
+*Applies to: `questions.jsonl`, the report of a run*
+
+A question whose schedule Minka has no words for is left out with its answers
+and named in the report with the field that made it impossible. The run goes on.
+
+**Why:** One question of a whole account would otherwise cost the extraction of
+all of it, and a run of hours would have to be repeated for a single fortnightly
+question nobody ever answered. Nothing here is final: the question uses no
+`sourceId`, so a later run writes it as soon as Minka has a word for its
+schedule, or as soon as the question is answered — unlike `asked`, which the
+first run settles. What is lost stands per question and per field in the report,
+so nobody has to guess what is missing. **Implemented as:**
+`basecamp.scheduleOf`, `basecamp.Extractor.leaveQuestionOut`, see
+[Importing from Basecamp](stable/import.md).
