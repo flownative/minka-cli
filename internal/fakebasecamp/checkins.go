@@ -147,7 +147,9 @@ func checkinProject(ada, grace, linus, edsger, niklaus, deleted Person, tool fun
 
 	checkins := tool(9070, "questionnaire", "questionnaires", "Check-ins", true, 1, &niklaus)
 	checkins.CreatedAt, checkins.UpdatedAt = at(1, 7), at(28, 12)
-	checkins.Questions = []Question{today, weekend, roadmap, retro, weekly, monthly, unanswered}
+	// Not the order they were made in: Basecamp lists what it likes, and the
+	// bundle writes them oldest first.
+	checkins.Questions = []Question{today, retro, weekend, monthly, roadmap, unanswered, weekly}
 
 	return Project{
 		ID: 7007, Name: "Check-in Project", Status: "active",
