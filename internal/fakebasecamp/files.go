@@ -141,6 +141,12 @@ func (a *Account) storedFile(key string) (storedFile, bool) {
 					}
 				}
 			}
+			for _, question := range tool.Questions {
+				for _, answer := range question.Answers {
+					listed(answer.Files)
+					commented(answer.Comments)
+				}
+			}
 		}
 	}
 	if found == nil {

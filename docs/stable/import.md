@@ -157,18 +157,19 @@ names an address or whose it is, and `invalidAddresses` holds IDs, never names.
 
 ## What a bundle holds so far
 
-The structure, the boards, the message boards and the chats:
+The structure, the boards, the message boards, the chats and the check-ins:
 `manifest.json`, `people.jsonl`, `projects.jsonl`, `tools.jsonl`,
 `categories.jsonl`, `columns.jsonl`, `cards.jsonl`, `steps.jsonl`,
-`posts.jsonl`, `messages.jsonl` or its parts, `comments.jsonl`,
-`reactions.jsonl`, `attachments.jsonl` and `files/` with the avatars and the
-files of texts and chats. A file of a kind the projects have nothing of is
-missing.
+`posts.jsonl`, `questions.jsonl`, `answers.jsonl`, `messages.jsonl` or its
+parts, `comments.jsonl`, `reactions.jsonl`, `attachments.jsonl` and `files/`
+with the avatars and the files of texts, chats and answers. A file of a kind
+the projects have nothing of is missing.
 
 The walk goes kind by kind across the projects of a run (C-028): the projects
 with their tools and boards, then the message boards of all projects, then
-the chats. So comments and reactions stand in the order of what they hang
-on: those of cards, those of posts, those of lines.
+the chats, then the questionnaires. So comments and reactions stand in the
+order of what they hang on: those of cards, those of posts, those of lines,
+those of answers.
 
 - **People** are the ones a record of the bundle refers to, and nobody else:
   the members of the projects named and whoever a record names: its creator,
@@ -233,7 +234,8 @@ on: those of cards, those of posts, those of lines.
   paragraph per block, a `<br>` per line break.
 - **Tools** are the dock entries that are switched on and that Minka has a
   counterpart for: `kanban_board` → `board`, `chat` → `chat`, `message_board`
-  → `posts`, several of a kind where a project has several. Creator and
+  → `posts`, `questionnaire` → `checkins`, several of a kind where a project
+  has several. Creator and
   timestamps come from the tool itself. Every other entry is counted as
   skipped, per kind and whether it was switched on, and shown in the report.
 - **Columns** are the lists of a card table: `Kanban::Triage` → `triage`,
@@ -321,14 +323,77 @@ on: those of cards, those of posts, those of lines.
   instead, and its manifest has no `parts`. A bundle never carries both. The
   writer of a bundle does this for any kind that is said to come in parts: it
   counts, and whoever adds the records says where a part may end.
-- **Comments** are those of cards and of posts, `parentKind` `card` or `post`,
+- **Questions** are the questions of every questionnaire, oldest first, by
+  `created_at` and then by ID. A questionnaire lists the questions it asks; a
+  walk is no snapshot, so a question met twice is written once.
+  The schedule of Basecamp becomes the one Minka has. The weekdays are Minka's:
+  Basecamp counts Sunday as 0 and Saturday as 6, Minka Monday as 1 and Sunday as
+  7, so every day but Sunday keeps its number and only Sunday moves; a day named
+  twice is one day, and they come in order. `rhythm` is `weekly` where one
+  weekday is chosen and `daily` where several are, because Minka's `daily` means
+  "on each of the chosen weekdays" and the two are the same thing for one day.
+  The frequencies Basecamp sends are `every_day`, `on_certain_days`,
+  `every_week`, `every_other_week` and `every_month`. The first three all carry
+  the days they are asked on, so they are the same thing and come to `weekly` or
+  `daily` by the number of days; `every_other_week` becomes `everyOtherWeek` and
+  `every_month` becomes `monthly`, both of which take exactly one weekday: what
+  Basecamp asks on one weekday every month is the first such day of the month,
+  which is what Minka's `monthly` means.
+  `timeOfDay` is `HH:MM`.
+  `status` is the one the source has, so a question it has shelved does not
+  arrive active and start asking people again. `paused` is `true` for a question
+  the source has paused and for one whose schedule has run out, because Minka's
+  schedule has no end to say so with.
+  `startsOn` is always written, never left out: Minka would otherwise take the
+  day of `createdAt` in the offset the bundle wrote, which is Basecamp's UTC, so
+  a question made late in the evening would start a day late. It is the
+  `start_date` of the schedule; for an `everyOtherWeek` question it is the day
+  the question was last answered on, stepped back to the weekday it is asked on,
+  because Minka counts the weeks from the first matching day at or after
+  `startsOn` and Basecamp says nothing about which of two weeks it asks in
+  (C-046). `anchorsInferred` in the report names each such question with that
+  day.
+  `asked` comes from the subscribers of the question, which is whom Basecamp
+  hands it to and not whoever answered it, and holds only those Minka can ask
+  (C-045), in the order of their IDs and each once. A question that comes asking
+  nobody at all is named in `nobodyAsked` with how many of its people fell out:
+  it will ask nobody again, because the first run settles `asked`. Nothing hangs
+  on a question: it carries no comment and no reaction, the format has no word
+  for either of one, and none is asked for.
+  A question whose schedule Minka has no words for is left out with its
+  answers, and the run goes on (C-048); `questionsLeftOut` names it with the
+  field that made it impossible: `week_instance`, `week_interval`,
+  `month_interval`, `duration`, a `frequency` nobody knows, `days` that are
+  empty, outside 0…6 or more than one where the rhythm takes one, an `end_date`
+  that has not passed, a `start_date` or an `end_date` of another shape than
+  `YYYY-MM-DD`, an `hour` or a `minute` of no day, and `group_on` for an
+  `everyOtherWeek` question nobody ever answered. A title the applier refuses ends the run as `api_error`, named by
+  ID: empty, longer than 200 characters, or with a character nobody can see. The
+  whitespace around a title is taken off, as Minka takes it off.
+- **Answers** are what somebody answered a question, per question oldest first,
+  by `created_at` and then by ID; one met twice is written once. `groupOn` is
+  the day the answer belongs to, taken from `group_on` as it is and never worked
+  out from the schedule: Minka stores it and holds it against nothing, so an
+  answer may well sit on a day the question never asked on, which is what the
+  source says. Where Basecamp names no day, it is the day the answer was
+  written, read in the zone of whoever wrote it (C-047), and counted in
+  `answersWithoutADay`. The text is the rendered one, as of a comment, and goes
+  the way every other text goes.
+  An answer in the trash is left out and counted (`answersTrashed`), as a
+  comment in the trash is, and one that says nothing is left out and counted
+  (`answersWithoutABody`), because the applier refuses such a body. A question
+  that has no answer costs no request. Comments, boosts and files hang on the
+  answer.
+- **Comments** are those of cards, of posts and of answers, `parentKind`
+  `card`, `post` or `answer`,
   per parent oldest first, by `created_at` and then by ID: the applier reads
   the order of the comments of a parent from the file. Basecamp hands out the
   rendered text of a comment only. A comment in the trash is left out with
   its boosts and counted (`commentsTrashed`); any other comes, the archived
   comment of an archived card as well.
 - **Reactions** are the boosts of a card (`targetKind` `card`), of a post
-  (`post`), of a comment (`comment`) and of a line (`message`), with `content`
+  (`post`), of an answer (`answer`), of a comment (`comment`) and of a line
+  (`message`), with `content`
   as it is, a text of some words included: what Minka takes for a reaction is
   the applier's to decide. The boosts of a card or a post stand before those
   of its comments. A boost has one time, which is both `createdAt` and
@@ -568,8 +633,8 @@ see Files that cannot be fetched (C-030).
 
 - **The record** carries `filename`, `contentType` as Basecamp says it, or
   `null`, `bytes`, `sha256`, `file`, which is exactly
-  `<sourceId>/<filename>`, `ownerKind` (`card`, `comment`, `post`, `message`)
-  and `ownerSourceId`. Basecamp gives a file neither a time nor a creator, so
+  `<sourceId>/<filename>`, `ownerKind` (`card`, `comment`, `post`, `message`,
+  `answer`) and `ownerSourceId`. Basecamp gives a file neither a time nor a creator, so
   `createdAt` and `updatedAt` are those of its owner, and `createdBy` is
   `null`, which the format reads as the author of the owner. Avatars stay as
   they are, with their person as creator.
@@ -729,12 +794,17 @@ files of its texts the same way.
   `filesDropped`, `filesExpected`, `filesBytesExpected`, `filesBytes`,
   `filesFetched`, `filesReused`, `filesGone`, `fileNamesChanged`,
   `captionsDropped`, `filesOfSeveralOwners`, `linkPreviews`,
-  `picturesLinked`, `embeds`, `embedsLeftOut`, `references`, `longestBody`,
-  `requestsRetried` and the absolute path of the bundle. `filesBytes` is
+  `picturesLinked`, `embeds`, `embedsLeftOut`, `references`,
+  `questionsLeftOut`, `anchorsInferred`, `nobodyAsked`, `askedLeftOut`
+  (`notInTheProject`,
+  `retired`, `withoutAnAddress`), `answersWithoutABody`, `answersWithoutADay`,
+  `answersTrashed`, `longestBody`, `requestsRetried` and the absolute path of
+  the bundle. The lines about check-ins are shown only by a run that met a
+  questionnaire. `filesBytes` is
   what the files of the bundle weigh, fetched or taken over; it and
   `filesFetched`, `filesReused` and `filesGone` are 0 in a dry run.
-  `longestBody` is the longest text per kind, `cards`, `comments`, `posts`
-  and `messages`, in characters: whoever sets the limits of where a bundle
+  `longestBody` is the longest text per kind, `cards`, `comments`, `posts`,
+  `messages` and `answers`, in characters: whoever sets the limits of where a bundle
   goes has to know it. `requestsRetried` is a number, 0 for a run that met no
   failure; the text shows its line only when it is more, and so it does for
   `creatorProbesRefused`, `embeds`, `embedsLeftOut` and `references`.

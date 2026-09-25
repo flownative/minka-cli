@@ -120,7 +120,10 @@ func TestImportBasecampWritesABundleAndReportsWhatItHolds(t *testing.T) {
 		"postsLeftOut":  float64(0), "postsWithEmptyBody": float64(0),
 		"messagesByType":     map[string]any{"text": float64(0), "richText": float64(0), "upload": float64(0), "integration": float64(0)},
 		"uploadLinesLeftOut": float64(0), "messagesWithEmptyBody": float64(0),
-		"longestBody":     map[string]any{"cards": float64(0), "comments": float64(0), "posts": float64(0), "messages": float64(0)},
+		"questionsLeftOut": []any{}, "anchorsInferred": []any{}, "nobodyAsked": []any{},
+		"askedLeftOut":        map[string]any{"notInTheProject": float64(0), "retired": float64(0), "withoutAnAddress": float64(0)},
+		"answersWithoutABody": float64(0), "answersWithoutADay": float64(0), "answersTrashed": float64(0),
+		"longestBody":     map[string]any{"cards": float64(0), "comments": float64(0), "posts": float64(0), "messages": float64(0), "answers": float64(0)},
 		"references":      map[string]any{"cards": float64(0), "posts": float64(0), "tools": float64(0)},
 		"requestsRetried": float64(0),
 	}
@@ -989,7 +992,7 @@ func TestImportBasecampReportsThePostsAndTheChatsOfAProject(t *testing.T) {
 		"postsLeftOut":  float64(1), "postsWithEmptyBody": float64(1),
 		"messagesByType":     map[string]any{"text": float64(3), "richText": float64(2), "upload": float64(2), "integration": float64(1)},
 		"uploadLinesLeftOut": float64(1), "messagesWithEmptyBody": float64(1), "picturesLinked": float64(1),
-		"longestBody":   map[string]any{"cards": float64(0), "comments": float64(94), "posts": float64(212), "messages": float64(213)},
+		"longestBody":   map[string]any{"cards": float64(0), "comments": float64(94), "posts": float64(212), "messages": float64(213), "answers": float64(0)},
 		"filesInBodies": float64(4), "filesDropped": float64(2), "linkPreviews": float64(3), "mentionsUnresolved": float64(0),
 		"embeds": float64(1), "embedsLeftOut": float64(0),
 	}
@@ -1520,5 +1523,118 @@ func TestAToolTheIdentityMayNotSeeIsSaidToBePassedOver(t *testing.T) {
 	expectCode(t, r, ExitOK)
 	if strings.Contains(env.Notice, "could not be asked who created") {
 		t.Errorf("a run that met no refusal says one: %q", env.Notice)
+	}
+}
+
+func TestImportBasecampReportsTheCheckinsOfAProject(t *testing.T) {
+	e := newImportEnv(t)
+	out := filepath.Join(t.TempDir(), "bundle")
+
+	env, r := e.runJSON("import", "basecamp", "--project", "7007", "--out", out)
+	expectCode(t, r, ExitOK)
+	data := decode(t, env.Data)
+	want := map[string]any{
+		"counts": map[string]any{"people": float64(6), "projects": float64(1), "tools": float64(1),
+			"questions": float64(6), "answers": float64(6), "comments": float64(1), "reactions": float64(2), "attachments": float64(6)},
+		"questionsLeftOut": []any{map[string]any{"questionSourceId": "9314", "field": "group_on"}},
+		"anchorsInferred":  []any{map[string]any{"questionSourceId": "9312", "from": "2024-02-28"}},
+		"nobodyAsked":      []any{},
+		"askedLeftOut": map[string]any{
+			"notInTheProject": float64(1), "retired": float64(1), "withoutAnAddress": float64(1)},
+		"answersWithoutABody": float64(1), "answersWithoutADay": float64(0), "answersTrashed": float64(0),
+		"longestBody": map[string]any{"cards": float64(0), "comments": float64(17), "posts": float64(0), "messages": float64(0), "answers": float64(150)},
+	}
+	for key, value := range want {
+		if !reflect.DeepEqual(data[key], value) {
+			t.Errorf("%s: got %v, want %v", key, data[key], value)
+		}
+	}
+	for _, notice := range []string{
+		"1 question of a check-in is left out",
+		"1 question asked every other week is anchored on the day it was last answered",
+		"3 people questions ask cannot be said to be asked",
+		"1 answer of a check-in is left out, because it says nothing",
+	} {
+		if !strings.Contains(env.Notice, notice) {
+			t.Errorf("notice %q does not say %q", env.Notice, notice)
+		}
+	}
+
+	r = e.run("import", "basecamp", "--project", "7007", "--out", out, "--styled")
+	expectCode(t, r, ExitOK)
+	for _, want := range []string{
+		"questions    6", "answers      6",
+		"Questions whose schedule Minka has no words for, left out: 1 — 9314 (group_on)",
+		"Questions asked every other week anchored on the day they were last answered: 1 — 9312 from 2024-02-28",
+		"People a question asks that the bundle cannot say are asked: 1 no member of the project, 1 no longer there, 1 without an address",
+		"Answers that say nothing, left out: 1; answers in the trash, left out: 0",
+		"Answers Basecamp names no day for, dated by when they were written: 0",
+	} {
+		if !strings.Contains(r.stdout, want) {
+			t.Errorf("the text lacks %q:\n%s", want, r.stdout)
+		}
+	}
+}
+
+// A run that met no questionnaire says nothing about check-ins, and no output
+// ever says what somebody answered.
+func TestARunWithoutACheckinSaysNothingAboutThem(t *testing.T) {
+	e := newImportEnv(t)
+	r := e.run("import", "basecamp", "--project", "7001", "--out", filepath.Join(t.TempDir(), "bundle"), "--styled")
+	expectCode(t, r, ExitOK)
+	if strings.Contains(r.stdout, "Questions") || strings.Contains(r.stdout, "Answers") {
+		t.Errorf("a run without a questionnaire talks about check-ins:\n%s", r.stdout)
+	}
+}
+
+func TestNoOutputSaysWhatSomebodyAnsweredACheckin(t *testing.T) {
+	e := newImportEnv(t)
+	out := filepath.Join(t.TempDir(), "bundle")
+	answered := []string{"Reviewed the plan", "Packed the boxes", "Joined from the outside", "On course", "The deploys", "hours.png", "What did you work on"}
+
+	env, r := e.runJSON("import", "basecamp", "--project", "7007", "--out", out)
+	expectCode(t, r, ExitOK)
+	styled := e.run("import", "basecamp", "--project", "7007", "--out", out, "--styled")
+	expectCode(t, styled, ExitOK)
+
+	for _, text := range answered {
+		for what, output := range map[string]string{
+			"the envelope": r.stdout + r.stderr, "the text": styled.stdout + styled.stderr, "the notices": env.Notice,
+		} {
+			if strings.Contains(output, text) {
+				t.Errorf("%s says %q", what, text)
+			}
+		}
+	}
+}
+
+// A question whose every subscriber is somebody the bundle cannot name as asked
+// comes asking nobody, and asks nobody again: a later run never touches asked.
+// So it is named on its own and not only counted.
+func TestAQuestionThatComesAskingNobodyIsNamed(t *testing.T) {
+	e := newImportEnv(t)
+	// Of the weekend question's one subscriber the bundle knows no address.
+	questions := e.account.Projects[6].Dock[0].Questions
+	for i := range questions {
+		if questions[i].ID == 9311 {
+			questions[i].Subscribers = []fakebasecamp.Person{{ID: 103}}
+		}
+	}
+	out := filepath.Join(t.TempDir(), "bundle")
+
+	env, r := e.runJSON("import", "basecamp", "--project", "7007", "--out", out)
+	expectCode(t, r, ExitOK)
+	want := []any{map[string]any{"questionSourceId": "9311", "leftOut": float64(1)}}
+	if got := decode(t, env.Data)["nobodyAsked"]; !reflect.DeepEqual(got, want) {
+		t.Errorf("nobodyAsked: got %v, want %v", got, want)
+	}
+	if !strings.Contains(env.Notice, "1 question of a check-in comes asking nobody at all") {
+		t.Errorf("notice %q", env.Notice)
+	}
+
+	styled := e.run("import", "basecamp", "--project", "7007", "--out", out, "--styled")
+	expectCode(t, styled, ExitOK)
+	if !strings.Contains(styled.stdout, "Questions that come asking nobody at all: 1 — 9311 (1 left out)") {
+		t.Errorf("the text lacks the question:\n%s", styled.stdout)
 	}
 }

@@ -288,6 +288,13 @@ func (a *Account) commentsOf(p *Project, id string) ([]Comment, bool) {
 				comments, found = post.Comments, true
 			}
 		}
+		for _, question := range p.Dock[t].Questions {
+			for _, answer := range question.Answers {
+				if strconv.FormatInt(answer.ID, 10) == id {
+					comments, found = answer.Comments, true
+				}
+			}
+		}
 	}
 	return comments, found
 }
@@ -317,6 +324,14 @@ func (a *Account) boostsOf(p *Project, id string) ([]Boost, bool) {
 		}
 		for _, line := range p.Dock[t].Lines {
 			is(line.ID, line.Boosts)
+		}
+		for _, question := range p.Dock[t].Questions {
+			for _, answer := range question.Answers {
+				is(answer.ID, answer.Boosts)
+				for _, comment := range answer.Comments {
+					is(comment.ID, comment.Boosts)
+				}
+			}
 		}
 	}
 	return boosts, found
