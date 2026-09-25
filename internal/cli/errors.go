@@ -8,6 +8,7 @@ import (
 	"net/http"
 
 	"github.com/flownative/minka-cli/internal/api"
+	"github.com/flownative/minka-cli/internal/config"
 	"github.com/spf13/cobra"
 )
 
@@ -139,7 +140,10 @@ func apiError(err error, host string) *Error {
 
 	var networkErr *api.NetworkError
 	if errors.As(err, &networkErr) {
-		e := &Error{Code: CodeNetwork, Message: networkErr.Error(), Hint: "Is " + host + " reachable?"}
+		// The error of the request has the address in it with the password
+		// replaced, the way the standard library prints one. A hint that named
+		// the host as it stands would undo that in the same envelope.
+		e := &Error{Code: CodeNetwork, Message: networkErr.Error(), Hint: "Is " + config.HostForOutput(host) + " reachable?"}
 		switch {
 		case errors.Is(err, context.Canceled):
 			e.Message = "interrupted"

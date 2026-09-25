@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"unicode"
 )
 
 func TestSaveWritesAFileOnlyItsOwnerCanRead(t *testing.T) {
@@ -181,6 +182,9 @@ func TestNormalizeHostRefusesWithoutRepeatingACredential(t *testing.T) {
 		"//" + user + ":" + password + "@minka.localbeach.net",
 		// A separator written percent-encoded leaves no literal @ or : to find.
 		"https://" + user + ":" + password + "%40minka.localbeach.net",
+		// Here the address can be read, and it is the percent-encoded separator
+		// alone that says the user information does not end where it seems to.
+		"https://" + user + ":2024/" + password + "%40minka.localbeach.net",
 		"https://" + user + "%3A" + password + "%40minka.localbeach.net",
 		// A second @ belongs to the user information as well, so the last one
 		// ends it — here where the address still parses, and below where a
@@ -200,13 +204,47 @@ func TestNormalizeHostRefusesWithoutRepeatingACredential(t *testing.T) {
 			continue
 		}
 		message := err.Error()
+		// The refusal is one reader of the rendering; every other place that
+		// prints a host reads the same one, so both are held to it here.
+		shown := HostForOutput(host)
 		for _, secret := range []string{password, user, another} {
 			if strings.Contains(message, secret) {
 				t.Errorf("the refusal of %q hands on %q: %s", host, secret, message)
 			}
+			if strings.Contains(shown, secret) {
+				t.Errorf("what may be printed of %q hands on %q: %s", host, secret, shown)
+			}
 		}
-		if !strings.Contains(message, "minka.localbeach.net") {
-			t.Errorf("the refusal of %q does not say which host it is about: %s", host, message)
+		// Where the credential moved into the path, no part of the value means
+		// the host any more, and the refusal quotes none of it; everywhere else
+		// it has to say which host it is about, or it would keep the secret by
+		// saying nothing.
+		if !strings.Contains(message, "minka.localbeach.net") && !strings.Contains(message, "the address given") {
+			t.Errorf("the refusal of %q says neither which host it is about nor that the address given is at fault: %s", host, message)
+		}
+	}
+}
+
+// What a host is rendered to is printed, and a control character in a printed
+// line is read as an order of its own by a terminal and by a log. None reaches
+// the result, whichever part of the value it stood in.
+func TestHostForOutputDropsWhatNoAddressIsMadeOf(t *testing.T) {
+	hosts := []string{
+		"https://minka.localbeach.net\x7f",
+		"https://minka.local\x1bbeach.net",
+		"https://robert:s3cr3t-password@minka.localbeach.net\x7f",
+		"https://minka.localbeach.net/\x00api/v1",
+		"https://minka.localbeach.net\r\n/api/v1",
+	}
+	for _, host := range hosts {
+		shown := HostForOutput(host)
+		for _, r := range shown {
+			if unicode.IsControl(r) {
+				t.Errorf("HostForOutput(%q) = %q, which holds %q", host, shown, r)
+			}
+		}
+		if !strings.Contains(shown, "minka.local") {
+			t.Errorf("HostForOutput(%q) = %q, which says no host", host, shown)
 		}
 	}
 }

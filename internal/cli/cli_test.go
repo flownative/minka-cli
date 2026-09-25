@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -1687,7 +1688,7 @@ func TestAHandWrittenDefaultHostIsRefusedWithoutItsPassword(t *testing.T) {
 	if strings.ContainsRune(r.stdout+r.stderr, '\x7f') {
 		t.Errorf("a control character of the value reached the output: %q", r.stdout+r.stderr)
 	}
-	if strings.Contains(env.Hint, "***") || !strings.Contains(env.Hint, "--host <the address of your Minka instance>") {
+	if strings.Contains(env.Hint, "***") || !strings.Contains(env.Hint, "--host YOUR-INSTANCE-ADDRESS") {
 		t.Errorf("the hint does not say what is to be filled in: %s", env.Hint)
 	}
 	// A line that looks ready to run would be run, by a person or by an agent,
@@ -1722,6 +1723,37 @@ func TestSigningOutOfAHandWrittenEntryPrintsNoPassword(t *testing.T) {
 	}
 	if _, ok := file.Hosts[withCredentials]; ok {
 		t.Error("the entry the file holds was not the one that was removed")
+	}
+}
+
+// A request that cannot be made says which address it was, and the standard
+// library replaces the password in the error it writes. The hint beside it must
+// not undo that in the same envelope — and this hint appears after every failed
+// request, not only where a sign-in is at stake.
+func TestTheHintAfterAFailedRequestCarriesNoPassword(t *testing.T) {
+	const password = "s3cr3t-password"
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	address := listener.Addr().String()
+	if err := listener.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	host := "http://robert:" + password + "@" + address
+	e := newTestEnv(t)
+	delete(e.vars, "MINKA_HOST")
+	delete(e.vars, "MINKA_TOKEN")
+	e.writeConfig(`{"defaultHost":"` + host + `","hosts":{"` + host + `":{"token":"minka_pat_written_by_hand"}}}`)
+
+	env, r := e.runJSON("", "me")
+	expectCode(t, r, ExitNetwork)
+	if out := r.stdout + r.stderr; strings.Contains(out, password) {
+		t.Errorf("the failed request hands the password on: %s", out)
+	}
+	if !strings.Contains(env.Hint, "127.0.0.1") {
+		t.Errorf("the hint does not say what could not be reached: %s", env.Hint)
 	}
 }
 

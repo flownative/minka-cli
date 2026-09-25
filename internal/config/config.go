@@ -19,6 +19,7 @@ import (
 	"runtime"
 	"sort"
 	"strings"
+	"unicode"
 )
 
 type File struct {
@@ -198,7 +199,7 @@ func NormalizeHost(raw string) (string, error) {
 	}
 	path := strings.TrimSuffix(strings.TrimRight(u.Path, "/"), "/api/v1")
 	if path != "" {
-		return "", fmt.Errorf("%q has a path; give the address of the Minka instance, such as https://minka.example.com", shown)
+		return "", errors.New("the address given has a path; give the address of the Minka instance, such as https://minka.example.com")
 	}
 	if u.Scheme == "http" && !isLoopback(u.Hostname()) {
 		return "", fmt.Errorf("%q uses plain http, which would send the token unencrypted; use https", shown)
@@ -213,7 +214,8 @@ func NormalizeHost(raw string) (string, error) {
 }
 
 // HostForOutput renders a host the way it may be printed: scheme, host, port
-// and path, and nothing that a credential can hide in.
+// and path, and nothing that a credential can hide in, nor anything that is no
+// part of an address at all.
 //
 // A host is said back to whoever gave it, and from there it travels into a
 // transcript, a ticket and a log. A password or a token written into the
@@ -232,16 +234,30 @@ func HostForOutput(raw string) string {
 	// slash, a question mark or a hash moves that end into the path, and the
 	// host and the path then carry the credential themselves.
 	if u, err := url.Parse(value); err == nil && u.Host != "" && !holdsASeparator(u.Host+u.EscapedPath()) {
-		return u.Scheme + "://" + u.Host + u.EscapedPath()
+		return withoutControlCharacters(u.Scheme + "://" + u.Host + u.EscapedPath())
 	}
 
-	return hostTextWithoutCredentials(value)
+	return withoutControlCharacters(hostTextWithoutCredentials(value))
+}
+
+// withoutControlCharacters drops what no address is made of. What is left is
+// printed, and a terminal, a transcript and a log read a control character as an
+// order of their own instead of as text, so no caller has to quote the result to
+// be safe.
+func withoutControlCharacters(value string) string {
+	return strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) {
+			return -1
+		}
+
+		return r
+	}, value)
 }
 
 // holdsASeparator says whether a part of an address still carries the sign that
 // user information ends there, written plainly or percent-encoded.
 func holdsASeparator(value string) bool {
-	return strings.Contains(value, "@") || strings.Contains(strings.ToUpper(value), "%40")
+	return strings.Contains(value, "@") || strings.Contains(value, "%40")
 }
 
 // hostTextWithoutCredentials renders a value whose address cannot be trusted to
