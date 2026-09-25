@@ -105,14 +105,18 @@ const dayFormat = "2006-01-02"
 const maxTitle = 200
 
 // rhythms are the frequencies of a Basecamp schedule that Minka has a rhythm
-// for. A question asked every day carries the days it is asked on like any
-// other, so every_day and on_certain_days are the same thing. Every other
-// frequency leaves the question out and is reported: whoever adds a word here
-// has seen what Basecamp sends under it.
+// for, each named by the rhythm it comes to where several weekdays are chosen.
+// A question asked every day, one asked on certain days and one asked every week
+// all carry the days they are asked on, so the three are the same thing; where
+// one weekday is chosen the rhythm is weekly, which says the same as daily does
+// of that one day. Every other frequency leaves the question out and is
+// reported: whoever adds a word here has seen what Basecamp sends under it.
 var rhythms = map[string]string{
 	"every_day":        bundle.RhythmDaily,
 	"on_certain_days":  bundle.RhythmDaily,
+	"every_week":       bundle.RhythmDaily,
 	"every_other_week": bundle.RhythmEveryOtherWeek,
+	"every_month":      bundle.RhythmMonthly,
 }
 
 // extractCheckins adds the questions of every questionnaire and what was

@@ -69,11 +69,12 @@ func ADayAhead() string {
 	return time.Now().UTC().AddDate(1, 0, 0).Format("2006-01-02")
 }
 
-// checkinProject is a project with a questionnaire that holds every case: a
-// question asked on certain days whose subscribers are more than the people a
-// bundle can name, one asked on a Sunday, one asked every other week with
-// answers to anchor it by, one whose schedule has ended, and one asked every
-// other week that nobody ever answered. Among the answers are one by somebody
+// checkinProject is a project with a questionnaire that holds every case: one
+// question in each frequency Basecamp is known to send, the one asked on certain
+// days with more subscribers than a bundle can name, the one asked every day on
+// a Saturday and a Sunday, the one asked every other week with answers to anchor
+// it by, one whose schedule has ended, and one asked every other week that
+// nobody ever answered. Among the answers are one by somebody
 // the question is not asked of and one that says nothing.
 //
 // The questionnaire was made by somebody who is no member of the project any
@@ -133,6 +134,18 @@ func checkinProject(ada, grace, linus, edsger, niklaus, deleted Person, tool fun
 		},
 	}
 
+	weekly := Question{
+		ID: 9315, Title: "How was your week?", Creator: &grace, CreatedAt: at(1, 13), UpdatedAt: at(1, 13),
+		Schedule:    Schedule{Frequency: "every_week", Days: []int{1}, Hour: 9, StartDate: "2024-02-05"},
+		Subscribers: []Person{ada, grace},
+	}
+
+	monthly := Question{
+		ID: 9316, Title: "Anything for the month?", Creator: &ada, CreatedAt: at(1, 14), UpdatedAt: at(1, 14),
+		Schedule:    Schedule{Frequency: "every_month", Days: []int{1}, Hour: 8, StartDate: "2024-02-01"},
+		Subscribers: []Person{ada},
+	}
+
 	unanswered := Question{
 		ID: 9314, Title: "Fortnightly and never answered", Creator: &grace, CreatedAt: at(1, 12), UpdatedAt: at(1, 12),
 		Schedule:    Schedule{Frequency: "every_other_week", Days: []int{4}, Hour: 11, StartDate: "2024-01-04"},
@@ -141,7 +154,7 @@ func checkinProject(ada, grace, linus, edsger, niklaus, deleted Person, tool fun
 
 	checkins := tool(9070, "questionnaire", "questionnaires", "Check-ins", true, 1, &niklaus)
 	checkins.CreatedAt, checkins.UpdatedAt = at(1, 7), at(28, 12)
-	checkins.Questions = []Question{today, weekend, roadmap, retro, unanswered}
+	checkins.Questions = []Question{today, weekend, roadmap, retro, weekly, monthly, unanswered}
 
 	return Project{
 		ID: 7007, Name: "Check-in Project", Status: "active",

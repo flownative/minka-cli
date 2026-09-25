@@ -33,11 +33,13 @@ into a chat come with a record and their bytes, streamed from the
 Basecamp CLI or taken over from the bundle the run replaces. It reads
 through the Basecamp CLI and is tested against the invented account in
 `internal/fakebasecamp`.
-The check-ins are checked against the fake alone: no run against the real
-account has met a questionnaire yet, so what Basecamp sends under a frequency
-other than `every_day`, `on_certain_days` and `every_other_week` is unknown. A
-frequency nobody knows leaves the question out and is reported with its field,
-so such a run says what is missing instead of writing a schedule nobody chose.
+The check-ins are checked against the fake alone: no extraction has met a
+questionnaire live yet. Which frequencies Basecamp sends was measured on the real
+account: `every_day`, `every_week` and `every_month` stand there, and
+`on_certain_days` and `every_other_week` are known besides; the fake holds one
+question in each of the five. A frequency nobody knows leaves the question out
+and is reported with its field, so such a run says what is missing instead of
+writing a schedule nobody chose.
 It has been run live, as a dry run and into a bundle outside the repository,
 under an identity that sees addresses, the posts and the chats included: all
 references of that bundle resolve and its parts are the ones its manifest
@@ -360,9 +362,9 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   in `authorization.md` and E-191.
 - `import basecamp` brings the to-dos of a project along: the applier is on
   Minka's `main`, the format in its `import-format.md`.
-- Run the check-ins live, against a real questionnaire: which frequencies
-  Basecamp sends, whether a question ever comes without a `start_date`, and
-  whether an answer ever comes without a `group_on`.
+- Run the check-ins live, against a real questionnaire: whether a question ever
+  comes without a `start_date`, whether an answer ever comes without a
+  `group_on`, and whether a frequency turns up that is in none of the five.
 - React to messages from `minka-ca`: check against the code, fake first,
   then the CLI, test and sabotage proof, check live, documentation in the
   same commit.

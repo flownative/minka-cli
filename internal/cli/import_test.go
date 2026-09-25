@@ -1535,7 +1535,7 @@ func TestImportBasecampReportsTheCheckinsOfAProject(t *testing.T) {
 	data := decode(t, env.Data)
 	want := map[string]any{
 		"counts": map[string]any{"people": float64(6), "projects": float64(1), "tools": float64(1),
-			"questions": float64(4), "answers": float64(6), "comments": float64(1), "reactions": float64(2), "attachments": float64(6)},
+			"questions": float64(6), "answers": float64(6), "comments": float64(1), "reactions": float64(2), "attachments": float64(6)},
 		"questionsLeftOut": []any{map[string]any{"questionSourceId": "9314", "field": "group_on"}},
 		"anchorsInferred":  []any{map[string]any{"questionSourceId": "9312", "from": "2024-02-28"}},
 		"askedLeftOut": map[string]any{
@@ -1562,7 +1562,7 @@ func TestImportBasecampReportsTheCheckinsOfAProject(t *testing.T) {
 	r = e.run("import", "basecamp", "--project", "7007", "--out", out, "--styled")
 	expectCode(t, r, ExitOK)
 	for _, want := range []string{
-		"questions    4", "answers      6",
+		"questions    6", "answers      6",
 		"Questions whose schedule Minka has no words for, left out: 1 — 9314 (group_on)",
 		"Questions asked every other week anchored on the day they were last answered: 1 — 9312 from 2024-02-28",
 		"People a question asks that the bundle cannot say are asked: 1 no member of the project, 1 no longer there, 1 without an address",
