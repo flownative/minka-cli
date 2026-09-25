@@ -46,23 +46,30 @@ command at once. Where the configuration keeps the same host in another form, th
 refusal says which entry that is: the token is there, it is only written where
 nothing looks for it.
 
-A host is said back to whoever gave it, and from there it travels into a
-transcript, a ticket and a log. What is printed of it is the address alone:
-scheme, host, port and path, put together from the parts where the value can be
-read, so that a password holding a slash, a question mark or a hash cannot take
-the end of the user information out of reach. A value that cannot be read at all
-is refused just as much and may carry just as much, so it is shown short:
-everything up to and including the last `@` is replaced, a separator written
-percent-encoded counts as one, and of what follows only as much as leads up to a
-path, a query or a fragment. The fault itself is named in words, so the refusal
-stays as clear as it was.
+A host that is refused is said back to whoever gave it, and from there it travels
+into a transcript, a ticket and a log. What is printed of it is the address
+alone: scheme, host, port and path, put together from the parts where the value
+can be read and nothing of the address still carries an `@`. Everything else is
+shown short, because the parts then say nothing dependable about where the user
+information ends: everything up to and including the last `@` is replaced, a
+separator written percent-encoded counts as one, and of what follows only as much
+as leads up to a path, a query or a fragment. The fault itself is named in words,
+so the refusal stays as clear as it was.
 
-Inside the CLI the value stays as it was given: it is a key of the list of cards
-and part of the name of a lock beside it. Only the output is rendered — the
-refusal for a default host nothing can be made of, and what `auth logout` says
-and puts into `data.host`. A hint is a command line to paste, so it names the
-address without the credential, and an address to fill in where nothing of the
-value is left to paste.
+This covers the refusals of a host, the refusal that nothing is signed in under
+the default host of the configuration, and what `auth logout` says and puts into
+`data.host`. It covers no more than that. Where a token stands under an entry
+written by hand, a session comes about, and then the host is printed as the file
+holds it: by `auth status`, by `doctor`, by the hint of a 401, by `setup` and by
+the search for a card, and the keepalive carries it in the argv of its child,
+where every local process sees it. Inside the CLI it stays as it was given
+anyway, as a key of the list of cards and part of the name of a lock beside it.
+A password written into such an entry is kept out of the refusals; keeping it out
+of the rest is open.
+
+A hint is a command line. It names the address without the credential, and where
+nothing of the value is left it names what is to be filled in — no address of its
+own, which whoever runs the line would reach instead of their own instance.
 
 ## Requests
 

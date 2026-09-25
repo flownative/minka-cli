@@ -1682,8 +1682,18 @@ func TestAHandWrittenDefaultHostIsRefusedWithoutItsPassword(t *testing.T) {
 	if out := r.stdout + r.stderr; strings.Contains(out, password) {
 		t.Errorf("the refusal hands the password on: %s", out)
 	}
-	if strings.Contains(env.Hint, "***") || !strings.Contains(env.Hint, "minka auth login --host https://") {
-		t.Errorf("the hint is no command line to paste: %s", env.Hint)
+	// What is left of such a value may hold anything, and a printed line goes
+	// through a terminal and a log that read a control character as an order.
+	if strings.ContainsRune(r.stdout+r.stderr, '\x7f') {
+		t.Errorf("a control character of the value reached the output: %q", r.stdout+r.stderr)
+	}
+	if strings.Contains(env.Hint, "***") || !strings.Contains(env.Hint, "--host <the address of your Minka instance>") {
+		t.Errorf("the hint does not say what is to be filled in: %s", env.Hint)
+	}
+	// A line that looks ready to run would be run, by a person or by an agent,
+	// and would reach a host that is not theirs.
+	if strings.Contains(env.Hint, "--host https://") {
+		t.Errorf("the hint names an address of its own: %s", env.Hint)
 	}
 }
 
