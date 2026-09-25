@@ -742,3 +742,53 @@ func TestCompletingACardTakesItOutOfTheListAtOnce(t *testing.T) {
 		t.Errorf("%v is left in the list, want the card nobody completed", left)
 	}
 }
+
+// Work that lasts longer than a working day keeps its card, because the
+// session says after every tool call that it is still at it. The session
+// beside it that died keeps nothing, however busy the machine.
+func TestTheSessionThatKeepsWorkingKeepsItsCard(t *testing.T) {
+	e := newAgentEnv(t)
+	began := time.Date(2026, 9, 23, 9, 0, 0, 0, time.UTC)
+	kept, lost := e.fixture.CardInDoing.ID, e.fixture.CardInTriage.ID
+
+	e.vars["CLAUDE_CODE_SESSION_ID"] = "the one that dies"
+	expectCode(t, e.runAt(began, "work", "start", lost, "--json"), ExitOK)
+	e.vars["CLAUDE_CODE_SESSION_ID"] = "the one that works on"
+	expectCode(t, e.runAt(began, "work", "start", kept, "--json"), ExitOK)
+
+	// Ten hours of tool calls, all of them from the session that is still at
+	// its card.
+	for hour := 0; hour <= 10; hour++ {
+		expectCode(t, e.runAt(began.Add(time.Duration(hour)*time.Hour), "heartbeat", "--json"), ExitOK)
+	}
+
+	env, r := e.runWithJSON(began.Add(10*time.Hour+time.Minute), "work", "list")
+	expectCode(t, r, ExitOK)
+	if left := cardIDsOfTheList(t, env); len(left) != 1 || left[0] != kept {
+		t.Fatalf("%v is left, want the card of the session that kept working", left)
+	}
+	if got := e.server.CardsAtWork(); len(got) != 1 || got[0] != kept {
+		t.Errorf("the server holds %v, want %s", got, kept)
+	}
+}
+
+// A card taken up where nothing says who is asking goes by the moment it was
+// started, and a machine that is busy around it changes nothing about that.
+func TestACardWithoutASessionGoesByItsBeginning(t *testing.T) {
+	e := newAgentEnv(t)
+	began := time.Date(2026, 9, 23, 9, 0, 0, 0, time.UTC)
+	expectCode(t, e.runAt(began, "work", "start", e.fixture.CardInTriage.ID, "--json"), ExitOK)
+
+	e.vars["CLAUDE_CODE_SESSION_ID"] = "somebody else entirely"
+	for hour := 0; hour <= 9; hour++ {
+		expectCode(t, e.runAt(began.Add(time.Duration(hour)*time.Hour), "heartbeat", "--json"), ExitOK)
+	}
+
+	// It is gone by the sweep of the signal that ran past the window, so the
+	// list has nothing left to give up and nothing to say about it.
+	env, r := e.runWithJSON(began.Add(work.ForgottenAfter+time.Minute), "work", "list")
+	expectCode(t, r, ExitOK)
+	if left := cardIDsOfTheList(t, env); len(left) != 0 {
+		t.Errorf("%v is left, want none", left)
+	}
+}

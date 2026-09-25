@@ -79,7 +79,13 @@ work on any more, so take a card up in that order — move it first, then say
 
 			entry := handle.File.Host(s.host)
 			forgotten := entry.ForgetWhatRanOut(a.now())
-			entry.Start(work.Card{ID: card.ID, ShortID: shortIdentifierOf(card), Title: card.Title, StartedAt: a.now()})
+			entry.Start(work.Card{
+				ID:        card.ID,
+				ShortID:   shortIdentifierOf(card),
+				Title:     card.Title,
+				StartedAt: a.now(),
+				Session:   a.agentSession(),
+			})
 			if err := handle.Save(); err != nil {
 				return &Error{Code: CodeConfig, Message: err.Error()}
 			}
@@ -303,16 +309,22 @@ func (a *app) claimTheSignal(path, host string, wait time.Duration) (*claim, str
 	if !known {
 		return nil, "nothing is remembered for " + host
 	}
-	forgotten := entry.ForgetWhatRanOut(a.now())
+	// The session says it is still at its cards before anything else, because
+	// that holds whether or not a signal goes out from here: the throttle is
+	// about the host's ear, and this is about the work.
+	changed := entry.ForgetWhatRanOut(a.now()) > 0
+	if entry.StillAtIt(a.agentSession(), a.now()) {
+		changed = true
+	}
 	cards := entry.CardIDs()
 
 	// Nothing to say, and nothing said before that would have to be taken
 	// back: this is where the common case ends, before the network.
 	if len(cards) == 0 && len(entry.SentCards) == 0 {
-		return nil, a.saving(handle, forgotten > 0, "nothing is remembered for "+host)
+		return nil, a.saving(handle, changed, "nothing is remembered for "+host)
 	}
 	if slices.Equal(cards, entry.SentCards) && a.now().Sub(entry.SentAt) < signalEvery {
-		return nil, a.saving(handle, forgotten > 0, "the last signal is younger than a minute")
+		return nil, a.saving(handle, changed, "the last signal is younger than a minute")
 	}
 
 	clientID, err := a.clientID()
@@ -535,7 +547,7 @@ func (a *app) workSuccess(entry *work.Host, summary string, more map[string]any,
 		s.notices = append(s.notices, "the last signal did not arrive: "+entry.Failure)
 	}
 	if forgotten > 0 {
-		s.notices = append(s.notices, fmt.Sprintf("%s given up after %.0f hours without a start; on a card you are still at work on, say minka work start again",
+		s.notices = append(s.notices, fmt.Sprintf("%s given up after %.0f hours without a sign of life; on a card you are still at work on, say minka work start again",
 			plural(forgotten, "card was", "cards were"), work.ForgottenAfter.Hours()))
 	}
 	s.breadcrumbs = []Breadcrumb{
@@ -650,4 +662,15 @@ func nullable(text string) any {
 		return nil
 	}
 	return text
+}
+
+// session_ is what a session of an agent calls itself, where it says so in the
+// environment. It binds a card to whoever took it up: the list belongs to the
+// machine and a signal carries all of it, so a sign of life without a name
+// would make one session's work keep every other session's cards alive.
+//
+// A card taken up where nothing says who is asking — a person at a terminal —
+// carries no name and goes by the moment it was started.
+func (a *app) agentSession() string {
+	return a.getenv("CLAUDE_CODE_SESSION_ID")
 }
