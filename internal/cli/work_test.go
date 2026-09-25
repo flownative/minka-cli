@@ -538,3 +538,75 @@ func TestTheServerKeepsOneSetPerClientAndPassesOverWhatItDoesNotKnow(t *testing.
 		t.Errorf("the server holds %v, want the card of the client with no name", got)
 	}
 }
+
+// A card somebody moves on is one nobody is at work on any more. The list is
+// the machine's, so the move says what it did to it, and the board is told
+// before the next tool call rather than after it.
+func TestMovingACardOnTakesItOutOfTheListAtOnce(t *testing.T) {
+	e := newAgentEnv(t)
+	card := e.fixture.CardInDoing.ID
+
+	expectCode(t, e.run("", "work", "start", card, "--json"), ExitOK)
+	expectCode(t, e.run("", "heartbeat", "--json"), ExitOK)
+	if got := e.server.CardsAtWork(); len(got) != 1 || got[0] != card {
+		t.Fatalf("the server holds %v, want %s", got, card)
+	}
+
+	env, r := e.runJSON("", "cards", "move", card, "--column", "not_now")
+	expectCode(t, r, ExitOK)
+	if !strings.Contains(env.Notice, "no longer among the cards") {
+		t.Errorf("the move said nothing about the list: %q", env.Notice)
+	}
+	listing, _ := e.runJSON("", "work", "list")
+	if cards := decode(t, listing.Data)["cards"].([]any); len(cards) != 0 {
+		t.Errorf("%d cards left in the list", len(cards))
+	}
+	if got := e.server.CardsAtWork(); len(got) != 0 {
+		t.Errorf("the server still holds %v", got)
+	}
+
+	// A card nobody said they were at work on changes nothing, and a move that
+	// changes nothing asks nothing of the network.
+	signals := len(e.signals())
+	env, r = e.runJSON("", "cards", "move", card, "--column", "Doing")
+	expectCode(t, r, ExitOK)
+	if env.Notice != "" {
+		t.Errorf("a card nobody is working on: %q", env.Notice)
+	}
+	if now := len(e.signals()); now != signals {
+		t.Errorf("%d signals for a move that changed no list", now-signals)
+	}
+}
+
+// Completing a card is the other way a card leaves the hand, and a card that
+// was done already is done all the same.
+func TestCompletingACardTakesItOutOfTheListAtOnce(t *testing.T) {
+	e := newAgentEnv(t)
+	card := e.fixture.CardInDoing.ID
+
+	expectCode(t, e.run("", "work", "start", card, "--json"), ExitOK)
+	expectCode(t, e.run("", "heartbeat", "--json"), ExitOK)
+
+	env, r := e.runJSON("", "cards", "done", card)
+	expectCode(t, r, ExitOK)
+	if !strings.Contains(env.Notice, "no longer among the cards") {
+		t.Errorf("done said nothing about the list: %q", env.Notice)
+	}
+	if got := e.server.CardsAtWork(); len(got) != 0 {
+		t.Errorf("the server still holds %v", got)
+	}
+
+	// Somebody who says it again of a card that is done takes it out too.
+	expectCode(t, e.run("", "work", "start", card, "--json"), ExitOK)
+	env, r = e.runJSON("", "cards", "done", card)
+	expectCode(t, r, ExitOK)
+	if !strings.Contains(env.Summary, "already done") {
+		t.Fatalf("summary %q", env.Summary)
+	}
+	if !strings.Contains(env.Notice, "no longer among the cards") {
+		t.Errorf("a card that was done already: %q", env.Notice)
+	}
+	if got := e.server.CardsAtWork(); len(got) != 0 {
+		t.Errorf("the server still holds %v", got)
+	}
+}

@@ -513,3 +513,20 @@ it can cut a long piece of work short as well — `work start` again says that
 the card is still the one.
 **Implemented as:** `work.Host.ForgetWhatRanOut`, see
 [Saying what you are working on](stable/at-work.md).
+
+<a id="c-041"></a>
+## C-041 — A card that is moved on is one nobody has in hand
+
+*Applies to: `cards move`, `cards done`*
+
+Both take the card out of the list of the machine and report at once, whatever
+column it goes to. Where the card was not in the list, nothing is written and
+no signal goes out.
+
+**Why:** Whoever moves a card on has let go of it, and a tile that keeps
+glowing says the opposite. The server cannot do it instead: a signal carries
+the whole set and the last one holds, so a card it dropped on a move would be
+back within the minute. What it costs is the order in which a card is taken
+up — move it first, then `work start`.
+**Implemented as:** `cli.app.theCardIsOutOfHand`, see
+[Saying what you are working on](stable/at-work.md).
