@@ -85,8 +85,9 @@ func checkinProject(ada, grace, linus, edsger, niklaus, deleted Person, tool fun
 
 	today := Question{
 		ID: 9310, Title: "What did you work on today?", Creator: &ada, CreatedAt: at(1, 8), UpdatedAt: at(1, 8),
-		Schedule:    Schedule{Frequency: "on_certain_days", Days: []int{1, 2, 3, 4, 5}, Hour: 17, StartDate: "2024-02-05"},
-		Subscribers: []Person{ada, grace, linus, edsger, deleted, niklaus},
+		Schedule: Schedule{Frequency: "on_certain_days", Days: []int{1, 2, 3, 4, 5}, Hour: 17, StartDate: "2024-02-05"},
+		// Not in the order of their IDs, and one of them twice.
+		Subscribers: []Person{niklaus, deleted, edsger, linus, grace, ada, grace},
 		Answers: []Answer{
 			{ID: 9320, GroupOn: "2024-02-05", Creator: &ada, CreatedAt: at(5, 17), UpdatedAt: at(5, 17), Files: []File{chart},
 				Content: `<div>Reviewed the plan with ` + Mention(SGID("gid://bc3/Person/102?expires_in"), "", 102, "Grace Sample") + `</div>` + EmbeddedFile(chart.SGID, "hours.png"),

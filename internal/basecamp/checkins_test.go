@@ -209,6 +209,17 @@ func TestOneWeekdayIsWeeklyAndSeveralAreDaily(t *testing.T) {
 // failure that names no file and no line.
 func TestWhoIsAskedComesFromTheSubscribersAndNotFromWhoAnswered(t *testing.T) {
 	account := fakebasecamp.New()
+	// The account lists the subscribers in another order than their IDs and one
+	// of them twice, so that the order and the dedupe of asked are held here too.
+	var listed []int64
+	each := map[int64]bool{}
+	for _, subscriber := range busyQuestion(account).Subscribers {
+		listed = append(listed, subscriber.ID)
+		each[subscriber.ID] = true
+	}
+	if slices.IsSorted(listed) || len(each) == len(listed) {
+		t.Fatalf("the account lists the subscribers sorted or each once: %v", listed)
+	}
 	dir, result := extract(t, account, checkinProject)
 
 	// Of the six subscribers, three can be named: one is no member of the

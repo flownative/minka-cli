@@ -96,6 +96,9 @@ type importReport struct {
 	// was taken from the day an answer belongs to.
 	QuestionsLeftOut []basecamp.ImpossibleQuestion `json:"questionsLeftOut"`
 	AnchorsInferred  []basecamp.InferredAnchor     `json:"anchorsInferred"`
+	// NobodyAsked are the questions that come asking nobody at all, each with
+	// how many people the bundle could not name as asked.
+	NobodyAsked []basecamp.NobodyAsked `json:"nobodyAsked"`
 	// AskedLeftOut counts the people a question is asked of that the bundle
 	// cannot say are asked.
 	AskedLeftOut basecamp.AskedLeftOut `json:"askedLeftOut"`
@@ -304,6 +307,7 @@ it has been applied.`,
 
 				QuestionsLeftOut:    result.QuestionsLeftOut,
 				AnchorsInferred:     result.AnchorsInferred,
+				NobodyAsked:         result.NobodyAsked,
 				AskedLeftOut:        result.AskedLeftOut,
 				AnswersWithoutABody: result.AnswersWithoutABody,
 				AnswersWithoutADay:  result.AnswersWithoutADay,
@@ -351,6 +355,11 @@ it has been applied.`,
 				notices = append(notices, plural(count,
 					"question asked every other week is anchored on the day it was last answered, because Basecamp does not say which of two weeks it asks in; data.anchorsInferred names it with that day",
 					"questions asked every other week are anchored on the days they were last answered, because Basecamp does not say which of two weeks they ask in; data.anchorsInferred names each with that day"))
+			}
+			if count := len(report.NobodyAsked); count > 0 {
+				notices = append(notices, plural(count,
+					"question of a check-in comes asking nobody at all and will ask nobody again, because whom it is asked of is what the first run makes of it; data.nobodyAsked names it",
+					"questions of check-ins come asking nobody at all and will ask nobody again, because whom they are asked of is what the first run makes of them; data.nobodyAsked names each"))
 			}
 			if count := report.AskedLeftOut.NotInTheProject + report.AskedLeftOut.Retired + report.AskedLeftOut.WithoutAnAddress; count > 0 {
 				notices = append(notices, plural(count,
@@ -522,6 +531,13 @@ func renderCheckins(w io.Writer, report importReport) {
 	}
 	fmt.Fprintf(w, "People a question asks that the bundle cannot say are asked: %d no member of the project, %d no longer there, %d without an address\n",
 		report.AskedLeftOut.NotInTheProject, report.AskedLeftOut.Retired, report.AskedLeftOut.WithoutAnAddress)
+	if len(report.NobodyAsked) > 0 {
+		asking := make([]string, 0, len(report.NobodyAsked))
+		for _, question := range report.NobodyAsked {
+			asking = append(asking, fmt.Sprintf("%s (%d left out)", question.QuestionSourceID, question.LeftOut))
+		}
+		fmt.Fprintf(w, "Questions that come asking nobody at all: %d — %s\n", len(asking), strings.Join(asking, ", "))
+	}
 	fmt.Fprintf(w, "Answers that say nothing, left out: %d; answers in the trash, left out: %d\n",
 		report.AnswersWithoutABody, report.AnswersTrashed)
 	fmt.Fprintf(w, "Answers Basecamp names no day for, dated by when they were written: %d\n", report.AnswersWithoutADay)

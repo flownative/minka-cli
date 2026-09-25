@@ -90,6 +90,14 @@ type InferredAnchor struct {
 	From             string `json:"from"`
 }
 
+// NobodyAsked is a question that comes asking nobody at all, with how many of
+// the people the source hands it to a bundle could not name as asked. Such a
+// question asks nobody for ever, and `asked` is what the first run makes of it.
+type NobodyAsked struct {
+	QuestionSourceID string `json:"questionSourceId"`
+	LeftOut          int    `json:"leftOut"`
+}
+
 // AskedLeftOut counts, over all questions, the people a question is asked of
 // that a bundle cannot name as being asked.
 type AskedLeftOut struct {
@@ -197,9 +205,12 @@ func (e *Extractor) writeQuestion(ctx context.Context, w *bundle.Writer, bucket,
 		when.startsOn = anchoredOn(anchor, when.weekdays[0])
 		e.anchorsInferred = append(e.anchorsInferred, InferredAnchor{QuestionSourceID: sourceID(found.ID), From: anchor.Format(dayFormat)})
 	}
-	asked, err := e.askedOf(ctx, bucket, found.ID)
+	asked, leftOut, err := e.askedOf(ctx, bucket, found.ID)
 	if err != nil {
 		return err
+	}
+	if len(asked) == 0 {
+		e.nobodyAsked = append(e.nobodyAsked, NobodyAsked{QuestionSourceID: sourceID(found.ID), LeftOut: leftOut})
 	}
 
 	origin, err := e.record("question", found.ID, found.recording)
@@ -446,15 +457,20 @@ func lastDayAnswered(answers []answered) (time.Time, bool) {
 // Minka, and only somebody Minka can hand a question to: whoever is not a
 // member, whoever has left and whoever comes without an address is left out and
 // counted. Minka's own run would otherwise end in a failure that names no file
-// and no line, while its dry run stayed green.
-func (e *Extractor) askedOf(ctx context.Context, bucket, question int64) ([]string, error) {
+// and no line, while its dry run stayed green. The second number is how many of
+// the subscribers of this one question fell out that way.
+//
+// They come in the order of their IDs and each once, however Basecamp lists
+// them: two runs over an unchanged account write the same bytes.
+func (e *Extractor) askedOf(ctx context.Context, bucket, question int64) ([]string, int, error) {
 	handedTo, err := getOne[subscription](ctx, e.Source, fmt.Sprintf("buckets/%d/recordings/%d/subscription.json", bucket, question))
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
 	members := e.members[bucket]
 	taken := map[int64]bool{}
+	leftOut := 0
 	var ids []int64
 	for _, subscriber := range handedTo.Subscribers {
 		if subscriber.ID == 0 || taken[subscriber.ID] {
@@ -465,10 +481,13 @@ func (e *Extractor) askedOf(ctx context.Context, bucket, question int64) ([]stri
 		switch {
 		case !members[subscriber.ID] || !carried:
 			e.askedLeftOut.NotInTheProject++
+			leftOut++
 		case known.retired():
 			e.askedLeftOut.Retired++
+			leftOut++
 		case known.EmailAddress == "":
 			e.askedLeftOut.WithoutAnAddress++
+			leftOut++
 		default:
 			ids = append(ids, subscriber.ID)
 		}
@@ -479,7 +498,7 @@ func (e *Extractor) askedOf(ctx context.Context, bucket, question int64) ([]stri
 	for _, id := range ids {
 		asked = append(asked, sourceID(id))
 	}
-	return asked, nil
+	return asked, leftOut, nil
 }
 
 // answersOf are the answers of a question, oldest first, each with the day it
@@ -533,10 +552,13 @@ func (e *Extractor) answersOf(ctx context.Context, found question) ([]answered, 
 	return all, nil
 }
 
-// dayAnsweredOn is the day an answer belongs to, as Basecamp has it. It is
-// taken over and never worked out from the schedule: Minka stores the day as it
-// comes and holds it against nothing, so an answer may well sit on a day the
-// question never asked on, which is what the source says and therefore right.
+// dayAnsweredOn is the day an answer belongs to, as Basecamp has it. It is taken
+// over and never worked out from the schedule.
+//
+// Somebody who answers late answers for a day nobody was asked on, and the day
+// they picked is the one the answer belongs to: the source decides that and not
+// the schedule. Minka stores the day as it comes and holds it against nothing,
+// so working it out here would move every such answer to a day nobody meant.
 //
 // An answer Basecamp names no day for takes the day it was written, and is
 // counted: one answer of another day than the source meant is worth knowing
