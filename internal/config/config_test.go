@@ -122,6 +122,15 @@ func TestNormalizeHost(t *testing.T) {
 		"http://127.0.0.1:8080":                "http://127.0.0.1:8080",
 		"http://localhost:8080":                "http://localhost:8080",
 		"http://[::1]:8080":                    "http://[::1]:8080",
+		"http://[::1]":                         "http://[::1]",
+		"https://192.0.2.1:8443":               "https://192.0.2.1:8443",
+		// An internationalised name reaches here as the text it was written in,
+		// percent-encoded or not, and a name with an underscore in it is one an
+		// instance behind a private certificate may go by.
+		"https://m\u00fcnchen.example.com":   "https://m\u00fcnchen.example.com",
+		"https://m%C3%BCnchen.example.com":   "https://m\u00fcnchen.example.com",
+		"https://xn--mnchen-3ya.example.com": "https://xn--mnchen-3ya.example.com",
+		"https://minka_host.example.com":     "https://minka_host.example.com",
 	}
 	for input, want := range valid {
 		got, err := NormalizeHost(input)
@@ -138,6 +147,8 @@ func TestNormalizeHost(t *testing.T) {
 		"https://user:pass@minka.localbeach.net",
 		"https://minka.localbeach.net?x=1",
 		"https://",
+		"https://minka.localbeach.net;t=x",
+		"https://minka.localbeach.net,x",
 	}
 	for _, input := range invalid {
 		if got, err := NormalizeHost(input); err == nil {
@@ -259,5 +270,51 @@ func TestNormalizeHostNamesUserInformationAsTheFault(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "user name and password before the @") {
 		t.Errorf("the refusal does not name what is wrong: %s", err)
+	}
+}
+
+// A registered name may hold the sub-delimiters of a URL by the letter of the
+// standard, so "minka.example.com;t=secret" parses as a host and nothing in the
+// grammar says otherwise. It is no host all the same: nothing answers at it, and
+// it would become a key of the configuration, a key of the store and part of the
+// name of a lock, and be printed as an address somebody could reach.
+//
+// What may be printed of such a value stops where the name stops. Whatever
+// somebody wrote behind it may be a token, and the refusal names the fault in
+// words rather than repeating it.
+func TestNormalizeHostRefusesWhatNamesNoMachine(t *testing.T) {
+	const secret = "minka_pat_in_the_wrong_place"
+	refused := map[string]string{
+		"https://minka.example.com;t=" + secret:           "https://minka.example.com",
+		"https://minka.example.com,t=" + secret:           "https://minka.example.com",
+		"https://minka.example.com=" + secret:             "https://minka.example.com",
+		"https://minka.example.com&t=" + secret:           "https://minka.example.com",
+		"https://minka.example.com+" + secret:             "https://minka.example.com",
+		"https://minka.example.com:8443;t=" + secret:      "https://minka.example.com:8443",
+		"https://robert:pw@minka.example.com;t=" + secret: "https://minka.example.com",
+		"https://a%25b.example.com":                       "https://a",
+	}
+	for host, want := range refused {
+		if got, err := NormalizeHost(host); err == nil {
+			t.Errorf("NormalizeHost(%q) = %q, want an error", host, got)
+		}
+		if shown := HostForOutput(host); shown != want {
+			t.Errorf("HostForOutput(%q) = %q, want %q", host, shown, want)
+		}
+	}
+}
+
+// An address in brackets is an IP address and nothing else. The interface behind
+// a percent belongs to a link-local address, and an instance reached over one is
+// still an instance.
+func TestNormalizeHostReadsAnAddressInBrackets(t *testing.T) {
+	if got, err := NormalizeHost("https://[2001:db8::1]:8443"); err != nil || got != "https://[2001:db8::1]:8443" {
+		t.Errorf("NormalizeHost of an address in brackets = %q, %v", got, err)
+	}
+	if got, err := NormalizeHost("https://[fe80::1%25eth0]:8443"); err != nil || got != "https://[fe80::1%eth0]:8443" {
+		t.Errorf("NormalizeHost of a link-local address = %q, %v", got, err)
+	}
+	if got, err := NormalizeHost("https://[fe80::1%25]:8443"); err == nil {
+		t.Errorf("NormalizeHost of an address with no interface behind the percent = %q", got)
 	}
 }

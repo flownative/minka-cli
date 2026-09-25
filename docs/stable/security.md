@@ -34,7 +34,13 @@ configuration file, or a refusal — never the token of the first host (C-004).
 ## Host names
 
 `https://` is added, `/api/v1` and a default port are removed. `http://` is
-accepted for loopback only. Other paths are refused.
+accepted for loopback only. Other paths are refused, and so is a value that names
+no machine: a host is a DNS name or an IP address, the latter in brackets where it
+is IPv6, with a port at most. A registered name may carry the sub-delimiters of a
+URL by the letter of the standard, so `https://minka.example.com;t=x` parses as
+one — and is refused here, because nothing answers at it while it would become a
+key of the configuration, a key of the list of cards and part of the name of a
+lock beside it.
 
 This holds for the default host of the configuration as well, whoever wrote it
 there. The host is a key of the list of cards and part of the name of a lock
@@ -49,7 +55,8 @@ nothing looks for it.
 A host is said back to whoever gave it, and from there it travels
 into a transcript, a ticket and a log. What is printed of it is the address
 alone: scheme, host, port and path, put together from the parts where the value
-can be read and nothing of the address still carries an `@`. Everything else is
+can be read and nothing of the address still carries an `@`, and the host only as
+far as it reads as one. Everything else is
 shown short, because the parts then say nothing dependable about where the user
 information ends: everything up to and including the last `@` is replaced, a
 separator written percent-encoded counts as one, and of what follows only as much

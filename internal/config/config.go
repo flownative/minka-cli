@@ -197,6 +197,9 @@ func NormalizeHost(raw string) (string, error) {
 	if u.Host == "" {
 		return "", fmt.Errorf("%q is not a valid host URL", shown)
 	}
+	if !readsAsAHost(u) {
+		return "", fmt.Errorf("%q names no machine; a host is a DNS name or an IP address, with a port at most", shown)
+	}
 	path := strings.TrimSuffix(strings.TrimRight(u.Path, "/"), "/api/v1")
 	if path != "" {
 		return "", errors.New("the address given has a path; give the address of the Minka instance, such as https://minka.example.com")
@@ -220,9 +223,9 @@ func NormalizeHost(raw string) (string, error) {
 // A host is said back to whoever gave it, and from there it travels into a
 // transcript, a ticket and a log. A password or a token written into the
 // address must not travel that far, and what is wrong with such a value is
-// said in words instead. Inside the CLI the value stays as it was given: it
-// is a key of a store and part of the name of a lock, and only what is
-// printed is rendered this way.
+// said in words instead. The host is shown as far as it reads as one: what
+// stands behind the first character no name and no address is made of is
+// dropped with the credential it could be.
 func HostForOutput(raw string) string {
 	value := strings.TrimSpace(raw)
 	if !strings.Contains(value, "://") {
@@ -234,10 +237,63 @@ func HostForOutput(raw string) string {
 	// slash, a question mark or a hash moves that end into the path, and the
 	// host and the path then carry the credential themselves.
 	if u, err := url.Parse(value); err == nil && u.Host != "" && !holdsASeparator(u.Host+u.EscapedPath()) {
-		return withoutControlCharacters(u.Scheme + "://" + u.Host + u.EscapedPath())
+		return withoutControlCharacters(u.Scheme + "://" + hostAsFarAsItReads(u.Host) + u.EscapedPath())
 	}
 
 	return withoutControlCharacters(hostTextWithoutCredentials(value))
+}
+
+// readsAsAHost says whether the authority of an address can name a machine at
+// all. A registered name may hold the sub-delimiters of a URL by the letter of
+// the standard, so "minka.example.com;t=secret" parses as a host and would
+// become a key of the configuration, of the store and of a lock, and be printed
+// as an address somebody could reach. What answers for a Minka instance is a
+// DNS name, an IP address, or an IP address in brackets, with a port at most.
+func readsAsAHost(u *url.URL) bool {
+	hostname := u.Hostname()
+	if hostname == "" {
+		return false
+	}
+	// In brackets stands an IP address, which the parser has read as one
+	// already. Behind a percent stands the interface a link-local address is
+	// reached over.
+	if strings.HasPrefix(u.Host, "[") {
+		address, zone, zoned := strings.Cut(hostname, "%")
+		return net.ParseIP(address) != nil && (!zoned || zone != "")
+	}
+	for _, r := range hostname {
+		if !partOfAHostName(r) {
+			return false
+		}
+	}
+
+	return true
+}
+
+// hostAsFarAsItReads is the authority up to the first character no name and no
+// address is made of. What stands behind it is no part of the address, and
+// whatever somebody wrote there has as little business in a transcript as a
+// password has: the fault is named in words instead.
+func hostAsFarAsItReads(host string) string {
+	// An address in brackets is read as one by the parser or not at all, so
+	// there is nothing in it to cut away.
+	if strings.HasPrefix(host, "[") {
+		return host
+	}
+	for i, r := range host {
+		if !partOfAHostName(r) && r != ':' {
+			return host[:i]
+		}
+	}
+
+	return host
+}
+
+// partOfAHostName holds for the characters a DNS name and an IP address are
+// written with. Letters are meant in every alphabet: an internationalised name
+// reaches here as the text it was written in.
+func partOfAHostName(r rune) bool {
+	return unicode.IsLetter(r) || unicode.IsDigit(r) || r == '-' || r == '.' || r == '_'
 }
 
 // withoutControlCharacters drops what no address is made of. What is left is
@@ -280,7 +336,7 @@ func hostTextWithoutCredentials(value string) string {
 		value = value[:i]
 	}
 
-	return scheme + value
+	return scheme + hostAsFarAsItReads(value)
 }
 
 func isLoopback(hostname string) bool {
