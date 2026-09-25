@@ -4,6 +4,7 @@ import (
 	"errors"
 	"reflect"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -13,28 +14,34 @@ import (
 	"github.com/flownative/minka-cli/internal/fakebasecamp"
 )
 
-// The check-ins of the fake are in its seventh project: a questionnaire with a
-// question asked on certain days, one asked on a Sunday, one asked every other
-// week, one whose schedule has run out, and one nobody ever answered.
+// The check-ins of the fake are in its seventh project: a questionnaire with one
+// question in each frequency Basecamp sends, one whose schedule has run out and
+// one nobody ever answered. The account lists them in another order than they
+// were made in.
 const checkinProject = "7007"
 
 func questionnaire(a *fakebasecamp.Account) *fakebasecamp.Tool {
 	return &a.Projects[6].Dock[0]
 }
 
-// theQuestions of the fake, by the order the account lists them in.
-func theQuestions(a *fakebasecamp.Account) []fakebasecamp.Question {
-	return questionnaire(a).Questions
+// theQuestion of the fake by its ID, because the order the account lists them in
+// is not the order they were made in.
+func theQuestion(a *fakebasecamp.Account, id int64) *fakebasecamp.Question {
+	for i := range questionnaire(a).Questions {
+		if questionnaire(a).Questions[i].ID == id {
+			return &questionnaire(a).Questions[i]
+		}
+	}
+	panic("the fake has no question " + strconv.FormatInt(id, 10))
 }
 
 // busyQuestion is the question with the most subscribers and the answers that
-// carry a text, a file, a comment and boosts.
-func busyQuestion(a *fakebasecamp.Account) *fakebasecamp.Question { return &theQuestions(a)[0] }
-
-// weekendQuestion is asked on a Saturday and a Sunday, fortnightly every other
-// week with answers to anchor it by.
-func weekendQuestion(a *fakebasecamp.Account) *fakebasecamp.Question { return &theQuestions(a)[1] }
-func fortnightly(a *fakebasecamp.Account) *fakebasecamp.Question     { return &theQuestions(a)[2] }
+// carry a text, a file, a comment and boosts; weekendQuestion is asked every day
+// on a Saturday and a Sunday, fortnightly every other week with answers to
+// anchor it by.
+func busyQuestion(a *fakebasecamp.Account) *fakebasecamp.Question    { return theQuestion(a, 9310) }
+func weekendQuestion(a *fakebasecamp.Account) *fakebasecamp.Question { return theQuestion(a, 9311) }
+func fortnightly(a *fakebasecamp.Account) *fakebasecamp.Question     { return theQuestion(a, 9312) }
 
 func TestAQuestionnaireComesAsACheckinsTool(t *testing.T) {
 	dir, _ := extract(t, fakebasecamp.New(), checkinProject)
@@ -526,6 +533,73 @@ func TestAnAnswerWithoutADayAndWithoutAZoneEndsTheRun(t *testing.T) {
 	}
 }
 
+// A question and an answer are held to what a bundle can carry where the walk
+// first meets them: a status a bundle has no word for ends the run before what
+// hangs on the record is asked for. The status of a question reaches the bundle,
+// so a word nobody knows would reach the applier.
+func TestAStatusNoBundleKnowsEndsTheRun(t *testing.T) {
+	cases := map[string]struct {
+		named  string
+		change func(*fakebasecamp.Account)
+	}{
+		"a question": {"9311", func(a *fakebasecamp.Account) { weekendQuestion(a).Status = "draft" }},
+		"an answer":  {"9321", func(a *fakebasecamp.Account) { busyQuestion(a).Answers[1].Status = "pending" }},
+	}
+	for what, one := range cases {
+		account := fakebasecamp.New()
+		one.change(account)
+
+		err := extractExpectingAnError(t, account, checkinProject)
+		if !strings.Contains(err.Error(), one.named) {
+			t.Errorf("%s: the run ended with %q, which does not name it", what, err)
+		}
+	}
+}
+
+// The questions of a questionnaire are written oldest first, whatever order
+// Basecamp lists them in: the applier reads the order of a file, and a run over
+// an unchanged account has to write the same bytes twice.
+func TestTheQuestionsOfAQuestionnaireAreWrittenOldestFirst(t *testing.T) {
+	account := fakebasecamp.New()
+	// The account lists them in another order than they were made in.
+	listed := make([]string, 0, len(questionnaire(account).Questions))
+	for _, question := range questionnaire(account).Questions {
+		listed = append(listed, sourceOf(question.ID))
+	}
+	if slices.IsSorted(listed) {
+		t.Fatalf("the account lists the questions in the order of their age: %v", listed)
+	}
+
+	dir, _ := extract(t, account, checkinProject)
+	written := sourceIDs(records(t, dir, bundle.Questions))
+	if want := []string{"9310", "9311", "9312", "9313", "9315", "9316"}; !slices.Equal(written, want) {
+		t.Errorf("the questions are written %v, want %v", written, want)
+	}
+}
+
+// Basecamp names the answers of a question at an address of the account, which
+// is read the way the steps of a card are: an address that leads anywhere else
+// is refused instead of fetched, because the Basecamp CLI signs every request it
+// makes.
+func TestAnswersAtAnAddressOutsideTheAccountEndTheRun(t *testing.T) {
+	for what, address := range map[string]string{
+		"another host":      "https://elsewhere.example.test/4242/buckets/7007/questions/9310/answers.json",
+		"another account":   "https://3.basecampapi.test/9999/buckets/7007/questions/9310/answers.json",
+		"a path of its own": "https://3.basecampapi.test/4242/buckets/7007/questions/9310/answers.json?page=7",
+	} {
+		account := fakebasecamp.New()
+		busyQuestion(account).AnswersURL = address
+
+		err := extractExpectingAnError(t, account, checkinProject)
+		if !strings.Contains(err.Error(), "9310") {
+			t.Errorf("%s: the run ended with %q, which does not name the question", what, err)
+		}
+		if strings.Contains(err.Error(), address) {
+			t.Errorf("%s: the failure quotes the address", what)
+		}
+	}
+}
+
 // Minka takes a day the way both it and Basecamp write one, and refuses
 // anything else.
 func TestADayOfAnotherShapeEndsTheRun(t *testing.T) {
@@ -650,4 +724,9 @@ func extractExpectingAnError(t *testing.T, account *fakebasecamp.Account, projec
 		t.Errorf("the failure is of the kind %s, want %s", failed.Kind, basecamp.API)
 	}
 	return failed
+}
+
+// sourceOf is the ID of a record of the account as a bundle writes it.
+func sourceOf(id int64) string {
+	return strconv.FormatInt(id, 10)
 }
