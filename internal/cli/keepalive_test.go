@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -23,9 +25,9 @@ func (e *testEnv) runAsTheKeepalive(at time.Time, args ...string) result {
 	}, "", args...)
 }
 
-// storedHost is what the store holds for the host of these tests, as it lies on
-// disk: what a command wrote, not what a command shows of it.
-func (e *testEnv) storedHost() map[string]any {
+// storedHosts is the store as it lies on disk: what a command wrote, not what a
+// command shows of it.
+func (e *testEnv) storedHosts() map[string]map[string]any {
 	e.t.Helper()
 	content, err := os.ReadFile(e.storePath())
 	if err != nil {
@@ -37,11 +39,23 @@ func (e *testEnv) storedHost() map[string]any {
 	if err := json.Unmarshal(content, &file); err != nil {
 		e.t.Fatalf("the store is not JSON: %v: %s", err, content)
 	}
-	entry, known := file.Hosts[e.vars["MINKA_HOST"]]
+	return file.Hosts
+}
+
+// storedHost is what the store holds for the host of these tests.
+func (e *testEnv) storedHost() map[string]any {
+	e.t.Helper()
+	entry, known := e.storedHosts()[e.vars["MINKA_HOST"]]
 	if !known {
-		e.t.Fatalf("the store holds nothing for %s: %s", e.vars["MINKA_HOST"], content)
+		e.t.Fatalf("the store holds nothing for %s: %v", e.vars["MINKA_HOST"], e.storedHosts())
 	}
 	return entry
+}
+
+// hostsOfTheStore is what the store is keyed by, sorted.
+func (e *testEnv) hostsOfTheStore() []string {
+	e.t.Helper()
+	return slices.Sorted(maps.Keys(e.storedHosts()))
 }
 
 // writeConfig puts a configuration file where the CLI of these tests reads one,
@@ -300,6 +314,34 @@ func TestTheKeepaliveIsToldTheHostTheBeatDecidedOn(t *testing.T) {
 	// And that is how the child is called.
 	if called := strings.Join(keepaliveArguments(named), " "); called != "heartbeat --keepalive --host "+named {
 		t.Errorf("the child is called with %q", called)
+	}
+}
+
+// The host of the store is read the way a sign-in writes it, however it stands
+// in the file. The child normalizes the host it is given, so a default host
+// written by hand with a slash at the end would have parent and child on two keys
+// of the store and two locks — whereupon every beat starts another child and
+// calls it started.
+func TestTheHostOfTheStoreIsReadAsASignInWritesIt(t *testing.T) {
+	e := newAgentEnv(t)
+	began := time.Date(2026, 9, 23, 10, 0, 0, 0, time.UTC)
+	host := e.server.URL
+	e.writeConfig(`{"defaultHost": "` + host + `/", "hosts": {
+		"` + host + `": {"token": "` + e.fixture.AgentToken + `"}}}`)
+	delete(e.vars, "MINKA_HOST")
+	delete(e.vars, "MINKA_TOKEN")
+
+	expectCode(t, e.runAt(began, "work", "start", e.fixture.CardInDoing.ID, "--json"), ExitOK)
+	env, r := e.runWithJSON(began, "heartbeat")
+	expectCode(t, r, ExitOK)
+	if became := decode(t, env.Data)["keepalive"]; became != keepaliveStarted {
+		t.Fatalf("the keepalive %v", became)
+	}
+	if told, _ := e.keepaliveHost.Load().(string); told != host {
+		t.Errorf("the keepalive was told %q, want %s", told, host)
+	}
+	if keys := e.hostsOfTheStore(); len(keys) != 1 || keys[0] != host {
+		t.Errorf("the store is keyed by %v, want the one host %s", keys, host)
 	}
 }
 

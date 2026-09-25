@@ -533,7 +533,23 @@ func (a *app) hostOfTheStore() (string, error) {
 	if file.DefaultHost == "" {
 		return "", &Error{Code: CodeAuth, Message: "not signed in to any Minka host", Hint: "Run: minka auth login --host https://minka.example.com"}
 	}
-	return file.DefaultHost, nil
+	return defaultHostOf(file), nil
+}
+
+// defaultHostOf is the host of the configuration, read the way a sign-in writes
+// it. It is a key of the store and part of the name of a lock, so every process
+// has to make the same string of it: a host written into the file by hand, with a
+// slash at the end or a capital in it, would have one process looking at another
+// list and another lock than the next.
+//
+// A value nothing can be made of is handed on as it stands, so that what says so
+// is the command looking for a token under it and not every command at once.
+func defaultHostOf(file *config.File) string {
+	host, err := config.NormalizeHost(file.DefaultHost)
+	if err != nil {
+		return file.DefaultHost
+	}
+	return host
 }
 
 // findCard reads a card by its ID or by the short identifier people call it
