@@ -492,7 +492,7 @@ minka cards edit <cardId> --description - --description-format html < text.html
   where the name says nothing. `--content-type` gives it instead. The server
   reads the bytes itself: a file that says it is a picture and is not exits 9
   with `meta.apiCode` `contentTypeMismatch`, a broken picture `notReadable`.
-- At most 50 MiB. A larger file exits 1 before it travels, and a server that
+- At most 100 MiB. A larger file exits 1 before it travels, and a server that
   refuses one exits 9 with `tooLarge`.
 - `--name` gives the file another name in Minka than it has here.
 

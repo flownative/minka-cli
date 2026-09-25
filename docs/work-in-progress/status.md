@@ -45,16 +45,18 @@ the people the chosen projects refer to come into a bundle.
 An agent says which cards it has in hand: `work start` and `work stop` keep
 one list per machine, `heartbeat` reports it to `PUT /me/work`, and `hooks
 install` writes the hook of Claude Code that calls it after every tool call.
-The list, the refusals, the throttle and the hook are seen live; the report
-itself is not, the local instance knowing only a person, whom `PUT /me/work`
-turns away as `agentsOnly`, see below.
+The list, the refusals, the throttle and the hook are seen live, and the
+report with them: on `minka.flownative.com`, where this CLI is signed in as an
+agent, `work start`, `heartbeat` and `work stop` get through, and the hook
+reports out of a session of its own. What nobody has seen yet is a tile alive
+on the board, see below.
 
 Everything else is tested against the fake API and checked live — the chain
 upload → attachment in the text → display → the bytes back, as well as private
 conversations in both directions. What is checked against the fake only is
 listed below.
 
-Coordination of the API: the Minka session `minka-14`. It reports changes,
+Coordination of the API: the Minka session `minka-ca`. It reports changes,
 which are checked against the Minka code; deviations go back to it.
 
 Versions are released by publishing a release in GitHub and installed through
@@ -177,11 +179,15 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
 - The fake API knows no archived card, so what Minka answers a move of one is
   not mirrored: that an archived card is named before a column without the
   area on hold is read in the Minka code alone.
-- Of saying what one is working on, the report that gets through: the 204 of
-  `PUT /me/work`, a tile that lights up and one that goes quiet, and the hook
-  running in a real session. The only account that may write on the local
-  instance is a person, and the address turns such a token away with 403
-  `agentsOnly`, so no signal of a live run has ever been taken in. The order
+- Of saying what one is working on, what is left: a tile that lights up and one
+  that goes quiet. The signal itself got through on `minka.flownative.com`,
+  which knows this CLI as an agent, and the hook has reported out of a real
+  session; on the local instance the only account that may write is a person,
+  whom the address turns away with 403 `agentsOnly`. On the board two cards
+  stood in "In Arbeit" that were being worked on and showed nothing, because
+  they had fallen out of the list of the machine eight hours after they were
+  started, which is what the CLI does and what nobody wants, see the next
+  steps. The order
   of the refusals is tested against the fake and read in Minka's code, its
   tests and E-184. What the fake does not mirror: it never forgets a signal
   after the three minutes Minka counts it for, because nothing the CLI does
@@ -205,6 +211,13 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   shapes that are refused unrepaired with the entry to add by hand.
 - "agent for X" in `people list` has been seen live, an agent that stepped
   down has not — it is in no list any more.
+- What Minka takes for one file is 100 MiB. The CLI refuses a byte over that
+  itself, which is tested; what a server answers above the limit is played by a
+  stand-in that gives the bare status, so neither the `tooLarge` of the fake nor
+  the hint the CLI has for it is reached by any test. No file of that order has
+  ever been sent live either, neither before the limit was raised nor after;
+  the number is read in Minka's `uploads.maxBytes` and in the controller that
+  takes an upload of the API.
 - Of `uploads download`, what is left: a file of a project one is not in, for
   which the local instance offers no second account; the entity tag with the
   304 and the 416 that go with it; the ranges an audio file is played in; and
@@ -251,10 +264,15 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   session of an agent, say. In the foreground it is green, under load as
   well, and so it is in CI.
 
+## Open elsewhere
+
+- The live check knows two instances by name, the test instance and the local
+  one. `minka.flownative.com`, where the signal of an agent was seen, is in
+  neither row, so the guide does not say what may be written there. Whose
+  decision that is is Robert's and Shaun's, not the coordinator's.
+
 ## Open in the API
 
-- A file may weigh 100 MiB, `uploads create` still refuses one over 50 MiB
-  before it travels and `security.md` says so. To be set right together.
 - Posts have `attachments` too, and the CLI has no commands for posts at all.
 - Renaming and reordering steps does not exist.
 - Paging Done beyond 25 cards does not exist; needed once dogfooding needs it.
@@ -273,10 +291,23 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   gains a build provenance attestation with instructions for verifying it, and
   the macOS binaries get notarised, which waits for an Apple Developer ID.
 
-- Report live with an agent's token, on a board that shows the tile: the 204
-  of `PUT /me/work`, a card that lights up and one that goes quiet at once,
-  and the hook running in a real session.
-- React to messages from `minka-14`: check against the code, fake first,
+- See a tile live: one that lights up and one that goes quiet at once. Both
+  wait on the two changes below, which decide when a card leaves the list.
+- `cards move` and `cards done` take the card out of the list of the machine
+  themselves and report at once, so that a card somebody moves on stops
+  glowing instead of waiting for the next signal.
+- A card leaves the list eight hours after it was started, even where the
+  session that started it is still at work; a piece of work longer than a
+  working day therefore goes quiet under the hands of whoever does it. It
+  should go by the last sign of life instead.
+- Commands for the to-dos of a project: the addresses are on Minka's `main`
+  and unreleased, the contract stands in its `authorization.md` and E-190.
+- Commands for the check-ins of a project: likewise unreleased, the contract
+  in `authorization.md` and E-191.
+- `import basecamp` brings the to-dos and the check-ins of a project along:
+  the appliers of both are on Minka's `main`, the format in its
+  `import-format.md`.
+- React to messages from `minka-ca`: check against the code, fake first,
   then the CLI, test and sabotage proof, check live, documentation in the
   same commit.
 - Prepare the internal alpha: change the token, proofread the SKILL.md.
