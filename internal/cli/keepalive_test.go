@@ -45,6 +45,62 @@ func asStored(at time.Time) string {
 	return at.UTC().Format(time.RFC3339)
 }
 
+// The safeguard, among the four a tick can come to: a tick whose clock jumped
+// reports nothing. A machine that wakes from a sleep of hours holds cards whose
+// tiles went out long ago, and a signal that raised them again would say that
+// somebody is at work on them.
+func TestWhatOneTickOfTheKeepaliveDecides(t *testing.T) {
+	woke := time.Date(2026, 9, 23, 10, 0, 0, 0, time.UTC)
+	justBefore := woke.Add(-keepaliveTick)
+	amoment := woke.Add(-time.Minute)
+
+	for _, one := range []struct {
+		name string
+		tick tick
+		want verdict
+	}{
+		{
+			"a card in hand and somebody at work",
+			tick{now: woke, before: justBefore, read: true, beat: amoment, cards: 1},
+			tickReports,
+		},
+		{
+			"a list that is empty",
+			tick{now: woke, before: justBefore, read: true, beat: amoment, cards: 0},
+			tickEndsOnAnEmptyList,
+		},
+		{
+			"a store nobody has been at",
+			tick{now: woke, before: justBefore, read: true, beat: woke.Add(-nobodyIsAtWorkAfter), cards: 1},
+			tickEndsForNobodyIsAtWork,
+		},
+		{
+			"a machine that slept",
+			tick{now: woke, before: woke.Add(-8 * time.Hour), read: true, beat: amoment, cards: 1},
+			tickEndsForTheClockJumped,
+		},
+		{
+			"a machine that slept over an empty list",
+			tick{now: woke, before: woke.Add(-8 * time.Hour), read: true, beat: amoment, cards: 0},
+			tickEndsForTheClockJumped,
+		},
+		{
+			"a clock that was put back",
+			tick{now: woke, before: woke.Add(time.Hour), read: true, beat: amoment, cards: 1},
+			tickEndsForTheClockJumped,
+		},
+		{
+			"a store somebody else held for the moment",
+			tick{now: woke, before: justBefore, read: false},
+			tickPassesOver,
+		},
+	} {
+		if got := one.tick.decide(); got != one.want {
+			t.Errorf("%s: verdict %d, want %d", one.name, got, one.want)
+		}
+	}
+}
+
 // The safeguard: a beat of the keepalive is nobody at work. It writes neither
 // the mark that says somebody was at the store nor the sign of life of a card,
 // and it writes neither although the name of the session that spawned it stands
