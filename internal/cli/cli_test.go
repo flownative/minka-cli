@@ -1609,6 +1609,41 @@ func TestTheEnvironmentTokenNeedsItsHost(t *testing.T) {
 	}
 }
 
+// A host the CLI refuses is named in the refusal, and that refusal reaches an
+// agent's transcript and its log. Whoever writes a password into the address
+// keeps it: nothing of it stands in the output, whichever way the host was
+// given and whichever way the CLI prints.
+func TestARefusedHostKeepsItsPasswordOutOfTheOutput(t *testing.T) {
+	const password = "s3cr3t-password"
+	const withCredentials = "https://robert:" + password + "@minka.localbeach.net"
+	e := newTestEnv(t)
+	acceptedHost := e.vars["MINKA_HOST"]
+
+	refusal := func(what string, r result) {
+		t.Helper()
+		expectCode(t, r, ExitUsage)
+		out := r.stdout + r.stderr
+		if strings.Contains(out, password) {
+			t.Errorf("%s hands the password on: %s", what, out)
+		}
+		if !strings.Contains(out, "minka.localbeach.net") {
+			t.Errorf("%s does not say which host it is about: %s", what, out)
+		}
+	}
+
+	for _, mode := range []string{"--json", "--quiet", "--styled"} {
+		e.vars["MINKA_HOST"] = acceptedHost
+		refusal("--host with "+mode, e.run("", "me", mode, "--host", withCredentials))
+
+		e.vars["MINKA_HOST"] = withCredentials
+		refusal("$MINKA_HOST with "+mode, e.run("", "me", mode))
+	}
+
+	if n := len(e.server.Requests()); n != 0 {
+		t.Errorf("%d requests were sent", n)
+	}
+}
+
 func TestAFailedWriteTellsToReadBackBeforeRetrying(t *testing.T) {
 	e := newTestEnv(t)
 	e.server.FailNextWith(http.StatusBadGateway)
