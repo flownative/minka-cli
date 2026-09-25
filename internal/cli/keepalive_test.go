@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -54,6 +55,16 @@ func (e *testEnv) writeConfig(content string) {
 	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
 		e.t.Fatal(err)
 	}
+}
+
+// theApp is the CLI as one run of it at a moment, for the few things a test asks
+// of it directly instead of through a command line.
+func (e *testEnv) theApp(at time.Time) *app {
+	e.t.Helper()
+	a := newApp(context.Background(), strings.NewReader(""), io.Discard, io.Discard,
+		func(name string) string { return e.vars[name] })
+	a.now = func() time.Time { return at }
+	return a
 }
 
 // asStored is a moment the way the store writes it down.
@@ -409,6 +420,31 @@ func TestTheKeepaliveTicksOftenerThanItReports(t *testing.T) {
 	}
 	if aJumpInTheClock <= signalEvery {
 		t.Errorf("a jump is %s, which is not longer than the %s between two signals", aJumpInTheClock, signalEvery)
+	}
+}
+
+// The safeguard: every tick gives up what ran out. When a session dies the
+// keepalive is often the last process left on the machine, so without this it
+// would report a card past the working day a card is allowed.
+func TestATickOfTheKeepaliveGivesUpWhatRanOut(t *testing.T) {
+	e := newAgentEnv(t)
+	began := time.Date(2026, 9, 23, 9, 0, 0, 0, time.UTC)
+	expectCode(t, e.runAt(began, "work", "start", e.fixture.CardInDoing.ID, "--json"), ExitOK)
+
+	tooLate := began.Add(work.ForgottenAfter + time.Minute)
+	beat, cards, err := e.theApp(tooLate).whatTheStoreSays(e.storePath(), e.vars["MINKA_HOST"])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cards != 0 {
+		t.Errorf("the tick found %d cards, want none: the card ran out a minute ago", cards)
+	}
+	if !beat.Equal(began) {
+		t.Errorf("the tick read the mark of a beat as %s, want %s", beat, began)
+	}
+	// And it is gone for every other reader too, not only for this tick.
+	if left := e.storedHost()["cards"].([]any); len(left) != 0 {
+		t.Errorf("%v is left in the store", left)
 	}
 }
 
