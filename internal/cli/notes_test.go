@@ -2,6 +2,8 @@ package cli
 
 import (
 	"encoding/json"
+	"io"
+	"net/http"
 	"strings"
 	"testing"
 	"time"
@@ -239,4 +241,34 @@ func TestNotesLongerThanMinkaKeepsAreRefusedWithoutARequest(t *testing.T) {
 
 	_, r = e.runJSON(strings.Repeat("ä", maxNotesLength-1)+"\r\n", "cards", "notes", "set", e.fixture.CardInTriage.ID, "-", "--force")
 	expectCode(t, r, ExitOK)
+}
+
+// The fake answers what the server answers, whether or not this CLI would ever
+// ask it: Minka reads six digits of a second and no more, and Go reads as many
+// as it is given whatever the layout says.
+func TestTheFakeReadsAGuardsTimeNoWiderThanMinka(t *testing.T) {
+	e := newTestEnv(t)
+	for value, want := range map[string]int{
+		"2026-09-24T11:53:14.123456Z":    http.StatusOK,
+		"2026-09-24T11:53:14.123456789Z": http.StatusBadRequest,
+		"2026-09-24T11:53:14+02":         http.StatusBadRequest,
+	} {
+		body := `{"body":"a text of its own for ` + value + `","expectedUpdatedAt":"` + value + `"}`
+		request, err := http.NewRequest(http.MethodPut,
+			e.server.URL+"/api/v1/cards/"+e.fixture.CardInTriage.ID+"/notes", strings.NewReader(body))
+		if err != nil {
+			t.Fatal(err)
+		}
+		request.Header.Set("Authorization", "Bearer "+e.fixture.Token)
+		request.Header.Set("Content-Type", "application/json")
+		response, err := http.DefaultClient.Do(request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		answer, _ := io.ReadAll(response.Body)
+		response.Body.Close()
+		if response.StatusCode != want {
+			t.Errorf("--expect %s answered %d, want %d: %s", value, response.StatusCode, want, answer)
+		}
+	}
 }
