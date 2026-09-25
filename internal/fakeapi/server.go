@@ -41,6 +41,7 @@ const (
 	maxDescriptionLength = 10000
 	maxCommentLength     = 10000
 	maxStepLength        = 500
+	maxNotesLength       = 100000
 	maxChatMessageLength = 10000
 )
 
@@ -116,6 +117,11 @@ type Card struct {
 	OnHold        bool     // waiting in the area on hold of its column
 	Steps         []*Step
 	Comments      []*Comment
+
+	// Notes is the back of the card: one text, overwritten as a whole.
+	Notes            string
+	NotesUpdatedAt   *time.Time // nil while nobody has written notes
+	NotesUpdatedByID string
 }
 
 type Step struct {
@@ -478,7 +484,7 @@ func New(t testing.TB) (*Server, *Fixture) {
 	mux.HandleFunc("GET /api/v1/boards/{boardId}", s.authenticated(s.board))
 	mux.HandleFunc("GET /api/v1/me/cards", s.authenticated(s.myCards))
 	mux.HandleFunc("GET /api/v1/cards/{cardId}", s.authenticated(s.card))
-	mux.HandleFunc("GET /api/v1/cards/by-short-id/{identifier}", s.authenticated(s.cardByShortIdentifier))
+	mux.HandleFunc("GET /api/v1/cards/{first}/{second}", s.authenticated(s.shortIdentifierOrNotes))
 	mux.HandleFunc("POST /api/v1/boards/{boardId}/cards", s.authenticated(s.addCard))
 	mux.HandleFunc("PATCH /api/v1/cards/{cardId}", s.authenticated(s.updateCard))
 	mux.HandleFunc("POST /api/v1/cards/{cardId}/moves", s.authenticated(s.moveCard))
@@ -497,6 +503,7 @@ func New(t testing.TB) (*Server, *Fixture) {
 	mux.HandleFunc("GET /api/v1/messages/{conversationId}/people", s.authenticated(s.conversationPeople))
 	mux.HandleFunc("POST /api/v1/cards/{cardId}/assignees", s.authenticated(s.assignCard))
 	mux.HandleFunc("DELETE /api/v1/cards/{cardId}/assignees/{personId}", s.authenticated(s.unassignCard))
+	mux.HandleFunc("PUT /api/v1/cards/{cardId}/notes", s.authenticated(s.writeCardNotes))
 	mux.HandleFunc("POST /api/v1/cards/{cardId}/steps", s.authenticated(s.addStep))
 	mux.HandleFunc("PATCH /api/v1/cards/{cardId}/steps/{stepId}", s.authenticated(s.updateStep))
 	mux.HandleFunc("DELETE /api/v1/cards/{cardId}/steps/{stepId}", s.authenticated(s.removeStep))
@@ -1388,6 +1395,130 @@ func (s *Server) addStep(w http.ResponseWriter, r *http.Request, person *Person)
 	}
 	card.Steps = append(card.Steps, &Step{ID: newID(), Title: text})
 	writeJSON(w, http.StatusCreated, s.cardResource(board, column, card))
+}
+
+// shortIdentifierOrNotes tells the two addresses of two parts below /cards
+// apart the way the routes of the server do, which the patterns of one mux
+// cannot: "by-short-id" looks a card up, anything else is a card's notes.
+func (s *Server) shortIdentifierOrNotes(w http.ResponseWriter, r *http.Request, person *Person) {
+	if r.PathValue("first") == "by-short-id" {
+		r.SetPathValue("identifier", r.PathValue("second"))
+		s.cardByShortIdentifier(w, r, person)
+		return
+	}
+	if r.PathValue("second") != "notes" {
+		notFound(w)
+		return
+	}
+	r.SetPathValue("cardId", r.PathValue("first"))
+	s.cardNotes(w, r, person)
+}
+
+func (s *Server) cardNotes(w http.ResponseWriter, r *http.Request, person *Person) {
+	board, _, card := s.visibleCard(r.PathValue("cardId"), person)
+	if card == nil {
+		notFound(w)
+		return
+	}
+	writeJSON(w, http.StatusOK, s.notesResource(board, card))
+}
+
+// writeCardNotes replaces the notes of a card. An expectedUpdatedAt that is
+// given writes only over the notes it names, or over none for null; notes
+// that say the sent text already are no conflict, and notes nobody has
+// written yet are created whatever was expected.
+func (s *Server) writeCardNotes(w http.ResponseWriter, r *http.Request, person *Person) {
+	fields, ok := readBody(w, r)
+	if !ok {
+		return
+	}
+	body, ok := stringField(w, fields, "body")
+	if !ok {
+		return
+	}
+	// The text is looked at before the guard, as the controller does it: a
+	// body that is no text is the one thing wrong with the request itself, and
+	// everything else about the text is a refusal of what it says.
+	if body == nil {
+		unprocessable(w, "cardNotesMissing", `Writing the notes of a card needs the field "body"; an empty string clears them.`)
+		return
+	}
+	text := strings.ReplaceAll(strings.ReplaceAll(*body, "\r\n", "\n"), "\r", "\n")
+	switch {
+	case !utf8.ValidString(text) || strings.IndexFunc(text, func(c rune) bool { return unicode.IsControl(c) && c != '\n' && c != '\t' }) >= 0:
+		unprocessable(w, "cardNotesHasControlCharacters", "The notes of a card must not contain control characters other than line breaks and tabs.")
+		return
+	case utf8.RuneCountInString(text) > maxNotesLength:
+		unprocessable(w, "cardNotesTooLong", "The notes of a card must not be longer than 100000 characters.")
+		return
+	}
+
+	expected, guarded := fields["expectedUpdatedAt"]
+	var expectedAt *time.Time
+	if guarded && expected != nil {
+		value, isString := expected.(string)
+		at, read := aPointInTime(value)
+		if !isString || !read {
+			malformed(w, `The field "expectedUpdatedAt" has to be a point in time as "updatedAt" gives it, or null.`)
+			return
+		}
+		expectedAt = &at
+	}
+
+	board, _, card := s.visibleCard(r.PathValue("cardId"), person)
+	if card == nil {
+		notFound(w)
+		return
+	}
+	if s.refusedAsArchived(w, s.projectOfCard(card.ID)) {
+		return
+	}
+	// The text the notes hold already is no write and no conflict, and that
+	// includes an empty text on a card nobody has written notes for.
+	if card.Notes == text {
+		writeJSON(w, http.StatusOK, s.notesResource(board, card))
+		return
+	}
+	if guarded && card.NotesUpdatedAt != nil && (expectedAt == nil || !expectedAt.Equal(*card.NotesUpdatedAt)) {
+		refusal := errorBody("notesChanged", `The notes of this card were changed since they were read. Nothing was written; "notes" holds them as they stand.`)
+		refusal["notes"] = s.notesResource(board, card)
+		writeJSON(w, http.StatusConflict, refusal)
+		return
+	}
+	// Every write stands a second after the one before, so that each has a
+	// time of its own for the guard to tell apart.
+	writtenAt := s.now
+	if card.NotesUpdatedAt != nil {
+		writtenAt = card.NotesUpdatedAt.Add(time.Second)
+	}
+	card.Notes, card.NotesUpdatedAt, card.NotesUpdatedByID = text, &writtenAt, person.ID
+	writeJSON(w, http.StatusOK, s.notesResource(board, card))
+}
+
+// aPointInTime reads a moment the way Minka reads the one a guard names: up to
+// six digits of a second, under Z or an offset written either way. The shape
+// is looked at first, because Go reads a fraction of any length whatever the
+// layout says.
+func aPointInTime(value string) (time.Time, bool) {
+	if !guardTimePattern.MatchString(value) {
+		return time.Time{}, false
+	}
+	for _, layout := range []string{"2006-01-02T15:04:05.999999Z07:00", "2006-01-02T15:04:05.999999Z0700"} {
+		if at, err := time.Parse(layout, value); err == nil {
+			return at, true
+		}
+	}
+	return time.Time{}, false
+}
+
+var guardTimePattern = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,6})?(Z|[+-]\d{2}:?\d{2})$`)
+
+func (s *Server) notesResource(board *Board, card *Card) map[string]any {
+	return map[string]any{
+		"cardId": card.ID, "body": card.Notes, "updatedAt": timestampOrNil(card.NotesUpdatedAt),
+		"updatedBy": s.personReferenceOrNil(card.NotesUpdatedByID),
+		"appUrl":    s.cardURL(board, card) + "#notes",
+	}
 }
 
 func (s *Server) updateStep(w http.ResponseWriter, r *http.Request, person *Person) {
@@ -2786,8 +2917,12 @@ func writeRaw(w http.ResponseWriter, status int, body string) {
 	_, _ = io.WriteString(w, body)
 }
 
+// timestampLayout is the one form the API gives points in time in: UTC with
+// microseconds.
+const timestampLayout = "2006-01-02T15:04:05.000000Z"
+
 func timestamp(t time.Time) string {
-	return t.UTC().Format("2006-01-02T15:04:05.000000Z")
+	return t.UTC().Format(timestampLayout)
 }
 
 func timestampOrNil(t *time.Time) any {

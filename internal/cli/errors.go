@@ -121,7 +121,8 @@ func apiError(err error, host string) *Error {
 			e.Code = CodeNotFound
 			e.Hint = "It does not exist, it belongs to a project you are not a member of, or its project is in the trash."
 		case status == http.StatusBadRequest || status == http.StatusUnsupportedMediaType ||
-			status == http.StatusRequestEntityTooLarge || status == http.StatusUnprocessableEntity:
+			status == http.StatusRequestEntityTooLarge || status == http.StatusUnprocessableEntity ||
+			status == http.StatusConflict:
 			e.Code = CodeValidation
 			if apiErr.Code == apiCodeProjectArchived {
 				e.Hint = "The project can still be read. Nothing is written in it until it is put back in use, which is done in Minka on the web. List archived projects with: minka projects list --archived"
