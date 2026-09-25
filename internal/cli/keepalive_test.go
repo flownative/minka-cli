@@ -91,6 +91,41 @@ func TestASecondKeepaliveOfTheSameHostReportsNothing(t *testing.T) {
 	}
 }
 
+// The safeguard: the flag is what puts a run into the mode that is at no work.
+// The first report comes before the timer, so a keepalive that is told to stop
+// straight away has been at the store once — and what it left there is nothing:
+// no mark of a beat, no sign of life, although the name of the session that
+// spawned it stands in the environment around it.
+func TestTheFlagPutsTheRunIntoTheModeThatIsAtNoWork(t *testing.T) {
+	e := newAgentEnv(t)
+	began := time.Date(2026, 9, 23, 10, 0, 0, 0, time.UTC)
+	e.vars[sessionVariable] = "the session that spawned it"
+	expectCode(t, e.runAt(began, "work", "start", e.fixture.CardInDoing.ID, "--json"), ExitOK)
+
+	// Two minutes on, where a beat of a session would write both marks.
+	env, r := e.runKeepaliveThatIsToldToStop(began.Add(2 * time.Minute))
+	expectCode(t, r, ExitOK)
+	if ended, _ := decode(t, env.Data)["ended"].(string); !strings.Contains(ended, "told to stop") {
+		t.Errorf("the keepalive ended for %q", ended)
+	}
+	entry := e.storedHost()
+	// The moment of a signal is claimed in the store before the request goes out,
+	// so this is what says that the keepalive was at the store before its timer.
+	if entry["sentAt"] == nil {
+		t.Fatalf("the keepalive claimed no signal before its timer: %v", entry)
+	}
+	if got := entry["beatAt"]; got != asStored(began) {
+		t.Errorf("the mark of a beat stands at %v, want the moment the card was taken up", got)
+	}
+	cards, _ := entry["cards"].([]any)
+	if len(cards) != 1 {
+		t.Fatalf("%d cards, want the one that was taken up", len(cards))
+	}
+	if seen := cards[0].(map[string]any)["seenAt"]; seen != asStored(time.Time{}) {
+		t.Errorf("the keepalive wrote the sign of life %v of a card it is at no work on", seen)
+	}
+}
+
 // The keepalive holds the lock while it reports and gives it back when it stops,
 // so that the next long tool call can start one again.
 func TestAKeepaliveHoldsTheLockOnlyWhileItReports(t *testing.T) {

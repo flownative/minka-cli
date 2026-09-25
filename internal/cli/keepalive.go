@@ -148,14 +148,13 @@ func (a *app) keepTilesAlive() string {
 
 	ticker := time.NewTicker(keepaliveTick)
 	defer ticker.Stop()
+
+	// The first tick is the moment the lock was taken, not a tick away from it:
+	// whoever holds the reporting from here on says so at once, and a keepalive
+	// that can do nothing for its host finds that out before it settles into a
+	// timer.
 	before := a.now()
 	for {
-		select {
-		case <-a.ctx.Done():
-			return "it was told to stop"
-		case <-ticker.C:
-		}
-
 		now := a.now()
 		beat, cards, read := a.whatTheStoreSays(path, host)
 		at := tick{now: now, before: before, read: read, beat: beat, cards: cards}.decide()
@@ -173,6 +172,12 @@ func (a *app) keepTilesAlive() string {
 			return whyItEnded(at)
 		default:
 			return whyItEnded(at)
+		}
+
+		select {
+		case <-a.ctx.Done():
+			return "it was told to stop"
+		case <-ticker.C:
 		}
 	}
 }
