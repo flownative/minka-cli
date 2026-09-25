@@ -71,7 +71,11 @@ type tick struct {
 // jumped and a store nobody has been at are left unsaid, because the cards may
 // still be in hand and the server forgets a signal by itself.
 func (t tick) decide() verdict {
-	if apart := t.now.Round(0).Sub(t.before.Round(0)); apart >= aJumpInTheClock || apart < 0 {
+	// A step back of less than a tick is a clock being corrected by a second or
+	// two, which says nothing about the work: ending on that would kill the
+	// keepalive in the middle of the long tool call it is there for, where no
+	// beat is coming to start another.
+	if apart := t.now.Round(0).Sub(t.before.Round(0)); apart >= aJumpInTheClock || apart <= -keepaliveTick {
 		return tickEndsForTheClockJumped
 	}
 	if !t.read {

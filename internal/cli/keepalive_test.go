@@ -328,9 +328,13 @@ func TestTheKeepaliveIsInNoCatalog(t *testing.T) {
 // reports nothing. A machine that wakes from a sleep of hours holds cards whose
 // tiles went out long ago, and a signal that raised them again would say that
 // somebody is at work on them.
+//
+// The moments are written out rather than built from the constants they are to
+// hold: a tick of a minute and a half, or a deadline of twenty-five hours, would
+// pass a table that measures itself.
 func TestWhatOneTickOfTheKeepaliveDecides(t *testing.T) {
 	woke := time.Date(2026, 9, 23, 10, 0, 0, 0, time.UTC)
-	justBefore := woke.Add(-keepaliveTick)
+	justBefore := woke.Add(-30 * time.Second)
 	amoment := woke.Add(-time.Minute)
 
 	for _, one := range []struct {
@@ -344,13 +348,18 @@ func TestWhatOneTickOfTheKeepaliveDecides(t *testing.T) {
 			tickReports,
 		},
 		{
+			"a store somebody was at twenty-four minutes ago",
+			tick{now: woke, before: justBefore, read: true, beat: woke.Add(-24 * time.Minute), cards: 1},
+			tickReports,
+		},
+		{
 			"a list that is empty",
 			tick{now: woke, before: justBefore, read: true, beat: amoment, cards: 0},
 			tickEndsOnAnEmptyList,
 		},
 		{
-			"a store nobody has been at",
-			tick{now: woke, before: justBefore, read: true, beat: woke.Add(-nobodyIsAtWorkAfter), cards: 1},
+			"a store nobody has been at for twenty-six minutes",
+			tick{now: woke, before: justBefore, read: true, beat: woke.Add(-26 * time.Minute), cards: 1},
 			tickEndsForNobodyIsAtWork,
 		},
 		{
@@ -364,9 +373,19 @@ func TestWhatOneTickOfTheKeepaliveDecides(t *testing.T) {
 			tickEndsForTheClockJumped,
 		},
 		{
-			"a clock that was put back",
+			"a tick four minutes late",
+			tick{now: woke, before: woke.Add(-4 * time.Minute), read: true, beat: amoment, cards: 1},
+			tickEndsForTheClockJumped,
+		},
+		{
+			"a clock put back by an hour",
 			tick{now: woke, before: woke.Add(time.Hour), read: true, beat: amoment, cards: 1},
 			tickEndsForTheClockJumped,
+		},
+		{
+			"a clock corrected by a second, which says nothing about the work",
+			tick{now: woke, before: woke.Add(time.Second), read: true, beat: amoment, cards: 1},
+			tickReports,
 		},
 		{
 			"a store somebody else held for the moment",
@@ -377,6 +396,19 @@ func TestWhatOneTickOfTheKeepaliveDecides(t *testing.T) {
 		if got := one.tick.decide(); got != one.want {
 			t.Errorf("%s: verdict %d, want %d", one.name, got, one.want)
 		}
+	}
+}
+
+// The tick has to be shorter than the throttle of the signal, or the keepalive
+// would report on its own rate instead of the throttle's, fall short of the
+// minute every second or third time, and let the gap grow past the three minutes
+// the server counts a signal for: the tile would flicker.
+func TestTheKeepaliveTicksOftenerThanItReports(t *testing.T) {
+	if keepaliveTick >= signalEvery {
+		t.Errorf("the keepalive ticks every %s and reports every %s", keepaliveTick, signalEvery)
+	}
+	if aJumpInTheClock <= signalEvery {
+		t.Errorf("a jump is %s, which is not longer than the %s between two signals", aJumpInTheClock, signalEvery)
 	}
 }
 
