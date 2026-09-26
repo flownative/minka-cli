@@ -293,6 +293,9 @@ type Extractor struct {
 	// MessagesPerPart is how many lines of a chat one file of a bundle holds
 	// at most; messagesPerPart when 0.
 	MessagesPerPart int
+	// LargestFile is the most one file may weigh for Minka to take it, in
+	// bytes; largestFileMinkaTakes when 0.
+	LargestFile int64
 	// Now is the moment the run is made, which a schedule that has run out is
 	// held against; the clock of the machine when nil.
 	Now func() time.Time
@@ -398,6 +401,9 @@ func ValidProjectID(value string) bool {
 // So the comments and the reactions of a bundle stand in the order of what they
 // hang on: those of cards, those of posts, those of lines, those of answers.
 func (e *Extractor) Extract(ctx context.Context, projectIDs []string, w *bundle.Writer) (Result, error) {
+	if e.LargestFile == 0 {
+		e.LargestFile = largestFileMinkaTakes
+	}
 	e.people = newRegistry()
 	e.skipped = map[skippedKey]int{}
 	e.missing = []MissingFile{}

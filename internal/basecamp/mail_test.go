@@ -7,17 +7,6 @@ import (
 	"unicode/utf8"
 )
 
-// WithTheCeilingOfARunAt lowers what Minka takes for one file for the length of
-// a test: the branch above it is reached by no fixture a gibibyte would fit in.
-// It stands in a test file, so nothing of it is in the binary, and a test of the
-// package around this one reaches it all the same.
-func WithTheCeilingOfARunAt(t *testing.T, bytes int64) {
-	t.Helper()
-	was := largestFileMinkaTakes
-	largestFileMinkaTakes = bytes
-	t.Cleanup(func() { largestFileMinkaTakes = was })
-}
-
 // The rule for the sender of a mail is kept here and asked of nobody, so every
 // part of it is held down: what a bundle carries has to be an address Minka
 // takes, and an address of a shape nobody writes is left out rather than

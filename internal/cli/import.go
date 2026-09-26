@@ -213,11 +213,11 @@ Two things a later run cannot repair, which the report says with a notice each:
 it leaves the people of a to-do as they stand in Minka (todosWithPeople), and it
 reopens nothing it once ticked off (todosNotDone).
 
-The forwarded mail of an inbox comes last of all, because a reference of such
-a mail that points at nothing is never looked at again. A mail carries its
-subject as its title, the sender as an address that never becomes a person, and
-the body as the source holds it, line breaks and all: Minka turns those into
-paragraphs. What the source keeps on its shelf comes into the trash, where it
+The forwarded mail of an inbox comes last of all, so that a file standing in a
+card and in a mail alike belongs to the card: a file met in two records is the
+first record's. A mail carries its subject as its title, the sender as an
+address that never becomes a person, and the body as the source holds it, line
+breaks and all: Minka turns those into paragraphs. What the source keeps on its shelf comes into the trash, where it
 can be brought back, and the report says how many (forwards.fromTheShelf); a
 mail of an inbox that is switched off is not in the bundle at all and counts as
 a skipped tool. A subject nobody wrote becomes "(no subject)", and one that is
@@ -555,8 +555,8 @@ it has been applied.`,
 			}
 			if count := report.Forwards.GivenALineOfTheRun; count > 0 {
 				notices = append(notices, plural(count,
-					"forwarded mail carries a line of the run's own, because what it says would reach Minka as nothing at all and a mail that arrives empty is lost on every run",
-					"forwarded mails carry a line of the run's own, because what they say would reach Minka as nothing at all and a mail that arrives empty is lost on every run"))
+					"forwarded mail or answer by mail carries a line of the run's own, because what it says would reach Minka as nothing at all and a mail that arrives empty is lost on every run",
+					"forwarded mails or answers by mail carry a line of the run's own, because what they say would reach Minka as nothing at all and a mail that arrives empty is lost on every run"))
 			}
 			if count := report.Forwards.WithoutASubject + report.Forwards.SubjectsChanged; count > 0 {
 				notices = append(notices, plural(count,
@@ -836,7 +836,7 @@ func renderForwards(w io.Writer, report importReport) {
 		forwards.ByStatus[bundle.StatusActive], forwards.ByStatus[bundle.StatusTrashed], forwards.FromTheShelf)
 	fmt.Fprintf(w, "Mails without a subject: %d; subjects folded or cut short to make a title: %d\n",
 		forwards.WithoutASubject, forwards.SubjectsChanged)
-	fmt.Fprintf(w, "Mails carrying a line of the run's own, because what they say would arrive as nothing: %d\n", forwards.GivenALineOfTheRun)
+	fmt.Fprintf(w, "Mails and answers carrying a line of the run's own, because what they say would arrive as nothing: %d\n", forwards.GivenALineOfTheRun)
 	fmt.Fprintf(w, "Mails nobody is named for, which Minka gives to the owner of the organization: %d\n", forwards.WithoutAForwarder)
 	if len(forwards.WithoutAnAddress) > 0 {
 		fmt.Fprintf(w, "Mails whose sender is no address Minka takes, left out: %d (forward %s)\n",
