@@ -267,7 +267,7 @@ the first record's. A folder, a document and an
 upload each carry the state the source left them in — active, archived or
 trashed — and never the state of the folder they stand in: what stands in a
 folder that was archived or thrown away goes along through the folder in Minka
-and comes back with it. For an entry **in use** the order of the file
+and comes back with it. For an entry that is in use the order of the file
 decides: Minka puts each new one on top of its kind, so the bundle carries them
 from the bottom up and the source's order comes out again. For one that has left
 its place it decides nothing — Minka orders an archive by the moment a record was
@@ -294,7 +294,7 @@ and named by ID with its comments and its boosts
 carry would stop the applier. A record that lost a file no run will bring is
 named (docs.onlyAFileNoRunWillBring), and the two kinds end differently because
 the one field is optional and the other is not: a document whose whole text was
-that file arrives **without words**, its title, comments and boosts with it,
+that file arrives without words, its title, comments and boosts with it,
 while an upload cannot be written without its file at all and Minka asks for the
 file again on every run. A file this run merely could not fetch is not that, and
 the record waits for it. A document, or the description of an
