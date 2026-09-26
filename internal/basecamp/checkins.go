@@ -274,7 +274,7 @@ func (e *Extractor) writeAnswers(ctx context.Context, w *bundle.Writer, bucket, 
 		if err != nil {
 			return err
 		}
-		e.measure(bundle.Answers, body)
+		e.measure(bundle.Answers, body, LongestBodyRecord{Record: "answer", SourceID: origin.SourceID, In: "project", InSourceID: sourceID(bucket)})
 		if err := e.attachFiles(ctx, w, bundle.OwnerAnswer, origin, files); err != nil {
 			return err
 		}

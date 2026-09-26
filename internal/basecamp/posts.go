@@ -229,7 +229,7 @@ func (e *Extractor) writePost(ctx context.Context, w *bundle.Writer, bucket int6
 	if err := w.Add(bundle.Posts, record); err != nil {
 		return err
 	}
-	e.measure(bundle.Posts, body)
+	e.measure(bundle.Posts, body, LongestBodyRecord{Record: "post", SourceID: origin.SourceID, In: "project", InSourceID: sourceID(bucket)})
 	e.postsByStatus[found.Status]++
 	if saysNothing(body) {
 		e.postsWithEmptyBody++

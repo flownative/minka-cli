@@ -447,7 +447,7 @@ func (e *Extractor) writeCard(ctx context.Context, w *bundle.Writer, bucket int6
 	if err := w.Add(bundle.Cards, record); err != nil {
 		return err
 	}
-	e.measure(bundle.Cards, description)
+	e.measure(bundle.Cards, description, LongestBodyRecord{Record: "card", SourceID: origin.SourceID, In: "project", InSourceID: projectID})
 	e.cardsByStatus[found.Status]++
 	if found.onHold {
 		e.cardsOnHold++
@@ -595,7 +595,7 @@ func (e *Extractor) writeComments(ctx context.Context, w *bundle.Writer, bucket 
 		if err != nil {
 			return nil, err
 		}
-		e.measure(bundle.Comments, body)
+		e.measure(bundle.Comments, body, LongestBodyRecord{Record: "comment", SourceID: origin.SourceID, In: "project", InSourceID: sourceID(bucket)})
 		if err := e.attachFiles(ctx, w, bundle.OwnerComment, origin, files); err != nil {
 			return nil, err
 		}

@@ -107,6 +107,23 @@ type LeftOutRecords struct {
 	LeftOut    int    `json:"leftOut"`
 }
 
+// LongestBodyRecord names the record whose text is the longest of its kind, so
+// that whoever reads the number can look at the record at the source. It says
+// nothing of the text: a kind of record, an identifier, the place it stands in
+// and the length.
+type LongestBodyRecord struct {
+	// Record is the kind of record: card, comment, post, line, answer.
+	Record   string `json:"record"`
+	SourceID string `json:"sourceId"`
+	// In is the kind of record it stands in and InSourceID which one: the chat
+	// of a line, the project of everything else.
+	In         string `json:"in"`
+	InSourceID string `json:"inSourceId"`
+	// Characters is how long the text is, the number LongestBody holds for the
+	// kind.
+	Characters int `json:"characters"`
+}
+
 // Result is what a run reports besides the counts of the bundle.
 type Result struct {
 	// SourceInstance is the ID of the Basecamp account.
@@ -174,10 +191,13 @@ type Result struct {
 	AnswersWithoutABody int
 	AnswersWithoutADay  int
 	AnswersTrashed      int
-	// LongestBody is the longest text of a kind, in characters.
-	LongestBody map[bundle.Kind]int
-	Bodies      BodyCounts
-	Files       FileCounts
+	// LongestBody is the longest text of a kind, in characters, and
+	// LongestBodyRecords the record it was measured on, per kind. A kind whose
+	// longest text has no characters names no record.
+	LongestBody        map[bundle.Kind]int
+	LongestBodyRecords map[bundle.Kind]LongestBodyRecord
+	Bodies             BodyCounts
+	Files              FileCounts
 }
 
 // Extractor walks projects of a Basecamp account and adds what it finds to a
@@ -225,6 +245,7 @@ type Extractor struct {
 
 	messagesWithEmptyBody int
 	longestBody           map[bundle.Kind]int
+	longestBodyRecords    map[bundle.Kind]LongestBodyRecord
 	bodies                BodyCounts
 
 	questionsLeftOut    []ImpossibleQuestion
@@ -291,6 +312,7 @@ func (e *Extractor) Extract(ctx context.Context, projectIDs []string, w *bundle.
 		e.messagesByType[name] = 0
 	}
 	e.longestBody = map[bundle.Kind]int{bundle.Cards: 0, bundle.Comments: 0, bundle.Posts: 0, bundle.Messages: 0, bundle.Answers: 0}
+	e.longestBodyRecords = map[bundle.Kind]LongestBodyRecord{}
 	e.fileOwners, e.fileRecords, e.files = map[string]string{}, nil, FileCounts{}
 
 	ids, err := sortedIDs(projectIDs)
@@ -365,6 +387,7 @@ func (e *Extractor) Extract(ctx context.Context, projectIDs []string, w *bundle.
 
 		MessagesWithEmptyBody: e.messagesWithEmptyBody,
 		LongestBody:           e.longestBody,
+		LongestBodyRecords:    e.longestBodyRecords,
 		Bodies:                e.bodies,
 		Files:                 e.files,
 	}, nil
@@ -735,10 +758,18 @@ func (e *Extractor) skippedTools() []SkippedTools {
 	return skipped
 }
 
-// measure notes how long a text of a kind is, in characters: whoever sets the
-// limits of where a bundle goes has to know the longest one.
-func (e *Extractor) measure(kind bundle.Kind, text string) {
-	e.longestBody[kind] = max(e.longestBody[kind], utf8.RuneCountInString(text))
+// measure notes how long a text of a kind is, in characters, and which record
+// it was: whoever sets the limits of where a bundle goes has to know the
+// longest text, and a number that names no record is a number nobody can
+// check. Of two texts of the same length the one met first keeps the place; a
+// text of no characters names no record, because there is nothing to look at.
+func (e *Extractor) measure(kind bundle.Kind, text string, of LongestBodyRecord) {
+	length := utf8.RuneCountInString(text)
+	if length == 0 || length <= e.longestBody[kind] {
+		return
+	}
+	of.Characters = length
+	e.longestBody[kind], e.longestBodyRecords[kind] = length, of
 }
 
 func sourceID(id int64) string {

@@ -163,7 +163,7 @@ func (e *Extractor) extractChat(ctx context.Context, w *bundle.Writer, bucket, c
 		if err != nil {
 			return err
 		}
-		e.measure(bundle.Messages, body)
+		e.measure(bundle.Messages, body, LongestBodyRecord{Record: "line", SourceID: origin.SourceID, In: "chat", InSourceID: sourceID(chat)})
 		e.messagesByType[lineTypes[found.Type]]++
 		if err := e.attachFiles(ctx, w, bundle.OwnerMessage, origin, files); err != nil {
 			return err

@@ -69,8 +69,12 @@ the words a bundle has no place for that account holds exactly one, the kind of
 line a run used to end on. What such a run is worth is the size it names before
 anything is fetched, and one thing it named that nobody expected: a comment
 seven times longer than what Minka takes, which the applier passes over rather
-than ending on. A run into a bundle over the whole account is still owed, and
-its size is Robert's and Shaun's to allow.
+than ending on. Nobody could look at that comment, because the number named no
+record; `longestBodyRecords` now says, beside every length, which record it was
+measured on — the kind, the identifier and the place it stands in — so the next
+such number can be traced without walking the account again. Basecamp's own
+address of the record is not in it: no run carries one. A run into a bundle over
+the whole account is still owed, and its size is Robert's and Shaun's to allow.
 
 The working notes on the back of a card are read with `cards notes show` and
 written with `cards notes set`, which needs `--expect` or `--force` (C-042).
