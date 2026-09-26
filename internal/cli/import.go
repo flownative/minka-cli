@@ -90,11 +90,21 @@ type importReport struct {
 	PostsByStatus      map[string]int `json:"postsByStatus"`
 	PostsLeftOut       int            `json:"postsLeftOut"`
 	PostsWithEmptyBody int            `json:"postsWithEmptyBody"`
-	// TodoListsByStatus splits counts.todolists. TodosLeftOut are the archived
-	// and trashed lists, groups and to-dos that hang on nothing the run
-	// extracts.
+	// TodoListsByStatus splits counts.todolists and TodosByStatus counts.todos.
+	// TodosLeftOut are the archived and trashed lists, groups and to-dos that
+	// hang on nothing the run extracts.
 	TodoListsByStatus map[string]int `json:"todoListsByStatus"`
+	TodosByStatus     map[string]int `json:"todosByStatus"`
 	TodosLeftOut      int            `json:"todosLeftOut"`
+	// TodosNotDone are the to-dos the source has open, and TodosWithPeople those
+	// that name somebody: the two differences a later run cannot carry, because
+	// it reopens nothing and leaves the people of a to-do as they stand.
+	TodosNotDone    int `json:"todosNotDone"`
+	TodosWithPeople int `json:"todosWithPeople"`
+	// TodosWithSubtasks are the to-dos that had subtasks and SubtasksLeftOut how
+	// many there were: a bundle carries none.
+	TodosWithSubtasks int `json:"todosWithSubtasks"`
+	SubtasksLeftOut   int `json:"subtasksLeftOut"`
 	// QuestionsLeftOut are the questions left out because Minka has no words
 	// for their schedule, each with the field that made it impossible.
 	// AnchorsInferred are the questions asked every other week whose startsOn
@@ -327,7 +337,12 @@ it has been applied.`,
 				RecordsLeftOut:     result.RecordsLeftOut,
 
 				TodoListsByStatus: result.TodoListsByStatus,
+				TodosByStatus:     result.TodosByStatus,
 				TodosLeftOut:      result.TodosLeftOut,
+				TodosNotDone:      result.TodosNotDone,
+				TodosWithPeople:   result.TodosWithPeople,
+				TodosWithSubtasks: result.TodosWithSubtasks,
+				SubtasksLeftOut:   result.SubtasksLeftOut,
 
 				QuestionsLeftOut:    result.QuestionsLeftOut,
 				AnchorsInferred:     result.AnchorsInferred,
@@ -405,6 +420,21 @@ it has been applied.`,
 				notices = append(notices, plural(count,
 					"line of a chat is left out, because it was files alone and Basecamp names none of them",
 					"lines of chats are left out, because they were files alone and Basecamp names none of them"))
+			}
+			if count := report.SubtasksLeftOut; count > 0 {
+				notices = append(notices, plural(count,
+					"subtask of a to-do is left out, because the format has no word for one; the to-do it hung on is poorer here than at the source, and data.todosWithSubtasks counts those to-dos",
+					"subtasks of to-dos are left out, because the format has no word for them; the to-dos they hung on are poorer here than at the source, and data.todosWithSubtasks counts those to-dos"))
+			}
+			if count := report.TodosWithPeople; count > 0 {
+				notices = append(notices, plural(count,
+					"to-do names somebody as an assignee or as somebody to tell when it is done, and a later run leaves the people of a to-do as they stand in Minka: a change at the source never arrives",
+					"to-dos name somebody as an assignee or as somebody to tell when they are done, and a later run leaves the people of a to-do as they stand in Minka: a change at the source never arrives"))
+			}
+			if count := report.TodosNotDone; count > 0 {
+				notices = append(notices, plural(count,
+					"to-do is open at the source, and a later run reopens nothing: one that somebody has ticked off in Minka stays done",
+					"to-dos are open at the source, and a later run reopens nothing: one that somebody has ticked off in Minka stays done"))
 			}
 			if count := recordsLeftOut(report); count > 0 {
 				notices = append(notices, plural(count,
@@ -609,6 +639,9 @@ func renderTodos(w io.Writer, report importReport) {
 	}
 	fmt.Fprintf(w, "To-do lists: %d active, %d archived, %d trashed\n",
 		report.TodoListsByStatus[bundle.StatusActive], report.TodoListsByStatus[bundle.StatusArchived], report.TodoListsByStatus[bundle.StatusTrashed])
+	fmt.Fprintf(w, "To-dos: %d active, %d trashed; %d of them still open, %d carrying people\n",
+		report.TodosByStatus[bundle.StatusActive], report.TodosByStatus[bundle.StatusTrashed], report.TodosNotDone, report.TodosWithPeople)
+	fmt.Fprintf(w, "To-dos that had subtasks: %d, with %d subtasks a bundle has no word for\n", report.TodosWithSubtasks, report.SubtasksLeftOut)
 	fmt.Fprintf(w, "Archived and trashed lists, groups and to-dos that hang on nothing extracted, left out: %d\n", report.TodosLeftOut)
 }
 

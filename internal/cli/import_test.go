@@ -113,7 +113,10 @@ func TestImportBasecampWritesABundleAndReportsWhatItHolds(t *testing.T) {
 		"creatorProbesRefused": float64(0),
 		"cardsByStatus":        map[string]any{"active": float64(0), "archived": float64(0), "trashed": float64(0)},
 		"cardsOnHold":          float64(0), "cardsLeftOut": float64(0), "commentsTrashed": float64(0),
-		"todoListsByStatus":  map[string]any{"active": float64(0), "archived": float64(0), "trashed": float64(0)},
+		"todoListsByStatus": map[string]any{"active": float64(0), "archived": float64(0), "trashed": float64(0)},
+		"todosByStatus":     map[string]any{"active": float64(0), "trashed": float64(0)},
+		"todosNotDone":      float64(0), "todosWithPeople": float64(0),
+		"todosWithSubtasks": float64(0), "subtasksLeftOut": float64(0),
 		"todosLeftOut":       float64(0),
 		"mentionsUnresolved": float64(0), "filesInBodies": float64(0), "filesDropped": float64(0), "linkPreviews": float64(0), "picturesLinked": float64(0), "embeds": float64(0), "embedsLeftOut": float64(0),
 		"filesExpected": float64(0), "filesBytesExpected": float64(0), "filesBytes": float64(0), "filesFetched": float64(0), "filesReused": float64(0),
@@ -1691,5 +1694,52 @@ func TestAQuestionThatComesAskingNobodyIsNamed(t *testing.T) {
 	expectCode(t, styled, ExitOK)
 	if !strings.Contains(styled.stdout, "Questions that come asking nobody at all: 1 — 9311 (1 left out)") {
 		t.Errorf("the text lacks the question:\n%s", styled.stdout)
+	}
+}
+
+func TestImportBasecampReportsTheToDosOfAProject(t *testing.T) {
+	e := newImportEnv(t)
+	out := filepath.Join(t.TempDir(), "bundle")
+
+	env, r := e.runJSON("import", "basecamp", "--project", "7008", "--out", out)
+	expectCode(t, r, ExitOK)
+	data := decode(t, env.Data)
+	want := map[string]any{
+		"todoListsByStatus": map[string]any{"active": float64(3), "archived": float64(1), "trashed": float64(1)},
+		"todosByStatus":     map[string]any{"active": float64(7), "trashed": float64(1)},
+		"todosLeftOut":      float64(3),
+		"todosNotDone":      float64(6), "todosWithPeople": float64(2),
+		"todosWithSubtasks": float64(1), "subtasksLeftOut": float64(2),
+		"recordsLeftOut": []any{map[string]any{"record": "group", "field": "status", "value": "archived",
+			"in": "project", "inSourceId": "7008", "leftOut": float64(1)}},
+	}
+	for key, value := range want {
+		if !reflect.DeepEqual(data[key], value) {
+			t.Errorf("%s: got %v, want %v", key, data[key], value)
+		}
+	}
+	for _, notice := range []string{
+		"2 subtasks of to-dos are left out",
+		"2 to-dos name somebody as an assignee or as somebody to tell when they are done",
+		"6 to-dos are open at the source, and a later run reopens nothing",
+		"1 record is left out, because the source describes it with a word a bundle has none for",
+	} {
+		if !strings.Contains(env.Notice, notice) {
+			t.Errorf("notice %q does not say %q", env.Notice, notice)
+		}
+	}
+
+	r = e.run("import", "basecamp", "--project", "7008", "--out", out, "--styled")
+	expectCode(t, r, ExitOK)
+	for _, want := range []string{
+		"todolists    5", "todogroups   4", "todos        8",
+		"To-do lists: 3 active, 1 archived, 1 trashed",
+		"To-dos: 7 active, 1 trashed; 6 of them still open, 2 carrying people",
+		"To-dos that had subtasks: 1, with 2 subtasks a bundle has no word for",
+		"Archived and trashed lists, groups and to-dos that hang on nothing extracted, left out: 3",
+	} {
+		if !strings.Contains(r.stdout, want) {
+			t.Errorf("the text lacks %q:\n%s", want, r.stdout)
+		}
 	}
 }
