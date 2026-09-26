@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 )
 
 // A card in the archive of its board is read like any other, and says where it
@@ -120,5 +121,35 @@ func TestEveryCardSaysWhetherItIsArchived(t *testing.T) {
 	}
 	if _, says := mine[0]["archived"]; !says {
 		t.Errorf("a card of the list says nothing about the archive: %s", env.Data)
+	}
+}
+
+// A card put away stays in the list of the machine until the board leaves it out
+// of the set: one mechanism takes a card out of that list, and the command is not
+// it. Putting a card away that nobody says they are working on therefore says
+// nothing about a list either.
+func TestPuttingACardAwayLeavesTheListOfTheMachineToTheBoard(t *testing.T) {
+	e := newAgentEnv(t)
+	now := time.Date(2026, 9, 23, 10, 0, 0, 0, time.UTC)
+	card := e.fixture.CardInDoing
+
+	expectCode(t, e.runAt(now, "work", "start", card.ID, "--json"), ExitOK)
+	expectCode(t, e.runAt(now, "heartbeat", "--json"), ExitOK)
+
+	env, r := e.runWithJSON(now, "cards", "archive", card.ID)
+	expectCode(t, r, ExitOK)
+	if strings.Contains(env.Notice, "no longer among the cards") {
+		t.Errorf("the command took the card out of the list itself: %q", env.Notice)
+	}
+	listing, _ := e.runWithJSON(now, "work", "list")
+	if got := cardIDsOfTheList(t, listing); len(got) != 1 || got[0] != card.ID {
+		t.Fatalf("the list holds %v, want the card until the board says otherwise", got)
+	}
+
+	// The next signal is where the card goes, with the word of the board for why.
+	env, r = e.runWithJSON(now.Add(61*time.Second), "heartbeat")
+	expectCode(t, r, ExitOK)
+	if reasons := letGoOfTheList(t, env); reasons[card.ID] != "cardArchived" {
+		t.Errorf("the beat says %v about what was left out", reasons)
 	}
 }
