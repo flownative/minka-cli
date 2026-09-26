@@ -480,7 +480,11 @@ func opensEmbedOrFrame(rest string) bool {
 	return strings.HasPrefix(lowered, "<"+embedTag) || strings.HasPrefix(lowered, "<"+frameTag)
 }
 
-// saysNothing tells whether a text of a bundle is empty for whoever reads it:
+// saysNothing tells whether a text of a bundle is empty for whoever reads it,
+// which whatWouldArriveOf asks of a mail with two questions more: a change here
+// belongs there as well.
+//
+// Empty is:
 // whitespace, characters without a width, line breaks and the empty blocks an
 // editor leaves behind. Anything else says something, a reference to a file
 // or a person, a link, a rule and an embed included: a text that was a video

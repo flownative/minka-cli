@@ -90,6 +90,7 @@ var toolKinds = map[string]string{
 	"message_board": bundle.ToolPosts,
 	"questionnaire": bundle.ToolCheckins,
 	"todoset":       bundle.ToolTodos,
+	"inbox":         bundle.ToolForwards,
 }
 
 // SkippedTools counts dock entries of one kind that a run left out, either
@@ -138,7 +139,7 @@ type TodoPlaceLeftOut struct {
 // out and the run goes on; what is lost stays nameable here.
 type LeftOutRecords struct {
 	// Record is the kind of record: card, post, comment, question, answer,
-	// column or line.
+	// column, line, forward or reply.
 	Record string `json:"record"`
 	// Field is where the source said the word, Value what it said. Neither is
 	// anything somebody wrote: a status, a kind of line, a kind of column.
@@ -156,7 +157,8 @@ type LeftOutRecords struct {
 // nothing of the text: a kind of record, an identifier, the place it stands in
 // and the length.
 type LongestBodyRecord struct {
-	// Record is the kind of record: card, comment, post, line, answer.
+	// Record is the kind of record: card, comment, post, line, answer, forward
+	// or reply.
 	Record   string `json:"record"`
 	SourceID string `json:"sourceId"`
 	// In is the kind of record it stands in and InSourceID which one: the chat
@@ -267,6 +269,8 @@ type Result struct {
 	AnswersWithoutABody int
 	AnswersWithoutADay  int
 	AnswersTrashed      int
+	// Forwards says what became of the forwarded mail a run met.
+	Forwards ForwardCounts
 	// LongestBody is the longest text of a kind, in characters, and
 	// LongestBodyRecords the record it was measured on, per kind. A kind whose
 	// longest text has no characters names no record.
@@ -289,6 +293,9 @@ type Extractor struct {
 	// MessagesPerPart is how many lines of a chat one file of a bundle holds
 	// at most; messagesPerPart when 0.
 	MessagesPerPart int
+	// LargestFile is the most one file may weigh for Minka to take it, in
+	// bytes; largestFileMinkaTakes when 0.
+	LargestFile int64
 	// Now is the moment the run is made, which a schedule that has run out is
 	// held against; the clock of the machine when nil.
 	Now func() time.Time
@@ -337,6 +344,8 @@ type Extractor struct {
 	todosWithSubtasks int
 	subtasksLeftOut   int
 
+	forwards ForwardCounts
+
 	questionsLeftOut    []ImpossibleQuestion
 	anchorsInferred     []InferredAnchor
 	nobodyAsked         []NobodyAsked
@@ -347,9 +356,12 @@ type Extractor struct {
 
 	// fileOwners names the first owner of every file the walk has met, and
 	// fileRecords are the records of those files in the order they were met.
-	fileOwners  map[string]string
-	fileRecords []bundle.Attachment
-	files       FileCounts
+	fileOwners map[string]string
+	// filesThatNeverArrive holds the files no run will ever bring in, for the
+	// one kind of record that is lost without them.
+	filesThatNeverArrive map[string]bool
+	fileRecords          []bundle.Attachment
+	files                FileCounts
 }
 
 // talk names the tools of one project that hold posts, lines, questions and
@@ -360,6 +372,7 @@ type talk struct {
 	chats          []int64
 	questionnaires []int64
 	todosets       []int64
+	inboxes        []int64
 	// everyTodoset is every dock entry of a project that is a To-dos tool, those
 	// that are switched off included. A list names only the tool it stands in, so
 	// what hangs on none of them is no list but a group.
@@ -388,6 +401,9 @@ func ValidProjectID(value string) bool {
 // So the comments and the reactions of a bundle stand in the order of what they
 // hang on: those of cards, those of posts, those of lines, those of answers.
 func (e *Extractor) Extract(ctx context.Context, projectIDs []string, w *bundle.Writer) (Result, error) {
+	if e.LargestFile == 0 {
+		e.LargestFile = largestFileMinkaTakes
+	}
 	e.people = newRegistry()
 	e.skipped = map[skippedKey]int{}
 	e.missing = []MissingFile{}
@@ -411,10 +427,15 @@ func (e *Extractor) Extract(ctx context.Context, projectIDs []string, w *bundle.
 	e.todosLeftOut, e.todoPlacesLeftOut = TodosLeftOut{}, []TodoPlaceLeftOut{}
 	e.todosNotDone, e.todosWithPeople = 0, 0
 	e.todosWithSubtasks, e.subtasksLeftOut = 0, 0
+	e.forwards = ForwardCounts{
+		ByStatus:              map[string]int{bundle.StatusActive: 0, bundle.StatusTrashed: 0},
+		WithoutAnAddress:      []string{},
+		RepliesWithoutASender: []string{},
+	}
 	e.longestBody = map[bundle.Kind]int{bundle.Cards: 0, bundle.Comments: 0, bundle.Posts: 0, bundle.Messages: 0, bundle.Answers: 0,
-		bundle.TodoLists: 0, bundle.Todos: 0}
+		bundle.TodoLists: 0, bundle.Todos: 0, bundle.Forwards: 0, bundle.ForwardReplies: 0}
 	e.longestBodyRecords = map[bundle.Kind]LongestBodyRecord{}
-	e.fileOwners, e.fileRecords, e.files = map[string]string{}, nil, FileCounts{}
+	e.fileOwners, e.filesThatNeverArrive, e.fileRecords, e.files = map[string]string{}, map[string]bool{}, nil, FileCounts{}
 
 	ids, err := sortedIDs(projectIDs)
 	if err != nil {
@@ -447,6 +468,11 @@ func (e *Extractor) Extract(ctx context.Context, projectIDs []string, w *bundle.
 		return Result{}, err
 	}
 	if err := e.extractTodos(ctx, w); err != nil {
+		return Result{}, err
+	}
+	// Last of all, so that a file standing in a card and in a mail alike belongs
+	// to the card: a file met twice keeps the record that named it first.
+	if err := e.extractForwards(ctx, w); err != nil {
 		return Result{}, err
 	}
 
@@ -502,6 +528,8 @@ func (e *Extractor) Extract(ctx context.Context, projectIDs []string, w *bundle.
 		AnswersWithoutABody: e.answersWithoutABody,
 		AnswersWithoutADay:  e.answersWithoutADay,
 		AnswersTrashed:      e.answersTrashed,
+
+		Forwards: e.forwards,
 
 		MessagesWithEmptyBody: e.messagesWithEmptyBody,
 		LongestBody:           e.longestBody,
@@ -661,6 +689,8 @@ func (e *Extractor) extractProject(ctx context.Context, id int64, w *bundle.Writ
 			talks.questionnaires = append(talks.questionnaires, tool.entry.ID)
 		case bundle.ToolTodos:
 			talks.todosets = append(talks.todosets, tool.entry.ID)
+		case bundle.ToolForwards:
+			talks.inboxes = append(talks.inboxes, tool.entry.ID)
 		}
 	}
 	e.talks = append(e.talks, talks)

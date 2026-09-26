@@ -120,11 +120,30 @@ kind of column a bundle has no role for, and a card, a post, a comment, a
 question or an answer whose status is neither `active` nor `archived` nor
 `trashed`, a draft among them, a to-do list of such a status, and a group or a
 to-do whose status is neither `active` nor `trashed`, the shelf among them,
-because a bundle gives neither of the two a shelf. `recordsLeftOut` names each
+because a bundle gives neither of the two a shelf, a forwarded mail of a status
+that is none of the three, and an answer by mail that says anything but
+`active`, because a bundle gives an answer no status at all. `recordsLeftOut`
+names each
 with the kind of record, the field, the word the source said there, the record
 it stood in and how many were left out, counting records and not entries.
 Nothing hangs on a record that is left out: nobody comes into the bundle for
 it, and nothing of it is asked for.
+
+**Two things of a forwarded mail are neither** (C-056): what a mail calls
+itself and whom it says it came from are nobody's to repair at the source, so a
+subject Minka would refuse is **made into a title** — every character nobody can
+see becomes a blank, what is left is trimmed, a mail without a subject is called
+`(no subject)`, and what is longer than 200 characters is cut before the last
+character and ends in an ellipsis. The run counts what it had to change
+(`forwards.withoutASubject`, `forwards.subjectsChanged`) and a `notice` says so.
+A sender that is no e-mail address Minka takes leaves the **mail** out, named by
+its `sourceId` in `forwards.withoutAnAddress`, and nothing of it is asked for:
+`fromAddress` takes nothing else and a bundle cannot say a mail without one. An
+address is asked more strictly than Minka asks — plain local part, a domain of
+labels and a top label of letters, ASCII throughout — so that what a bundle
+carries is always taken and an address of a shape nobody writes is left out
+rather than risked. The title of a card, a post or a to-do still ends the run:
+that one somebody can repair where it stands.
 
 The run ends as `api_error` where going on would put something wrong into the
 bundle: a record without `created_at` or `updated_at` and a time that is none,
@@ -223,20 +242,28 @@ names an address or whose it is, and `invalidAddresses` holds IDs, never names.
 
 ## What a bundle holds so far
 
-The structure, the boards, the message boards, the chats, the check-ins and the
-to-dos: `manifest.json`, `people.jsonl`, `projects.jsonl`, `tools.jsonl`,
+The structure, the boards, the message boards, the chats, the check-ins, the
+to-dos and the forwarded mail: `manifest.json`, `people.jsonl`,
+`projects.jsonl`, `tools.jsonl`,
 `categories.jsonl`, `columns.jsonl`, `cards.jsonl`, `steps.jsonl`,
 `posts.jsonl`, `questions.jsonl`, `answers.jsonl`, `todolists.jsonl`,
-`todogroups.jsonl`, `todos.jsonl`, `messages.jsonl` or its
+`todogroups.jsonl`, `todos.jsonl`, `forwards.jsonl`, `forwardreplies.jsonl`,
+`messages.jsonl` or its
 parts, `comments.jsonl`, `reactions.jsonl`, `attachments.jsonl` and `files/`
-with the avatars and the files of texts, chats, answers, lists and to-dos. A
-file of a kind the projects have nothing of is missing.
+with the avatars and the files of texts, chats, answers, lists, to-dos and
+mails. A file of a kind the projects have nothing of is missing.
 
 The walk goes kind by kind across the projects of a run (C-028): the projects
 with their tools and boards, then the message boards of all projects, then
-the chats, then the questionnaires, then the To-dos tools. So comments and
+the chats, then the questionnaires, then the To-dos tools, and last the
+inboxes. So comments and
 reactions stand in the order of what they hang on: those of cards, those of
-posts, those of lines, those of answers, those of lists and of to-dos.
+posts, those of lines, those of answers, those of lists and of to-dos, those of
+mails. Where a kind stands in that order decides one thing and no more: a file
+met in two records belongs to the first that named it, so a file that hangs in
+a card and in a mail alike stays the card's. Nothing a record points at gains by
+being written earlier — the bundle is whole before Minka reads a line of it, and
+Minka applies the kinds in an order of its own.
 
 - **People** are the ones a record of the bundle refers to, and nobody else:
   the members of the projects named and whoever a record names: its creator,
@@ -301,7 +328,8 @@ posts, those of lines, those of answers, those of lists and of to-dos.
   paragraph per block, a `<br>` per line break.
 - **Tools** are the dock entries that are switched on and that Minka has a
   counterpart for: `kanban_board` → `board`, `chat` → `chat`, `message_board`
-  → `posts`, `questionnaire` → `checkins`, `todoset` → `todos`, several of a
+  → `posts`, `questionnaire` → `checkins`, `todoset` → `todos`, `inbox` →
+  `forwards`, several of a
   kind where a project has several. Creator and
   timestamps come from the tool itself. Every other entry is counted as
   skipped, per kind and whether it was switched on, and shown in the report.
@@ -526,9 +554,80 @@ posts, those of lines, those of answers, those of lists and of to-dos.
   the format has no word for them, so all that is left of them is how many
   there were, counted in `todosWithSubtasks` and `subtasksLeftOut` and asked
   for never.
-- **Comments** are those of cards, of posts, of answers, of to-do lists and of
-  to-dos, `parentKind`
-  `card`, `post`, `answer`, `todolist` or `todo`,
+- **Forwards** are the mails somebody forwarded into a project, one record per
+  mail of every inbox that is switched on. Basecamp lists the mails of an
+  inbox itself and hands out **no** list of the archived and the trashed ones
+  of a project: asked for one it answers with a refusal of the request, so a
+  bundle holds what an inbox shows and nothing else. The mails of an inbox are
+  written oldest first, by `created_at` and then by ID, the inboxes in the
+  order of the tools; a walk is no snapshot here either, and a mail a list that
+  moved hands out twice is written once.
+  `title` is the subject, `createdBy` whoever forwarded it and `createdAt` the
+  moment they did. `fromAddress` is the sender, who **stays an address**:
+  nobody comes into the bundle for a sender, and `fromName` is always `null`,
+  because Basecamp gives the address alone. A subject Minka would refuse is
+  made into a title rather than costing the mail or the run, and a sender that
+  is no address leaves the mail out (C-056), see What a bundle cannot carry.
+  A mail Basecamp names nobody for comes with `createdBy` `null`, which Minka
+  gives to the owner of the organization without a word; the run counts them
+  (`forwards.withoutAForwarder`) and a `notice` says so.
+  A record of Basecamp that says nothing of what became of it is in use, as the
+  format reads an absent `status`: Basecamp names one on a mail and on an answer
+  alike, and reading silence as a word nobody knows would lose every record of
+  an account the day that changed.
+  `status` is `active` or `trashed`. **What the source keeps on its shelf
+  becomes the trash** (C-058), counted in `forwards.fromTheShelf` and named in
+  a `notice`: Minka gives a forward no shelf, its trash holds the mail with
+  everything on it, and a bundle that said `archived` would stop the run.
+  The body is the mail as the source holds it, **line breaks and all**: Minka
+  turns a blank line into a paragraph and a single break into a `<br>`, so the
+  extractor rewrites nothing but the files, the mentions, the references and
+  the embeds, the way it does in every text. Where the body would reach Minka
+  as nothing at all, the run writes one line of its own behind it (C-057), see
+  Texts.
+  Comments on a mail are `comments` with `parentKind` `forward` and its boosts
+  are `reactions` with `targetKind` `forward`. A mail says **how many of
+  neither**, so both lists are asked for of every one of them: a count of zero
+  there is the field missing and not a mail nobody answered. Its answers it does
+  count, and they are asked for where it says it has some **and where it says
+  nothing about them at all**, so that a field the source drops does not take
+  every answer of an account with it. Its files are
+  `attachments` with `ownerKind` `forward`.
+- **Answers by mail** are the replies to a forward, `forwardreplies`, a record
+  of its own and no comment, oldest first per mail: Minka reads them back by
+  their moment and lets the order of the file decide between two of one second.
+  They are asked for only where a mail says it has some.
+  `createdBy` is somebody of the account, and then `fromAddress` is `null`; for
+  an answer from outside it is the other way round, because somebody from
+  outside never becomes a person — they would be somebody of the organization.
+  **Never both:** Minka reads the person and drops the address without a word.
+  Basecamp gives such a writer the kind `Outsider` and their address as their
+  name as well, so the name stands in where the field for an address is empty.
+  An answer the source names neither somebody nor a usable address for is left
+  out and named by ID (`forwards.repliesWithoutASender`), because Minka stops
+  the run at one that names neither.
+  An answer says what became of it as a mail does: one that says `active`, or
+  says nothing, comes, and any other word leaves it out and is counted, see What
+  a bundle cannot carry. The body is the rendered text, and where it would
+  reach Minka as nothing it carries a line of the run as a mail's does.
+  A mail or an answer whose body is longer than the 1,000,000 characters Minka
+  holds is counted (`forwards.longerThanMinkaTakes`) and named in a `notice`,
+  and the body comes as it is: the source has no such limit, a run that
+  shortened it would decide in the one place nobody can repeat, and Minka passes
+  such a record over on every run with everything hanging on it. What is counted
+  is the body as the run writes it, which is shorter than what Minka stores, so
+  the number is what a run can see and no promise. `longestBodyRecords` names
+  the longest mail and the longest answer of the run.
+  **Nothing hangs on an answer:** it has no comments here, and its boosts are
+  counted and never written (`forwards.reactionsOnRepliesLeftOut`), because
+  Minka passes a reaction on one over — nor is the list of them asked for. They
+  are counted of every answer the source shows, one that is left out included:
+  a bundle holds none of them either way. Its
+  files are `attachments` with `ownerKind` `forwardreply`; in Minka they belong
+  to the mail.
+- **Comments** are those of cards, of posts, of answers, of to-do lists, of
+  to-dos and of forwarded mail, `parentKind`
+  `card`, `post`, `answer`, `todolist`, `todo` or `forward`,
   per parent oldest first, by `created_at` and then by ID: the applier reads
   the order of the comments of a parent from the file. Basecamp hands out the
   rendered text of a comment only. A comment in the trash is left out with
@@ -536,8 +635,8 @@ posts, those of lines, those of answers, those of lists and of to-dos.
   comment of an archived card as well.
 - **Reactions** are the boosts of a card (`targetKind` `card`), of a post
   (`post`), of an answer (`answer`), of a to-do list (`todolist`), of a to-do
-  (`todo`), of a comment (`comment`) and of a line
-  (`message`), with `content`
+  (`todo`), of a forwarded mail (`forward`), of a comment (`comment`) and of a
+  line (`message`), with `content`
   as it is, a text of some words included: what Minka takes for a reaction is
   the applier's to decide. The boosts of a card or a post stand before those
   of its comments. A boost has one time, which is both `createdAt` and
@@ -555,6 +654,10 @@ What Basecamp does not hand out, so that no bundle carries it:
   run.
 - A line somebody deleted, and the lines Basecamp writes itself, such as who
   joined a chat.
+- Whom a forwarded mail was addressed to, who was copied on it, and when it was
+  sent: Basecamp keeps the sender, the subject, the words and the moment
+  somebody forwarded it, and nothing else of the mail. The secret address an
+  inbox receives at is not read either.
 
 IDs are the numeric IDs of Basecamp as strings; `sourceInstance` is the ID of
 the account, taken from the address of a project. Times are written the way
@@ -568,9 +671,14 @@ files in the order the walk meets them, see Files. Only where Basecamp gives
 cards no position, in Done and among the archived and the trashed, does its
 own order count.
 
-A card, a post and a line cost no request of their own: a list shows them in
+A card, a post, a line and a forwarded mail cost no request of their own: a
+list shows them in
 full. Comments are asked for only where a card or a post says it has some,
-boosts only where a card, a post, a comment or a line says so. The requests
+boosts only where a card, a post, a comment or a line says so, and the answers
+of a mail only where it says it has some. A **mail** says how many comments and
+how many boosts it has as little as Basecamp knows, so both of its lists are
+asked for whatever they hold: two requests a mail, and one more where it has
+answers. The requests
 go one after the other, never two at a time: the Basecamp CLI keeps to the
 rate Basecamp allows.
 
@@ -579,7 +687,8 @@ rate Basecamp allows.
 A bundle never carries the embeds of its source, and writes four tags of its
 own in their place: `<import-mention>`, `<import-attachment>`,
 `<import-embed>` and `<import-reference>`. In the note of a card, the body of
-a post, of a comment and of a line, every `<bc-attachment>` is replaced as a
+a post, of a comment, of a line, of a forwarded mail and of an answer by mail,
+every `<bc-attachment>` is replaced as a
 whole, with the figure Basecamp rendered into it:
 
 - A mention becomes `<import-mention ref="<personId>">Name</import-mention>`,
@@ -676,6 +785,35 @@ provider from another and asks nobody about the address.
   passes through, a frame becomes a tag or is left out like any other: no
   `<iframe>` reaches a body, and such an embed may never end.
 - No output names an address.
+
+The run reads a mention and a reference as something the body says, although
+Minka leaves either as the plain words it was given where it finds no target.
+A run writes words into both, so a body of one of them alone does say something
+there as well.
+
+**A mail whose body would reach Minka as nothing at all carries one line of
+the run** (C-057), written behind the body and counted in
+`forwards.givenALineOfTheRun`, with a `notice`. That happens where the mail says
+nothing, where what it says is a file that will **never** come — one the source
+no longer has, one above the gibibyte a run of Minka takes — where the body is
+nothing but an embed, and where the body
+holds nothing but what Minka takes off the edges of a text, a NUL among them,
+which Go does not. A file this run merely could not fetch is none of those: it
+leaves no record at all, the run says so and ends non-zero, and the run after it
+brings the file, so the mail waits with it rather than being told that its file
+is lost — which no later run could take back. Minka writes
+such a body empty and remembers the mail as finished, or passes it over before it
+is remembered and passes it over again on every run afterwards, and either way
+the subject, the sender, the answers and the comments are lost with it; the
+extractor is the one place that knows a file will never come. The tag of a file
+that will never come stays where it stood, and Minka drops it.
+**An embed gets the address and no sentence.** It counts for nothing here
+although Minka usually takes one, because whether it does is its own reading of
+the address; so the address is written beside it as a link, which every reading
+keeps, and nothing is said about the mail — a run that called such a mail
+wordless would be putting that in writing wherever Minka took the embed after
+all. A dry run knows no more than what Basecamp says of a file's size,
+so it writes the line only where the size alone gives it away.
 
 A link to a card, a message or a chat of the account, and to a line of a
 chat, becomes a reference to that record (C-031):
@@ -778,7 +916,8 @@ see Files that cannot be fetched (C-030).
 - **The record** carries `filename`, `contentType` as Basecamp says it, or
   `null`, `bytes`, `sha256`, `file`, which is exactly
   `<sourceId>/<filename>`, `ownerKind` (`card`, `comment`, `post`, `message`,
-  `answer`, `todolist`, `todo`) and `ownerSourceId`. Basecamp gives a file
+  `answer`, `todolist`, `todo`, `forward`, `forwardreply`) and
+  `ownerSourceId`. Basecamp gives a file
   neither a time nor a creator, so
   `createdAt` and `updatedAt` are those of its owner, and `createdBy` is
   `null`, which the format reads as the author of the owner. Avatars stay as
@@ -790,7 +929,8 @@ see Files that cannot be fetched (C-030).
 - **Order.** The index begins with the avatars, in the order of the people,
   and goes on with the files in the order the walk meets them: the files of
   a card, those of its comments, the next card; then the posts the same way;
-  then the lines; within a text in the order of the references. A file is
+  then the lines; then those of a mail, of its answers and of its comments;
+  within a text in the order of the references. A file is
   fetched when its owner is written, and its record is held until the people
   are written at the end of the run.
 - **Through the Basecamp CLI.** `basecamp files download <address> --out -
@@ -923,7 +1063,8 @@ therefore read from the source and never guessed (C-055).
   so a tool is read where the tool is read. Where the source says nothing,
   nothing is written: in doubt, private.
 - **What follows what it hangs on** — a to-do, a group, a card, a step, an
-  answer, a comment, a line of a chat — carries no word of its own, because a
+  answer, a comment, a line of a chat, a forwarded mail, an answer by mail —
+  carries no word of its own, because a
   second truth about one record is one truth too many. Where the source offers
   one, it is counted (`visibilityLeftToTheContainer`).
 - **A client is no member of a project in Minka**, which leaves the memberships
@@ -936,10 +1077,12 @@ therefore read from the source and never guessed (C-055).
   member of the project first, then being a client, then having left and coming
   without an address, because Minka has a client out of the project before it
   asks anything else about them.
-- **Docs & Files (`vault`) and Forwards (`inbox`) are not extracted**, so a
-  bundle says nothing of whether clients see them or what stands in them. The
-  report counts the ones that are switched on and a `notice` names the gap, so
-  that no bundle looks complete about clients.
+- **Docs & Files (`vault`) is not extracted**, so a bundle says nothing of
+  whether clients see it or what stands in it. The report counts the ones that
+  are switched on and a `notice` names the gap, so that no bundle looks complete
+  about clients. An Email forwards tool carries its word like every other tool,
+  and a forwarded mail and an answer by mail follow it: an inbox is shown to
+  clients as a whole or not at all.
 
 The report counts and never names: how many clients came, how many memberships
 of theirs Minka leaves out and how many words about clients fell to a container.

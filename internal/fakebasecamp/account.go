@@ -91,6 +91,9 @@ type Tool struct {
 	// TodoLists are the lists of a To-dos tool, in the order the account shows
 	// them.
 	TodoLists []TodoList
+	// Forwards are the mails of an Email forwards tool, in the order the account
+	// lists them.
+	Forwards []Forward
 	// VisibleToClients is what the recording of the tool says about clients; the
 	// dock entry says nothing of it either way.
 	VisibleToClients *bool
@@ -116,6 +119,10 @@ type Account struct {
 	// MemberEmail replaces the address of a person in the list of a project.
 	MemberEmail map[int64]string
 
+	// MailListMoves has a list of forwarded mail hand the last record of a page
+	// out again as the first of the next, as a list does that something was
+	// added to between two requests.
+	MailListMoves bool
 	// OnHoldInColumn lists the cards that are set aside among the cards of
 	// their column as well.
 	OnHoldInColumn bool
@@ -230,6 +237,7 @@ func New() *Account {
 			checkinProject(ada, grace, linus, edsger, niklaus, deleted, tool),
 			todoProject(ada, grace, edsger, former, tool),
 			clientProject(ada, iris, otto, nora, cora, tessa, tool),
+			forwardProject(ada, grace, former, tool),
 		},
 		SubtasksURL:  map[int64]string{},
 		Fail:         map[string]error{},
@@ -269,9 +277,10 @@ func (a *Account) person(p Person) map[string]any {
 	case "":
 	case "Integration":
 		answer["personable_type"], answer["email_address"] = p.Kind, nil
-	case "Client":
-		// The kind Basecamp had for a client before the flag, and nobody who is
-		// gone: no time of death.
+	case "Client", "Outsider":
+		// The kind Basecamp had for a client before the flag, and somebody who
+		// wrote from their own mailbox: neither is gone, so neither has a time
+		// of death.
 		answer["personable_type"] = p.Kind
 	default:
 		answer["personable_type"], answer["tombstoned_at"] = p.Kind, p.UpdatedAt
@@ -367,6 +376,9 @@ func (a *Account) Get(_ context.Context, path string) ([]byte, error) {
 			return answer, nil
 		}
 		if answer, known := a.todos(path, page); known {
+			return answer, nil
+		}
+		if answer, known := a.forwards(path, page); known {
 			return answer, nil
 		}
 	}
