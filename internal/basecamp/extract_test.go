@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -392,6 +393,40 @@ func TestProjectsOfTwoAccountsDoNotShareABundle(t *testing.T) {
 	account := fakebasecamp.New()
 	account.Projects[1].URL = "https://3.basecampapi.test/5555/projects/7002.json"
 	expectRefusedAtOnce(t, account, "a project of another account", "7002", "7001", "7002")
+}
+
+// wordOfASource is what a word a bundle has no word for may be made of, and
+// digitsOnly what names the record it stood in.
+var wordOfASource, digitsOnly = regexp.MustCompile(`^[A-Za-z:]+$`), regexp.MustCompile(`^[0-9]+$`)
+
+// What a run reports of a record it left out is the word of the source and never
+// anything somebody wrote. The shape is what holds it: a further place that
+// leaves a record out would otherwise be held by its own expectations alone.
+func TestWhatARecordIsLeftOutForSaysAWordAndNothingElse(t *testing.T) {
+	account := fakebasecamp.New()
+	// One of every place a record is left out, beside the two lines of an
+	// unknown kind the account holds itself.
+	campfire(account).Lines[5].Status = "trashed"
+	roadmap(account).Lists[3].Type = "Kanban::Swimlane"
+	doing(account).Cards[1].ShownStatus = "drafted"
+	busyCard(account).Comments[1].Status = "drafted"
+	busyPost(account).ShownStatus = "draft"
+	weekendQuestion(account).Status = "draft"
+	busyQuestion(account).Answers[1].Status = "pending"
+	_, result := extract(t, account, boardProject, talkProject, checkinProject)
+
+	met := map[string]bool{}
+	for _, one := range result.RecordsLeftOut {
+		met[one.Record] = true
+		if !wordOfASource.MatchString(one.Value) || !digitsOnly.MatchString(one.InSourceID) {
+			t.Errorf("a record left out is reported as %+v", one)
+		}
+	}
+	for _, record := range []string{"line", "column", "card", "comment", "post", "question", "answer"} {
+		if !met[record] {
+			t.Errorf("no %s was left out, so the shape of one was never looked at: %v", record, result.RecordsLeftOut)
+		}
+	}
 }
 
 func TestWhatABundleCannotSayEndsTheRun(t *testing.T) {

@@ -104,19 +104,45 @@ request that failed halfway, names and addresses included.
 A bundle that cannot be written is `config`; an `--out` that holds something
 else is `usage`.
 
-What Basecamp says and a bundle cannot carry ends the run as `api_error`
-instead of being passed on: a status of a project, a card, a post or a
-comment other than `active`, `archived` or `trashed`, which a draft would be,
-a line of a chat that is not `active`, because a message of a bundle has no
-status, a record without `created_at` or `updated_at`, a time that is none
-where records are ordered by it, a kind of column a bundle has no role for, a
-kind of line a bundle does not know, a second Triage, Not now or Done on one
-board, a boost that does not say whose it is. A card, a post and a comment
-are held to this where the walk first meets them, before anything that hangs
-on them is asked for, and the lines of a chat before the first of them is
-written. Such a message names the record by its ID and what is missing. Of
-what Basecamp said it quotes the status or the kind of column or line a
-bundle does not know, and never a title, a name, a text or an address.
+## What a bundle cannot carry
+
+The line runs between two things, and it is the same line in both directions
+(C-050): **the run stops where going on would write something wrong, and leaves
+the record out where a bundle cannot express it at all and its absence stays
+nameable.**
+
+Left out and counted, the run going on: a record the source describes with a
+word a bundle has none for. A bundle has no field to say such a word in, so the
+record is lost whatever the run does, and going on costs it and nothing else.
+That is a kind of chat line a bundle does not know, a chat line whose status is
+not `active`, because a message of a bundle has no status at all, a kind of
+column a bundle has no role for, and a card, a post, a comment, a question or
+an answer whose status is neither `active` nor `archived` nor `trashed`, a
+draft among them. `recordsLeftOut` names each with the kind of record, the
+field, the word the source said there, the record it stood in and how many were
+left out, counting records and not entries. Nothing hangs on a record that is
+left out: nobody comes into the bundle for it, and nothing of it is asked for.
+
+The run ends as `api_error` where going on would put something wrong into the
+bundle: a record without `created_at` or `updated_at` and a time that is none,
+because the record would be placed wrongly among the others; a day of another
+shape than `YYYY-MM-DD`; a time zone the run does not know, because the day
+would be somebody else's; an address outside the account, because it is a
+request the run may not make; a title Minka refuses, because the applier would
+refuse it too; a second Triage, Not now or Done on one board, because the cards
+of the second would end up in a column nobody had; a boost that does not say
+whose it is, because `createdBy` takes `null` and a reaction with an empty one
+reads as the author of what it hangs on, which would lay it at the feet of
+somebody who never gave it; and the status of a **project** the run was given by
+name, because a run that was asked for that project has to say that it cannot
+have it.
+
+A card, a post and a comment are held to all of this where the walk first meets
+them, before anything that hangs on them is asked for, and the lines of a chat
+before the first of them is written. A message of a failure names the record by
+its ID and what is missing. Of what Basecamp said, the report and the message
+quote a status, a kind of column and a kind of line, and never a title, a name,
+a text or an address.
 
 ## What the Basecamp identity needs
 
@@ -243,14 +269,19 @@ those of answers.
   `Kanban::DoneColumn` → `done`. They are written in the order of a board:
   Triage, Not now, the work columns by their position, Done. Basecamp gives
   the three columns every table has no position, so `position` is the number
-  of the column in that order. The colour of a column is left out.
+  of the column in that order. The colour of a column is left out. A kind of
+  list a bundle has no role for is left out and counted, see What a bundle
+  cannot carry; it takes the cards standing in it with it, which are never asked
+  for, and the archived and the trashed ones among them count as cards whose
+  column is in no extracted board.
 - **Cards** are those of every column, and the archived and trashed ones.
   Basecamp lists the cards of a column itself, and the archived and the
   trashed ones of a project in one list across all its card tables, those
   that are switched off included. Such a card names its column and no table,
   so it goes to the board its column is of; a card whose column is in no
-  extracted board, because the board is switched off or the column is gone,
-  is left out and counted (`cardsLeftOut`).
+  extracted board, because the board is switched off, the column is gone or the
+  column is of a kind a bundle has no role for, is left out and counted
+  (`cardsLeftOut`).
   A walk has no snapshot: a card that is moved between two requests can be
   missed or met twice, and one met twice is written once.
   The cards of a board are written oldest first, by `created_at` and then by
@@ -309,6 +340,23 @@ those of answers.
   something: a line that was a video alone is a line, and one whose only
   frame is left out, see Texts, says nothing. A line comes as long as it is:
   nothing is shortened.
+  A bundle has a word for four kinds of line: `Chat::Lines::Text`,
+  `Chat::Lines::RichText`, `Chat::Lines::Upload` and
+  `Chat::Lines::Integration`. Basecamp grows kinds of its own, and a line of
+  one of them is left out and counted, as is one whose status is not `active`,
+  see What a bundle cannot carry. The kind of a line is looked at before its
+  status and before its times, so such a line is left out for its kind whatever
+  else is wrong with it, and it is counted once. Whoever adds a word for a kind
+  has seen what Basecamp sends under it.
+  Nothing of this is final: the line stays where it is, and a later run brings
+  it as soon as a bundle has a word for it.
+  **A known limit of that:** where two lines carry the same second and one of
+  them comes only with a later run, the order of the two can turn round. Minka
+  puts a line at its `createdAt` plus the number of its line in the file, in
+  microseconds, so among lines of one second the number in the new file decides,
+  and the line that came late can land before one that stood after it in the
+  chat. It shifts the order by less than a second, and Basecamp gives nothing
+  finer.
 - **Parts.** The messages are written in parts: `messages-0001.jsonl` and on,
   numbered through the bundle in the order of the chats, which is the order
   of the projects and their tools. A part holds lines of one chat. It ends
@@ -790,6 +838,8 @@ files of its texts the same way.
   `cardsOnHold`, `cardsLeftOut`, `commentsTrashed`, `postsByStatus`,
   `postsLeftOut`, `postsWithEmptyBody`, `messagesByType` (`text`, `richText`,
   `upload`, `integration`), `messagesWithEmptyBody`, `uploadLinesLeftOut`,
+  `recordsLeftOut` (`record`, `field`, `value`, `in`, `inSourceId`,
+  `leftOut`),
   `parts` as the manifest has them, `mentionsUnresolved`, `filesInBodies`,
   `filesDropped`, `filesExpected`, `filesBytesExpected`, `filesBytes`,
   `filesFetched`, `filesReused`, `filesGone`, `fileNamesChanged`,
@@ -807,7 +857,9 @@ files of its texts the same way.
   `messages` and `answers`, in characters: whoever sets the limits of where a bundle
   goes has to know it. `requestsRetried` is a number, 0 for a run that met no
   failure; the text shows its line only when it is more, and so it does for
-  `creatorProbesRefused`, `embeds`, `embedsLeftOut` and `references`.
+  `creatorProbesRefused`, `embeds`, `embedsLeftOut`, `references` and
+  `recordsLeftOut`, whose lines come one per entry under a line that counts the
+  records of all of them.
   No output names a title, a person or what stands in a text.
 - A run prints nothing while it goes on, in any mode: the output contract
   knows results, warnings and errors only.

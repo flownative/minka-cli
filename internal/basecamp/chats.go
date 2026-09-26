@@ -38,9 +38,11 @@ type upload struct {
 
 const uploadLine = "Chat::Lines::Upload"
 
-// lineTypes are the kinds of line a chat has, by the names a report counts
-// them under. Basecamp hands out neither the lines somebody deleted nor the
-// ones it wrote itself, such as who joined.
+// lineTypes are the kinds of line a bundle has a word for, by the names a
+// report counts them under. Basecamp hands out neither the lines somebody
+// deleted nor the ones it wrote itself, such as who joined, and it grows kinds
+// of its own that are in none of these: such a line is left out and reported,
+// and whoever adds a word here has seen what Basecamp sends under it.
 var lineTypes = map[string]string{
 	"Chat::Lines::Text":        "text",
 	"Chat::Lines::RichText":    "richText",
@@ -88,8 +90,12 @@ func (e *Extractor) extractChats(ctx context.Context, w *bundle.Writer) error {
 // once.
 //
 // A line is held to what a bundle can carry before anything of the chat is
-// written: a kind of line nobody knows ends the run, and so does a status
-// other than active, because a line of a bundle has none.
+// written, and one a bundle cannot carry is left out: a kind nobody knows, and a
+// status other than active, which a line of a bundle has no field for. Nobody
+// comes into the bundle for such a line, its boosts are not asked for and no
+// part ends at it. Its kind is looked at before its status and its times: a line
+// a bundle has no word for is left out for that, whatever else is wrong with
+// it.
 func (e *Extractor) extractChat(ctx context.Context, w *bundle.Writer, bucket, chat int64) error {
 	listed, err := getList[line](ctx, e.Source, fmt.Sprintf("buckets/%d/chats/%d/lines.json", bucket, chat))
 	if err != nil {
@@ -103,10 +109,12 @@ func (e *Extractor) extractChat(ctx context.Context, w *bundle.Writer, bucket, c
 		}
 		seen[found.ID] = true
 		if _, known := lineTypes[found.Type]; !known {
-			return &Error{Kind: API, Message: fmt.Sprintf("line %d of chat %d is of the type %q, which a bundle does not know", found.ID, chat, found.Type)}
+			e.leaveOut("line", "type", found.Type, "chat", sourceID(chat))
+			continue
 		}
 		if found.Status != bundle.StatusActive {
-			return &Error{Kind: API, Message: fmt.Sprintf("line %d of chat %d has the status %q, which a bundle cannot say of a line", found.ID, chat, found.Status)}
+			e.leaveOut("line", "status", found.Status, "chat", sourceID(chat))
+			continue
 		}
 		if err := requireTimestamps(fmt.Sprintf("line %d", found.ID), found.CreatedAt, found.UpdatedAt); err != nil {
 			return err
