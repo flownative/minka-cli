@@ -905,7 +905,8 @@ therefore read from the source and never guessed (C-055).
   Minka reads it nowhere else and where somebody who is no client works is
   nothing an import needs. A company the source names without an identifier, or
   with a name Minka refuses — blank, longer than 200 characters, or holding a
-  character nobody can see — ends the run as `api_error`. Minka reads a company
+  character nobody can see — ends the run as `api_error`, where the record that
+  names it comes in and not at the end of a walk of hours. Minka reads a company
   that is missing and one that is `null` the same way and drops the company it
   holds, so writing the record without it would say of somebody that they belong
   to nobody, and a later run would take away what the run before wrote. The
@@ -931,7 +932,9 @@ therefore read from the source and never guessed (C-055).
   question is ever said to be asked of a client: Minka drops such a person from
   `asked` without a word, so a client among the subscribers of a question is left
   out here and counted (`askedLeftOut.clients`), beside whoever is no member, has
-  left or comes without an address.
+  left or comes without an address. Somebody several of these hold for counts as
+  a client and nothing else, the way Minka takes a client out of the project
+  before it asks who is in it.
 - **Docs & Files (`vault`) and Forwards (`inbox`) are not extracted**, so a
   bundle says nothing of whether clients see them or what stands in them. The
   report counts the ones that are switched on and a `notice` names the gap, so

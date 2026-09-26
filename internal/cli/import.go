@@ -211,8 +211,8 @@ A question comes with the schedule Minka has words for: the weekdays counted
 from Monday, the time of day, the day the rhythm is counted from, and whom it is
 asked of, which are the subscribers of the question and not whoever answered it.
 Only a member of the project who is no client, is still there and has an address
-can be asked (askedLeftOut). A question whose schedule Minka cannot express is left out with
-its answers and named with the field that made it impossible
+can be asked (askedLeftOut). A question whose schedule Minka cannot express is
+left out with its answers and named with the field that made it impossible
 (questionsLeftOut); one whose schedule has run out comes paused; one asked every
 other week is anchored on the day it was last answered (anchorsInferred) and
 left out where nobody ever answered it. An answer that says nothing or lies in
@@ -248,8 +248,9 @@ client is no member of a project in Minka, so clientMemberships says how many
 memberships the import leaves out and no question is ever said to be asked of
 one. Docs & Files and Forwards are not extracted at all, so a bundle says
 nothing about whether clients see them. A company the source names without an
-identifier, or with a name Minka refuses, ends the run: writing the record
-without it would tell Minka to drop the company it holds.
+identifier, or with a name Minka refuses, ends the run where the record that
+names it comes in: writing the record without it would tell Minka to drop the
+company it holds.
 
 A record the source describes with a word a bundle has none for is left out
 and the run goes on: a line of a chat of an unknown kind or with a status other

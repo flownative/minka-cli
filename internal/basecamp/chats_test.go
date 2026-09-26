@@ -485,13 +485,13 @@ func TestWithoutANumberAPartHoldsTenThousandLines(t *testing.T) {
 // alone for anybody else: the people of a bundle are the same under both.
 func TestABotAndSomebodyDeletedAreRetiredWhicheverListTheAccountShows(t *testing.T) {
 	var first string
-	// The list anybody else sees holds users alone: of the three it lacks, the bot
-	// and who was deleted are named by a record, so one person fewer is left out.
+	// The list anybody else sees holds users alone: of the four it lacks, the bot
+	// and who was deleted are named by a record, so two people fewer are left out.
 	for view, look := range map[string]struct {
 		change  func(*fakebasecamp.Account)
 		leftOut int
 	}{
-		"what an admin sees":     {func(*fakebasecamp.Account) {}, 5},
+		"what an admin sees":     {func(*fakebasecamp.Account) {}, 6},
 		"what anybody else sees": {func(a *fakebasecamp.Account) { a.UsersOnly() }, 4},
 	} {
 		account := fakebasecamp.New()
@@ -546,8 +546,8 @@ func TestABotNoRecordNamesStaysOutOfTheBundle(t *testing.T) {
 			t.Errorf("person %s came into a bundle no record of which names them", id)
 		}
 	}
-	if result.PeopleLeftOut != 6 {
-		t.Errorf("%d people left out, want the bot, who was deleted and the four clients", result.PeopleLeftOut)
+	if result.PeopleLeftOut != 7 {
+		t.Errorf("%d people left out, want the bot, who was deleted and the five clients", result.PeopleLeftOut)
 	}
 }
 

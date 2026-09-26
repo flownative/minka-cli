@@ -51,7 +51,7 @@ func (e *Extractor) clientsOf(p project) (*bool, *bundle.CompanyOrNone, error) {
 	if p.ClientsEnabled == nil {
 		return nil, nil, nil
 	}
-	company, err := e.companyOf("project", p.ID, p.ClientCompany)
+	company, err := companyOf("project", p.ID, p.ClientCompany)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -70,7 +70,7 @@ func (e *Extractor) clientsOf(p project) (*bool, *bundle.CompanyOrNone, error) {
 //
 // No message repeats the name: a field that holds no name holds something, and
 // what it holds is nobody's to print. The identifier says which company it is.
-func (e *Extractor) companyOf(what string, id int64, named *companyAtTheSource) (*bundle.CompanyOrNone, error) {
+func companyOf(what string, id int64, named *companyAtTheSource) (*bundle.CompanyOrNone, error) {
 	if named == nil {
 		return bundle.NoCompany(), nil
 	}

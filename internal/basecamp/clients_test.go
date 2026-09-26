@@ -130,6 +130,7 @@ func TestAClientComesAsOneAndOnlyAClientComesWithACompany(t *testing.T) {
 		"108": {"client": true, "company": nil},
 		// A client of a second company: a company is the person's own.
 		"109": {"client": true, "company": map[string]any{"sourceId": "9282", "name": "Southwind Example"}},
+		"110": {"client": true, "company": nil},
 	}
 	for id, wanted := range want {
 		person := recordWithID(t, people, id)
@@ -142,11 +143,11 @@ func TestAClientComesAsOneAndOnlyAClientComesWithACompany(t *testing.T) {
 			t.Errorf("person %s:\n got %v\nwant %v", id, got, wanted)
 		}
 	}
-	if result.PeopleAsClients != 4 {
-		t.Errorf("%d clients, want the four of the project", result.PeopleAsClients)
+	if result.PeopleAsClients != 5 {
+		t.Errorf("%d clients, want the five of the project", result.PeopleAsClients)
 	}
-	if result.ClientMemberships != 4 {
-		t.Errorf("%d memberships of clients, want the four of the project", result.ClientMemberships)
+	if result.ClientMemberships != 5 {
+		t.Errorf("%d memberships of clients, want the five of the project", result.ClientMemberships)
 	}
 }
 
@@ -258,9 +259,36 @@ func TestACompanyMinkaWouldRefuseEndsTheRun(t *testing.T) {
 	}
 }
 
+// The run ends where the client comes in. An extraction of an account walks for
+// hours, and a company it read in the first minutes must not end it in the last.
+func TestACompanyMinkaWouldRefuseEndsTheRunWhereTheClientComesIn(t *testing.T) {
+	account := fakebasecamp.New()
+	theClient(t, account).Company = &fakebasecamp.Company{ID: 9284, Name: "  "}
+	extractor := basecamp.Extractor{Source: account, Avatars: account, Files: account,
+		Now: func() time.Time { return runDay }}
+	_, err := extractor.Extract(t.Context(), []string{clientProject}, bundle.Discard())
+
+	var failed *basecamp.Error
+	if !errors.As(err, &failed) || failed.Kind != basecamp.API {
+		t.Fatalf("got %v, want an api error", err)
+	}
+	// The members of the project are the last thing the run asked for.
+	if last := account.Requests[len(account.Requests)-1]; !strings.Contains(last, "projects/7009/people.json") {
+		t.Errorf("the run went on and asked for %s", last)
+	}
+	for _, part := range []string{"message_boards", "chats", "questionnaires", "todosets", "card_tables"} {
+		if went := asked(account, part); len(went) != 0 {
+			t.Errorf("the run walked the dock: %v", went)
+		}
+	}
+	if len(account.AvatarRequests) != 0 {
+		t.Errorf("the run fetched %d avatars", len(account.AvatarRequests))
+	}
+}
+
 // A client is no member of a project in Minka, so a question is never said to be
-// asked of one: Minka drops such a person without a word, and three counters
-// would say a question is asked of people who never get it.
+// asked of one: Minka drops such a person without a word, and the counters would
+// say a question is asked of somebody who never gets it.
 func TestAClientIsNeverSaidToBeAskedAQuestion(t *testing.T) {
 	dir, result := extract(t, fakebasecamp.New(), clientProject)
 
@@ -268,11 +296,40 @@ func TestAClientIsNeverSaidToBeAskedAQuestion(t *testing.T) {
 	if got := question["asked"]; !reflect.DeepEqual(got, []any{"101"}) {
 		t.Errorf("the question is asked of %v, want the one member who is no client", got)
 	}
-	if result.AskedLeftOut.Clients != 1 {
-		t.Errorf("%d clients left out of a question, want the one subscribed to it", result.AskedLeftOut.Clients)
+	if result.AskedLeftOut.Clients != 4 {
+		t.Errorf("%d clients left out of a question, want the ones subscribed to the two", result.AskedLeftOut.Clients)
 	}
-	if len(result.NobodyAsked) != 0 {
-		t.Errorf("%v comes asking nobody, and it asks a member", result.NobodyAsked)
+}
+
+// Being a client is the first reason somebody cannot be asked, as it is in
+// Minka: a client is out of the project's memory before membership is asked at
+// all, so a client who has left and comes without an address is counted as a
+// client and nowhere else.
+func TestSomebodyWhoIsAClientAndMoreIsLeftOutOfAQuestionAsAClient(t *testing.T) {
+	dir, result := extract(t, fakebasecamp.New(), clientProject)
+
+	person := recordWithID(t, records(t, dir, bundle.People), "110")
+	if person["client"] != true || person["retired"] != true || person["email"] != nil {
+		t.Fatalf("the client who has left and has no address comes as %v", person)
+	}
+	want := basecamp.AskedLeftOut{Clients: 4}
+	if result.AskedLeftOut != want {
+		t.Errorf("people left out of asked %+v, want %+v", result.AskedLeftOut, want)
+	}
+}
+
+// A question whose every subscriber is a client comes asking nobody: the run
+// names it, because a later run never touches asked again.
+func TestAQuestionAskedOfClientsAloneComesAskingNobody(t *testing.T) {
+	dir, result := extract(t, fakebasecamp.New(), clientProject)
+
+	question := recordWithID(t, records(t, dir, bundle.Questions), "9272")
+	if got := question["asked"]; !reflect.DeepEqual(got, []any{}) {
+		t.Errorf("the question is asked of %v, want nobody", got)
+	}
+	want := []basecamp.NobodyAsked{{QuestionSourceID: "9272", LeftOut: 2}}
+	if !reflect.DeepEqual(result.NobodyAsked, want) {
+		t.Errorf("questions asking nobody %+v, want %+v", result.NobodyAsked, want)
 	}
 }
 

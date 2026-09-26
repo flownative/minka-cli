@@ -207,8 +207,8 @@ func TestOneWeekdayIsWeeklyAndSeveralAreDaily(t *testing.T) {
 // somebody who answered without being asked is not.
 //
 // Only a member of the project the bundle carries can be asked, who is still
-// there and who has an address: the applier would otherwise end its run in a
-// failure that names no file and no line.
+// there and who has an address: Minka hands a question to nobody else, so
+// naming anybody else would say it is asked of somebody who never gets it.
 func TestWhoIsAskedComesFromTheSubscribersAndNotFromWhoAnswered(t *testing.T) {
 	account := fakebasecamp.New()
 	dir, result := extract(t, account, checkinProject)

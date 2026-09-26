@@ -645,8 +645,8 @@ func TestOnlyPeopleARecordRefersToComeIntoTheBundle(t *testing.T) {
 	for _, person := range records(t, dir, bundle.People) {
 		written = append(written, person["sourceId"].(string))
 	}
-	if !slices.Equal(written, []string{"101"}) || result.PeopleLeftOut != 10 {
-		t.Errorf("wrote %v and left %d out, want the one member and 10 left out", written, result.PeopleLeftOut)
+	if !slices.Equal(written, []string{"101"}) || result.PeopleLeftOut != 11 {
+		t.Errorf("wrote %v and left %d out, want the one member and 11 left out", written, result.PeopleLeftOut)
 	}
 	if len(account.AvatarRequests) != 1 || !strings.Contains(account.AvatarRequests[0], "/people/101/") {
 		t.Errorf("downloaded %v, want the avatar of the one person only", account.AvatarRequests)
@@ -656,7 +656,7 @@ func TestOnlyPeopleARecordRefersToComeIntoTheBundle(t *testing.T) {
 	}
 
 	_, result = extract(t, fakebasecamp.New(), "7001", "7002")
-	if result.PeopleLeftOut != 7 {
-		t.Errorf("%d left out, want the seven nobody refers to", result.PeopleLeftOut)
+	if result.PeopleLeftOut != 8 {
+		t.Errorf("%d left out, want the eight nobody refers to", result.PeopleLeftOut)
 	}
 }
