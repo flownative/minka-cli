@@ -772,8 +772,11 @@ this:
   bundle or not, with the address as it stood and the words of the link as
   plain text: `data.references` counts them by `cards`, `posts` and
   `tools`. `data.longestBody` is the longest text per kind
-  (`cards`, `comments`, `posts`, `messages`) in characters. None of them
-  fails a run.
+  (`cards`, `comments`, `posts`, `messages`) in characters, and
+  `data.longestBodyRecords` names under the same kinds which record it was
+  measured on (`record`, `sourceId`, `in`, `inSourceId`, `characters`), so that
+  a number can be looked at at the source; a kind whose longest text has no
+  characters is missing there. None of them fails a run.
 - Every reference to a file has a record in `attachments.jsonl` with the same
   ID (`attachment-<id>` for a file of a text, `blob-<key>` for one dropped
   into a chat) and its bytes under `files/<id>/`, whatever their size and
