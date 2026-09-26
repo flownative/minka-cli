@@ -50,7 +50,9 @@ type TodoList struct {
 // Its to-dos hold every case as well: in the list and in a group, with days,
 // with people on them and with subtasks, one done after the source last touched
 // it and one done before, one in the trash, one in a group that is in the trash,
-// and one assigned to somebody who has left the account.
+// one assigned to somebody who has left the account, two that repeat, and two
+// hanging on the tool itself and in no list of it, one in use and one on the
+// shelf.
 func todoProject(ada, grace, edsger, former Person, tool func(int64, string, string, string, bool, int, *Person) Tool) Project {
 	at := func(day, hour int) string { return fmt.Sprintf("2025-04-%02dT%02d:00:00.000Z", day, hour) }
 
@@ -116,7 +118,10 @@ func todoProject(ada, grace, edsger, former Person, tool func(int64, string, str
 	// another list would be seen naming it.
 	later := TodoList{ID: 9402, Title: "Later", Creator: &grace, CreatedAt: at(1, 9), UpdatedAt: at(1, 9),
 		Groups: []TodoList{{ID: 9416, Title: "Some day", Creator: &grace, CreatedAt: at(1, 19), UpdatedAt: at(1, 19), Todos: []Todo{
-			{ID: 9429, Title: "Think about it", Creator: &grace, CreatedAt: at(3, 8), UpdatedAt: at(3, 8)},
+			// Repeating in a rhythm of another kind, so that nothing hangs on
+			// which one a schedule names.
+			{ID: 9429, Title: "Think about it", Creator: &grace, CreatedAt: at(3, 8), UpdatedAt: at(3, 8),
+				Repetition: &Repetition{Frequency: "every_month", Days: []int{1}, StartDate: "2025-04-01", MonthInterval: interval(1)}},
 		}}}}
 	finished := TodoList{ID: 9403, Status: "archived", Title: "Finished", Creator: &ada, CreatedAt: at(1, 10), UpdatedAt: at(3, 10)}
 	dropped := TodoList{ID: 9404, Status: "trashed", Title: "Dropped", Creator: &ada, CreatedAt: at(1, 11), UpdatedAt: at(3, 11)}
@@ -126,11 +131,21 @@ func todoProject(ada, grace, edsger, former Person, tool func(int64, string, str
 	// The account shows them as they stand, the topmost first, and a bundle
 	// writes them the other way round.
 	todos.TodoLists = []TodoList{launch, later, finished, dropped}
+	// Hanging on the tool itself and in no list of it: one in use, which the
+	// account hands out under the tool's own identifier alone, and one on the
+	// shelf, which it hands out among the records of the project.
+	todos.Todos = []Todo{
+		{ID: 9431, Title: "In no list at all", Creator: &ada, CreatedAt: at(3, 10), UpdatedAt: at(3, 10)},
+		{ID: 9432, Status: "archived", Title: "In no list and on the shelf", Creator: &ada, CreatedAt: at(3, 11), UpdatedAt: at(3, 11)},
+	}
 
 	chores := tool(9081, "todoset", "todosets", "Chores", true, 2, &grace)
 	chores.CreatedAt, chores.UpdatedAt = at(1, 7), at(3, 12)
+	// A to-do that repeats: a bundle has no word for a schedule, so the to-do
+	// comes as any other and the schedule stays behind.
 	chores.TodoLists = []TodoList{{ID: 9405, Title: "Every week", Creator: &grace, CreatedAt: at(1, 12), UpdatedAt: at(1, 12),
-		Todos: []Todo{{ID: 9427, Title: "Water the plants", Creator: &grace, CreatedAt: at(2, 22), UpdatedAt: at(2, 22)}}}}
+		Todos: []Todo{{ID: 9427, Title: "Water the plants", Creator: &grace, CreatedAt: at(2, 22), UpdatedAt: at(2, 22),
+			Repetition: &Repetition{Frequency: "every_week", Days: []int{1}, StartDate: "2025-04-07", WeekInterval: interval(1)}}}}}
 
 	retired := tool(9082, "todoset", "todosets", "Old to-dos", false, 0, &ada)
 	retired.TodoLists = []TodoList{
@@ -169,6 +184,9 @@ type Todo struct {
 	// Subtasks is how many subtasks the to-do has, of which a bundle carries
 	// none.
 	Subtasks int
+	// Repetition is the schedule of a to-do that repeats; a to-do that repeats
+	// nothing carries none.
+	Repetition *Repetition
 	// EmptyDays has the account send the days as empty text rather than leaving
 	// them out, the way a source writes a field it has nothing for.
 	EmptyDays bool
@@ -237,30 +255,24 @@ func (a *Account) todos(path string, page int) ([]byte, bool) {
 	case todosPattern.MatchString(path):
 		match := todosPattern.FindStringSubmatch(path)
 		if p := a.project(match[1]); p != nil {
+			done := match[3] != ""
+			// A To-dos tool answers under this path as a list of it does, and
+			// hands out the to-dos hanging on itself.
+			if tool, known := a.theTodoset(p, match[2]); known {
+				return a.pageOf(a.todosInAPlace(p, tool.ID, "Todoset", tool.Todos, done), page), true
+			}
 			if list, known := a.theTodoList(p, match[2]); known {
-				done := match[3] != ""
-				var found []map[string]any
-				for i := range list.Todos {
-					one := &list.Todos[i]
-					if one.status() != "active" || (one.Completion != nil) != done {
-						continue
-					}
-					found = append(found, a.todoJSON(p, list, one))
-					if one.Twice {
-						found = append(found, a.todoJSON(p, list, one))
-					}
-				}
-				return a.pageOf(found, page), true
+				return a.pageOf(a.todosInAPlace(p, list.ID, "Todolist", list.Todos, done), page), true
 			}
 		}
 	case todoItemsPattern.MatchString(path):
 		match := todoItemsPattern.FindStringSubmatch(path)
 		if p := a.project(match[1]); p != nil {
 			var found []map[string]any
-			a.eachTodoListAndGroup(p, func(list *TodoList) {
-				for i := range list.Todos {
-					if one := &list.Todos[i]; one.status() == match[2] {
-						found = append(found, a.todoJSON(p, list, one))
+			a.eachTodoPlace(p, func(parentID int64, parentType string, todos []Todo) {
+				for i := range todos {
+					if one := &todos[i]; one.status() == match[2] {
+						found = append(found, a.todoJSON(p, parentID, parentType, one))
 					}
 				}
 			})
@@ -312,13 +324,54 @@ func (a *Account) eachTodoListAndGroup(p *Project, visit func(*TodoList)) {
 	})
 }
 
-// eachTodo visits the to-dos of every list and group of a project.
+// eachTodo visits the to-dos of every list and group of a project, and those
+// hanging on a To-dos tool itself.
 func (a *Account) eachTodo(p *Project, visit func(*Todo)) {
-	a.eachTodoListAndGroup(p, func(list *TodoList) {
-		for i := range list.Todos {
-			visit(&list.Todos[i])
+	a.eachTodoPlace(p, func(_ int64, _ string, todos []Todo) {
+		for i := range todos {
+			visit(&todos[i])
 		}
 	})
+}
+
+// eachTodoPlace visits every place of a project that holds to-dos, with what a
+// record standing there says it hangs on: the lists of its To-dos tools, the
+// groups of those lists, and the tools themselves, on which Basecamp lets a to-do
+// hang straight.
+func (a *Account) eachTodoPlace(p *Project, visit func(parentID int64, parentType string, todos []Todo)) {
+	for t := range p.Dock {
+		if tool := &p.Dock[t]; tool.Type == "todosets" {
+			visit(tool.ID, "Todoset", tool.Todos)
+		}
+	}
+	a.eachTodoListAndGroup(p, func(list *TodoList) { visit(list.ID, "Todolist", list.Todos) })
+}
+
+// todosInAPlace are the to-dos of one place as the account hands them out: those
+// that are open or those that are done, as Basecamp keeps the two apart.
+func (a *Account) todosInAPlace(p *Project, parentID int64, parentType string, todos []Todo, done bool) []map[string]any {
+	var found []map[string]any
+	for i := range todos {
+		one := &todos[i]
+		if one.status() != "active" || (one.Completion != nil) != done {
+			continue
+		}
+		found = append(found, a.todoJSON(p, parentID, parentType, one))
+		if one.Twice {
+			found = append(found, a.todoJSON(p, parentID, parentType, one))
+		}
+	}
+	return found
+}
+
+// theTodoset finds a To-dos tool of a project by its ID, switched off or not.
+func (a *Account) theTodoset(p *Project, id string) (*Tool, bool) {
+	for t := range p.Dock {
+		if tool := &p.Dock[t]; tool.Type == "todosets" && strconv.FormatInt(tool.ID, 10) == id {
+			return tool, true
+		}
+	}
+	return nil, false
 }
 
 // theTodoList finds a list or a group of a project by its ID.
@@ -380,6 +433,58 @@ func (t *Todo) shownStatus() string {
 	return t.status()
 }
 
+// Repetition is the schedule of a to-do that repeats. The account writes it as
+// Basecamp does: all ten keys of a schedule, and empty the ones the rhythm has no
+// use for. A to-do that repeats nothing carries **no such key at all**, which is
+// the only thing that tells the two apart.
+type Repetition struct {
+	// Frequency is the rhythm: every_day_of_month, every_month, every_week,
+	// every_year or custom_month.
+	Frequency string
+	// Days are the days the rhythm names, of the week or of the month.
+	Days []int
+	// StartDate and EndDate are days of the shape YYYY-MM-DD; a schedule that
+	// does not run out has no end.
+	StartDate string
+	EndDate   string
+	// Hour and Minute are the time of day it comes at, Duration how long it
+	// runs, and the three intervals what the rhythm counts in. A run reads none
+	// of them, so what a frequency fills and what it leaves empty is the
+	// fixture's to say.
+	Hour, Minute, Duration, MonthInterval, WeekInstance, WeekInterval *int
+}
+
+// interval is one of the numbers a schedule counts in, for a fixture that names
+// it; a schedule leaves out what its rhythm has no use for.
+func interval(value int) *int { return &value }
+
+// repetitionJSON is a schedule as Basecamp hands it out, with every key it holds.
+func repetitionJSON(r *Repetition) map[string]any {
+	number := func(value *int) any {
+		if value == nil {
+			return nil
+		}
+		return *value
+	}
+	days := any(nil)
+	if len(r.Days) > 0 {
+		days = r.Days
+	}
+	day := func(value string) any {
+		if value == "" {
+			return nil
+		}
+		return value
+	}
+	return map[string]any{
+		"frequency": r.Frequency, "days": days,
+		"start_date": day(r.StartDate), "end_date": day(r.EndDate),
+		"hour": number(r.Hour), "minute": number(r.Minute), "duration": number(r.Duration),
+		"month_interval": number(r.MonthInterval), "week_instance": number(r.WeekInstance),
+		"week_interval": number(r.WeekInterval),
+	}
+}
+
 // day is what the account says of a day the to-do has none for: nothing, or the
 // empty text a source writes instead.
 func (t *Todo) day(value string) any {
@@ -392,7 +497,7 @@ func (t *Todo) day(value string) any {
 	return nil
 }
 
-func (a *Account) todoJSON(p *Project, in *TodoList, t *Todo) map[string]any {
+func (a *Account) todoJSON(p *Project, parentID int64, parentType string, t *Todo) map[string]any {
 	people := func(named []Person) []map[string]any {
 		all := []map[string]any{}
 		for _, one := range named {
@@ -403,7 +508,7 @@ func (a *Account) todoJSON(p *Project, in *TodoList, t *Todo) map[string]any {
 	answer := map[string]any{
 		"id": t.ID, "status": t.shownStatus(), "title": t.Title, "content": t.Title, "type": "Todo",
 		"description": t.Notes, "description_attachments": a.filesJSON(t.Files),
-		"parent":    map[string]any{"id": in.ID, "type": "Todolist"},
+		"parent":    map[string]any{"id": parentID, "type": parentType},
 		"starts_on": t.day(t.StartsOn), "due_on": t.day(t.DueOn),
 		"assignees": people(t.Assignees), "completion_subscribers": people(t.NotifiedWhenDone),
 		"completed": t.Completion != nil, "subtasks_count": t.Subtasks,
@@ -419,6 +524,10 @@ func (a *Account) todoJSON(p *Project, in *TodoList, t *Todo) map[string]any {
 	}
 	if t.Completion != nil {
 		answer["completion"] = a.completionJSON(*t.Completion)
+	}
+	// A to-do that repeats nothing comes without the key, not with an empty one.
+	if t.Repetition != nil {
+		answer["repetition_schedule"] = repetitionJSON(t.Repetition)
 	}
 	return answer
 }
