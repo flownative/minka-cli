@@ -736,8 +736,8 @@ the [Status](work-in-progress/status.md) names it.
 *Applies to: `heartbeat`, `work list`, the list of the machine*
 
 A card the host names in `leftOut` with a word this CLI knows leaves the list of
-the machine and stops counting as reported, so the next signal carries what the
-host does take. A word it does not know takes no card out of anything: the note
+the machine, and the shorter list is reported with the next beat, as every
+changed list is. A word it does not know takes no card out of anything: the note
 is written, the card stays, and the report says what the host called it. What
 was let go stands in `work list` as `letGo` and is swept with the list.
 
