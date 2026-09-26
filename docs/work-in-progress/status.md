@@ -383,7 +383,7 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   `visible_to_clients` **below the top of their tool**, which is the field the
   whole client rule hangs on.
   Measured over the account besides: 18 archived folders over 3 buckets, 151
-  active and 115 archived documents, 267 active and 11 archived uploads, and
+  active and 115 archived documents, and
   **nothing in the trash of any of the three kinds**; every one of the 28
   projects has a `vault` dock entry, 8 of them switched off, so "no Docs & Files"
   is a tool that is switched off and never a missing entry; a folder's own list
@@ -395,13 +395,13 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   **What that measurement caught**, and what it changed: the shape of an
   upload's `download_url` had been taken from the wrong record. It is
   `…/buckets/{b}/uploads/{id}/download/{name}` — the API's own address, no
-  `blobs` segment and no key of a stored file anywhere — for **all 278 uploads of
-  the account, one shape without exception**, and the
+  `blobs` segment and no key of a stored file anywhere — **one shape without
+  exception over every upload of the account that was read**, and the
   `…/blobs/{key}/download/{name}` shape read off it belongs to a file inside a
   text, which carries a `key` of its own. So every upload took the branch for one
   that names no stored file, and a bundle of the account would have arrived with
-  **no uploads at all**, of the order of 278 files and 0.4 GB, counted and named
-  and gone.
+  **no uploads at all** — the card's own measurement of the account puts that at
+  some 278 files and 0.4 GB — counted and named and gone.
   What says an upload has a file is now the record's own word, an address to
   fetch one from, and the bytes are asked for **by the identifier of the upload
   and of its project** (`basecamp files download <id> --in <project> --out -`):
@@ -423,8 +423,9 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   account holding none; an upload in a cloud, with a comment and a boost on it;
   a title longer than one Minka takes and an upload with neither a title nor a
   name; a document whose whole text is a file the source no longer has, and an
-  upload whose own file is one; a description with a file embedded in it, the
-  account's 278 uploads all carrying an empty `description_attachments`; a
+  upload whose own file is one; a description with a file embedded in it, every
+  upload of the account that was read carrying an empty
+  `description_attachments`; a
   document and a description longer than Minka holds; an entry the source
   lists twice; a folder the bundle cannot carry with a folder, a document and
   an upload standing in it; a Docs & Files tool that is switched off with an
@@ -442,22 +443,16 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   **eight** files of the account have older versions is a number of the card's
   own read-only measurement of the account and of no run of the CLI; nothing
   here measured it and nothing here can.
-- **The one belief of the Docs & Files that ends the whole run, and nothing has
-  checked it.** The title of a **folder** and of a **document** is held to
-  `IsName` and **ends the run** where Minka would refuse it: longer than 200
-  characters, or holding any character nobody can see. That is right — somebody
-  can put such a title right where it stands, as they can a card's — but it is
-  the last branch before the account is walked once, and a title of a folder or
-  a document that Minka refuses would end a walk of hours at the end of it.
-  One branch ago the same belief was checked for the mail: every address and
-  every title a run would write was put through PHP's own reading, and none was
-  refused. **Nothing of the kind was done here.** The check owed is exact and
-  cheap: `maxName` and `IsName::MAX_LENGTH` are both 200 and the expression
-  `\p{Cc}` is exactly `unicode.IsControl`, so every folder name and document
-  title of the account has to be read once, read-only, and held against those
-  two. Until that is done, a run over the account may end on a title nobody
-  looked at. A name a **file** carries is not in this: it is folded and never
-  ends a run (C-056).
+- The titles of the Docs & Files are held against Minka's own reading rather
+  than against a test here, as the addresses and the titles of the mail were:
+  every folder name, document title, upload title and upload file name of the
+  account — 1,040 values over 753 records — was put through `IsName`, and **not
+  one is refused**, the longest of any kind being 99 characters against the bound
+  of 200 and the shortest 2, so nothing sits near either edge. The title of a
+  folder or a document ends a run where Minka would refuse it, which is right and
+  which nothing in the account will meet; a title a **file** carries is folded
+  and ends no run (C-056). The trashed half of all three kinds is not unasked but
+  empty at the source.
 - Of the files of `import basecamp`: a download that breaks off, a file
   whose size differs from what Basecamp says, a file that is gone, a name that
   has to be changed, a caption too long, and one file under two owners.
@@ -711,26 +706,14 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   as well, so a larger number is no sign of anything wrong. Whether a mail on the
   shelf exists at all is a question for Basecamp and not for a run: nothing the
   API offers hands one out.
-- **Read every folder name and document title of the account against `IsName`,
-  read-only, before the account is walked.** A title Minka refuses ends the
-  whole run, and no reading has been done: 200 characters and `\p{Cc}`, the
-  same two checks the addresses and the titles of the mail were put through one
-  branch ago. It is the cheapest thing owed and the one that can cost a walk of
-  hours at the end of it. A dry run does not settle it: it reads the same
-  titles, but nothing holds them against Minka's own reading.
-- **Read the `download_url` of one upload of the account, before a run fetches
-  anything.** It is the last unread shape of the Docs & Files and the one that
-  decides whether a single file is fetched: a run builds a storage address from
-  the key in it, and where the address has none every file of every Docs & Files
-  tool comes out under `missingFiles` — loudly, and with nothing in the bundle.
-  A **dry run says it now** without fetching a byte, so the cost of finding out
-  is one dry run over one project; what it cannot say is what to put in its
-  place, which the value itself will.
 - **Extract the Docs & Files of a project into a bundle live, and check it
   record by record** as the boards and the chats were checked, before the account
-  is walked for MNK-53. Open besides the address: whether a folder the source
-  archived or threw away answers for what stands in it, which no project walked
-  so far had one of; whether the account holds an upload in a cloud at all and
+  is walked for MNK-53. The one thing no reading can settle is whether the bytes
+  of an upload arrive: they are asked for by the identifier of the upload and of
+  its project, and the flags of that call are read off the Basecamp CLI's own
+  documentation and not off a run — where they are wrong, every file of every
+  tool comes out under `missingFiles`, loudly and with nothing in the bundle.
+  Open besides: whether the account holds an upload in a cloud at all and
   what such a record looks like; and whether a vault really lists what stands in
   it topmost first, which the order of a bundle turns on. Keep an eye on the one
   thing that cannot be taken back: that every
