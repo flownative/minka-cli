@@ -170,19 +170,17 @@ e-mail addresses of other people; Basecamp masks them for anybody else, and
 the run ends with exit 4. Nothing is written to Basecamp, and no Minka
 host or token is needed.
 
-So far a bundle holds the structure, the boards, the message boards, the chats,
-the check-ins and the to-dos: the people the named projects refer to with their
-avatars
-(their members and whoever a record names, not the rest of the account), the
-projects with their members, of each project the card tables, chats, message
-boards, questionnaires and to-do sets that are switched on, of each card table
-the columns,
-the cards with the archived and the trashed ones, their steps, comments and
-boosts, of each message board the messages with the archived and the trashed
-ones as posts, their categories, comments and boosts, of each chat its lines
-with their boosts as messages, of each questionnaire its questions with
-their answers, comments and boosts, and of each to-do set its lists with their
-groups and to-dos.
+So far a bundle holds the structure, the boards, the message boards, the
+chats, the check-ins and the to-dos: the people the named projects refer to
+with their avatars (their members and whoever a record names, not the rest of
+the account), the projects with their members, of each project the card
+tables, chats, message boards, questionnaires and to-do sets that are switched
+on, of each card table the columns, the cards with the archived and the
+trashed ones, their steps, comments and boosts, of each message board the
+messages with the archived and the trashed ones as posts, their categories,
+comments and boosts, of each chat its lines with their boosts as messages, of
+each questionnaire its questions with their answers, comments and boosts, and
+of each to-do set its lists with their groups and to-dos.
 
 The lists of a to-do set stand in the bundle from the bottom up, because Minka
 puts every new list on top of its tool, and the groups and the to-dos of a list
