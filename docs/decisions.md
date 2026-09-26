@@ -729,3 +729,25 @@ assumption about an answer counts too few instead of ending the run, which is wh
 the [Status](work-in-progress/status.md) names it.
 **Implemented as:** `basecamp.Extractor.countWhatFellWithAPlace`, see
 [Importing from Basecamp](stable/import.md).
+
+<a id="c-053"></a>
+## C-053 — A card the host will not have leaves the list, and an unknown word takes nothing
+
+*Applies to: `heartbeat`, `work list`, the list of the machine*
+
+A card the host names in `leftOut` with a word this CLI knows leaves the list of
+the machine and stops counting as reported, so the next signal carries what the
+host does take. A word it does not know takes no card out of anything: the note
+is written, the card stays, and the report says what the host called it. What
+was let go stands in `work list` as `letGo` and is swept with the list.
+
+**Why:** One card the host will not have must not put out the tiles of
+everything else a machine is at work on, and a list it keeps for ever is one it
+keeps reporting in vain. The reason has to outlive the card, because the list
+itself cannot say why something is missing from it and the hook that met the
+answer is silent by [C-038](#c-038). The line is the one of
+[C-050](#c-050): act on what is understood, pass on what is not — no word of a
+host takes a card out of the list of a machine by itself.
+**Implemented as:** `cli.app.writeDownWhatTheHostWouldNotHave`,
+`work.Host.LetGoOf` and `NoteNotTaken`, see
+[Saying what you are working on](stable/at-work.md).

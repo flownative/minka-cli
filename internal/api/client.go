@@ -191,7 +191,11 @@ func (c *Client) Me(ctx context.Context) (Result[Me], error) {
 // Only an agent may say so, and only for itself. A card the agent may not see
 // and an identifier that is no UUID are passed over by the server without a
 // word, so a set that names nothing it knows arrives as an empty one.
-func (c *Client) NoteAtWork(ctx context.Context, clientID string, cardIDs []string) error {
+//
+// What comes back are the cards the host did not take, and it took the rest:
+// a card it will not have must not keep the others from being reported. An
+// answer that names none of them takes the whole set.
+func (c *Client) NoteAtWork(ctx context.Context, clientID string, cardIDs []string) ([]LeftOutCard, error) {
 	if cardIDs == nil {
 		cardIDs = []string{}
 	}
@@ -199,8 +203,10 @@ func (c *Client) NoteAtWork(ctx context.Context, clientID string, cardIDs []stri
 		ClientID string   `json:"clientId"`
 		CardIDs  []string `json:"cardIds"`
 	}{clientID, cardIDs}
-	_, err := request[struct{}](ctx, c, http.MethodPut, "/me/work", body)
-	return err
+	answer, err := request[struct {
+		LeftOut []LeftOutCard `json:"leftOut"`
+	}](ctx, c, http.MethodPut, "/me/work", body)
+	return answer.Value.LeftOut, err
 }
 
 // Projects lists the projects in use, or the archived ones instead.

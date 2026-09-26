@@ -117,6 +117,18 @@ const (
 	TrashColumn = "column"
 )
 
+// LeftOutCard is a card the host did not take into the set an agent says it is
+// at work on, together with the word it gives for why. The host may learn
+// further words, so a client acts on the ones it knows and passes the rest on.
+type LeftOutCard struct {
+	CardID string `json:"cardId"`
+	Reason string `json:"reason"`
+}
+
+// ReasonCardArchived says the card lies in the archive of its board, where
+// nobody works on it.
+const ReasonCardArchived = "cardArchived"
+
 // ProjectMember is somebody a circle has: a member of a project or one of the
 // two of a private conversation. Whom a card can be assigned to and whom a text
 // may name are the same list, so the mention rides along.
