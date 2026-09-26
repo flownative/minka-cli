@@ -465,12 +465,13 @@ func (e *Extractor) Extract(ctx context.Context, projectIDs []string, w *bundle.
 		RepliesWithoutASender: []string{},
 	}
 	e.docs = DocsCounts{
-		FoldersByStatus:         everyStatus(),
-		DocumentsByStatus:       everyStatus(),
-		UploadsByStatus:         everyStatus(),
-		WithoutAStoredFile:      []string{},
-		OnlyAFileNoRunWillBring: []string{},
-		PlacesLeftOut:           []DocsPlaceLeftOut{},
+		FoldersByStatus:                 everyStatus(),
+		DocumentsByStatus:               everyStatus(),
+		UploadsByStatus:                 everyStatus(),
+		WithoutAStoredFile:              []string{},
+		SilentAboutClientsInsideAFolder: []EntrySilentAboutClients{},
+		OnlyAFileNoRunWillBring:         []string{},
+		PlacesLeftOut:                   []DocsPlaceLeftOut{},
 	}
 	e.longestBody = map[bundle.Kind]int{bundle.Cards: 0, bundle.Comments: 0, bundle.Posts: 0, bundle.Messages: 0, bundle.Answers: 0,
 		bundle.TodoLists: 0, bundle.Todos: 0, bundle.Forwards: 0, bundle.ForwardReplies: 0,

@@ -146,10 +146,10 @@ func TestImportBasecampWritesABundleAndReportsWhatItHolds(t *testing.T) {
 			"namesMadeIntoATitle": float64(0), "withoutAName": float64(0),
 			"withoutAStoredFile": []any{}, "commentsWithoutTheirUpload": float64(0), "boostsWithoutTheirUpload": float64(0),
 			"onlyAFileNoRunWillBring": []any{}, "foldersThatSaidNothingOfWhatIsInThem": float64(0),
-			"silentAboutClientsBelowTheTop": float64(0),
-			"longerThanMinkaTakes":          float64(0),
-			"leftOut":                       map[string]any{"folders": float64(0), "documents": float64(0), "uploads": float64(0)},
-			"placesLeftOut":                 []any{}},
+			"silentAboutClientsInsideAFolder": []any{},
+			"longerThanMinkaTakes":            float64(0),
+			"leftOut":                         map[string]any{"folders": float64(0), "documents": float64(0), "uploads": float64(0)},
+			"placesLeftOut":                   []any{}},
 		"longestBody": map[string]any{"cards": float64(0), "comments": float64(0), "posts": float64(0), "messages": float64(0), "answers": float64(0),
 			"todolists": float64(0), "todos": float64(0), "forwards": float64(0), "forwardreplies": float64(0),
 			"documents": float64(0), "uploads": float64(0)},
@@ -1948,9 +1948,13 @@ func TestImportBasecampReportsTheDocsAndFilesOfAProject(t *testing.T) {
 		"namesMadeIntoATitle": float64(1), "withoutAName": float64(1),
 		"withoutAStoredFile": []any{"9262"}, "commentsWithoutTheirUpload": float64(1), "boostsWithoutTheirUpload": float64(1),
 		"onlyAFileNoRunWillBring": []any{"9245", "9276"}, "foldersThatSaidNothingOfWhatIsInThem": float64(2),
-		"silentAboutClientsBelowTheTop": float64(3),
-		"longerThanMinkaTakes":          float64(0),
-		"leftOut":                       map[string]any{"folders": float64(3), "documents": float64(5), "uploads": float64(2)},
+		"silentAboutClientsInsideAFolder": []any{
+			map[string]any{"record": "document", "sourceId": "9255", "projectSourceId": "7011"},
+			map[string]any{"record": "document", "sourceId": "9252", "projectSourceId": "7011"},
+			map[string]any{"record": "upload", "sourceId": "9270", "projectSourceId": "7011"},
+		},
+		"longerThanMinkaTakes": float64(0),
+		"leftOut":              map[string]any{"folders": float64(3), "documents": float64(5), "uploads": float64(2)},
 		"placesLeftOut": []any{
 			map[string]any{"record": "folder", "sourceId": "9224", "folders": float64(1), "documents": float64(1), "uploads": float64(1)},
 			map[string]any{"record": "Docs & Files tool", "sourceId": "9212", "folders": float64(1), "documents": float64(1), "uploads": float64(0)},
@@ -1983,6 +1987,9 @@ func TestImportBasecampReportsTheDocsAndFilesOfAProject(t *testing.T) {
 		"Left out of the Docs & Files tools: 3 folders, 5 documents, 2 uploads",
 		"  with folder 9224 fell: 1 folders, 1 documents, 1 uploads",
 		"  with Docs & Files tool 9212 fell: 1 folders, 1 documents, 0 uploads",
+		"Entries inside a folder that say nothing about whether clients see them, which cannot hide the folder above them: 3",
+		"  document 9255     in project 7011",
+		"  upload   9270     in project 7011",
 	} {
 		if !strings.Contains(r.stdout, line) {
 			t.Errorf("the text lacks %q:\n%s", line, r.stdout)

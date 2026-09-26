@@ -1024,13 +1024,14 @@ func TestOnlyWhatIsInUseStandsInTheFileFromTheBottomUp(t *testing.T) {
 //
 // At the top of a tool silence costs nothing — Minka reads an absent word as
 // private — so it is not counted there.
-func TestAnEntryInsideAFolderThatSaysNothingAboutClientsIsCounted(t *testing.T) {
-	// Three entries of the account stand inside a folder and say nothing: the
-	// second document and the two uploads of the folder at the top.
+func TestAnEntryInsideAFolderThatSaysNothingAboutClientsIsNamed(t *testing.T) {
+	// Three entries of the account stand inside a folder and say nothing: the two
+	// documents of the folder at the top that nobody gave the word, and the upload
+	// in its trash.
 	_, before := extract(t, fakebasecamp.New(), docsProject)
-	if before.Docs.SilentAboutClientsBelowTheTop != 3 {
+	if len(before.Docs.SilentAboutClientsInsideAFolder) != 3 {
 		t.Errorf("%d entries inside a folder are silent about clients, want the three the source says nothing of",
-			before.Docs.SilentAboutClientsBelowTheTop)
+			len(before.Docs.SilentAboutClientsInsideAFolder))
 	}
 
 	// Take the word off the three that stand inside the folder below the top, and
@@ -1040,10 +1041,29 @@ func TestAnEntryInsideAFolderThatSaysNothingAboutClientsIsCounted(t *testing.T) 
 	theDocument(t, account, 9241).VisibleToClients = nil
 	theUpload(t, account, 9265).VisibleToClients = nil
 	dir, result := extract(t, account, docsProject)
-	if result.Docs.SilentAboutClientsBelowTheTop != before.Docs.SilentAboutClientsBelowTheTop+3 {
+	if len(result.Docs.SilentAboutClientsInsideAFolder) != len(before.Docs.SilentAboutClientsInsideAFolder)+3 {
 		t.Errorf("%d entries inside a folder are silent about clients and %d were before, want three more: the folder, the document and the upload",
-			result.Docs.SilentAboutClientsBelowTheTop, before.Docs.SilentAboutClientsBelowTheTop)
+			len(result.Docs.SilentAboutClientsInsideAFolder), len(before.Docs.SilentAboutClientsInsideAFolder))
 	}
+	// Each is **named** and not only counted: the one thing to do about such an
+	// entry is to go and compare it against the source, which nobody can do with a
+	// number. The kind, the record and its project, and never a title.
+	named := map[string]basecamp.EntrySilentAboutClients{}
+	for _, entry := range result.Docs.SilentAboutClientsInsideAFolder {
+		named[entry.SourceID] = entry
+	}
+	for id, record := range map[string]string{"9221": "folder", "9241": "document", "9265": "upload"} {
+		entry, there := named[id]
+		switch {
+		case !there:
+			t.Errorf("entry %s is silent about clients and is not named: %v", id, result.Docs.SilentAboutClientsInsideAFolder)
+		case entry.Record != record:
+			t.Errorf("entry %s is named a %s, want a %s", id, entry.Record, record)
+		case entry.ProjectSourceID != docsProject:
+			t.Errorf("entry %s is named in project %s, want %s", id, entry.ProjectSourceID, docsProject)
+		}
+	}
+
 	// Nothing is written for them: in doubt private is Minka's to decide.
 	for kind, id := range map[bundle.Kind]string{bundle.Folders: "9221", bundle.Documents: "9241", bundle.Uploads: "9265"} {
 		if _, says := recordWithID(t, records(t, dir, kind), id)["visibleToClients"]; says {
@@ -1056,8 +1076,8 @@ func TestAnEntryInsideAFolderThatSaysNothingAboutClientsIsCounted(t *testing.T) 
 	account = fakebasecamp.New()
 	theFolder(t, account, 9220).VisibleToClients = nil
 	_, result = extract(t, account, docsProject)
-	if result.Docs.SilentAboutClientsBelowTheTop != before.Docs.SilentAboutClientsBelowTheTop {
+	if len(result.Docs.SilentAboutClientsInsideAFolder) != len(before.Docs.SilentAboutClientsInsideAFolder) {
 		t.Errorf("%d entries are counted where only the top of a tool fell silent, want the %d there were",
-			result.Docs.SilentAboutClientsBelowTheTop, before.Docs.SilentAboutClientsBelowTheTop)
+			len(result.Docs.SilentAboutClientsInsideAFolder), len(before.Docs.SilentAboutClientsInsideAFolder))
 	}
 }
