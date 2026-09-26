@@ -666,8 +666,9 @@ func TestSomebodyNamedTwiceOnAToDoComesOnce(t *testing.T) {
 	}
 }
 
-// A day the source writes as an empty field comes as nothing, as one it leaves
-// out does.
+// A day the source writes as an empty field is a day it has none for: it comes as
+// nothing, the way one it leaves out does, and it does not end the run the way a
+// day of another shape does.
 func TestADayThatArrivesEmptyComesAsNothing(t *testing.T) {
 	account := fakebasecamp.New()
 	theTodo(account, 9421).StartsOn, theTodo(account, 9421).DueOn = "", ""
