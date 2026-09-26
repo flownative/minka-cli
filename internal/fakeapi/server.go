@@ -184,11 +184,22 @@ type TrashedCard struct {
 
 // ArchivedCard is a card that was put into the archive of its board. It keeps
 // the column it was taken from, which is the column it goes on naming although
-// it stands in none.
+// it stands in none, and the moment and the person it was put away by, which is
+// what the archive of a board is ordered and listed by.
 type ArchivedCard struct {
 	Card   *Card
 	Column *Column
+	At     time.Time // the zero moment is a card put away before Minka noted one
+	ByID   string    // empty where nobody is known
 }
+
+// ArchivedCardsOnAPage is the page the archive of a board gives without a
+// limit, MostArchivedCardsOnAPage the largest page it serves. A limit above the
+// largest is not refused but cut down to it without a word.
+const (
+	ArchivedCardsOnAPage     = 50
+	MostArchivedCardsOnAPage = 100
+)
 
 // TrashEntries is how many entries an answer carries at most, as the server
 // caps them.
@@ -394,6 +405,18 @@ type Server struct {
 	// with a word it does not know must not depend on the server's choice.
 	LeavesOutWithReason string
 
+	// ForgetsTheArchiveBoundaryOf is the card a page of an archive may not start
+	// behind although it lies in the archive: naming it refuses the page with
+	// archivedCardsBeforeUnknown, the way the server does once somebody has
+	// taken that card out of the archive between two pages of one walk.
+	ForgetsTheArchiveBoundaryOf string
+
+	// RacesOnTheArchiveBoundaryOf is the same loss in its narrow form: the check
+	// that the card lies in the archive passes, and by the time the page is read
+	// the card is gone, so the answer is an empty page that reads like the end
+	// of the list. One page answers that way, and the mark is spent with it.
+	RacesOnTheArchiveBoundaryOf string
+
 	// SendsAFileShort hands a file out one byte shorter than it was said to
 	// be, which no Minka does: what a client makes of bytes that are not the
 	// ones announced must not depend on the server being right about them.
@@ -497,6 +520,9 @@ func New(t testing.TB) (*Server, *Fixture) {
 	mux.HandleFunc("GET /api/v1/projects", s.authenticated(s.projects))
 	mux.HandleFunc("GET /api/v1/projects/{projectId}/boards", s.authenticated(s.boards))
 	mux.HandleFunc("GET /api/v1/boards/{boardId}", s.authenticated(s.board))
+	mux.HandleFunc("GET /api/v1/boards/{boardId}/archive", s.authenticated(s.archivedCards))
+	mux.HandleFunc("POST /api/v1/cards/{cardId}/archive", s.authenticated(s.archiveCard))
+	mux.HandleFunc("POST /api/v1/cards/{cardId}/unarchive", s.authenticated(s.unarchiveCard))
 	mux.HandleFunc("GET /api/v1/me/cards", s.authenticated(s.myCards))
 	mux.HandleFunc("GET /api/v1/cards/{cardId}", s.authenticated(s.card))
 	mux.HandleFunc("GET /api/v1/cards/{first}/{second}", s.authenticated(s.shortIdentifierOrNotes))
@@ -577,17 +603,35 @@ func (s *Server) WritingRequests() []RecordedRequest {
 // archiving it does. It leaves its column, and the column stays with it: that
 // is the column an archived card names, on a board where it may have been
 // deleted since.
-func (s *Server) PutInTheArchive(card *Card) {
+//
+// The entry comes back, so that a test can say when and by whom the card was
+// put away, which is what the archive is ordered and listed by.
+func (s *Server) PutInTheArchive(card *Card) *ArchivedCard {
 	for _, board := range s.Boards {
 		for _, column := range board.Columns {
 			if !slices.Contains(column.Cards, card) {
 				continue
 			}
 			column.Cards = slices.DeleteFunc(column.Cards, func(c *Card) bool { return c == card })
-			s.Archive = append(s.Archive, &ArchivedCard{Card: card, Column: column})
-			return
+			entry := &ArchivedCard{Card: card, Column: column, At: s.now}
+			s.Archive = append(s.Archive, entry)
+			return entry
 		}
 	}
+	return nil
+}
+
+// TakeOutOfTheArchive brings a card back to the top of the column it was taken
+// from and off hold, as unarchiving it does. The moment and the person go with
+// the entry: nothing left on the card says it was ever in an archive.
+func (s *Server) TakeOutOfTheArchive(card *Card) {
+	archived := s.inTheArchive(card.ID)
+	if archived == nil {
+		return
+	}
+	s.Archive = slices.DeleteFunc(s.Archive, func(a *ArchivedCard) bool { return a.Card == card })
+	card.OnHold = false
+	archived.Column.Cards = append([]*Card{card}, archived.Column.Cards...)
 }
 
 // FailNextWith makes the next request answer with this status and a body that
@@ -915,6 +959,150 @@ func (s *Server) board(w http.ResponseWriter, r *http.Request, person *Person) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"id": board.ID, "projectId": board.ProjectID, "title": board.Title, "appUrl": s.boardURL(board), "columns": columns,
 	})
+}
+
+// archivedCardsLimit is the shape a limit has to have, as the controller reads
+// it: a whole number, and nothing that could overflow on the way in.
+var archivedCardsLimit = regexp.MustCompile(`^[0-9]{1,18}$`)
+
+// archivedCards answers a page of the archive of a board, the card put away
+// last first.
+//
+// The order of the refusals is the controller's: a board that is not there, or
+// belongs to a project this person is not in, beats both refusals of the query.
+// A limit that is no whole number is refused; one above the largest page is not,
+// it is cut down to it without a word.
+func (s *Server) archivedCards(w http.ResponseWriter, r *http.Request, person *Person) {
+	board := s.visibleBoard(r.PathValue("boardId"), person)
+	if board == nil {
+		notFound(w)
+		return
+	}
+
+	limit := ArchivedCardsOnAPage
+	if given := r.URL.Query().Get("limit"); given != "" {
+		asked, err := strconv.ParseInt(given, 10, 64)
+		if !archivedCardsLimit.MatchString(given) || err != nil || asked < 1 {
+			unprocessable(w, "archivedCardsLimitNotANumber", "The number of cards asked for has to be a whole number of at least one.")
+			return
+		}
+		limit = min(int(asked), MostArchivedCardsOnAPage)
+	}
+
+	var boundary *ArchivedCard
+	if before := r.URL.Query().Get("before"); before != "" {
+		if uuidPattern.MatchString(before) {
+			boundary = s.inTheArchiveOf(board, before)
+		}
+		if boundary == nil || before == s.ForgetsTheArchiveBoundaryOf {
+			unprocessable(w, "archivedCardsBeforeUnknown", "The page starts behind a card in the archive of this board, named by its id.")
+			return
+		}
+		if before == s.RacesOnTheArchiveBoundaryOf {
+			// The card went between the check above and the read below, so the
+			// page comes back empty although the list goes on.
+			s.RacesOnTheArchiveBoundaryOf = ""
+			writeJSON(w, http.StatusOK, []any{})
+			return
+		}
+	}
+
+	var archive []*ArchivedCard
+	for _, archived := range s.Archive {
+		if s.boardOfColumn(archived.Column) != board {
+			continue
+		}
+		if boundary != nil && archiveOrder(archived, boundary) <= 0 {
+			continue
+		}
+		archive = append(archive, archived)
+	}
+	slices.SortStableFunc(archive, archiveOrder)
+
+	list := []any{}
+	for _, archived := range archive[:min(len(archive), limit)] {
+		list = append(list, s.archivedCardResource(board, archived))
+	}
+	writeJSON(w, http.StatusOK, list)
+}
+
+// archiveOrder is the order the archive of a board is listed in: the card put
+// away last first, one whose moment nobody noted as the oldest, and the id
+// deciding between two cards put away in the same moment.
+func archiveOrder(a, b *ArchivedCard) int {
+	if !a.At.Equal(b.At) {
+		return b.At.Compare(a.At)
+	}
+	return strings.Compare(a.Card.ID, b.Card.ID)
+}
+
+// inTheArchiveOf is the entry of this board's archive for a card, and nil for
+// anything that does not lie in it.
+func (s *Server) inTheArchiveOf(board *Board, cardID string) *ArchivedCard {
+	archived := s.inTheArchive(cardID)
+	if archived == nil || s.boardOfColumn(archived.Column) != board {
+		return nil
+	}
+	return archived
+}
+
+func (s *Server) archivedCardResource(board *Board, archived *ArchivedCard) map[string]any {
+	return map[string]any{
+		"id": archived.Card.ID, "shortId": nullable(archived.Card.ShortID), "title": archived.Card.Title,
+		"archivedAt": timestampOrNil(nilIfZero(archived.At)), "archivedBy": s.personReferenceOrNil(archived.ByID),
+		"appUrl": s.cardURL(board, archived.Card),
+	}
+}
+
+// archiveCard takes a card off its board into the archive of the board. A card
+// that lies there already is refused with its own code rather than answered as
+// though it had just been put away, and an archived project comes before that.
+func (s *Server) archiveCard(w http.ResponseWriter, r *http.Request, person *Person) {
+	board, column, card := s.visibleCard(r.PathValue("cardId"), person)
+	onItsBoard := card != nil
+	if card == nil {
+		board, column, card = s.visibleArchivedCard(r.PathValue("cardId"), person)
+	}
+	if card == nil {
+		notFound(w)
+		return
+	}
+	if s.refusedAsArchived(w, s.projectOf(board)) {
+		return
+	}
+	if !onItsBoard {
+		unprocessable(w, "cardArchived", "This card is archived. Nothing is written on it until it is back on its board.")
+		return
+	}
+
+	entry := s.PutInTheArchive(card)
+	entry.ByID = person.ID
+	writeJSON(w, http.StatusOK, s.cardResource(board, column, card))
+}
+
+// unarchiveCard brings a card back out of the archive onto its board. A card
+// that stands on its board is refused with its own code, and an archived
+// project comes before that.
+func (s *Server) unarchiveCard(w http.ResponseWriter, r *http.Request, person *Person) {
+	board, column, card := s.visibleCard(r.PathValue("cardId"), person)
+	onItsBoard := card != nil
+	if card == nil {
+		board, column, card = s.visibleArchivedCard(r.PathValue("cardId"), person)
+	}
+	if card == nil {
+		notFound(w)
+		return
+	}
+	if s.refusedAsArchived(w, s.projectOf(board)) {
+		return
+	}
+	if onItsBoard {
+		unprocessable(w, "cardNotArchived", "This card is not archived.")
+		return
+	}
+
+	s.TakeOutOfTheArchive(card)
+	writeJSON(w, http.StatusOK, s.cardResource(board, column, card))
 }
 
 // columnResource lists the cards of a column in its two areas, and counts the
@@ -2612,7 +2800,8 @@ func (s *Server) assigneeReferences(card *Card) []any {
 // removeCard moves a card to the trash, from its board or from the archive of
 // its board. The fake forgets where it came from, which reads the same: every
 // later request for it is 404, and what a restore gives back is a card on the
-// board either way.
+// board either way. The entry of the archive goes with it, and the moment and
+// the person it was put away by go with the entry.
 func (s *Server) removeCard(w http.ResponseWriter, r *http.Request, person *Person) {
 	_, column, card := s.visibleCard(r.PathValue("cardId"), person)
 	fromTheArchive := false

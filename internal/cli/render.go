@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"text/tabwriter"
 	"time"
 
 	"github.com/flownative/minka-cli/internal/api"
@@ -73,6 +74,37 @@ func renderBoardCards(w io.Writer, cards []api.BoardCard) {
 		}
 		fmt.Fprintln(w, line)
 	}
+}
+
+// renderArchivedCards lists the cards a board has put away, the one put away
+// last first. A card whose moment nobody noted says nothing about when it went,
+// rather than a moment it has not got.
+func renderArchivedCards(w io.Writer, cards []api.ArchivedCard) {
+	if len(cards) == 0 {
+		fmt.Fprintln(w, "Nothing in the archive.")
+		return
+	}
+	table := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
+	fmt.Fprintln(table, "ID\tSHORT\tTITLE\tARCHIVED")
+	for _, card := range cards {
+		when := ""
+		if card.ArchivedAt != nil {
+			when = formatTime(*card.ArchivedAt)
+		}
+		if card.ArchivedBy != nil {
+			when = strings.TrimSpace(when + " by " + card.ArchivedBy.Name)
+		}
+		fmt.Fprintf(table, "%s\t%s\t%s\t%s\n", card.ID, deref(card.ShortID), card.Title, when)
+	}
+	_ = table.Flush()
+}
+
+// deref is the text a field carries, and nothing where it carries none.
+func deref(value *string) string {
+	if value == nil {
+		return ""
+	}
+	return *value
 }
 
 // dayFormat is the way Minka writes a day.

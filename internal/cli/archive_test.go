@@ -30,6 +30,8 @@ func everyWrite(e *testEnv) map[string][]string {
 		"cards edit":        {"cards", "edit", card, "--title", "Renamed"},
 		"cards move":        {"cards", "move", card, "--column", "not_now"},
 		"cards done":        {"cards", "done", card},
+		"cards archive":     {"cards", "archive", card},
+		"cards unarchive":   {"cards", "unarchive", card},
 		"cards delete":      {"cards", "delete", card},
 		"cards restore":     {"cards", "restore", f.CardInTriage.ID},
 		"cards assign":      {"cards", "assign", card, f.Anke.ID},
@@ -62,7 +64,7 @@ func everyWrite(e *testEnv) map[string][]string {
 var notAWriteIntoAProject = []string{
 	"auth login", "auth logout", "auth status", "setup", "doctor", "me", "version", "commands",
 	"skill show", "skill install", "skill status",
-	"projects list", "boards list", "boards show", "people list", "trash list",
+	"projects list", "boards list", "boards show", "boards archive", "people list", "trash list",
 	"cards mine", "cards show", "cards notes show", "steps list", "chats list", "messages list",
 	"chats mark-read", "conversations list", "conversations with", "conversations people",
 	"uploads create", "uploads download", "import basecamp",
