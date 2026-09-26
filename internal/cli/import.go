@@ -168,16 +168,32 @@ e-mail addresses of other people; Basecamp masks them for anybody else, and
 the run ends with exit 4. Nothing is written to Basecamp, and no Minka
 host or token is needed.
 
-So far a bundle holds the structure, the boards, the message boards, the chats
-and the check-ins: the people the named projects refer to with their avatars
+So far a bundle holds the structure, the boards, the message boards, the chats,
+the check-ins and the to-dos: the people the named projects refer to with their
+avatars
 (their members and whoever a record names, not the rest of the account), the
 projects with their members, of each project the card tables, chats, message
-boards and questionnaires that are switched on, of each card table the columns,
+boards, questionnaires and to-do sets that are switched on, of each card table
+the columns,
 the cards with the archived and the trashed ones, their steps, comments and
 boosts, of each message board the messages with the archived and the trashed
 ones as posts, their categories, comments and boosts, of each chat its lines
-with their boosts as messages, and of each questionnaire its questions with
-their answers, comments and boosts.
+with their boosts as messages, of each questionnaire its questions with
+their answers, comments and boosts, and of each to-do set its lists with their
+groups and to-dos.
+
+The lists of a to-do set stand in the bundle from the bottom up, because Minka
+puts every new list on top of its tool, and the groups and the to-dos of a list
+in the order of the list. A list comes with the state the source left it in, a
+group and a to-do with the trash alone, because Minka gives neither of the two a
+shelf: one the source has put on the shelf is left out and counted. Nothing
+hangs on a group, which the format has no word for. A to-do carries its notes,
+its days, whom it is assigned to, who is told when it is done and the tick the
+source put on it, and it is never said to be older than that tick. Subtasks are
+not carried at all: todosWithSubtasks and subtasksLeftOut count what fell away.
+Two things a later run cannot repair, which the report says with a notice each:
+it leaves the people of a to-do as they stand in Minka (todosWithPeople), and it
+reopens nothing it once ticked off (todosNotDone).
 
 A question comes with the schedule Minka has words for: the weekdays counted
 from Monday, the time of day, the day the rhythm is counted from, and whom it is
