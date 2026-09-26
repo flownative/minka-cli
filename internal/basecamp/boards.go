@@ -394,7 +394,7 @@ func (e *Extractor) leaveOut(record, field, value, in, inSourceID string) {
 // says about where something comes from. Every kind gets it here, so that none
 // comes without its times and nobody is named who is not in the bundle. It is
 // also where a word about clients on a record that has no word of its own is
-// counted, because every kind passes through.
+// counted: every kind that stands in a project passes through here.
 func (e *Extractor) record(what string, id int64, origin recording) (bundle.Record, error) {
 	if err := requireTimestamps(fmt.Sprintf("%s %d", what, id), origin.CreatedAt, origin.UpdatedAt); err != nil {
 		return bundle.Record{}, err
