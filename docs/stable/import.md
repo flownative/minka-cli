@@ -129,6 +129,13 @@ it stood in and how many were left out, counting records and not entries.
 Nothing hangs on a record that is left out: nobody comes into the bundle for
 it, and nothing of it is asked for.
 
+**A to-do that hangs on a To-dos tool itself** is left out although the source
+says no word a bundle has none for (C-060): it stands in no list and no group,
+and a bundle holds a to-do in a list alone. It is counted in `todosLeftOut` and
+named in `todosWithoutAList` with its project, because an identifier is what
+somebody needs to find it at the source and move it into a list, after which a
+later run carries it. Nothing of it is asked for and nothing hangs on it.
+
 **Two things of a forwarded mail are neither** (C-056): what a mail calls
 itself and whom it says it came from are nobody's to repair at the source, so a
 subject Minka would refuse is **made into a title** — every character nobody can
@@ -584,7 +591,13 @@ Minka applies the kinds in an order of its own.
   every list and group that took records with it, with how many groups and
   to-dos those were. Such a request is made for the counting alone, so a place
   Basecamp no longer has takes nothing with it and does not end the run; every
-  other failure of it ends the run as everywhere. A to-do goes to the end of
+  other failure of it ends the run as everywhere.
+  **A to-do can hang on a To-dos tool itself** and stand in no list and no group
+  of it. A bundle holds a to-do in a list alone, so such a to-do is left out,
+  counted in `todosLeftOut` and named in `todosWithoutAList` with its project
+  (C-060); the walk of the lists never meets it, so the to-dos of each tool are
+  asked for under the tool's own identifier, and a failure of that request ends
+  the run. A to-do goes to the end of
   its list or its group, so the order of the file is the order of the list:
   what is open as Basecamp lists it, then what is done, then what it has
   thrown away. `groupSourceId` names a group of the to-do's own list and is
@@ -599,6 +612,11 @@ Minka applies the kinds in an order of its own.
   the format has no word for them, so all that is left of them is how many
   there were, counted in `todosWithSubtasks` and `subtasksLeftOut` and asked
   for never.
+  **A schedule is not carried either:** a to-do that comes again at the source
+  comes here as an ordinary to-do, because Minka has no repeating one, and
+  `todosThatRepeat` counts them. Basecamp leaves the key of a schedule out
+  altogether where nothing repeats, so that the key is there is the whole test,
+  and nothing in it is read.
 - **Forwards** are the mails somebody forwarded into a project, one record per
   mail of every inbox that is switched on. Basecamp lists the mails of an
   inbox itself and hands out **no** list of the archived and the trashed ones
@@ -1188,7 +1206,9 @@ A name and a company are personal data.
   `picturesLinked`, `embeds`, `embedsLeftOut`, `references`,
   `todoListsByStatus`, `todosByStatus`, `todosLeftOut` (`lists`, `groups`,
   `todos`), `todoPlacesLeftOut` (`record`, `sourceId`, `groups`, `todos`),
+  `todosWithoutAList` (`sourceId`, `projectSourceId`),
   `todosNotDone`, `todosWithPeople`, `todosWithSubtasks`, `subtasksLeftOut`,
+  `todosThatRepeat`,
   `questionsLeftOut`, `anchorsInferred`, `nobodyAsked`, `askedLeftOut`
   (`notInTheProject`,
   `retired`, `withoutAnAddress`), `answersWithoutABody`, `answersWithoutADay`,

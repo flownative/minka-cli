@@ -212,9 +212,9 @@ func TestWhatFallsWithAPlaceThatIsLeftOutIsCountedAndNamed(t *testing.T) {
 			}
 		}
 	}
-	want := basecamp.TodosLeftOut{Lists: 1, Groups: 2, Todos: 2}
+	want := basecamp.TodosLeftOut{Lists: 1, Groups: 2, Todos: 4}
 	if result.TodosLeftOut != want {
-		t.Errorf("left out %+v, want %+v: the list and the group of the tool that is switched off, the group on the shelf, and the two to-dos that fell with them", result.TodosLeftOut, want)
+		t.Errorf("left out %+v, want %+v: the list and the group of the tool that is switched off, the group on the shelf, the two to-dos that fell with them, and the two standing in no list", result.TodosLeftOut, want)
 	}
 	places := []basecamp.TodoPlaceLeftOut{
 		{Record: "to-do list", SourceID: "9406", Groups: 1, Todos: 1},
@@ -611,7 +611,7 @@ func TestAStatusNoBundleKnowsLeavesAListOrAToDoOutAndTheRunGoesOn(t *testing.T) 
 	}
 	// The group and the to-do that stood in the list fall with it, and are counted
 	// and named with it.
-	left := basecamp.TodosLeftOut{Lists: 2, Groups: 3, Todos: 4}
+	left := basecamp.TodosLeftOut{Lists: 2, Groups: 3, Todos: 6}
 	if result.TodosLeftOut != left {
 		t.Errorf("left out %+v, want %+v", result.TodosLeftOut, left)
 	}
@@ -927,8 +927,8 @@ func TestAPlaceThatIsGoneTakesNothingWithItAndCostsNoRun(t *testing.T) {
 	}
 	_, result := extract(t, account, todoProject)
 
-	if got := result.TodosLeftOut; got.Groups != 2 || got.Todos != 1 {
-		t.Errorf("left out %+v, want the group that is gone counted and only the to-do of the other place", got)
+	if got := result.TodosLeftOut; got.Groups != 2 || got.Todos != 3 {
+		t.Errorf("left out %+v, want the group that is gone counted, the to-do of the other place, and the two standing in no list", got)
 	}
 	for _, place := range result.TodoPlacesLeftOut {
 		if place.SourceID == "9414" {
@@ -980,5 +980,122 @@ func TestCountingWhatFellAsksForNothingBeyondIt(t *testing.T) {
 	}
 	if !slices.Equal(asked, want) {
 		t.Errorf("the counting asked for\n%v\nwant\n%v", asked, want)
+	}
+}
+
+// A to-do can hang on a To-dos tool itself and stand in no list and no group of
+// it. A bundle has no place for one — the identifier of the tool is no list — so
+// it is left out; and it is named, because a number alone says that something is
+// gone and never which, while the identifier is what somebody needs to find the
+// to-do at the source and move it into a list.
+func TestAToDoStandingInNoListIsLeftOutCountedAndNamed(t *testing.T) {
+	account := fakebasecamp.New()
+
+	// Read from what the account answers: the one in use stands under the tool's
+	// own identifier, saying it hangs on the tool, and under no list of it.
+	shown := todosTheAccountShows(t, account, 7008, 9080, false)
+	if len(shown) != 1 || shown[0]["id"].(float64) != 9431 {
+		t.Fatalf("the account hands out %v under the tool itself, and the test needs the to-do standing there", shown)
+	}
+	if parent := shown[0]["parent"].(map[string]any); parent["type"] != "Todoset" || parent["id"].(float64) != 9080 {
+		t.Fatalf("the to-do says it hangs on %v, and the test needs the tool itself", parent)
+	}
+	if lists := listsTheAccountShows(t, account, 7008, 9080); slices.Contains(lists, "9431") {
+		t.Fatalf("the account lists it among the lists of the tool, %v, and then no walk of the lists would miss it", lists)
+	}
+	// One on the shelf comes with the records of the project, where it matches no
+	// list of the walk either.
+	var onTheShelf []float64
+	for _, one := range recordingsTheAccountShows(t, account, 7008, "Todo", "archived") {
+		if one["parent"].(map[string]any)["type"] == "Todoset" {
+			onTheShelf = append(onTheShelf, one["id"].(float64))
+		}
+	}
+	if !slices.Equal(onTheShelf, []float64{9432}) {
+		t.Fatalf("the account holds %v on the shelf hanging on a tool itself, and the test needs the one it was built with", onTheShelf)
+	}
+
+	dir, result := extract(t, account, todoProject)
+
+	written := sourceIDs(records(t, dir, bundle.Todos))
+	for _, id := range []string{"9431", "9432"} {
+		if slices.Contains(written, id) {
+			t.Errorf("to-do %s came along, although no list of the bundle holds it: %v", id, written)
+		}
+	}
+	named := []basecamp.TodoWithoutAList{
+		{SourceID: "9431", ProjectSourceID: "7008"},
+		{SourceID: "9432", ProjectSourceID: "7008"},
+	}
+	if !slices.Equal(result.TodosWithoutAList, named) {
+		t.Errorf("the to-dos standing in no list:\n got %+v\nwant %+v", result.TodosWithoutAList, named)
+	}
+	if got := result.TodosLeftOut.Todos; got != 4 {
+		t.Errorf("left out %d to-dos, want the two that fell with a place and the two standing in no list", got)
+	}
+	// A to-do nothing writes costs nothing beyond its number: the tool is no list,
+	// so no group of it is asked for, and nothing that hangs on such a to-do is
+	// asked for either.
+	if got := asked(account, "todolists/9080/groups.json"); len(got) > 0 {
+		t.Errorf("a run walked the tool as if it were a list: %v", got)
+	}
+	for _, id := range []string{"9431", "9432"} {
+		if got := asked(account, "recordings/"+id+"/"); len(got) > 0 {
+			t.Errorf("a run asked for what hangs on the to-do it left out: %v", got)
+		}
+	}
+}
+
+// Minka has no repeating to-do, so one that comes again at the source is carried
+// as an ordinary to-do and its schedule stays behind. The number is all that is
+// left of it, and without it nobody could tell a year later that anything had
+// been there.
+func TestAToDoThatComesAgainIsCarriedWithoutItsSchedule(t *testing.T) {
+	account := fakebasecamp.New()
+
+	// Read from what the account answers: the key is there on the to-do that comes
+	// again, with every field Basecamp holds in it, and there is no such key at all
+	// on one that comes once, which is the only thing that tells the two apart.
+	repeating := todosTheAccountShows(t, account, 7008, 9405, false)
+	if len(repeating) != 1 || repeating[0]["id"].(float64) != 9427 {
+		t.Fatalf("the account holds %v in the list of the second tool, and the test needs the to-do that comes again", repeating)
+	}
+	schedule, said := repeating[0]["repetition_schedule"]
+	if !said {
+		t.Fatal("the account sends no schedule at all, so the safeguard is held by nothing")
+	}
+	var fields []string
+	for field := range schedule.(map[string]any) {
+		fields = append(fields, field)
+	}
+	slices.Sort(fields)
+	want := []string{"days", "duration", "end_date", "frequency", "hour", "minute", "month_interval", "start_date", "week_instance", "week_interval"}
+	if !slices.Equal(fields, want) {
+		t.Fatalf("the account sends a schedule of %v, want the %v Basecamp holds", fields, want)
+	}
+	for _, one := range todosTheAccountShows(t, account, 7008, 9401, false) {
+		if _, said := one["repetition_schedule"]; said {
+			t.Fatalf("the account sends a schedule for to-do %v, which comes once: then the key is no test", one["id"])
+		}
+	}
+
+	dir, result := extract(t, account, todoProject)
+
+	if result.TodosThatRepeat != 2 {
+		t.Errorf("to-dos that come again: %d, want the two the account holds", result.TodosThatRepeat)
+	}
+	// The to-do itself is carried, as any other is, and nothing of the schedule
+	// with it.
+	if written := sourceIDs(records(t, dir, bundle.Todos)); !slices.Contains(written, "9427") {
+		t.Errorf("the to-do that comes again is in no bundle, though a bundle carries it as any other: %v", written)
+	}
+	lines, err := os.ReadFile(filepath.Join(dir, "todos.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, said := range []string{"repetition", "every_week", "every_month", "week_interval"} {
+		if strings.Contains(string(lines), said) {
+			t.Errorf("a to-do of the bundle says %q, and the format has no word for a schedule", said)
+		}
 	}
 }
