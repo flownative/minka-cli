@@ -30,8 +30,9 @@ type TodoList struct {
 	// status; the account lists what is done apart from what is open, as
 	// Basecamp does.
 	Todos []Todo
-	// Twice has the list of lists hold this one twice, as a list that moves
-	// under a walk does.
+	// Twice has the account list this one twice wherever it lists it, as a list
+	// that moves under a walk does: among the lists of a tool, among the groups of
+	// a list, and among the recordings of the project.
 	Twice bool
 }
 
@@ -97,7 +98,8 @@ func todoProject(ada, grace, edsger, former Person, tool func(int64, string, str
 			Notes:    `<div>On thick paper, says ` + Mention(SGID("gid://bc3/Person/104?expires_in"), "", 104, "Edsger Invented") + `</div>` + EmbeddedFile(invitations.SGID, "card.png"),
 			Files:    []File{invitations},
 			StartsOn: "2025-04-20", DueOn: "2025-05-01",
-			Assignees: []Person{grace, ada}, NotifiedWhenDone: []Person{edsger}, Subtasks: 2,
+			// Not in the order of their IDs, and one of them twice.
+			Assignees: []Person{grace, ada, grace}, NotifiedWhenDone: []Person{edsger, edsger}, Subtasks: 2,
 			Comments: []Comment{{ID: 9471, Creator: &grace, CreatedAt: at(2, 12), UpdatedAt: at(2, 12), Content: `<div>Which paper?</div>`,
 				Boosts: []Boost{{ID: 9482, Content: "📄", CreatedAt: at(2, 14), Booster: &ada}}}},
 			Boosts: []Boost{{ID: 9481, Content: "👍", CreatedAt: at(2, 13), Booster: &grace}}},
@@ -163,9 +165,12 @@ type Todo struct {
 	// Subtasks is how many subtasks the to-do has, of which a bundle carries
 	// none.
 	Subtasks int
-	Files    []File
-	Comments []Comment
-	Boosts   []Boost
+	// EmptyDays has the account send the days as empty text rather than leaving
+	// them out, the way a source writes a field it has nothing for.
+	EmptyDays bool
+	Files     []File
+	Comments  []Comment
+	Boosts    []Boost
 	// Twice has the list of to-dos hold this one twice.
 	Twice bool
 }
@@ -211,7 +216,11 @@ func (a *Account) todos(path string, page int) ([]byte, bool) {
 				var found []map[string]any
 				for i := range list.Groups {
 					group := &list.Groups[i]
-					if group.status() == "active" {
+					if group.status() != "active" {
+						continue
+					}
+					found = append(found, a.todoListJSON(p, list.ID, "Todolist", group))
+					if group.Twice {
 						found = append(found, a.todoListJSON(p, list.ID, "Todolist", group))
 					}
 				}
@@ -259,9 +268,17 @@ func (a *Account) todos(path string, page int) ([]byte, bool) {
 			a.eachTodoList(p, func(tool *Tool, list *TodoList) {
 				if list.status() == match[2] {
 					found = append(found, a.todoListJSON(p, tool.ID, "Todoset", list))
+					if list.Twice {
+						found = append(found, a.todoListJSON(p, tool.ID, "Todoset", list))
+					}
 				}
 				for i := range list.Groups {
-					if group := &list.Groups[i]; group.status() == match[2] {
+					group := &list.Groups[i]
+					if group.status() != match[2] {
+						continue
+					}
+					found = append(found, a.todoListJSON(p, list.ID, "Todolist", group))
+					if group.Twice {
 						found = append(found, a.todoListJSON(p, list.ID, "Todolist", group))
 					}
 				}
@@ -356,13 +373,19 @@ func (t *Todo) shownStatus() string {
 	return t.status()
 }
 
-func (a *Account) todoJSON(p *Project, in *TodoList, t *Todo) map[string]any {
-	orNull := func(value string) any {
-		if value == "" {
-			return nil
-		}
+// day is what the account says of a day the to-do has none for: nothing, or the
+// empty text a source writes instead.
+func (t *Todo) day(value string) any {
+	if value != "" {
 		return value
 	}
+	if t.EmptyDays {
+		return ""
+	}
+	return nil
+}
+
+func (a *Account) todoJSON(p *Project, in *TodoList, t *Todo) map[string]any {
 	people := func(named []Person) []map[string]any {
 		all := []map[string]any{}
 		for _, one := range named {
@@ -374,7 +397,7 @@ func (a *Account) todoJSON(p *Project, in *TodoList, t *Todo) map[string]any {
 		"id": t.ID, "status": t.shownStatus(), "title": t.Title, "content": t.Title, "type": "Todo",
 		"description": t.Notes, "description_attachments": a.filesJSON(t.Files),
 		"parent":    map[string]any{"id": in.ID, "type": "Todolist"},
-		"starts_on": orNull(t.StartsOn), "due_on": orNull(t.DueOn),
+		"starts_on": t.day(t.StartsOn), "due_on": t.day(t.DueOn),
 		"assignees": people(t.Assignees), "completion_subscribers": people(t.NotifiedWhenDone),
 		"completed": t.Completion != nil, "subtasks_count": t.Subtasks,
 		"comments_count": len(t.Comments), "comments_url": fmt.Sprintf("%sbuckets/%d/recordings/%d/comments.json", a.root(), p.ID, t.ID),

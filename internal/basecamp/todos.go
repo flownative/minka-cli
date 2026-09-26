@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/flownative/minka-cli/internal/bundle"
@@ -652,25 +653,35 @@ func (e *Extractor) peopleOn(named []person) ([]string, error) {
 // the run, because the applier would refuse them too and a day nobody can read
 // is a day nobody can put right afterwards.
 func daysOfATodo(found todo) (startsOn, dueOn *string, err error) {
+	startsOn, dueOn = aDayOrNone(found.StartsOn), aDayOrNone(found.DueOn)
 	for _, day := range []struct {
 		field string
 		value *string
 	}{
-		{"starts on", found.StartsOn},
-		{"is due on", found.DueOn},
+		{"starts on", startsOn},
+		{"is due on", dueOn},
 	} {
-		if day.value == nil || *day.value == "" {
+		if day.value == nil {
 			continue
 		}
 		if _, aDate := aDay(*day.value); !aDate {
 			return nil, nil, &Error{Kind: API, Message: fmt.Sprintf("Basecamp says that to-do %d %s a day of a shape that is none", found.ID, day.field)}
 		}
 	}
-	startsOn, dueOn = found.StartsOn, found.DueOn
 	if startsOn != nil && dueOn != nil && *startsOn > *dueOn {
 		return nil, nil, &Error{Kind: API, Message: fmt.Sprintf("to-do %d starts after the day it is due, which Minka does not take", found.ID)}
 	}
 	return startsOn, dueOn, nil
+}
+
+// aDayOrNone is the day a field holds, and nothing where it holds none: a source
+// that writes an empty field rather than leaving it out means the same thing, and
+// a bundle says it one way.
+func aDayOrNone(value *string) *string {
+	if value == nil || strings.TrimSpace(*value) == "" {
+		return nil
+	}
+	return value
 }
 
 // touchedAtLeastWhenDone is the moment a to-do was last touched, never earlier

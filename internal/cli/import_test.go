@@ -1735,6 +1735,16 @@ func TestImportBasecampReportsTheToDosOfAProject(t *testing.T) {
 		}
 	}
 
+	// A run that met no To-dos tool says nothing of them at all, as one that met
+	// no questionnaire says nothing of check-ins.
+	r = e.run("import", "basecamp", "--project", "7003", "--out", filepath.Join(t.TempDir(), "boards"), "--styled")
+	expectCode(t, r, ExitOK)
+	for _, quiet := range []string{"To-do lists:", "To-dos:", "To-dos that had subtasks", "Left out of the To-dos tools"} {
+		if strings.Contains(r.stdout, quiet) {
+			t.Errorf("a run over a project without a To-dos tool says %q:\n%s", quiet, r.stdout)
+		}
+	}
+
 	r = e.run("import", "basecamp", "--project", "7008", "--out", out, "--styled")
 	expectCode(t, r, ExitOK)
 	for _, want := range []string{
