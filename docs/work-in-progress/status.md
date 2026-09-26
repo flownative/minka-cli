@@ -60,7 +60,8 @@ it hangs on carries no word of its own and is counted where the source offers
 one. A client is no member of a project in Minka, so the run counts the
 memberships that fall away and says no question is asked of a client. A company
 the source names without an identifier, or with a name Minka refuses, ends the
-run: written away as none, it would tell Minka to drop the company it holds.
+run where the record that names it comes in: written away as none, it would tell
+Minka to drop the company it holds.
 Docs & Files and Forwards are not extracted, so a bundle says nothing of whether
 clients see them, which the report names as a gap.
 Mentions in the texts are references, the preview of a link is the link, a

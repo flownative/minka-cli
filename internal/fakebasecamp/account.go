@@ -167,7 +167,7 @@ func (a *Account) UsersOnly() {
 // and a tool whose creator has left; their one board and their one To-dos tool
 // are empty. The third
 // project holds the boards, the fourth the message boards and the chats, the
-// fifth the files, and the last the clients, with the four kinds of client in
+// fifth the files, and the last the clients, with the five kinds of client in
 // its list of people.
 func New() *Account {
 	ada := Person{ID: 101, Name: "Ada Example", Email: "ada@example.test", CreatedAt: "2020-01-01T08:00:00.000Z", UpdatedAt: "2024-01-01T08:00:00.000Z"}
@@ -184,7 +184,7 @@ func New() *Account {
 			CreatedAt: fmt.Sprintf("2022-05-%02dT10:00:00.000Z", id-9000), UpdatedAt: fmt.Sprintf("2025-05-%02dT10:00:00.000Z", id-9000)}
 	}
 
-	iris, otto, nora, cora := clientPeople()
+	iris, otto, nora, cora, tessa := clientPeople()
 
 	bugs := tool(9003, "kanban_board", "card_tables", "Bugs", true, 3, &former)
 	for i, kind := range []string{Triage, NotNow, Done} {
@@ -195,7 +195,7 @@ func New() *Account {
 	return &Account{
 		ID:       "4242",
 		PageSize: 2,
-		People:   []Person{grace, ada, edsger, linus, niklaus, bot, deleted, iris, otto, nora, cora},
+		People:   []Person{grace, ada, edsger, linus, niklaus, bot, deleted, iris, otto, nora, cora, tessa},
 		Former:   former,
 		Bot:      bot,
 		Deleted:  deleted,
@@ -229,7 +229,7 @@ func New() *Account {
 			referenceProject(ada, grace, tool),
 			checkinProject(ada, grace, linus, edsger, niklaus, deleted, tool),
 			todoProject(ada, grace, edsger, former, tool),
-			clientProject(ada, iris, otto, nora, cora, tool),
+			clientProject(ada, iris, otto, nora, cora, tessa, tool),
 		},
 		SubtasksURL:  map[int64]string{},
 		Fail:         map[string]error{},

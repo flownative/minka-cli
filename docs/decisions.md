@@ -778,14 +778,15 @@ Whether clients see a record is read from that record and never from the tool it
 stands in, and where the source says nothing, nothing is written. A record that
 follows its container carries no such word and is counted where the source offers
 one, `client` is written either way, a company stands on a client alone, and a
-client is never said to be asked a question. The run ends where a bundle cannot
-carry what the source says: a company without an identifier or with a name Minka
-refuses, and the access of a project without its company.
+client is never said to be asked a question. A project's access and its company
+stand together or not at all. A company without an identifier or with a name
+Minka refuses ends the run, where the record that names it comes in.
 
 **Why:** A record that took the word of its tool would show a client what the
-source hides, and what a client has seen cannot be taken back, whereas a company
-written away as none tells Minka to drop the one it holds.
+source hides, and what a client has seen cannot be taken back; a company written
+away as none tells Minka to drop the one it holds, and a project that names a
+company and no access is one whose clients have none there.
 **Implemented as:** `basecamp.visibleToClientsOf`, `basecamp.visibilityOfItsOwn`,
-`basecamp.Extractor.clientsOf`, `basecamp.Extractor.companyOf`,
+`basecamp.Extractor.clientsOf`, `basecamp.companyOf`, `basecamp.registry.refer`,
 `basecamp.seenPerson.aClient`, see
 [Importing from Basecamp](stable/import.md).

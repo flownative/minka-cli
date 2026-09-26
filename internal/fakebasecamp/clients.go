@@ -13,10 +13,11 @@ var southwind = Company{ID: 9282, Name: "Southwind Example"}
 
 // clientPeople are the people the client project works with: a client of a
 // company, somebody of the kind Basecamp had for a client before the flag, a
-// client whose company the source does not name, and a client of a second
-// company. A company a bundle cannot carry ends a run, so a test that wants one
-// puts it on one of them.
-func clientPeople() (iris, otto, nora, cora Person) {
+// client whose company the source does not name, a client of a second company,
+// and a client who has left and comes without an address, on whom the order of
+// the reasons somebody cannot be asked a question stands. A company a bundle
+// cannot carry ends a run, so a test that wants one puts it on one of them.
+func clientPeople() (iris, otto, nora, cora, tessa Person) {
 	iris = Person{ID: 106, Name: "Iris Outside", Email: "iris@northwind.test", Client: true, Company: &northwind,
 		CreatedAt: "2021-01-01T08:00:00.000Z", UpdatedAt: "2024-06-01T08:00:00.000Z"}
 	otto = Person{ID: 107, Name: "Otto Older", Kind: "Client", Email: "otto@northwind.test",
@@ -25,7 +26,9 @@ func clientPeople() (iris, otto, nora, cora Person) {
 		CreatedAt: "2021-03-01T08:00:00.000Z", UpdatedAt: "2024-06-03T08:00:00.000Z"}
 	cora = Person{ID: 109, Name: "Cora Southward", Email: "cora@example.test", Client: true, Company: &southwind,
 		CreatedAt: "2021-04-01T08:00:00.000Z", UpdatedAt: "2024-06-04T08:00:00.000Z"}
-	return iris, otto, nora, cora
+	tessa = Person{ID: 110, Name: "Tessa Tombstone", Kind: "Tombstone", Client: true,
+		CreatedAt: "2021-05-01T08:00:00.000Z", UpdatedAt: "2024-06-05T08:00:00.000Z"}
+	return iris, otto, nora, cora, tessa
 }
 
 // clientProject is a project that works with clients, with every case of what
@@ -33,12 +36,13 @@ func clientPeople() (iris, otto, nora, cora Person) {
 // a tool shown to clients holding a post and a list that are kept from them, a
 // tool kept from them holding a post and a question that are shown, and a group
 // and a to-do whose word falls to what they hang on. Its Docs & Files and its two
-// Forwards are the tools a run does not extract, one of them switched off; a
-// client is among the people its question is asked of.
+// Forwards are the tools a run does not extract, one of them switched off; one
+// of its questions is asked of a client beside an employee, the other of clients
+// alone.
 //
-// Its members are an employee and four clients, so that a run says how many
+// Its members are an employee and five clients, so that a run says how many
 // memberships Minka will leave out.
-func clientProject(ada, iris, otto, nora, cora Person, tool func(int64, string, string, string, bool, int, *Person) Tool) Project {
+func clientProject(ada, iris, otto, nora, cora, tessa Person, tool func(int64, string, string, string, bool, int, *Person) Tool) Project {
 	at := func(day, hour int) string { return fmt.Sprintf("2025-09-%02dT%02d:00:00.000Z", day, hour) }
 	made := tool
 	tool = func(id int64, name, kind, title string, enabled bool, position int, creator *Person) Tool {
@@ -89,15 +93,22 @@ func clientProject(ada, iris, otto, nora, cora Person, tool func(int64, string, 
 	checkins.VisibleToClients = &hidden
 	checkins.Questions = []Question{
 		{ID: 9271, Title: "How is the handover?", Creator: &ada, CreatedAt: at(4, 8), UpdatedAt: at(4, 8),
-			Schedule:    Schedule{Frequency: "every_week", Days: []int{1}, Hour: 9, StartDate: "2025-09-01"},
-			Subscribers: []Person{ada, iris}, VisibleToClients: &shown},
+			Schedule: Schedule{Frequency: "every_week", Days: []int{1}, Hour: 9, StartDate: "2025-09-01"},
+			// The client who has left and comes without an address is a
+			// client first of all: of the three reasons, that one is written
+			// down.
+			Subscribers: []Person{ada, iris, tessa}, VisibleToClients: &shown},
+		{ID: 9272, Title: "Anything from your side?", Creator: &ada, CreatedAt: at(4, 9), UpdatedAt: at(4, 9),
+			Schedule: Schedule{Frequency: "every_week", Days: []int{5}, Hour: 9, StartDate: "2025-09-01"},
+			// Asked of clients alone, which leaves it asking nobody.
+			Subscribers: []Person{iris, cora}, VisibleToClients: &hidden},
 	}
 
 	return Project{
 		ID: 7009, Name: "Client Project", Status: "active",
 		CreatedAt: at(1, 7), UpdatedAt: at(10, 12),
 		ClientsEnabled: true, ClientCompany: &northwind,
-		Members: []int64{ada.ID, iris.ID, otto.ID, nora.ID, cora.ID},
+		Members: []int64{ada.ID, iris.ID, otto.ID, nora.ID, cora.ID, tessa.ID},
 		Dock: []Tool{news, notes, chat, clientChat, todos, checkins,
 			tool(9226, "vault", "vaults", "Docs & Files", true, 7, &ada),
 			tool(9227, "inbox", "inboxes", "Forwards", true, 8, &ada),

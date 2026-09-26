@@ -464,14 +464,15 @@ func lastDayAnswered(answers []answered) (time.Time, bool) {
 // them again, so the first one decides.
 //
 // Only somebody the bundle carries as a member of the project can be asked in
-// Minka, and only somebody Minka can hand a question to: whoever is not a
+// Minka, and only somebody Minka hands a question to at all: whoever is not a
 // member, whoever is a client, whoever has left and whoever comes without an
-// address is left out and counted. A client is no member of a project in Minka,
-// whatever the bundle says of the project's members, and a question that named
-// one would be handed over with a name Minka drops without a word. For the rest,
-// Minka's own run would end in a failure that names no file and no line, while
-// its dry run stayed green. The second number is how many of the subscribers of
-// this one question fell out that way.
+// address is left out and counted. Minka takes all four out of the people a
+// question asks itself. A client is in no project there, whatever the bundle
+// says of the project's members; somebody who has left and somebody without an
+// address are retired there, and a retired person is no member of a project. A
+// bundle that named them all the same would say a question is asked of people
+// who never get it, and the counters of the run would say it too. The second
+// number is how many of the subscribers of this one question fell out that way.
 //
 // They come in the order of their IDs and each once, however Basecamp lists
 // them: two runs over an unchanged account write the same bytes.

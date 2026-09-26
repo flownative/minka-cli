@@ -880,11 +880,7 @@ func (e *Extractor) writePeople(ctx context.Context, w *bundle.Writer) (int, err
 		record.Client = seen.aClient()
 		if record.Client {
 			e.peopleAsClients++
-			company, err := e.companyOf("person", seen.ID, seen.Company)
-			if err != nil {
-				return 0, err
-			}
-			record.Company = company
+			record.Company = seen.company
 		}
 
 		if seen.AvatarURL != "" {
