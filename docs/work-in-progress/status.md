@@ -36,7 +36,9 @@ has a word for `Chat::Lines::Text`, `Chat::Lines::RichText`,
 than `active`, a column of a kind a bundle has no role for, a card, a post,
 a comment, a question or an answer with a status a bundle does not know, a draft
 among them, and a group or a to-do the source has put on the shelf, which a
-bundle gives none. `recordsLeftOut` names each with the kind of record, the word and
+bundle gives none. What stood in a list or a group a bundle cannot carry falls
+with it, is asked for to be counted and is named with the place it fell with
+(C-052), so that no run says a bundle holds more of the source than it does. `recordsLeftOut` names each with the kind of record, the word and
 where it stood, so one exotic record does not cost the account. What still ends
 a run is what would be written wrongly: times that are missing or are none, a
 second Triage, Not now or Done on one board, the status of a project the run was

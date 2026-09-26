@@ -81,7 +81,11 @@ func todoProject(ada, grace, edsger, former Person, tool func(int64, string, str
 		{ID: 9413, Status: "trashed", Title: "Given up", Creator: &ada, CreatedAt: at(1, 16), UpdatedAt: at(3, 16), Todos: []Todo{
 			{ID: 9426, Title: "Of a group in the trash", Creator: &ada, CreatedAt: at(2, 21), UpdatedAt: at(2, 21)},
 		}},
-		{ID: 9414, Status: "archived", Title: "On the shelf", Creator: &ada, CreatedAt: at(1, 17), UpdatedAt: at(3, 17)},
+		// A group on the shelf, which no bundle has a word for, with a to-do in use
+		// standing in it: the to-do falls with the group and has to be counted.
+		{ID: 9414, Status: "archived", Title: "On the shelf", Creator: &ada, CreatedAt: at(1, 17), UpdatedAt: at(3, 17), Todos: []Todo{
+			{ID: 9430, Title: "Of a group on the shelf", Creator: &ada, CreatedAt: at(3, 9), UpdatedAt: at(3, 9)},
+		}},
 	}
 
 	invitations := File{ID: 5063, SGID: SGID("gid://bc3/Attachment/5063?expires_in"), Key: FileKey(5063), Filename: "card.png", ContentType: "image/png", Bytes: 128}

@@ -90,6 +90,27 @@ type MissingFile struct {
 	Retryable bool `json:"retryable"`
 }
 
+// TodosLeftOut counts what a bundle does not carry of the To-dos tools of a run,
+// per kind of record: a list, a group or a to-do whose status a bundle has no word
+// for, one that hangs on a tool the run does not extract, and whatever stood in
+// one of them and fell with it.
+type TodosLeftOut struct {
+	Lists  int `json:"lists"`
+	Groups int `json:"groups"`
+	Todos  int `json:"todos"`
+}
+
+// TodoPlaceLeftOut is a list or a group the bundle does not carry, with how many
+// groups and to-dos stood in it. The place is named, because a number alone says
+// that something is gone and never which.
+type TodoPlaceLeftOut struct {
+	// Record is the kind of place: a to-do list or a group.
+	Record   string `json:"record"`
+	SourceID string `json:"sourceId"`
+	Groups   int    `json:"groups"`
+	Todos    int    `json:"todos"`
+}
+
 // LeftOutRecords counts the records of one kind that a bundle cannot carry
 // because the source said a word a bundle has none for. Such records are left
 // out and the run goes on; what is lost stays nameable here.
@@ -179,10 +200,11 @@ type Result struct {
 	// TodosByStatus counts the to-dos of the bundle: active, trashed. The shelf
 	// is the list's alone.
 	TodosByStatus map[string]int
-	// TodosLeftOut counts the archived and trashed lists, groups and to-dos that
-	// hang on nothing the run extracts: a To-dos tool that is switched off, a
-	// list or a group that is gone.
-	TodosLeftOut int
+	// TodosLeftOut counts what a bundle does not carry of the To-dos tools, per
+	// kind of record, and TodoPlacesLeftOut names the lists and groups that took
+	// records with them.
+	TodosLeftOut      TodosLeftOut
+	TodoPlacesLeftOut []TodoPlaceLeftOut
 	// TodosNotDone counts the to-dos the source has open. A later run reopens
 	// nothing, so one that is done in Minka stays done.
 	TodosNotDone int
@@ -272,7 +294,8 @@ type Extractor struct {
 
 	todoListsByStatus map[string]int
 	todosByStatus     map[string]int
-	todosLeftOut      int
+	todosLeftOut      TodosLeftOut
+	todoPlacesLeftOut []TodoPlaceLeftOut
 	todosNotDone      int
 	todosWithPeople   int
 	todosWithSubtasks int
@@ -301,6 +324,10 @@ type talk struct {
 	chats          []int64
 	questionnaires []int64
 	todosets       []int64
+	// everyTodoset is every dock entry of a project that is a To-dos tool, those
+	// that are switched off included. A list names only the tool it stands in, so
+	// what hangs on none of them is no list but a group.
+	everyTodoset map[int64]bool
 }
 
 type skippedKey struct {
@@ -344,7 +371,8 @@ func (e *Extractor) Extract(ctx context.Context, projectIDs []string, w *bundle.
 	}
 	e.todoListsByStatus = map[string]int{bundle.StatusActive: 0, bundle.StatusArchived: 0, bundle.StatusTrashed: 0}
 	e.todosByStatus = map[string]int{bundle.StatusActive: 0, bundle.StatusTrashed: 0}
-	e.todosLeftOut, e.todosNotDone, e.todosWithPeople = 0, 0, 0
+	e.todosLeftOut, e.todoPlacesLeftOut = TodosLeftOut{}, []TodoPlaceLeftOut{}
+	e.todosNotDone, e.todosWithPeople = 0, 0
 	e.todosWithSubtasks, e.subtasksLeftOut = 0, 0
 	e.longestBody = map[bundle.Kind]int{bundle.Cards: 0, bundle.Comments: 0, bundle.Posts: 0, bundle.Messages: 0, bundle.Answers: 0,
 		bundle.TodoLists: 0, bundle.Todos: 0}
@@ -419,6 +447,7 @@ func (e *Extractor) Extract(ctx context.Context, projectIDs []string, w *bundle.
 		TodoListsByStatus: e.todoListsByStatus,
 		TodosByStatus:     e.todosByStatus,
 		TodosLeftOut:      e.todosLeftOut,
+		TodoPlacesLeftOut: e.todoPlacesLeftOut,
 		TodosNotDone:      e.todosNotDone,
 		TodosWithPeople:   e.todosWithPeople,
 		TodosWithSubtasks: e.todosWithSubtasks,
@@ -509,9 +538,15 @@ func (e *Extractor) extractProject(ctx context.Context, id int64, w *bundle.Writ
 	var tools []extractedTool
 	var made []recording
 	var others []dockEntry
+	// Every To-dos tool of the project, those that are switched off included: a
+	// list of one that is not extracted still has to be told from a group.
+	everyTodoset := map[int64]bool{}
 	dock := append([]dockEntry(nil), p.Dock...)
 	sort.SliceStable(dock, func(i, j int) bool { return dock[i].ID < dock[j].ID })
 	for _, entry := range dock {
+		if toolKinds[entry.Name] == bundle.ToolTodos {
+			everyTodoset[entry.ID] = true
+		}
 		if _, known := toolKinds[entry.Name]; !known || !entry.Enabled {
 			e.skipped[skippedKey{kind: entry.Name, enabled: entry.Enabled}]++
 			others = append(others, entry)
@@ -546,7 +581,7 @@ func (e *Extractor) extractProject(ctx context.Context, id int64, w *bundle.Writ
 	}
 
 	var boards []*board
-	talks := talk{bucket: id}
+	talks := talk{bucket: id, everyTodoset: everyTodoset}
 	for _, tool := range tools {
 		record, err := e.record("tool", tool.entry.ID, tool.details.recording)
 		if err != nil {
