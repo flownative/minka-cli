@@ -338,7 +338,7 @@ func noticesOfTheRun(run api.ArchiveRun) []string {
 		notices = append(notices, fmt.Sprintf("read in %d pages: every card that lay in the archive for the whole run is listed once, but the list is no picture of one moment — a card put away during the run lands on the first page, which was already read, and a card taken out of the archive left the run without a trace", run.Pages))
 	}
 	if run.Duplicates > 0 {
-		notices = append(notices, fmt.Sprintf("%s came a second time, because a page had to start behind an earlier card of the page before it; each card is listed once", plural(run.Duplicates, "card", "cards")))
+		notices = append(notices, fmt.Sprintf("%s came a second time, because a cursor did not hold and the run had to read over ground it had covered; each card is listed once", plural(run.Duplicates, "card", "cards")))
 	}
 	if run.BeganAgain {
 		notices = append(notices, "no card of a page was left in the archive for the next one to start behind, so the run began again where it started")
