@@ -712,9 +712,13 @@ and Minka applies the kinds in an order of its own.
   Basecamp, so neither is written and neither is asked for: Minka counts one
   that names a folder with what it will never take, and no later run takes it
   either.
-  A folder the source has thrown away may hand out no list of what stands in it;
-  what is in use below such a folder is then beyond the reach of any run, and
-  what the source has put away comes from the project's own lists either way.
+  A folder the source has put away may hand out no list of what stands in it,
+  and that is passed over rather than ending the run; a folder that is in use
+  has to answer, and a list of one that is not there ends the run. What is in
+  use below a folder that would not answer is then beyond the reach of any run
+  and nothing can count it, so `docs.foldersThatSaidNothingOfWhatIsInThem`
+  counts the folders and a `notice` says so; what the source has put away comes
+  from the project's own lists either way, and the folder itself comes.
 - **Documents** are the documents of those tools, `documents.jsonl`, with
   `folderSourceId` `null` at the top of the tool. `title` is the title, `body`
   the document as Basecamp renders it, rewritten like every other text, and

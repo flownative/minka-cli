@@ -386,8 +386,8 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   names no file to download at all, which is the one thing the shape of the
   answer is guessed at rather than read; that a folder the source archived or
   threw away can be asked what stands in it, which a run does and passes over a
-  refusal of for a folder that is not in use; and that a folder takes neither
-  comments nor boosts.
+  refusal of for a folder that is not in use, counting the folders that would
+  not answer; and that a folder takes neither comments nor boosts.
   Invented for want of anything to measure: a folder, a document or an upload
   whose status is none of the three; an upload in a cloud, with a comment and a
   boost on it; a file name longer than a title holds and an upload without a

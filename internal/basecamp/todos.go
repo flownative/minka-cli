@@ -282,7 +282,7 @@ func (e *Extractor) countWhatFellWithAPlace(ctx context.Context, bucket int64, l
 
 		if place.aList {
 			e.todosLeftOut.Lists++
-			inIt, err := listedUnlessItIsGone[todoList](ctx, e.Source, fmt.Sprintf("buckets/%d/todolists/%d/groups.json", bucket, place.id), false)
+			inIt, _, err := listedUnlessItIsGone[todoList](ctx, e.Source, fmt.Sprintf("buckets/%d/todolists/%d/groups.json", bucket, place.id), false)
 			if err != nil {
 				return err
 			}
@@ -298,7 +298,7 @@ func (e *Extractor) countWhatFellWithAPlace(ctx context.Context, bucket int64, l
 		}
 
 		for _, path := range todosOfAPlace(bucket, place.id) {
-			inIt, err := listedUnlessItIsGone[todo](ctx, e.Source, path, false)
+			inIt, _, err := listedUnlessItIsGone[todo](ctx, e.Source, path, false)
 			if err != nil {
 				return err
 			}

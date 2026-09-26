@@ -38,6 +38,11 @@ type DocsCounts struct {
 	// only once the source hands the file out again; the record is written all
 	// the same, because the source may do exactly that tomorrow.
 	OnlyAFileNoRunWillBring []string `json:"onlyAFileNoRunWillBring"`
+	// FoldersThatSaidNothingOfWhatIsInThem counts the folders the source has put
+	// away that would not say what stands in them. What is in use below such a
+	// folder reaches no bundle and no later run finds it either, and nothing can
+	// count it: the number of folders is all a run can say about the hole.
+	FoldersThatSaidNothingOfWhatIsInThem int `json:"foldersThatSaidNothingOfWhatIsInThem"`
 	// LongerThanMinkaTakes counts the documents and the descriptions of uploads
 	// that are longer than Minka holds. Minka passes such a record over on every
 	// run, with everything hanging on it, and the text is not cut short.
@@ -280,17 +285,23 @@ func (e *Extractor) walkVault(ctx context.Context, walk *docsWalk, id, in int64,
 	walk.places = append(walk.places, place)
 	inUse := folder == nil || folder.status() == bundle.StatusActive
 
-	shownFolders, err := listedUnlessItIsGone[vaultFolder](ctx, e.Source, fmt.Sprintf("buckets/%d/vaults/%d/vaults.json", walk.bucket, id), inUse)
+	shownFolders, foldersGone, err := listedUnlessItIsGone[vaultFolder](ctx, e.Source, fmt.Sprintf("buckets/%d/vaults/%d/vaults.json", walk.bucket, id), inUse)
 	if err != nil {
 		return err
 	}
-	shownDocuments, err := listedUnlessItIsGone[vaultDocument](ctx, e.Source, fmt.Sprintf("buckets/%d/vaults/%d/documents.json", walk.bucket, id), inUse)
+	shownDocuments, documentsGone, err := listedUnlessItIsGone[vaultDocument](ctx, e.Source, fmt.Sprintf("buckets/%d/vaults/%d/documents.json", walk.bucket, id), inUse)
 	if err != nil {
 		return err
 	}
-	shownUploads, err := listedUnlessItIsGone[vaultUpload](ctx, e.Source, fmt.Sprintf("buckets/%d/vaults/%d/uploads.json", walk.bucket, id), inUse)
+	shownUploads, uploadsGone, err := listedUnlessItIsGone[vaultUpload](ctx, e.Source, fmt.Sprintf("buckets/%d/vaults/%d/uploads.json", walk.bucket, id), inUse)
 	if err != nil {
 		return err
+	}
+	// A folder that will not say what stands in it is a hole nobody can count:
+	// what is in use below it reaches no bundle and no later run finds it
+	// either, so the run says how many such folders there were.
+	if foldersGone || documentsGone || uploadsGone {
+		e.docs.FoldersThatSaidNothingOfWhatIsInThem++
 	}
 
 	for _, found := range inFileOrder(walk.documentsGone[id], shownDocuments) {
@@ -631,7 +642,7 @@ func (e *Extractor) countWhatFellWithAVault(ctx context.Context, walk *docsWalk)
 // stands in it, so that what falls with it is counted. A folder of it is a place
 // of its own and is added to the walk.
 func (e *Extractor) countWhatStandsInAFolderLeftOut(ctx context.Context, walk *docsWalk, id int64, fell *DocsPlaceLeftOut) error {
-	folders, err := listedUnlessItIsGone[vaultFolder](ctx, e.Source, fmt.Sprintf("buckets/%d/vaults/%d/vaults.json", walk.bucket, id), false)
+	folders, _, err := listedUnlessItIsGone[vaultFolder](ctx, e.Source, fmt.Sprintf("buckets/%d/vaults/%d/vaults.json", walk.bucket, id), false)
 	if err != nil {
 		return err
 	}
@@ -641,7 +652,7 @@ func (e *Extractor) countWhatStandsInAFolderLeftOut(ctx context.Context, walk *d
 			walk.lost = append(walk.lost, lostVaultPlace{record: "folder", id: found.ID, aFolder: true})
 		}
 	}
-	documents, err := listedUnlessItIsGone[vaultDocument](ctx, e.Source, fmt.Sprintf("buckets/%d/vaults/%d/documents.json", walk.bucket, id), false)
+	documents, _, err := listedUnlessItIsGone[vaultDocument](ctx, e.Source, fmt.Sprintf("buckets/%d/vaults/%d/documents.json", walk.bucket, id), false)
 	if err != nil {
 		return err
 	}
@@ -651,7 +662,7 @@ func (e *Extractor) countWhatStandsInAFolderLeftOut(ctx context.Context, walk *d
 			e.docs.LeftOut.Documents++
 		}
 	}
-	uploads, err := listedUnlessItIsGone[vaultUpload](ctx, e.Source, fmt.Sprintf("buckets/%d/vaults/%d/uploads.json", walk.bucket, id), false)
+	uploads, _, err := listedUnlessItIsGone[vaultUpload](ctx, e.Source, fmt.Sprintf("buckets/%d/vaults/%d/uploads.json", walk.bucket, id), false)
 	if err != nil {
 		return err
 	}
