@@ -301,10 +301,10 @@ func TestAClientIsNeverSaidToBeAskedAQuestion(t *testing.T) {
 	}
 }
 
-// Being a client is the first reason somebody cannot be asked, as it is in
-// Minka: a client is out of the project's memory before membership is asked at
-// all, so a client who has left and comes without an address is counted as a
-// client and nowhere else.
+// Being a client comes before the reasons that attach to the person, as it does
+// in Minka, where a client is out of the project's memory before anything else
+// about them is asked: a client who has left and comes without an address is
+// counted as a client and nowhere else.
 func TestSomebodyWhoIsAClientAndMoreIsLeftOutOfAQuestionAsAClient(t *testing.T) {
 	dir, result := extract(t, fakebasecamp.New(), clientProject)
 

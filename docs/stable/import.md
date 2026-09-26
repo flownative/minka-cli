@@ -932,9 +932,10 @@ therefore read from the source and never guessed (C-055).
   question is ever said to be asked of a client: Minka drops such a person from
   `asked` without a word, so a client among the subscribers of a question is left
   out here and counted (`askedLeftOut.clients`), beside whoever is no member, has
-  left or comes without an address. Somebody several of these hold for counts as
-  a client and nothing else, the way Minka takes a client out of the project
-  before it asks who is in it.
+  left or comes without an address. One reason is counted per person: being no
+  member of the project first, then being a client, then having left and coming
+  without an address, because Minka has a client out of the project before it
+  asks anything else about them.
 - **Docs & Files (`vault`) and Forwards (`inbox`) are not extracted**, so a
   bundle says nothing of whether clients see them or what stands in them. The
   report counts the ones that are switched on and a `notice` names the gap, so
