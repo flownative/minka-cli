@@ -127,7 +127,7 @@ func TestACardNobodyStartedAgainRunsOut(t *testing.T) {
 		{ID: "fresh", StartedAt: began.Add(ForgottenAfter - time.Minute)},
 	}}
 
-	if forgotten := entry.ForgetWhatRanOut(began.Add(ForgottenAfter)); forgotten != 1 {
+	if forgotten, _ := entry.ForgetWhatRanOut(began.Add(ForgottenAfter)); forgotten != 1 {
 		t.Fatalf("%d cards were forgotten, want 1", forgotten)
 	}
 	if cards := entry.CardIDs(); len(cards) != 1 || cards[0] != "fresh" {
@@ -151,7 +151,7 @@ func TestOnlyTheSessionThatTookACardUpKeepsItAlive(t *testing.T) {
 		entry.StillAtIt("busy", began.Add(time.Duration(hour)*time.Hour))
 	}
 
-	if forgotten := entry.ForgetWhatRanOut(began.Add(ForgottenAfter + time.Minute)); forgotten != 2 {
+	if forgotten, _ := entry.ForgetWhatRanOut(began.Add(ForgottenAfter + time.Minute)); forgotten != 2 {
 		t.Fatalf("%d cards were forgotten, want the two nobody said anything about", forgotten)
 	}
 	if cards := entry.CardIDs(); len(cards) != 1 || cards[0] != "of the busy session" {
@@ -221,7 +221,7 @@ func TestACardWithoutASessionIsKeptAliveByNobody(t *testing.T) {
 		}
 	}
 
-	if forgotten := entry.ForgetWhatRanOut(began.Add(ForgottenAfter + time.Minute)); forgotten != 1 {
+	if forgotten, _ := entry.ForgetWhatRanOut(began.Add(ForgottenAfter + time.Minute)); forgotten != 1 {
 		t.Fatalf("%d cards were forgotten, want the one nobody said anything about", forgotten)
 	}
 	if cards := entry.CardIDs(); len(cards) != 0 {
