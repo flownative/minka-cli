@@ -89,15 +89,15 @@ func clientProject(ada, iris, otto, nora, cora, tessa Person, tool func(int64, s
 	}
 
 	// A tool of forwarded mail that the clients do not see, holding a mail and an
-	// answer that the source says they do see: neither has a word of its own, and
-	// both follow the tool.
+	// answer that say what the source says of every one of them: neither has a
+	// word of its own in a bundle, and both follow the tool.
 	forwards := tool(9227, "inbox", "inboxes", "Forwards", true, 8, &ada)
 	forwards.VisibleToClients = &hidden
 	forwards.Forwards = []Forward{
 		{ID: 9235, Subject: "For the client", From: "hello@northwind.test", Creator: &ada,
-			CreatedAt: at(5, 8), UpdatedAt: at(5, 8), Content: "Passed on.", VisibleToClients: &shown,
+			CreatedAt: at(5, 8), UpdatedAt: at(5, 8), Content: "Passed on.", VisibleToClients: &hidden,
 			Replies: []Reply{{ID: 9236, Creator: &ada, CreatedAt: at(5, 9), UpdatedAt: at(5, 9),
-				Content: `<div>Noted.</div>`, VisibleToClients: &shown}}},
+				Content: `<div>Noted.</div>`, VisibleToClients: &hidden}}},
 	}
 
 	// A tool they do not see, holding a question they do.

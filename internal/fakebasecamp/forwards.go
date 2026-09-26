@@ -17,16 +17,19 @@ type Forward struct {
 	Status                 string
 	ShownStatus            string
 	SaysNothingOfItsStatus bool
-	Subject                string
-	From                   string
-	Content                string
-	Creator                *Person
-	CreatedAt              string
-	UpdatedAt              string
-	Files                  []File
-	Replies                []Reply
-	Comments               []Comment
-	Boosts                 []Boost
+	// SaysNothingOfItsReplyCount leaves the count of the answers out of the
+	// answer, which is another Basecamp nobody has met.
+	SaysNothingOfItsReplyCount bool
+	Subject                    string
+	From                       string
+	Content                    string
+	Creator                    *Person
+	CreatedAt                  string
+	UpdatedAt                  string
+	Files                      []File
+	Replies                    []Reply
+	Comments                   []Comment
+	Boosts                     []Boost
 	// VisibleToClients is what the forward says about clients, which a bundle has
 	// no word for: an Email forwards tool is shown to them as a whole.
 	VisibleToClients *bool
@@ -37,15 +40,16 @@ type Forward struct {
 // "Outsider" and their address as their name.
 type Reply struct {
 	ID int64
-	// Status is left out of the answer when empty, which is what Basecamp
-	// answers: a reply says nothing of what became of it.
-	Status    string
-	Content   string
-	Creator   *Person
-	CreatedAt string
-	UpdatedAt string
-	Files     []File
-	Boosts    []Boost
+	// Status is "active" when empty, as a forward's is, and
+	// SaysNothingOfItsStatus leaves the field out of the answer.
+	Status                 string
+	SaysNothingOfItsStatus bool
+	Content                string
+	Creator                *Person
+	CreatedAt              string
+	UpdatedAt              string
+	Files                  []File
+	Boosts                 []Boost
 	// VisibleToClients is what the reply says about clients, which follows its
 	// tool as a forward's does.
 	VisibleToClients *bool
@@ -76,7 +80,8 @@ func OutsiderByNameAlone(id int64, address string) Person {
 // at all, one that is nothing but an embedded player, one nobody is named for,
 // replies from inside and outside the account, one of those named by their name
 // alone and one whose address Minka would refuse, a reply in the trash, and a
-// boost on a reply that comes and one on a reply that does not.
+// boost on a reply that comes and one on a reply that does not, and an answer
+// that is nothing but a file the source no longer has.
 func forwardProject(ada, grace, former Person, tool func(int64, string, string, string, bool, int, *Person) Tool) Project {
 	at := func(day, hour int) string { return fmt.Sprintf("2025-02-%02dT%02d:00:00.000Z", day, hour) }
 	made := tool
@@ -99,6 +104,8 @@ func forwardProject(ada, grace, former Person, tool func(int64, string, string, 
 		Filename: "signed.pdf", ContentType: "application/pdf", Bytes: 1536}
 	lost := File{ID: 5303, SGID: SGID("gid://bc3/Attachment/5303?expires_in"), Key: FileKey(5303),
 		Filename: "contract.pdf", ContentType: "application/pdf", Bytes: 2048, Gone: true}
+	lostToo := File{ID: 5304, SGID: SGID("gid://bc3/Attachment/5304?expires_in"), Key: FileKey(5304),
+		Filename: "amendment.pdf", ContentType: "application/pdf", Bytes: 1024, Gone: true}
 
 	// A mail as Basecamp holds one: text with line breaks, an auto-linked
 	// address and a figure for the file.
@@ -145,6 +152,9 @@ func forwardProject(ada, grace, former Person, tool func(int64, string, string, 
 		// On the shelf at the source, which is the trash here.
 		{ID: 9304, Status: "archived", Subject: "Old enquiry", From: "hello@supplier.test", Creator: &ada,
 			CreatedAt: at(7, 8), UpdatedAt: at(9, 8), Content: "Is this still open?",
+			// An answer that is nothing but a file the source no longer has.
+			Replies: []Reply{{ID: 9406, Creator: &grace, CreatedAt: at(8, 9), UpdatedAt: at(8, 9),
+				Content: Embed{File: lostToo}.HTML(), Files: []File{lostToo}}},
 			Comments: []Comment{{ID: 9503, Creator: &ada, CreatedAt: at(8, 8), UpdatedAt: at(8, 8), Content: `<div>Closed.</div>`}}},
 		{ID: 9305, Status: "trashed", Subject: "Advertising", From: "sales@supplier.test", Creator: &ada,
 			CreatedAt: at(10, 8), UpdatedAt: at(11, 8), Content: "Special offer."},
@@ -261,6 +271,13 @@ func (f *Forward) status() string {
 	return f.Status
 }
 
+func (r Reply) status() string {
+	if r.Status == "" {
+		return "active"
+	}
+	return r.Status
+}
+
 // forwardJSON is a forward as Basecamp answers one: no count of its comments
 // and none of its boosts, because it has neither.
 func (a *Account) forwardJSON(p *Project, forward *Forward) map[string]any {
@@ -276,6 +293,9 @@ func (a *Account) forwardJSON(p *Project, forward *Forward) map[string]any {
 	if forward.SaysNothingOfItsStatus {
 		delete(answer, "status")
 	}
+	if forward.SaysNothingOfItsReplyCount {
+		delete(answer, "replies_count")
+	}
 	if forward.VisibleToClients != nil {
 		answer["visible_to_clients"] = *forward.VisibleToClients
 	}
@@ -288,16 +308,15 @@ func (a *Account) forwardJSON(p *Project, forward *Forward) map[string]any {
 	return answer
 }
 
-// replyJSON is a reply as Basecamp answers one. It says nothing of what became
-// of it, as Basecamp says nothing: only a reply a test gives a status carries
-// one.
+// replyJSON is a reply as Basecamp answers one: with what became of it, as a
+// forward comes, and with no count of comments, which a reply cannot have.
 func (a *Account) replyJSON(reply Reply) map[string]any {
 	answer := map[string]any{
-		"id": reply.ID, "content": reply.Content, "content_attachments": a.filesJSON(reply.Files),
+		"id": reply.ID, "status": reply.status(), "content": reply.Content, "content_attachments": a.filesJSON(reply.Files),
 		"boosts_count": len(reply.Boosts), "created_at": reply.CreatedAt, "updated_at": reply.UpdatedAt,
 	}
-	if reply.Status != "" {
-		answer["status"] = reply.Status
+	if reply.SaysNothingOfItsStatus {
+		delete(answer, "status")
 	}
 	if reply.VisibleToClients != nil {
 		answer["visible_to_clients"] = *reply.VisibleToClients

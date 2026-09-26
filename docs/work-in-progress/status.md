@@ -38,8 +38,8 @@ each to-do set its lists from the bottom up, because Minka puts every new list
 on top, with their groups and their to-dos in the order of the list and what
 hangs on a list and a to-do, and of each inbox its forwarded mail with the
 answers by mail, the comments and the boosts of each.
-The inboxes come last of all, because no second look rewrites a reference of a
-forwarded mail. Three things of such a mail are the extractor's own doing, each
+The inboxes come last of all, so that a file standing in a card and in a mail
+alike belongs to the card. Three things of such a mail are the extractor's own doing, each
 written down as a rule: a subject Minka would refuse becomes a title rather than
 costing the mail or the run and a sender that is no address leaves the mail out
 (C-056), a body that would reach Minka as nothing at all carries one line of the
@@ -266,38 +266,56 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   be asked for at all, which is what a run does for a list of any status. A to-do
   whose completion is newer than the moment the source says it was touched
   (C-051) is a shape the invented account holds and no real one has shown.
-- Of the forwarded mail of `import basecamp`: all of it. No extraction has met
-  an inbox live. What the account was measured for, read-only and before a line
-  was written, is the shape of the source: that a dock entry of an inbox is
+- Of the forwarded mail of `import basecamp`: no extraction has met an inbox
+  live, and the shape of the source is measured all the same, read-only and
+  without a run. Measured: that a dock entry of an inbox is
   called `inbox`, that its mail is listed at `buckets/{b}/inboxes/{i}/forwards.json`
   and the answers of one at `buckets/{b}/inbox_forwards/{id}/replies.json`, that
   a mail carries `subject`, `from` — the address alone, never a name —,
-  `content`, `content_attachments`, `creator`, `created_at`, `status` and
-  `replies_count` and says how many comments and how many boosts it has as
-  little as it says whom it was addressed to, that an answer carries `content`,
-  `content_attachments`, `creator` and `boosts_count`, that such a creator can be
-  an `Outsider`, and that `projects/recordings.json?type=Inbox::Forward` refuses
-  the request, so there is no list of the archived and the trashed mails of a
-  project. Everything the run does with all that rests on the invented account,
-  with three things held against Minka's own reading rather than against a
+  `content`, `content_attachments`, `creator`, `created_at`, `status`,
+  `replies_count` and `visible_to_clients`, and says how many comments and how
+  many boosts it has as
+  little as it says whom it was addressed to; that an answer carries `content`,
+  `content_attachments`, `creator`, `boosts_count` and `status` as well, and
+  that such a creator can be
+  an `Outsider`; that an inbox lists its mail newest first, by `created_at`
+  descending; and that `projects/recordings.json?type=Inbox::Forward` refuses
+  the request while the status of the list is ignored, so **no mail of any
+  status but `active` can be got out of Basecamp at all** and the shelf becoming
+  the trash may never fire. Measured too, and the one measurement that says the
+  run is needed: of the senders of the account a handful are addresses Minka
+  refuses — a whole address in quotation marks, a local part over 64 bytes —
+  so a mail left out for its sender is no invented case but one the first real
+  run will meet, and writing such a sender would have ended the applier after
+  hours of walking.
+  What the run does with all that rests on the invented account, with three
+  things held against Minka's own reading rather than against a
   test here: every address and every title the run would write was put through
   PHP's `filter_var`, the plain local part of `EmailAddress` and the three
   refusals of `IsName`, and not one of them is refused; and the bodies of a
   bundle were put through `MailLineBreaks` with the tag of the file that will
   never come taken out first, as the applier takes it out, and none of them
   comes out empty.
-  Invented for want of anything to measure: that an inbox lists its mail newest
-  first; a mail whose `status` says anything but `active`, the account holding
-  none, so the shelf becoming the trash has never been seen; a mail that says
-  nothing of its status, which Basecamp always names; an answer whose
-  `status` says anything at all, because Basecamp names none; a sender that is
-  no address; a mail without a subject and one whose subject is longer than a
+  Invented for want of anything to measure: a mail or an answer whose `status`
+  says anything but `active`, and one that says nothing of its status, which
+  Basecamp always names; a sender that is
+  no address, of the two shapes the account holds and of the others; a mail
+  without a subject and one whose subject is longer than a
   title holds; a mail whose body is nothing but a file the source no longer has,
-  one that says nothing and one that is nothing but a player, Basecamp having
-  cleaned every body of the account down to text, links and files; a mail nobody
-  is named for; somebody from outside whose address Minka would refuse; and a
+  one whose file this run could not fetch, one above the ceiling of a run of
+  Minka — for which the ceiling is lowered, a gibibyte fitting in no fixture —,
+  one that says nothing, one that is nothing but a player, Basecamp having
+  cleaned every body of the account down to text, links and files, and one that
+  holds nothing but a NUL; a mail nobody
+  is named for; somebody from outside whose address Minka would refuse and one
+  the source names by their name alone; a mail that says nothing of how many
+  answers it has; and a
   boost on a mail, of which the account holds none, so the list a run asks for of
   every mail has never answered with one.
+  One number of the report will be far larger live than the fake suggests:
+  every mail and every answer of the account carries a word about clients, and
+  every one of them is counted in `visibilityLeftToTheContainer`, where the fake
+  offers one of each.
 - Of the files of `import basecamp`: a download that breaks off, a file
   whose size differs from what Basecamp says, a file that is gone, a name that
   has to be changed, a caption too long, and one file under two owners.
@@ -541,12 +559,12 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
 - Of the ninety-odd addresses the API offers, about half have no command. Four
   cards say which: the lists and groups of to-dos, the to-dos and their
   subtasks, the check-ins, and the archive of cards and posts.
-- Extract the forwarded mail of a project live: whether an inbox answers for its
-  mail as the account was measured to, in which order it lists it, whether a
-  mail ever says `archived`, what an answer says about its status, and what a
-  body of a mail looks like that a run has to write a line of its own into.
-  Then check the bundle record by record, as the boards and the chats were
-  checked, and walk the whole account for a mail whose sender Minka would refuse.
+- Extract the forwarded mail of a project live, and check the bundle record by
+  record as the boards and the chats were checked. What is still open there is
+  what no reading of the source answers: what a body looks like that the run has
+  to write a line of its own into, and how the mails whose sender Minka refuses
+  read in the report. Whether a mail on the shelf exists at all is a question
+  for Basecamp and not for a run: nothing the API offers hands one out.
 - Extract the to-dos of a project live: whether `todoset` is the dock entry, the
   fields of a list, a group and a to-do, the two lists of what is open and what is
   done, the recordings of the archived and the trashed ones, whether a list on

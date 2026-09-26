@@ -822,23 +822,25 @@ what a bundle carries is always taken.
 *Applies to: `import basecamp`, the `body` of a forward and of an answer by mail*
 
 Where the body of a mail would reach Minka as nothing at all — the mail says
-nothing, what it says is a file that will never come, it is nothing but an
+nothing, what it says is a file that will **never** come, it is nothing but an
 embed, or it holds nothing but what Minka takes off the edges of a text — the
 run writes one line of its own behind the body and counts the mails that carry
 one. The tag of the file stays where it stood, and an embed gets its address as
-a link and no sentence.
+a link and no sentence. A file this run merely could not fetch is not one that
+will never come: the mail waits for it.
 
 **Why:** Minka writes such a body empty and remembers the mail as finished, or
 passes it over before it is remembered and passes it over again on every run
 afterwards; either way the subject, the sender, the answers and the comments are
 lost, and no run can mend it from that side. The extractor is the one place that
-knows a file will never come. An embed is Minka's own reading of an address, so a
+knows a file can never come, and a run that said so of one it could simply not
+fetch would take the mail from every run after it. An embed is Minka's own reading of an address, so a
 mail that hangs on one alone gets the address as a link, which every reading
 keeps, and no sentence: Minka usually takes the embed, and a run that called such
 a mail wordless would be putting that in writing under somebody's name.
 **Implemented as:** `basecamp.Extractor.aBodyThatSaysSomething`,
 `basecamp.Extractor.whatWouldArriveOf`,
-`basecamp.Extractor.noteWhetherItArrives`, see
+`basecamp.Extractor.theFileNeverArrives`, see
 [Importing from Basecamp](stable/import.md).
 
 <a id="c-058"></a>

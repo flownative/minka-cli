@@ -126,11 +126,6 @@ func (e *Extractor) storageAddress(file sourceFile) (string, error) {
 }
 
 const (
-	// largestFileMinkaTakes is the ceiling one file meets on the way in, in
-	// bytes. Above it the file stays outside there however whole it is here, so
-	// a record whose body is nothing but that file arrives empty. An instance
-	// may be told another number; this is the one the format names.
-	largestFileMinkaTakes = 1 << 30
 	// maxCaptionLength is how long a caption may be to stay on a reference,
 	// in characters.
 	maxCaptionLength = 1000
@@ -172,6 +167,14 @@ func plainName(name string) (string, bool) {
 	}
 	return plain, plain != name
 }
+
+// largestFileMinkaTakes is the ceiling one file meets on the way in, in bytes.
+// Above it the file stays outside there however whole it is here, so a record
+// whose body is nothing but that file arrives empty. An instance may be told
+// another number; this is the one the format names.
+//
+// A variable so that a test can reach what lies above it without a gibibyte.
+var largestFileMinkaTakes int64 = 1 << 30
 
 // attachFiles brings the files a text refers to, in the order of their
 // references, as attachments of whatever carries the text.
@@ -228,8 +231,8 @@ func (e *Extractor) attachFile(ctx context.Context, w *bundle.Writer, ownerKind 
 	}
 	if w.Discards() {
 		// All a dry run knows of a file is the size the source gives it.
-		if file.byteSize == nil || *file.byteSize <= largestFileMinkaTakes {
-			e.filesThatArrive[file.ref] = true
+		if file.byteSize != nil && *file.byteSize > largestFileMinkaTakes {
+			e.filesThatNeverArrive[file.ref] = true
 		}
 		e.fileRecords = append(e.fileRecords, record)
 		return nil
@@ -281,6 +284,7 @@ func (e *Extractor) attachFile(ctx context.Context, w *bundle.Writer, ownerKind 
 		case failed.Kind == NotFound:
 			record.Gone = true
 			e.files.Gone++
+			e.filesThatNeverArrive[file.ref] = true
 			e.fileRecords = append(e.fileRecords, record)
 			return nil
 		default:
@@ -298,22 +302,24 @@ func (e *Extractor) attachFile(ctx context.Context, w *bundle.Writer, ownerKind 
 	}
 
 	e.files.Bytes += stored.Bytes
-	if stored.Bytes <= largestFileMinkaTakes {
-		e.filesThatArrive[file.ref] = true
+	if stored.Bytes > largestFileMinkaTakes {
+		e.filesThatNeverArrive[file.ref] = true
 	}
 	record.Holds(stored)
 	e.fileRecords = append(e.fileRecords, record)
 	return nil
 }
 
-// theFileArrives tells whether the bytes of a file reach Minka: whether the
-// bundle carries them and whether Minka takes a file of that size. Only what
-// arrives is written down, so a file the walk never met, one it could not
-// fetch, one the source no longer has and one too large all answer the same.
+// theFileNeverArrives tells that no run will ever bring the bytes of a file to
+// Minka: the source no longer has it, or it weighs more than a run takes there.
+// A file this run merely could not fetch is not one of them — it leaves no
+// record at all, the run ends non-zero, and the run after it brings the file —
+// and neither is one the walk has not met yet.
+//
 // Only a record whose body is nothing else asks: for every other body a file
 // that stays outside leaves a hole and nothing more.
-func (e *Extractor) theFileArrives(ref string) bool {
-	return e.filesThatArrive[ref]
+func (e *Extractor) theFileNeverArrives(ref string) bool {
+	return e.filesThatNeverArrive[ref]
 }
 
 // sizeDiffers is the failure of a download that ended well and brought

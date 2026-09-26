@@ -602,9 +602,9 @@ point at is in the bundle before it.
   An answer the source names neither somebody nor a usable address for is left
   out and named by ID (`forwards.repliesWithoutASender`), because Minka stops
   the run at one that names neither.
-  Basecamp says nothing of what became of an answer, so one that says `active`
-  or says nothing comes and any other word leaves it out and is counted, see
-  What a bundle cannot carry. The body is the rendered text, and where it would
+  An answer says what became of it as a mail does: one that says `active`, or
+  says nothing, comes, and any other word leaves it out and is counted, see What
+  a bundle cannot carry. The body is the rendered text, and where it would
   reach Minka as nothing it carries a line of the run as a mail's does.
   A mail or an answer whose body is longer than the 1,000,000 characters Minka
   holds is counted (`forwards.longerThanMinkaTakes`) and named in a `notice`,
@@ -782,14 +782,22 @@ provider from another and asks nobody about the address.
   `<iframe>` reaches a body, and such an embed may never end.
 - No output names an address.
 
+The run reads a mention and a reference as something the body says, although
+Minka leaves either as the plain words it was given where it finds no target.
+A run writes words into both, so a body of one of them alone does say something
+there as well.
+
 **A mail whose body would reach Minka as nothing at all carries one line of
 the run** (C-057), written behind the body and counted in
 `forwards.givenALineOfTheRun`, with a `notice`. That happens where the mail says
-nothing, where what it says is a file that will never come — one the source no
-longer has, one above the gibibyte a run of Minka takes, one whose bytes are not
-what the index says — where the body is nothing but an embed, and where the body
+nothing, where what it says is a file that will **never** come — one the source
+no longer has, one above the gibibyte a run of Minka takes — where the body is
+nothing but an embed, and where the body
 holds nothing but what Minka takes off the edges of a text, a NUL among them,
-which Go does not. Minka writes
+which Go does not. A file this run merely could not fetch is none of those: it
+leaves no record at all, the run says so and ends non-zero, and the run after it
+brings the file, so the mail waits with it rather than being told that its file
+is lost — which no later run could take back. Minka writes
 such a body empty and remembers the mail as finished, or passes it over before it
 is remembered and passes it over again on every run afterwards, and either way
 the subject, the sender, the answers and the comments are lost with it; the
