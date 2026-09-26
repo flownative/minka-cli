@@ -417,9 +417,11 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   in `authorization.md` and E-191.
 - Extract the to-dos of a project live: whether `todoset` is the dock entry, the
   fields of a list, a group and a to-do, the two lists of what is open and what is
-  done, the recordings of the archived and the trashed ones, and whether a list on
-  the shelf or in the trash answers for its groups and its to-dos. Then check the
-  bundle record by record, as the boards and the chats were checked.
+  done, the recordings of the archived and the trashed ones, whether a list on
+  the shelf or in the trash answers for its groups and its to-dos, and what a
+  place the account no longer has answers when it is asked for what fell with it.
+  Then check the bundle record by record, as the boards and the chats were
+  checked.
 - Write the bundle of the whole account, once Robert or Shaun has allowed its
   size: a dry run over it goes through and names what it would fetch. What it
   leaves out of the words a bundle has no place for is the one kind of line and

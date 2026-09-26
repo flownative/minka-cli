@@ -264,36 +264,46 @@ func aGroupThatFell(id int64) lostPlace { return lostPlace{record: "group", id: 
 // without a number — no run could say how much of the source a bundle holds. A
 // group of such a list is a place of its own, so the walk grows while it goes.
 func (e *Extractor) countWhatFellWithAPlace(ctx context.Context, bucket int64, lost []lostPlace, strays []todoList, shelvedTodos []todo, met, placed map[int64]bool) error {
-	// A group whose list the bundle does not carry either stands in no place the
-	// walk reaches, so it is a place of its own.
+	// A group of the archived and trashed records of the project falls with its
+	// list where the walk reaches that list, and stands for itself where the walk
+	// never sees it. Every place that is a list is known here, because the walk
+	// itself only ever finds groups.
+	inTheList := map[int64][]todoList{}
+	lists := map[int64]bool{}
+	for _, place := range lost {
+		if place.aList {
+			lists[place.id] = true
+		}
+	}
 	for _, found := range strays {
-		if aSecondTime(met, found.ID) {
+		if lists[found.Parent.ID] {
+			inTheList[found.Parent.ID] = append(inTheList[found.Parent.ID], found)
 			continue
 		}
-		lost = append(lost, aGroupThatFell(found.ID))
+		if !aSecondTime(met, found.ID) {
+			lost = append(lost, aGroupThatFell(found.ID))
+		}
 	}
 
 	for i := 0; i < len(lost); i++ {
 		place := lost[i]
 		fell := TodoPlaceLeftOut{Record: place.record, SourceID: sourceID(place.id)}
-		if place.aList {
-			e.todosLeftOut.Lists++
-		} else {
-			e.todosLeftOut.Groups++
-		}
 
 		if place.aList {
+			e.todosLeftOut.Lists++
 			inIt, err := listedForCounting[todoList](ctx, e.Source, fmt.Sprintf("buckets/%d/todolists/%d/groups.json", bucket, place.id))
 			if err != nil {
 				return err
 			}
-			for _, found := range inIt {
+			for _, found := range append(inIt, inTheList[place.id]...) {
 				if aSecondTime(met, found.ID) {
 					continue
 				}
 				fell.Groups++
 				lost = append(lost, aGroupThatFell(found.ID))
 			}
+		} else {
+			e.todosLeftOut.Groups++
 		}
 
 		for _, path := range todosOfAPlace(bucket, place.id) {
@@ -326,13 +336,14 @@ func (e *Extractor) countWhatFellWithAPlace(ctx context.Context, bucket int64, l
 
 // listedForCounting reads a list of records of a place the bundle does not carry.
 // None of them is written, so a place Basecamp no longer has takes nothing with
-// it: the run counts nothing for it instead of ending over a record it left out
-// anyway.
+// it: the run counts what it read of it instead of ending over records it left
+// out anyway. Not being there is the one failure that is passed over; every
+// other ends the run as it does anywhere.
 func listedForCounting[T any](ctx context.Context, source Source, path string) ([]T, error) {
 	listed, err := getList[T](ctx, source, path)
 	var failed *Error
 	if errors.As(err, &failed) && failed.Kind == NotFound {
-		return nil, nil
+		return listed, nil
 	}
 	return listed, err
 }

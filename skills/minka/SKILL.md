@@ -692,21 +692,20 @@ this:
   says how many: the run exits 0, and a project may come without a creator
   because of it. An identity that may see nothing at all still exits 4.
 - So far a bundle holds the structure, the boards, the message boards, the
-  chats, the check-ins and the to-dos: the people the projects refer to (members and
-  whoever a record names; `data.peopleLeftOut` counts the rest of the
-  account's list, which holds more for an admin than for anybody else, the
-  people written do not differ) with their
-  avatars, the projects with their members, the card tables, chats, message
-  boards, questionnaires and to-do sets that are switched on, of each card table
-  the
-  columns, the cards with the archived and the trashed ones, their steps,
-  comments and boosts, of each message board its messages as posts, the
-  archived and the trashed ones included, with their categories, comments and
-  boosts, of each chat its lines as messages with their boosts, of each
-  questionnaire its questions with their answers, comments and boosts, and of
-  each to-do set its lists with their groups and to-dos.
-  `data.skippedTools` counts what was left out, per kind and whether it was
-  switched on; `data.counts` is what the manifest says.
+  chats, the check-ins and the to-dos: the people the projects refer to
+  (members and whoever a record names; `data.peopleLeftOut` counts the rest of
+  the account's list, which holds more for an admin than for anybody else, the
+  people written do not differ) with their avatars, the projects with their
+  members, the card tables, chats, message boards, questionnaires and to-do
+  sets that are switched on, of each card table the columns, the cards with
+  the archived and the trashed ones, their steps, comments and boosts, of each
+  message board its messages as posts, the archived and the trashed ones
+  included, with their categories, comments and boosts, of each chat its lines
+  as messages with their boosts, of each questionnaire its questions with
+  their answers, comments and boosts, and of each to-do set its lists with
+  their groups and to-dos. `data.skippedTools` counts what was left out, per
+  kind and whether it was switched on; `data.counts` is what the manifest
+  says.
 - A person comes with `retired: true` unless Basecamp calls them a user: a
   bot, somebody who was deleted and an outsider are authors and nothing more,
   whichever identity ran the import.
