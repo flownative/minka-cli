@@ -69,7 +69,11 @@ bundle gives none, a forwarded mail of a status that is none of the three, and
 an answer by mail that says anything but `active`. What stood in a list or a
 group a bundle cannot carry falls
 with it, is asked for to be counted and is named with the place it fell with
-(C-052), so that no run says a bundle holds more of the source than it does.
+(C-052), so that no run says a bundle holds more of the source than it does. A
+to-do that hangs on a To-dos tool itself stands in no list a bundle can name, so
+it is left out, counted and named with its project (C-060), and the to-dos of
+every tool that is switched on are asked for under the tool's own identifier for
+that reason.
 `recordsLeftOut` names each with the kind of record, the word and where it
 stood, so one exotic record does not cost the account. What still ends
 a run is what would be written wrongly: times that are missing or are none, a
@@ -280,6 +284,29 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   be asked for at all, which is what a run does for a list of any status. A to-do
   whose completion is newer than the moment the source says it was touched
   (C-051) is a shape the invented account holds and no real one has shown.
+  Two shapes of the real account were measured all the same, read-only and
+  **without a run of the CLI**, and the extractor rests on that measurement: a
+  to-do whose `parent` says `Todoset` instead of `Todolist`, of which the whole
+  account holds six in use, in three projects and across four to-do sets, none of
+  them archived or trashed, the parent being the tool's own identifier, and which
+  Basecamp hands out at `buckets/{b}/todolists/{todoset}/todos.json` although no
+  `todolists.json` of the tool names that identifier; and `repetition_schedule`,
+  which twelve to-dos of the account carry and the other 3,244 leave out
+  altogether rather than sending an empty one, with the same ten fields every
+  time. How Basecamp answers that path is measured as well: a to-do set that holds
+  no to-do of its own answers 200 with an empty array and no error, one that holds
+  lists with to-dos in them answers the same, and `?completed=true` does too,
+  which is why a failure of that request ends the run where a place the bundle
+  does not carry is passed over when it is gone. The path hands out the to-dos
+  hanging on the tool alone and never those of its lists, so the run's reading of
+  `parent.type` is a second hold on the same thing and not what carries it.
+  An **active** to-do hanging on the to-do set of a tool that is switched off
+  stays invisible, as an active list of such a tool already is: the walk never
+  learns that tool's identifier, so the same gap holds for both. One on the shelf
+  or in the trash is named all the same, because the records of a project name
+  every to-do set of it, switched off or not. Where **every** To-dos tool of a
+  project is switched off, the project is passed over whole and not even those
+  are counted.
 - Of the forwarded mail of `import basecamp`: no extraction has met an inbox
   live, and the shape of the source is measured all the same, read-only and
   without a run. Measured: that a dock entry of an inbox is
@@ -597,6 +624,9 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   done, the recordings of the archived and the trashed ones, whether a list on
   the shelf or in the trash answers for its groups and its to-dos, and what a
   place the account no longer has answers when it is asked for what fell with it.
+  Two shapes were measured at the account and have still never come through a
+  run: how the six to-dos that stand in no list read in `todosWithoutAList`, and
+  the twelve schedules in `todosThatRepeat`.
   Then check the bundle record by record, as the boards and the chats were
   checked.
 - Write the bundle of the whole account, once Robert or Shaun has allowed its

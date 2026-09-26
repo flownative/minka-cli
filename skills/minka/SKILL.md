@@ -875,12 +875,19 @@ this:
   per kind (`lists`, `groups`, `todos`) what the bundle holds none of, whatever
   the reason, and `data.todoPlacesLeftOut` names every list and group that took
   records with it, with how many groups and to-dos fell with it; a `notice` says
-  how many such places there were. Nothing hangs on a group,
+  how many such places there were. A to-do can hang on a to-do set itself and
+  stand in no list of it, which a bundle has no place for: it is left out,
+  `data.todosWithoutAList` names it with its `sourceId` and its project, and a
+  `notice` says so — move it into a list at the source and a later run carries it.
+  Nothing hangs on a group,
   which the format has no word for; a list and a to-do carry comments, boosts and
   the files of their text. A to-do is never said to be older than the tick the
   source put on it, or Minka would never write the tick. Subtasks are not carried:
   `data.todosWithSubtasks` and `data.subtasksLeftOut` count what fell away, and a
-  `notice` says so. Two differences a later run cannot repair, each with a
+  `notice` says so. A to-do that comes again at the source comes as an ordinary
+  one, because Minka has no repeating to-do: the schedule stays behind and
+  `data.todosThatRepeat` counts the ones a bundle carries, with a `notice`. Two differences a later run
+  cannot repair, each with a
   `notice`: it leaves the people of a to-do as they stand in Minka
   (`data.todosWithPeople`) and reopens nothing it once ticked off
   (`data.todosNotDone`).

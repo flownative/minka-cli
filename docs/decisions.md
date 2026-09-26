@@ -901,3 +901,30 @@ number in the report keeps the repair from being a silent one.
 **Implemented as:** `basecamp.anAddressMinkaTakes`,
 `basecamp.minkaTakesTheAddress`, see
 [Importing from Basecamp](stable/import.md).
+
+<a id="c-060"></a>
+## C-060 — A to-do that stands in no list is left out, counted and named
+
+*Applies to: `todos.jsonl`, the to-dos of a To-dos tool, the report of a run*
+
+Basecamp lets a to-do hang on a To-dos tool itself, in no list and no group of
+it. A bundle carries none: such a to-do is left out, counted in
+`todosLeftOut.todos` and named in `todosWithoutAList` with its `sourceId` and
+its project. No list of the tool holds it, so the to-dos of every tool that is
+switched on are asked for under the tool's own identifier, what is open and what
+is done, and a failure of that request ends the run. Two other ways were weighed
+and are not taken: the identifier is **not** written into `listSourceId`, where
+it would make two kinds of record answer to one identifier and Minka resolve the
+reference wrongly or not at all, and **no list is invented**, because a list
+nobody created is a record nobody can explain at the source.
+
+**Why:** [C-050](#c-050) promises that what a bundle cannot carry is counted,
+and this was the shape that slipped through it — the walk goes list by list, so
+a to-do standing in none was never fetched, never written and never counted, and
+one on the shelf raised a number that named nothing. The naming turns the loss
+into a repair: whoever reads the report moves the to-do into a list at the
+source, and the next run carries it with everything that hangs on it. An
+identifier and a project are all it takes, so nothing of what the to-do says is
+in the report.
+**Implemented as:** `basecamp.Extractor.leaveOutTheTodosWithoutAList`, see
+[Importing from Basecamp](stable/import.md).
