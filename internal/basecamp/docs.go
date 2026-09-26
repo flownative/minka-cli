@@ -31,11 +31,12 @@ type DocsCounts struct {
 	// with such an upload.
 	CommentsWithoutTheirUpload int `json:"commentsWithoutTheirUpload"`
 	BoostsWithoutTheirUpload   int `json:"boostsWithoutTheirUpload"`
-	// OnlyAFileNoRunWillBring are the documents and uploads whose whole text is a
-	// file no run will bring, by sourceId. Minka keeps nothing of such a record
-	// and asks for the file again on every run, so it arrives there only once the
-	// source hands the file out again; the record is written all the same, because
-	// the source may do exactly that tomorrow.
+	// OnlyAFileNoRunWillBring are the documents and uploads that stand or fall
+	// with a file no run will bring, by sourceId: a document whose whole text is
+	// such a file, and an upload whose own file is one. Minka keeps nothing of
+	// such a record and asks for the file again on every run, so it arrives there
+	// only once the source hands the file out again; the record is written all
+	// the same, because the source may do exactly that tomorrow.
 	OnlyAFileNoRunWillBring []string `json:"onlyAFileNoRunWillBring"`
 	// LongerThanMinkaTakes counts the documents and the descriptions of uploads
 	// that are longer than Minka holds. Minka passes such a record over on every
@@ -444,7 +445,7 @@ func (e *Extractor) writeDocument(ctx context.Context, w *bundle.Writer, walk *d
 		return err
 	}
 	e.measure(bundle.Documents, body, LongestBodyRecord{Record: "document", SourceID: origin.SourceID, In: "project", InSourceID: walk.projectID})
-	e.countWhatMinkaWillNotTakeOfTheText(body, origin.SourceID)
+	e.countWhatMinkaWillNotTakeOfTheText(body, origin.SourceID, false)
 	e.docs.DocumentsByStatus[found.status()]++
 	return e.writeDiscussion(ctx, w, walk.bucket, bundle.ParentDocument, bundle.TargetDocument, found.ID, found.CommentsCount, found.BoostsCount)
 }
@@ -509,29 +510,33 @@ func (e *Extractor) writeUpload(ctx context.Context, w *bundle.Writer, walk *doc
 		return err
 	}
 	e.measure(bundle.Uploads, description, LongestBodyRecord{Record: "upload", SourceID: origin.SourceID, In: "project", InSourceID: walk.projectID})
-	e.countWhatMinkaWillNotTakeOfTheText(description, origin.SourceID)
+	// An upload whose own file will never come is the same loss as a text that
+	// is nothing but such a file: Minka keeps nothing of it either way.
+	e.countWhatMinkaWillNotTakeOfTheText(description, origin.SourceID, e.theFileNeverArrives(file.ref))
 	e.docs.UploadsByStatus[found.status()]++
 	return e.writeDiscussion(ctx, w, walk.bucket, bundle.ParentUpload, bundle.TargetUpload, found.ID, found.CommentsCount, found.BoostsCount)
 }
 
-// countWhatMinkaWillNotTakeOfTheText notes what Minka will do with a text of a
-// document or an upload that it cannot take as it stands.
+// countWhatMinkaWillNotTakeOfTheText notes what Minka will do with a document or
+// an upload it cannot take as it stands.
 //
 // A text longer than Minka holds is passed over there on every run, with
 // everything hanging on it, and it comes as it is: the source has no such limit,
 // and a run that shortened it would decide in the one place nobody can repeat.
 //
-// A text that is nothing but a file no run will ever bring is a record Minka
+// A record that stands or falls with a file no run will ever bring is one Minka
 // keeps nothing of: it asks for the file again on every run, which is what
 // rescues such a record where the file comes back and what loses it where the
-// file is gone for good. The record is written all the same, because the source
-// may hand the file out again; the run says which ones they are.
-func (e *Extractor) countWhatMinkaWillNotTakeOfTheText(text, sourceID string) {
+// file is gone for good. That is a text which is nothing but such a file, and
+// the file an upload itself stands for. The record is written all the same,
+// because the source may hand the file out again; the run says which ones they
+// are.
+func (e *Extractor) countWhatMinkaWillNotTakeOfTheText(text, sourceID string, itsFileNeverComes bool) {
 	if longerThanMinkaTakes(text) {
 		e.docs.LongerThanMinkaTakes++
 	}
 	filesThatStayOut, embedded, empty := e.whatWouldArriveOf(text)
-	if empty && filesThatStayOut > 0 && len(embedded) == 0 {
+	if itsFileNeverComes || (empty && filesThatStayOut > 0 && len(embedded) == 0) {
 		e.docs.OnlyAFileNoRunWillBring = append(e.docs.OnlyAFileNoRunWillBring, sourceID)
 	}
 }

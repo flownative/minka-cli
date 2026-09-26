@@ -941,10 +941,12 @@ this:
   comments and its boosts (`data.docs.commentsWithoutTheirUpload`,
   `boostsWithoutTheirUpload`), because no run will ever have bytes for it. A
   document or a description longer than the 1,000,000 characters Minka holds is
-  counted (`data.docs.longerThanMinkaTakes`) and comes as it is, and one whose
-  whole text is a file no run will bring is named
-  (`data.docs.onlyAFileNoRunWillBring`): Minka keeps nothing of such a record
-  and asks for the file again on every run. `data.docs.leftOut` counts per kind
+  counted (`data.docs.longerThanMinkaTakes`) and comes as it is. A record that
+  stands or falls with a file no run will bring — a document whose whole text is
+  such a file, an upload whose own file is one — is written all the same and
+  named (`data.docs.onlyAFileNoRunWillBring`): Minka keeps nothing of it and
+  asks for the file again on every run. A file this run merely could not fetch
+  is not that: the record waits for it, and the next run brings both. `data.docs.leftOut` counts per kind
   what the bundle holds none of, and `data.docs.placesLeftOut` names every
   folder and every tool that took entries with it. No output ever names a file,
   a folder or a document.

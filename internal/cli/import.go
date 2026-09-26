@@ -280,10 +280,12 @@ file the source shows now comes; earlier copies of it stay at the source. An
 upload Basecamp names no stored file for, one that lives in a cloud, is left out
 and named by ID with its comments and its boosts
 (docs.withoutAStoredFile): a comment pointing at an upload the bundle does not
-carry would stop the applier. A document or an upload whose whole text is a file
-no run will bring is written all the same and named
+carry would stop the applier. A record that stands or falls with a file no run
+will bring — a document whose whole text is such a file, an upload whose own
+file is one — is written all the same and named
 (docs.onlyAFileNoRunWillBring), because Minka keeps nothing of such a record and
-asks for the file again on every run. A document, or the description of an
+asks for the file again on every run; a file this run merely could not fetch is
+not that, and the record waits for it. A document, or the description of an
 upload, longer than the 1,000,000 characters Minka holds is counted
 (docs.longerThanMinkaTakes) and comes as it is, as a mail does. A folder takes
 neither comments nor boosts, here as in Basecamp, so neither is asked for.
@@ -635,8 +637,8 @@ it has been applied.`,
 			}
 			if count := len(report.Docs.OnlyAFileNoRunWillBring); count > 0 {
 				notices = append(notices, plural(count,
-					"document or upload of a Docs & Files tool says nothing but a file no run will bring, so Minka keeps nothing of it and asks for the file again on every run; data.docs.onlyAFileNoRunWillBring names it by ID, and it arrives there only once the source hands the file out again",
-					"documents or uploads of Docs & Files tools say nothing but a file no run will bring, so Minka keeps nothing of them and asks for the files again on every run; data.docs.onlyAFileNoRunWillBring names them by ID, and they arrive there only once the source hands the files out again"))
+					"document or upload of a Docs & Files tool stands or falls with a file no run will bring, so Minka keeps nothing of it and asks for the file again on every run; data.docs.onlyAFileNoRunWillBring names it by ID, and it arrives there only once the source hands the file out again",
+					"documents or uploads of Docs & Files tools stand or fall with a file no run will bring, so Minka keeps nothing of them and asks for the files again on every run; data.docs.onlyAFileNoRunWillBring names them by ID, and they arrive there only once the source hands the files out again"))
 			}
 			if count := report.Docs.LongerThanMinkaTakes; count > 0 {
 				notices = append(notices, plural(count,
@@ -939,7 +941,7 @@ func renderDocs(w io.Writer, report importReport) {
 			docs.CommentsWithoutTheirUpload, docs.BoostsWithoutTheirUpload)
 	}
 	if len(docs.OnlyAFileNoRunWillBring) > 0 {
-		fmt.Fprintf(w, "Documents and uploads whose text is nothing but a file no run will bring: %d (record %s)\n",
+		fmt.Fprintf(w, "Documents and uploads that stand or fall with a file no run will bring: %d (record %s)\n",
 			len(docs.OnlyAFileNoRunWillBring), strings.Join(docs.OnlyAFileNoRunWillBring, ", "))
 	}
 	if docs.LongerThanMinkaTakes > 0 {

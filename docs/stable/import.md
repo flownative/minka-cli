@@ -745,12 +745,14 @@ and Minka applies the kinds in an order of its own.
   holds** is counted (`docs.longerThanMinkaTakes`) and comes as it is, as a mail
   does: Minka passes such a record over on every run with everything hanging on
   it, and a run that shortened it would decide in the one place nobody can
-  repeat. A document or an upload whose whole text is **a file no run will ever
-  bring** is written all the same and named by its `sourceId`
-  (`docs.onlyAFileNoRunWillBring`): Minka keeps nothing of such a record and
+  repeat. A record that **stands or falls with a file no run will ever bring**
+  is written all the same and named by its `sourceId`
+  (`docs.onlyAFileNoRunWillBring`) — a document whose whole text is such a file,
+  and an upload whose own file is one: Minka keeps nothing of such a record and
   asks for the file again on every run, which is what rescues it where the
   source hands the file out again and what loses it where the file is gone for
-  good. It gets no line of the run's own as a mail does (C-057), because such a
+  good. A file this run merely could not fetch is not one that will never come:
+  the record waits for it, and the run after this one brings both. It gets no line of the run's own as a mail does (C-057), because such a
   record is not remembered as finished and the run after the one that finds the
   file writes it whole.
 - **Comments** are those of cards, of posts, of answers, of to-do lists, of
