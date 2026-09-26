@@ -20,6 +20,9 @@ const (
 	Posts       Kind = "posts"
 	Questions   Kind = "questions"
 	Answers     Kind = "answers"
+	TodoLists   Kind = "todolists"
+	TodoGroups  Kind = "todogroups"
+	Todos       Kind = "todos"
 	Messages    Kind = "messages"
 	Comments    Kind = "comments"
 	Reactions   Kind = "reactions"
@@ -28,20 +31,23 @@ const (
 
 // Kinds lists every kind in the order of the format, which is the order a
 // report shows them in.
-var Kinds = []Kind{People, Projects, Tools, Categories, Columns, Cards, Steps, Posts, Questions, Answers, Messages, Comments, Reactions, Attachments}
+var Kinds = []Kind{People, Projects, Tools, Categories, Columns, Cards, Steps, Posts, Questions, Answers, TodoLists, TodoGroups, Todos, Messages, Comments, Reactions, Attachments}
 
 const (
 	ToolBoard    = "board"
 	ToolChat     = "chat"
 	ToolPosts    = "posts"
 	ToolCheckins = "checkins"
+	ToolTodos    = "todos"
 
-	OwnerAnswer  = "answer"
-	OwnerCard    = "card"
-	OwnerComment = "comment"
-	OwnerMessage = "message"
-	OwnerPerson  = "person"
-	OwnerPost    = "post"
+	OwnerAnswer   = "answer"
+	OwnerCard     = "card"
+	OwnerComment  = "comment"
+	OwnerMessage  = "message"
+	OwnerPerson   = "person"
+	OwnerPost     = "post"
+	OwnerTodo     = "todo"
+	OwnerTodoList = "todolist"
 
 	RoleTriage = "triage"
 	RoleWork   = "work"
@@ -52,15 +58,19 @@ const (
 	StatusArchived = "archived"
 	StatusTrashed  = "trashed"
 
-	ParentAnswer = "answer"
-	ParentCard   = "card"
-	ParentPost   = "post"
+	ParentAnswer   = "answer"
+	ParentCard     = "card"
+	ParentPost     = "post"
+	ParentTodo     = "todo"
+	ParentTodoList = "todolist"
 
-	TargetAnswer  = "answer"
-	TargetCard    = "card"
-	TargetComment = "comment"
-	TargetMessage = "message"
-	TargetPost    = "post"
+	TargetAnswer   = "answer"
+	TargetCard     = "card"
+	TargetComment  = "comment"
+	TargetMessage  = "message"
+	TargetPost     = "post"
+	TargetTodo     = "todo"
+	TargetTodoList = "todolist"
 
 	// The four rhythms a question can be asked in. Daily means on each of the
 	// chosen weekdays.
@@ -199,6 +209,58 @@ type Answer struct {
 	QuestionSourceID string `json:"questionSourceId"`
 	GroupOn          string `json:"groupOn"`
 	Body             string `json:"body"`
+}
+
+// TodoList is a list of a To-dos tool. Minka puts every new list on top of its
+// tool, so the lists of a tool stand in the file from the bottom up: the last
+// line of a tool is the list on top. Status is active, archived or trashed.
+type TodoList struct {
+	Record
+	ProjectSourceID string  `json:"projectSourceId"`
+	ToolSourceID    string  `json:"toolSourceId"`
+	Title           string  `json:"title"`
+	Description     *string `json:"description"`
+	Status          string  `json:"status"`
+}
+
+// TodoGroup is a named heading inside a list. A group goes to the end of its
+// list, so the order of the file is the order of the list. Status is active or
+// trashed: the shelf is the list's.
+//
+// Nothing hangs on a group: it carries no comment, no reaction and no file, and
+// the format has no word for either of one.
+type TodoGroup struct {
+	Record
+	ProjectSourceID string `json:"projectSourceId"`
+	ToolSourceID    string `json:"toolSourceId"`
+	ListSourceID    string `json:"listSourceId"`
+	Title           string `json:"title"`
+	Status          string `json:"status"`
+}
+
+// Todo is a to-do of a list, standing directly in it or in one of its groups.
+// It goes to the end of its list or its group, so the order of the file is the
+// order of the list. GroupSourceID names a group of the same list and is nil
+// for a to-do that stands in the list itself.
+//
+// StartsOn lies before DueOn, and one day alone is the day the to-do is due.
+// NotifyWhenDone are the people the source tells when it is done. Status is
+// active or trashed, as a group's is.
+type Todo struct {
+	Record
+	ProjectSourceID string   `json:"projectSourceId"`
+	ToolSourceID    string   `json:"toolSourceId"`
+	ListSourceID    string   `json:"listSourceId"`
+	GroupSourceID   *string  `json:"groupSourceId"`
+	Title           string   `json:"title"`
+	Notes           *string  `json:"notes"`
+	StartsOn        *string  `json:"startsOn"`
+	DueOn           *string  `json:"dueOn"`
+	Assignees       []string `json:"assignees"`
+	NotifyWhenDone  []string `json:"notifyWhenDone"`
+	CompletedAt     *string  `json:"completedAt"`
+	CompletedBy     *string  `json:"completedBy"`
+	Status          string   `json:"status"`
 }
 
 // Message is one line of a chat.

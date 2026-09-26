@@ -359,3 +359,44 @@ func TestTheShapeOfAnAddressIsCheckedPlainly(t *testing.T) {
 		}
 	}
 }
+
+// goneAfterAPage answers one page and then says the list is not there, as a place
+// does that Basecamp loses between two requests.
+type goneAfterAPage struct {
+	kind     Kind
+	answered int
+}
+
+func (g *goneAfterAPage) Get(_ context.Context, _ string) ([]byte, error) {
+	g.answered++
+	if g.answered > 1 {
+		return nil, &Error{Kind: g.kind, Message: "Basecamp says no"}
+	}
+	return []byte(`[{"id":1},{"id":2}]`), nil
+}
+
+// A list that is counted and not written keeps the pages that did arrive: a place
+// Basecamp loses halfway would otherwise take the records it had already shown
+// with it, and the number of what fell would be quietly too low.
+func TestCountingKeepsWhatCameBeforeAPlaceWasGone(t *testing.T) {
+	source := &goneAfterAPage{kind: NotFound}
+	counted, err := listedForCounting[person](t.Context(), source, "buckets/1/todolists/2/todos.json")
+	if err != nil {
+		t.Fatalf("a place that is not there ended the counting: %v", err)
+	}
+	if len(counted) != 2 {
+		t.Errorf("counted %d records, want the two that arrived before the place was gone", len(counted))
+	}
+
+	// Every other failure is what it is anywhere, and hands back what it read all
+	// the same.
+	source = &goneAfterAPage{kind: Forbidden}
+	counted, err = listedForCounting[person](t.Context(), source, "buckets/1/todolists/2/todos.json")
+	var failed *Error
+	if !errors.As(err, &failed) || failed.Kind != Forbidden {
+		t.Errorf("a refusal came back as %v, want forbidden", err)
+	}
+	if len(counted) != 2 {
+		t.Errorf("counted %d records of a refusal, want the two that arrived", len(counted))
+	}
+}

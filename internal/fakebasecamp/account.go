@@ -71,6 +71,9 @@ type Tool struct {
 	// Questions are the questions of a questionnaire, in the order the account
 	// lists them.
 	Questions []Question
+	// TodoLists are the lists of a To-dos tool, in the order the account shows
+	// them.
+	TodoLists []TodoList
 }
 
 // Account is the fake. It is a basecamp.Source, a basecamp.AvatarFetcher and
@@ -141,7 +144,8 @@ func (a *Account) UsersOnly() {
 // the list an admin sees. Of the users, one is somebody the first two projects have
 // nothing to do with. Those two have a dock that holds every case: several
 // tools of a kind, tools Minka has nothing for, tools that are switched off,
-// and a tool whose creator has left; their one board is empty. The third
+// and a tool whose creator has left; their one board and their one To-dos tool
+// are empty. The third
 // project holds the boards, the fourth the message boards and the chats, the
 // fifth the files.
 func New() *Account {
@@ -183,11 +187,11 @@ func New() *Account {
 					tool(9002, "message_board", "message_boards", "Announcements", true, 2, &ada),
 					bugs,
 					tool(9004, "chat", "chats", "Second chat", true, 4, &grace),
-					tool(9005, "todoset", "todosets", "To-dos", true, 5, &ada),
+					tool(9005, "todoset", "todosets", "Old to-dos", false, 0, &ada),
 					tool(9006, "schedule", "schedules", "Schedule", false, 0, &ada),
 					tool(9007, "kanban_board", "card_tables", "Old board", false, 0, &ada),
 					tool(9008, "vault", "vaults", "Docs", true, 6, &ada),
-					tool(9009, "todoset", "todosets", "More to-dos", true, 7, &ada),
+					tool(9009, "todoset", "todosets", "To-dos", true, 7, &ada),
 				},
 			},
 			{
@@ -201,6 +205,7 @@ func New() *Account {
 			fileProject(ada, grace, tool),
 			referenceProject(ada, grace, tool),
 			checkinProject(ada, grace, linus, edsger, niklaus, deleted, tool),
+			todoProject(ada, grace, edsger, former, tool),
 		},
 		SubtasksURL:  map[int64]string{},
 		Fail:         map[string]error{},
@@ -318,6 +323,9 @@ func (a *Account) Get(_ context.Context, path string) ([]byte, error) {
 			return answer, nil
 		}
 		if answer, known := a.checkins(path, page); known {
+			return answer, nil
+		}
+		if answer, known := a.todos(path, page); known {
 			return answer, nil
 		}
 	}

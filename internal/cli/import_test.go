@@ -101,18 +101,24 @@ func TestImportBasecampWritesABundleAndReportsWhatItHolds(t *testing.T) {
 
 	want := map[string]any{
 		"source": "basecamp", "sourceInstance": "4242", "dryRun": false, "bundle": out,
-		"counts":  map[string]any{"people": float64(5), "projects": float64(2), "tools": float64(5), "columns": float64(3), "attachments": float64(4)},
+		"counts":  map[string]any{"people": float64(5), "projects": float64(2), "tools": float64(6), "columns": float64(3), "attachments": float64(4)},
 		"avatars": map[string]any{"count": float64(4), "initialsDistinguishable": false},
 		"skippedTools": []any{
 			map[string]any{"kind": "kanban_board", "enabled": false, "count": float64(1)},
 			map[string]any{"kind": "schedule", "enabled": false, "count": float64(1)},
-			map[string]any{"kind": "todoset", "enabled": true, "count": float64(2)},
+			map[string]any{"kind": "todoset", "enabled": false, "count": float64(1)},
 			map[string]any{"kind": "vault", "enabled": true, "count": float64(1)},
 		},
 		"missingFiles": []any{}, "invalidAddresses": []any{}, "peopleLeftOut": float64(3),
 		"creatorProbesRefused": float64(0),
 		"cardsByStatus":        map[string]any{"active": float64(0), "archived": float64(0), "trashed": float64(0)},
 		"cardsOnHold":          float64(0), "cardsLeftOut": float64(0), "commentsTrashed": float64(0),
+		"todoListsByStatus": map[string]any{"active": float64(0), "archived": float64(0), "trashed": float64(0)},
+		"todosByStatus":     map[string]any{"active": float64(0), "trashed": float64(0)},
+		"todosNotDone":      float64(0), "todosWithPeople": float64(0),
+		"todosWithSubtasks": float64(0), "subtasksLeftOut": float64(0),
+		"todosLeftOut":       map[string]any{"lists": float64(0), "groups": float64(0), "todos": float64(0)},
+		"todoPlacesLeftOut":  []any{},
 		"mentionsUnresolved": float64(0), "filesInBodies": float64(0), "filesDropped": float64(0), "linkPreviews": float64(0), "picturesLinked": float64(0), "embeds": float64(0), "embedsLeftOut": float64(0),
 		"filesExpected": float64(0), "filesBytesExpected": float64(0), "filesBytes": float64(0), "filesFetched": float64(0), "filesReused": float64(0),
 		"filesGone": float64(0), "fileNamesChanged": float64(0), "captionsDropped": float64(0), "filesOfSeveralOwners": float64(0),
@@ -123,7 +129,8 @@ func TestImportBasecampWritesABundleAndReportsWhatItHolds(t *testing.T) {
 		"questionsLeftOut": []any{}, "anchorsInferred": []any{}, "nobodyAsked": []any{},
 		"askedLeftOut":        map[string]any{"notInTheProject": float64(0), "retired": float64(0), "withoutAnAddress": float64(0)},
 		"answersWithoutABody": float64(0), "answersWithoutADay": float64(0), "answersTrashed": float64(0),
-		"longestBody":        map[string]any{"cards": float64(0), "comments": float64(0), "posts": float64(0), "messages": float64(0), "answers": float64(0)},
+		"longestBody": map[string]any{"cards": float64(0), "comments": float64(0), "posts": float64(0), "messages": float64(0), "answers": float64(0),
+			"todolists": float64(0), "todos": float64(0)},
 		"longestBodyRecords": map[string]any{},
 		"references":         map[string]any{"cards": float64(0), "posts": float64(0), "tools": float64(0)},
 		"requestsRetried":    float64(0),
@@ -131,7 +138,7 @@ func TestImportBasecampWritesABundleAndReportsWhatItHolds(t *testing.T) {
 	if got := decode(t, env.Data); !reflect.DeepEqual(got, want) {
 		t.Errorf("data:\n got %v\nwant %v", got, want)
 	}
-	if !env.OK || !strings.Contains(env.Summary, "5 people, 2 projects, 5 tools, 0 cards, 0 posts, 0 messages") {
+	if !env.OK || !strings.Contains(env.Summary, "5 people, 2 projects, 6 tools, 0 cards, 0 posts, 0 messages") {
 		t.Errorf("ok %v, summary %q", env.OK, env.Summary)
 	}
 
@@ -158,7 +165,7 @@ func TestImportBasecampAsTextAndAsBareData(t *testing.T) {
 	for _, want := range []string{
 		"Bundle: " + out, "Source: basecamp 4242", "people       5", "attachments  4",
 		"Avatars: 4, initials not distinguishable",
-		"todoset          not part of Minka  2", "kanban_board     switched off       1",
+		"todoset          switched off       1", "kanban_board     switched off       1",
 	} {
 		if !strings.Contains(r.stdout, want) {
 			t.Errorf("the text lacks %q:\n%s", want, r.stdout)
@@ -185,7 +192,7 @@ func TestADryRunWalksBasecampAndWritesNothing(t *testing.T) {
 	expectCode(t, r, ExitOK)
 
 	data := decode(t, env.Data)
-	wantCounts := map[string]any{"people": float64(5), "projects": float64(1), "tools": float64(4), "columns": float64(3), "attachments": float64(4)}
+	wantCounts := map[string]any{"people": float64(5), "projects": float64(1), "tools": float64(5), "columns": float64(3), "attachments": float64(4)}
 	if !reflect.DeepEqual(data["counts"], wantCounts) {
 		t.Errorf("counts %v, want %v", data["counts"], wantCounts)
 	}
@@ -277,7 +284,7 @@ func TestARunWithFilesMissingWritesTheBundleAndSaysSoInEveryMode(t *testing.T) {
 	if !reflect.DeepEqual(data["missingFiles"], wantMissing) {
 		t.Errorf("missingFiles %v, want %v", data["missingFiles"], wantMissing)
 	}
-	wantCounts := map[string]any{"people": float64(5), "projects": float64(1), "tools": float64(4), "columns": float64(3), "attachments": float64(3)}
+	wantCounts := map[string]any{"people": float64(5), "projects": float64(1), "tools": float64(5), "columns": float64(3), "attachments": float64(3)}
 	if !reflect.DeepEqual(data["counts"], wantCounts) || data["bundle"] != out {
 		t.Errorf("counts %v, bundle %v", data["counts"], data["bundle"])
 	}
@@ -995,7 +1002,8 @@ func TestImportBasecampReportsThePostsAndTheChatsOfAProject(t *testing.T) {
 		"uploadLinesLeftOut": float64(1), "messagesWithEmptyBody": float64(1), "picturesLinked": float64(1),
 		"recordsLeftOut": []any{map[string]any{"record": "line", "field": "type", "value": fakebasecamp.UnknownLine,
 			"in": "chat", "inSourceId": "9033", "leftOut": float64(2)}},
-		"longestBody": map[string]any{"cards": float64(0), "comments": float64(94), "posts": float64(212), "messages": float64(213), "answers": float64(0)},
+		"longestBody": map[string]any{"cards": float64(0), "comments": float64(94), "posts": float64(212), "messages": float64(213), "answers": float64(0),
+			"todolists": float64(0), "todos": float64(0)},
 		"longestBodyRecords": map[string]any{
 			"comments": map[string]any{"record": "comment", "sourceId": "9752", "in": "project", "inSourceId": "7004", "characters": float64(94)},
 			"posts":    map[string]any{"record": "post", "sourceId": "9701", "in": "project", "inSourceId": "7004", "characters": float64(212)},
@@ -1588,7 +1596,8 @@ func TestImportBasecampReportsTheCheckinsOfAProject(t *testing.T) {
 		"askedLeftOut": map[string]any{
 			"notInTheProject": float64(1), "retired": float64(1), "withoutAnAddress": float64(1)},
 		"answersWithoutABody": float64(1), "answersWithoutADay": float64(0), "answersTrashed": float64(0),
-		"longestBody": map[string]any{"cards": float64(0), "comments": float64(17), "posts": float64(0), "messages": float64(0), "answers": float64(150)},
+		"longestBody": map[string]any{"cards": float64(0), "comments": float64(17), "posts": float64(0), "messages": float64(0), "answers": float64(150),
+			"todolists": float64(0), "todos": float64(0)},
 		"longestBodyRecords": map[string]any{
 			"comments": map[string]any{"record": "comment", "sourceId": "9350", "in": "project", "inSourceId": "7007", "characters": float64(17)},
 			"answers":  map[string]any{"record": "answer", "sourceId": "9320", "in": "project", "inSourceId": "7007", "characters": float64(150)},
@@ -1687,5 +1696,71 @@ func TestAQuestionThatComesAskingNobodyIsNamed(t *testing.T) {
 	expectCode(t, styled, ExitOK)
 	if !strings.Contains(styled.stdout, "Questions that come asking nobody at all: 1 — 9311 (1 left out)") {
 		t.Errorf("the text lacks the question:\n%s", styled.stdout)
+	}
+}
+
+func TestImportBasecampReportsTheToDosOfAProject(t *testing.T) {
+	e := newImportEnv(t)
+	out := filepath.Join(t.TempDir(), "bundle")
+
+	env, r := e.runJSON("import", "basecamp", "--project", "7008", "--out", out)
+	expectCode(t, r, ExitOK)
+	data := decode(t, env.Data)
+	want := map[string]any{
+		"todoListsByStatus": map[string]any{"active": float64(3), "archived": float64(1), "trashed": float64(1)},
+		"todosByStatus":     map[string]any{"active": float64(7), "trashed": float64(1)},
+		"todosLeftOut":      map[string]any{"lists": float64(1), "groups": float64(2), "todos": float64(2)},
+		"todoPlacesLeftOut": []any{
+			map[string]any{"record": "to-do list", "sourceId": "9406", "groups": float64(1), "todos": float64(1)},
+			map[string]any{"record": "group", "sourceId": "9414", "groups": float64(0), "todos": float64(1)},
+		},
+		"todosNotDone": float64(6), "todosWithPeople": float64(2),
+		"todosWithSubtasks": float64(1), "subtasksLeftOut": float64(2),
+		"recordsLeftOut": []any{map[string]any{"record": "group", "field": "status", "value": "archived",
+			"in": "project", "inSourceId": "7008", "leftOut": float64(1)}},
+	}
+	for key, value := range want {
+		if !reflect.DeepEqual(data[key], value) {
+			t.Errorf("%s: got %v, want %v", key, data[key], value)
+		}
+	}
+	for _, notice := range []string{
+		"2 subtasks of to-dos are left out",
+		"2 to-dos name somebody as an assignee or as somebody to tell when they are done",
+		"6 to-dos are open at the source, and a later run reopens nothing",
+		"2 lists or groups of To-dos tools are left out with what stood in them",
+		"1 record is left out, because the source describes it with a word a bundle has none for",
+	} {
+		if !strings.Contains(env.Notice, notice) {
+			t.Errorf("notice %q does not say %q", env.Notice, notice)
+		}
+	}
+
+	// A run that met no To-dos tool says nothing of them at all, as one that met
+	// no questionnaire says nothing of check-ins.
+	r = e.run("import", "basecamp", "--project", "7003", "--out", filepath.Join(t.TempDir(), "boards"), "--styled")
+	expectCode(t, r, ExitOK)
+	for _, quiet := range []string{"To-do lists:", "To-dos:", "To-dos that had subtasks", "Left out of the To-dos tools"} {
+		if strings.Contains(r.stdout, quiet) {
+			t.Errorf("a run over a project without a To-dos tool says %q:\n%s", quiet, r.stdout)
+		}
+	}
+
+	r = e.run("import", "basecamp", "--project", "7008", "--out", out, "--styled")
+	expectCode(t, r, ExitOK)
+	for _, want := range []string{
+		"todolists    5", "todogroups   4", "todos        8",
+		"To-do lists: 3 active, 1 archived, 1 trashed",
+		"To-dos: 7 active, 1 trashed; 6 of them still open, 2 carrying people",
+		"To-dos that had subtasks: 1, with 2 subtasks a bundle has no word for",
+		"Left out of the To-dos tools: 1 lists, 2 groups, 2 to-dos",
+		"  with to-do list 9406 fell: 1 groups, 1 to-dos",
+		"  with group 9414 fell: 0 groups, 1 to-dos",
+		"to-do list 9401     in project 7008: 159",
+		"to-do    9421     in project 7008: 151",
+	} {
+		if !strings.Contains(r.stdout, want) {
+			t.Errorf("the text lacks %q:\n%s", want, r.stdout)
+		}
 	}
 }

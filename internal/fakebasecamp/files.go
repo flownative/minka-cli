@@ -148,6 +148,14 @@ func (a *Account) storedFile(key string) (storedFile, bool) {
 				}
 			}
 		}
+		a.eachTodoListAndGroup(&a.Projects[p], func(list *TodoList) {
+			listed(list.Files)
+			commented(list.Comments)
+		})
+		a.eachTodo(&a.Projects[p], func(one *Todo) {
+			listed(one.Files)
+			commented(one.Comments)
+		})
 	}
 	if found == nil {
 		return storedFile{}, false

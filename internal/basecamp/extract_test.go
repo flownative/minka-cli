@@ -182,6 +182,7 @@ func TestOfADockTheToolsMinkaKnowsComeOverAndTheRestIsCounted(t *testing.T) {
 		{"9002", "7001", "posts", "Announcements", "101"},
 		{"9003", "7001", "board", "Bugs", "99"},
 		{"9004", "7001", "chat", "Second chat", "102"},
+		{"9009", "7001", "todos", "To-dos", "101"},
 		{"9010", "7002", "chat", "Campfire", ""},
 	}
 	if !slices.Equal(got, want) {
@@ -196,7 +197,7 @@ func TestOfADockTheToolsMinkaKnowsComeOverAndTheRestIsCounted(t *testing.T) {
 	skipped := []basecamp.SkippedTools{
 		{Kind: "kanban_board", Enabled: false, Count: 1},
 		{Kind: "schedule", Enabled: false, Count: 1},
-		{Kind: "todoset", Enabled: true, Count: 2},
+		{Kind: "todoset", Enabled: false, Count: 1},
 		{Kind: "vault", Enabled: true, Count: 1},
 	}
 	if !slices.Equal(result.Skipped, skipped) {
@@ -291,7 +292,7 @@ func TestADiscardedRunWalksTheSameWayAndDownloadsNoAvatar(t *testing.T) {
 	if len(dry.AvatarRequests) != 0 {
 		t.Errorf("a dry run downloaded %v", dry.AvatarRequests)
 	}
-	want := map[bundle.Kind]int{bundle.People: 5, bundle.Projects: 1, bundle.Tools: 4, bundle.Columns: 3, bundle.Attachments: 4}
+	want := map[bundle.Kind]int{bundle.People: 5, bundle.Projects: 1, bundle.Tools: 5, bundle.Columns: 3, bundle.Attachments: 4}
 	if got := writer.Counts(); !reflect.DeepEqual(got, want) {
 		t.Errorf("counts %v, want %v", got, want)
 	}
