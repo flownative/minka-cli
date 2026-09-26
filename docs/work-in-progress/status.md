@@ -303,12 +303,12 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   off — about 4% of the mail of the projects swept — and two have a local
   part over 64 bytes and stay out whatever is done. So a mail left out for its
   sender is no invented case but one the first real run will meet, and writing
-  such a sender would have ended the applier after hours of walking. Measured in
-  the other direction as well: of 8,301 addresses a run would write, `filter_var`
-  refuses none, which is the direction that decides whether a run stops; the only
-  over-strictness the account holds is a bracketed literal address of a machine
-  and a top label of one letter, neither of them anybody's mail, and of the two
-  only the bracketed one is still left out.
+  such a sender would have ended the applier after hours of walking. The same
+  sweep says what the account holds in the other direction, which is what it is
+  worth here — that the rule takes nothing Minka refuses is held above, over a
+  corpus built for it: the only over-strictness the account holds is a bracketed
+  literal address of a machine and a top label of one letter, neither of them
+  anybody's mail, and of the two only the bracketed one is still left out.
   What the run does with all that rests on the invented account, with three
   things held against Minka's own reading rather than against a
   test here: every address and every title the run would write was put through
