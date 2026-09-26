@@ -7,14 +7,15 @@ import "fmt"
 // identifier.
 var northwind = Company{ID: 9281, Name: "Northwind Example"}
 
-// nameless is a company whose name is no name. No bundle carries one, because
-// Minka would end its run over it.
-var nameless = Company{ID: 9282, Name: "  "}
+// southwind is the company of a second client: two clients of one project belong
+// to companies of their own.
+var southwind = Company{ID: 9282, Name: "Southwind Example"}
 
 // clientPeople are the people the client project works with: a client of a
 // company, somebody of the kind Basecamp had for a client before the flag, a
-// client whose company the source does not name, and one whose company has no
-// name.
+// client whose company the source does not name, and a client of a second
+// company. A company a bundle cannot carry ends a run, so a test that wants one
+// puts it on one of them.
 func clientPeople() (iris, otto, nora, cora Person) {
 	iris = Person{ID: 106, Name: "Iris Outside", Email: "iris@northwind.test", Client: true, Company: &northwind,
 		CreatedAt: "2021-01-01T08:00:00.000Z", UpdatedAt: "2024-06-01T08:00:00.000Z"}
@@ -22,7 +23,7 @@ func clientPeople() (iris, otto, nora, cora Person) {
 		CreatedAt: "2021-02-01T08:00:00.000Z", UpdatedAt: "2024-06-02T08:00:00.000Z"}
 	nora = Person{ID: 108, Name: "Nora Nowhere", Email: "nora@example.test", Client: true,
 		CreatedAt: "2021-03-01T08:00:00.000Z", UpdatedAt: "2024-06-03T08:00:00.000Z"}
-	cora = Person{ID: 109, Name: "Cora Unnamed", Email: "cora@example.test", Client: true, Company: &nameless,
+	cora = Person{ID: 109, Name: "Cora Southward", Email: "cora@example.test", Client: true, Company: &southwind,
 		CreatedAt: "2021-04-01T08:00:00.000Z", UpdatedAt: "2024-06-04T08:00:00.000Z"}
 	return iris, otto, nora, cora
 }
@@ -31,11 +32,12 @@ func clientPeople() (iris, otto, nora, cora Person) {
 // the source says about what they see: two tools of one kind whose word differs,
 // a tool shown to clients holding a post and a list that are kept from them, a
 // tool kept from them holding a post and a question that are shown, and a group
-// and a to-do whose word falls to what they hang on. Its Docs & Files and
-// Forwards are the tools a run does not extract, whose word no bundle carries.
+// and a to-do whose word falls to what they hang on. Its Docs & Files and its two
+// Forwards are the tools a run does not extract, one of them switched off; a
+// client is among the people its question is asked of.
 //
-// Its members are an employee and the four kinds of client, so that a run says
-// how many memberships Minka will leave out.
+// Its members are an employee and four clients, so that a run says how many
+// memberships Minka will leave out.
 func clientProject(ada, iris, otto, nora, cora Person, tool func(int64, string, string, string, bool, int, *Person) Tool) Project {
 	at := func(day, hour int) string { return fmt.Sprintf("2025-09-%02dT%02d:00:00.000Z", day, hour) }
 	made := tool
@@ -88,7 +90,7 @@ func clientProject(ada, iris, otto, nora, cora Person, tool func(int64, string, 
 	checkins.Questions = []Question{
 		{ID: 9271, Title: "How is the handover?", Creator: &ada, CreatedAt: at(4, 8), UpdatedAt: at(4, 8),
 			Schedule:    Schedule{Frequency: "every_week", Days: []int{1}, Hour: 9, StartDate: "2025-09-01"},
-			Subscribers: []Person{ada}, VisibleToClients: &shown},
+			Subscribers: []Person{ada, iris}, VisibleToClients: &shown},
 	}
 
 	return Project{
@@ -98,6 +100,7 @@ func clientProject(ada, iris, otto, nora, cora Person, tool func(int64, string, 
 		Members: []int64{ada.ID, iris.ID, otto.ID, nora.ID, cora.ID},
 		Dock: []Tool{news, notes, chat, clientChat, todos, checkins,
 			tool(9226, "vault", "vaults", "Docs & Files", true, 7, &ada),
-			tool(9227, "inbox", "inboxes", "Forwards", true, 8, &ada)},
+			tool(9227, "inbox", "inboxes", "Forwards", true, 8, &ada),
+			tool(9228, "inbox", "inboxes", "Old forwards", false, 0, &ada)},
 	}
 }

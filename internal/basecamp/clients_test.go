@@ -1,9 +1,13 @@
 package basecamp_test
 
 import (
+	"errors"
 	"reflect"
+	"strings"
 	"testing"
+	"time"
 
+	"github.com/flownative/minka-cli/internal/basecamp"
 	"github.com/flownative/minka-cli/internal/bundle"
 	"github.com/flownative/minka-cli/internal/fakebasecamp"
 )
@@ -89,15 +93,22 @@ func TestAWordAboutClientsOnARecordThatFollowsItsContainerIsLeftOutAndCounted(t 
 }
 
 // Where the source says nothing, nothing is written: Minka then leaves what it
-// holds alone, and in doubt a record stays private.
+// holds alone, and in doubt a record stays private. The projects are the ones
+// that hold posts, to-do lists and questions, so every kind that has a word of
+// its own is looked at.
 func TestWhereTheSourceSaysNothingAboutClientsNothingIsWritten(t *testing.T) {
-	dir, result := extract(t, fakebasecamp.New(), "7001")
+	dir, result := extract(t, fakebasecamp.New(), talkProject, checkinProject, todoProject)
 
+	seen := map[bundle.Kind]int{}
 	for _, kind := range []bundle.Kind{bundle.Tools, bundle.Posts, bundle.TodoLists, bundle.Questions} {
 		for _, record := range recordsOrNone(t, dir, kind) {
+			seen[kind]++
 			if _, said := record["visibleToClients"]; said {
 				t.Errorf("%s %s says %v about clients, and the source says nothing", kind, record["sourceId"], record["visibleToClients"])
 			}
+		}
+		if seen[kind] == 0 {
+			t.Errorf("the bundle holds no %s to look at", kind)
 		}
 	}
 	if result.VisibilityLeftToTheContainer != 0 {
@@ -117,9 +128,8 @@ func TestAClientComesAsOneAndOnlyAClientComesWithACompany(t *testing.T) {
 		// The kind Basecamp had for a client before the flag, whose flag says no.
 		"107": {"client": true, "company": nil},
 		"108": {"client": true, "company": nil},
-		// A company whose name is no name is left out, and the client comes
-		// saying that the source names none.
-		"109": {"client": true, "company": nil},
+		// A client of a second company: a company is the person's own.
+		"109": {"client": true, "company": map[string]any{"sourceId": "9282", "name": "Southwind Example"}},
 	}
 	for id, wanted := range want {
 		person := recordWithID(t, people, id)
@@ -132,8 +142,8 @@ func TestAClientComesAsOneAndOnlyAClientComesWithACompany(t *testing.T) {
 			t.Errorf("person %s:\n got %v\nwant %v", id, got, wanted)
 		}
 	}
-	if result.PeopleAsClients != 4 || result.CompaniesLeftOut != 1 {
-		t.Errorf("%d clients and %d companies left out, want 4 and 1", result.PeopleAsClients, result.CompaniesLeftOut)
+	if result.PeopleAsClients != 4 {
+		t.Errorf("%d clients, want the four of the project", result.PeopleAsClients)
 	}
 	if result.ClientMemberships != 4 {
 		t.Errorf("%d memberships of clients, want the four of the project", result.ClientMemberships)
@@ -182,5 +192,102 @@ func TestTheWordAboutClientsOfAToolIsReadFromTheToolAndNotFromTheDock(t *testing
 	}
 	if asked := asked(account, "message_boards/9220.json"); len(asked) != 1 {
 		t.Errorf("the tool was asked for %d times, want once: %v", len(asked), asked)
+	}
+}
+
+// theClient is the client of the client project whose company a test changes,
+// and theClientProject the project itself: a company a bundle cannot carry ends
+// a run, so the fake holds none by itself.
+func theClient(t *testing.T, a *fakebasecamp.Account) *fakebasecamp.Person {
+	t.Helper()
+	for i := range a.People {
+		if a.People[i].ID == 109 {
+			return &a.People[i]
+		}
+	}
+	t.Fatal("the account holds no client 109")
+	return nil
+}
+
+func theClientProject(t *testing.T, a *fakebasecamp.Account) *fakebasecamp.Project {
+	t.Helper()
+	for i := range a.Projects {
+		if a.Projects[i].ID == 7009 {
+			return &a.Projects[i]
+		}
+	}
+	t.Fatal("the account holds no project 7009")
+	return nil
+}
+
+// A company Minka would refuse ends the run rather than reaching it. Writing the
+// record without the company the source names would tell Minka to drop the
+// company it holds, which is a lie about a person that no later run takes back.
+func TestACompanyMinkaWouldRefuseEndsTheRun(t *testing.T) {
+	for name, company := range map[string]fakebasecamp.Company{
+		"without an identifier":                {Name: "Northwind Example"},
+		"without a name":                       {ID: 9284, Name: "  "},
+		"with a name too long":                 {ID: 9284, Name: strings.Repeat("a", 201)},
+		"with a control character in its name": {ID: 9284, Name: "North\u0007wind"},
+	} {
+		for _, where := range []string{"person", "project"} {
+			account := fakebasecamp.New()
+			if where == "person" {
+				theClient(t, account).Company = &company
+			} else {
+				theClientProject(t, account).ClientCompany = &company
+			}
+			extractor := basecamp.Extractor{Source: account, Avatars: account, Files: account,
+				Now: func() time.Time { return runDay }}
+			_, err := extractor.Extract(t.Context(), []string{clientProject}, bundle.Discard())
+
+			var failed *basecamp.Error
+			if !errors.As(err, &failed) || failed.Kind != basecamp.API {
+				t.Fatalf("%s, a company %s: got %v, want an api error", where, name, err)
+			}
+			// Never the name itself: a field that holds no name holds something.
+			for _, secret := range []string{company.Name, "Cora", "Southward"} {
+				if strings.TrimSpace(secret) != "" && strings.Contains(failed.Message, secret) {
+					t.Errorf("%s, a company %s: the message names %q: %s", where, name, secret, failed.Message)
+				}
+			}
+			if company.ID != 0 && !strings.Contains(failed.Message, "9284") {
+				t.Errorf("%s, a company %s: the message does not say which company: %s", where, name, failed.Message)
+			}
+		}
+	}
+}
+
+// A client is no member of a project in Minka, so a question is never said to be
+// asked of one: Minka drops such a person without a word, and three counters
+// would say a question is asked of people who never get it.
+func TestAClientIsNeverSaidToBeAskedAQuestion(t *testing.T) {
+	dir, result := extract(t, fakebasecamp.New(), clientProject)
+
+	question := recordWithID(t, records(t, dir, bundle.Questions), "9271")
+	if got := question["asked"]; !reflect.DeepEqual(got, []any{"101"}) {
+		t.Errorf("the question is asked of %v, want the one member who is no client", got)
+	}
+	if result.AskedLeftOut.Clients != 1 {
+		t.Errorf("%d clients left out of a question, want the one subscribed to it", result.AskedLeftOut.Clients)
+	}
+	if len(result.NobodyAsked) != 0 {
+		t.Errorf("%v comes asking nobody, and it asks a member", result.NobodyAsked)
+	}
+}
+
+// A kind of tool is either extracted or silent about clients, never both: what a
+// run extracts is asked first, so the day Docs & Files is extracted this test
+// fails and the gap in the report goes with it.
+func TestAKindOfToolIsEitherExtractedOrSilentAboutClients(t *testing.T) {
+	silent := map[string]bool{
+		"vault": true, "inbox": true,
+		"kanban_board": false, "chat": false, "message_board": false, "questionnaire": false, "todoset": false,
+		"schedule": false,
+	}
+	for kind, want := range silent {
+		if got := basecamp.SaysNothingAboutClients(kind); got != want {
+			t.Errorf("%s says nothing about clients: %v, want %v", kind, got, want)
+		}
 	}
 }

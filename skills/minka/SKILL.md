@@ -829,12 +829,14 @@ this:
   alone. A record that follows what it hangs on — a to-do, a group, a card, an
   answer, a comment — carries none, and `data.visibilityLeftToTheContainer`
   counts the words the source offered there. `data.peopleAsClients` counts the
-  clients, `data.clientMemberships` the memberships Minka leaves out because a
-  client is no member of a project there, and `data.companiesLeftOut` the
-  companies the source names without an identifier or without a name, which no
-  bundle carries. Docs & Files and Forwards are not extracted at all, so the
-  bundle says nothing of whether clients see them; a `notice` names that gap.
-  No output ever names a person or a company.
+  clients and `data.clientMemberships` the memberships Minka leaves out, because
+  a client is no member of a project there; for the same reason no question is
+  said to be asked of a client, which `data.askedLeftOut.clients` counts. A
+  company the source names without an identifier, or with a name Minka refuses,
+  ends the run: written away as none it would tell Minka to drop the company it
+  holds. Docs & Files and Forwards are not extracted at all, so the bundle says
+  nothing of whether clients see them; a `notice` names that gap. No output ever
+  names a person or a company.
 - `data.cardsByStatus` splits the cards, `data.cardsOnHold` counts those set
   aside within their column, `data.cardsLeftOut` the archived and trashed
   cards whose column is in no extracted board, `data.commentsTrashed` the

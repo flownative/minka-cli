@@ -91,8 +91,9 @@ type Company struct {
 }
 
 // CompanyOrNone is what a record says about a company: which one it is, or that
-// the source names none. A record that says nothing about a company carries no
-// such field at all, and Minka then leaves the company it holds alone.
+// the source names none. Minka reads a field that is missing and one that says
+// none the same way and drops the company it holds for the record, so both say
+// that there is no company and neither leaves one standing.
 type CompanyOrNone struct {
 	Company *Company
 }

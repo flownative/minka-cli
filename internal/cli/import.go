@@ -45,10 +45,6 @@ type importReport struct {
 	// a client out of the members of every project.
 	PeopleAsClients   int `json:"peopleAsClients"`
 	ClientMemberships int `json:"clientMemberships"`
-	// CompaniesLeftOut counts the records that name a company without an
-	// identifier or without a name, which no bundle carries. No company is ever
-	// named: it says whom somebody works for.
-	CompaniesLeftOut int `json:"companiesLeftOut"`
 	// VisibilityLeftToTheContainer are the records the source says whether clients
 	// see them although a bundle has no word for it of such a record: they follow
 	// what they hang on.
@@ -214,8 +210,8 @@ reopens nothing it once ticked off (todosNotDone).
 A question comes with the schedule Minka has words for: the weekdays counted
 from Monday, the time of day, the day the rhythm is counted from, and whom it is
 asked of, which are the subscribers of the question and not whoever answered it.
-Only a member of the project who is still there and has an address can be asked
-(askedLeftOut). A question whose schedule Minka cannot express is left out with
+Only a member of the project who is no client, is still there and has an address
+can be asked (askedLeftOut). A question whose schedule Minka cannot express is left out with
 its answers and named with the field that made it impossible
 (questionsLeftOut); one whose schedule has run out comes paused; one asked every
 other week is anchored on the day it was last answered (anchorsInferred) and
@@ -249,8 +245,11 @@ Minka leaves what it holds alone. A record that follows what it hangs on — a
 to-do, a group, a card, an answer, a comment — carries no word of its own, and
 where the source offers one it is counted (visibilityLeftToTheContainer). A
 client is no member of a project in Minka, so clientMemberships says how many
-memberships the import leaves out. Docs & Files and Forwards are not extracted at
-all, so a bundle says nothing about whether clients see them.
+memberships the import leaves out and no question is ever said to be asked of
+one. Docs & Files and Forwards are not extracted at all, so a bundle says
+nothing about whether clients see them. A company the source names without an
+identifier, or with a name Minka refuses, ends the run: writing the record
+without it would tell Minka to drop the company it holds.
 
 A record the source describes with a word a bundle has none for is left out
 and the run goes on: a line of a chat of an unknown kind or with a status other
@@ -353,7 +352,6 @@ it has been applied.`,
 
 				PeopleAsClients:              result.PeopleAsClients,
 				ClientMemberships:            result.ClientMemberships,
-				CompaniesLeftOut:             result.CompaniesLeftOut,
 				VisibilityLeftToTheContainer: result.VisibilityLeftToTheContainer,
 
 				CardsByStatus:      result.CardsByStatus,
@@ -422,11 +420,6 @@ it has been applied.`,
 					"membership of a project belongs to a client, and Minka leaves a client out of the members of every project: the bundle says it, the import does not carry it over",
 					"memberships of projects belong to clients, and Minka leaves a client out of the members of every project: the bundle says them, the import does not carry them over"))
 			}
-			if count := report.CompaniesLeftOut; count > 0 {
-				notices = append(notices, plural(count,
-					"company of the source comes without an identifier or without a name and is left out; the person or project that names it comes without a company",
-					"companies of the source come without an identifier or without a name and are left out; the people and projects that name them come without a company"))
-			}
 			if count := toolsSilentAboutClients(report); count > 0 {
 				notices = append(notices, plural(count,
 					"tool of a project is a Docs & Files or a Forwards, which a run does not extract: the bundle says nothing of whether clients see it or what stands in it, and a later run brings it",
@@ -467,10 +460,10 @@ it has been applied.`,
 					"question of a check-in comes asking nobody at all and will ask nobody again, because whom it is asked of is what the first run makes of it; data.nobodyAsked names it",
 					"questions of check-ins come asking nobody at all and will ask nobody again, because whom they are asked of is what the first run makes of them; data.nobodyAsked names each"))
 			}
-			if count := report.AskedLeftOut.NotInTheProject + report.AskedLeftOut.Retired + report.AskedLeftOut.WithoutAnAddress; count > 0 {
+			if count := askedLeftOut(report); count > 0 {
 				notices = append(notices, plural(count,
-					"person a question asks cannot be said to be asked, because they are no member of the project, have left, or come without an address; the question comes without them",
-					"people questions ask cannot be said to be asked, because they are no members of their project, have left, or come without an address; the questions come without them"))
+					"person a question asks cannot be said to be asked, because they are no member of the project, are a client, have left, or come without an address; the question comes without them",
+					"people questions ask cannot be said to be asked, because they are no members of their project, are clients, have left, or come without an address; the questions come without them"))
 			}
 			if count := report.AnswersWithoutADay; count > 0 {
 				notices = append(notices, plural(count,
@@ -573,11 +566,12 @@ func renderImportReport(w io.Writer, report importReport) {
 		fmt.Fprintf(w, "Tools this identity may not see, asked for the creator of a project and passed over: %d\n", report.CreatorProbesRefused)
 	}
 
-	fmt.Fprintf(w, "Clients: %d, with %d memberships Minka leaves out of their projects\n", report.PeopleAsClients, report.ClientMemberships)
-	if report.CompaniesLeftOut > 0 {
-		fmt.Fprintf(w, "Companies without an identifier or without a name, left out: %d\n", report.CompaniesLeftOut)
+	if report.PeopleAsClients > 0 || report.ClientMemberships > 0 {
+		fmt.Fprintf(w, "Clients: %d, with %d memberships Minka leaves out of their projects\n", report.PeopleAsClients, report.ClientMemberships)
 	}
-	fmt.Fprintf(w, "Words about clients on a record that follows what it hangs on, left out: %d\n", report.VisibilityLeftToTheContainer)
+	if report.VisibilityLeftToTheContainer > 0 {
+		fmt.Fprintf(w, "Words about clients on a record that follows what it hangs on, left out: %d\n", report.VisibilityLeftToTheContainer)
+	}
 	if count := toolsSilentAboutClients(report); count > 0 {
 		fmt.Fprintf(w, "Docs & Files and Forwards tools a run does not extract, whose word about clients no bundle carries: %d\n", count)
 	}
@@ -659,22 +653,25 @@ func renderImportReport(w io.Writer, report importReport) {
 	}
 }
 
-// silentToolKinds are the tools of Basecamp that Minka has a counterpart for and
-// a run does not extract. Neither their word about clients nor anything that
-// stands in them reaches a bundle, which is why a report says how many there
-// were rather than letting a bundle look complete about clients.
-var silentToolKinds = map[string]bool{"vault": true, "inbox": true}
-
-// toolsSilentAboutClients counts those tools of a run. Only the ones that are
-// switched on count: a tool the source has switched off shows nobody anything.
+// toolsSilentAboutClients counts the tools of a run whose word about clients no
+// bundle carries, because a run does not extract that kind of tool at all: the
+// extractor says which kinds those are. Only the ones that are switched on
+// count, because a tool the source has switched off shows nobody anything.
 func toolsSilentAboutClients(report importReport) int {
 	count := 0
 	for _, skipped := range report.SkippedTools {
-		if skipped.Enabled && silentToolKinds[skipped.Kind] {
+		if skipped.Enabled && basecamp.SaysNothingAboutClients(skipped.Kind) {
 			count += skipped.Count
 		}
 	}
 	return count
+}
+
+// askedLeftOut is how many people a run could not say a question asks, over
+// every reason.
+func askedLeftOut(report importReport) int {
+	left := report.AskedLeftOut
+	return left.NotInTheProject + left.Clients + left.Retired + left.WithoutAnAddress
 }
 
 // recordsLeftOut is how many records a run left out for want of a word for what
@@ -714,8 +711,8 @@ func renderCheckins(w io.Writer, report importReport) {
 		fmt.Fprintf(w, "Questions asked every other week anchored on the day they were last answered: %d — %s\n",
 			len(anchored), strings.Join(anchored, ", "))
 	}
-	fmt.Fprintf(w, "People a question asks that the bundle cannot say are asked: %d no member of the project, %d no longer there, %d without an address\n",
-		report.AskedLeftOut.NotInTheProject, report.AskedLeftOut.Retired, report.AskedLeftOut.WithoutAnAddress)
+	fmt.Fprintf(w, "People a question asks that the bundle cannot say are asked: %d no member of the project, %d a client, %d no longer there, %d without an address\n",
+		report.AskedLeftOut.NotInTheProject, report.AskedLeftOut.Clients, report.AskedLeftOut.Retired, report.AskedLeftOut.WithoutAnAddress)
 	if len(report.NobodyAsked) > 0 {
 		asking := make([]string, 0, len(report.NobodyAsked))
 		for _, question := range report.NobodyAsked {

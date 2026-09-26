@@ -111,7 +111,7 @@ func TestImportBasecampWritesABundleAndReportsWhatItHolds(t *testing.T) {
 		},
 		"missingFiles": []any{}, "invalidAddresses": []any{}, "peopleLeftOut": float64(7),
 		"creatorProbesRefused": float64(0),
-		"peopleAsClients":      float64(0), "clientMemberships": float64(0), "companiesLeftOut": float64(0),
+		"peopleAsClients":      float64(0), "clientMemberships": float64(0),
 		"visibilityLeftToTheContainer": float64(0),
 		"cardsByStatus":                map[string]any{"active": float64(0), "archived": float64(0), "trashed": float64(0)},
 		"cardsOnHold":                  float64(0), "cardsLeftOut": float64(0), "commentsTrashed": float64(0),
@@ -129,7 +129,8 @@ func TestImportBasecampWritesABundleAndReportsWhatItHolds(t *testing.T) {
 		"messagesByType":     map[string]any{"text": float64(0), "richText": float64(0), "upload": float64(0), "integration": float64(0)},
 		"uploadLinesLeftOut": float64(0), "messagesWithEmptyBody": float64(0), "recordsLeftOut": []any{},
 		"questionsLeftOut": []any{}, "anchorsInferred": []any{}, "nobodyAsked": []any{},
-		"askedLeftOut":        map[string]any{"notInTheProject": float64(0), "retired": float64(0), "withoutAnAddress": float64(0)},
+		"askedLeftOut": map[string]any{"notInTheProject": float64(0), "clients": float64(0),
+			"retired": float64(0), "withoutAnAddress": float64(0)},
 		"answersWithoutABody": float64(0), "answersWithoutADay": float64(0), "answersTrashed": float64(0),
 		"longestBody": map[string]any{"cards": float64(0), "comments": float64(0), "posts": float64(0), "messages": float64(0), "answers": float64(0),
 			"todolists": float64(0), "todos": float64(0)},
@@ -1596,7 +1597,7 @@ func TestImportBasecampReportsTheCheckinsOfAProject(t *testing.T) {
 		"anchorsInferred":  []any{map[string]any{"questionSourceId": "9312", "from": "2024-02-28"}},
 		"nobodyAsked":      []any{},
 		"askedLeftOut": map[string]any{
-			"notInTheProject": float64(1), "retired": float64(1), "withoutAnAddress": float64(1)},
+			"notInTheProject": float64(1), "clients": float64(0), "retired": float64(1), "withoutAnAddress": float64(1)},
 		"answersWithoutABody": float64(1), "answersWithoutADay": float64(0), "answersTrashed": float64(0),
 		"longestBody": map[string]any{"cards": float64(0), "comments": float64(17), "posts": float64(0), "messages": float64(0), "answers": float64(150),
 			"todolists": float64(0), "todos": float64(0)},
@@ -1627,7 +1628,7 @@ func TestImportBasecampReportsTheCheckinsOfAProject(t *testing.T) {
 		"questions    6", "answers      6",
 		"Questions whose schedule Minka has no words for, left out: 1 — 9314 (group_on)",
 		"Questions asked every other week anchored on the day they were last answered: 1 — 9312 from 2024-02-28",
-		"People a question asks that the bundle cannot say are asked: 1 no member of the project, 1 no longer there, 1 without an address",
+		"People a question asks that the bundle cannot say are asked: 1 no member of the project, 0 a client, 1 no longer there, 1 without an address",
 		"Answers that say nothing, left out: 1; answers in the trash, left out: 0",
 		"Answers Basecamp names no day for, dated by when they were written: 0",
 		"answer   9320     in project 7007: 150",
@@ -1776,7 +1777,7 @@ func TestImportBasecampSaysWhatABundleHoldsAboutClients(t *testing.T) {
 
 	data := decode(t, env.Data)
 	want := map[string]any{"peopleAsClients": float64(4), "clientMemberships": float64(4),
-		"companiesLeftOut": float64(1), "visibilityLeftToTheContainer": float64(2)}
+		"visibilityLeftToTheContainer": float64(2)}
 	for field, number := range want {
 		if data[field] != number {
 			t.Errorf("%s is %v, want %v", field, data[field], number)
@@ -1784,7 +1785,7 @@ func TestImportBasecampSaysWhatABundleHoldsAboutClients(t *testing.T) {
 	}
 	for _, notice := range []string{
 		"4 memberships of projects belong to clients",
-		"1 company of the source comes without an identifier or without a name",
+		"1 person a question asks cannot be said to be asked",
 		"2 tools of projects are Docs & Files or Forwards",
 	} {
 		if !strings.Contains(env.Notice, notice) {
@@ -1803,7 +1804,7 @@ func TestImportBasecampSaysWhatABundleHoldsAboutClients(t *testing.T) {
 	expectCode(t, r, ExitOK)
 	for _, line := range []string{
 		"Clients: 4, with 4 memberships Minka leaves out of their projects",
-		"Companies without an identifier or without a name, left out: 1",
+		"1 a client,",
 		"Words about clients on a record that follows what it hangs on, left out: 2",
 		"Docs & Files and Forwards tools a run does not extract, whose word about clients no bundle carries: 2",
 	} {

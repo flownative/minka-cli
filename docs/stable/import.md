@@ -903,10 +903,14 @@ therefore read from the source and never guessed (C-055).
   address out of the projects, and Minka retires them for it.
 - **`company`** stands on a client alone, `{sourceId, name}` or `null`, because
   Minka reads it nowhere else and where somebody who is no client works is
-  nothing an import needs. A company the source names without an identifier or
-  without a name is left out and counted (`companiesLeftOut`, per record that
-  names one): Minka would end its run over one, and the client comes saying that
-  the source names no company. No output names a company.
+  nothing an import needs. A company the source names without an identifier, or
+  with a name Minka refuses — blank, longer than 200 characters, or holding a
+  character nobody can see — ends the run as `api_error`. Minka reads a company
+  that is missing and one that is `null` the same way and drops the company it
+  holds, so writing the record without it would say of somebody that they belong
+  to nobody, and a later run would take away what the run before wrote. The
+  message names the company's identifier and what is wrong with the name, never
+  the name: a field that holds no name holds something.
 - **Projects** carry `clientAccess` from `clients_enabled` and `clientCompany`
   from `client_company`, and both stand or neither does: Minka reads a project
   that names a client company and no access as one whose clients have none. A
@@ -923,15 +927,19 @@ therefore read from the source and never guessed (C-055).
   one, it is counted (`visibilityLeftToTheContainer`).
 - **A client is no member of a project in Minka**, which leaves the memberships
   of the bundle that are a client's out of the import. The run says how many
-  (`clientMemberships`), and a `notice` with them.
+  (`clientMemberships`), and a `notice` with them. For the same reason no
+  question is ever said to be asked of a client: Minka drops such a person from
+  `asked` without a word, so a client among the subscribers of a question is left
+  out here and counted (`askedLeftOut.clients`), beside whoever is no member, has
+  left or comes without an address.
 - **Docs & Files (`vault`) and Forwards (`inbox`) are not extracted**, so a
   bundle says nothing of whether clients see them or what stands in them. The
   report counts the ones that are switched on and a `notice` names the gap, so
   that no bundle looks complete about clients.
 
 The report counts and never names: how many clients came, how many memberships
-of theirs Minka leaves out, how many companies were left out and how many words
-about clients fell to a container. A name and a company are personal data.
+of theirs Minka leaves out and how many words about clients fell to a container.
+A name and a company are personal data.
 
 ## A run
 

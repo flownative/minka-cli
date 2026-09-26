@@ -191,11 +191,6 @@ type Result struct {
 	// memberships of the bundle do not arrive.
 	PeopleAsClients   int
 	ClientMemberships int
-	// CompaniesLeftOut counts the records that name a company without an
-	// identifier or without a name, which no bundle carries: such a record comes
-	// saying that the source names none. It names no company, because a company
-	// says whom somebody works for.
-	CompaniesLeftOut int
 	// VisibilityLeftToTheContainer counts the records the source says whether
 	// clients see them although a bundle has no word for it of such a record:
 	// they follow what they hang on.
@@ -309,7 +304,6 @@ type Extractor struct {
 
 	peopleAsClients              int
 	clientMemberships            int
-	companiesLeftOut             int
 	visibilityLeftToTheContainer int
 	// talks are the message boards, chats and questionnaires of the projects
 	// walked so far.
@@ -398,7 +392,7 @@ func (e *Extractor) Extract(ctx context.Context, projectIDs []string, w *bundle.
 	e.skipped = map[skippedKey]int{}
 	e.missing = []MissingFile{}
 	e.creatorProbesRefused = 0
-	e.peopleAsClients, e.clientMemberships, e.companiesLeftOut, e.visibilityLeftToTheContainer = 0, 0, 0, 0
+	e.peopleAsClients, e.clientMemberships, e.visibilityLeftToTheContainer = 0, 0, 0
 	e.account, e.apiRoot = "", ""
 	e.cardsByStatus = map[string]int{bundle.StatusActive: 0, bundle.StatusArchived: 0, bundle.StatusTrashed: 0}
 	e.cardsOnHold, e.cardsLeftOut, e.commentsTrashed, e.bodies = 0, 0, 0, BodyCounts{}
@@ -478,7 +472,6 @@ func (e *Extractor) Extract(ctx context.Context, projectIDs []string, w *bundle.
 
 		PeopleAsClients:              e.peopleAsClients,
 		ClientMemberships:            e.clientMemberships,
-		CompaniesLeftOut:             e.companiesLeftOut,
 		VisibilityLeftToTheContainer: e.visibilityLeftToTheContainer,
 
 		CardsByStatus:   e.cardsByStatus,
@@ -621,7 +614,10 @@ func (e *Extractor) extractProject(ctx context.Context, id int64, w *bundle.Writ
 		return err
 	}
 	projectID := sourceID(p.ID)
-	clientAccess, clientCompany := e.clientsOf(p)
+	clientAccess, clientCompany, err := e.clientsOf(p)
+	if err != nil {
+		return err
+	}
 	err = w.Add(bundle.Projects, bundle.Project{
 		Record:        bundle.Record{SourceID: projectID, CreatedAt: p.CreatedAt, UpdatedAt: p.UpdatedAt, CreatedBy: creator},
 		Name:          p.Name,
@@ -884,7 +880,11 @@ func (e *Extractor) writePeople(ctx context.Context, w *bundle.Writer) (int, err
 		record.Client = seen.aClient()
 		if record.Client {
 			e.peopleAsClients++
-			record.Company = e.companyOf(seen.Company)
+			company, err := e.companyOf("person", seen.ID, seen.Company)
+			if err != nil {
+				return 0, err
+			}
+			record.Company = company
 		}
 
 		if seen.AvatarURL != "" {

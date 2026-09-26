@@ -772,22 +772,20 @@ would truncate an archive and report success. **Implemented as:**
 <a id="c-055"></a>
 ## C-055 — A record says for itself whether clients see it
 
-*Applies to: `import basecamp`, `visibleToClients`, `client`, `clientAccess`*
+*Applies to: `import basecamp`, `visibleToClients`, `client`, `company`, `clientAccess`*
 
 Whether clients see a record is read from that record and never from the tool it
-stands in; where the source says nothing, nothing is written. A record that
-follows its container carries no word of its own and is counted where the source
-offers one, `client` is written either way, a company stands on a client alone,
-and the access of a project and its company stand together or not at all.
+stands in, and where the source says nothing, nothing is written. A record that
+follows its container carries no such word and is counted where the source offers
+one, `client` is written either way, a company stands on a client alone, and a
+client is never said to be asked a question. The run ends where a bundle cannot
+carry what the source says: a company without an identifier or with a name Minka
+refuses, and the access of a project without its company.
 
-**Why:** Two tools of one kind in one project differ, and a tool that is shown to
-clients holds records that are kept from them, so a record that took the word of
-its tool would show a client what the source hides — and what a client has seen
-cannot be taken back, whereas what was not imported a later run brings. A field
-the format leaves open reads as something else wherever Minka reads it: an access
-without its company says a project has no client company, a company without the
-access says its clients have no access, and a company without a name ends the
-applier's run. **Implemented as:** `basecamp.visibleToClientsOf`,
-`basecamp.visibilityOfItsOwn`, `basecamp.Extractor.clientsOf`,
-`basecamp.Extractor.companyOf`, `basecamp.seenPerson.aClient`, see
+**Why:** A record that took the word of its tool would show a client what the
+source hides, and what a client has seen cannot be taken back, whereas a company
+written away as none tells Minka to drop the one it holds.
+**Implemented as:** `basecamp.visibleToClientsOf`, `basecamp.visibilityOfItsOwn`,
+`basecamp.Extractor.clientsOf`, `basecamp.Extractor.companyOf`,
+`basecamp.seenPerson.aClient`, see
 [Importing from Basecamp](stable/import.md).
