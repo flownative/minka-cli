@@ -53,6 +53,11 @@ stops the applier after hours of walking, and one pair of quotation marks
 around the whole of an address comes off before it is read: the one place a
 run repairs what the source says instead of passing it on, counted per record
 in `addressesUnquoted`.
+That rule is held against Minka's own reader over 193,531 inputs — the seams of
+the rule, a combinatorial sweep, byte mutations of addresses that pass, random
+strings — compared on what Minka makes of what a bundle would carry and not of
+the input: no case the CLI takes and Minka refuses, and the narrow differences
+are the three C-059 names.
 A record the source describes with a word a bundle has none for is left out and
 counted, and the run goes on (C-050): a chat line of an unknown kind — a bundle
 has a word for `Chat::Lines::Text`, `Chat::Lines::RichText`,
