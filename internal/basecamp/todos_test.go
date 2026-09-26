@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -591,26 +592,129 @@ func TestAStatusNoBundleKnowsLeavesAListOrAToDoOutAndTheRunGoesOn(t *testing.T) 
 
 // A walk is no snapshot: a list or a to-do the source lists twice is written
 // once.
-func TestAListOrAToDoMetTwiceIsWrittenOnce(t *testing.T) {
+func TestAListAGroupOrAToDoMetTwiceIsWrittenOnce(t *testing.T) {
 	account := fakebasecamp.New()
-	theList(account, 9401).Twice = true
+	// One of each, in every list the account answers with: the lists of a tool,
+	// the archived and trashed records of the project, the groups of a list, and
+	// the to-dos of a place.
+	for _, id := range []int64{9401, 9403, 9411, 9413} {
+		theList(account, id).Twice = true
+	}
 	theTodo(account, 9421).Twice = true
+
+	listed := groupsTheAccountShows(t, account, 7008, 9401)
+	twice := 0
+	for _, group := range listed {
+		if group["id"].(float64) == 9411 {
+			twice++
+		}
+	}
+	if twice != 2 {
+		t.Fatalf("the account lists the group %d times among %v, and the test needs it twice", twice, listed)
+	}
+
+	dir, _ := extract(t, account, todoProject)
+	for _, of := range []struct {
+		kind bundle.Kind
+		ids  []string
+	}{
+		{bundle.TodoLists, []string{"9401", "9403"}},
+		{bundle.TodoGroups, []string{"9411", "9413"}},
+		{bundle.Todos, []string{"9421"}},
+	} {
+		written := sourceIDs(records(t, dir, of.kind))
+		for _, id := range of.ids {
+			count := 0
+			for _, one := range written {
+				if one == id {
+					count++
+				}
+			}
+			if count != 1 {
+				t.Errorf("%s %s came %d times, want once: %v", of.kind, id, count, written)
+			}
+		}
+	}
+}
+
+// The people on a to-do come once, however often the source names them.
+func TestSomebodyNamedTwiceOnAToDoComesOnce(t *testing.T) {
+	account := fakebasecamp.New()
 	dir, _ := extract(t, account, todoProject)
 
-	lists := 0
-	for _, list := range records(t, dir, bundle.TodoLists) {
-		if list["sourceId"] == "9401" {
-			lists++
+	shown := todosTheAccountShows(t, account, 7008, 9401, false)
+	if len(shown) == 0 || shown[0]["id"].(float64) != 9421 {
+		t.Fatalf("the account shows %v, and the test needs the to-do that carries people", shown)
+	}
+	for _, field := range []string{"assignees", "completion_subscribers"} {
+		named := map[string]int{}
+		for _, one := range shown[0][field].([]any) {
+			named[fmt.Sprint(one.(map[string]any)["id"])]++
+		}
+		twice := false
+		for _, count := range named {
+			twice = twice || count > 1
+		}
+		if !twice {
+			t.Fatalf("the account names nobody twice in %s, so the safeguard is held by nothing: %v", field, named)
 		}
 	}
-	todos := 0
-	for _, one := range records(t, dir, bundle.Todos) {
-		if one["sourceId"] == "9421" {
-			todos++
-		}
+
+	one := recordWithID(t, records(t, dir, bundle.Todos), "9421")
+	if !reflect.DeepEqual(one["assignees"], []any{"101", "102"}) || !reflect.DeepEqual(one["notifyWhenDone"], []any{"104"}) {
+		t.Errorf("the people of a to-do: %v and %v", one["assignees"], one["notifyWhenDone"])
 	}
-	if lists != 1 || todos != 1 {
-		t.Errorf("the list came %d times and the to-do %d, want once each", lists, todos)
+}
+
+// A day the source writes as an empty field comes as nothing, as one it leaves
+// out does.
+func TestADayThatArrivesEmptyComesAsNothing(t *testing.T) {
+	account := fakebasecamp.New()
+	theTodo(account, 9421).StartsOn, theTodo(account, 9421).DueOn = "", ""
+	theTodo(account, 9421).EmptyDays = true
+
+	shown := todosTheAccountShows(t, account, 7008, 9401, false)
+	if len(shown) == 0 || shown[0]["starts_on"] != "" || shown[0]["due_on"] != "" {
+		t.Fatalf("the account says %v of the days, and the test needs them as empty text", shown)
+	}
+
+	dir, _ := extract(t, account, todoProject)
+	one := recordWithID(t, records(t, dir, bundle.Todos), "9421")
+	if one["startsOn"] != nil || one["dueOn"] != nil {
+		t.Errorf("the days of a to-do that has none: %v and %v", one["startsOn"], one["dueOn"])
+	}
+}
+
+// The longest text of a list and of a to-do is measured and names the record it
+// was measured on, as every other body of a bundle is.
+func TestTheLongestTextOfAListAndAToDoIsMeasured(t *testing.T) {
+	dir, result := extract(t, fakebasecamp.New(), todoProject)
+
+	of := func(kind bundle.Kind, id string, field string) int {
+		record := recordWithID(t, records(t, dir, kind), id)
+		text, _ := record[field].(string)
+		return len([]rune(text))
+	}
+	for _, measured := range []struct {
+		kind   bundle.Kind
+		record string
+		id     string
+		field  string
+	}{
+		{bundle.TodoLists, "to-do list", "9401", "description"},
+		{bundle.Todos, "to-do", "9421", "notes"},
+	} {
+		length := of(measured.kind, measured.id, measured.field)
+		if length == 0 {
+			t.Fatalf("the %s of the bundle carries no text, so the safeguard is held by nothing", measured.kind)
+		}
+		if got := result.LongestBody[measured.kind]; got != length {
+			t.Errorf("the longest %s text is %d characters, want %d", measured.kind, got, length)
+		}
+		want := basecamp.LongestBodyRecord{Record: measured.record, SourceID: measured.id, In: "project", InSourceID: "7008", Characters: length}
+		if got := result.LongestBodyRecords[measured.kind]; got != want {
+			t.Errorf("the longest %s text was measured on %+v, want %+v", measured.kind, got, want)
+		}
 	}
 }
 
