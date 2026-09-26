@@ -52,10 +52,19 @@ type Reply struct {
 }
 
 // Outsider is somebody who wrote to a project from their own mailbox: no
-// member of the account, and nobody it can be asked about.
+// member of the account, and nobody it can be asked about. Basecamp gives such
+// a writer their address as their name, and the field for an address with it.
 func Outsider(id int64, address string) Person {
 	return Person{ID: id, Kind: "Outsider", Name: address, Email: address,
 		CreatedAt: "2025-02-01T08:00:00.000Z", UpdatedAt: "2025-02-01T08:00:00.000Z"}
+}
+
+// OutsiderByNameAlone is one whose address stands in their name and nowhere
+// else, which is all Basecamp is known to promise of somebody outside.
+func OutsiderByNameAlone(id int64, address string) Person {
+	writer := Outsider(id, address)
+	writer.Email = ""
+	return writer
 }
 
 // forwardProject is a project with every case of forwarded mail: two inboxes
@@ -65,8 +74,9 @@ func Outsider(id int64, address string) Person {
 // of a status nobody knows, one whose sender is no address a bundle can carry,
 // one that is nothing but a file the source no longer has, one that says nothing
 // at all, one that is nothing but an embedded player, one nobody is named for,
-// replies from inside and outside the account, a reply in the trash and a boost
-// on a reply.
+// replies from inside and outside the account, one of those named by their name
+// alone and one whose address Minka would refuse, a reply in the trash, and a
+// boost on a reply that comes and one on a reply that does not.
 func forwardProject(ada, grace, former Person, tool func(int64, string, string, string, bool, int, *Person) Tool) Project {
 	at := func(day, hour int) string { return fmt.Sprintf("2025-02-%02dT%02d:00:00.000Z", day, hour) }
 	made := tool
@@ -80,6 +90,8 @@ func forwardProject(ada, grace, former Person, tool func(int64, string, string, 
 	// Somebody from outside whose address a mail server would take and Minka
 	// would not: no domain of its own.
 	daemon := Outsider(902, "postmaster@localhost")
+	// And one the account names by their name alone.
+	otis := OutsiderByNameAlone(903, "otis@partner.test")
 
 	invoice := File{ID: 5301, SGID: SGID("gid://bc3/Attachment/5301?expires_in"), Key: FileKey(5301),
 		Filename: "invoice.pdf", ContentType: "application/pdf", Bytes: 3072}
@@ -103,7 +115,8 @@ func forwardProject(ada, grace, former Person, tool func(int64, string, string, 
 				Content: `<div>Here is the signed copy.</div>` + Embed{File: signed}.HTML(), Files: []File{signed},
 				Boosts: []Boost{{ID: 9591, Content: "👍", CreatedAt: at(3, 11), Booster: &grace}}},
 			{ID: 9403, Status: "trashed", Creator: &grace, CreatedAt: at(3, 12), UpdatedAt: at(3, 13),
-				Content: `<div>Sent to the wrong mail.</div>`},
+				Content: `<div>Sent to the wrong mail.</div>`,
+				Boosts:  []Boost{{ID: 9594, Content: "\U0001f44d", CreatedAt: at(3, 13), Booster: &ada}}},
 		},
 		Comments: []Comment{
 			{ID: 9501, Creator: &grace, CreatedAt: at(4, 9), UpdatedAt: at(4, 9), Content: `<div>Paid.</div>`,
@@ -120,8 +133,12 @@ func forwardProject(ada, grace, former Person, tool func(int64, string, string, 
 		// A mail nobody gave a subject, held as the plain text it is.
 		{ID: 9302, From: "noreply@notifications.test", Creator: &ada, CreatedAt: at(5, 8), UpdatedAt: at(5, 8),
 			Content: "Build 42 failed.\n\nSee the log.",
-			Replies: []Reply{{ID: 9404, Creator: &daemon, CreatedAt: at(5, 9), UpdatedAt: at(5, 9),
-				Content: `<div>Delivery failed.</div>`}}},
+			Replies: []Reply{
+				{ID: 9404, Creator: &daemon, CreatedAt: at(5, 9), UpdatedAt: at(5, 9),
+					Content: `<div>Delivery failed.</div>`},
+				{ID: 9405, Creator: &otis, CreatedAt: at(5, 10), UpdatedAt: at(5, 10),
+					Content: `<div>What is build 42?</div>`},
+			}},
 		// A subject over two lines and longer than a title holds.
 		{ID: 9303, Subject: "Re:\tFwd: " + LongSubject, From: "office@supplier.test", Creator: &grace,
 			CreatedAt: at(6, 8), UpdatedAt: at(6, 8), Content: "See below."},
@@ -201,7 +218,7 @@ func (a *Account) forwards(path string, page int) ([]byte, bool) {
 				for i := len(tool.Forwards) - 1; i >= 0; i-- {
 					found = append(found, a.forwardJSON(p, &tool.Forwards[i]))
 				}
-				return a.pageOf(found, page), true
+				return a.pageOf(a.shiftedWhereTheListMoves(found), page), true
 			}
 		}
 	case repliesPattern.MatchString(path):
@@ -213,16 +230,28 @@ func (a *Account) forwards(path string, page int) ([]byte, bool) {
 					if strconv.FormatInt(forward.ID, 10) != match[2] {
 						continue
 					}
+					// Newest first, as the answers of a mail are shown.
 					found := []map[string]any{}
-					for _, reply := range forward.Replies {
-						found = append(found, a.replyJSON(reply))
+					for i := len(forward.Replies) - 1; i >= 0; i-- {
+						found = append(found, a.replyJSON(forward.Replies[i]))
 					}
-					return a.pageOf(found, page), true
+					return a.pageOf(a.shiftedWhereTheListMoves(found), page), true
 				}
 			}
 		}
 	}
 	return nil, false
+}
+
+// shiftedWhereTheListMoves hands the last record of the first page out again as
+// the first of the second, which is what a list does that something was added
+// to between two requests.
+func (a *Account) shiftedWhereTheListMoves(found []map[string]any) []map[string]any {
+	if !a.MailListMoves || len(found) <= a.PageSize {
+		return found
+	}
+	shifted := append([]map[string]any{}, found[:a.PageSize]...)
+	return append(shifted, found[a.PageSize-1:]...)
 }
 
 func (f *Forward) status() string {

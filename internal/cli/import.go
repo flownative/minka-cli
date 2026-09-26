@@ -850,7 +850,7 @@ func renderForwards(w io.Writer, report importReport) {
 	}
 	fmt.Fprintf(w, "Boosts on an answer by mail, which Minka takes none of, left out: %d\n", forwards.ReactionsOnRepliesLeftOut)
 	if forwards.LongerThanMinkaTakes > 0 {
-		fmt.Fprintf(w, "Mails longer than Minka holds, which it passes over on every run: %d\n", forwards.LongerThanMinkaTakes)
+		fmt.Fprintf(w, "Mails and answers longer than Minka holds, which it passes over on every run: %d\n", forwards.LongerThanMinkaTakes)
 	}
 }
 

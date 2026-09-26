@@ -116,6 +116,10 @@ const outsider = "Outsider"
 // a card or a post, so everything a forward can point at is in the bundle
 // before it.
 func (e *Extractor) extractForwards(ctx context.Context, w *bundle.Writer) error {
+	// A mail belongs to one inbox, but a walk of pages can hand one out twice
+	// where the list moved under it, and a source that listed one in two
+	// inboxes would put it in Minka twice.
+	met := map[int64]bool{}
 	for _, t := range e.talks {
 		for _, inbox := range t.inboxes {
 			listed, err := getList[forward](ctx, e.Source, fmt.Sprintf("buckets/%d/inboxes/%d/forwards.json", t.bucket, inbox))
@@ -123,7 +127,6 @@ func (e *Extractor) extractForwards(ctx context.Context, w *bundle.Writer) error
 				return err
 			}
 			carried := make([]forward, 0, len(listed))
-			met := map[int64]bool{}
 			for _, found := range listed {
 				if met[found.ID] {
 					continue
@@ -259,6 +262,9 @@ func (e *Extractor) writeForwardReplies(ctx context.Context, w *bundle.Writer, b
 			continue
 		}
 		met[reply.ID] = true
+		// Counted of every answer the source shows, carried or not: a bundle
+		// holds none of them either way.
+		e.forwards.ReactionsOnRepliesLeftOut += reply.BoostsCount
 		taken, err := e.metAmong(replyStatuses, "reply", reply.ID, reply.status(), reply.recording, "project", sourceID(bucket))
 		if err != nil {
 			return err
@@ -334,7 +340,6 @@ func (e *Extractor) writeForwardReply(ctx context.Context, w *bundle.Writer, buc
 	}
 	e.measure(bundle.ForwardReplies, body, LongestBodyRecord{Record: "reply", SourceID: origin.SourceID, In: "project", InSourceID: projectID})
 	e.countIfItIsLongerThanMinkaTakes(body)
-	e.forwards.ReactionsOnRepliesLeftOut += reply.BoostsCount
 	return nil
 }
 
@@ -351,9 +356,9 @@ func (e *Extractor) countIfItIsLongerThanMinkaTakes(body string) {
 }
 
 // theAddressOfAnOutsider is what a reply from outside the account says about
-// whoever wrote it, and whether they are one. Basecamp gives such a writer the
-// address as their name as well, so the name stands in where the field for an
-// address is empty.
+// whoever wrote it, and whether they are one. Basecamp gives such a writer
+// their address as their name as well, so the name stands in where the field
+// for an address is empty: a writer who is nobody here is worth reading twice.
 func theAddressOfAnOutsider(writer *person) (string, bool) {
 	if writer == nil || writer.PersonableType != outsider {
 		return "", false
@@ -435,7 +440,13 @@ const (
 
 // anAddressAMailCanCarry is the address a bundle writes for the sender of a
 // mail, and whether the source gave one. The whitespace around it goes, and
-// nothing else of it is touched.
+// nothing else of it is touched. What it takes is ASCII throughout, because
+// every part of it is asked of characters of the first 128 and of no others.
+//
+// It is not the rule a person's address is held to (looksLikeAnAddress): that
+// one asks whether a source masked an address and lets a person through
+// without one where it did not, while this field takes nothing but an address
+// and a mail with none cannot be carried at all.
 //
 // It is asked more strictly than Minka asks: what passes here passes there, and
 // an address of a shape nobody writes is left out rather than risked. A
@@ -444,7 +455,7 @@ const (
 func anAddressAMailCanCarry(value string) (string, bool) {
 	address := strings.TrimSpace(value)
 	at := strings.LastIndex(address, "@")
-	if at < 0 || len(address) > maxAddressLength || !ascii(address) {
+	if at < 0 || len(address) > maxAddressLength {
 		return "", false
 	}
 	local, domain := address[:at], address[at+1:]
@@ -463,18 +474,6 @@ func anAddressAMailCanCarry(value string) (string, bool) {
 	return address, true
 }
 
-// ascii tells whether every character of a value is one of the first 128: an
-// address of any other is one no mail server of the source could have read
-// either.
-func ascii(value string) bool {
-	for i := range len(value) {
-		if value[i] >= utf8.RuneSelf {
-			return false
-		}
-	}
-	return true
-}
-
 // longestBodyMinkaTakes is how long the body of a mail or of an answer may be
 // for Minka to hold it, in characters. What is measured here is the body the run
 // writes; Minka counts what it stores, which is that body with the markup of its
@@ -482,11 +481,12 @@ func ascii(value string) bool {
 // one too many.
 const longestBodyMinkaTakes = 1000000
 
-// The lines a run writes into a mail that would arrive with nothing in it.
+// The lines a run writes into a mail that would arrive with nothing in it. One
+// wording for a mail that held one file and for a mail that held several: a
+// mail that would be lost is no place to count them.
 const (
 	withoutWords         = "<p>This mail came without words.</p>"
-	withoutWordsAndAFile = "<p>This mail came without words, and the file it held could not be brought.</p>"
-	withoutWordsAndFiles = "<p>This mail came without words, and the files it held could not be brought.</p>"
+	withoutWordsAndAFile = "<p>This mail came without words, and what it held could not be brought.</p>"
 )
 
 // aBodyThatSaysSomething is the body of a mail with a line of the run's own
@@ -500,21 +500,27 @@ const (
 // where the file stood, and Minka drops it.
 //
 // An embed counts for nothing here although Minka usually takes one: whether it
-// does is its rule, read from its own reading of an address, and a mail that
-// hangs on that alone is lost wherever the two read one differently. Its
-// address comes as a link, which every reading keeps.
+// does is its own reading of an address, and a mail that hangs on one alone is
+// lost wherever the two readings differ. What it gets is its address as a link,
+// which every reading keeps, and no sentence: the mail did point there, and a
+// run that said it came without words would put that in writing wherever Minka
+// took the embed after all.
+//
+// A body PHP reads as nothing gets the line too. It takes a NUL off the edges
+// of a text where Go does not, so a body of nothing else is missing on that
+// side, and a field the format needs and cannot find stops the run.
 func (e *Extractor) aBodyThatSaysSomething(body string) string {
 	filesThatStayOut, embedded, empty := e.whatWouldArriveOf(body)
-	if !empty {
+	if !empty && strings.Trim(body, paddingPHPTakesOff) != "" {
 		return body
 	}
 	e.forwards.GivenALineOfTheRun++
-	line := withoutWords
+	line := ""
 	switch {
-	case filesThatStayOut == 1:
+	case filesThatStayOut > 0:
 		line = withoutWordsAndAFile
-	case filesThatStayOut > 1:
-		line = withoutWordsAndFiles
+	case len(embedded) == 0:
+		line = withoutWords
 	}
 	for _, address := range embedded {
 		line += `<p><a href="` + html.EscapeString(address) + `">` + html.EscapeString(address) + `</a></p>`
@@ -522,11 +528,16 @@ func (e *Extractor) aBodyThatSaysSomething(body string) string {
 	return body + line
 }
 
+// paddingPHPTakesOff is the whitespace Minka trims off a field of a bundle
+// before it asks whether the field says anything.
+const paddingPHPTakesOff = " \t\n\r\x00\v"
+
 // whatWouldArriveOf reads a body the run wrote and says what of it reaches a
 // page: how many of the files it names will not come, the addresses of the
-// embeds in it, and whether what is left says nothing. It asks what
-// saysNothing asks of every other body, and counts a file whose bytes stay
-// outside and an embed for nothing.
+// embeds in it, and whether what is left says nothing. It asks what saysNothing
+// asks of every other body and two questions more, so what is changed in the
+// one belongs in the other: a file whose bytes stay outside counts for nothing
+// here, and so does an embed.
 func (e *Extractor) whatWouldArriveOf(body string) (filesThatStayOut int, embedded []string, empty bool) {
 	reader := newBodyReader(body)
 	for {
@@ -543,7 +554,7 @@ func (e *Extractor) whatWouldArriveOf(body string) (filesThatStayOut int, embedd
 			if token.kind == nethtml.EndTagToken {
 				continue
 			}
-			if e.filesThatArrive[token.attribute("ref")] {
+			if e.theFileArrives(token.attribute("ref")) {
 				return filesThatStayOut, embedded, false
 			}
 			filesThatStayOut++

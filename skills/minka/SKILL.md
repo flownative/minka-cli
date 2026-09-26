@@ -896,7 +896,8 @@ this:
   it, to the address alone and never to both
   (`data.forwards.repliesFromOutside`); one naming neither is left out and named
   (`data.forwards.repliesWithoutASender`), and a boost on an answer is counted
-  and not carried (`data.forwards.reactionsOnRepliesLeftOut`). Comments and
+  and not carried (`data.forwards.reactionsOnRepliesLeftOut`), whether the answer
+  itself comes or not. Comments and
   boosts hang on the mail itself. A body longer than the 1,000,000 characters
   Minka holds is counted in `data.forwards.longerThanMinkaTakes` and comes as it
   is: Minka passes such a mail over on every run, with everything hanging on it.
@@ -907,7 +908,8 @@ this:
   post, a comment, a question or an answer with a status a bundle does not
   know, a draft among them, a group or a to-do the source has put on the
   shelf, a forwarded mail of a status that is none of the three, and an answer
-  by mail that says anything but `active`. `data.recordsLeftOut` names each with the kind of
+  by mail that says anything but `active`; `data.recordsLeftOut` calls the last
+  two `forward` and `reply`. `data.recordsLeftOut` names each with the kind of
   record, the field, the word the source said there, where it stood and how
   many records it cost, and a `notice` counts the records. A record whose times
   are missing or are no times still ends the run: it would be put in the wrong

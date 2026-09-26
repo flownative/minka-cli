@@ -139,7 +139,7 @@ type TodoPlaceLeftOut struct {
 // out and the run goes on; what is lost stays nameable here.
 type LeftOutRecords struct {
 	// Record is the kind of record: card, post, comment, question, answer,
-	// column or line.
+	// column, line, forward or reply.
 	Record string `json:"record"`
 	// Field is where the source said the word, Value what it said. Neither is
 	// anything somebody wrote: a status, a kind of line, a kind of column.
@@ -157,7 +157,8 @@ type LeftOutRecords struct {
 // nothing of the text: a kind of record, an identifier, the place it stands in
 // and the length.
 type LongestBodyRecord struct {
-	// Record is the kind of record: card, comment, post, line, answer.
+	// Record is the kind of record: card, comment, post, line, answer, forward
+	// or reply.
 	Record   string `json:"record"`
 	SourceID string `json:"sourceId"`
 	// In is the kind of record it stands in and InSourceID which one: the chat
@@ -353,8 +354,8 @@ type Extractor struct {
 	// fileOwners names the first owner of every file the walk has met, and
 	// fileRecords are the records of those files in the order they were met.
 	fileOwners map[string]string
-	// filesThatArrive says of every file the walk has met whether its bytes
-	// reach Minka, for the one kind of record that is lost without them.
+	// filesThatArrive holds the files whose bytes reach Minka, for the one kind
+	// of record that is lost without them. What is not in it does not arrive.
 	filesThatArrive map[string]bool
 	fileRecords     []bundle.Attachment
 	files           FileCounts

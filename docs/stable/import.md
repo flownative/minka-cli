@@ -558,8 +558,9 @@ point at is in the bundle before it.
   of a project: asked for one it answers with a refusal of the request, so a
   bundle holds what an inbox shows and nothing else. The mails of an inbox are
   written oldest first, by `created_at` and then by ID, the inboxes in the
-  order of the tools; a walk is no snapshot here either, and a mail met twice
-  is written once.
+  order of the tools; a walk is no snapshot here either, and a mail met twice —
+  by a list that moved between two pages, or by two inboxes — is written once,
+  under the first inbox that showed it.
   `title` is the subject, `createdBy` whoever forwarded it and `createdAt` the
   moment they did. `fromAddress` is the sender, who **stays an address**:
   nobody comes into the bundle for a sender, and `fromName` is always `null`,
@@ -615,7 +616,9 @@ point at is in the bundle before it.
   the longest mail and the longest answer of the run.
   **Nothing hangs on an answer:** it has no comments here, and its boosts are
   counted and never written (`forwards.reactionsOnRepliesLeftOut`), because
-  Minka passes a reaction on one over — nor is the list of them asked for. Its
+  Minka passes a reaction on one over — nor is the list of them asked for. They
+  are counted of every answer the source shows, one that is left out included:
+  a bundle holds none of them either way. Its
   files are `attachments` with `ownerKind` `forwardreply`; in Minka they belong
   to the mail.
 - **Comments** are those of cards, of posts, of answers, of to-do lists, of
@@ -784,15 +787,20 @@ the run** (C-057), written behind the body and counted in
 `forwards.givenALineOfTheRun`, with a `notice`. That happens where the mail says
 nothing, where what it says is a file that will never come — one the source no
 longer has, one above the gibibyte a run of Minka takes, one whose bytes are not
-what the index says — and where the body is nothing but an embed. Minka writes
+what the index says — where the body is nothing but an embed, and where the body
+holds nothing but what Minka takes off the edges of a text, a NUL among them,
+which Go does not. Minka writes
 such a body empty and remembers the mail as finished, or passes it over before it
 is remembered and passes it over again on every run afterwards, and either way
 the subject, the sender, the answers and the comments are lost with it; the
-extractor is the one place that knows a file will never come. An embed counts for
-nothing here although Minka usually takes one, because whether it does is its own
-reading of the address, so its address comes as a link as well, which every
-reading keeps. The tag of a file that will never come stays where it stood, and
-Minka drops it. A dry run knows no more than what Basecamp says of a file's size,
+extractor is the one place that knows a file will never come. The tag of a file
+that will never come stays where it stood, and Minka drops it.
+**An embed gets the address and no sentence.** It counts for nothing here
+although Minka usually takes one, because whether it does is its own reading of
+the address; so the address is written beside it as a link, which every reading
+keeps, and nothing is said about the mail — a run that called such a mail
+wordless would be putting that in writing wherever Minka took the embed after
+all. A dry run knows no more than what Basecamp says of a file's size,
 so it writes the line only where the size alone gives it away.
 
 A link to a card, a message or a chat of the account, and to a line of a
