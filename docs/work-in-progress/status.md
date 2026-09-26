@@ -25,10 +25,19 @@ status with their categories, comments and boosts, of each chat its lines as
 messages with their boosts, written in parts of one chat and some 10,000 lines
 each, and of each questionnaire its questions with the schedule Minka has words
 for and their answers with what hangs on them.
-A bundle has a word for four kinds of line, `Chat::Lines::Text`,
-`Chat::Lines::RichText`, `Chat::Lines::Upload` and `Chat::Lines::Integration`; a
-line of any other kind is left out and named in the report with its kind and the
-chat it stood in, so one exotic line does not cost the account (C-049).
+A record the source describes with a word a bundle has none for is left out and
+counted, and the run goes on (C-050): a chat line of an unknown kind — a bundle
+has a word for `Chat::Lines::Text`, `Chat::Lines::RichText`,
+`Chat::Lines::Upload` and `Chat::Lines::Integration` — or with a status other
+than `active`, a column of a kind a bundle has no role for, and a card, a post,
+a comment, a question or an answer with a status a bundle does not know, a draft
+among them. `recordsLeftOut` names each with the kind of record, the word and
+where it stood, so one exotic record does not cost the account. What still ends
+a run is what would be written wrongly: times that are missing or are none, a
+second Triage, Not now or Done on one board, the status of a project the run was
+asked for. Where a chat line is brought only by a later run and another line
+carries the same second, the order of the two can turn round, which is a known
+limit and written down with the rule.
 Mentions in the texts are references, the preview of a link is the link, a
 video or a player embedded in a text is an `<import-embed>` with its address,
 a link to a card, a message or a chat of the account is an
@@ -153,12 +162,15 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
 - Of the posts and chats of `import basecamp`: an outsider or a placeholder
   as the writer of something, a part that runs past its size because a second
   does, a trashed post, a post of a message board that is not extracted, a
-  file dropped into a chat without a usable key, a line of a kind a bundle has
-  no word for left out and counted with its kind and its chat, and what ends a
-  run: a line with a status other than `active`, a category without a name and a
-  person without their times. A fifth kind of line does exist: a dry run over
-  all 32 projects of the account met `Chat::Lines::Play` and ended on it, which
-  is what the rule is for; no run has gone through such a line yet. Seen live,
+  file dropped into a chat without a usable key, a line left out and counted for
+  its kind and one for its status, a post of a status nobody knows, a column of a
+  kind nobody knows with the cards in it, a card, a comment, a question and an
+  answer of a status nobody knows, and what ends a run: a category without a name
+  and a person without their times. A fifth kind of line does exist: a dry run
+  over all 32 projects of the account met `Chat::Lines::Play` and ended on it,
+  which is what the rule is for; no run has gone through a record that is left
+  out for its word yet, and no live account has shown a draft, a second Triage or
+  a column of a kind nobody knows either. Seen live,
   in a bundle that was checked reference by
   reference, its people against the kind Basecamp gives them: chats listed
   newest first in pages that grow, the four kinds of line, files dropped into
@@ -373,9 +385,9 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
 - Run the check-ins live, against a real questionnaire: whether a question ever
   comes without a `start_date`, whether an answer ever comes without a
   `group_on`, and whether a frequency turns up that is in none of the five.
-- Run a dry run over the whole account again and read `linesOfAnUnknownKind`:
-  which kinds of line turn up besides `Chat::Lines::Play`, in which chats and how
-  many, and decide per kind whether a bundle gets a word for it. Whoever adds
+- Run a dry run over the whole account again and read `recordsLeftOut`: which
+  words turn up besides `Chat::Lines::Play`, on which kind of record, where and
+  how many, and decide per word whether a bundle gets one for it. Whoever adds
   one has to have seen what Basecamp sends under it.
 - React to messages from `minka-ca`: check against the code, fake first,
   then the CLI, test and sabotage proof, check live, documentation in the

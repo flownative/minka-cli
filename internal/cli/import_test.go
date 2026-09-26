@@ -119,7 +119,7 @@ func TestImportBasecampWritesABundleAndReportsWhatItHolds(t *testing.T) {
 		"postsByStatus": map[string]any{"active": float64(0), "archived": float64(0), "trashed": float64(0)},
 		"postsLeftOut":  float64(0), "postsWithEmptyBody": float64(0),
 		"messagesByType":     map[string]any{"text": float64(0), "richText": float64(0), "upload": float64(0), "integration": float64(0)},
-		"uploadLinesLeftOut": float64(0), "messagesWithEmptyBody": float64(0), "linesOfAnUnknownKind": []any{},
+		"uploadLinesLeftOut": float64(0), "messagesWithEmptyBody": float64(0), "recordsLeftOut": []any{},
 		"questionsLeftOut": []any{}, "anchorsInferred": []any{}, "nobodyAsked": []any{},
 		"askedLeftOut":        map[string]any{"notInTheProject": float64(0), "retired": float64(0), "withoutAnAddress": float64(0)},
 		"answersWithoutABody": float64(0), "answersWithoutADay": float64(0), "answersTrashed": float64(0),
@@ -992,9 +992,10 @@ func TestImportBasecampReportsThePostsAndTheChatsOfAProject(t *testing.T) {
 		"postsLeftOut":  float64(1), "postsWithEmptyBody": float64(1),
 		"messagesByType":     map[string]any{"text": float64(3), "richText": float64(2), "upload": float64(2), "integration": float64(1)},
 		"uploadLinesLeftOut": float64(1), "messagesWithEmptyBody": float64(1), "picturesLinked": float64(1),
-		"linesOfAnUnknownKind": []any{map[string]any{"chatSourceId": "9033", "type": fakebasecamp.UnknownLine, "leftOut": float64(1)}},
-		"longestBody":          map[string]any{"cards": float64(0), "comments": float64(94), "posts": float64(212), "messages": float64(213), "answers": float64(0)},
-		"filesInBodies":        float64(4), "filesDropped": float64(2), "linkPreviews": float64(3), "mentionsUnresolved": float64(0),
+		"recordsLeftOut": []any{map[string]any{"record": "line", "field": "type", "value": fakebasecamp.UnknownLine,
+			"in": "chat", "inSourceId": "9033", "leftOut": float64(2)}},
+		"longestBody":   map[string]any{"cards": float64(0), "comments": float64(94), "posts": float64(212), "messages": float64(213), "answers": float64(0)},
+		"filesInBodies": float64(4), "filesDropped": float64(2), "linkPreviews": float64(3), "mentionsUnresolved": float64(0),
 		"embeds": float64(1), "embedsLeftOut": float64(0),
 	}
 	for key, value := range want {
@@ -1007,7 +1008,7 @@ func TestImportBasecampReportsThePostsAndTheChatsOfAProject(t *testing.T) {
 	}
 	for _, notice := range []string{"2 files embedded in texts or dropped into chats",
 		"1 line of a chat is left out, because it was files alone",
-		"1 line of a chat is left out, because a bundle has no word for its kind"} {
+		"2 records are left out, because the source describes them with words a bundle has none for"} {
 		if !strings.Contains(env.Notice, notice) {
 			t.Errorf("notice %q does not say %q", env.Notice, notice)
 		}
@@ -1042,7 +1043,8 @@ func TestImportBasecampReportsThePostsAndTheChatsOfAProject(t *testing.T) {
 		"Lines that say nothing, left out: 1",
 		"Messages are written in 2 parts, messages-0001.jsonl to messages-0002.jsonl",
 		"Lines that were files Basecamp names none of, left out: 1",
-		"Lines of a kind a bundle has no word for, left out: 1 — " + fakebasecamp.UnknownLine + " in chat 9033 (1)",
+		"Records the source describes with a word a bundle has none for, left out: 2",
+		"line     type   " + fakebasecamp.UnknownLine + "     in chat 9033: 2",
 		"In the texts: 4 files referred to, 2 files Basecamp lists nothing for dropped, 0 mentions left as names, 3 previews of links turned into links, 1 picture at a foreign address turned into a link",
 		"Longest text in characters: cards 0, comments 94, posts 212, messages 213",
 	} {
@@ -1114,18 +1116,20 @@ func TestTheReportCountsEmbedsAndNoOutputSaysAnAddress(t *testing.T) {
 		t.Errorf("a run without a frame shows a line for them:\n%s", r.stdout)
 	}
 
-	failures := map[string]func(*fakebasecamp.Account){
+	// A line in the trash is left out, not a failure, and its text goes with it.
+	changes := map[string]func(*fakebasecamp.Account){
 		"nothing fails":       func(*fakebasecamp.Account) {},
 		"a line at no time":   func(a *fakebasecamp.Account) { lines(a)[4].CreatedAt = "" },
 		"a line in the trash": func(a *fakebasecamp.Account) { lines(a)[0].Status = "trashed" },
 	}
-	for name, change := range failures {
+	goesOn := map[string]bool{"nothing fails": true, "a line in the trash": true}
+	for name, change := range changes {
 		for _, mode := range [][]string{{"--json"}, {"--quiet"}, {"--styled"}, {"--json", "--dry-run"}} {
 			e := newImportEnv(t)
 			framed(e.account)
 			change(e.account)
 			r := e.run(append([]string{"import", "basecamp", "--project", "7004", "--out", filepath.Join(t.TempDir(), "bundle")}, mode...)...)
-			if (r.code == ExitOK) != (name == "nothing fails") {
+			if (r.code == ExitOK) != goesOn[name] {
 				t.Errorf("%s %v: exit %d", name, mode, r.code)
 			}
 			for _, text := range []string{"player.example", "s3cret", "embed/", "A film"} {
@@ -1187,7 +1191,8 @@ func TestNoOutputSaysWhatStandsInAPostOrAChat(t *testing.T) {
 	}
 	// A kind of line nobody knows costs the line and not the run, so such a run
 	// goes through and has to hold its tongue about the chat all the same.
-	goesOn := map[string]bool{"nothing fails": true, "a kind of line nobody knows": true}
+	goesOn := map[string]bool{"nothing fails": true, "a kind of line nobody knows": true,
+		"a line in the trash": true, "a draft": true}
 	for name, change := range changes {
 		for _, mode := range [][]string{{"--json"}, {"--quiet"}, {"--styled"}, {"--json", "--dry-run"}} {
 			e := newImportEnv(t)
@@ -1210,8 +1215,8 @@ func TestALineOrAPostABundleCannotCarryIsAnErrorOfTheAPIThatNamesItByID(t *testi
 		change  func(*fakebasecamp.Account)
 		message string
 	}{
-		"a line in the trash": {func(a *fakebasecamp.Account) { a.Projects[3].Dock[3].Lines[1].Status = "trashed" }, `line 9802 of chat 9033 has the status "trashed"`},
-		"a draft":             {func(a *fakebasecamp.Account) { a.Projects[3].Dock[0].Posts[0].ShownStatus = "draft" }, `post 9701 has the status "draft"`},
+		"a line at no time":     {func(a *fakebasecamp.Account) { a.Projects[3].Dock[3].Lines[1].CreatedAt = "at dawn" }, "line 9802 was created at something that is no time"},
+		"a post without a time": {func(a *fakebasecamp.Account) { a.Projects[3].Dock[0].Posts[0].UpdatedAt = "" }, "when post 9701 was updated"},
 	} {
 		e := newImportEnv(t)
 		c.change(e.account)

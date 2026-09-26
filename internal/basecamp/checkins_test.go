@@ -550,26 +550,36 @@ func TestAnAnswerWithoutADayAndWithoutAZoneEndsTheRun(t *testing.T) {
 }
 
 // A question and an answer are held to what a bundle can carry where the walk
-// first meets them: a status a bundle has no word for ends the run before what
-// hangs on the record is asked for. The status of a question reaches the bundle,
-// so a word nobody knows would reach the applier.
-func TestAStatusNoBundleKnowsEndsTheRun(t *testing.T) {
+// first meets them: a status a bundle has no word for leaves the record out and
+// is counted, before what hangs on it is asked for. The status of a question
+// reaches the bundle, so a word nobody knows would otherwise reach the applier.
+func TestAStatusNoBundleKnowsLeavesTheQuestionOrTheAnswerOut(t *testing.T) {
 	cases := map[string]struct {
-		message string
-		change  func(*fakebasecamp.Account)
+		left   basecamp.LeftOutRecords
+		gone   string
+		kind   bundle.Kind
+		change func(*fakebasecamp.Account)
 	}{
-		"a question": {`question 9311 has the status "draft", which a bundle does not know`,
+		"a question": {basecamp.LeftOutRecords{Record: "question", Field: "status", Value: "draft", In: "project", InSourceID: "7007", LeftOut: 1},
+			"9311", bundle.Questions,
 			func(a *fakebasecamp.Account) { weekendQuestion(a).Status = "draft" }},
-		"an answer": {`answer 9321 has the status "pending", which a bundle does not know`,
+		"an answer": {basecamp.LeftOutRecords{Record: "answer", Field: "status", Value: "pending", In: "project", InSourceID: "7007", LeftOut: 1},
+			"9321", bundle.Answers,
 			func(a *fakebasecamp.Account) { busyQuestion(a).Answers[1].Status = "pending" }},
 	}
 	for what, one := range cases {
 		account := fakebasecamp.New()
 		one.change(account)
+		dir, result := extract(t, account, checkinProject)
 
-		err := extractExpectingAnError(t, account, checkinProject)
-		if err.Message != one.message {
-			t.Errorf("%s: the run ended with %q, want %q", what, err.Message, one.message)
+		if want := []basecamp.LeftOutRecords{one.left}; !reflect.DeepEqual(result.RecordsLeftOut, want) {
+			t.Errorf("%s: the records left out are %v, want %v", what, result.RecordsLeftOut, want)
+		}
+		if got := sourceIDs(records(t, dir, one.kind)); slices.Contains(got, one.gone) {
+			t.Errorf("%s: %s came into the bundle: %v", what, one.gone, got)
+		}
+		if asked := asked(account, "recordings/"+one.gone+"/"); len(asked) != 0 {
+			t.Errorf("%s: what hangs on %s was asked for: %v", what, one.gone, asked)
 		}
 	}
 }

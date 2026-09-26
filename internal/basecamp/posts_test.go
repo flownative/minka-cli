@@ -231,6 +231,33 @@ func TestBasecampTellsOfNoPinSoNoPostCarriesOne(t *testing.T) {
 	}
 }
 
+// A post of a status a bundle has no word for, a draft among them, is left out
+// and counted before its comments are asked for. Basecamp hands out no drafts
+// today; one would otherwise cost a whole account.
+func TestAPostWhoseStatusABundleDoesNotKnowIsLeftOutAndCounted(t *testing.T) {
+	account := fakebasecamp.New()
+	busyPost(account).ShownStatus = "draft"
+	news(account).Posts[2].ShownStatus = "drafted"
+	dir, result := extract(t, account, talkProject)
+
+	want := []basecamp.LeftOutRecords{
+		{Record: "post", Field: "status", Value: "draft", In: "project", InSourceID: "7004", LeftOut: 1},
+		{Record: "post", Field: "status", Value: "drafted", In: "project", InSourceID: "7004", LeftOut: 1},
+	}
+	if !reflect.DeepEqual(result.RecordsLeftOut[:len(want)], want) {
+		t.Errorf("the records left out are %v, want %v first", result.RecordsLeftOut, want)
+	}
+	posts := sourceIDs(records(t, dir, bundle.Posts))
+	for _, post := range []string{"9701", "9703"} {
+		if slices.Contains(posts, post) {
+			t.Errorf("post %s of a status nobody knows came into the bundle: %v", post, posts)
+		}
+	}
+	if asked := asked(account, "recordings/9701/comments.json"); len(asked) != 0 {
+		t.Errorf("the comments of a post that is left out were asked for: %v", asked)
+	}
+}
+
 // A post is held to what a bundle can carry where the walk first meets it:
 // before a category or a post is written and before a comment is asked for.
 func TestAPostThatCannotBeCarriedEndsTheRunWhereItIsFirstMet(t *testing.T) {
@@ -238,8 +265,6 @@ func TestAPostThatCannotBeCarriedEndsTheRunWhereItIsFirstMet(t *testing.T) {
 		change  func(*fakebasecamp.Account)
 		message string
 	}{
-		"a draft":                    {func(a *fakebasecamp.Account) { news(a).Posts[1].ShownStatus = "draft" }, `post 9702 has the status "draft", which a bundle does not know`},
-		"an archived post, drafted":  {func(a *fakebasecamp.Account) { news(a).Posts[2].ShownStatus = "drafted" }, `post 9703 has the status "drafted", which a bundle does not know`},
 		"a post without createdAt":   {func(a *fakebasecamp.Account) { pitches(a).Posts[0].CreatedAt = "" }, "when post 9711 was created"},
 		"a post without updatedAt":   {func(a *fakebasecamp.Account) { pitches(a).Posts[0].UpdatedAt = "" }, "when post 9711 was updated"},
 		"a post created at no time":  {func(a *fakebasecamp.Account) { pitches(a).Posts[0].CreatedAt = "on a Thursday" }, "post 9711 was created at something that is no time"},
