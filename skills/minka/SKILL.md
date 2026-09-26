@@ -674,6 +674,17 @@ this:
   made of the last one that did not. The `notice` advises `minka hooks install`
   only while nothing has ever gone out; a signal that was turned away is no
   reason to install anything.
+- **A card in the archive of its board is not taken at work.** Minka answers a
+  signal that names one with 200 and `leftOut`, notes the other cards of the
+  set, and the card is taken out of the list of this machine: one card nobody
+  can work on must not put out the tiles of the rest. It stands
+  afterwards in `data.letGo` of `minka work list` and of `minka heartbeat
+  --json`, with `id`, `shortId`, `title`, `reason` and `at`, and in the
+  `notice` in words, until it has stood there eight hours. So a card that is
+  missing from `work list` and named in `letGo` was archived, not forgotten.
+- A `reason` this CLI does not know takes no card out of the list: the card
+  stays, the word is reported as it came, and the `notice` says so. Act on it
+  yourself.
 - `minka heartbeat` always exits 0 and prints nothing unless you ask with
   `--json`. Not signed in, no network, a token that was revoked: none of it
   stops your work, and none of it is reported as a failure. If the board shows

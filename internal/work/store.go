@@ -56,6 +56,21 @@ type Card struct {
 	SeenAt  time.Time `json:"seenAt,omitempty"`
 }
 
+// LetGoCard is a card the host did not take into the list at work: the word it
+// gave for that, and when it said so. The note outlives the card, because a
+// card that is gone from the list is the one thing the list itself cannot say.
+//
+// Where the word is one this machine acts on, the card is out of the list as
+// well. Where it is not, the card stays in it: no word of a host takes a card
+// out of a list by itself.
+type LetGoCard struct {
+	ID      string    `json:"id"`
+	ShortID string    `json:"shortId,omitempty"`
+	Title   string    `json:"title,omitempty"`
+	Reason  string    `json:"reason"`
+	At      time.Time `json:"at"`
+}
+
 // Host is what is remembered for one Minka host.
 //
 // SentAt and SentCards are the throttle: they say what the last signal carried
@@ -73,6 +88,10 @@ type Card struct {
 // time and a busy session would otherwise look silent.
 type Host struct {
 	Cards []Card `json:"cards"`
+
+	// LetGo are the cards the host did not take, newest last, kept as long as a
+	// card of the list is kept without a sign of life.
+	LetGo []LetGoCard `json:"letGo,omitempty"`
 
 	SentAt     time.Time `json:"sentAt,omitempty"`
 	SentCards  []string  `json:"sentCards,omitempty"`
@@ -219,6 +238,34 @@ func (h *Host) Stop(cardID string) bool {
 	return len(h.Cards) < before
 }
 
+// LetGoOf takes a card out of the list because the host will not have it, and
+// leaves the note that says why.
+func (h *Host) LetGoOf(cardID, reason string, now time.Time) LetGoCard {
+	note := h.note(cardID, reason, now)
+	h.Stop(cardID)
+	return note
+}
+
+// NoteNotTaken keeps the note about a card the host did not take and leaves the
+// list as it is, for a word this machine does not act on.
+func (h *Host) NoteNotTaken(cardID, reason string, now time.Time) LetGoCard {
+	return h.note(cardID, reason, now)
+}
+
+// note writes down what the host said about one card, under the name the card
+// goes by here, and replaces what it said about the same card before: a
+// condition that lasts is one note, not one per signal.
+func (h *Host) note(cardID, reason string, now time.Time) LetGoCard {
+	note := LetGoCard{ID: cardID, Reason: reason, At: now}
+	if at := slices.IndexFunc(h.Cards, func(c Card) bool { return c.ID == cardID }); at >= 0 {
+		note.ShortID = h.Cards[at].ShortID
+		note.Title = h.Cards[at].Title
+	}
+	h.LetGo = slices.DeleteFunc(h.LetGo, func(n LetGoCard) bool { return n.ID == cardID })
+	h.LetGo = append(h.LetGo, note)
+	return note
+}
+
 // StillAtIt says again that a session is at work on the cards it took up, and
 // answers whether that was worth writing down. A session that gave no name
 // says nothing here: its cards go by the moment they were started.
@@ -249,11 +296,17 @@ func (h *Host) Beat(now time.Time) bool {
 	return true
 }
 
-// ForgetWhatRanOut drops the cards of a session that never said it was done.
-func (h *Host) ForgetWhatRanOut(now time.Time) int {
+// ForgetWhatRanOut drops the cards of a session that never said it was done,
+// and the notes about cards the host did not take that have stood as long: one
+// window for everything the store keeps without being told again. It answers
+// how many cards it forgot and whether it changed anything at all.
+func (h *Host) ForgetWhatRanOut(now time.Time) (int, bool) {
 	before := len(h.Cards)
 	h.Cards = slices.DeleteFunc(h.Cards, func(c Card) bool { return now.Sub(lastSeen(c)) >= ForgottenAfter })
-	return before - len(h.Cards)
+	notes := len(h.LetGo)
+	h.LetGo = slices.DeleteFunc(h.LetGo, func(n LetGoCard) bool { return now.Sub(n.At) >= ForgottenAfter })
+	forgotten := before - len(h.Cards)
+	return forgotten, forgotten > 0 || notes > len(h.LetGo)
 }
 
 // lastSeen is when the session that took a card up was last known to be at it:

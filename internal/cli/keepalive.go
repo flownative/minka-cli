@@ -215,7 +215,7 @@ func (a *app) whatTheStoreSays(path, host string) (beat time.Time, cards int, er
 	if !known {
 		return time.Time{}, 0, nil
 	}
-	if entry.ForgetWhatRanOut(a.now()) > 0 {
+	if _, swept := entry.ForgetWhatRanOut(a.now()); swept {
 		_ = handle.Save()
 	}
 	return entry.BeatAt, len(entry.Cards), nil

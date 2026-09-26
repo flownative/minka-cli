@@ -388,6 +388,12 @@ type Server struct {
 	// installation with such a store answers it.
 	StoreURL string
 
+	// LeavesOutWithReason is the word the fake gives for a card it leaves out
+	// of a set at work. Empty is `cardArchived`, which is the one Minka gives;
+	// another one stands for a word Minka may learn, and what a client does
+	// with a word it does not know must not depend on the server's choice.
+	LeavesOutWithReason string
+
 	// SendsAFileShort hands a file out one byte shorter than it was said to
 	// be, which no Minka does: what a client makes of bytes that are not the
 	// ones announced must not depend on the server being right about them.
@@ -688,6 +694,8 @@ func (s *Server) noteAtWork(w http.ResponseWriter, r *http.Request, person *Pers
 	}
 
 	cards := []string{}
+	var leftOut []any
+	var leftOutIDs []string
 	for _, name := range named {
 		// A card written out by hand may arrive in capitals and names the
 		// same card.
@@ -696,6 +704,13 @@ func (s *Server) noteAtWork(w http.ResponseWriter, r *http.Request, person *Pers
 			continue
 		}
 		if _, _, card := s.visibleCard(id, person); card == nil {
+			// A card in the archive is named in the answer, where a card that
+			// is nothing to this agent is passed over: nobody works on a card
+			// in the archive, and the rest of the set has to go on glowing.
+			if _, _, archived := s.visibleArchivedCard(id, person); archived != nil && !slices.Contains(leftOutIDs, id) {
+				leftOutIDs = append(leftOutIDs, id)
+				leftOut = append(leftOut, map[string]any{"cardId": id, "reason": s.leftOutReason()})
+			}
 			continue
 		}
 		cards = append(cards, id)
@@ -708,8 +723,22 @@ func (s *Server) noteAtWork(w http.ResponseWriter, r *http.Request, person *Pers
 		s.atWork = append(s.atWork, AtWork{AgentID: person.ID, ClientID: clientID, CardID: card, LastSeenAt: s.now})
 	}
 
-	// 204 and no body, not even a content type.
-	w.WriteHeader(http.StatusNoContent)
+	if len(leftOut) == 0 {
+		// 204 and no body, not even a content type.
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	// The cards it took are noted; the answer says which it did not take.
+	writeJSON(w, http.StatusOK, map[string]any{"leftOut": leftOut})
+}
+
+// leftOutReason is the word the fake gives for a card it leaves out of a set at
+// work.
+func (s *Server) leftOutReason() string {
+	if s.LeavesOutWithReason != "" {
+		return s.LeavesOutWithReason
+	}
+	return "cardArchived"
 }
 
 // agentClientID reads which client of an agent is speaking. A name that is too

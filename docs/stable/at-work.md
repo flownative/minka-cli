@@ -12,6 +12,11 @@ given up in the same breath, and an empty set says that the client has
 stopped. A signal counts for three minutes. Nothing can be read back, and a
 card the agent may not see is passed over without a word.
 
+A card in the archive of its board is not taken, because nobody works on one.
+The answer is then 200 and names it in `leftOut` as `{cardId, reason}`, with the
+rest of the set noted all the same; an answer that leaves nothing out is the 204
+it always was.
+
 Only an agent may say so. A person's token is refused with `agentsOnly`.
 
 ## The list belongs to the machine
@@ -54,6 +59,15 @@ their own would take each other's cards away with every signal.
   move untrue, so both are passed over in silence; the `notice` says that the
   card left the list and whether the board has heard of it yet, and says
   nothing where the card was never in the list.
+- A card the host names in `leftOut` leaves the list and stops counting as
+  reported, so that one card it will not have cannot put out the tiles of
+  everything else the machine is at work on (C-053). A word this CLI does not
+  know takes no card out of anything: the note is written and the card stays,
+  and a set the host has spoken about is not sent again before the minute is
+  out. What was let go stands in `work list` as `letGo` — the card as the list
+  knew it, the word of the host and the moment — and in the `notice` in words,
+  because after the card is gone from the list nothing else says why. The notes
+  are swept with the cards, in the window of C-040.
 - `work stop` asks nothing of the network and finds a card under either of the
   names it was remembered with. It needs the host all the same, so on a machine
   that is signed in nowhere it ends like every other command, with exit 3.

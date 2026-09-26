@@ -125,7 +125,7 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
 ## Checked against the fake only
 
 - Of the notes of a card: `cardNotesHasControlCharacters`, and `cardArchived`
-  for a card in its board's archive, which no write of the fake answers.
+  for a card in its board's archive, which no write of the fake refuses with.
   Notes over 100000 characters are refused before sending, counted as the
   server counts them since it was brought into line. The fake refuses in the
   controller's order, the text before the guard, and reads a guard's time in
@@ -273,11 +273,16 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   the text view of the board and of the card.
 - The fake API knows a card in the archive of its board: it says `archived`, is
   read at its own address, stands in no list, goes into the trash from the
-  archive and comes back onto the board. What it does not mirror is the refusal
-  of a write on such a card: every write answers as an address that has nothing
-  instead of 422 `cardArchived`, and the order in which a move refuses — an
-  archived card before a column without the area on hold — is read in the Minka
-  code alone.
+  archive and comes back onto the board, and it is left out of a set at work
+  with 200 and `leftOut` while everything else of the set is noted. What it does
+  not mirror is the refusal of a write on such a card: every write answers as an
+  address that has nothing instead of 422 `cardArchived`, and the order in which
+  a move refuses — an archived card before a column without the area on hold —
+  is read in the Minka code alone.
+- That a card is left out of a set at work is read live nowhere yet: it was read
+  in Minka's code, and the answer the fake gives is the one that code builds.
+  What a word for it that this CLI does not know does to the list is seen
+  against the fake alone, which gives such a word when it is asked to.
 - The trash of the fake holds cards alone. That a post, a to-do, a question, a
   folder or a document names its tool in the field `board`, and that `blockedBy`
   can name a to-do list, a group, a question or a folder in the trash or in an
