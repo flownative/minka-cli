@@ -69,7 +69,10 @@ bundle gives none, a forwarded mail of a status that is none of the three, and
 an answer by mail that says anything but `active`. What stood in a list or a
 group a bundle cannot carry falls
 with it, is asked for to be counted and is named with the place it fell with
-(C-052), so that no run says a bundle holds more of the source than it does.
+(C-052), so that no run says a bundle holds more of the source than it does. A
+to-do that hangs on a To-dos tool itself stands in no list a bundle can name, so
+it is left out, counted and named with its project (C-060), and the to-dos of
+every tool are asked for under the tool's own identifier for that reason.
 `recordsLeftOut` names each with the kind of record, the word and where it
 stood, so one exotic record does not cost the account. What still ends
 a run is what would be written wrongly: times that are missing or are none, a
@@ -280,6 +283,19 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   be asked for at all, which is what a run does for a list of any status. A to-do
   whose completion is newer than the moment the source says it was touched
   (C-051) is a shape the invented account holds and no real one has shown.
+  Two shapes of the real account were measured all the same, read-only and
+  **without a run of the CLI**, and the extractor rests on that measurement: a
+  to-do whose `parent` says `Todoset` instead of `Todolist`, of which the whole
+  account holds six in use, in three projects and across four to-do sets, none of
+  them archived or trashed, the parent being the tool's own identifier, and which
+  Basecamp hands out at `buckets/{b}/todolists/{todoset}/todos.json` although no
+  `todolists.json` of the tool names that identifier; and `repetition_schedule`,
+  which twelve to-dos of the account carry and the other 3,244 leave out
+  altogether rather than sending an empty one, with the same ten fields every
+  time. Neither shape has been met by a run, so how Basecamp answers a request for
+  the to-dos of a tool that has none of its own rests on the invented account too:
+  a failure of that request ends the run, where a place the bundle does not carry
+  is passed over when it is gone.
 - Of the forwarded mail of `import basecamp`: no extraction has met an inbox
   live, and the shape of the source is measured all the same, read-only and
   without a run. Measured: that a dock entry of an inbox is
