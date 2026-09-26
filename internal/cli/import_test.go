@@ -123,9 +123,10 @@ func TestImportBasecampWritesABundleAndReportsWhatItHolds(t *testing.T) {
 		"questionsLeftOut": []any{}, "anchorsInferred": []any{}, "nobodyAsked": []any{},
 		"askedLeftOut":        map[string]any{"notInTheProject": float64(0), "retired": float64(0), "withoutAnAddress": float64(0)},
 		"answersWithoutABody": float64(0), "answersWithoutADay": float64(0), "answersTrashed": float64(0),
-		"longestBody":     map[string]any{"cards": float64(0), "comments": float64(0), "posts": float64(0), "messages": float64(0), "answers": float64(0)},
-		"references":      map[string]any{"cards": float64(0), "posts": float64(0), "tools": float64(0)},
-		"requestsRetried": float64(0),
+		"longestBody":        map[string]any{"cards": float64(0), "comments": float64(0), "posts": float64(0), "messages": float64(0), "answers": float64(0)},
+		"longestBodyRecords": map[string]any{},
+		"references":         map[string]any{"cards": float64(0), "posts": float64(0), "tools": float64(0)},
+		"requestsRetried":    float64(0),
 	}
 	if got := decode(t, env.Data); !reflect.DeepEqual(got, want) {
 		t.Errorf("data:\n got %v\nwant %v", got, want)
@@ -994,7 +995,12 @@ func TestImportBasecampReportsThePostsAndTheChatsOfAProject(t *testing.T) {
 		"uploadLinesLeftOut": float64(1), "messagesWithEmptyBody": float64(1), "picturesLinked": float64(1),
 		"recordsLeftOut": []any{map[string]any{"record": "line", "field": "type", "value": fakebasecamp.UnknownLine,
 			"in": "chat", "inSourceId": "9033", "leftOut": float64(2)}},
-		"longestBody":   map[string]any{"cards": float64(0), "comments": float64(94), "posts": float64(212), "messages": float64(213), "answers": float64(0)},
+		"longestBody": map[string]any{"cards": float64(0), "comments": float64(94), "posts": float64(212), "messages": float64(213), "answers": float64(0)},
+		"longestBodyRecords": map[string]any{
+			"comments": map[string]any{"record": "comment", "sourceId": "9752", "in": "project", "inSourceId": "7004", "characters": float64(94)},
+			"posts":    map[string]any{"record": "post", "sourceId": "9701", "in": "project", "inSourceId": "7004", "characters": float64(212)},
+			"messages": map[string]any{"record": "line", "sourceId": "9802", "in": "chat", "inSourceId": "9033", "characters": float64(213)},
+		},
 		"filesInBodies": float64(4), "filesDropped": float64(2), "linkPreviews": float64(3), "mentionsUnresolved": float64(0),
 		"embeds": float64(1), "embedsLeftOut": float64(0),
 	}
@@ -1047,6 +1053,9 @@ func TestImportBasecampReportsThePostsAndTheChatsOfAProject(t *testing.T) {
 		"line     type   " + fakebasecamp.UnknownLine + "     in chat 9033: 2",
 		"In the texts: 4 files referred to, 2 files Basecamp lists nothing for dropped, 0 mentions left as names, 3 previews of links turned into links, 1 picture at a foreign address turned into a link",
 		"Longest text in characters: cards 0, comments 94, posts 212, messages 213",
+		"  comment  9752     in project 7004: 94",
+		"  post     9701     in project 7004: 212",
+		"  line     9802     in chat 9033: 213",
 	} {
 		if !strings.Contains(r.stdout, want) {
 			t.Errorf("the text lacks %q:\n%s", want, r.stdout)
@@ -1168,13 +1177,17 @@ func TestABundleWithOneSmallChatCarriesTheOneFileAndNamesNoParts(t *testing.T) {
 
 // What people wrote is in the bundle and nowhere else: no output says what a
 // post is called, what somebody said in a chat or who did.
+// writtenInAPostOrAChat is what people wrote in the posts and the chats of the
+// fake: no output of a run over them may say any of it.
+var writtenInAPostOrAChat = []string{
+	"News", "Pitches", "Attic", "Campfire", "Side room", "Office move", "Reminder", "house rules", "tea club", "book shelf",
+	"Announcement", "faq", "Heartbeat", "Pitch", "📢", "💡", "Count me in", "plants", "fern", "Good morning", "Build 42", "Goodbye", "Ping",
+	"minutes.pdf", "whiteboard.png", "route.png", "nowhere.png", "0a1b2c3d", "not a key", "Shelves", "weather", "Click", "alert",
+	"Grace", "Ada", "Former", "Robot", "Deleted Somebody", "example.test", "👏", "🎲", "Whatever",
+}
+
 func TestNoOutputSaysWhatStandsInAPostOrAChat(t *testing.T) {
-	written := []string{
-		"News", "Pitches", "Attic", "Campfire", "Side room", "Office move", "Reminder", "house rules", "tea club", "book shelf",
-		"Announcement", "faq", "Heartbeat", "Pitch", "📢", "💡", "Count me in", "plants", "fern", "Good morning", "Build 42", "Goodbye", "Ping",
-		"minutes.pdf", "whiteboard.png", "route.png", "nowhere.png", "0a1b2c3d", "not a key", "Shelves", "weather", "Click", "alert",
-		"Grace", "Ada", "Former", "Robot", "Deleted Somebody", "example.test", "👏", "🎲", "Whatever",
-	}
+	written := writtenInAPostOrAChat
 	lines := func(a *fakebasecamp.Account) []fakebasecamp.Line { return a.Projects[3].Dock[3].Lines }
 	posts := func(a *fakebasecamp.Account) []fakebasecamp.Post { return a.Projects[3].Dock[0].Posts }
 	changes := map[string]func(*fakebasecamp.Account){
@@ -1205,6 +1218,27 @@ func TestNoOutputSaysWhatStandsInAPostOrAChat(t *testing.T) {
 				if strings.Contains(r.stdout+r.stderr, text) {
 					t.Errorf("%s %v: the output says %q:\n%s%s", name, mode, text, r.stdout, r.stderr)
 				}
+			}
+		}
+	}
+}
+
+// The record that holds the longest text of its kind is named in every mode,
+// by its identifier and the place it stands in, and by nothing that was written
+// in it.
+func TestTheLongestTextNamesItsRecordAndNothingOfWhatItSays(t *testing.T) {
+	for _, mode := range [][]string{{"--json"}, {"--quiet"}, {"--styled"}, {"--json", "--dry-run"}} {
+		e := newImportEnv(t)
+		r := e.run(append([]string{"import", "basecamp", "--project", "7004", "--out", filepath.Join(t.TempDir(), "bundle")}, mode...)...)
+		expectCode(t, r, ExitOK)
+		for _, id := range []string{"9752", "9701", "9802"} {
+			if !strings.Contains(r.stdout, id) {
+				t.Errorf("%v: the output does not name the record %s of a longest text:\n%s", mode, id, r.stdout)
+			}
+		}
+		for _, text := range writtenInAPostOrAChat {
+			if strings.Contains(r.stdout+r.stderr, text) {
+				t.Errorf("%v: the output says %q:\n%s%s", mode, text, r.stdout, r.stderr)
 			}
 		}
 	}
@@ -1555,6 +1589,10 @@ func TestImportBasecampReportsTheCheckinsOfAProject(t *testing.T) {
 			"notInTheProject": float64(1), "retired": float64(1), "withoutAnAddress": float64(1)},
 		"answersWithoutABody": float64(1), "answersWithoutADay": float64(0), "answersTrashed": float64(0),
 		"longestBody": map[string]any{"cards": float64(0), "comments": float64(17), "posts": float64(0), "messages": float64(0), "answers": float64(150)},
+		"longestBodyRecords": map[string]any{
+			"comments": map[string]any{"record": "comment", "sourceId": "9350", "in": "project", "inSourceId": "7007", "characters": float64(17)},
+			"answers":  map[string]any{"record": "answer", "sourceId": "9320", "in": "project", "inSourceId": "7007", "characters": float64(150)},
+		},
 	}
 	for key, value := range want {
 		if !reflect.DeepEqual(data[key], value) {

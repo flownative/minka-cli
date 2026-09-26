@@ -120,8 +120,12 @@ type importReport struct {
 	// place.
 	RecordsLeftOut []basecamp.LeftOutRecords `json:"recordsLeftOut"`
 	// LongestBody is the longest text per kind, in characters: a number and
-	// nothing of the text.
-	LongestBody map[bundle.Kind]int `json:"longestBody"`
+	// nothing of the text. LongestBodyRecords names the record each number was
+	// measured on, so that it can be looked at at the source: a kind, an
+	// identifier and a place, and nothing of the text either. A kind whose
+	// longest text has no characters names no record.
+	LongestBody        map[bundle.Kind]int                        `json:"longestBody"`
+	LongestBodyRecords map[bundle.Kind]basecamp.LongestBodyRecord `json:"longestBodyRecords"`
 	// RequestsRetried counts the requests that were asked again because they
 	// failed for a reason that may pass, each further attempt counted.
 	RequestsRetried int `json:"requestsRetried"`
@@ -327,6 +331,7 @@ it has been applied.`,
 
 				MessagesWithEmptyBody: result.MessagesWithEmptyBody,
 				LongestBody:           result.LongestBody,
+				LongestBodyRecords:    result.LongestBodyRecords,
 				RequestsRetried:       source.Retried(),
 			}
 			var notices []string
@@ -430,6 +435,10 @@ it has been applied.`,
 	return cmd
 }
 
+// measuredKinds are the kinds whose longest text a run measures, in the order
+// the report names them.
+var measuredKinds = []bundle.Kind{bundle.Cards, bundle.Comments, bundle.Posts, bundle.Messages, bundle.Answers}
+
 func renderImportReport(w io.Writer, report importReport) {
 	if report.DryRun {
 		fmt.Fprintln(w, "Dry run: nothing written")
@@ -502,6 +511,11 @@ func renderImportReport(w io.Writer, report importReport) {
 	fmt.Fprintf(w, "Longest text in characters: cards %d, comments %d, posts %d, messages %d, answers %d\n",
 		report.LongestBody[bundle.Cards], report.LongestBody[bundle.Comments], report.LongestBody[bundle.Posts], report.LongestBody[bundle.Messages],
 		report.LongestBody[bundle.Answers])
+	for _, kind := range measuredKinds {
+		if one, has := report.LongestBodyRecords[kind]; has {
+			fmt.Fprintf(w, "  %-8s %-8s in %s %s: %d\n", one.Record, one.SourceID, one.In, one.InSourceID, one.Characters)
+		}
+	}
 
 	if report.RequestsRetried > 0 {
 		fmt.Fprintf(w, "Requests asked again after a failure that passed: %d\n", report.RequestsRetried)

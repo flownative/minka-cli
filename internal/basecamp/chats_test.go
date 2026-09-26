@@ -691,7 +691,10 @@ func TestALineThatCannotBeCarriedEndsTheRunBeforeItsChatIsWritten(t *testing.T) 
 	}
 }
 
-func TestTheLongestTextOfAKindIsMeasuredInCharacters(t *testing.T) {
+// The longest text of a kind comes with the record it was measured on, so that
+// whoever reads the number can look at the record at the source. A kind nothing
+// was measured for names no record.
+func TestTheLongestTextOfAKindIsMeasuredInCharactersAndNamesItsRecord(t *testing.T) {
 	account := fakebasecamp.New()
 	busyCard(account).Comments[0].Content = strings.Repeat("ä", 500)
 	busyPost(account).Comments[0].Content = strings.Repeat("ö", 400)
@@ -703,6 +706,58 @@ func TestTheLongestTextOfAKindIsMeasuredInCharacters(t *testing.T) {
 	want := map[bundle.Kind]int{bundle.Cards: 600, bundle.Comments: 500, bundle.Posts: 300, bundle.Messages: 250, bundle.Answers: 0}
 	if !reflect.DeepEqual(result.LongestBody, want) {
 		t.Errorf("the longest texts are %v, want %v", result.LongestBody, want)
+	}
+
+	records := map[bundle.Kind]basecamp.LongestBodyRecord{
+		bundle.Cards:    {Record: "card", SourceID: "9202", In: "project", InSourceID: boardProject, Characters: 600},
+		bundle.Comments: {Record: "comment", SourceID: "9301", In: "project", InSourceID: boardProject, Characters: 500},
+		bundle.Posts:    {Record: "post", SourceID: "9711", In: "project", InSourceID: talkProject, Characters: 300},
+		bundle.Messages: {Record: "line", SourceID: "9812", In: "chat", InSourceID: "9035", Characters: 250},
+	}
+	if !reflect.DeepEqual(result.LongestBodyRecords, records) {
+		t.Errorf("the longest texts stand in %v, want %v", result.LongestBodyRecords, records)
+	}
+}
+
+// Of two texts of a kind the longer one is named, whether the run met it first
+// or last, and of two of the same length the one met first.
+func TestTheRecordNamedIsTheOneWithTheLongestTextAndNotTheOneMetLast(t *testing.T) {
+	for what, lengths := range map[string][2]int{
+		"the longer one met first": {300, 200},
+		"the longer one met last":  {200, 300},
+		"both of a length":         {300, 300},
+	} {
+		account := fakebasecamp.New()
+		comments := busyCard(account).Comments
+		comments[0].Content = strings.Repeat("a", lengths[0])
+		comments[1].Content = strings.Repeat("b", lengths[1])
+		_, result := extract(t, account, boardProject)
+
+		named, longest := "9301", lengths[0]
+		if lengths[1] > lengths[0] {
+			named, longest = "9302", lengths[1]
+		}
+		want := basecamp.LongestBodyRecord{Record: "comment", SourceID: named, In: "project", InSourceID: boardProject, Characters: longest}
+		if got := result.LongestBodyRecords[bundle.Comments]; got != want {
+			t.Errorf("%s: the longest comment is %+v, want %+v", what, got, want)
+		}
+	}
+}
+
+// A text of no characters is no text to look at, so a kind whose texts are all
+// empty names a length of nothing and no record.
+func TestAKindWithoutATextNamesNoRecord(t *testing.T) {
+	account := fakebasecamp.New()
+	for i := range busyCard(account).Comments {
+		busyCard(account).Comments[i].Content = ""
+	}
+	_, result := extract(t, account, boardProject)
+
+	if result.LongestBody[bundle.Comments] != 0 {
+		t.Errorf("comments of no characters are measured as %d", result.LongestBody[bundle.Comments])
+	}
+	if named, has := result.LongestBodyRecords[bundle.Comments]; has {
+		t.Errorf("a comment of no characters is named as the longest: %+v", named)
 	}
 }
 
