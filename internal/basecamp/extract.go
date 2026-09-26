@@ -90,6 +90,7 @@ var toolKinds = map[string]string{
 	"message_board": bundle.ToolPosts,
 	"questionnaire": bundle.ToolCheckins,
 	"todoset":       bundle.ToolTodos,
+	"inbox":         bundle.ToolForwards,
 }
 
 // SkippedTools counts dock entries of one kind that a run left out, either
@@ -267,6 +268,8 @@ type Result struct {
 	AnswersWithoutABody int
 	AnswersWithoutADay  int
 	AnswersTrashed      int
+	// Forwards says what became of the forwarded mail a run met.
+	Forwards ForwardCounts
 	// LongestBody is the longest text of a kind, in characters, and
 	// LongestBodyRecords the record it was measured on, per kind. A kind whose
 	// longest text has no characters names no record.
@@ -337,6 +340,8 @@ type Extractor struct {
 	todosWithSubtasks int
 	subtasksLeftOut   int
 
+	forwards ForwardCounts
+
 	questionsLeftOut    []ImpossibleQuestion
 	anchorsInferred     []InferredAnchor
 	nobodyAsked         []NobodyAsked
@@ -347,9 +352,12 @@ type Extractor struct {
 
 	// fileOwners names the first owner of every file the walk has met, and
 	// fileRecords are the records of those files in the order they were met.
-	fileOwners  map[string]string
-	fileRecords []bundle.Attachment
-	files       FileCounts
+	fileOwners map[string]string
+	// filesThatArrive says of every file the walk has met whether its bytes
+	// reach Minka, for the one kind of record that is lost without them.
+	filesThatArrive map[string]bool
+	fileRecords     []bundle.Attachment
+	files           FileCounts
 }
 
 // talk names the tools of one project that hold posts, lines, questions and
@@ -360,6 +368,7 @@ type talk struct {
 	chats          []int64
 	questionnaires []int64
 	todosets       []int64
+	inboxes        []int64
 	// everyTodoset is every dock entry of a project that is a To-dos tool, those
 	// that are switched off included. A list names only the tool it stands in, so
 	// what hangs on none of them is no list but a group.
@@ -411,10 +420,15 @@ func (e *Extractor) Extract(ctx context.Context, projectIDs []string, w *bundle.
 	e.todosLeftOut, e.todoPlacesLeftOut = TodosLeftOut{}, []TodoPlaceLeftOut{}
 	e.todosNotDone, e.todosWithPeople = 0, 0
 	e.todosWithSubtasks, e.subtasksLeftOut = 0, 0
+	e.forwards = ForwardCounts{
+		ByStatus:              map[string]int{bundle.StatusActive: 0, bundle.StatusTrashed: 0},
+		WithoutAnAddress:      []string{},
+		RepliesWithoutASender: []string{},
+	}
 	e.longestBody = map[bundle.Kind]int{bundle.Cards: 0, bundle.Comments: 0, bundle.Posts: 0, bundle.Messages: 0, bundle.Answers: 0,
-		bundle.TodoLists: 0, bundle.Todos: 0}
+		bundle.TodoLists: 0, bundle.Todos: 0, bundle.Forwards: 0, bundle.ForwardReplies: 0}
 	e.longestBodyRecords = map[bundle.Kind]LongestBodyRecord{}
-	e.fileOwners, e.fileRecords, e.files = map[string]string{}, nil, FileCounts{}
+	e.fileOwners, e.filesThatArrive, e.fileRecords, e.files = map[string]string{}, map[string]bool{}, nil, FileCounts{}
 
 	ids, err := sortedIDs(projectIDs)
 	if err != nil {
@@ -447,6 +461,11 @@ func (e *Extractor) Extract(ctx context.Context, projectIDs []string, w *bundle.
 		return Result{}, err
 	}
 	if err := e.extractTodos(ctx, w); err != nil {
+		return Result{}, err
+	}
+	// Last of all, because no second look rewrites a reference of a forward:
+	// what it points at has to be in the bundle before it.
+	if err := e.extractForwards(ctx, w); err != nil {
 		return Result{}, err
 	}
 
@@ -502,6 +521,8 @@ func (e *Extractor) Extract(ctx context.Context, projectIDs []string, w *bundle.
 		AnswersWithoutABody: e.answersWithoutABody,
 		AnswersWithoutADay:  e.answersWithoutADay,
 		AnswersTrashed:      e.answersTrashed,
+
+		Forwards: e.forwards,
 
 		MessagesWithEmptyBody: e.messagesWithEmptyBody,
 		LongestBody:           e.longestBody,
@@ -661,6 +682,8 @@ func (e *Extractor) extractProject(ctx context.Context, id int64, w *bundle.Writ
 			talks.questionnaires = append(talks.questionnaires, tool.entry.ID)
 		case bundle.ToolTodos:
 			talks.todosets = append(talks.todosets, tool.entry.ID)
+		case bundle.ToolForwards:
+			talks.inboxes = append(talks.inboxes, tool.entry.ID)
 		}
 	}
 	e.talks = append(e.talks, talks)

@@ -81,14 +81,15 @@ func TestTwoToolsOfOneKindEachSayWhetherClientsSeeThem(t *testing.T) {
 func TestAWordAboutClientsOnARecordThatFollowsItsContainerIsLeftOutAndCounted(t *testing.T) {
 	dir, result := extract(t, fakebasecamp.New(), clientProject)
 
-	for kind, id := range map[bundle.Kind]string{bundle.Todos: "9261", bundle.TodoGroups: "9251"} {
+	for kind, id := range map[bundle.Kind]string{bundle.Todos: "9261", bundle.TodoGroups: "9251",
+		bundle.Forwards: "9235", bundle.ForwardReplies: "9236"} {
 		record := recordWithID(t, records(t, dir, kind), id)
 		if _, said := record["visibleToClients"]; said {
-			t.Errorf("%s %s says %v about clients, and follows its list", kind, id, record["visibleToClients"])
+			t.Errorf("%s %s says %v about clients, and follows what it stands in", kind, id, record["visibleToClients"])
 		}
 	}
-	if result.VisibilityLeftToTheContainer != 2 {
-		t.Errorf("%d words left to a container, want the group and the to-do", result.VisibilityLeftToTheContainer)
+	if result.VisibilityLeftToTheContainer != 4 {
+		t.Errorf("%d words left to a container, want the group, the to-do, the forward and its reply", result.VisibilityLeftToTheContainer)
 	}
 }
 
@@ -171,7 +172,7 @@ func TestAProjectSaysWhetherItWorksWithClientsAndWithWhichCompany(t *testing.T) 
 	}
 
 	account = fakebasecamp.New()
-	account.Projects[len(account.Projects)-1].SaysNothingAboutClients = true
+	theClientProject(t, account).SaysNothingAboutClients = true
 	dir, _ = extract(t, account, clientProject)
 	silent := recordWithID(t, records(t, dir, bundle.Projects), clientProject)
 	if _, access := silent["clientAccess"]; access {
@@ -335,12 +336,12 @@ func TestAQuestionAskedOfClientsAloneComesAskingNobody(t *testing.T) {
 
 // A kind of tool is either extracted or silent about clients, never both: what a
 // run extracts is asked first, so the day Docs & Files is extracted this test
-// fails and the gap in the report goes with it.
+// fails and the gap in the report goes with it, as it went with the forwards.
 func TestAKindOfToolIsEitherExtractedOrSilentAboutClients(t *testing.T) {
 	silent := map[string]bool{
-		"vault": true, "inbox": true,
+		"vault":        true,
 		"kanban_board": false, "chat": false, "message_board": false, "questionnaire": false, "todoset": false,
-		"schedule": false,
+		"inbox": false, "schedule": false,
 	}
 	for kind, want := range silent {
 		if got := basecamp.SaysNothingAboutClients(kind); got != want {

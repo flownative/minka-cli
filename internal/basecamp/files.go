@@ -126,6 +126,11 @@ func (e *Extractor) storageAddress(file sourceFile) (string, error) {
 }
 
 const (
+	// largestFileMinkaTakes is the ceiling one file meets on the way in, in
+	// bytes. Above it the file stays outside there however whole it is here, so
+	// a record whose body is nothing but that file arrives empty. An instance
+	// may be told another number; this is the one the format names.
+	largestFileMinkaTakes = 1 << 30
 	// maxCaptionLength is how long a caption may be to stay on a reference,
 	// in characters.
 	maxCaptionLength = 1000
@@ -222,10 +227,12 @@ func (e *Extractor) attachFile(ctx context.Context, w *bundle.Writer, ownerKind 
 		record.ContentType = &file.contentType
 	}
 	if w.Discards() {
+		e.noteWhetherItArrives(file.ref, file.byteSize == nil || *file.byteSize <= largestFileMinkaTakes)
 		e.fileRecords = append(e.fileRecords, record)
 		return nil
 	}
 	missing := func(failed *Error) {
+		e.noteWhetherItArrives(file.ref, false)
 		e.missing = append(e.missing, MissingFile{
 			AttachmentSourceID: file.ref,
 			OwnerKind:          ownerKind,
@@ -272,6 +279,7 @@ func (e *Extractor) attachFile(ctx context.Context, w *bundle.Writer, ownerKind 
 		case failed.Kind == NotFound:
 			record.Gone = true
 			e.files.Gone++
+			e.noteWhetherItArrives(file.ref, false)
 			e.fileRecords = append(e.fileRecords, record)
 			return nil
 		default:
@@ -289,9 +297,19 @@ func (e *Extractor) attachFile(ctx context.Context, w *bundle.Writer, ownerKind 
 	}
 
 	e.files.Bytes += stored.Bytes
+	e.noteWhetherItArrives(file.ref, stored.Bytes <= largestFileMinkaTakes)
 	record.Holds(stored)
 	e.fileRecords = append(e.fileRecords, record)
 	return nil
+}
+
+// noteWhetherItArrives writes down whether the bytes of a file will reach
+// Minka: whether the bundle carries them and whether Minka takes a file of
+// that size. Only a record whose body is nothing else asks, because such a
+// record is written empty there and never looked at again; for every other
+// body a file that stays outside leaves a hole and nothing more.
+func (e *Extractor) noteWhetherItArrives(ref string, arrives bool) {
+	e.filesThatArrive[ref] = arrives
 }
 
 // sizeDiffers is the failure of a download that ended well and brought

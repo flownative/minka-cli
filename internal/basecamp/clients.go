@@ -27,12 +27,14 @@ func visibleToClientsOf(origin recording) *bool {
 // its list, a card its board, an answer its question, a comment what it was
 // written under. Where such a record carries a word all the same, it is counted
 // and left out, because a second truth about one record is one truth too many.
+// A forward and a reply follow their tool like the rest: an Email forwards
+// tool is shown to clients as a whole or not at all.
 var visibilityOfItsOwn = map[string]bool{"tool": true, "post": true, "to-do list": true, "question": true}
 
 // toolKindsARunLeaves are the kinds of Basecamp tool Minka has a counterpart for
 // that a run does not extract. Neither their word about clients nor anything
 // standing in them reaches a bundle.
-var toolKindsARunLeaves = map[string]bool{"vault": true, "inbox": true}
+var toolKindsARunLeaves = map[string]bool{"vault": true}
 
 // SaysNothingAboutClients tells of a kind of dock entry that a bundle carries no
 // word about clients for such a tool, because a run does not extract that kind

@@ -322,6 +322,11 @@ func (a *Account) commentsOf(p *Project, id string) ([]Comment, bool) {
 			comments, found = one.Comments, true
 		}
 	})
+	a.eachForward(p, func(forward *Forward) {
+		if strconv.FormatInt(forward.ID, 10) == id {
+			comments, found = forward.Comments, true
+		}
+	})
 	return comments, found
 }
 
@@ -370,6 +375,17 @@ func (a *Account) boostsOf(p *Project, id string) ([]Boost, bool) {
 		is(one.ID, one.Boosts)
 		for _, comment := range one.Comments {
 			is(comment.ID, comment.Boosts)
+		}
+	})
+	// The boosts of a reply are there to be asked for, as they are at Basecamp:
+	// that no run asks is the run's own doing.
+	a.eachForward(p, func(forward *Forward) {
+		is(forward.ID, forward.Boosts)
+		for _, comment := range forward.Comments {
+			is(comment.ID, comment.Boosts)
+		}
+		for _, reply := range forward.Replies {
+			is(reply.ID, reply.Boosts)
 		}
 	})
 	return boosts, found

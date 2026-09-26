@@ -24,17 +24,28 @@ card, a comment or a message gives the identifier a download takes, without
 anything being taken out of the text.
 
 `minka import basecamp` extracts the structure, the boards, the message
-boards, the chats, the check-ins and the to-dos of Basecamp projects into an
+boards, the chats, the check-ins, the to-dos and the forwarded mail of Basecamp
+projects into an
 import bundle for Minka's applier: people with avatars, projects with members,
-the boards, chats, message boards, questionnaires and to-do sets as tools, of
+the boards, chats, message boards, questionnaires, to-do sets and inboxes as
+tools, of
 each board the columns, cards, steps, comments and boosts, of each message
 board the posts of every status with their categories, comments and boosts, of
 each chat its lines as messages with their boosts, written in parts of one
 chat and some 10,000 lines each, of each questionnaire its questions with the
-schedule Minka has words for and their answers with what hangs on them, and of
+schedule Minka has words for and their answers with what hangs on them, of
 each to-do set its lists from the bottom up, because Minka puts every new list
 on top, with their groups and their to-dos in the order of the list and what
-hangs on a list and a to-do.
+hangs on a list and a to-do, and of each inbox its forwarded mail with the
+answers by mail, the comments and the boosts of each.
+The inboxes come last of all, because no second look rewrites a reference of a
+forwarded mail. Three things of such a mail are the extractor's own doing, each
+written down as a rule: a subject Minka would refuse becomes a title rather than
+costing the mail or the run and a sender that is no address leaves the mail out
+(C-056), a body that would reach Minka as nothing at all carries one line of the
+run (C-057), and what the source keeps on its shelf comes into the trash, where
+it can be brought back (C-058). Somebody who wrote to a project from outside the
+account stays an address and becomes nobody.
 A record the source describes with a word a bundle has none for is left out and
 counted, and the run goes on (C-050): a chat line of an unknown kind — a bundle
 has a word for `Chat::Lines::Text`, `Chat::Lines::RichText`,
@@ -62,8 +73,9 @@ memberships that fall away and says no question is asked of a client. A company
 the source names without an identifier, or with a name Minka refuses, ends the
 run where the record that names it comes in: written away as none, it would tell
 Minka to drop the company it holds.
-Docs & Files and Forwards are not extracted, so a bundle says nothing of whether
-clients see them, which the report names as a gap.
+Docs & Files is not extracted, so a bundle says nothing of whether clients see
+it, which the report names as a gap; an Email forwards tool carries its word like
+every other tool, and a mail and an answer by mail follow it.
 Mentions in the texts are references, the preview of a link is the link, a
 video or a player embedded in a text is an `<import-embed>` with its address,
 a link to a card, a message or a chat of the account is an
@@ -253,6 +265,30 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   be asked for at all, which is what a run does for a list of any status. A to-do
   whose completion is newer than the moment the source says it was touched
   (C-051) is a shape the invented account holds and no real one has shown.
+- Of the forwarded mail of `import basecamp`: all of it. No extraction has met
+  an inbox live. What the account was measured for, read-only and before a line
+  was written, is the shape of the source: that a dock entry of an inbox is
+  called `inbox`, that its mail is listed at `buckets/{b}/inboxes/{i}/forwards.json`
+  and the answers of one at `buckets/{b}/inbox_forwards/{id}/replies.json`, that
+  a mail carries `subject`, `from` — the address alone, never a name —,
+  `content`, `content_attachments`, `creator`, `created_at`, `status` and
+  `replies_count` and says how many comments and how many boosts it has as
+  little as it says whom it was addressed to, that an answer carries `content`,
+  `content_attachments`, `creator` and `boosts_count`, that such a creator can be
+  an `Outsider`, and that `projects/recordings.json?type=Inbox::Forward` refuses
+  the request, so there is no list of the archived and the trashed mails of a
+  project. Everything the run does with all that rests on the invented account.
+  Invented for want of anything to measure: that an inbox lists its mail newest
+  first; a mail whose `status` says anything but `active`, the account holding
+  none, so the shelf becoming the trash has never been seen; an answer whose
+  `status` says anything at all, because Basecamp names none; a sender that is
+  no address; a mail without a subject and one whose subject is longer than a
+  title holds; a mail whose body is nothing but a file the source no longer has,
+  one that says nothing and one that is nothing but a player, Basecamp having
+  cleaned every body of the account down to text, links and files; a mail nobody
+  is named for; somebody from outside whose address Minka would refuse; and a
+  boost on a mail, of which the account holds none, so the list a run asks for of
+  every mail has never answered with one.
 - Of the files of `import basecamp`: a download that breaks off, a file
   whose size differs from what Basecamp says, a file that is gone, a name that
   has to be changed, a caption too long, and one file under two owners.
@@ -496,6 +532,12 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
 - Of the ninety-odd addresses the API offers, about half have no command. Four
   cards say which: the lists and groups of to-dos, the to-dos and their
   subtasks, the check-ins, and the archive of cards and posts.
+- Extract the forwarded mail of a project live: whether an inbox answers for its
+  mail as the account was measured to, in which order it lists it, whether a
+  mail ever says `archived`, what an answer says about its status, and what a
+  body of a mail looks like that a run has to write a line of its own into.
+  Then check the bundle record by record, as the boards and the chats were
+  checked, and walk the whole account for a mail whose sender Minka would refuse.
 - Extract the to-dos of a project live: whether `todoset` is the dock entry, the
   fields of a list, a group and a to-do, the two lists of what is open and what is
   done, the recordings of the archived and the trashed ones, whether a list on

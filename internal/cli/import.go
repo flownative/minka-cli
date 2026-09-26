@@ -134,6 +134,10 @@ type importReport struct {
 	AnswersWithoutABody int `json:"answersWithoutABody"`
 	AnswersWithoutADay  int `json:"answersWithoutADay"`
 	AnswersTrashed      int `json:"answersTrashed"`
+	// Forwards says what became of the forwarded mail a run met: what it counts
+	// is beside counts.forwards and counts.forwardreplies, which are what a
+	// bundle carries.
+	Forwards basecamp.ForwardCounts `json:"forwards"`
 	// MessagesByType splits counts.messages by what a line was in its chat.
 	// MessagesWithEmptyBody are lines somebody wrote that say nothing,
 	// UploadLinesLeftOut lines that were files alone, none of which can be
@@ -180,16 +184,18 @@ the run ends with exit 4. Nothing is written to Basecamp, and no Minka
 host or token is needed.
 
 So far a bundle holds the structure, the boards, the message boards, the
-chats, the check-ins and the to-dos: the people the named projects refer to
-with their avatars (their members and whoever a record names, not the rest of
-the account), the projects with their members, of each project the card
-tables, chats, message boards, questionnaires and to-do sets that are switched
+chats, the check-ins, the to-dos and the forwarded mail: the people the named
+projects refer to with their avatars (their members and whoever a record names,
+not the rest of the account), the projects with their members, of each project
+the card tables, chats, message boards, questionnaires, to-do sets and inboxes
+that are switched
 on, of each card table the columns, the cards with the archived and the
 trashed ones, their steps, comments and boosts, of each message board the
 messages with the archived and the trashed ones as posts, their categories,
 comments and boosts, of each chat its lines with their boosts as messages, of
-each questionnaire its questions with their answers, comments and boosts, and
-of each to-do set its lists with their groups and to-dos.
+each questionnaire its questions with their answers, comments and boosts, of
+each to-do set its lists with their groups and to-dos, and of each inbox its
+forwarded mail with the answers by mail, the comments and the boosts of each.
 
 The lists of a to-do set stand in the bundle from the bottom up, because Minka
 puts every new list on top of its tool, and the groups and the to-dos of a list
@@ -206,6 +212,32 @@ not carried at all: todosWithSubtasks and subtasksLeftOut count what fell away.
 Two things a later run cannot repair, which the report says with a notice each:
 it leaves the people of a to-do as they stand in Minka (todosWithPeople), and it
 reopens nothing it once ticked off (todosNotDone).
+
+The forwarded mail of an inbox comes last of all, because a reference of such
+a mail that points at nothing is never looked at again. A mail carries its
+subject as its title, the sender as an address that never becomes a person, and
+the body as the source holds it, line breaks and all: Minka turns those into
+paragraphs. What the source keeps on its shelf comes into the trash, where it
+can be brought back, and the report says how many (forwards.fromTheShelf); a
+mail of an inbox that is switched off is not in the bundle at all and counts as
+a skipped tool. A subject nobody wrote becomes "(no subject)", and one that is
+longer than the 200 characters a title holds, or that runs over several lines,
+is folded into one line and cut short (forwards.withoutASubject,
+forwards.subjectsChanged). A mail whose sender is no e-mail address Minka takes
+is left out and named by ID (forwards.withoutAnAddress): the field takes nothing
+else. Where what a mail says would reach Minka as nothing at all — no words, and
+a file that will never come — the run writes a line of its own into the body
+(forwards.givenALineOfTheRun), because such a mail is written empty there and
+lost on every run after this one.
+
+An answer by mail is a record of its own and no comment. It belongs to somebody
+of the account or, where it came from outside it, to the address alone, and
+never to both: somebody from outside never becomes a person
+(forwards.repliesFromOutside). One the source names neither for is left out and
+named (forwards.repliesWithoutASender), and a boost on an answer is counted and
+not carried (forwards.reactionsOnRepliesLeftOut), because Minka takes no
+reaction on one. Comments and boosts hang on the mail itself, and a mail says
+how many of neither, so both are asked for of every one of them.
 
 A question comes with the schedule Minka has words for: the weekdays counted
 from Monday, the time of day, the day the rhythm is counted from, and whom it is
@@ -246,8 +278,8 @@ to-do, a group, a card, an answer, a comment — carries no word of its own, and
 where the source offers one it is counted (visibilityLeftToTheContainer). A
 client is no member of a project in Minka, so clientMemberships says how many
 memberships the import leaves out and no question is ever said to be asked of
-one. Docs & Files and Forwards are not extracted at all, so a bundle says
-nothing about whether clients see them. A company the source names without an
+one. Docs & Files is not extracted at all, so a bundle says nothing about
+whether clients see it. A company the source names without an
 identifier, or with a name Minka refuses, ends the run where the record that
 names it comes in: writing the record without it would tell Minka to drop the
 company it holds.
@@ -402,6 +434,8 @@ it has been applied.`,
 				AnswersWithoutADay:  result.AnswersWithoutADay,
 				AnswersTrashed:      result.AnswersTrashed,
 
+				Forwards: result.Forwards,
+
 				MessagesWithEmptyBody: result.MessagesWithEmptyBody,
 				LongestBody:           result.LongestBody,
 				LongestBodyRecords:    result.LongestBodyRecords,
@@ -423,8 +457,8 @@ it has been applied.`,
 			}
 			if count := toolsSilentAboutClients(report); count > 0 {
 				notices = append(notices, plural(count,
-					"tool of a project is a Docs & Files or a Forwards, which a run does not extract: the bundle says nothing of whether clients see it or what stands in it, and a later run brings it",
-					"tools of projects are Docs & Files or Forwards, which a run does not extract: the bundle says nothing of whether clients see them or what stands in them, and a later run brings them"))
+					"tool of a project is a Docs & Files, which a run does not extract: the bundle says nothing of whether clients see it or what stands in it, and a later run brings it",
+					"tools of projects are Docs & Files, which a run does not extract: the bundle says nothing of whether clients see them or what stands in them, and a later run brings them"))
 			}
 			if count := report.FilesDropped; count > 0 {
 				notices = append(notices, plural(count,
@@ -501,6 +535,41 @@ it has been applied.`,
 					"to-do is open at the source, and a later run reopens nothing: one that somebody has ticked off in Minka stays done",
 					"to-dos are open at the source, and a later run reopens nothing: one that somebody has ticked off in Minka stays done"))
 			}
+			if count := len(report.Forwards.WithoutAnAddress); count > 0 {
+				notices = append(notices, plural(count,
+					"forwarded mail is left out, because what the source calls its sender is no e-mail address Minka takes; data.forwards.withoutAnAddress names it by ID, the field takes nothing else, and only the source can repair it",
+					"forwarded mails are left out, because what the source calls their senders are no e-mail addresses Minka takes; data.forwards.withoutAnAddress names them by ID, the field takes nothing else, and only the source can repair it"))
+			}
+			if count := len(report.Forwards.RepliesWithoutASender); count > 0 {
+				notices = append(notices, plural(count,
+					"answer by mail is left out, because the source names neither who wrote it nor an address it came from; data.forwards.repliesWithoutASender names it by ID",
+					"answers by mail are left out, because the source names neither who wrote them nor an address they came from; data.forwards.repliesWithoutASender names them by ID"))
+			}
+			if count := report.Forwards.FromTheShelf; count > 0 {
+				notices = append(notices, plural(count,
+					"forwarded mail is on the shelf at the source and comes into the trash here, where it can be brought back: Minka gives a forward no shelf",
+					"forwarded mails are on the shelf at the source and come into the trash here, where they can be brought back: Minka gives a forward no shelf"))
+			}
+			if count := report.Forwards.GivenALineOfTheRun; count > 0 {
+				notices = append(notices, plural(count,
+					"forwarded mail carries a line of the run's own, because what it says would reach Minka as nothing at all and a mail that arrives empty is lost on every run",
+					"forwarded mails carry a line of the run's own, because what they say would reach Minka as nothing at all and a mail that arrives empty is lost on every run"))
+			}
+			if count := report.Forwards.WithoutASubject + report.Forwards.SubjectsChanged; count > 0 {
+				notices = append(notices, plural(count,
+					"forwarded mail carries a title the run made of its subject: a mail without one, or one that had to be folded into a single line or cut short, because a title here is one line of at most 200 characters",
+					"forwarded mails carry titles the run made of their subjects: mails without one, or ones that had to be folded into a single line or cut short, because a title here is one line of at most 200 characters"))
+			}
+			if count := report.Forwards.WithoutAForwarder; count > 0 {
+				notices = append(notices, plural(count,
+					"forwarded mail names nobody who forwarded it, and Minka gives such a mail to the owner of the organization without a word",
+					"forwarded mails name nobody who forwarded them, and Minka gives such a mail to the owner of the organization without a word"))
+			}
+			if count := report.Forwards.ReactionsOnRepliesLeftOut; count > 0 {
+				notices = append(notices, plural(count,
+					"boost on an answer by mail is left out, because Minka takes no reaction on one; the answer comes",
+					"boosts on answers by mail are left out, because Minka takes no reaction on one; the answers come"))
+			}
 			if count := recordsLeftOut(report); count > 0 {
 				notices = append(notices, plural(count,
 					"record is left out, because the source describes it with a word a bundle has none for; data.recordsLeftOut names the kind of record, the word and where it stood, and a later run brings it once a bundle has a word for it",
@@ -540,7 +609,8 @@ it has been applied.`,
 
 // measuredKinds are the kinds whose longest text a run measures, in the order
 // the report names them.
-var measuredKinds = []bundle.Kind{bundle.Cards, bundle.Comments, bundle.Posts, bundle.Messages, bundle.Answers, bundle.TodoLists, bundle.Todos}
+var measuredKinds = []bundle.Kind{bundle.Cards, bundle.Comments, bundle.Posts, bundle.Messages, bundle.Answers, bundle.TodoLists, bundle.Todos,
+	bundle.Forwards, bundle.ForwardReplies}
 
 func renderImportReport(w io.Writer, report importReport) {
 	if report.DryRun {
@@ -574,7 +644,7 @@ func renderImportReport(w io.Writer, report importReport) {
 		fmt.Fprintf(w, "Words about clients on a record that follows what it hangs on, left out: %d\n", report.VisibilityLeftToTheContainer)
 	}
 	if count := toolsSilentAboutClients(report); count > 0 {
-		fmt.Fprintf(w, "Docs & Files and Forwards tools a run does not extract, whose word about clients no bundle carries: %d\n", count)
+		fmt.Fprintf(w, "Docs & Files tools a run does not extract, whose word about clients no bundle carries: %d\n", count)
 	}
 
 	fmt.Fprintf(w, "\nCards: %d active, %d archived, %d trashed; %d of them on hold\n",
@@ -599,6 +669,7 @@ func renderImportReport(w io.Writer, report importReport) {
 	}
 	renderCheckins(w, report)
 	renderTodos(w, report)
+	renderForwards(w, report)
 	fmt.Fprintf(w, "In the texts: %s referred to, %s Basecamp lists nothing for dropped, %s, %s, %s\n",
 		plural(report.FilesInBodies, "file", "files"), plural(report.FilesDropped, "file", "files"),
 		plural(report.MentionsUnresolved, "mention left as a name", "mentions left as names"),
@@ -622,9 +693,10 @@ func renderImportReport(w io.Writer, report importReport) {
 	}
 	fmt.Fprintf(w, "Names of files changed: %d; captions too long for a reference, left off: %d; files met under a second owner: %d\n",
 		report.FileNamesChanged, report.CaptionsDropped, report.FilesOfSeveralOwners)
-	fmt.Fprintf(w, "Longest text in characters: cards %d, comments %d, posts %d, messages %d, answers %d, to-do lists %d, to-dos %d\n",
+	fmt.Fprintf(w, "Longest text in characters: cards %d, comments %d, posts %d, messages %d, answers %d, to-do lists %d, to-dos %d, forwards %d, answers by mail %d\n",
 		report.LongestBody[bundle.Cards], report.LongestBody[bundle.Comments], report.LongestBody[bundle.Posts], report.LongestBody[bundle.Messages],
-		report.LongestBody[bundle.Answers], report.LongestBody[bundle.TodoLists], report.LongestBody[bundle.Todos])
+		report.LongestBody[bundle.Answers], report.LongestBody[bundle.TodoLists], report.LongestBody[bundle.Todos],
+		report.LongestBody[bundle.Forwards], report.LongestBody[bundle.ForwardReplies])
 	for _, kind := range measuredKinds {
 		if one, has := report.LongestBodyRecords[kind]; has {
 			fmt.Fprintf(w, "  %-8s %-8s in %s %s: %d\n", one.Record, one.SourceID, one.In, one.InSourceID, one.Characters)
@@ -743,6 +815,32 @@ func renderTodos(w io.Writer, report importReport) {
 	for _, place := range report.TodoPlacesLeftOut {
 		fmt.Fprintf(w, "  with %s %s fell: %d groups, %d to-dos\n", place.Record, place.SourceID, place.Groups, place.Todos)
 	}
+}
+
+// renderForwards says what became of the forwarded mail a run met. A run that
+// met no Email forwards tool says nothing about it.
+func renderForwards(w io.Writer, report importReport) {
+	forwards := report.Forwards
+	if _, met := report.Counts[bundle.Forwards]; !met && len(forwards.WithoutAnAddress) == 0 {
+		return
+	}
+	fmt.Fprintf(w, "Forwarded mail: %d active, %d trashed; %d of them on the shelf at the source\n",
+		forwards.ByStatus[bundle.StatusActive], forwards.ByStatus[bundle.StatusTrashed], forwards.FromTheShelf)
+	fmt.Fprintf(w, "Mails without a subject: %d; subjects folded or cut short to make a title: %d\n",
+		forwards.WithoutASubject, forwards.SubjectsChanged)
+	fmt.Fprintf(w, "Mails carrying a line of the run's own, because what they say would arrive as nothing: %d\n", forwards.GivenALineOfTheRun)
+	fmt.Fprintf(w, "Mails nobody is named for, which Minka gives to the owner of the organization: %d\n", forwards.WithoutAForwarder)
+	if len(forwards.WithoutAnAddress) > 0 {
+		fmt.Fprintf(w, "Mails whose sender is no address Minka takes, left out: %d (forward %s)\n",
+			len(forwards.WithoutAnAddress), strings.Join(forwards.WithoutAnAddress, ", "))
+	}
+	fmt.Fprintf(w, "Answers by mail: %d, %d of them from outside the account\n",
+		report.Counts[bundle.ForwardReplies], forwards.RepliesFromOutside)
+	if len(forwards.RepliesWithoutASender) > 0 {
+		fmt.Fprintf(w, "Answers naming neither a writer nor an address, left out: %d (reply %s)\n",
+			len(forwards.RepliesWithoutASender), strings.Join(forwards.RepliesWithoutASender, ", "))
+	}
+	fmt.Fprintf(w, "Boosts on an answer by mail, which Minka takes none of, left out: %d\n", forwards.ReactionsOnRepliesLeftOut)
 }
 
 // incompleteImport is the end of a run that wrote its bundle without some of
