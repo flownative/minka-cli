@@ -91,6 +91,13 @@ fine), `commentNotReadable`, `cardDueDateNotADate`, `personNotAProjectMember`, `
 `columnHasNoOnHoldArea`, `systemColumnHasNoOnHoldArea`, `malformedBody`,
 `unsupportedMediaType`, `projectArchived`.
 
+That is not all of them: Minka has a code for every refusal of every endpoint,
+far more than the CLI can meet, and the list above holds the ones that come up
+most. Codes of their own stand where their subject is described — projects,
+cards on hold, people and assignments, steps, the working notes on the back of
+a card, due dates, reactions and uploads. Read the code you got, do not expect
+it in a list.
+
 Minka answers everything you may not see with 404, never 403, so exit 4 is
 not expected in practice.
 
@@ -481,7 +488,8 @@ What the two commands do:
 - `comments react <cardId> <commentId> <content>` and `messages react <chatId>
   <messageId> <content>` leave a reaction, `comments unreact` and `messages
   unreact` take one away. A reaction is an emoji or at most 20 characters;
-  longer exits 9 with `reactionTooLong`, empty with `reactionMissing`.
+  longer exits 9 with `reactionTooLong`, empty with `reactionMissing`, one with a
+  control character in it with `reactionHasControlCharacters`.
 - Reacting the same way twice changes nothing and succeeds. Taking one away is
   not bound to whoever left it: it takes your own reaction of that text, and
   where you left none, the one somebody else left last. Taking away what is
@@ -792,8 +800,8 @@ this:
   bundle or not, with the address as it stood and the words of the link as
   plain text: `data.references` counts them by `cards`, `posts` and
   `tools`. `data.longestBody` is the longest text per kind
-  (`cards`, `comments`, `posts`, `messages`, `answers`, `todolists`, `todos`) in
-  characters, and
+  (`cards`, `comments`, `posts`, `messages`, `answers`, `todolists`, `todos`)
+  in characters, and
   `data.longestBodyRecords` names under the same kinds which record it was
   measured on (`record`, `sourceId`, `in`, `inSourceId`, `characters`), so that
   a number can be looked at at the source; a kind whose longest text has no
