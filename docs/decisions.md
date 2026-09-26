@@ -805,26 +805,30 @@ company and no access is one whose clients have none there.
 *Applies to: `import basecamp`, the `title` and the `fromAddress` of a forward,
 the `title` of an upload*
 
-Two things a bundle carries are nobody's to put right where they stand: the
-subject of a forwarded mail, and the name of the file an upload of Docs & Files
-stands for. Either becomes a title Minka takes: every character nobody can see
-becomes a blank, what is left is trimmed, what is longer than 200 characters is
-cut before the last character and ends in an ellipsis, and what is left of
-nothing is called `(no subject)` for a mail and `(no name)` for an upload. A
+Two titles a bundle carries are nobody's to put right where they stand: the
+subject of a forwarded mail, and the title of an upload of Docs & Files, which
+the source fills from the name of a file. Either is made into a title Minka
+takes: every character nobody can see becomes a blank, what is left is trimmed,
+and what is left of nothing is called `(no subject)` for a mail and `(no name)`
+for an upload. What is longer than 200 characters is cut — a subject before the
+last character, ending in an ellipsis, and an upload's title **the way Minka
+shortens the name of a file** (`ItemTitle::fromFilename`), the extension staying
+and the stem cut to make room, with no ellipsis. A
 sender that is no e-mail address Minka takes leaves the **mail** out, named by
 its `sourceId`, and the run goes on. All of it is counted and named in a
 `notice`.
 
-**Why:** A subject is whatever a mail server let through, and the name of a
-file is whatever a file system allowed: neither is anybody's to repair at the
-source, so a run that refused one would never come to an end, however often it
-is started. The title of a card, a post, a to-do, a folder or a document still
-ends the run, because that one somebody can put right where it stands. An
-upload has no other title, Minka deriving nothing from a file, so its name is
-folded rather than ending a walk of hours over a name nobody typed. **A name too
-long is shortened the way Minka shortens one** (`ItemTitle::fromFilename`): the
-extension stays and the stem is cut to make room, with no ellipsis, so one file
-carries the same title whether it was uploaded there or brought here.
+**Why:** A subject is whatever a mail server let through, and an upload's title
+is whatever a file system allowed the name of its file to be: neither is
+anybody's to repair at the source, so a run that refused one would never come to
+an end, however often it is started. The title of a card, a post, a to-do, a
+folder or a document still ends the run, because that one somebody can put right
+where it stands. An upload's own title is taken where the source gives one and
+the name of its file stands in where it does not, Minka deriving nothing from a
+file and refusing an upload without a title; the fold is what keeps either from
+ending a walk of hours over a name nobody typed. It follows Minka's own
+shortening so that one file carries the same title whether it was uploaded there
+or brought here.
 `fromAddress` is what a forward is about and the field takes nothing else, so a
 mail whose sender is none cannot be
 carried at all — and ending a walk of hours over one mail would leave a whole
