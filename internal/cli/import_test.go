@@ -2002,7 +2002,7 @@ func onlyInTheCloud(t *testing.T, a *fakebasecamp.Account) {
 		for i := range folders {
 			strip(folders[i].Folders)
 			for u := range folders[i].Uploads {
-				folders[i].Uploads[u].InTheCloud = true
+				folders[i].Uploads[u].InTheCloud, folders[i].Uploads[u].ShownStatus = true, ""
 			}
 			folders[i].Documents = nil
 		}
@@ -2012,7 +2012,7 @@ func onlyInTheCloud(t *testing.T, a *fakebasecamp.Account) {
 		strip(tool.Folders)
 		tool.Folders, tool.Documents = nil, nil
 		for u := range tool.Uploads {
-			tool.Uploads[u].InTheCloud = true
+			tool.Uploads[u].InTheCloud, tool.Uploads[u].ShownStatus = true, ""
 		}
 	}
 }
