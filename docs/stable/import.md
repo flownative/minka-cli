@@ -132,7 +132,7 @@ it, and nothing of it is asked for.
 **A to-do that hangs on a To-dos tool itself** is left out although the source
 says no word a bundle has none for (C-060): it stands in no list and no group,
 and a bundle holds a to-do in a list alone. It is counted in `todosLeftOut` and
-named in `todosWithoutAList` with its project, because an identifier is what
+named in `todosWithoutAList` with its identifier and its project, which is what
 somebody needs to find it at the source and move it into a list, after which a
 later run carries it. Nothing of it is asked for and nothing hangs on it.
 
@@ -594,8 +594,8 @@ Minka applies the kinds in an order of its own.
   other failure of it ends the run as everywhere.
   **A to-do can hang on a To-dos tool itself** and stand in no list and no group
   of it. A bundle holds a to-do in a list alone, so such a to-do is left out,
-  counted in `todosLeftOut` and named in `todosWithoutAList` with its project
-  (C-060); the walk of the lists never meets it, so the to-dos of each tool are
+  counted in `todosLeftOut` and named in `todosWithoutAList` with its identifier
+  and its project (C-060); the walk of the lists never meets it, so the to-dos of each tool are
   asked for under the tool's own identifier, and a failure of that request ends
   the run. A to-do goes to the end of
   its list or its group, so the order of the file is the order of the list:
