@@ -1014,3 +1014,50 @@ func TestOnlyWhatIsInUseStandsInTheFileFromTheBottomUp(t *testing.T) {
 		}
 	}
 }
+
+// An entry standing inside a folder that says nothing about whether clients see
+// it is counted, because the silence can cost the one rule this tool is written
+// for: nothing is written, Minka reads such an entry as one that changes nothing
+// above it, and a folder at the top that ought to be hidden from clients stays
+// shown. A number is all a run can do about it, and a run that said nothing would
+// let that harm arrive through the safest-looking answer the source has.
+//
+// At the top of a tool silence costs nothing — Minka reads an absent word as
+// private — so it is not counted there.
+func TestAnEntryInsideAFolderThatSaysNothingAboutClientsIsCounted(t *testing.T) {
+	// Three entries of the account stand inside a folder and say nothing: the
+	// second document and the two uploads of the folder at the top.
+	_, before := extract(t, fakebasecamp.New(), docsProject)
+	if before.Docs.SilentAboutClientsBelowTheTop != 3 {
+		t.Errorf("%d entries inside a folder are silent about clients, want the three the source says nothing of",
+			before.Docs.SilentAboutClientsBelowTheTop)
+	}
+
+	// Take the word off the three that stand inside the folder below the top, and
+	// those are counted too.
+	account := fakebasecamp.New()
+	theFolder(t, account, 9221).VisibleToClients = nil
+	theDocument(t, account, 9241).VisibleToClients = nil
+	theUpload(t, account, 9265).VisibleToClients = nil
+	dir, result := extract(t, account, docsProject)
+	if result.Docs.SilentAboutClientsBelowTheTop != before.Docs.SilentAboutClientsBelowTheTop+3 {
+		t.Errorf("%d entries inside a folder are silent about clients and %d were before, want three more: the folder, the document and the upload",
+			result.Docs.SilentAboutClientsBelowTheTop, before.Docs.SilentAboutClientsBelowTheTop)
+	}
+	// Nothing is written for them: in doubt private is Minka's to decide.
+	for kind, id := range map[bundle.Kind]string{bundle.Folders: "9221", bundle.Documents: "9241", bundle.Uploads: "9265"} {
+		if _, says := recordWithID(t, records(t, dir, kind), id)["visibleToClients"]; says {
+			t.Errorf("%s %s says something about clients although the source says nothing", kind, id)
+		}
+	}
+
+	// At the top of a tool the same silence is not counted: Minka reads an absent
+	// word as private there and nothing above it can be lost.
+	account = fakebasecamp.New()
+	theFolder(t, account, 9220).VisibleToClients = nil
+	_, result = extract(t, account, docsProject)
+	if result.Docs.SilentAboutClientsBelowTheTop != before.Docs.SilentAboutClientsBelowTheTop {
+		t.Errorf("%d entries are counted where only the top of a tool fell silent, want the %d there were",
+			result.Docs.SilentAboutClientsBelowTheTop, before.Docs.SilentAboutClientsBelowTheTop)
+	}
+}
