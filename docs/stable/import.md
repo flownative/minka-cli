@@ -601,6 +601,14 @@ point at is in the bundle before it.
   or says nothing comes and any other word leaves it out and is counted, see
   What a bundle cannot carry. The body is the rendered text, and where it would
   reach Minka as nothing it carries a line of the run as a mail's does.
+  A mail or an answer whose body is longer than the 1,000,000 characters Minka
+  holds is counted (`forwards.longerThanMinkaTakes`) and named in a `notice`,
+  and the body comes as it is: the source has no such limit, a run that
+  shortened it would decide in the one place nobody can repeat, and Minka passes
+  such a record over on every run with everything hanging on it. What is counted
+  is the body as the run writes it, which is shorter than what Minka stores, so
+  the number is what a run can see and no promise. `longestBodyRecords` names
+  the longest mail and the longest answer of the run.
   **Nothing hangs on an answer:** it has no comments here, and its boosts are
   counted and never written (`forwards.reactionsOnRepliesLeftOut`), because
   Minka passes a reaction on one over — nor is the list of them asked for. Its

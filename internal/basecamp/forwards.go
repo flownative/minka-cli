@@ -44,6 +44,11 @@ type ForwardCounts struct {
 	// ReactionsOnRepliesLeftOut counts the boosts on a reply: Minka passes such
 	// a reaction over, so a bundle carries none.
 	ReactionsOnRepliesLeftOut int `json:"reactionsOnRepliesLeftOut"`
+	// LongerThanMinkaTakes counts the mails and the answers whose body is longer
+	// than Minka holds as they are written here. Minka passes such a record over
+	// on every run and everything hanging on it waits with it, so the run names
+	// how many there are; the body is not cut short.
+	LongerThanMinkaTakes int `json:"longerThanMinkaTakes"`
 }
 
 // forward is a mail somebody forwarded into a project. Basecamp names the
@@ -209,6 +214,7 @@ func (e *Extractor) writeForward(ctx context.Context, w *bundle.Writer, bucket i
 		return err
 	}
 	e.measure(bundle.Forwards, body, LongestBodyRecord{Record: "forward", SourceID: origin.SourceID, In: "project", InSourceID: projectID})
+	e.countIfItIsLongerThanMinkaTakes(body)
 	e.forwards.ByStatus[status]++
 
 	if err := e.writeForwardReplies(ctx, w, bucket, toolID, origin.SourceID, found); err != nil {
@@ -327,8 +333,21 @@ func (e *Extractor) writeForwardReply(ctx context.Context, w *bundle.Writer, buc
 		return err
 	}
 	e.measure(bundle.ForwardReplies, body, LongestBodyRecord{Record: "reply", SourceID: origin.SourceID, In: "project", InSourceID: projectID})
+	e.countIfItIsLongerThanMinkaTakes(body)
 	e.forwards.ReactionsOnRepliesLeftOut += reply.BoostsCount
 	return nil
+}
+
+// countIfItIsLongerThanMinkaTakes notes a mail Minka will pass over for its
+// length. The body comes as it is — the source has no such limit, and a run that
+// shortened it would decide in the one place that cannot be repeated — but a run
+// that said nothing would leave a mail, its answers and its comments out of
+// Minka with the number nobody looked at. Which record it was stands in
+// longestBodyRecords.
+func (e *Extractor) countIfItIsLongerThanMinkaTakes(body string) {
+	if utf8.RuneCountInString(body) > longestBodyMinkaTakes {
+		e.forwards.LongerThanMinkaTakes++
+	}
 }
 
 // theAddressOfAnOutsider is what a reply from outside the account says about
@@ -455,6 +474,13 @@ func ascii(value string) bool {
 	}
 	return true
 }
+
+// longestBodyMinkaTakes is how long the body of a mail or of an answer may be
+// for Minka to hold it, in characters. What is measured here is the body the run
+// writes; Minka counts what it stores, which is that body with the markup of its
+// line breaks and of its files in it, so a body below the number can still be
+// one too many.
+const longestBodyMinkaTakes = 1000000
 
 // The lines a run writes into a mail that would arrive with nothing in it.
 const (
