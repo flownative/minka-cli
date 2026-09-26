@@ -299,9 +299,10 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   and a card in the trash as an address that has nothing. It gives the boundary
   card's disappearance in both forms, which no live run can be made to produce on
   purpose, and as many cards at a time as a walk can lose:
-  `ForgetsTheArchiveBoundariesOf` for the 422 and
-  `RacesOnTheArchiveBoundariesOf` for the empty 200 of the race, where the same
-  card named twice is that window met twice. What the fake
+  `ForgetsTheArchiveBoundariesOf` for the 422, which takes the card out of the
+  archive with the refusal because one status decides the cursor and the listing
+  alike, and `RacesOnTheArchiveBoundariesOf` for the empty 200 of the race, where
+  the card stays and the same card named twice is that window met twice. What the fake
   cannot show at all is a column deleted from a board, so that a card comes back
   into the first working column or into Triage instead of the column it left: the
   fake deletes no columns, and that branch is read in

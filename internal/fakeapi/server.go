@@ -997,6 +997,12 @@ func (s *Server) archivedCards(w http.ResponseWriter, r *http.Request, person *P
 			boundary = s.inTheArchiveOf(board, before)
 		}
 		if boundary == nil || slices.Contains(s.ForgetsTheArchiveBoundariesOf, before) {
+			// One status decides both the cursor and the listing, so a card this
+			// page may not start behind is a card out of the archive: it is gone
+			// from every page from here on, as it is gone for the cursor.
+			if boundary != nil {
+				s.TakeOutOfTheArchive(boundary.Card)
+			}
 			unprocessable(w, "archivedCardsBeforeUnknown", "The page starts behind a card in the archive of this board, named by its id.")
 			return
 		}
