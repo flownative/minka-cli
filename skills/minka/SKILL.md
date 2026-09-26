@@ -220,9 +220,18 @@ such as `Doing`.
 - `trash list <projectId>` says what was taken out of a project, the newest
   first and at most 200 (a `notice` says when there are more). Every entry is
   `{kind, id, title, toolType, board, column, trashedAt, trashedBy,
-  restorable, blockedBy, appUrl}`. `kind` is `card`, `column` or `tool`;
-  `restorable` says whether `cards restore` takes it, `blockedBy` which of
-  board and column is in the way. Columns and tools come back in the web only.
+  restorable, blockedBy, appUrl}`.
+- `kind` is `tool`, `column`, `card`, `post`, `todoList`, `todo`, `todoGroup`,
+  `checkinQuestion`, `checkinAnswer`, `forward`, `folder`, `document` or
+  `upload`, and Minka may name further kinds.
+- `board` is a board only for a `card` and a `column`. For every other kind the
+  same field carries the tool the thing hung in, which the text view marks as a
+  tool; `column` is there for a card alone.
+- `restorable` says whether `cards restore` takes the entry, which only a card
+  is. `blockedBy` names what has to come back first: `board`, `column`, `tool`,
+  `todoList`, `todoGroup`, `question`, `folder` or `archivedFolder` — the last
+  one lies in an archive, not in the trash. Everything that is no card comes
+  back in the web only.
 
 ## Projects
 

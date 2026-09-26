@@ -85,21 +85,37 @@ type BoardCard struct {
 	AppURL             string            `json:"appUrl"`
 }
 
-// TrashEntry is one thing that was taken out of a project. Only a card can be
-// put back, and only while neither its column nor its board is in the trash.
+// TrashEntry is one thing that was taken out of a project, of whichever kind.
+// Only a card can be put back through the API, and only while nothing it hung
+// in is in the trash.
 type TrashEntry struct {
-	Kind       string           `json:"kind"` // "card", "column" or "tool"
-	ID         string           `json:"id"`
-	Title      string           `json:"title"`
-	ToolType   *string          `json:"toolType"` // "board" or "chat" for a tool, null for the rest
+	// Kind is what the thing is: "tool", "column", "card", "post", "todoList",
+	// "todo", "todoGroup", "checkinQuestion", "checkinAnswer", "forward",
+	// "folder", "document" or "upload". Minka may name further kinds.
+	Kind     string  `json:"kind"`
+	ID       string  `json:"id"`
+	Title    string  `json:"title"`
+	ToolType *string `json:"toolType"` // "board" or "chat" for a tool, null for the rest
+	// Board is the board a card or a column lay on. For every other kind it is
+	// the tool the thing belonged to, which is no board.
 	Board      *BoardReference  `json:"board"`
-	Column     *ColumnReference `json:"column"`
+	Column     *ColumnReference `json:"column"` // only a card has one
 	TrashedAt  *string          `json:"trashedAt"`
 	TrashedBy  *PersonReference `json:"trashedBy"`
 	Restorable bool             `json:"restorable"`
-	BlockedBy  *string          `json:"blockedBy"` // "board" or "column", null where nothing blocks
-	AppURL     string           `json:"appUrl"`
+	// BlockedBy is what has to come back first: "board", "column", "tool",
+	// "todoList", "todoGroup", "question", "folder" or "archivedFolder", and
+	// null where nothing blocks. Minka may name further ones.
+	BlockedBy *string `json:"blockedBy"`
+	AppURL    string  `json:"appUrl"`
 }
+
+// Kinds of a trash entry that lie on a board. Everything else in the trash
+// belongs to a tool of another sort, which the same field carries.
+const (
+	TrashCard   = "card"
+	TrashColumn = "column"
+)
 
 // ProjectMember is somebody a circle has: a member of a project or one of the
 // two of a private conversation. Whom a card can be assigned to and whom a text

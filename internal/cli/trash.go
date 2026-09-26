@@ -18,12 +18,17 @@ func (a *app) newTrashListCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "list <projectId>",
 		Short: "List what is in the trash of a project, the newest first",
-		Long: `Lists the cards, columns and tools that were taken out of a project, the newest
-first, at most 200 of them.
+		Long: `Lists what was taken out of a project, the newest first, at most 200 of them.
+Anything a project holds can be there: a card, a column, a tool, a post, a
+to-do with its list and its group, a question or an answer of a check-in, a
+forward, and a folder, a document or a file of Docs & Files.
 
-Only a card comes back, with cards restore, and only while neither its column
-nor its board is in the trash: restorable says whether it does, blockedBy which
-of the two is in the way. Columns and tools come back in the web only.`,
+WHERE says what the thing hung in. Only a card and a column lie on a board;
+everything else belongs to a tool of another sort, which is marked as a tool.
+
+Only a card comes back through this CLI, with cards restore, and only while
+nothing it hung in is in the trash: restorable says whether it does, blockedBy
+what is in the way. Everything else comes back in the web only.`,
 		Args: requireArgs("projectId"),
 		RunE: func(_ *cobra.Command, args []string) error {
 			s, err := a.session()
@@ -69,13 +74,18 @@ of the two is in the way. Columns and tools come back in the web only.`,
 	}
 }
 
-// whereItHung is the board and the column a trashed thing belonged to, as far
-// as it had one.
+// whereItHung is what a trashed thing belonged to, as far as it belonged to
+// anything. Only a card and a column lie on a board; for every other kind the
+// same field carries the tool it hung in, and it is named as a tool so that no
+// line reads as though a board had been emptied.
 func whereItHung(entry api.TrashEntry) string {
-	var parts []string
-	if entry.Board != nil {
-		parts = append(parts, entry.Board.Title)
+	if entry.Board == nil {
+		return ""
 	}
+	if entry.Kind != api.TrashCard && entry.Kind != api.TrashColumn {
+		return entry.Board.Title + " (tool)"
+	}
+	parts := []string{entry.Board.Title}
 	if entry.Column != nil {
 		parts = append(parts, entry.Column.Title)
 	}
@@ -100,8 +110,28 @@ func howItComesBack(entry api.TrashEntry) string {
 	case entry.Restorable:
 		return "yes"
 	case entry.BlockedBy != nil:
-		return "no, its " + *entry.BlockedBy + " is in the trash"
+		return "no, " + whatIsInTheWay(*entry.BlockedBy)
 	default:
 		return "in the web only"
+	}
+}
+
+// whatIsInTheWay says what has to come back before this thing can. A word this
+// CLI does not know is passed on as it came and says no more than that it is in
+// the way, because where a kind Minka gains lies is not something to guess.
+func whatIsInTheWay(blocker string) string {
+	switch blocker {
+	case "board", "column", "tool", "folder":
+		return "its " + blocker + " is in the trash"
+	case "todoList":
+		return "its to-do list is in the trash"
+	case "todoGroup":
+		return "its group is in the trash"
+	case "question":
+		return "its check-in question is in the trash"
+	case "archivedFolder":
+		return "its folder is in the archive"
+	default:
+		return blocker + " is in the way"
 	}
 }
