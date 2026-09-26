@@ -646,13 +646,13 @@ const (
 // the run asks for the people of the account and for the project itself. A
 // refusal that is passed over is counted, so that no run stays silent about it.
 func (e *Extractor) projectCreator(ctx context.Context, p project, extracted []recording, others []dockEntry) (*string, error) {
-	created, err := time.Parse(time.RFC3339Nano, p.CreatedAt)
-	if err != nil {
+	created, isAMoment := aMoment(p.CreatedAt)
+	if !isAMoment {
 		return nil, nil
 	}
 	madeWithProject := func(tool recording) bool {
-		made, err := time.Parse(time.RFC3339Nano, tool.CreatedAt)
-		if err != nil || tool.Creator == nil {
+		made, isAMoment := aMoment(tool.CreatedAt)
+		if !isAMoment || tool.Creator == nil {
 			return false
 		}
 		after := made.Sub(created)
@@ -694,8 +694,9 @@ func (e *Extractor) projectCreator(ctx context.Context, p project, extracted []r
 
 var projectStatuses = map[string]bool{"active": true, "archived": true, "trashed": true}
 
-// requireTimestamps refuses a record without its times. The applier decides by
-// updatedAt whether a run changes a record, so a bundle never carries a guess.
+// requireTimestamps refuses a record without its times and one whose times are
+// no times. The applier decides by updatedAt whether a run changes a record, so
+// a bundle never carries a guess.
 func requireTimestamps(what, createdAt, updatedAt string) error {
 	var missing []string
 	if createdAt == "" {
@@ -704,10 +705,66 @@ func requireTimestamps(what, createdAt, updatedAt string) error {
 	if updatedAt == "" {
 		missing = append(missing, "updated")
 	}
-	if len(missing) == 0 {
-		return nil
+	if len(missing) > 0 {
+		return &Error{Kind: API, Message: "Basecamp does not say when " + what + " was " + strings.Join(missing, " and ")}
 	}
-	return &Error{Kind: API, Message: "Basecamp does not say when " + what + " was " + strings.Join(missing, " and ")}
+	if _, err := momentOf(what, "created", createdAt); err != nil {
+		return err
+	}
+	_, err := momentOf(what, "updated", updatedAt)
+	return err
+}
+
+// momentShape is the shape the applier holds a moment of a bundle to. What has
+// that shape is made of digits and the punctuation of a time, so a message may
+// say it out loud, and it is the reading of the calendar alone that refused it.
+var momentShape = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$`)
+
+// momentOf reads a time of a record and names the record and the field, so that
+// a run says where in the source the repair belongs.
+//
+// What stood there is said only where it has the shape of a moment: the
+// thirtieth of February reads like a time and is none, and a reader who is not
+// told the value has nothing to go on. A value of any other shape is not
+// repeated, because a field that holds no time holds whatever the source put
+// there, a name among it, and no message of a run says a name.
+func momentOf(what, field, value string) (time.Time, error) {
+	moment, isAMoment := aMoment(value)
+	if !isAMoment {
+		return time.Time{}, &Error{
+			Kind:    API,
+			Message: fmt.Sprintf("Basecamp says that %s was %s at %s", what, field, noTime(value)),
+		}
+	}
+	return moment, nil
+}
+
+// noTime is how a message says a value that is no moment.
+func noTime(value string) string {
+	if momentShape.MatchString(value) {
+		return strconv.Quote(value) + ", which no calendar has"
+	}
+	return "something that is no time"
+}
+
+// aMoment reads a moment the way Basecamp writes one: a date, a time of day, a
+// fraction of a second where there is one, and the zone it is meant in, with
+// nothing around it and nothing else in its place. Everything a bundle carries
+// a time for is read here, and it is read strictly, because the applier draws
+// the line in the same place and a line two programs draw differently is no
+// line but the place where a time silently changes its meaning.
+//
+// What a looser reading takes is a relative word such as "now" or "tomorrow",
+// and a time without a zone, which is somebody's guess at a zone. Either would
+// store the record at a moment nobody meant, and nothing afterwards tells that
+// from the truth. Refused besides is a moment of the right shape that no
+// calendar has, the thirtieth of February among them.
+func aMoment(value string) (time.Time, bool) {
+	moment, err := time.Parse(time.RFC3339Nano, value)
+	if err != nil {
+		return time.Time{}, false
+	}
+	return moment, true
 }
 
 var projectAddressPattern = regexp.MustCompile(`^(https://[^/?#]+/([0-9]+)/)projects/([0-9]+)\.json$`)

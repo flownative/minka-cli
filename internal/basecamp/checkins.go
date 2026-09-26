@@ -3,7 +3,9 @@ package basecamp
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 	// The zone database travels in the binary: which day a record belongs to
@@ -581,7 +583,7 @@ func (e *Extractor) dayAnsweredOn(one answer) (time.Time, error) {
 	}
 	day, aDate := aDay(one.GroupOn)
 	if !aDate {
-		return time.Time{}, &Error{Kind: API, Message: fmt.Sprintf("answer %d belongs to a day of the shape %q, which is none", one.ID, one.GroupOn)}
+		return time.Time{}, &Error{Kind: API, Message: fmt.Sprintf("answer %d belongs to %s", one.ID, noDay(one.GroupOn))}
 	}
 	return day, nil
 }
@@ -593,9 +595,9 @@ func (e *Extractor) dayAnsweredOn(one answer) (time.Time, error) {
 // ends instead of guessing: a day that is off by one is a day nobody can tell
 // from a right one afterwards.
 func dayOf(what string, id int64, timestamp string, author *person) (time.Time, error) {
-	moment, err := time.Parse(time.RFC3339Nano, timestamp)
+	moment, err := momentOf(fmt.Sprintf("%s %d", what, id), "created", timestamp)
 	if err != nil {
-		return time.Time{}, &Error{Kind: API, Message: fmt.Sprintf("Basecamp says that %s %d was created at something that is no time", what, id)}
+		return time.Time{}, err
 	}
 	if author == nil || author.TimeZone == "" {
 		return time.Time{}, &Error{
@@ -629,4 +631,19 @@ func aDay(value string) (time.Time, bool) {
 		return time.Time{}, false
 	}
 	return day, true
+}
+
+// dayShape is the shape of a day, whether or not a calendar has that day. What
+// has it may be said out loud, as a moment of the shape of one may.
+var dayShape = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}$`)
+
+// noDay is how a message says a value that is no day, by the rule that holds for
+// a moment: the value where it has the shape of one, because a reader can make
+// nothing of the thirtieth of February otherwise, and nothing of it where it has
+// another shape and may hold whatever the source put there.
+func noDay(value string) string {
+	if dayShape.MatchString(value) {
+		return strconv.Quote(value) + ", which no calendar has"
+	}
+	return "something that is no day"
 }

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"sort"
 	"strings"
-	"time"
 
 	"github.com/flownative/minka-cli/internal/bundle"
 )
@@ -572,7 +571,7 @@ func (e *Extractor) writeTodo(ctx context.Context, w *bundle.Writer, bucket, too
 	if err != nil {
 		return err
 	}
-	completedAt, completedBy, err := e.completed(found.Completion)
+	completedAt, completedBy, err := e.completed("to-do", found.ID, found.Completion)
 	if err != nil {
 		return err
 	}
@@ -676,7 +675,7 @@ func daysOfATodo(found todo) (startsOn, dueOn *string, err error) {
 			continue
 		}
 		if _, aDate := aDay(*day.value); !aDate {
-			return nil, nil, &Error{Kind: API, Message: fmt.Sprintf("Basecamp says that to-do %d %s a day of a shape that is none", found.ID, day.field)}
+			return nil, nil, &Error{Kind: API, Message: fmt.Sprintf("Basecamp says that to-do %d %s %s", found.ID, day.field, noDay(*day.value))}
 		}
 	}
 	if startsOn != nil && dueOn != nil && *startsOn > *dueOn {
@@ -703,13 +702,14 @@ func touchedAtLeastWhenDone(id int64, origin bundle.Record, completedAt *string)
 	if completedAt == nil {
 		return origin.UpdatedAt, nil
 	}
-	done, err := time.Parse(time.RFC3339Nano, *completedAt)
+	what := fmt.Sprintf("to-do %d", id)
+	done, err := momentOf(what, "completed", *completedAt)
 	if err != nil {
-		return "", &Error{Kind: API, Message: fmt.Sprintf("Basecamp says that to-do %d was done at something that is no time", id)}
+		return "", err
 	}
-	touched, err := time.Parse(time.RFC3339Nano, origin.UpdatedAt)
+	touched, err := momentOf(what, "updated", origin.UpdatedAt)
 	if err != nil {
-		return "", &Error{Kind: API, Message: fmt.Sprintf("Basecamp says that to-do %d was updated at something that is no time", id)}
+		return "", err
 	}
 	if done.After(touched) {
 		return *completedAt, nil

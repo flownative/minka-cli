@@ -692,7 +692,8 @@ field the format leaves open is no way out where it reads as something else —
 what it hangs on. Nothing left out is final: the source keeps it, and a later run
 brings it once a bundle has a word for it.
 **Implemented as:** `basecamp.Extractor.met`, `basecamp.Extractor.leaveOut`,
-`basecamp.lineTypes`, `basecamp.columnRoles`, see
+`basecamp.aMoment`, `basecamp.requireTimestamps`, `basecamp.lineTypes`,
+`basecamp.columnRoles`, see
 [Importing from Basecamp](stable/import.md).
 
 <a id="c-051"></a>
