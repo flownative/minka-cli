@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -11,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/flownative/minka-cli/internal/basecamp"
 	"github.com/flownative/minka-cli/internal/bundle"
@@ -150,22 +152,35 @@ func TestTheListsOfAToolAreWrittenFromTheBottomUp(t *testing.T) {
 }
 
 // A list that hangs on a To-dos tool the run does not extract has nowhere to go,
-// and neither has a group of such a list: both are left out and counted, and the
-// run goes on.
-func TestWhatHangsOnNoExtractedToolIsLeftOutAndCounted(t *testing.T) {
-	dir, result := extract(t, fakebasecamp.New(), todoProject)
+// and neither has a group of such a list. What stood in a place the bundle does
+// not carry falls with it and is counted too, and the place is named: the
+// archived group of the account holds a to-do in use, and a number that passed
+// over it would say a bundle holds more of the source than it does.
+func TestWhatFallsWithAPlaceThatIsLeftOutIsCountedAndNamed(t *testing.T) {
+	account := fakebasecamp.New()
+	dir, result := extract(t, account, todoProject)
 
-	if ids := sourceIDs(records(t, dir, bundle.TodoLists)); slices.Contains(ids, "9406") {
-		t.Errorf("the list of a tool that is switched off came along: %v", ids)
+	shown := todosTheAccountShows(t, account, 7008, 9414, false)
+	if len(shown) != 1 || shown[0]["id"].(float64) != 9430 {
+		t.Fatalf("the account holds %v in the group on the shelf, and the test needs the one to-do in use it was built with", shown)
 	}
-	if ids := sourceIDs(records(t, dir, bundle.TodoGroups)); slices.Contains(ids, "9415") {
-		t.Errorf("the group of a list nobody extracts came along: %v", ids)
+	for _, id := range []string{"9406", "9415", "9428", "9430"} {
+		for _, kind := range []bundle.Kind{bundle.TodoLists, bundle.TodoGroups, bundle.Todos} {
+			if slices.Contains(sourceIDs(records(t, dir, kind)), id) {
+				t.Errorf("%s came along as a %s although nothing carries it", id, kind)
+			}
+		}
 	}
-	if ids := sourceIDs(records(t, dir, bundle.Todos)); slices.Contains(ids, "9428") {
-		t.Errorf("the to-do of a list nobody extracts came along: %v", ids)
+	want := basecamp.TodosLeftOut{Lists: 1, Groups: 2, Todos: 2}
+	if result.TodosLeftOut != want {
+		t.Errorf("left out %+v, want %+v: the list and the group of the tool that is switched off, the group on the shelf, and the two to-dos that fell with them", result.TodosLeftOut, want)
 	}
-	if result.TodosLeftOut != 3 {
-		t.Errorf("%d records left out, want the list, the group and the to-do of the tool that is switched off", result.TodosLeftOut)
+	places := []basecamp.TodoPlaceLeftOut{
+		{Record: "to-do list", SourceID: "9406", Todos: 1},
+		{Record: "group", SourceID: "9414", Todos: 1},
+	}
+	if !slices.Equal(result.TodoPlacesLeftOut, places) {
+		t.Errorf("the places that took records with them:\n got %+v\nwant %+v", result.TodoPlacesLeftOut, places)
 	}
 }
 
@@ -553,6 +568,21 @@ func TestAStatusNoBundleKnowsLeavesAListOrAToDoOutAndTheRunGoesOn(t *testing.T) 
 	if got := result.RecordsLeftOut; !slices.Equal(got, want) {
 		t.Errorf("records left out:\n got %v\nwant %v", got, want)
 	}
+	// The group and the to-do that stood in the list fall with it, and are counted
+	// and named with it.
+	left := basecamp.TodosLeftOut{Lists: 2, Groups: 3, Todos: 4}
+	if result.TodosLeftOut != left {
+		t.Errorf("left out %+v, want %+v", result.TodosLeftOut, left)
+	}
+	places := []basecamp.TodoPlaceLeftOut{
+		{Record: "to-do list", SourceID: "9402", Groups: 1},
+		{Record: "to-do list", SourceID: "9406", Todos: 1},
+		{Record: "group", SourceID: "9414", Todos: 1},
+		{Record: "group", SourceID: "9416", Todos: 1},
+	}
+	if !slices.Equal(result.TodoPlacesLeftOut, places) {
+		t.Errorf("the places that took records with them:\n got %+v\nwant %+v", result.TodoPlacesLeftOut, places)
+	}
 	// Nothing of a record that is left out is asked for.
 	if asked := asked(account, "recordings/9421/"); len(asked) > 0 {
 		t.Errorf("a run asked for what hangs on a to-do it left out: %v", asked)
@@ -729,5 +759,37 @@ func TestTwoRunsOverTheSameToDosWriteTheSameBytes(t *testing.T) {
 		if !bytes.Equal(a, b) {
 			t.Errorf("%s differs between two runs:\n%s\n%s", name, a, b)
 		}
+	}
+}
+
+// Counting what fell with a place costs requests for records nothing writes, so a
+// place Basecamp no longer has must not cost the run: it takes nothing with it.
+// Every other failure of such a request ends the run as any other does.
+func TestAPlaceThatIsGoneTakesNothingWithItAndCostsNoRun(t *testing.T) {
+	account := fakebasecamp.New()
+	for _, path := range []string{
+		"buckets/7008/todolists/9414/todos.json",
+		"buckets/7008/todolists/9414/todos.json?completed=true",
+	} {
+		account.Fail[path] = &basecamp.Error{Kind: basecamp.NotFound, Message: "Basecamp: resource not found"}
+	}
+	_, result := extract(t, account, todoProject)
+
+	if got := result.TodosLeftOut; got.Groups != 2 || got.Todos != 1 {
+		t.Errorf("left out %+v, want the group that is gone counted and only the to-do of the other place", got)
+	}
+	for _, place := range result.TodoPlacesLeftOut {
+		if place.SourceID == "9414" {
+			t.Errorf("a place Basecamp no longer has is named as having taken records with it: %+v", place)
+		}
+	}
+
+	account = fakebasecamp.New()
+	account.Fail["buckets/7008/todolists/9414/todos.json"] = &basecamp.Error{Kind: basecamp.Forbidden, Message: "Basecamp forbids it"}
+	extractor := basecamp.Extractor{Source: account, Avatars: account, Files: account, Now: func() time.Time { return runDay }}
+	_, err := extractor.Extract(t.Context(), []string{todoProject}, bundle.Discard())
+	var failed *basecamp.Error
+	if !errors.As(err, &failed) || failed.Kind != basecamp.Forbidden {
+		t.Errorf("a request that was refused ended the run with %v, want forbidden", err)
 	}
 }

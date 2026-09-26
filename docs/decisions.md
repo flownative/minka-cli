@@ -708,3 +708,20 @@ the run before, so such a to-do would stay open here for ever with nobody able t
 see why — and the later of two moments the source itself said is no guess.
 **Implemented as:** `basecamp.touchedAtLeastWhenDone`, see
 [Importing from Basecamp](stable/import.md).
+
+<a id="c-052"></a>
+## C-052 — What falls with a place a bundle cannot carry is asked for and counted
+
+*Applies to: the lists, groups and to-dos of a bundle, the report of a run*
+
+The groups and to-dos of a to-do list, and the to-dos of a group, that a bundle
+does not carry are asked for although none of them is written, counted per kind
+and named with the place they fell with.
+
+**Why:** [C-050](#c-050) promises that what is left out is counted, and a place
+that took a subtree with it silently would make every number of a run say that a
+bundle holds more of the source than it does. The requests are the price, and a
+place Basecamp no longer has is passed over rather than ending a run over records
+it left out anyway.
+**Implemented as:** `basecamp.Extractor.countWhatFellWithAPlace`, see
+[Importing from Basecamp](stable/import.md).

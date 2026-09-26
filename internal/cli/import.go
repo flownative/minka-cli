@@ -91,11 +91,13 @@ type importReport struct {
 	PostsLeftOut       int            `json:"postsLeftOut"`
 	PostsWithEmptyBody int            `json:"postsWithEmptyBody"`
 	// TodoListsByStatus splits counts.todolists and TodosByStatus counts.todos.
-	// TodosLeftOut are the archived and trashed lists, groups and to-dos that
-	// hang on nothing the run extracts.
-	TodoListsByStatus map[string]int `json:"todoListsByStatus"`
-	TodosByStatus     map[string]int `json:"todosByStatus"`
-	TodosLeftOut      int            `json:"todosLeftOut"`
+	// TodosLeftOut counts per kind what the bundle does not carry of the To-dos
+	// tools, and TodoPlacesLeftOut names the lists and groups that took records
+	// with them.
+	TodoListsByStatus map[string]int              `json:"todoListsByStatus"`
+	TodosByStatus     map[string]int              `json:"todosByStatus"`
+	TodosLeftOut      basecamp.TodosLeftOut       `json:"todosLeftOut"`
+	TodoPlacesLeftOut []basecamp.TodoPlaceLeftOut `json:"todoPlacesLeftOut"`
 	// TodosNotDone are the to-dos the source has open, and TodosWithPeople those
 	// that name somebody: the two differences a later run cannot carry, because
 	// it reopens nothing and leaves the people of a to-do as they stand.
@@ -186,7 +188,10 @@ The lists of a to-do set stand in the bundle from the bottom up, because Minka
 puts every new list on top of its tool, and the groups and the to-dos of a list
 in the order of the list. A list comes with the state the source left it in, a
 group and a to-do with the trash alone, because Minka gives neither of the two a
-shelf: one the source has put on the shelf is left out and counted. Nothing
+shelf: one the source has put on the shelf is left out and counted, and so is
+whatever stood in a list or a group the bundle does not carry — todosLeftOut
+counts the lists, groups and to-dos it holds none of, and todoPlacesLeftOut names
+every place that took records with it. Nothing
 hangs on a group, which the format has no word for. A to-do carries its notes,
 its days, whom it is assigned to, who is told when it is done and the tick the
 source put on it, and it is never said to be older than that tick. Subtasks are
@@ -355,6 +360,7 @@ it has been applied.`,
 				TodoListsByStatus: result.TodoListsByStatus,
 				TodosByStatus:     result.TodosByStatus,
 				TodosLeftOut:      result.TodosLeftOut,
+				TodoPlacesLeftOut: result.TodoPlacesLeftOut,
 				TodosNotDone:      result.TodosNotDone,
 				TodosWithPeople:   result.TodosWithPeople,
 				TodosWithSubtasks: result.TodosWithSubtasks,
@@ -436,6 +442,11 @@ it has been applied.`,
 				notices = append(notices, plural(count,
 					"line of a chat is left out, because it was files alone and Basecamp names none of them",
 					"lines of chats are left out, because they were files alone and Basecamp names none of them"))
+			}
+			if count := len(report.TodoPlacesLeftOut); count > 0 {
+				notices = append(notices, plural(count,
+					"list or group of a To-dos tool is left out with what stood in it, which is left out with it; data.todoPlacesLeftOut names it with how many groups and to-dos fell with it",
+					"lists or groups of To-dos tools are left out with what stood in them, which is left out with them; data.todoPlacesLeftOut names each with how many groups and to-dos fell with it"))
 			}
 			if count := report.SubtasksLeftOut; count > 0 {
 				notices = append(notices, plural(count,
@@ -650,7 +661,7 @@ func renderCheckins(w io.Writer, report importReport) {
 // To-dos tool says nothing about them.
 func renderTodos(w io.Writer, report importReport) {
 	_, met := report.Counts[bundle.TodoLists]
-	if !met && report.TodosLeftOut == 0 {
+	if !met && report.TodosLeftOut == (basecamp.TodosLeftOut{}) {
 		return
 	}
 	fmt.Fprintf(w, "To-do lists: %d active, %d archived, %d trashed\n",
@@ -658,7 +669,11 @@ func renderTodos(w io.Writer, report importReport) {
 	fmt.Fprintf(w, "To-dos: %d active, %d trashed; %d of them still open, %d carrying people\n",
 		report.TodosByStatus[bundle.StatusActive], report.TodosByStatus[bundle.StatusTrashed], report.TodosNotDone, report.TodosWithPeople)
 	fmt.Fprintf(w, "To-dos that had subtasks: %d, with %d subtasks a bundle has no word for\n", report.TodosWithSubtasks, report.SubtasksLeftOut)
-	fmt.Fprintf(w, "Archived and trashed lists, groups and to-dos that hang on nothing extracted, left out: %d\n", report.TodosLeftOut)
+	left := report.TodosLeftOut
+	fmt.Fprintf(w, "Left out of the To-dos tools: %d lists, %d groups, %d to-dos\n", left.Lists, left.Groups, left.Todos)
+	for _, place := range report.TodoPlacesLeftOut {
+		fmt.Fprintf(w, "  with %s %s fell: %d groups, %d to-dos\n", place.Record, place.SourceID, place.Groups, place.Todos)
+	}
 }
 
 // incompleteImport is the end of a run that wrote its bundle without some of

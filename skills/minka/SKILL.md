@@ -729,10 +729,13 @@ this:
 - A to-do set becomes a tool of kind `todos`. Its lists stand in the bundle from
   the bottom up, because Minka puts every new list on top, and the groups and the
   to-dos of a list in the order of the list. `data.todoListsByStatus` splits the
-  lists and `data.todosByStatus` the to-dos, `data.todosLeftOut` counts the
-  archived and trashed lists, groups and to-dos that hang on nothing extracted. A
+  lists and `data.todosByStatus` the to-dos. A
   list knows the shelf and the trash, a group and a to-do the trash alone: one the
-  source has put on the shelf is left out and counted. Nothing hangs on a group,
+  source has put on the shelf is left out and counted. `data.todosLeftOut` counts
+  per kind (`lists`, `groups`, `todos`) what the bundle holds none of, whatever
+  the reason, and `data.todoPlacesLeftOut` names every list and group that took
+  records with it, with how many groups and to-dos fell with it; a `notice` says
+  how many such places there were. Nothing hangs on a group,
   which the format has no word for; a list and a to-do carry comments, boosts and
   the files of their text. A to-do is never said to be older than the tick the
   source put on it, or Minka would never write the tick. Subtasks are not carried:

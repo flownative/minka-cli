@@ -441,7 +441,7 @@ posts, those of lines, those of answers, those of lists and of to-dos.
   the trashed ones of a project in one list across all its To-dos tools, those
   that are switched off included; such a record names only what it hangs on, so
   every list of every tool is known before the first one is written, and a list
-  of a tool that is not extracted is left out and counted (`todosLeftOut`).
+  of a tool that is not extracted is left out and counted.
   Minka puts every new list on top of its tool, so the lists of a tool stand in
   the file **from the bottom up**: the last line of a tool is the list on top.
   What has left the list, the archived and the trashed ones, goes first, where it
@@ -467,7 +467,14 @@ posts, those of lines, those of answers, those of lists and of to-dos.
   trashed ones. Basecamp lists what is open apart from what is done, and the
   archived and the trashed ones of a project in one list across all its To-dos
   tools; one that stands in neither a list nor a group of the bundle is left out
-  and counted. A to-do goes to the end of its list or its group, so the order of
+  and counted. A list or a group the bundle does not carry takes what stood in it
+  with it, and what fell is asked for and counted all the same (C-052):
+  `todosLeftOut` counts the lists, the groups and the to-dos a bundle does not
+  carry, each kind on its own, and `todoPlacesLeftOut` names every list and group
+  that took records with it, with how many groups and to-dos those were. Such a
+  request is made for the counting alone, so a place Basecamp no longer has takes
+  nothing with it and does not end the run; every other failure of it ends the run
+  as everywhere. A to-do goes to the end of its list or its group, so the order of
   the file is the order of the list: what is open as Basecamp lists it, then what
   is done, then what it has thrown away. `groupSourceId` names a group of the
   to-do's own list and is `null` for a to-do standing in the list itself; both it
@@ -896,7 +903,9 @@ files of its texts the same way.
   `filesFetched`, `filesReused`, `filesGone`, `fileNamesChanged`,
   `captionsDropped`, `filesOfSeveralOwners`, `linkPreviews`,
   `picturesLinked`, `embeds`, `embedsLeftOut`, `references`,
-  `todoListsByStatus`, `todosByStatus`, `todosLeftOut`, `todosNotDone`,
+  `todoListsByStatus`, `todosByStatus`, `todosLeftOut` (`lists`, `groups`,
+  `todos`), `todoPlacesLeftOut` (`record`, `sourceId`, `groups`, `todos`),
+  `todosNotDone`,
   `todosWithPeople`, `todosWithSubtasks`, `subtasksLeftOut`,
   `questionsLeftOut`, `anchorsInferred`, `nobodyAsked`, `askedLeftOut`
   (`notInTheProject`,
