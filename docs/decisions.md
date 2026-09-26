@@ -759,8 +759,9 @@ host takes a card out of the list of a machine by itself.
 
 A `--limit` outside 1 to 100 is refused as a usage error rather than cut down to
 the bound, a walk of several pages ends only on an answer that carried no card,
-and what it promises is every card of the whole run exactly once — not the
-archive of one moment, which it says in a `notice`.
+and what it promises is every card of the whole run exactly once — not the archive
+of one moment, and not an end it had nothing left to check against, both of which
+it says in a `notice`.
 
 **Why:** The server cuts a larger page down in silence and marks the end of a
 list by nothing but fewer cards than asked for, so a run that trusted either

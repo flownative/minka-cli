@@ -352,7 +352,14 @@ such as `Doing`.
   end, and it lists every card once. A page that carries the run no further ends
   it with exit 7 (`api_error`) and what it read.
 - **What a run of `--all` promises:** every card that lay in the archive for the
-  whole run appears exactly once. **What it does not promise:** the archive at
+  whole run appears exactly once, under one reservation: the run checks the end of
+  the list by asking behind another card of the last page, and where no card of
+  that page is left to ask behind, an answer that carried nothing is all it has
+  for the end. A card that left the archive in that moment reads the same, and
+  cards behind it were not read. Such a run exits 0 and says so in its `notice`;
+  do not report its result as the whole archive. A page of one card is in that
+  place from the first request, a larger page where the fallback has used up the
+  cards of the page it last read. **What it does not promise:** the archive at
   one moment. A card put away during the run lands on the first page, which the
   run has already passed, and can be missed; a card taken out of the archive
   during the run vanishes from the result with no trace, and the API says

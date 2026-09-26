@@ -235,6 +235,13 @@ the first page, which the run has already passed, and a card taken out of the
 archive vanishes from the run, and the API says nothing about either. A run of
 more than one page says so in a notice.
 
+The one card listed exactly once holds under one reservation: a run checks the
+end of the list by asking behind another card of the last page, and where no card
+of that page is left to ask behind, nothing but an answer that carried nothing
+stands for the end. Such a run says so in a notice and still exits 0; a card that
+left the archive in that moment reads exactly like the end, and cards behind it
+were then not read.
+
 An unknown board, or one of a project you are not a member of, exits 2
 (not_found). A --before that names no card in the archive of this board exits 9
 (validation) with meta.apiCode archivedCardsBeforeUnknown: somebody took that
@@ -335,6 +342,9 @@ func noticesOfTheRun(run api.ArchiveRun) []string {
 	}
 	if run.BeganAgain {
 		notices = append(notices, "no card of a page was left in the archive for the next one to start behind, so the run began again where it started")
+	}
+	if run.TookTheEndOnTrust {
+		notices = append(notices, "the end of the list could not be checked: no card of the last page was left to ask behind, so an answer that carried nothing had to stand for the end — where a card left the archive in that moment instead, cards the run never saw stand behind it")
 	}
 	return notices
 }

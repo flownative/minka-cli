@@ -50,9 +50,15 @@ the cursor it just used: where the list has really ended, the page behind the
 card before the cursor holds the cursor's card and nothing beyond it, and where
 the list went on, it holds what follows — so one request settles it either way,
 where the same cursor asked again can only be refused for a card that is gone or
-come back as empty as before. Only a page of one card leaves no other card to ask
-behind; there the same cursor is asked once more, and a second empty answer closes
-the list.
+come back as empty as before.
+
+That holds as long as a card of the last page is left to ask behind. Where none
+is, the same cursor is asked once more and a second empty answer closes the list
+**unchecked**: a card that left the archive in that moment reads exactly like the
+end of the list, and cards behind it were not read. A page of one card is in that
+place from the first request; a larger one gets there where the fallback has used
+up the cards of the page it last read. The run exits 0 — it did what could be
+done — and says in a `notice` that its end could not be checked.
 
 A walk deduplicates by id over the whole run and counts what it swallowed. Only
 when no card of the last page is left does it begin again where it started, once,
@@ -65,11 +71,14 @@ asking on would be the same request for ever, so such an answer ends the run as
 `api_error` with what it read.
 
 What a reader may be promised: **every card that lay in the archive for the whole
-run appears exactly once.** What may not be promised: **completeness against a
-moment.** A card put away during the run lands on the first page, which the run
-has passed, and can be missed; a card taken out of the archive vanishes from the
-run without a trace, and the API says nothing about either. A run of more than
-one page says so in a `notice`, not in small print.
+run appears exactly once** — under the one reservation above, that the run could
+check its end. What may not be promised: **completeness against a moment.** A
+card put away during the run lands on the first page, which the run has passed,
+and can be missed; a card taken out of the archive vanishes from the run without
+a trace, and the API says nothing about either. A run of more than one page says
+so in a `notice`, not in small print, and a run that could not check its end says
+that as well: the general sentence does not cover it, because that is a card
+which lay in the archive throughout.
 
 ## The refusals
 
