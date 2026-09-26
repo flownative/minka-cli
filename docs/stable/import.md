@@ -110,13 +110,14 @@ comment other than `active`, `archived` or `trashed`, which a draft would be,
 a line of a chat that is not `active`, because a message of a bundle has no
 status, a record without `created_at` or `updated_at`, a time that is none
 where records are ordered by it, a kind of column a bundle has no role for, a
-kind of line a bundle does not know, a second Triage, Not now or Done on one
-board, a boost that does not say whose it is. A card, a post and a comment
+second Triage, Not now or Done on one board, a boost that does not say whose
+it is. A card, a post and a comment
 are held to this where the walk first meets them, before anything that hangs
 on them is asked for, and the lines of a chat before the first of them is
 written. Such a message names the record by its ID and what is missing. Of
-what Basecamp said it quotes the status or the kind of column or line a
-bundle does not know, and never a title, a name, a text or an address.
+what Basecamp said it quotes the status or the kind of column a bundle has no
+role for, as the report quotes the kind of a line it has no word for, and
+never a title, a name, a text or an address.
 
 ## What the Basecamp identity needs
 
@@ -309,6 +310,16 @@ those of answers.
   something: a line that was a video alone is a line, and one whose only
   frame is left out, see Texts, says nothing. A line comes as long as it is:
   nothing is shortened.
+  A bundle has a word for four kinds of line: `Chat::Lines::Text`,
+  `Chat::Lines::RichText`, `Chat::Lines::Upload` and
+  `Chat::Lines::Integration`. Basecamp grows kinds of its own, and a line of
+  one of them is left out and the run goes on (C-049): nobody comes into the
+  bundle for it, its boosts are not asked for and no part ends at it.
+  `linesOfAnUnknownKind` names every such kind with the chat it stood in and
+  how many lines it cost there, so a reader can tell a sound effect from
+  something that matters. Nothing here is final: the line stays where it is,
+  and a later run brings it as soon as a bundle has a word for its kind.
+  Whoever adds a word has seen what Basecamp sends under it.
 - **Parts.** The messages are written in parts: `messages-0001.jsonl` and on,
   numbered through the bundle in the order of the chats, which is the order
   of the projects and their tools. A part holds lines of one chat. It ends
@@ -790,6 +801,7 @@ files of its texts the same way.
   `cardsOnHold`, `cardsLeftOut`, `commentsTrashed`, `postsByStatus`,
   `postsLeftOut`, `postsWithEmptyBody`, `messagesByType` (`text`, `richText`,
   `upload`, `integration`), `messagesWithEmptyBody`, `uploadLinesLeftOut`,
+  `linesOfAnUnknownKind` (`chatSourceId`, `type`, `leftOut`),
   `parts` as the manifest has them, `mentionsUnresolved`, `filesInBodies`,
   `filesDropped`, `filesExpected`, `filesBytesExpected`, `filesBytes`,
   `filesFetched`, `filesReused`, `filesGone`, `fileNamesChanged`,
@@ -807,7 +819,8 @@ files of its texts the same way.
   `messages` and `answers`, in characters: whoever sets the limits of where a bundle
   goes has to know it. `requestsRetried` is a number, 0 for a run that met no
   failure; the text shows its line only when it is more, and so it does for
-  `creatorProbesRefused`, `embeds`, `embedsLeftOut` and `references`.
+  `creatorProbesRefused`, `embeds`, `embedsLeftOut`, `references` and
+  `linesOfAnUnknownKind`.
   No output names a title, a person or what stands in a text.
 - A run prints nothing while it goes on, in any mode: the output contract
   knows results, warnings and errors only.

@@ -133,6 +133,9 @@ type Result struct {
 	// UploadLinesLeftOut counts the lines that were files alone, of which
 	// Basecamp names none in a way a bundle can refer to.
 	UploadLinesLeftOut int
+	// LinesOfAnUnknownKind are the kinds of line a bundle has no word for, each
+	// with the chat it was met in and how many lines are left out there.
+	LinesOfAnUnknownKind []UnknownLineKind
 	// QuestionsLeftOut are the questions left out because Minka has no words
 	// for their schedule, each with the field that made it impossible.
 	QuestionsLeftOut []ImpossibleQuestion
@@ -190,15 +193,16 @@ type Extractor struct {
 	// Only they can be asked a question of that project.
 	members map[int64]map[int64]bool
 
-	cardsByStatus      map[string]int
-	cardsOnHold        int
-	cardsLeftOut       int
-	commentsTrashed    int
-	postsByStatus      map[string]int
-	postsLeftOut       int
-	postsWithEmptyBody int
-	messagesByType     map[string]int
-	uploadLinesLeftOut int
+	cardsByStatus        map[string]int
+	cardsOnHold          int
+	cardsLeftOut         int
+	commentsTrashed      int
+	postsByStatus        map[string]int
+	postsLeftOut         int
+	postsWithEmptyBody   int
+	messagesByType       map[string]int
+	uploadLinesLeftOut   int
+	linesOfAnUnknownKind []UnknownLineKind
 
 	messagesWithEmptyBody int
 	longestBody           map[bundle.Kind]int
@@ -262,6 +266,7 @@ func (e *Extractor) Extract(ctx context.Context, projectIDs []string, w *bundle.
 	e.askedLeftOut, e.answersWithoutABody, e.answersWithoutADay, e.answersTrashed = AskedLeftOut{}, 0, 0, 0
 	e.postsByStatus = map[string]int{bundle.StatusActive: 0, bundle.StatusArchived: 0, bundle.StatusTrashed: 0}
 	e.postsLeftOut, e.postsWithEmptyBody, e.uploadLinesLeftOut, e.messagesWithEmptyBody = 0, 0, 0, 0
+	e.linesOfAnUnknownKind = []UnknownLineKind{}
 	e.messagesByType = map[string]int{}
 	for _, name := range lineTypes {
 		e.messagesByType[name] = 0
@@ -324,11 +329,12 @@ func (e *Extractor) Extract(ctx context.Context, projectIDs []string, w *bundle.
 		CardsLeftOut:         e.cardsLeftOut,
 		CommentsTrashed:      e.commentsTrashed,
 
-		PostsByStatus:      e.postsByStatus,
-		PostsLeftOut:       e.postsLeftOut,
-		PostsWithEmptyBody: e.postsWithEmptyBody,
-		MessagesByType:     e.messagesByType,
-		UploadLinesLeftOut: e.uploadLinesLeftOut,
+		PostsByStatus:        e.postsByStatus,
+		PostsLeftOut:         e.postsLeftOut,
+		PostsWithEmptyBody:   e.postsWithEmptyBody,
+		MessagesByType:       e.messagesByType,
+		UploadLinesLeftOut:   e.uploadLinesLeftOut,
+		LinesOfAnUnknownKind: e.linesOfAnUnknownKind,
 
 		QuestionsLeftOut:    e.questionsLeftOut,
 		AnchorsInferred:     e.anchorsInferred,

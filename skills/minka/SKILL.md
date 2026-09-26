@@ -722,7 +722,10 @@ this:
   counts the lines somebody wrote that say nothing, which are left out. A
   line that was files alone becomes a body of references to them;
   `data.uploadLinesLeftOut` counts the lines of which Basecamp names no
-  file, which are left out and which a `notice` counts as well. Lines
+  file, which are left out and which a `notice` counts as well. A line of a
+  kind a bundle has no word for is left out too, and the run goes on;
+  `data.linesOfAnUnknownKind` names every such kind with the chat it stood in
+  and how many lines it cost there, and a `notice` counts them. Lines
   somebody deleted and the lines Basecamp writes itself are not in its API.
 - A question of a check-in carries the rhythm, the weekdays counted from Monday,
   the time of day, the day the rhythm is counted from and whom it is asked of,

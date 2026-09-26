@@ -41,6 +41,10 @@ const (
 	RichTextLine    = "Chat::Lines::RichText"
 	UploadLine      = "Chat::Lines::Upload"
 	IntegrationLine = "Chat::Lines::Integration"
+	// UnknownLine stands for the kinds of line Basecamp grows that a bundle
+	// has no word for. What it is called says what it is, because what the
+	// next one will be called nobody knows.
+	UnknownLine = "Chat::Lines::Unknown"
 )
 
 // Line is a line of a chat. One that is an upload has no content.
@@ -89,9 +93,10 @@ func LinkPreview(address, title string) string {
 // talkProject is a project with every case of a message board and a chat: two
 // boards, the second with a category no list holds, a board that is switched
 // off, messages of every status, one without a category, one without a text,
-// comments and boosts; a chat with every kind of line, a bot and somebody
-// deleted among the writers, uploads with and without a key, previews of links
-// and an embedded video, a chat without a line, and a small one.
+// comments and boosts; a chat with every kind of line a bundle knows and one of
+// a kind it does not, a bot and somebody deleted among the writers, uploads with
+// and without a key, previews of links and an embedded video, a chat without a
+// line, and a small one.
 func talkProject(ada, grace, linus, edsger, former, bot, deleted Person, tool func(int64, string, string, string, bool, int, *Person) Tool) Project {
 	at := func(day, hour int) string { return fmt.Sprintf("2023-04-%02dT%02d:00:00.000Z", day, hour) }
 	minute := func(n int) string { return fmt.Sprintf("2023-04-20T09:%02d:00.000Z", n) }
@@ -171,6 +176,10 @@ func talkProject(ada, grace, linus, edsger, former, bot, deleted Person, tool fu
 		{ID: 9808, Type: UploadLine, Creator: &grace, CreatedAt: minute(11), UpdatedAt: minute(11), Uploads: []Upload{
 			{Filename: "nowhere.png", ContentType: "image/png", Bytes: 512, URL: "https://preview.basecamp.test/nowhere", DownloadURL: "https://storage.basecamp.test/nowhere"},
 		}},
+		// A kind of line a bundle has no word for, with a text and a boost that
+		// a bundle carries none of either.
+		{ID: 9809, Type: UnknownLine, Creator: &ada, CreatedAt: minute(12), UpdatedAt: minute(12), Content: `Whatever this is`,
+			Boosts: []Boost{{ID: 9893, Content: "🎲", CreatedAt: minute(13), Booster: &grace}}},
 	}
 
 	quiet := tool(9034, "chat", "chats", "Quiet room", true, 4, &grace)

@@ -653,3 +653,20 @@ first run settles. What is lost stands per question and per field in the report,
 so nobody has to guess what is missing. **Implemented as:**
 `basecamp.scheduleOf`, `basecamp.Extractor.leaveQuestionOut`, see
 [Importing from Basecamp](stable/import.md).
+
+<a id="c-049"></a>
+## C-049 — A kind of chat line a bundle has no word for leaves the line out, and the run goes on
+
+*Applies to: the messages of a bundle, the report of a run*
+
+A line of a chat whose kind a bundle has no word for is left out, and the report
+names that kind with the chat it stood in and how many lines it cost there. The
+run goes on.
+
+**Why:** The reason of [C-048](#c-048), for a record of another kind: one exotic
+line of one chat must not cost the extraction of a whole account, and a run of
+hours must not have to be repeated for a sound effect somebody sent. The kind is
+what the report names, because it is the only thing that tells a sound effect
+from something that matters, and Basecamp keeps growing kinds. **Implemented
+as:** `basecamp.lineTypes`, `basecamp.Extractor.leaveLineOut`, see
+[Importing from Basecamp](stable/import.md).
