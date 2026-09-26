@@ -2,7 +2,6 @@ package basecamp
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -80,16 +79,9 @@ type todoTool struct {
 	shown []todoList
 }
 
-// inFileOrder are the lists of a tool in the order a bundle writes them. Minka
-// puts every new list on top of its tool, so the lists in use come the other way
-// round; what has left the list goes first, where it cannot push the rest about.
+// inFileOrder are the lists of a tool in the order a bundle writes them.
 func (t *todoTool) inFileOrder() []todoList {
-	all := make([]todoList, 0, len(t.gone)+len(t.shown))
-	all = append(all, t.gone...)
-	for i := len(t.shown) - 1; i >= 0; i-- {
-		all = append(all, t.shown[i])
-	}
-	return all
+	return inFileOrder(t.gone, t.shown)
 }
 
 // extractTodos adds the lists of every To-dos tool and what stands in them,
@@ -290,7 +282,7 @@ func (e *Extractor) countWhatFellWithAPlace(ctx context.Context, bucket int64, l
 
 		if place.aList {
 			e.todosLeftOut.Lists++
-			inIt, err := listedForCounting[todoList](ctx, e.Source, fmt.Sprintf("buckets/%d/todolists/%d/groups.json", bucket, place.id))
+			inIt, err := listedUnlessItIsGone[todoList](ctx, e.Source, fmt.Sprintf("buckets/%d/todolists/%d/groups.json", bucket, place.id), false)
 			if err != nil {
 				return err
 			}
@@ -306,7 +298,7 @@ func (e *Extractor) countWhatFellWithAPlace(ctx context.Context, bucket int64, l
 		}
 
 		for _, path := range todosOfAPlace(bucket, place.id) {
-			inIt, err := listedForCounting[todo](ctx, e.Source, path)
+			inIt, err := listedUnlessItIsGone[todo](ctx, e.Source, path, false)
 			if err != nil {
 				return err
 			}
@@ -331,20 +323,6 @@ func (e *Extractor) countWhatFellWithAPlace(ctx context.Context, bucket int64, l
 		}
 	}
 	return nil
-}
-
-// listedForCounting reads a list of records of a place the bundle does not carry.
-// None of them is written, so a place Basecamp no longer has takes nothing with
-// it: the run counts what it read of it instead of ending over records it left
-// out anyway. Not being there is the one failure that is passed over; every
-// other ends the run as it does anywhere.
-func listedForCounting[T any](ctx context.Context, source Source, path string) ([]T, error) {
-	listed, err := getList[T](ctx, source, path)
-	var failed *Error
-	if errors.As(err, &failed) && failed.Kind == NotFound {
-		return listed, nil
-	}
-	return listed, err
 }
 
 // todosOfAPlace are the two lists Basecamp keeps the to-dos of a list or a group

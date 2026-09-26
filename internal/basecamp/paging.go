@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 )
@@ -66,4 +67,19 @@ func getOne[T any](ctx context.Context, source Source, path string) (T, error) {
 		return value, &Error{Kind: API, Message: fmt.Sprintf("Basecamp answered %s with something that cannot be read: %s", path, err)}
 	}
 	return value, nil
+}
+
+// listedUnlessItIsGone reads a list of a place the source may no longer hand out
+// at all: one the bundle does not carry and whose records are only counted, and
+// one that is on the shelf or in the trash, which Basecamp does not always let
+// anybody look into. Not being there is the one failure that is passed over;
+// every other ends the run as it does anywhere. inUse says that the place is one
+// the source must answer for, and then nothing is passed over.
+func listedUnlessItIsGone[T any](ctx context.Context, source Source, path string, inUse bool) ([]T, error) {
+	listed, err := getList[T](ctx, source, path)
+	var failed *Error
+	if !inUse && errors.As(err, &failed) && failed.Kind == NotFound {
+		return listed, nil
+	}
+	return listed, err
 }

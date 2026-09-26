@@ -417,19 +417,19 @@ func (e *Extractor) Extract(ctx context.Context, projectIDs []string, w *bundle.
 	e.creatorProbesRefused, e.addressesUnquoted = 0, 0
 	e.peopleAsClients, e.clientMemberships, e.visibilityLeftToTheContainer = 0, 0, 0
 	e.account, e.apiRoot = "", ""
-	e.cardsByStatus = map[string]int{bundle.StatusActive: 0, bundle.StatusArchived: 0, bundle.StatusTrashed: 0}
+	e.cardsByStatus = everyStatus()
 	e.cardsOnHold, e.cardsLeftOut, e.commentsTrashed, e.bodies = 0, 0, 0, BodyCounts{}
 	e.talks, e.members = nil, map[int64]map[int64]bool{}
 	e.questionsLeftOut, e.anchorsInferred, e.nobodyAsked = []ImpossibleQuestion{}, []InferredAnchor{}, []NobodyAsked{}
 	e.askedLeftOut, e.answersWithoutABody, e.answersWithoutADay, e.answersTrashed = AskedLeftOut{}, 0, 0, 0
-	e.postsByStatus = map[string]int{bundle.StatusActive: 0, bundle.StatusArchived: 0, bundle.StatusTrashed: 0}
+	e.postsByStatus = everyStatus()
 	e.postsLeftOut, e.postsWithEmptyBody, e.uploadLinesLeftOut, e.messagesWithEmptyBody = 0, 0, 0, 0
 	e.recordsLeftOut = []LeftOutRecords{}
 	e.messagesByType = map[string]int{}
 	for _, name := range lineTypes {
 		e.messagesByType[name] = 0
 	}
-	e.todoListsByStatus = map[string]int{bundle.StatusActive: 0, bundle.StatusArchived: 0, bundle.StatusTrashed: 0}
+	e.todoListsByStatus = everyStatus()
 	e.todosByStatus = map[string]int{bundle.StatusActive: 0, bundle.StatusTrashed: 0}
 	e.todosLeftOut, e.todoPlacesLeftOut = TodosLeftOut{}, []TodoPlaceLeftOut{}
 	e.todosNotDone, e.todosWithPeople = 0, 0
@@ -1019,6 +1019,45 @@ func (e *Extractor) measure(kind bundle.Kind, text string, of LongestBodyRecord)
 
 func sourceID(id int64) string {
 	return strconv.FormatInt(id, 10)
+}
+
+// everyStatus counts nothing of each status a bundle has a word for, so that a
+// report names all three even where a run met one of them.
+func everyStatus() map[string]int {
+	return map[string]int{bundle.StatusActive: 0, bundle.StatusArchived: 0, bundle.StatusTrashed: 0}
+}
+
+// statusOrInUse is what became of a record of Basecamp: a record that says
+// nothing of it is in use, as the format reads an absent status. Reading silence
+// as a word nobody knows would lose every record of an account the day Basecamp
+// stopped saying it.
+func statusOrInUse(said string) string {
+	if said == "" {
+		return bundle.StatusActive
+	}
+	return said
+}
+
+// inFileOrder are the records of one kind in one place in the order a bundle
+// writes them. Minka puts every new one on top of its kind there, so what is in
+// use goes the other way round from the way the source shows it; what has left
+// the place goes first, where it cannot push the rest about.
+func inFileOrder[T any](gone, shown []T) []T {
+	all := make([]T, 0, len(gone)+len(shown))
+	all = append(all, gone...)
+	for i := len(shown) - 1; i >= 0; i-- {
+		all = append(all, shown[i])
+	}
+	return all
+}
+
+// longerThanMinkaTakes tells that a text the run wrote is longer than Minka
+// holds, so that Minka passes the record over on every run with everything
+// hanging on it. What is measured is the text as the run writes it; Minka counts
+// what it stores, which is that text with the markup of its line breaks and of
+// its files in it, so a text below the number can still be one too many.
+func longerThanMinkaTakes(text string) bool {
+	return utf8.RuneCountInString(text) > longestBodyMinkaTakes
 }
 
 var paragraphBreak = regexp.MustCompile(`\n{2,}`)
