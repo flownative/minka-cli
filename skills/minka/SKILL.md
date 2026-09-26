@@ -91,6 +91,11 @@ fine), `commentNotReadable`, `cardDueDateNotADate`, `personNotAProjectMember`, `
 `columnHasNoOnHoldArea`, `systemColumnHasNoOnHoldArea`, `malformedBody`,
 `unsupportedMediaType`, `projectArchived`.
 
+That is not all of them: Minka has a code for every refusal of every endpoint,
+and the ones a single command can meet stand in the section about that command
+— the notes of a card, reactions and uploads each name their own. Read the code
+you got, do not expect it in this list.
+
 Minka answers everything you may not see with 404, never 403, so exit 4 is
 not expected in practice.
 
@@ -481,7 +486,8 @@ What the two commands do:
 - `comments react <cardId> <commentId> <content>` and `messages react <chatId>
   <messageId> <content>` leave a reaction, `comments unreact` and `messages
   unreact` take one away. A reaction is an emoji or at most 20 characters;
-  longer exits 9 with `reactionTooLong`, empty with `reactionMissing`.
+  longer exits 9 with `reactionTooLong`, empty with `reactionMissing`, one with a
+  control character in it with `reactionHasControlCharacters`.
 - Reacting the same way twice changes nothing and succeeds. Taking one away is
   not bound to whoever left it: it takes your own reaction of that text, and
   where you left none, the one somebody else left last. Taking away what is
