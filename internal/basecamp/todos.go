@@ -343,15 +343,22 @@ func (e *Extractor) shelvedTodos(ctx context.Context, bucket int64) ([]todo, err
 // list: the to-dos that are open as Basecamp lists them, then the ones that are
 // done, then the ones it has thrown away.
 //
-// A to-do that stands in neither a list nor a group of the bundle is left out and
-// counted by whoever has walked every list.
+// A to-do that stands in neither a list nor a group of the bundle is left where
+// it is; the walk over the project counts it once every list is known.
 func (e *Extractor) writeTodos(ctx context.Context, w *bundle.Writer, bucket, tool, list int64, groups []todoList, shelved []todo, placed map[int64]bool) error {
-	for _, in := range append([]todoList{{ID: list}}, groups...) {
-		group := &in.ID
-		if in.ID == list {
-			group = nil
+	// The list itself takes no group, and every group of it names itself.
+	places := make([]*int64, 0, len(groups)+1)
+	places = append(places, nil)
+	for i := range groups {
+		places = append(places, &groups[i].ID)
+	}
+
+	for _, group := range places {
+		in := list
+		if group != nil {
+			in = *group
 		}
-		found, err := e.todosIn(ctx, bucket, in.ID, shelved, placed)
+		found, err := e.todosIn(ctx, bucket, in, shelved, placed)
 		if err != nil {
 			return err
 		}
