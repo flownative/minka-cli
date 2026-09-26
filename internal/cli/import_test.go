@@ -1628,6 +1628,7 @@ func TestImportBasecampReportsTheCheckinsOfAProject(t *testing.T) {
 		"People a question asks that the bundle cannot say are asked: 1 no member of the project, 1 no longer there, 1 without an address",
 		"Answers that say nothing, left out: 1; answers in the trash, left out: 0",
 		"Answers Basecamp names no day for, dated by when they were written: 0",
+		"answer   9320     in project 7007: 150",
 	} {
 		if !strings.Contains(r.stdout, want) {
 			t.Errorf("the text lacks %q:\n%s", want, r.stdout)
@@ -1755,6 +1756,8 @@ func TestImportBasecampReportsTheToDosOfAProject(t *testing.T) {
 		"Left out of the To-dos tools: 1 lists, 2 groups, 2 to-dos",
 		"  with to-do list 9406 fell: 1 groups, 1 to-dos",
 		"  with group 9414 fell: 0 groups, 1 to-dos",
+		"to-do list 9401     in project 7008: 159",
+		"to-do    9421     in project 7008: 151",
 	} {
 		if !strings.Contains(r.stdout, want) {
 			t.Errorf("the text lacks %q:\n%s", want, r.stdout)
