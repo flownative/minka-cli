@@ -29,21 +29,16 @@ func visibleToClientsOf(origin recording) *bool {
 // and left out, because a second truth about one record is one truth too many.
 // A forward and a reply follow their tool like the rest: an Email forwards
 // tool is shown to clients as a whole or not at all.
-var visibilityOfItsOwn = map[string]bool{"tool": true, "post": true, "to-do list": true, "question": true}
-
-// toolKindsARunLeaves are the kinds of Basecamp tool Minka has a counterpart for
-// that a run does not extract. Neither their word about clients nor anything
-// standing in them reaches a bundle.
-var toolKindsARunLeaves = map[string]bool{"vault": true}
-
-// SaysNothingAboutClients tells of a kind of dock entry that a bundle carries no
-// word about clients for such a tool, because a run does not extract that kind
-// at all. What a run extracts is asked first, so a kind that comes to be
-// extracted leaves this by itself.
-func SaysNothingAboutClients(kind string) bool {
-	_, extracted := toolKinds[kind]
-	return !extracted && toolKindsARunLeaves[kind]
-}
+//
+// A folder, a document and an upload of Docs & Files carry the word at every
+// depth, and not only at the top of their tool. Minka reads it below the top as
+// well, and it is the one thing there that can hide a folder at the top the
+// source shows: where something below is hidden from clients, the import hides
+// the top folder with everything in it and names it. An entry that left the word
+// out would be imported in the open under a folder clients see, and what a client
+// has seen cannot be taken back.
+var visibilityOfItsOwn = map[string]bool{"tool": true, "post": true, "to-do list": true, "question": true,
+	"folder": true, "document": true, "upload": true}
 
 // clientsOf is what a bundle says of the clients of a project: whether it works
 // with them, and which company. Both stand or neither does, because Minka reads

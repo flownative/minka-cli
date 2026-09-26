@@ -1,0 +1,674 @@
+package basecamp_test
+
+import (
+	"reflect"
+	"strings"
+	"testing"
+
+	"github.com/flownative/minka-cli/internal/basecamp"
+	"github.com/flownative/minka-cli/internal/bundle"
+	"github.com/flownative/minka-cli/internal/fakebasecamp"
+)
+
+// The Docs & Files of the fake stand in its eleventh project: the first tool of
+// the dock holds every case, the second holds one document, the third is
+// switched off.
+const docsProject = "7011"
+
+func docsDock(a *fakebasecamp.Account) *fakebasecamp.Project { return &a.Projects[10] }
+
+// eachFolderOfTheFake visits every folder of the Docs & Files tools of the fake's
+// docs project, the tool that is switched off included.
+func eachFolderOfTheFake(a *fakebasecamp.Account, visit func(*fakebasecamp.Folder)) {
+	var down func([]fakebasecamp.Folder)
+	down = func(folders []fakebasecamp.Folder) {
+		for i := range folders {
+			visit(&folders[i])
+			down(folders[i].Folders)
+		}
+	}
+	for t := range docsDock(a).Dock {
+		down(docsDock(a).Dock[t].Folders)
+	}
+}
+
+// theFolder, theDocument and theUpload find an entry of the fake by its ID, for a
+// test that changes it.
+func theFolder(t *testing.T, a *fakebasecamp.Account, id int64) *fakebasecamp.Folder {
+	t.Helper()
+	var found *fakebasecamp.Folder
+	eachFolderOfTheFake(a, func(folder *fakebasecamp.Folder) {
+		if folder.ID == id {
+			found = folder
+		}
+	})
+	if found == nil {
+		t.Fatalf("the docs project holds no folder %d", id)
+	}
+	return found
+}
+
+func theDocument(t *testing.T, a *fakebasecamp.Account, id int64) *fakebasecamp.Document {
+	t.Helper()
+	var found *fakebasecamp.Document
+	visit := func(documents []fakebasecamp.Document) {
+		for i := range documents {
+			if documents[i].ID == id {
+				found = &documents[i]
+			}
+		}
+	}
+	for t := range docsDock(a).Dock {
+		visit(docsDock(a).Dock[t].Documents)
+	}
+	eachFolderOfTheFake(a, func(folder *fakebasecamp.Folder) { visit(folder.Documents) })
+	if found == nil {
+		t.Fatalf("the docs project holds no document %d", id)
+	}
+	return found
+}
+
+func theUpload(t *testing.T, a *fakebasecamp.Account, id int64) *fakebasecamp.UploadedFile {
+	t.Helper()
+	var found *fakebasecamp.UploadedFile
+	visit := func(uploads []fakebasecamp.UploadedFile) {
+		for i := range uploads {
+			if uploads[i].ID == id {
+				found = &uploads[i]
+			}
+		}
+	}
+	for t := range docsDock(a).Dock {
+		visit(docsDock(a).Dock[t].Uploads)
+	}
+	eachFolderOfTheFake(a, func(folder *fakebasecamp.Folder) { visit(folder.Uploads) })
+	if found == nil {
+		t.Fatalf("the docs project holds no upload %d", id)
+	}
+	return found
+}
+
+// Every Docs & Files tool that is switched on is a tool of the kind files, and
+// its folders, documents and uploads come with what stands in them: a document
+// with its title and its text, the mentions and the files of that text rewritten
+// as everywhere, an upload with the name of its file as its title.
+func TestTheDocsAndFilesOfAToolComeAsFoldersDocumentsAndUploads(t *testing.T) {
+	dir, _ := extract(t, fakebasecamp.New(), docsProject)
+
+	tools := records(t, dir, bundle.Tools)
+	for _, id := range []string{"9210", "9211"} {
+		if kind := recordWithID(t, tools, id)["kind"]; kind != bundle.ToolFiles {
+			t.Errorf("the Docs & Files tool %s comes as a tool of the kind %v", id, kind)
+		}
+	}
+
+	want := map[string]any{
+		"sourceId": "9240", "createdAt": "2025-06-02T08:00:00.000Z", "updatedAt": "2025-06-02T09:00:00.000Z", "createdBy": "101",
+		"projectSourceId": docsProject, "toolSourceId": "9210", "folderSourceId": "9220",
+		"title": "Chapter one", "status": bundle.StatusActive, "visibleToClients": true,
+		"body": `<div>How it works, says <import-mention ref="102">Grace Sample</import-mention></div>` +
+			`<import-attachment ref="attachment-5401"></import-attachment>`,
+	}
+	if got := recordWithID(t, records(t, dir, bundle.Documents), "9240"); !reflect.DeepEqual(got, want) {
+		t.Errorf("the document with everything on it:\n got %v\nwant %v", got, want)
+	}
+
+	folder := recordWithID(t, records(t, dir, bundle.Folders), "9220")
+	if folder["title"] != "Handbook" || folder["parentSourceId"] != nil || folder["toolSourceId"] != "9210" {
+		t.Errorf("the folder at the top of its tool: %v", folder)
+	}
+
+	upload := recordWithID(t, records(t, dir, bundle.Uploads), "9260")
+	if upload["title"] != "logo.png" || upload["file"] != "upload-9260" || upload["folderSourceId"] != "9220" {
+		t.Errorf("the upload with its file: %v", upload)
+	}
+
+	// A comment and a boost hang on a document and on an upload by their own
+	// words, and the boosts of a comment come behind those of its parent.
+	comment := recordWithID(t, records(t, dir, bundle.Comments), "9271")
+	if comment["parentKind"] != bundle.ParentDocument || comment["parentSourceId"] != "9240" {
+		t.Errorf("the comment of a document hangs on %v %v", comment["parentKind"], comment["parentSourceId"])
+	}
+	boost := recordWithID(t, records(t, dir, bundle.Reactions), "9283")
+	if boost["targetKind"] != bundle.TargetUpload || boost["targetSourceId"] != "9260" {
+		t.Errorf("the boost of an upload hangs on %v %v", boost["targetKind"], boost["targetSourceId"])
+	}
+	// The files of a document and of the description of an upload belong to what
+	// carries the text.
+	attachments := records(t, dir, bundle.Attachments)
+	if got := recordWithID(t, attachments, "upload-9260")["ownerKind"]; got != bundle.OwnerUpload {
+		t.Errorf("the file of an upload says ownerKind %v, want upload", got)
+	}
+	if got := recordWithID(t, attachments, "attachment-5402")["ownerKind"]; got != bundle.OwnerDocument {
+		t.Errorf("the file of a document says ownerKind %v, want document", got)
+	}
+}
+
+// The one rule that is the opposite of the rule everywhere else: a folder, a
+// document and an upload say whether clients see them at **every** depth, exactly
+// as the source has it, because Minka reads the word below the top of a tool as
+// well. Something hidden there is what makes Minka hide the folder at the top with
+// everything in it; an entry that came without the word would be imported in the
+// open under a folder clients see, and what a client has seen cannot be taken
+// back.
+//
+// Nothing of it is counted as a word left to what the entry hangs on: an entry of
+// Docs & Files decides for itself wherever it stands.
+func TestEveryEntryOfDocsAndFilesSaysWhatTheSourceSaysAboutClientsAtEveryDepth(t *testing.T) {
+	dir, result := extract(t, fakebasecamp.New(), docsProject)
+
+	// The folder at the top is shown, the folder inside it is hidden, and so are
+	// the document and the upload standing in that folder.
+	for _, entry := range []struct {
+		kind bundle.Kind
+		id   string
+		want any
+	}{
+		{bundle.Folders, "9220", true},
+		{bundle.Folders, "9221", false},
+		{bundle.Documents, "9240", true},
+		{bundle.Documents, "9241", false},
+		{bundle.Uploads, "9260", true},
+		{bundle.Uploads, "9265", false},
+	} {
+		record := recordWithID(t, records(t, dir, entry.kind), entry.id)
+		said, says := record["visibleToClients"]
+		if !says {
+			t.Errorf("%s %s says nothing about clients, and the source says %v", entry.kind, entry.id, entry.want)
+			continue
+		}
+		if said != entry.want {
+			t.Errorf("%s %s says %v about clients, want %v", entry.kind, entry.id, said, entry.want)
+		}
+	}
+
+	// Where the source says nothing, nothing is written: in doubt, private.
+	for _, entry := range []struct {
+		kind bundle.Kind
+		id   string
+	}{{bundle.Folders, "9228"}, {bundle.Documents, "9244"}, {bundle.Uploads, "9267"}} {
+		record := recordWithID(t, records(t, dir, entry.kind), entry.id)
+		if said, says := record["visibleToClients"]; says {
+			t.Errorf("%s %s says %v about clients although the source says nothing", entry.kind, entry.id, said)
+		}
+	}
+
+	if result.VisibilityLeftToTheContainer != 0 {
+		t.Errorf("%d words about clients were left to a container, and an entry of Docs & Files decides for itself at every depth",
+			result.VisibilityLeftToTheContainer)
+	}
+}
+
+// The word of a nested entry is the only thing that hides a folder at the top:
+// where the source hides an entry below a folder it shows, the bundle has to say
+// so at that entry. This holds the field down at every depth of the fake, so that
+// a run which wrote it at the top alone goes red.
+func TestNoEntryBelowATopFolderIsSilentAboutClientsWhereTheSourceSpeaks(t *testing.T) {
+	account := fakebasecamp.New()
+	dir, _ := extract(t, account, docsProject)
+
+	said := map[string]bool{}
+	for _, kind := range []bundle.Kind{bundle.Folders, bundle.Documents, bundle.Uploads} {
+		for _, record := range recordsOrNone(t, dir, kind) {
+			if _, says := record["visibleToClients"]; says {
+				said[record["sourceId"].(string)] = true
+			}
+		}
+	}
+	for _, id := range []string{"9220", "9221", "9240", "9241", "9260", "9265"} {
+		if !said[id] {
+			t.Errorf("entry %s is silent about clients although the source is not", id)
+		}
+	}
+
+	// And the word follows the source when the source changes it: an entry the
+	// source hides below a shown top says false, whatever its depth.
+	hidden := false
+	theDocument(t, account, 9242).VisibleToClients = &hidden
+	dir, _ = extract(t, account, docsProject)
+	if got := recordWithID(t, records(t, dir, bundle.Documents), "9242")["visibleToClients"]; got != false {
+		t.Errorf("a document hidden from clients in a folder on the shelf says %v", got)
+	}
+}
+
+// A folder stands in the file after the folder it is in, because the applier
+// stops at a folder whose parent it has not seen yet. Each kind of a folder
+// stands there from the bottom up, because Minka puts every new entry on top of
+// its kind: so the last line of a folder is the one on top, and the order the
+// source shows comes out again.
+func TestTheFoldersOfATheBundleStandParentsFirstAndEachKindFromTheBottomUp(t *testing.T) {
+	dir, _ := extract(t, fakebasecamp.New(), docsProject)
+
+	folders := records(t, dir, bundle.Folders)
+	if got := sourceIDs(folders); !reflect.DeepEqual(got, []string{"9222", "9223", "9228", "9220", "9221"}) {
+		t.Errorf("the folders stand in the order %v", got)
+	}
+	standsAt := map[string]int{}
+	for i, record := range folders {
+		standsAt[record["sourceId"].(string)] = i
+	}
+	for _, record := range folders {
+		parent, inAFolder := record["parentSourceId"].(string)
+		if inAFolder && standsAt[parent] > standsAt[record["sourceId"].(string)] {
+			t.Errorf("folder %s stands before its parent %s", record["sourceId"], parent)
+		}
+	}
+
+	// Per folder and per kind, the bundle is the source's order upside down, and
+	// what has left the folder goes first, where it cannot push the rest about.
+	if got := sourceIDs(records(t, dir, bundle.Documents)); !reflect.DeepEqual(got,
+		[]string{"9246", "9247", "9245", "9244", "9242", "9252", "9240", "9241", "9248"}) {
+		t.Errorf("the documents stand in the order %v", got)
+	}
+	if got := sourceIDs(records(t, dir, bundle.Uploads)); !reflect.DeepEqual(got,
+		[]string{"9269", "9264", "9263", "9267", "9261", "9270", "9260", "9265"}) {
+		t.Errorf("the uploads stand in the order %v", got)
+	}
+}
+
+// There is no position in the format: Minka reads the order of the file and
+// earns a warning for every record that carries one.
+func TestNoEntryOfDocsAndFilesCarriesAPosition(t *testing.T) {
+	dir, _ := extract(t, fakebasecamp.New(), docsProject)
+
+	for _, kind := range []bundle.Kind{bundle.Folders, bundle.Documents, bundle.Uploads} {
+		for _, record := range records(t, dir, kind) {
+			if _, said := record["position"]; said {
+				t.Errorf("%s %s carries a position", kind, record["sourceId"])
+			}
+		}
+	}
+}
+
+// The status of an entry is its own and is never the status of its folder: what
+// stands in a folder the source archived or threw away comes in as it is and goes
+// along through the folder, and a run that copied the folder's word onto it would
+// put it away one by one and never bring it back with the folder.
+func TestTheStatusOfAnEntryIsItsOwnAndNeverItsFoldersS(t *testing.T) {
+	dir, result := extract(t, fakebasecamp.New(), docsProject)
+
+	if got := recordWithID(t, records(t, dir, bundle.Folders), "9222")["status"]; got != bundle.StatusArchived {
+		t.Errorf("the folder on the shelf comes as %v", got)
+	}
+	if got := recordWithID(t, records(t, dir, bundle.Documents), "9242")["status"]; got != bundle.StatusActive {
+		t.Errorf("the document in a folder on the shelf comes as %v, want active", got)
+	}
+	if got := recordWithID(t, records(t, dir, bundle.Uploads), "9261")["status"]; got != bundle.StatusActive {
+		t.Errorf("the upload in a folder in the trash comes as %v, want active", got)
+	}
+	if got := result.Docs.FoldersByStatus; !reflect.DeepEqual(got,
+		map[string]int{bundle.StatusActive: 3, bundle.StatusArchived: 1, bundle.StatusTrashed: 1}) {
+		t.Errorf("the folders by status are %v", got)
+	}
+	if got := result.Docs.DocumentsByStatus; !reflect.DeepEqual(got,
+		map[string]int{bundle.StatusActive: 7, bundle.StatusArchived: 1, bundle.StatusTrashed: 1}) {
+		t.Errorf("the documents by status are %v", got)
+	}
+	if got := result.Docs.UploadsByStatus; !reflect.DeepEqual(got,
+		map[string]int{bundle.StatusActive: 6, bundle.StatusArchived: 1, bundle.StatusTrashed: 1}) {
+		t.Errorf("the uploads by status are %v", got)
+	}
+}
+
+// The title of an upload is the name of its file, because Minka derives nothing
+// from a file and refuses an upload without a title. A name is whatever a file
+// system allowed, so it is made into a title the way a subject is, and the run
+// says how many.
+func TestAnUploadCarriesTheNameOfItsFileAsATitleMinkaTakes(t *testing.T) {
+	dir, result := extract(t, fakebasecamp.New(), docsProject)
+
+	uploads := records(t, dir, bundle.Uploads)
+	if got := recordWithID(t, uploads, "9260")["title"]; got != "logo.png" {
+		t.Errorf("the upload carries the title %v, want the name of its file", got)
+	}
+	long := recordWithID(t, uploads, "9263")["title"].(string)
+	if count := len([]rune(long)); count > 200 || !strings.HasSuffix(long, "…") {
+		t.Errorf("a name longer than a title holds became a title of %d characters ending in %q", count, long[len(long)-3:])
+	}
+	if got := recordWithID(t, uploads, "9264")["title"]; got != "(no name)" {
+		t.Errorf("an upload whose file has no name carries the title %v", got)
+	}
+	if result.Docs.NamesMadeIntoATitle != 1 || result.Docs.WithoutAName != 1 {
+		t.Errorf("%d names made into a title and %d without a name, want one of each",
+			result.Docs.NamesMadeIntoATitle, result.Docs.WithoutAName)
+	}
+
+	// Whatever the source calls a file, what comes out is a title Minka takes.
+	for _, name := range []string{"", "  ", "a\nb", strings.Repeat("ä", 500), string([]byte{0xff, 'x'})} {
+		account := fakebasecamp.New()
+		theUpload(t, account, 9267).Filename = name
+		dir, _ := extract(t, account, docsProject)
+		title := recordWithID(t, records(t, dir, bundle.Uploads), "9267")["title"].(string)
+		switch {
+		case strings.TrimSpace(title) == "":
+			t.Errorf("the name %q became a title of nothing", name)
+		case len([]rune(title)) > 200:
+			t.Errorf("the name %q became a title of %d characters", name, len([]rune(title)))
+		}
+	}
+}
+
+// An upload Basecamp names no stored file for — one that lives in a cloud — is
+// left out and named by ID, and its comments and its boosts go with it rather
+// than being asked for: a comment pointing at an upload the bundle does not carry
+// would stop the applier.
+func TestAnUploadWithoutAStoredFileIsLeftOutWithEverythingPointingAtIt(t *testing.T) {
+	account := fakebasecamp.New()
+	dir, result := extract(t, account, docsProject)
+
+	for _, record := range records(t, dir, bundle.Uploads) {
+		if record["sourceId"] == "9262" {
+			t.Error("the upload Basecamp names no file for is in the bundle")
+		}
+	}
+	if got := result.Docs.WithoutAStoredFile; !reflect.DeepEqual(got, []string{"9262"}) {
+		t.Errorf("the uploads without a stored file are %v, want the one in the cloud", got)
+	}
+	if result.Docs.CommentsWithoutTheirUpload != 1 || result.Docs.BoostsWithoutTheirUpload != 1 {
+		t.Errorf("%d comments and %d boosts fell with it, want one of each",
+			result.Docs.CommentsWithoutTheirUpload, result.Docs.BoostsWithoutTheirUpload)
+	}
+	for _, record := range records(t, dir, bundle.Comments) {
+		if record["parentSourceId"] == "9262" {
+			t.Errorf("comment %s hangs on an upload the bundle does not carry", record["sourceId"])
+		}
+	}
+	for _, record := range records(t, dir, bundle.Reactions) {
+		if record["targetSourceId"] == "9262" {
+			t.Errorf("boost %s hangs on an upload the bundle does not carry", record["sourceId"])
+		}
+	}
+	// Neither list is asked for: nothing of such an upload costs a request.
+	for _, asked := range account.Requests {
+		if strings.Contains(asked, "/9262/") {
+			t.Errorf("the run asked for %s of an upload it leaves out", asked)
+		}
+	}
+}
+
+// A stored file has one place in Minka, so the file of an upload never carries
+// the reference a text of the bundle uses for a file: the text would claim the
+// blob, and the upload would stay out with a warning nobody reads.
+func TestTheFileOfAnUploadIsNeverTheReferenceOfAFileInAText(t *testing.T) {
+	dir, _ := extract(t, fakebasecamp.New(), docsProject)
+
+	inATextOrAnUpload := map[string]string{}
+	for _, record := range records(t, dir, bundle.Uploads) {
+		inATextOrAnUpload[record["file"].(string)] = "the file of upload " + record["sourceId"].(string)
+	}
+	for _, kind := range []bundle.Kind{bundle.Documents, bundle.Uploads, bundle.Comments} {
+		for _, record := range recordsOrNone(t, dir, kind) {
+			text, _ := record["body"].(string)
+			if description, has := record["description"].(string); has {
+				text += description
+			}
+			for _, ref := range referencesIn(text) {
+				if where, claimed := inATextOrAnUpload[ref]; claimed {
+					t.Errorf("%s %s names %s in its text, which is %s", kind, record["sourceId"], ref, where)
+				}
+			}
+		}
+	}
+}
+
+// referencesIn are the files a text of a bundle refers to.
+func referencesIn(text string) []string {
+	var refs []string
+	for _, part := range strings.Split(text, `<import-attachment ref="`)[1:] {
+		if end := strings.Index(part, `"`); end >= 0 {
+			refs = append(refs, part[:end])
+		}
+	}
+	return refs
+}
+
+// A folder whose status a bundle has no word for is left out, and everything
+// below it falls with it: a folder, a document and an upload the run would
+// otherwise have written under a place that is not there. The place is named with
+// how much fell, because a number alone says that something is gone and never
+// which.
+func TestAFolderTheBundleCannotCarryTakesEverythingBelowItAndIsNamed(t *testing.T) {
+	dir, result := extract(t, fakebasecamp.New(), docsProject)
+
+	for kind, id := range map[bundle.Kind]string{bundle.Folders: "9226", bundle.Documents: "9243", bundle.Uploads: "9266"} {
+		for _, record := range records(t, dir, kind) {
+			if record["sourceId"] == id {
+				t.Errorf("%s %s stood in a folder the bundle leaves out and is in the bundle", kind, id)
+			}
+		}
+	}
+	held := DocsPlace(t, result, "9224")
+	if held.Record != "folder" || held.Folders != 1 || held.Documents != 1 || held.Uploads != 1 {
+		t.Errorf("with the folder the bundle leaves out fell %v", held)
+	}
+	// The word that made it impossible is counted with every other such record.
+	found := false
+	for _, one := range result.RecordsLeftOut {
+		if one.Record == "folder" && one.Field == "status" && one.Value == "quarantined" && one.LeftOut == 1 {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("the word that left the folder out is not counted: %v", result.RecordsLeftOut)
+	}
+}
+
+// DocsPlace is the place of a run's report that took entries with it.
+func DocsPlace(t *testing.T, result basecamp.Result, id string) basecamp.DocsPlaceLeftOut {
+	t.Helper()
+	for _, place := range result.Docs.PlacesLeftOut {
+		if place.SourceID == id {
+			return place
+		}
+	}
+	t.Fatalf("no place %s took entries with it: %v", id, result.Docs.PlacesLeftOut)
+	return basecamp.DocsPlaceLeftOut{}
+}
+
+// A Docs & Files tool the source has switched off is not read at all, and nothing
+// that stands in it reaches the bundle. What the project's own lists of records it
+// has put away hand out of such a tool is counted and named with the tool it fell
+// with, so that no run is silent about it.
+func TestNothingOfADocsAndFilesToolThatIsSwitchedOffReachesTheBundle(t *testing.T) {
+	account := fakebasecamp.New()
+	dir, result := extract(t, account, docsProject)
+
+	for _, record := range records(t, dir, bundle.Tools) {
+		if record["sourceId"] == "9212" {
+			t.Error("the Docs & Files tool that is switched off is a tool of the bundle")
+		}
+	}
+	for kind, id := range map[bundle.Kind]string{bundle.Folders: "9227", bundle.Documents: "9251"} {
+		for _, record := range records(t, dir, kind) {
+			if record["sourceId"] == id {
+				t.Errorf("%s %s of a tool that is switched off is in the bundle", kind, id)
+			}
+		}
+	}
+	closed := DocsPlace(t, result, "9212")
+	if closed.Record != "Docs & Files tool" || closed.Folders != 1 || closed.Documents != 1 {
+		t.Errorf("with the tool that is switched off fell %v", closed)
+	}
+	// Its own lists are never asked for.
+	for _, asked := range account.Requests {
+		if strings.Contains(asked, "/vaults/9212/") {
+			t.Errorf("the run asked for %s of a tool that is switched off", asked)
+		}
+	}
+	// And the tool is counted among the skipped ones.
+	skipped := false
+	for _, one := range result.Skipped {
+		if one.Kind == "vault" && !one.Enabled && one.Count == 1 {
+			skipped = true
+		}
+	}
+	if !skipped {
+		t.Errorf("the Docs & Files tool that is switched off is not counted as skipped: %v", result.Skipped)
+	}
+}
+
+// Minka takes neither a comment nor a reaction of a folder and no later run ever
+// will, so a bundle carries none and a run does not even ask: a record that waited
+// there for ever would be counted as waiting on every run.
+func TestNoCommentAndNoBoostOfAFolderIsWrittenOrAskedFor(t *testing.T) {
+	account := fakebasecamp.New()
+	dir, _ := extract(t, account, docsProject)
+
+	folders := map[string]bool{}
+	for _, record := range records(t, dir, bundle.Folders) {
+		folders[record["sourceId"].(string)] = true
+	}
+	for _, record := range records(t, dir, bundle.Comments) {
+		if folders[record["parentSourceId"].(string)] {
+			t.Errorf("comment %s hangs on a folder", record["sourceId"])
+		}
+	}
+	for _, record := range records(t, dir, bundle.Reactions) {
+		if folders[record["targetSourceId"].(string)] {
+			t.Errorf("boost %s hangs on a folder", record["sourceId"])
+		}
+	}
+	for _, asked := range account.Requests {
+		for id := range folders {
+			if strings.Contains(asked, "/recordings/"+id+"/") {
+				t.Errorf("the run asked for %s of a folder", asked)
+			}
+		}
+	}
+}
+
+// A document or an upload whose whole text is a file no run will ever bring is
+// written all the same and named: Minka keeps nothing of such a record and waits
+// for the file, so it arrives there only if the source hands the file out again.
+// A run that said nothing would leave the record, its comments and its boosts out
+// of Minka with the number nobody looked at.
+func TestADocumentThatSaysNothingButAFileThatNeverComesIsWrittenAndNamed(t *testing.T) {
+	dir, result := extract(t, fakebasecamp.New(), docsProject)
+
+	waiting := recordWithID(t, records(t, dir, bundle.Documents), "9245")
+	if waiting["body"] != `<import-attachment ref="attachment-5402"></import-attachment>` {
+		t.Errorf("the document of nothing but a file carries %v", waiting["body"])
+	}
+	if got := result.Docs.OnlyAFileNoRunWillBring; !reflect.DeepEqual(got, []string{"9245"}) {
+		t.Errorf("the records waiting for a file that never comes are %v, want the one document", got)
+	}
+
+	// A document that says something beside the file is not one of them: it keeps
+	// its words and loses the file alone.
+	account := fakebasecamp.New()
+	theDocument(t, account, 9245).Content = `<div>See this</div>` + theDocument(t, account, 9245).Content
+	_, result = extract(t, account, docsProject)
+	if len(result.Docs.OnlyAFileNoRunWillBring) != 0 {
+		t.Errorf("a document with words beside its file is named as waiting: %v", result.Docs.OnlyAFileNoRunWillBring)
+	}
+}
+
+// A document or a description Minka will pass over for its length is counted: it
+// is lost there on every run, with its comments and its boosts, and the text is
+// not cut short.
+func TestADocumentLongerThanMinkaHoldsIsCounted(t *testing.T) {
+	account := fakebasecamp.New()
+	theDocument(t, account, 9244).Content = strings.Repeat("a", 1000001)
+	theUpload(t, account, 9267).Description = strings.Repeat("b", 1000001)
+	_, result := extract(t, account, docsProject)
+
+	if result.Docs.LongerThanMinkaTakes != 2 {
+		t.Errorf("%d texts longer than Minka holds, want the document and the description", result.Docs.LongerThanMinkaTakes)
+	}
+	// The text comes as it is: the longest of the kind is as long as the source
+	// wrote it, and nothing was cut.
+	if result.LongestBody[bundle.Documents] != 1000001 || result.LongestBody[bundle.Uploads] != 1000001 {
+		t.Errorf("the longest document is %d and the longest description %d",
+			result.LongestBody[bundle.Documents], result.LongestBody[bundle.Uploads])
+	}
+	for _, kind := range []bundle.Kind{bundle.Documents, bundle.Uploads} {
+		if got := result.LongestBodyRecords[kind]; got.SourceID == "" || got.In != "project" {
+			t.Errorf("the longest %s names no record: %v", kind, got)
+		}
+	}
+}
+
+// A walk is no snapshot: a list that moved under it can hand one record out
+// twice, and the bundle writes it once.
+func TestAnEntryTheSourceListsTwiceIsWrittenOnce(t *testing.T) {
+	dir, _ := extract(t, fakebasecamp.New(), docsProject)
+
+	for _, kind := range []bundle.Kind{bundle.Folders, bundle.Documents} {
+		seen := map[string]int{}
+		for _, record := range records(t, dir, kind) {
+			seen[record["sourceId"].(string)]++
+		}
+		for id, times := range seen {
+			if times > 1 {
+				t.Errorf("%s %s stands in the bundle %d times", kind, id, times)
+			}
+		}
+	}
+}
+
+// Every time of every record is read where it is read: a folder, a document or an
+// upload the source says no time of, or a time that is none of, ends the run
+// naming the record and the field, because the applier decides by updatedAt
+// whether a run changes a record and a bundle never carries a guess.
+func TestATimeOfAnEntryThatIsNoTimeEndsTheRun(t *testing.T) {
+	for name, broken := range map[string]func(*fakebasecamp.Account){
+		"a folder without a time":      func(a *fakebasecamp.Account) { theFolder(t, a, 9220).UpdatedAt = "" },
+		"a folder at no time":          func(a *fakebasecamp.Account) { theFolder(t, a, 9220).CreatedAt = "yesterday" },
+		"a document without a time":    func(a *fakebasecamp.Account) { theDocument(t, a, 9244).CreatedAt = "" },
+		"a document at no time":        func(a *fakebasecamp.Account) { theDocument(t, a, 9244).UpdatedAt = "2025-06-07T08:00:00" },
+		"an upload without a time":     func(a *fakebasecamp.Account) { theUpload(t, a, 9267).UpdatedAt = "" },
+		"an upload on a day that is n": func(a *fakebasecamp.Account) { theUpload(t, a, 9267).CreatedAt = "2025-02-30T08:00:00Z" },
+	} {
+		account := fakebasecamp.New()
+		broken(account)
+		failed := extractExpectingAnError(t, account, docsProject)
+		if failed.Kind != basecamp.API {
+			t.Errorf("%s ended the run as %v, want an api_error", name, failed.Kind)
+		}
+	}
+}
+
+// A title Minka refuses ends the run instead of reaching it: a folder and a
+// document carry what somebody typed, and somebody can put that right at the
+// source. No message quotes it.
+func TestATitleOfAFolderOrADocumentMinkaRefusesEndsTheRun(t *testing.T) {
+	for name, broken := range map[string]func(*fakebasecamp.Account){
+		"a folder without a title":     func(a *fakebasecamp.Account) { theFolder(t, a, 9220).Title = "  " },
+		"a folder with a long title":   func(a *fakebasecamp.Account) { theFolder(t, a, 9220).Title = strings.Repeat("a", 201) },
+		"a document without a title":   func(a *fakebasecamp.Account) { theDocument(t, a, 9244).Title = "" },
+		"a document with a line break": func(a *fakebasecamp.Account) { theDocument(t, a, 9244).Title = "one\ntwo" },
+	} {
+		account := fakebasecamp.New()
+		broken(account)
+		failed := extractExpectingAnError(t, account, docsProject)
+		if failed.Kind != basecamp.API {
+			t.Errorf("%s ended the run as %v, want an api_error", name, failed.Kind)
+		}
+		if strings.Contains(failed.Message, "one\ntwo") || strings.Contains(failed.Message, strings.Repeat("a", 201)) {
+			t.Errorf("%s: the message quotes the title", name)
+		}
+	}
+}
+
+// A dry run walks the same way and brings no file.
+func TestADryRunOfDocsAndFilesWalksTheSameWay(t *testing.T) {
+	account := fakebasecamp.New()
+	_, wet := extract(t, account, docsProject)
+
+	dry := fakebasecamp.New()
+	writer := bundle.Discard()
+	extractor := basecamp.Extractor{Source: dry, Avatars: dry, Files: dry}
+	result, err := extractor.Extract(t.Context(), []string{docsProject}, writer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := result.Docs, asADryRunKnowsIt(wet).Docs; !reflect.DeepEqual(got, want) {
+		t.Errorf("a dry run says of the Docs & Files\n got %v\nwant %v", got, want)
+	}
+	if len(dry.Downloads) > 0 {
+		t.Errorf("a dry run downloaded %d files", len(dry.Downloads))
+	}
+	if !reflect.DeepEqual(dry.Requests, account.Requests) {
+		t.Error("a dry run asked Basecamp for something else than a run")
+	}
+}

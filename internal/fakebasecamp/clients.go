@@ -116,13 +116,17 @@ func clientProject(ada, iris, otto, nora, cora, tessa Person, tool func(int64, s
 			Subscribers: []Person{iris, cora}, VisibleToClients: &hidden},
 	}
 
+	// A Docs & Files tool clients see, holding nothing: what stands in one is the
+	// docs project's to show.
+	files := tool(9226, "vault", "vaults", "Docs & Files", true, 7, &ada)
+	files.VisibleToClients = &shown
+
 	return Project{
 		ID: 7009, Name: "Client Project", Status: "active",
 		CreatedAt: at(1, 7), UpdatedAt: at(10, 12),
 		ClientsEnabled: true, ClientCompany: &northwind,
 		Members: []int64{ada.ID, iris.ID, otto.ID, nora.ID, cora.ID, tessa.ID},
-		Dock: []Tool{news, notes, chat, clientChat, todos, checkins,
-			tool(9226, "vault", "vaults", "Docs & Files", true, 7, &ada),
+		Dock: []Tool{news, notes, chat, clientChat, todos, checkins, files,
 			forwards,
 			tool(9228, "inbox", "inboxes", "Old forwards", false, 0, &ada)},
 	}

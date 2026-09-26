@@ -121,13 +121,30 @@ question or an answer whose status is neither `active` nor `archived` nor
 `trashed`, a draft among them, a to-do list of such a status, and a group or a
 to-do whose status is neither `active` nor `trashed`, the shelf among them,
 because a bundle gives neither of the two a shelf, a forwarded mail of a status
-that is none of the three, and an answer by mail that says anything but
-`active`, because a bundle gives an answer no status at all. `recordsLeftOut`
-names each
+that is none of the three, an answer by mail that says anything but
+`active`, because a bundle gives an answer no status at all, and a folder, a
+document or an upload of Docs & Files whose status is none of the three.
+`recordsLeftOut` names each
 with the kind of record, the field, the word the source said there, the record
 it stood in and how many were left out, counting records and not entries.
 Nothing hangs on a record that is left out: nobody comes into the bundle for
 it, and nothing of it is asked for.
+
+**What stood in a place the bundle cannot carry falls with it and is asked for
+so that it can be counted** (C-052). That is a to-do list or a group, and a
+folder of Docs & Files or a whole Docs & Files tool: the folders, documents and
+uploads below such a folder are counted in `docs.leftOut`, and
+`docs.placesLeftOut` names every place with how much fell with it. A folder the
+bundle leaves out is asked what stands in it, and a folder of that folder is a
+place of its own, so the walk grows while it goes. A **tool that is switched
+off** is asked nothing at all: a tool the source has switched off is one the run
+does not read, as an inbox is, and what the project's own lists of records it
+has put away hand out of it is counted where it is met.
+
+**An upload Basecamp names no stored file for** is left out with its comments
+and its boosts, named by its `sourceId` (C-060), because `file` takes the
+`sourceId` of a file of the bundle and nothing else, and no run will ever have
+bytes to fetch for what lies in a cloud.
 
 **Two things of a forwarded mail are neither** (C-056): what a mail calls
 itself and whom it says it came from are nobody's to repair at the source, so a
@@ -141,7 +158,8 @@ its `sourceId` in `forwards.withoutAnAddress`, and nothing of it is asked for:
 `fromAddress` takes nothing else and a bundle cannot say a mail without one.
 The rule an address is held to is the same wherever one reaches a bundle, see
 **One rule for every address** below. The title of a card, a post or a to-do
-still ends the run: that one somebody can repair where it stands.
+still ends the run, and so does that of a folder or a document: that one
+somebody can repair where it stands.
 
 The run ends as `api_error` where going on would put something wrong into the
 bundle: a record without `created_at` or `updated_at` and a time that is none,
@@ -288,27 +306,29 @@ writer is from outside and has no usable address in
 ## What a bundle holds so far
 
 The structure, the boards, the message boards, the chats, the check-ins, the
-to-dos and the forwarded mail: `manifest.json`, `people.jsonl`,
-`projects.jsonl`, `tools.jsonl`,
+to-dos, the forwarded mail and the Docs & Files: `manifest.json`,
+`people.jsonl`, `projects.jsonl`, `tools.jsonl`,
 `categories.jsonl`, `columns.jsonl`, `cards.jsonl`, `steps.jsonl`,
 `posts.jsonl`, `questions.jsonl`, `answers.jsonl`, `todolists.jsonl`,
 `todogroups.jsonl`, `todos.jsonl`, `forwards.jsonl`, `forwardreplies.jsonl`,
+`folders.jsonl`, `documents.jsonl`, `uploads.jsonl`,
 `messages.jsonl` or its
 parts, `comments.jsonl`, `reactions.jsonl`, `attachments.jsonl` and `files/`
-with the avatars and the files of texts, chats, answers, lists, to-dos and
-mails. A file of a kind the projects have nothing of is missing.
+with the avatars and the files of texts, chats, answers, lists, to-dos, mails,
+documents and uploads. A file of a kind the projects have nothing of is missing.
 
 The walk goes kind by kind across the projects of a run (C-028): the projects
 with their tools and boards, then the message boards of all projects, then
-the chats, then the questionnaires, then the To-dos tools, and last the
-inboxes. So comments and
+the chats, then the questionnaires, then the To-dos tools, then the
+inboxes, and last the Docs & Files tools. So comments and
 reactions stand in the order of what they hang on: those of cards, those of
 posts, those of lines, those of answers, those of lists and of to-dos, those of
-mails. Where a kind stands in that order decides one thing and no more: a file
+mails, those of documents and of uploads. Where a kind stands in that order
+decides one thing and no more: a file
 met in two records belongs to the first that named it, so a file that hangs in
-a card and in a mail alike stays the card's. Nothing a record points at gains by
-being written earlier — the bundle is whole before Minka reads a line of it, and
-Minka applies the kinds in an order of its own.
+a card and in a document alike stays the card's. Nothing a record points at gains
+by being written earlier — the bundle is whole before Minka reads a line of it,
+and Minka applies the kinds in an order of its own.
 
 - **People** are the ones a record of the bundle refers to, and nobody else:
   the members of the projects named and whoever a record names: its creator,
@@ -670,9 +690,73 @@ Minka applies the kinds in an order of its own.
   a bundle holds none of them either way. Its
   files are `attachments` with `ownerKind` `forwardreply`; in Minka they belong
   to the mail.
+- **Folders** are the folders of every Docs & Files tool that is switched on,
+  `folders.jsonl`. Basecamp calls a folder a vault and makes the tool itself the
+  vault at the top, so the dock entry is the tool and the folders standing
+  directly in it carry `parentSourceId` `null`. Basecamp lists what is in use in
+  a vault, folder by folder, and the archived and the trashed records of a
+  project in one list per kind across all its Docs & Files tools, those that are
+  switched off included. Such a record names the vault it stands in and nothing
+  else, so every folder the bundle carries is known before the first entry of a
+  tool is written, and an entry naming anything else falls with the place it
+  stood in, see What a bundle cannot carry. A walk is no snapshot here either: a
+  folder a list that moved hands out twice is written once.
+  A folder **stands after the folder it is in** — the applier stops at one whose
+  parent it has not seen — and each kind of a folder stands **from the bottom
+  up**, because Minka puts every new entry on top of its kind there: what has
+  left the folder comes first, then what is in use the other way round from the
+  way the source shows it, so the source's order comes out again. There is no
+  `position` in the format, and a record that carried one would earn a warning.
+  `status` is `active`, `archived` or `trashed` and is the folder's own.
+  **A folder takes neither comments nor reactions**, here as in Minka and as in
+  Basecamp, so neither is written and neither is asked for: Minka counts one
+  that names a folder with what it will never take, and no later run takes it
+  either.
+  A folder the source has thrown away may hand out no list of what stands in it;
+  what is in use below such a folder is then beyond the reach of any run, and
+  what the source has put away comes from the project's own lists either way.
+- **Documents** are the documents of those tools, `documents.jsonl`, with
+  `folderSourceId` `null` at the top of the tool. `title` is the title, `body`
+  the document as Basecamp renders it, rewritten like every other text, and
+  `null` where the document has no words, which Minka takes. `status` is the
+  document's **own**: one in a folder the source archived or threw away carries
+  `active` and goes along through the folder in Minka, and a run that wrote the
+  folder's word onto it would put it away one by one and never bring it back
+  with the folder. Comments on a document are `comments` with `parentKind`
+  `document`, its boosts `reactions` with `targetKind` `document`, its files
+  `attachments` with `ownerKind` `document`.
+- **Uploads** are one stored file each, standing beside a text instead of inside
+  one, `uploads.jsonl`. `title` is the **name of the file**, because Minka
+  derives nothing from a file and refuses an upload without a title; a name
+  Minka would refuse is made into a title as the subject of a mail is (C-056),
+  counted in `docs.namesMadeIntoATitle` and `docs.withoutAName`. `file` is the
+  `sourceId` of the file's record in `attachments.jsonl`, which is `upload-<id>`
+  and never the reference a text uses for a file: a stored file has one place in
+  Minka, so a text that embedded the same file and an upload that stood for it
+  would be one reference used twice, the text would claim it, and the upload
+  would stay out. `description` is the rich text beside the file, or `null`, and
+  `status` is its own as a document's is. Only the file the source shows now
+  comes; the format keeps `versions` free for the earlier copies and reads it
+  nowhere, so a bundle writes none, and the upload says neither how many there
+  are nor which. An upload Basecamp names no stored file for is left out with
+  everything pointing at it (C-060). Comments, boosts and the files of the
+  description use `upload` as their kind.
+- **A document or a description longer than the 1,000,000 characters Minka
+  holds** is counted (`docs.longerThanMinkaTakes`) and comes as it is, as a mail
+  does: Minka passes such a record over on every run with everything hanging on
+  it, and a run that shortened it would decide in the one place nobody can
+  repeat. A document or an upload whose whole text is **a file no run will ever
+  bring** is written all the same and named by its `sourceId`
+  (`docs.onlyAFileNoRunWillBring`): Minka keeps nothing of such a record and
+  asks for the file again on every run, which is what rescues it where the
+  source hands the file out again and what loses it where the file is gone for
+  good. It gets no line of the run's own as a mail does (C-057), because such a
+  record is not remembered as finished and the run after the one that finds the
+  file writes it whole.
 - **Comments** are those of cards, of posts, of answers, of to-do lists, of
-  to-dos and of forwarded mail, `parentKind`
-  `card`, `post`, `answer`, `todolist`, `todo` or `forward`,
+  to-dos, of forwarded mail, of documents and of uploads, `parentKind`
+  `card`, `post`, `answer`, `todolist`, `todo`, `forward`, `document` or
+  `upload`,
   per parent oldest first, by `created_at` and then by ID: the applier reads
   the order of the comments of a parent from the file. Basecamp hands out the
   rendered text of a comment only. A comment in the trash is left out with
@@ -680,7 +764,8 @@ Minka applies the kinds in an order of its own.
   comment of an archived card as well.
 - **Reactions** are the boosts of a card (`targetKind` `card`), of a post
   (`post`), of an answer (`answer`), of a to-do list (`todolist`), of a to-do
-  (`todo`), of a forwarded mail (`forward`), of a comment (`comment`) and of a
+  (`todo`), of a forwarded mail (`forward`), of a document (`document`), of an
+  upload (`upload`), of a comment (`comment`) and of a
   line (`message`), with `content`
   as it is, a text of some words included: what Minka takes for a reaction is
   the applier's to decide. The boosts of a card or a post stand before those
@@ -688,8 +773,8 @@ Minka applies the kinds in an order of its own.
   `updatedAt`.
 
 Left out besides: the colours, wormholes between boards, who follows a card
-or a post and whom a post told, and being on hold as anything more than the
-flag.
+or a post and whom a post told, being on hold as anything more than the
+flag, and the earlier copies of the file of an upload.
 
 What Basecamp does not hand out, so that no bundle carries it:
 
@@ -716,9 +801,13 @@ files in the order the walk meets them, see Files. Only where Basecamp gives
 cards no position, in Done and among the archived and the trashed, does its
 own order count.
 
-A card, a post, a line and a forwarded mail cost no request of their own: a
-list shows them in
-full. Comments are asked for only where a card or a post says it has some,
+A card, a post, a line, a forwarded mail and an entry of Docs & Files cost no
+request of their own: a list shows them in
+full. A Docs & Files tool costs three requests per vault it holds — its folders,
+its documents and its uploads, the vault at the top of the tool included — and a
+project with such a tool six more for the records it has put away, one per kind
+and status, whatever the tool.
+Comments are asked for only where a card or a post says it has some,
 boosts only where a card, a post, a comment or a line says so, and the answers
 of a mail only where it says it has some. A **mail** says how many comments and
 how many boosts it has as little as Basecamp knows, so both of its lists are
@@ -955,13 +1044,15 @@ Every `<import-attachment>` the extractor writes has a record in
 `attachments.jsonl` whose `sourceId` is exactly its `ref`, and its bytes at
 `files/<sourceId>/<filename>`: `attachment-<id>` for a file embedded in the
 text of a card, a comment or a post, `blob-<key>` for a file dropped into a
-chat. The one reference without a record is a file the run could not fetch,
+chat, `upload-<id>` for the file an upload of Docs & Files stands for. The one
+reference without a record is a file the run could not fetch,
 see Files that cannot be fetched (C-030).
 
 - **The record** carries `filename`, `contentType` as Basecamp says it, or
   `null`, `bytes`, `sha256`, `file`, which is exactly
   `<sourceId>/<filename>`, `ownerKind` (`card`, `comment`, `post`, `message`,
-  `answer`, `todolist`, `todo`, `forward`, `forwardreply`) and
+  `answer`, `todolist`, `todo`, `forward`, `forwardreply`, `document`,
+  `upload`) and
   `ownerSourceId`. Basecamp gives a file
   neither a time nor a creator, so
   `createdAt` and `updatedAt` are those of its owner, and `createdBy` is
@@ -1102,11 +1193,19 @@ therefore read from the source and never guessed (C-055).
   that names a client company and no access as one whose clients have none. A
   project the source says nothing of clients about carries neither, which leaves
   what Minka holds alone.
-- **`visibleToClients`** is carried by a tool, a post, a to-do list and a
-  check-in question: the records Minka lets decide for themselves. It comes from
+- **`visibleToClients`** is carried by a tool, a post, a to-do list, a
+  check-in question and every folder, document and upload of Docs & Files: the
+  records Minka lets decide for themselves. It comes from
   the recording of the record itself — a dock entry says nothing about clients,
   so a tool is read where the tool is read. Where the source says nothing,
   nothing is written: in doubt, private.
+- **An entry of Docs & Files carries it at every depth** (C-061), which is the
+  one place a record standing inside another says anything about clients. Minka
+  reads the word below the top of a tool as well, and there it is the one thing
+  that can hide a folder at the top: where a folder, a document or an upload
+  below a top folder the source shows is hidden from clients, the import hides
+  that top folder with everything in it and names it. An entry that left the
+  word out would be imported in the open under a folder clients see.
 - **What follows what it hangs on** — a to-do, a group, a card, a step, an
   answer, a comment, a line of a chat, a forwarded mail, an answer by mail —
   carries no word of its own, because a
@@ -1122,10 +1221,9 @@ therefore read from the source and never guessed (C-055).
   member of the project first, then being a client, then having left and coming
   without an address, because Minka has a client out of the project before it
   asks anything else about them.
-- **Docs & Files (`vault`) is not extracted**, so a bundle says nothing of
-  whether clients see it or what stands in it. The report counts the ones that
-  are switched on and a `notice` names the gap, so that no bundle looks complete
-  about clients. An Email forwards tool carries its word like every other tool,
+- **Every kind of tool Minka has a counterpart for is extracted**, so no bundle
+  is silent about whether clients see one of them. An Email forwards
+  tool carries its word like every other tool,
   and a forwarded mail and an answer by mail follow it: an inbox is shown to
   clients as a whole or not at all.
 

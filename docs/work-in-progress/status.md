@@ -24,11 +24,12 @@ card, a comment or a message gives the identifier a download takes, without
 anything being taken out of the text.
 
 `minka import basecamp` extracts the structure, the boards, the message
-boards, the chats, the check-ins, the to-dos and the forwarded mail of Basecamp
+boards, the chats, the check-ins, the to-dos, the forwarded mail and the
+Docs & Files of Basecamp
 projects into an
 import bundle for Minka's applier: people with avatars, projects with members,
-the boards, chats, message boards, questionnaires, to-do sets and inboxes as
-tools, of
+the boards, chats, message boards, questionnaires, to-do sets, inboxes and
+Docs & Files tools as tools, of
 each board the columns, cards, steps, comments and boosts, of each message
 board the posts of every status with their categories, comments and boosts, of
 each chat its lines as messages with their boosts, written in parts of one
@@ -36,10 +37,13 @@ chat and some 10,000 lines each, of each questionnaire its questions with the
 schedule Minka has words for and their answers with what hangs on them, of
 each to-do set its lists from the bottom up, because Minka puts every new list
 on top, with their groups and their to-dos in the order of the list and what
-hangs on a list and a to-do, and of each inbox its forwarded mail with the
-answers by mail, the comments and the boosts of each.
-The inboxes come last of all, so that a file standing in a card and in a mail
-alike belongs to the card. Three things of such a mail are the extractor's own
+hangs on a list and a to-do, of each inbox its forwarded mail with the
+answers by mail, the comments and the boosts of each, and of each Docs & Files
+tool its folders, documents and uploads with the comments, the boosts and the
+files of each.
+The Docs & Files tools come last of all, so that a file standing in a card and
+in a document alike belongs to the card, and the inboxes before them.
+Three things of such a mail are the extractor's own
 doing, each
 written down as a rule: a subject Minka would refuse becomes a title rather than
 costing the mail or the run and a sender that is no address leaves the mail out
@@ -47,6 +51,15 @@ costing the mail or the run and a sender that is no address leaves the mail out
 run (C-057), and what the source keeps on its shelf comes into the trash, where
 it can be brought back (C-058). Somebody who wrote to a project from outside the
 account stays an address and becomes nobody.
+Of the Docs & Files, three things are the extractor's own doing. A folder
+stands in the bundle after the folder it is in and each kind of a folder from
+the bottom up, because Minka reads the order of the file and puts every new
+entry on top of its kind. The status of an entry is its own and never that of
+its folder, so what stands in a folder the source put away comes in as it is
+and goes along through the folder there. And the title of an upload is the name
+of its file, folded to fit where the name is one Minka would refuse (C-056),
+because Minka derives nothing from a file and refuses an upload without a
+title.
 Every address a bundle carries — a person's, a mail's sender, an answer's —
 is read the way Minka reads it and no wider (C-059), so that none of them
 stops the applier after hours of walking, and one pair of quotation marks
@@ -65,9 +78,14 @@ has a word for `Chat::Lines::Text`, `Chat::Lines::RichText`,
 than `active`, a column of a kind a bundle has no role for, a card, a post,
 a comment, a question or an answer with a status a bundle does not know, a draft
 among them, a group or a to-do the source has put on the shelf, which a
-bundle gives none, a forwarded mail of a status that is none of the three, and
-an answer by mail that says anything but `active`. What stood in a list or a
-group a bundle cannot carry falls
+bundle gives none, a forwarded mail of a status that is none of the three,
+an answer by mail that says anything but `active`, and a folder, a document or
+an upload of Docs & Files whose status is none of the three. An upload
+Basecamp names no stored file for is left out with its comments and its boosts
+(C-060): `file` takes the identifier of a file of the bundle and nothing else,
+and no run will ever have bytes to fetch for what lies in a cloud.
+What stood in a list, a group, a folder or a whole Docs & Files tool a bundle
+cannot carry falls
 with it, is asked for to be counted and is named with the place it fell with
 (C-052), so that no run says a bundle holds more of the source than it does.
 `recordsLeftOut` names each with the kind of record, the word and where it
@@ -79,16 +97,20 @@ carries the same second, the order of the two can turn round, which is a known
 limit and written down with the rule.
 What the source says about clients comes with a bundle (C-055): `client` and the
 company on a person, `clientAccess` and the client company on a project, and
-`visibleToClients` on a tool, a post, a to-do list and a check-in question, read
+`visibleToClients` on a tool, a post, a to-do list, a check-in question and
+every folder, document and upload of Docs & Files, read
 from each record and never from the tool it stands in. A record that follows what
 it hangs on carries no word of its own and is counted where the source offers
-one. A client is no member of a project in Minka, so the run counts the
+one. **An entry of Docs & Files is the one exception** (C-061): it carries the
+word at every depth, because Minka reads it below the top of a tool as well and
+something hidden there hides the folder at the top with everything in it.
+A client is no member of a project in Minka, so the run counts the
 memberships that fall away and says no question is asked of a client. A company
 the source names without an identifier, or with a name Minka refuses, ends the
 run where the record that names it comes in: written away as none, it would tell
 Minka to drop the company it holds.
-Docs & Files is not extracted, so a bundle says nothing of whether clients see
-it, which the report names as a gap; an Email forwards tool carries its word like
+Every kind of tool Minka has a counterpart for is extracted, so no report names
+a gap about clients; an Email forwards tool carries its word like
 every other tool, and a mail and an answer by mail follow it.
 Mentions in the texts are references, the preview of a link is the link, a
 video or a player embedded in a text is an `<import-embed>` with its address,
@@ -339,6 +361,44 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   counted in `visibilityLeftToTheContainer`, where the fake offers one. Of the
   answers only one list was read, and what it says about clients was not among
   what was measured.
+- Of the Docs & Files of `import basecamp`: **all of it, and more of it than
+  for any other kind.** No extraction has met a Docs & Files tool live, and
+  nothing of the source was measured before the code was written either: the
+  account was measured for its size and not for its shapes. What the bundle has
+  to carry was read in Minka's own code — `FoldersApplier`, `DocumentsApplier`,
+  `UploadsApplier`, `EntriesOfDocsAndFiles` and `WhatClientsSee` — and `E-195`,
+  and read there rather than in Minka's prose, which said the opposite of the
+  client rule until the code was read against it.
+  Taken on trust of Basecamp and held by nothing but the invented account: that
+  a dock entry of a Docs & Files tool is called `vault` and **is itself the
+  vault at the top**, so that what stands directly in the tool names the dock
+  entry as its parent; that a vault lists what stands in it at
+  `buckets/{b}/vaults/{v}/vaults.json`, `documents.json` and `uploads.json`, in
+  the order it shows them, topmost first; that the archived and the trashed
+  folders, documents and uploads of a project come as recordings of the types
+  `Vault`, `Document` and `Upload`, which the Basecamp CLI does not offer for a
+  vault and which its own documentation of the types does not name either; that
+  a folder carries `title` and `parent`, a document `title`, `content` and
+  `content_attachments`, and an upload `filename`, `content_type`, `byte_size`,
+  `download_url`, `description` and `description_attachments` under those
+  names; that an upload's stored file is named in its `download_url` and
+  nowhere else, as a file dropped into a chat is; that an upload in a cloud
+  names no file to download at all, which is the one thing the shape of the
+  answer is guessed at rather than read; that a folder the source archived or
+  threw away can be asked what stands in it, which a run does and passes over a
+  refusal of for a folder that is not in use; and that a folder takes neither
+  comments nor boosts.
+  Invented for want of anything to measure: a folder, a document or an upload
+  whose status is none of the three; an upload in a cloud, with a comment and a
+  boost on it; a file name longer than a title holds and an upload without a
+  name at all; a document whose whole text is a file the source no longer has;
+  a document and a description longer than Minka holds; an entry the source
+  lists twice; a folder the bundle cannot carry with a folder, a document and
+  an upload standing in it; and a Docs & Files tool that is switched off with an
+  archived folder and an archived document behind it.
+  Not counted and not asked for: how many earlier copies of its file an upload
+  has. `versions` is a field Minka reads nowhere, and the upload says nothing
+  of them, so a run that wanted the number would ask once per upload.
 - Of the files of `import basecamp`: a download that breaks off, a file
   whose size differs from what Basecamp says, a file that is gone, a name that
   has to be changed, a caption too long, and one file under two owners.
@@ -592,6 +652,19 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   as well, so a larger number is no sign of anything wrong. Whether a mail on the
   shelf exists at all is a question for Basecamp and not for a run: nothing the
   API offers hands one out.
+- **Extract the Docs & Files of a project live, before the account is walked
+  for MNK-53.** Nothing of the source was measured, so this is the one kind
+  where the first live request may end the run: whether `recordings.json` takes
+  `type=Vault`, `type=Document` and `type=Upload` at all; whether the dock
+  entry of a Docs & Files tool is the vault at the top; whether a folder the
+  source archived or threw away answers for what stands in it; what an upload
+  in a cloud looks like, and whether such an upload exists in the account at
+  all; whether an upload's `download_url` names the stored file. A dry run over
+  one project with a Docs & Files tool answers all of it and costs nothing.
+  Then check the bundle record by record, as the boards and the chats were
+  checked, with an eye on the one thing that cannot be taken back: that every
+  folder, document and upload the source says anything about clients of carries
+  the word, at every depth.
 - Extract the to-dos of a project live: whether `todoset` is the dock entry, the
   fields of a list, a group and a to-do, the two lists of what is open and what is
   done, the recordings of the archived and the trashed ones, whether a list on

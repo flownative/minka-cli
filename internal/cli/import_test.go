@@ -107,7 +107,7 @@ func TestImportBasecampWritesABundleAndReportsWhatItHolds(t *testing.T) {
 			map[string]any{"kind": "kanban_board", "enabled": false, "count": float64(1)},
 			map[string]any{"kind": "schedule", "enabled": false, "count": float64(1)},
 			map[string]any{"kind": "todoset", "enabled": false, "count": float64(1)},
-			map[string]any{"kind": "vault", "enabled": true, "count": float64(1)},
+			map[string]any{"kind": "vault", "enabled": false, "count": float64(1)},
 		},
 		"missingFiles": []any{}, "invalidAddresses": []any{}, "addressesUnquoted": float64(0), "peopleLeftOut": float64(8),
 		"creatorProbesRefused": float64(0),
@@ -138,8 +138,18 @@ func TestImportBasecampWritesABundleAndReportsWhatItHolds(t *testing.T) {
 			"withoutAForwarder": float64(0), "withoutAnAddress": []any{},
 			"repliesFromOutside": float64(0), "repliesWithoutASender": []any{}, "reactionsOnRepliesLeftOut": float64(0),
 			"longerThanMinkaTakes": float64(0)},
+		"docs": map[string]any{
+			"foldersByStatus":       map[string]any{"active": float64(0), "archived": float64(0), "trashed": float64(0)},
+			"documentsByStatus":     map[string]any{"active": float64(0), "archived": float64(0), "trashed": float64(0)},
+			"uploadsByStatus":       map[string]any{"active": float64(0), "archived": float64(0), "trashed": float64(0)},
+			"documentsWithoutWords": float64(0), "namesMadeIntoATitle": float64(0), "withoutAName": float64(0),
+			"withoutAStoredFile": []any{}, "commentsWithoutTheirUpload": float64(0), "boostsWithoutTheirUpload": float64(0),
+			"onlyAFileNoRunWillBring": []any{}, "longerThanMinkaTakes": float64(0),
+			"leftOut":       map[string]any{"folders": float64(0), "documents": float64(0), "uploads": float64(0)},
+			"placesLeftOut": []any{}},
 		"longestBody": map[string]any{"cards": float64(0), "comments": float64(0), "posts": float64(0), "messages": float64(0), "answers": float64(0),
-			"todolists": float64(0), "todos": float64(0), "forwards": float64(0), "forwardreplies": float64(0)},
+			"todolists": float64(0), "todos": float64(0), "forwards": float64(0), "forwardreplies": float64(0),
+			"documents": float64(0), "uploads": float64(0)},
 		"longestBodyRecords": map[string]any{},
 		"references":         map[string]any{"cards": float64(0), "posts": float64(0), "tools": float64(0)},
 		"requestsRetried":    float64(0),
@@ -1053,7 +1063,8 @@ func TestImportBasecampReportsThePostsAndTheChatsOfAProject(t *testing.T) {
 		"recordsLeftOut": []any{map[string]any{"record": "line", "field": "type", "value": fakebasecamp.UnknownLine,
 			"in": "chat", "inSourceId": "9033", "leftOut": float64(2)}},
 		"longestBody": map[string]any{"cards": float64(0), "comments": float64(94), "posts": float64(212), "messages": float64(213), "answers": float64(0),
-			"todolists": float64(0), "todos": float64(0), "forwards": float64(0), "forwardreplies": float64(0)},
+			"todolists": float64(0), "todos": float64(0), "forwards": float64(0), "forwardreplies": float64(0),
+			"documents": float64(0), "uploads": float64(0)},
 		"longestBodyRecords": map[string]any{
 			"comments": map[string]any{"record": "comment", "sourceId": "9752", "in": "project", "inSourceId": "7004", "characters": float64(94)},
 			"posts":    map[string]any{"record": "post", "sourceId": "9701", "in": "project", "inSourceId": "7004", "characters": float64(212)},
@@ -1580,6 +1591,28 @@ func TestNoOutputSaysWhatAFileIsCalledOrWhereItLies(t *testing.T) {
 	}
 }
 
+// Docs & Files is made of file names, so nothing a run says of it may carry
+// one, nor a title of a document, nor a folder's name: the report names the
+// numeric identifier and what is wrong with it.
+func TestNoOutputOfDocsAndFilesSaysWhatAnythingIsCalled(t *testing.T) {
+	written := []string{
+		"logo.png", "sketch.png", "minutes.pdf", "old.pdf", "draft.pdf", "last-year.pdf", "checked.pdf", "held.pdf",
+		"chart.png", "shredded.png", "long name", "jpeg", "Handbook", "Drafts", "Chapter one", "Appendix", "Press",
+		"Not for outside", "Read me first", "The picture", "Last quarter", "Plan in the cloud", "For everybody",
+		"storage.", "basecampapi", "blobs", "download/",
+	}
+	for _, mode := range [][]string{{"--json"}, {"--quiet"}, {"--styled"}, {"--json", "--dry-run"}} {
+		e := newImportEnv(t)
+		r := e.run(append([]string{"import", "basecamp", "--project", "7011", "--out", filepath.Join(t.TempDir(), "bundle")}, mode...)...)
+		expectCode(t, r, ExitOK)
+		for _, text := range written {
+			if strings.Contains(r.stdout+r.stderr, text) {
+				t.Errorf("%v: the output says %q:\n%s%s", mode, text, r.stdout, r.stderr)
+			}
+		}
+	}
+}
+
 func TestImportBasecampReportsTheLinksThatBecameReferences(t *testing.T) {
 	e := newImportEnv(t)
 
@@ -1647,7 +1680,8 @@ func TestImportBasecampReportsTheCheckinsOfAProject(t *testing.T) {
 			"notInTheProject": float64(1), "clients": float64(0), "retired": float64(1), "withoutAnAddress": float64(1)},
 		"answersWithoutABody": float64(1), "answersWithoutADay": float64(0), "answersTrashed": float64(0),
 		"longestBody": map[string]any{"cards": float64(0), "comments": float64(17), "posts": float64(0), "messages": float64(0), "answers": float64(150),
-			"todolists": float64(0), "todos": float64(0), "forwards": float64(0), "forwardreplies": float64(0)},
+			"todolists": float64(0), "todos": float64(0), "forwards": float64(0), "forwardreplies": float64(0),
+			"documents": float64(0), "uploads": float64(0)},
 		"longestBodyRecords": map[string]any{
 			"comments": map[string]any{"record": "comment", "sourceId": "9350", "in": "project", "inSourceId": "7007", "characters": float64(17)},
 			"answers":  map[string]any{"record": "answer", "sourceId": "9320", "in": "project", "inSourceId": "7007", "characters": float64(150)},
@@ -1882,6 +1916,69 @@ func TestImportBasecampReportsTheForwardedMailOfAProject(t *testing.T) {
 	}
 }
 
+func TestImportBasecampReportsTheDocsAndFilesOfAProject(t *testing.T) {
+	e := newImportEnv(t)
+	out := filepath.Join(t.TempDir(), "bundle")
+
+	env, r := e.runJSON("import", "basecamp", "--project", "7011", "--out", out)
+	expectCode(t, r, ExitOK)
+	data := decode(t, env.Data)
+	want := map[string]any{
+		"foldersByStatus":       map[string]any{"active": float64(3), "archived": float64(1), "trashed": float64(1)},
+		"documentsByStatus":     map[string]any{"active": float64(7), "archived": float64(1), "trashed": float64(1)},
+		"uploadsByStatus":       map[string]any{"active": float64(6), "archived": float64(1), "trashed": float64(1)},
+		"documentsWithoutWords": float64(0), "namesMadeIntoATitle": float64(1), "withoutAName": float64(1),
+		"withoutAStoredFile": []any{"9262"}, "commentsWithoutTheirUpload": float64(1), "boostsWithoutTheirUpload": float64(1),
+		"onlyAFileNoRunWillBring": []any{"9245"}, "longerThanMinkaTakes": float64(0),
+		"leftOut": map[string]any{"folders": float64(3), "documents": float64(4), "uploads": float64(2)},
+		"placesLeftOut": []any{
+			map[string]any{"record": "folder", "sourceId": "9224", "folders": float64(1), "documents": float64(1), "uploads": float64(1)},
+			map[string]any{"record": "Docs & Files tool", "sourceId": "9212", "folders": float64(1), "documents": float64(1), "uploads": float64(0)},
+			map[string]any{"record": "folder", "sourceId": "9227", "folders": float64(0), "documents": float64(1), "uploads": float64(0)},
+		},
+	}
+	if !reflect.DeepEqual(data["docs"], want) {
+		t.Errorf("docs:\n got %v\nwant %v", data["docs"], want)
+	}
+	for _, notice := range []string{
+		"1 upload of a Docs & Files tool is left out, because Basecamp names no stored file for it",
+		"1 document or upload of a Docs & Files tool says nothing but a file no run will bring",
+		"2 uploads carry titles the run made of the names of their files",
+		"3 folders or Docs & Files tools are left out with what stood in them",
+	} {
+		if !strings.Contains(env.Notice, notice) {
+			t.Errorf("notice %q does not say %q", env.Notice, notice)
+		}
+	}
+
+	r = e.run("import", "basecamp", "--project", "7011", "--out", out, "--styled")
+	expectCode(t, r, ExitOK)
+	for _, line := range []string{
+		"folders      5", "documents    9", "uploads      8",
+		"Folders: 3 active, 1 archived, 1 trashed",
+		"Documents: 7 active, 1 archived, 1 trashed; 0 of them without words",
+		"Uploads: 6 active, 1 archived, 1 trashed; 2 carrying a title made of the file name, 1 of them without a name",
+		"Uploads Basecamp names no stored file for, left out: 1 (upload 9262), with 1 comments and 1 boosts",
+		"Documents and uploads whose text is nothing but a file no run will bring: 1 (record 9245)",
+		"Left out of the Docs & Files tools: 3 folders, 4 documents, 2 uploads",
+		"  with folder 9224 fell: 1 folders, 1 documents, 1 uploads",
+		"  with Docs & Files tool 9212 fell: 1 folders, 1 documents, 0 uploads",
+	} {
+		if !strings.Contains(r.stdout, line) {
+			t.Errorf("the text lacks %q:\n%s", line, r.stdout)
+		}
+	}
+
+	// A run that met no Docs & Files tool says nothing about them at all.
+	r = e.run("import", "basecamp", "--project", "7003", "--out", filepath.Join(t.TempDir(), "boards"), "--styled")
+	expectCode(t, r, ExitOK)
+	for _, quiet := range []string{"Folders:", "Documents:", "Uploads:", "Left out of the Docs & Files tools"} {
+		if strings.Contains(r.stdout, quiet) {
+			t.Errorf("a run over a project without a Docs & Files tool says %q:\n%s", quiet, r.stdout)
+		}
+	}
+}
+
 func TestImportBasecampSaysWhatABundleHoldsAboutClients(t *testing.T) {
 	e := newImportEnv(t)
 	out := filepath.Join(t.TempDir(), "bundle")
@@ -1900,7 +1997,6 @@ func TestImportBasecampSaysWhatABundleHoldsAboutClients(t *testing.T) {
 	for _, notice := range []string{
 		"5 memberships of projects belong to clients",
 		"4 people questions ask cannot be said to be asked",
-		"1 tool of a project is a Docs & Files",
 	} {
 		if !strings.Contains(env.Notice, notice) {
 			t.Errorf("no notice says %q:\n%s", notice, env.Notice)
@@ -1920,11 +2016,14 @@ func TestImportBasecampSaysWhatABundleHoldsAboutClients(t *testing.T) {
 		"Clients: 5, with 5 memberships Minka leaves out of their projects",
 		"4 a client,",
 		"Words about clients on a record that follows what it hangs on, left out: 4",
-		"Docs & Files tools a run does not extract, whose word about clients no bundle carries: 1",
 	} {
 		if !strings.Contains(r.stdout, line) {
 			t.Errorf("the text lacks %q:\n%s", line, r.stdout)
 		}
+	}
+	// Every kind of tool is extracted, so no report names a gap any more.
+	if strings.Contains(r.stdout, "a run does not extract") {
+		t.Errorf("the report still names a kind of tool no run extracts:\n%s", r.stdout)
 	}
 }
 

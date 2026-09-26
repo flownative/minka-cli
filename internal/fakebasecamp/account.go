@@ -94,6 +94,12 @@ type Tool struct {
 	// Forwards are the mails of an Email forwards tool, in the order the account
 	// lists them.
 	Forwards []Forward
+	// Folders, Documents and Uploads are what stands at the top of a Docs & Files
+	// tool, in the order the account lists them: the tool itself is the vault at
+	// the top.
+	Folders   []Folder
+	Documents []Document
+	Uploads   []UploadedFile
 	// VisibleToClients is what the recording of the tool says about clients; the
 	// dock entry says nothing of it either way.
 	VisibleToClients *bool
@@ -172,10 +178,11 @@ func (a *Account) UsersOnly() {
 // nothing to do with. Those two have a dock that holds every case: several
 // tools of a kind, tools Minka has nothing for, tools that are switched off,
 // and a tool whose creator has left; their one board and their one To-dos tool
-// are empty. The third
+// are empty. Four of the first project's tools the run does not extract, which is
+// more than it asks for the creator of a project. The third
 // project holds the boards, the fourth the message boards and the chats, the
-// fifth the files, and the last the clients, with the five kinds of client in
-// its list of people.
+// fifth the files, the ninth the clients, with the five kinds of client in its
+// list of people, the tenth the forwarded mail and the last the Docs & Files.
 func New() *Account {
 	ada := Person{ID: 101, Name: "Ada Example", Email: "ada@example.test", CreatedAt: "2020-01-01T08:00:00.000Z", UpdatedAt: "2024-01-01T08:00:00.000Z"}
 	grace := Person{ID: 102, Name: "Grace Sample", Email: "grace@example.test", CreatedAt: "2020-02-01T08:00:00.000Z", UpdatedAt: "2024-02-01T08:00:00.000Z"}
@@ -220,8 +227,8 @@ func New() *Account {
 					tool(9005, "todoset", "todosets", "Old to-dos", false, 0, &ada),
 					tool(9006, "schedule", "schedules", "Schedule", false, 0, &ada),
 					tool(9007, "kanban_board", "card_tables", "Old board", false, 0, &ada),
-					tool(9008, "vault", "vaults", "Docs", true, 6, &ada),
-					tool(9009, "todoset", "todosets", "To-dos", true, 7, &ada),
+					tool(9008, "vault", "vaults", "Old docs", false, 0, &ada),
+					tool(9009, "todoset", "todosets", "To-dos", true, 6, &ada),
 				},
 			},
 			{
@@ -238,6 +245,7 @@ func New() *Account {
 			todoProject(ada, grace, edsger, former, tool),
 			clientProject(ada, iris, otto, nora, cora, tessa, tool),
 			forwardProject(ada, grace, former, tool),
+			docsProject(ada, grace, former, tool),
 		},
 		SubtasksURL:  map[int64]string{},
 		Fail:         map[string]error{},
@@ -379,6 +387,9 @@ func (a *Account) Get(_ context.Context, path string) ([]byte, error) {
 			return answer, nil
 		}
 		if answer, known := a.forwards(path, page); known {
+			return answer, nil
+		}
+		if answer, known := a.docs(path, page); known {
 			return answer, nil
 		}
 	}

@@ -91,6 +91,7 @@ var toolKinds = map[string]string{
 	"questionnaire": bundle.ToolCheckins,
 	"todoset":       bundle.ToolTodos,
 	"inbox":         bundle.ToolForwards,
+	"vault":         bundle.ToolFiles,
 }
 
 // SkippedTools counts dock entries of one kind that a run left out, either
@@ -273,8 +274,10 @@ type Result struct {
 	AnswersWithoutABody int
 	AnswersWithoutADay  int
 	AnswersTrashed      int
-	// Forwards says what became of the forwarded mail a run met.
+	// Forwards says what became of the forwarded mail a run met, and Docs what
+	// became of the Docs & Files.
 	Forwards ForwardCounts
+	Docs     DocsCounts
 	// LongestBody is the longest text of a kind, in characters, and
 	// LongestBodyRecords the record it was measured on, per kind. A kind whose
 	// longest text has no characters names no record.
@@ -352,6 +355,7 @@ type Extractor struct {
 	subtasksLeftOut   int
 
 	forwards ForwardCounts
+	docs     DocsCounts
 
 	questionsLeftOut    []ImpossibleQuestion
 	anchorsInferred     []InferredAnchor
@@ -380,10 +384,16 @@ type talk struct {
 	questionnaires []int64
 	todosets       []int64
 	inboxes        []int64
+	vaults         []int64
 	// everyTodoset is every dock entry of a project that is a To-dos tool, those
 	// that are switched off included. A list names only the tool it stands in, so
 	// what hangs on none of them is no list but a group.
 	everyTodoset map[int64]bool
+	// everyVault is every dock entry of a project that is a Docs & Files tool,
+	// those that are switched off included. An entry names only the vault it
+	// stands in, so what hangs on none of them stands in a folder or in nothing a
+	// run reads.
+	everyVault map[int64]bool
 }
 
 type skippedKey struct {
@@ -439,8 +449,17 @@ func (e *Extractor) Extract(ctx context.Context, projectIDs []string, w *bundle.
 		WithoutAnAddress:      []string{},
 		RepliesWithoutASender: []string{},
 	}
+	e.docs = DocsCounts{
+		FoldersByStatus:         everyStatus(),
+		DocumentsByStatus:       everyStatus(),
+		UploadsByStatus:         everyStatus(),
+		WithoutAStoredFile:      []string{},
+		OnlyAFileNoRunWillBring: []string{},
+		PlacesLeftOut:           []DocsPlaceLeftOut{},
+	}
 	e.longestBody = map[bundle.Kind]int{bundle.Cards: 0, bundle.Comments: 0, bundle.Posts: 0, bundle.Messages: 0, bundle.Answers: 0,
-		bundle.TodoLists: 0, bundle.Todos: 0, bundle.Forwards: 0, bundle.ForwardReplies: 0}
+		bundle.TodoLists: 0, bundle.Todos: 0, bundle.Forwards: 0, bundle.ForwardReplies: 0,
+		bundle.Documents: 0, bundle.Uploads: 0}
 	e.longestBodyRecords = map[bundle.Kind]LongestBodyRecord{}
 	e.fileOwners, e.filesThatNeverArrive, e.fileRecords, e.files = map[string]string{}, map[string]bool{}, nil, FileCounts{}
 
@@ -477,9 +496,12 @@ func (e *Extractor) Extract(ctx context.Context, projectIDs []string, w *bundle.
 	if err := e.extractTodos(ctx, w); err != nil {
 		return Result{}, err
 	}
-	// Last of all, so that a file standing in a card and in a mail alike belongs
-	// to the card: a file met twice keeps the record that named it first.
 	if err := e.extractForwards(ctx, w); err != nil {
+		return Result{}, err
+	}
+	// Last of all, so that a file standing in a card and in a document alike
+	// belongs to the card: a file met twice keeps the record that named it first.
+	if err := e.extractDocs(ctx, w); err != nil {
 		return Result{}, err
 	}
 
@@ -538,6 +560,7 @@ func (e *Extractor) Extract(ctx context.Context, projectIDs []string, w *bundle.
 		AnswersTrashed:      e.answersTrashed,
 
 		Forwards: e.forwards,
+		Docs:     e.docs,
 
 		MessagesWithEmptyBody: e.messagesWithEmptyBody,
 		LongestBody:           e.longestBody,
@@ -619,14 +642,19 @@ func (e *Extractor) extractProject(ctx context.Context, id int64, w *bundle.Writ
 	var tools []extractedTool
 	var made []recording
 	var others []dockEntry
-	// Every To-dos tool of the project, those that are switched off included: a
-	// list of one that is not extracted still has to be told from a group.
+	// Every To-dos tool and every Docs & Files tool of the project, those that
+	// are switched off included: a list or an entry of one that is not extracted
+	// still has to be told from one that stands somewhere else.
 	everyTodoset := map[int64]bool{}
+	everyVault := map[int64]bool{}
 	dock := append([]dockEntry(nil), p.Dock...)
 	sort.SliceStable(dock, func(i, j int) bool { return dock[i].ID < dock[j].ID })
 	for _, entry := range dock {
-		if toolKinds[entry.Name] == bundle.ToolTodos {
+		switch toolKinds[entry.Name] {
+		case bundle.ToolTodos:
 			everyTodoset[entry.ID] = true
+		case bundle.ToolFiles:
+			everyVault[entry.ID] = true
 		}
 		if _, known := toolKinds[entry.Name]; !known || !entry.Enabled {
 			e.skipped[skippedKey{kind: entry.Name, enabled: entry.Enabled}]++
@@ -668,7 +696,7 @@ func (e *Extractor) extractProject(ctx context.Context, id int64, w *bundle.Writ
 	}
 
 	var boards []*board
-	talks := talk{bucket: id, everyTodoset: everyTodoset}
+	talks := talk{bucket: id, everyTodoset: everyTodoset, everyVault: everyVault}
 	for _, tool := range tools {
 		record, err := e.record("tool", tool.entry.ID, tool.details.recording)
 		if err != nil {
@@ -699,6 +727,8 @@ func (e *Extractor) extractProject(ctx context.Context, id int64, w *bundle.Writ
 			talks.todosets = append(talks.todosets, tool.entry.ID)
 		case bundle.ToolForwards:
 			talks.inboxes = append(talks.inboxes, tool.entry.ID)
+		case bundle.ToolFiles:
+			talks.vaults = append(talks.vaults, tool.entry.ID)
 		}
 	}
 	e.talks = append(e.talks, talks)
