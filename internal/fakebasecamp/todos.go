@@ -24,6 +24,10 @@ type TodoList struct {
 	// Groups are the groups of a list, in the order the account lists them. A
 	// group has none of its own.
 	Groups []TodoList
+	// Todos are the to-dos standing in the list or in the group, whatever their
+	// status; the account lists what is done apart from what is open, as
+	// Basecamp does.
+	Todos []Todo
 	// Twice has the list of lists hold this one twice, as a list that moves
 	// under a walk does.
 	Twice bool
@@ -33,9 +37,14 @@ type TodoList struct {
 // the account shows in the order they stand in, one on the shelf and one in the
 // trash, groups in use, one in the trash and one on the shelf, a group carrying
 // what no group of a bundle can carry, a second tool of the same kind, and a
-// tool that is switched off whose list and whose group hang on nothing a run
+// tool that is switched off whose list, group and to-do hang on nothing a run
 // extracts.
-func todoProject(ada, grace, edsger Person, tool func(int64, string, string, string, bool, int, *Person) Tool) Project {
+//
+// Its to-dos hold every case as well: in the list and in a group, with days,
+// with people on them and with subtasks, one done after the source last touched
+// it and one done before, one in the trash, one in a group that is in the trash,
+// and one assigned to somebody who has left the account.
+func todoProject(ada, grace, edsger, former Person, tool func(int64, string, string, string, bool, int, *Person) Tool) Project {
 	at := func(day, hour int) string { return fmt.Sprintf("2025-04-%02dT%02d:00:00.000Z", day, hour) }
 
 	plan := File{ID: 5061, SGID: SGID("gid://bc3/Attachment/5061?expires_in"), Key: FileKey(5061), Filename: "plan.png", ContentType: "image/png", Bytes: 512}
@@ -55,12 +64,40 @@ func todoProject(ada, grace, edsger Person, tool func(int64, string, string, str
 	// and boosts. None of it reaches a bundle, and none of it is asked for.
 	launch.Groups = []TodoList{
 		{ID: 9411, Title: "Before the launch", Creator: &ada, CreatedAt: at(1, 14), UpdatedAt: at(1, 14),
+			// Assigned to somebody who has left the account, whom the bundle
+			// carries as retired.
+			Todos: []Todo{{ID: 9424, Title: "Choose a date", Creator: &ada, CreatedAt: at(2, 18), UpdatedAt: at(2, 18),
+				Assignees: []Person{former}}},
 			Description: `<div>What comes first</div>` + EmbeddedFile(sketch.SGID, "sketch.png"), Files: []File{sketch},
 			Comments: []Comment{{ID: 9455, Creator: &grace, CreatedAt: at(2, 14), UpdatedAt: at(2, 14), Content: `<div>Good heading</div>`}},
 			Boosts:   []Boost{{ID: 9465, Content: "👀", CreatedAt: at(2, 15), Booster: &grace}}},
-		{ID: 9412, Title: "After the launch", Creator: &grace, CreatedAt: at(1, 15), UpdatedAt: at(1, 15)},
-		{ID: 9413, Status: "trashed", Title: "Given up", Creator: &ada, CreatedAt: at(1, 16), UpdatedAt: at(3, 16)},
+		{ID: 9412, Title: "After the launch", Creator: &grace, CreatedAt: at(1, 15), UpdatedAt: at(1, 15), Todos: []Todo{
+			// Done before the source last touched it, and nobody on it.
+			{ID: 9425, Title: "Send thanks", Creator: &grace, CreatedAt: at(2, 19), UpdatedAt: at(3, 19),
+				Completion: &Completion{At: at(2, 20), By: &grace}},
+		}},
+		{ID: 9413, Status: "trashed", Title: "Given up", Creator: &ada, CreatedAt: at(1, 16), UpdatedAt: at(3, 16), Todos: []Todo{
+			{ID: 9426, Title: "Of a group in the trash", Creator: &ada, CreatedAt: at(2, 21), UpdatedAt: at(2, 21)},
+		}},
 		{ID: 9414, Status: "archived", Title: "On the shelf", Creator: &ada, CreatedAt: at(1, 17), UpdatedAt: at(3, 17)},
+	}
+
+	invitations := File{ID: 5063, SGID: SGID("gid://bc3/Attachment/5063?expires_in"), Key: FileKey(5063), Filename: "card.png", ContentType: "image/png", Bytes: 128}
+	// In the list itself: one that is open with everything a to-do carries, one
+	// that is done later than the source says it was touched, and one in the
+	// trash.
+	launch.Todos = []Todo{
+		{ID: 9421, Title: "Print the invitations", Creator: &ada, CreatedAt: at(2, 8), UpdatedAt: at(2, 8),
+			Notes:    `<div>On thick paper, says ` + Mention(SGID("gid://bc3/Person/104?expires_in"), "", 104, "Edsger Invented") + `</div>` + EmbeddedFile(invitations.SGID, "card.png"),
+			Files:    []File{invitations},
+			StartsOn: "2025-04-20", DueOn: "2025-05-01",
+			Assignees: []Person{grace, ada}, NotifiedWhenDone: []Person{edsger}, Subtasks: 2,
+			Comments: []Comment{{ID: 9471, Creator: &grace, CreatedAt: at(2, 12), UpdatedAt: at(2, 12), Content: `<div>Which paper?</div>`,
+				Boosts: []Boost{{ID: 9482, Content: "📄", CreatedAt: at(2, 14), Booster: &ada}}}},
+			Boosts: []Boost{{ID: 9481, Content: "👍", CreatedAt: at(2, 13), Booster: &grace}}},
+		{ID: 9422, Title: "Book the room", Creator: &ada, CreatedAt: at(2, 9), UpdatedAt: at(2, 9),
+			Completion: &Completion{At: at(3, 9), By: &grace}},
+		{ID: 9423, Status: "trashed", Title: "Cancelled", Creator: &ada, CreatedAt: at(2, 10), UpdatedAt: at(3, 10)},
 	}
 
 	later := TodoList{ID: 9402, Title: "Later", Creator: &grace, CreatedAt: at(1, 9), UpdatedAt: at(1, 9)}
@@ -75,12 +112,14 @@ func todoProject(ada, grace, edsger Person, tool func(int64, string, string, str
 
 	chores := tool(9081, "todoset", "todosets", "Chores", true, 2, &grace)
 	chores.CreatedAt, chores.UpdatedAt = at(1, 7), at(3, 12)
-	chores.TodoLists = []TodoList{{ID: 9405, Title: "Every week", Creator: &grace, CreatedAt: at(1, 12), UpdatedAt: at(1, 12)}}
+	chores.TodoLists = []TodoList{{ID: 9405, Title: "Every week", Creator: &grace, CreatedAt: at(1, 12), UpdatedAt: at(1, 12),
+		Todos: []Todo{{ID: 9427, Title: "Water the plants", Creator: &grace, CreatedAt: at(2, 22), UpdatedAt: at(2, 22)}}}}
 
 	retired := tool(9082, "todoset", "todosets", "Old to-dos", false, 0, &ada)
 	retired.TodoLists = []TodoList{
 		{ID: 9406, Status: "archived", Title: "Of a tool nobody sees", Creator: &ada, CreatedAt: at(1, 13), UpdatedAt: at(3, 13),
-			Groups: []TodoList{{ID: 9415, Status: "trashed", Title: "Of a list nobody sees", Creator: &ada, CreatedAt: at(1, 18), UpdatedAt: at(3, 18)}}},
+			Groups: []TodoList{{ID: 9415, Status: "trashed", Title: "Of a list nobody sees", Creator: &ada, CreatedAt: at(1, 18), UpdatedAt: at(3, 18)}},
+			Todos:  []Todo{{ID: 9428, Status: "trashed", Title: "Of a list nobody sees", Creator: &ada, CreatedAt: at(2, 23), UpdatedAt: at(3, 23)}}},
 	}
 
 	return Project{
@@ -91,10 +130,39 @@ func todoProject(ada, grace, edsger Person, tool func(int64, string, string, str
 	}
 }
 
+// Todo is a to-do of a list or of one of its groups.
+type Todo struct {
+	ID int64
+	// Status is "active" when empty.
+	Status string
+	Title  string
+	// Notes are the notes of a to-do as Basecamp renders them.
+	Notes     string
+	StartsOn  string
+	DueOn     string
+	Creator   *Person
+	CreatedAt string
+	UpdatedAt string
+	Assignees []Person
+	// NotifiedWhenDone are the people the source tells when the to-do is done.
+	NotifiedWhenDone []Person
+	Completion       *Completion
+	// Subtasks is how many subtasks the to-do has, of which a bundle carries
+	// none.
+	Subtasks int
+	Files    []File
+	Comments []Comment
+	Boosts   []Boost
+	// Twice has the list of to-dos hold this one twice.
+	Twice bool
+}
+
 var (
 	todoListsPattern      = regexp.MustCompile(`^buckets/([0-9]+)/todosets/([0-9]+)/todolists\.json$`)
 	todoGroupsPattern     = regexp.MustCompile(`^buckets/([0-9]+)/todolists/([0-9]+)/groups\.json$`)
 	todoRecordingsPattern = regexp.MustCompile(`^projects/recordings\.json\?type=Todolist&bucket=([0-9]+)&status=(archived|trashed)$`)
+	todosPattern          = regexp.MustCompile(`^buckets/([0-9]+)/todolists/([0-9]+)/todos\.json(\?completed=true)?$`)
+	todoItemsPattern      = regexp.MustCompile(`^projects/recordings\.json\?type=Todo&bucket=([0-9]+)&status=(archived|trashed)$`)
 )
 
 // todos answers the paths of To-dos tools. The second value tells whether the
@@ -137,6 +205,40 @@ func (a *Account) todos(path string, page int) ([]byte, bool) {
 				return a.pageOf(found, page), true
 			}
 		}
+	case todosPattern.MatchString(path):
+		match := todosPattern.FindStringSubmatch(path)
+		if p := a.project(match[1]); p != nil {
+			if list, known := a.theTodoList(p, match[2]); known {
+				done := match[3] != ""
+				var found []map[string]any
+				for i := range list.Todos {
+					one := &list.Todos[i]
+					if one.status() != "active" || (one.Completion != nil) != done {
+						continue
+					}
+					found = append(found, a.todoJSON(p, list, one))
+					if one.Twice {
+						found = append(found, a.todoJSON(p, list, one))
+					}
+				}
+				return a.pageOf(found, page), true
+			}
+		}
+	case todoItemsPattern.MatchString(path):
+		match := todoItemsPattern.FindStringSubmatch(path)
+		if p := a.project(match[1]); p != nil {
+			var found []map[string]any
+			a.eachTodoListAndGroup(p, func(list *TodoList) {
+				for i := range list.Todos {
+					if one := &list.Todos[i]; one.status() == match[2] {
+						found = append(found, a.todoJSON(p, list, one))
+					}
+				}
+			})
+			// One list across all To-dos tools, whatever list a to-do stands in.
+			sort.SliceStable(found, func(i, j int) bool { return found[i]["id"].(int64) > found[j]["id"].(int64) })
+			return a.pageOf(found, page), true
+		}
 	case todoRecordingsPattern.MatchString(path):
 		match := todoRecordingsPattern.FindStringSubmatch(path)
 		if p := a.project(match[1]); p != nil {
@@ -173,6 +275,15 @@ func (a *Account) eachTodoListAndGroup(p *Project, visit func(*TodoList)) {
 	})
 }
 
+// eachTodo visits the to-dos of every list and group of a project.
+func (a *Account) eachTodo(p *Project, visit func(*Todo)) {
+	a.eachTodoListAndGroup(p, func(list *TodoList) {
+		for i := range list.Todos {
+			visit(&list.Todos[i])
+		}
+	})
+}
+
 // theTodoList finds a list or a group of a project by its ID.
 func (a *Account) theTodoList(p *Project, id string) (*TodoList, bool) {
 	var found *TodoList
@@ -205,6 +316,47 @@ func (l *TodoList) status() string {
 		return "active"
 	}
 	return l.Status
+}
+
+func (t *Todo) status() string {
+	if t.Status == "" {
+		return "active"
+	}
+	return t.Status
+}
+
+func (a *Account) todoJSON(p *Project, in *TodoList, t *Todo) map[string]any {
+	orNull := func(value string) any {
+		if value == "" {
+			return nil
+		}
+		return value
+	}
+	people := func(named []Person) []map[string]any {
+		all := []map[string]any{}
+		for _, one := range named {
+			all = append(all, a.person(one))
+		}
+		return all
+	}
+	answer := map[string]any{
+		"id": t.ID, "status": t.status(), "title": t.Title, "content": t.Title, "type": "Todo",
+		"description": t.Notes, "description_attachments": a.filesJSON(t.Files),
+		"parent":    map[string]any{"id": in.ID, "type": "Todolist"},
+		"starts_on": orNull(t.StartsOn), "due_on": orNull(t.DueOn),
+		"assignees": people(t.Assignees), "completion_subscribers": people(t.NotifiedWhenDone),
+		"completed": t.Completion != nil, "subtasks_count": t.Subtasks,
+		"comments_count": len(t.Comments), "comments_url": fmt.Sprintf("%sbuckets/%d/recordings/%d/comments.json", a.root(), p.ID, t.ID),
+		"boosts_count": len(t.Boosts), "boosts_url": fmt.Sprintf("%sbuckets/%d/recordings/%d/boosts.json", a.root(), p.ID, t.ID),
+		"created_at": t.CreatedAt, "updated_at": t.UpdatedAt,
+	}
+	if t.Creator != nil {
+		answer["creator"] = a.person(*t.Creator)
+	}
+	if t.Completion != nil {
+		answer["completion"] = a.completionJSON(*t.Completion)
+	}
+	return answer
 }
 
 func (a *Account) todoListJSON(p *Project, parentID int64, parentType string, l *TodoList) map[string]any {
