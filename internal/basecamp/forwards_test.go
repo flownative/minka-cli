@@ -1,6 +1,7 @@
 package basecamp_test
 
 import (
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -269,7 +270,8 @@ func TestAnAnswerNamingNeitherAWriterNorAnAddressIsLeftOutAndNamed(t *testing.T)
 // word and the place it stood in: a mail of a status nobody knows, and an answer
 // the source has thrown away, which a bundle cannot say.
 func TestAMailOrAnAnswerOfAStatusNobodyKnowsIsLeftOutAndCounted(t *testing.T) {
-	dir, result := extract(t, fakebasecamp.New(), forwardProject)
+	accountOfTheRun := fakebasecamp.New()
+	dir, result := extract(t, accountOfTheRun, forwardProject)
 
 	for _, record := range records(t, dir, bundle.Forwards) {
 		if record["sourceId"] == "9306" {
@@ -279,6 +281,13 @@ func TestAMailOrAnAnswerOfAStatusNobodyKnowsIsLeftOutAndCounted(t *testing.T) {
 	for _, reply := range records(t, dir, bundle.ForwardReplies) {
 		if reply["sourceId"] == "9403" {
 			t.Errorf("the answer in the trash is in the bundle: %v", reply)
+		}
+	}
+	// Nothing of a record that is left out is asked for: nobody comes into the
+	// bundle for it and no request is spent on it.
+	for _, part := range []string{"recordings/9306/", "inbox_forwards/9306/"} {
+		for _, request := range asked(accountOfTheRun, part) {
+			t.Errorf("the run asked for something of the mail it left out: %s", request)
 		}
 	}
 	left := map[string]int{}
@@ -389,5 +398,53 @@ func TestForwardedMailIsReadAfterEverythingItCanPointAt(t *testing.T) {
 	}
 	if first == len(account.Requests) {
 		t.Fatal("the run never read an inbox")
+	}
+}
+
+// The words of the format are the contract: a kind, a file name, a kind of owner
+// and a kind of parent are what Minka reads them as and not what a constant here
+// happens to say. Nobody on that side checks a word it does not know, so a typo
+// would be silent.
+func TestTheWordsAForwardIsWrittenUnderAreTheOnesMinkaReads(t *testing.T) {
+	dir, _ := extract(t, fakebasecamp.New(), forwardProject)
+
+	if got := recordsIn(t, filepath.Join(dir, "forwards.jsonl")); len(got) == 0 {
+		t.Error("the mails stand in no forwards.jsonl")
+	}
+	if got := recordsIn(t, filepath.Join(dir, "forwardreplies.jsonl")); len(got) == 0 {
+		t.Error("the answers stand in no forwardreplies.jsonl")
+	}
+	if got := recordWithID(t, records(t, dir, bundle.Tools), "9290")["kind"]; got != "forwards" {
+		t.Errorf("an inbox becomes a tool of kind %v, want forwards", got)
+	}
+	if got := recordWithID(t, records(t, dir, bundle.Comments), "9501")["parentKind"]; got != "forward" {
+		t.Errorf("a comment on a mail says parentKind %v, want forward", got)
+	}
+	if got := recordWithID(t, records(t, dir, bundle.Reactions), "9593")["targetKind"]; got != "forward" {
+		t.Errorf("a boost on a mail says targetKind %v, want forward", got)
+	}
+	attachments := records(t, dir, bundle.Attachments)
+	if got := recordWithID(t, attachments, "attachment-5301")["ownerKind"]; got != "forward" {
+		t.Errorf("the file of a mail says ownerKind %v, want forward", got)
+	}
+	if got := recordWithID(t, attachments, "attachment-5302")["ownerKind"]; got != "forwardreply" {
+		t.Errorf("the file of an answer says ownerKind %v, want forwardreply", got)
+	}
+}
+
+// A mail Minka will pass over for its length is counted: it is lost there on
+// every run, and its answers and comments wait with it.
+func TestAMailLongerThanMinkaHoldsIsCounted(t *testing.T) {
+	account := fakebasecamp.New()
+	theMail(t, account, 9302).Content = strings.Repeat("a", 1000001)
+	_, result := extract(t, account, forwardProject)
+
+	if result.Forwards.LongerThanMinkaTakes != 1 {
+		t.Errorf("%d mails longer than Minka holds, want the one", result.Forwards.LongerThanMinkaTakes)
+	}
+	// It comes as it is: a run that shortened it would decide in the one place
+	// nobody can repeat.
+	if got := result.LongestBody[bundle.Forwards]; got != 1000001 {
+		t.Errorf("the longest mail is %d characters", got)
 	}
 }

@@ -565,6 +565,11 @@ it has been applied.`,
 					"forwarded mail names nobody who forwarded it, and Minka gives such a mail to the owner of the organization without a word",
 					"forwarded mails name nobody who forwarded them, and Minka gives such a mail to the owner of the organization without a word"))
 			}
+			if count := report.Forwards.LongerThanMinkaTakes; count > 0 {
+				notices = append(notices, plural(count,
+					"forwarded mail or answer by mail is longer than Minka holds and is passed over there on every run, with its answers and its comments; data.longestBodyRecords names the longest of each kind, and the body is not cut short",
+					"forwarded mails or answers by mail are longer than Minka holds and are passed over there on every run, with their answers and their comments; data.longestBodyRecords names the longest of each kind, and the bodies are not cut short"))
+			}
 			if count := report.Forwards.ReactionsOnRepliesLeftOut; count > 0 {
 				notices = append(notices, plural(count,
 					"boost on an answer by mail is left out, because Minka takes no reaction on one; the answer comes",
@@ -841,6 +846,9 @@ func renderForwards(w io.Writer, report importReport) {
 			len(forwards.RepliesWithoutASender), strings.Join(forwards.RepliesWithoutASender, ", "))
 	}
 	fmt.Fprintf(w, "Boosts on an answer by mail, which Minka takes none of, left out: %d\n", forwards.ReactionsOnRepliesLeftOut)
+	if forwards.LongerThanMinkaTakes > 0 {
+		fmt.Fprintf(w, "Mails longer than Minka holds, which it passes over on every run: %d\n", forwards.LongerThanMinkaTakes)
+	}
 }
 
 // incompleteImport is the end of a run that wrote its bundle without some of

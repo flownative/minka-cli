@@ -897,7 +897,10 @@ this:
   (`data.forwards.repliesFromOutside`); one naming neither is left out and named
   (`data.forwards.repliesWithoutASender`), and a boost on an answer is counted
   and not carried (`data.forwards.reactionsOnRepliesLeftOut`). Comments and
-  boosts hang on the mail itself. No output ever names a subject or an address.
+  boosts hang on the mail itself. A body longer than the 1,000,000 characters
+  Minka holds is counted in `data.forwards.longerThanMinkaTakes` and comes as it
+  is: Minka passes such a mail over on every run, with everything hanging on it.
+  No output ever names a subject or an address.
 - A record the source describes with a word a bundle has none for is left out
   and the run goes on: a chat line of an unknown kind or with a status other
   than `active`, a column of a kind a bundle has no role for, a card, a

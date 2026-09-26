@@ -136,7 +136,8 @@ func TestImportBasecampWritesABundleAndReportsWhatItHolds(t *testing.T) {
 			"byStatus": map[string]any{"active": float64(0), "trashed": float64(0)}, "fromTheShelf": float64(0),
 			"withoutASubject": float64(0), "subjectsChanged": float64(0), "givenALineOfTheRun": float64(0),
 			"withoutAForwarder": float64(0), "withoutAnAddress": []any{},
-			"repliesFromOutside": float64(0), "repliesWithoutASender": []any{}, "reactionsOnRepliesLeftOut": float64(0)},
+			"repliesFromOutside": float64(0), "repliesWithoutASender": []any{}, "reactionsOnRepliesLeftOut": float64(0),
+			"longerThanMinkaTakes": float64(0)},
 		"longestBody": map[string]any{"cards": float64(0), "comments": float64(0), "posts": float64(0), "messages": float64(0), "answers": float64(0),
 			"todolists": float64(0), "todos": float64(0), "forwards": float64(0), "forwardreplies": float64(0)},
 		"longestBodyRecords": map[string]any{},
@@ -1785,7 +1786,7 @@ func TestImportBasecampReportsTheForwardedMailOfAProject(t *testing.T) {
 		"withoutASubject": float64(1), "subjectsChanged": float64(1), "givenALineOfTheRun": float64(3),
 		"withoutAForwarder": float64(1), "withoutAnAddress": []any{"9307"},
 		"repliesFromOutside": float64(1), "repliesWithoutASender": []any{"9404"},
-		"reactionsOnRepliesLeftOut": float64(1),
+		"reactionsOnRepliesLeftOut": float64(1), "longerThanMinkaTakes": float64(0),
 	}
 	if !reflect.DeepEqual(data["forwards"], want) {
 		t.Errorf("forwards:\n got %v\nwant %v", data["forwards"], want)
