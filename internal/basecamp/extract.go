@@ -89,6 +89,24 @@ type MissingFile struct {
 	Retryable bool `json:"retryable"`
 }
 
+// LeftOutRecords counts the records of one kind that a bundle cannot carry
+// because the source said a word a bundle has none for. Such records are left
+// out and the run goes on; what is lost stays nameable here.
+type LeftOutRecords struct {
+	// Record is the kind of record: card, post, comment, question, answer,
+	// column or line.
+	Record string `json:"record"`
+	// Field is where the source said the word, Value what it said. Neither is
+	// anything somebody wrote: a status, a kind of line, a kind of column.
+	Field string `json:"field"`
+	Value string `json:"value"`
+	// In is the kind of record they stood in and InSourceID which one: the chat
+	// of a line, the board of a column, the project of everything else.
+	In         string `json:"in"`
+	InSourceID string `json:"inSourceId"`
+	LeftOut    int    `json:"leftOut"`
+}
+
 // Result is what a run reports besides the counts of the bundle.
 type Result struct {
 	// SourceInstance is the ID of the Basecamp account.
@@ -133,9 +151,10 @@ type Result struct {
 	// UploadLinesLeftOut counts the lines that were files alone, of which
 	// Basecamp names none in a way a bundle can refer to.
 	UploadLinesLeftOut int
-	// LinesOfAnUnknownKind are the kinds of line a bundle has no word for, each
-	// with the chat it was met in and how many lines are left out there.
-	LinesOfAnUnknownKind []UnknownLineKind
+	// RecordsLeftOut are the records a bundle cannot carry because the source
+	// said a word a bundle has none for, counted per kind of record, per word
+	// and per place.
+	RecordsLeftOut []LeftOutRecords
 	// QuestionsLeftOut are the questions left out because Minka has no words
 	// for their schedule, each with the field that made it impossible.
 	QuestionsLeftOut []ImpossibleQuestion
@@ -193,16 +212,16 @@ type Extractor struct {
 	// Only they can be asked a question of that project.
 	members map[int64]map[int64]bool
 
-	cardsByStatus        map[string]int
-	cardsOnHold          int
-	cardsLeftOut         int
-	commentsTrashed      int
-	postsByStatus        map[string]int
-	postsLeftOut         int
-	postsWithEmptyBody   int
-	messagesByType       map[string]int
-	uploadLinesLeftOut   int
-	linesOfAnUnknownKind []UnknownLineKind
+	cardsByStatus      map[string]int
+	cardsOnHold        int
+	cardsLeftOut       int
+	commentsTrashed    int
+	postsByStatus      map[string]int
+	postsLeftOut       int
+	postsWithEmptyBody int
+	messagesByType     map[string]int
+	uploadLinesLeftOut int
+	recordsLeftOut     []LeftOutRecords
 
 	messagesWithEmptyBody int
 	longestBody           map[bundle.Kind]int
@@ -266,7 +285,7 @@ func (e *Extractor) Extract(ctx context.Context, projectIDs []string, w *bundle.
 	e.askedLeftOut, e.answersWithoutABody, e.answersWithoutADay, e.answersTrashed = AskedLeftOut{}, 0, 0, 0
 	e.postsByStatus = map[string]int{bundle.StatusActive: 0, bundle.StatusArchived: 0, bundle.StatusTrashed: 0}
 	e.postsLeftOut, e.postsWithEmptyBody, e.uploadLinesLeftOut, e.messagesWithEmptyBody = 0, 0, 0, 0
-	e.linesOfAnUnknownKind = []UnknownLineKind{}
+	e.recordsLeftOut = []LeftOutRecords{}
 	e.messagesByType = map[string]int{}
 	for _, name := range lineTypes {
 		e.messagesByType[name] = 0
@@ -329,12 +348,12 @@ func (e *Extractor) Extract(ctx context.Context, projectIDs []string, w *bundle.
 		CardsLeftOut:         e.cardsLeftOut,
 		CommentsTrashed:      e.commentsTrashed,
 
-		PostsByStatus:        e.postsByStatus,
-		PostsLeftOut:         e.postsLeftOut,
-		PostsWithEmptyBody:   e.postsWithEmptyBody,
-		MessagesByType:       e.messagesByType,
-		UploadLinesLeftOut:   e.uploadLinesLeftOut,
-		LinesOfAnUnknownKind: e.linesOfAnUnknownKind,
+		PostsByStatus:      e.postsByStatus,
+		PostsLeftOut:       e.postsLeftOut,
+		PostsWithEmptyBody: e.postsWithEmptyBody,
+		MessagesByType:     e.messagesByType,
+		UploadLinesLeftOut: e.uploadLinesLeftOut,
+		RecordsLeftOut:     e.recordsLeftOut,
 
 		QuestionsLeftOut:    e.questionsLeftOut,
 		AnchorsInferred:     e.anchorsInferred,

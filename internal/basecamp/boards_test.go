@@ -583,30 +583,87 @@ func first(dir string, _ basecamp.Result) string { return dir }
 // boardTitles is text of the fake that no message may carry.
 var boardTitles = []string{"Roadmap", "Doing", "Inbox", "Draw the map", "Outline", "Fish", "Settled", "Well done", "Grace", "Ada", "Former"}
 
+// A column of a kind a bundle has no role for is left out and counted, and the
+// board comes with the columns that are left. It takes the cards standing in it
+// with it, which are never asked for; the archived and the trashed ones among
+// them count as cards whose column is in no extracted board.
+func TestAColumnOfAKindNobodyKnowsIsLeftOutWithTheCardsInIt(t *testing.T) {
+	account := fakebasecamp.New()
+	doing(account).Type = "Kanban::Swimlane"
+	dir, result := extract(t, account, boardProject)
+
+	want := []basecamp.LeftOutRecords{{Record: "column", Field: "type", Value: "Kanban::Swimlane", In: "board", InSourceID: "9020", LeftOut: 1}}
+	if !reflect.DeepEqual(result.RecordsLeftOut, want) {
+		t.Errorf("the records left out are %v, want %v", result.RecordsLeftOut, want)
+	}
+	if got, want := sourceIDs(records(t, dir, bundle.Columns)), []string{"9103", "9105", "9101", "9102", "9131", "9132", "9133"}; !slices.Equal(got, want) {
+		t.Errorf("columns %v, want %v", got, want)
+	}
+	cards := sourceIDs(records(t, dir, bundle.Cards))
+	for _, card := range []string{"9201", "9202", "9203", "9207", "9208"} {
+		if slices.Contains(cards, card) {
+			t.Errorf("card %s of a column a bundle has no role for came into the bundle: %v", card, cards)
+		}
+	}
+	for _, list := range []string{"9104", "9113"} {
+		if asked := asked(account, "lists/"+list+"/cards.json"); len(asked) != 0 {
+			t.Errorf("the cards of list %s were asked for: %v", list, asked)
+		}
+	}
+	// The one of the board that is switched off, and the archived and the
+	// trashed card of the column that is gone.
+	if result.CardsLeftOut != 3 {
+		t.Errorf("%d cards left out, want 3", result.CardsLeftOut)
+	}
+}
+
+// A status a bundle has no word for leaves the record out and is counted, before
+// anything that hangs on it is asked for.
+func TestARecordWhoseStatusABundleDoesNotKnowIsLeftOutAndCounted(t *testing.T) {
+	account := fakebasecamp.New()
+	doing(account).Cards[2].ShownStatus = "drafted"
+	busyCard(account).Comments[0].Status = "drafted"
+	dir, result := extract(t, account, boardProject)
+
+	want := []basecamp.LeftOutRecords{
+		{Record: "card", Field: "status", Value: "drafted", In: "project", InSourceID: "7003", LeftOut: 1},
+		{Record: "comment", Field: "status", Value: "drafted", In: "project", InSourceID: "7003", LeftOut: 1},
+	}
+	if !reflect.DeepEqual(result.RecordsLeftOut, want) {
+		t.Errorf("the records left out are %v, want %v", result.RecordsLeftOut, want)
+	}
+	if cards := sourceIDs(records(t, dir, bundle.Cards)); slices.Contains(cards, "9207") {
+		t.Errorf("the card of a status nobody knows came into the bundle: %v", cards)
+	}
+	if comments := sourceIDs(records(t, dir, bundle.Comments)); slices.Contains(comments, "9301") {
+		t.Errorf("the comment of a status nobody knows came into the bundle: %v", comments)
+	}
+	if asked := asked(account, "recordings/9301/boosts.json"); len(asked) != 0 {
+		t.Errorf("the boosts of a comment that is left out were asked for: %v", asked)
+	}
+}
+
 func TestWhatABundleCannotSayAboutABoardEndsTheRunWithoutNamingAnything(t *testing.T) {
 	for what, change := range map[string]func(*fakebasecamp.Account){
-		"a second Triage":                  func(a *fakebasecamp.Account) { roadmap(a).Lists[1].Type = fakebasecamp.Triage },
-		"a second Done":                    func(a *fakebasecamp.Account) { roadmap(a).Lists[1].Type = fakebasecamp.Done },
-		"a second Not now":                 func(a *fakebasecamp.Account) { roadmap(a).Lists[0].Type = fakebasecamp.NotNow },
-		"a kind of column nobody knows":    func(a *fakebasecamp.Account) { doing(a).Type = "Kanban::Swimlane" },
-		"a column without createdAt":       func(a *fakebasecamp.Account) { doing(a).CreatedAt = "" },
-		"a column without updatedAt":       func(a *fakebasecamp.Account) { doing(a).UpdatedAt = "" },
-		"a card without createdAt":         func(a *fakebasecamp.Account) { busyCard(a).CreatedAt = "" },
-		"a card without updatedAt":         func(a *fakebasecamp.Account) { busyCard(a).UpdatedAt = "" },
-		"a card created at no time":        func(a *fakebasecamp.Account) { busyCard(a).CreatedAt = "the other day" },
-		"a card with an unknown status":    func(a *fakebasecamp.Account) { doing(a).Cards[2].ShownStatus = "drafted" },
-		"an archived card without a time":  func(a *fakebasecamp.Account) { doing(a).Cards[2].UpdatedAt = "" },
-		"a step without createdAt":         func(a *fakebasecamp.Account) { busyCard(a).Steps[0].CreatedAt = "" },
-		"a step without updatedAt":         func(a *fakebasecamp.Account) { busyCard(a).Steps[0].UpdatedAt = "" },
-		"a comment without createdAt":      func(a *fakebasecamp.Account) { busyCard(a).Comments[0].CreatedAt = "" },
-		"a comment without updatedAt":      func(a *fakebasecamp.Account) { busyCard(a).Comments[0].UpdatedAt = "" },
-		"a comment with an unknown status": func(a *fakebasecamp.Account) { busyCard(a).Comments[0].Status = "drafted" },
-		"a comment created at no time":     func(a *fakebasecamp.Account) { busyCard(a).Comments[0].CreatedAt = "yesterday" },
-		"a boost without a time":           func(a *fakebasecamp.Account) { busyCard(a).Boosts[0].CreatedAt = "" },
-		"a boost given at no time":         func(a *fakebasecamp.Account) { busyCard(a).Boosts[0].CreatedAt = "just now" },
-		"a boost of nobody":                func(a *fakebasecamp.Account) { busyCard(a).Boosts[0].Booster = nil },
-		"a boost of a comment, of nobody":  func(a *fakebasecamp.Account) { busyCard(a).Comments[0].Boosts[1].Booster = nil },
-		"a board that cannot be read":      func(a *fakebasecamp.Account) { a.Fail["buckets/7003/card_tables/lists/9104/cards.json"] = failure },
+		"a second Triage":                 func(a *fakebasecamp.Account) { roadmap(a).Lists[1].Type = fakebasecamp.Triage },
+		"a second Done":                   func(a *fakebasecamp.Account) { roadmap(a).Lists[1].Type = fakebasecamp.Done },
+		"a second Not now":                func(a *fakebasecamp.Account) { roadmap(a).Lists[0].Type = fakebasecamp.NotNow },
+		"a column without createdAt":      func(a *fakebasecamp.Account) { doing(a).CreatedAt = "" },
+		"a column without updatedAt":      func(a *fakebasecamp.Account) { doing(a).UpdatedAt = "" },
+		"a card without createdAt":        func(a *fakebasecamp.Account) { busyCard(a).CreatedAt = "" },
+		"a card without updatedAt":        func(a *fakebasecamp.Account) { busyCard(a).UpdatedAt = "" },
+		"a card created at no time":       func(a *fakebasecamp.Account) { busyCard(a).CreatedAt = "the other day" },
+		"an archived card without a time": func(a *fakebasecamp.Account) { doing(a).Cards[2].UpdatedAt = "" },
+		"a step without createdAt":        func(a *fakebasecamp.Account) { busyCard(a).Steps[0].CreatedAt = "" },
+		"a step without updatedAt":        func(a *fakebasecamp.Account) { busyCard(a).Steps[0].UpdatedAt = "" },
+		"a comment without createdAt":     func(a *fakebasecamp.Account) { busyCard(a).Comments[0].CreatedAt = "" },
+		"a comment without updatedAt":     func(a *fakebasecamp.Account) { busyCard(a).Comments[0].UpdatedAt = "" },
+		"a comment created at no time":    func(a *fakebasecamp.Account) { busyCard(a).Comments[0].CreatedAt = "yesterday" },
+		"a boost without a time":          func(a *fakebasecamp.Account) { busyCard(a).Boosts[0].CreatedAt = "" },
+		"a boost given at no time":        func(a *fakebasecamp.Account) { busyCard(a).Boosts[0].CreatedAt = "just now" },
+		"a boost of nobody":               func(a *fakebasecamp.Account) { busyCard(a).Boosts[0].Booster = nil },
+		"a boost of a comment, of nobody": func(a *fakebasecamp.Account) { busyCard(a).Comments[0].Boosts[1].Booster = nil },
+		"a board that cannot be read":     func(a *fakebasecamp.Account) { a.Fail["buckets/7003/card_tables/lists/9104/cards.json"] = failure },
 		"an archive that cannot be read": func(a *fakebasecamp.Account) {
 			a.Fail["projects/recordings.json?type=Kanban::Card&bucket=7003&status=trashed"] = failure
 		},
@@ -647,7 +704,6 @@ func TestARecordThatCannotBeCarriedEndsTheRunWhereItIsFirstMet(t *testing.T) {
 		"a card without either":       {func(a *fakebasecamp.Account) { doing(a).Cards[1].CreatedAt, doing(a).Cards[1].UpdatedAt = "", "" }, "when card 9202 was created and updated"},
 		"a comment without createdAt": {func(a *fakebasecamp.Account) { busyCard(a).Comments[2].CreatedAt = "" }, "when comment 9303 was created"},
 		"a comment without updatedAt": {func(a *fakebasecamp.Account) { busyCard(a).Comments[2].UpdatedAt = "" }, "when comment 9303 was updated"},
-		"a comment of no known kind":  {func(a *fakebasecamp.Account) { busyCard(a).Comments[2].Status = "drafted" }, `comment 9303 has the status "drafted"`},
 	} {
 		account := fakebasecamp.New()
 		c.change(account)

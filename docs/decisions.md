@@ -305,7 +305,9 @@ The bundle is written without the file and its record and the report names it;
 the command exits 6 when trying again may help, else 7, the report as `data`.
 
 **Why:** One missing picture must not cost a run of hours, and exit 0 would
-hide that the bundle is incomplete.
+hide that the bundle is incomplete. This is no case of [C-050](#c-050): a bundle
+can express the file, the source merely does not hand it over, so the run says at
+the end that a later one has something left to bring.
 **Implemented as:** `Extractor.attach`, `incompleteImport`.
 
 <a id="c-026"></a>
@@ -649,24 +651,38 @@ all of it, and a run of hours would have to be repeated for a single fortnightly
 question nobody ever answered. Nothing here is final: the question uses no
 `sourceId`, so a later run writes it as soon as Minka has a word for its
 schedule, or as soon as the question is answered — unlike `asked`, which the
-first run settles. What is lost stands per question and per field in the report,
-so nobody has to guess what is missing. **Implemented as:**
-`basecamp.scheduleOf`, `basecamp.Extractor.leaveQuestionOut`, see
+first run settles. The line it stands on is [C-050](#c-050); what is its own is
+that no single word makes a schedule impossible but a reading of several fields
+together, and that the report names every such question by its `sourceId` rather
+than counting them. **Implemented as:** `basecamp.scheduleOf`,
+`basecamp.Extractor.leaveQuestionOut`, see
 [Importing from Basecamp](stable/import.md).
 
 <a id="c-049"></a>
 ## C-049 — A kind of chat line a bundle has no word for leaves the line out, and the run goes on
 
-*Applies to: the messages of a bundle, the report of a run*
+*Superseded by [C-050](#c-050)*, which says the same for every kind of record of
+a bundle, with the same report, the same counting and the same reason. Nothing of
+this entry was left over.
 
-A line of a chat whose kind a bundle has no word for is left out, and the report
-names that kind with the chat it stood in and how many lines it cost there. The
-run goes on.
+<a id="c-050"></a>
+## C-050 — The run stops where it would write something wrong, and leaves out what a bundle cannot express
 
-**Why:** The reason of [C-048](#c-048), for a record of another kind: one exotic
-line of one chat must not cost the extraction of a whole account, and a run of
-hours must not have to be repeated for a sound effect somebody sent. The kind is
-what the report names, because it is the only thing that tells a sound effect
-from something that matters, and Basecamp keeps growing kinds. **Implemented
-as:** `basecamp.lineTypes`, `basecamp.Extractor.leaveLineOut`, see
+*Applies to: `import`, every record of a bundle, the report of a run*
+
+A record the source describes with a word a bundle has none for is left out and
+counted in `recordsLeftOut`, with the kind of record, the field, the word and
+where it stood; the run goes on. Where going on would put something wrong into
+the bundle, the run ends as `api_error` instead: a record without its times or
+with a time that is none, a day or a zone that would give somebody else's day, an
+address outside the account, a title Minka refuses, a second Triage, Not now or
+Done on one board, and the status of a project the run was asked for by name.
+
+**Why:** A bundle has no field to say an unknown word in, so such a record is
+lost whatever the run does, and one exotic record must not cost the extraction of
+a whole account — while a record put in the wrong place is a mistake nobody can
+tell from the truth afterwards. Nothing that is left out is final: the source
+keeps it, and a later run brings it as soon as a bundle has a word for it.
+**Implemented as:** `basecamp.Extractor.met`, `basecamp.Extractor.leaveOut`,
+`basecamp.lineTypes`, `basecamp.columnRoles`, see
 [Importing from Basecamp](stable/import.md).

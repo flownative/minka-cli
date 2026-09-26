@@ -180,6 +180,10 @@ func talkProject(ada, grace, linus, edsger, former, bot, deleted Person, tool fu
 		// a bundle carries none of either.
 		{ID: 9809, Type: UnknownLine, Creator: &ada, CreatedAt: minute(12), UpdatedAt: minute(12), Content: `Whatever this is`,
 			Boosts: []Boost{{ID: 9893, Content: "🎲", CreatedAt: minute(13), Booster: &grace}}},
+		// A second of that kind, thrown away and without the time it was last
+		// touched: its kind is what it is left out for, and two lines of one kind
+		// are two lines.
+		{ID: 9810, Type: UnknownLine, Status: "trashed", Creator: &ada, CreatedAt: minute(14), Content: `Whatever that was`},
 	}
 
 	quiet := tool(9034, "chat", "chats", "Quiet room", true, 4, &grace)
