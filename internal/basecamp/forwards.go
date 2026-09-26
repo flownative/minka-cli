@@ -406,7 +406,7 @@ func aSubjectAsATitle(subject string) (title string, withoutASubject, changed bo
 		return folded, false, changed
 	}
 	cut := []rune(folded)[:maxTitleLength-utf8.RuneCountInString(ellipsis)]
-	return strings.TrimRight(string(cut), " \t") + ellipsis, false, true
+	return strings.TrimRightFunc(string(cut), unicode.IsSpace) + ellipsis, false, true
 }
 
 var (
