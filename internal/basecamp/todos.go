@@ -443,11 +443,12 @@ func (e *Extractor) writeTodoList(ctx context.Context, w *bundle.Writer, bucket,
 	}
 
 	record := bundle.TodoList{
-		Record:          origin,
-		ProjectSourceID: sourceID(bucket),
-		ToolSourceID:    sourceID(tool),
-		Title:           title,
-		Status:          found.Status,
+		Record:           origin,
+		ProjectSourceID:  sourceID(bucket),
+		ToolSourceID:     sourceID(tool),
+		Title:            title,
+		Status:           found.Status,
+		VisibleToClients: visibleToClientsOf(found.recording),
 	}
 	// A list without a text has none.
 	if description != "" {

@@ -820,6 +820,23 @@ this:
 - A person comes with `retired: true` unless Basecamp calls them a user: a
   bot, somebody who was deleted and an outsider are authors and nothing more,
   whichever identity ran the import.
+- What the source says about clients comes with the bundle: `client` on every
+  person, `company` on a client alone, `clientAccess` and `clientCompany` on a
+  project, and `visibleToClients` on a tool, a post, a to-do list and a check-in
+  question. That word is always the record's own and never the word of its tool:
+  a post of a board the clients see can be one the source keeps from them. Where
+  the source says nothing, nothing is written and Minka leaves what it holds
+  alone. A record that follows what it hangs on — a to-do, a group, a card, an
+  answer, a comment — carries none, and `data.visibilityLeftToTheContainer`
+  counts the words the source offered there. `data.peopleAsClients` counts the
+  clients and `data.clientMemberships` the memberships Minka leaves out, because
+  a client is no member of a project there; for the same reason no question is
+  said to be asked of a client, which `data.askedLeftOut.clients` counts. A
+  company the source names without an identifier, or with a name Minka refuses,
+  ends the run where the record that names it comes in: written away as none it
+  would tell Minka to drop the company it holds. Docs & Files and Forwards are
+  not extracted at all, so the bundle says nothing of whether clients see them;
+  a `notice` names that gap. No output ever names a person or a company.
 - `data.cardsByStatus` splits the cards, `data.cardsOnHold` counts those set
   aside within their column, `data.cardsLeftOut` the archived and trashed
   cards whose column is in no extracted board, `data.commentsTrashed` the
@@ -875,14 +892,15 @@ this:
 - A question of a check-in carries the rhythm, the weekdays counted from Monday,
   the time of day, the day the rhythm is counted from and whom it is asked of,
   which are the subscribers of the question and not whoever answered it. Only a
-  member of the project who is still there and has an address can be asked;
-  `data.askedLeftOut` counts the rest by reason, and `data.nobodyAsked` names
-  every question that comes asking nobody at all, which will ask nobody again.
-  A question whose schedule Minka cannot express is left out with its answers,
-  and `data.questionsLeftOut` names
-  it with the field that made it impossible; one whose schedule has run out comes
-  paused; one asked every other week is anchored on the day it was last answered,
-  which `data.anchorsInferred` names, and left out where nobody ever answered it.
+  member of the project who is no client, is still there and has an address can
+  be asked; `data.askedLeftOut` counts the rest by reason, one reason each and
+  in the order just named. `data.nobodyAsked` names every question that comes
+  asking nobody at all, which will ask nobody again. A question whose schedule
+  Minka cannot express is left out with its answers, and `data.questionsLeftOut`
+  names it with the field that made it impossible; one whose schedule has run
+  out comes paused; one asked every other week is anchored on the day it was
+  last answered, which `data.anchorsInferred` names, and left out where nobody
+  ever answered it.
   Comments, boosts and files hang on an answer, never on a question.
   `data.answersWithoutABody` and `data.answersTrashed` count the answers left
   out, `data.answersWithoutADay` those Basecamp names no day for, which take the

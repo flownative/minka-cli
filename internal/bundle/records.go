@@ -2,6 +2,8 @@
 // attached files that Minka's applier reads foreign history from.
 package bundle
 
+import "encoding/json"
+
 // Format is the version of the bundle format a manifest announces.
 const Format = 1
 
@@ -80,6 +82,39 @@ const (
 	RhythmMonthly        = "monthly"
 )
 
+// Company is whom a client belongs to at the source. Neither part is ever
+// empty: Minka ends a run over a company without an identifier or without a
+// name.
+type Company struct {
+	SourceID string `json:"sourceId"`
+	Name     string `json:"name"`
+}
+
+// CompanyOrNone is what a record says about a company: which one it is, or that
+// the source names none. Minka reads a field that is missing and one that says
+// none the same way and drops the company it holds for the record, so both say
+// that there is no company and neither leaves one standing.
+type CompanyOrNone struct {
+	Company *Company
+}
+
+// TheCompany is the company a record names, NoCompany the word that it names
+// none.
+func TheCompany(sourceID, name string) *CompanyOrNone {
+	return &CompanyOrNone{Company: &Company{SourceID: sourceID, Name: name}}
+}
+
+func NoCompany() *CompanyOrNone {
+	return &CompanyOrNone{}
+}
+
+func (c CompanyOrNone) MarshalJSON() ([]byte, error) {
+	if c.Company == nil {
+		return []byte("null"), nil
+	}
+	return json.Marshal(c.Company)
+}
+
 // Record is what every record carries. CreatedBy is nil when the source does
 // not say who created it.
 type Record struct {
@@ -89,28 +124,47 @@ type Record struct {
 	CreatedBy *string `json:"createdBy"`
 }
 
+// Person is somebody of the source. Client is said either way and never left
+// out: the word false is the only way back from a client to somebody of the
+// company. Company stands on a client alone, because the company of anybody
+// else is nothing the import has a use for.
 type Person struct {
 	Record
 	Name    string  `json:"name"`
 	Email   *string `json:"email"`
 	Avatar  *string `json:"avatar"`
 	Retired bool    `json:"retired"`
+
+	Client  bool           `json:"client"`
+	Company *CompanyOrNone `json:"company,omitempty"`
 }
 
+// Project is a project of the source. ClientAccess tells that it works with
+// clients and ClientCompany names the company it works with; the two stand
+// together or neither does, because a company without the access would say that
+// a project with a client company has none.
 type Project struct {
 	Record
 	Name        string   `json:"name"`
 	Description string   `json:"description"`
 	Status      string   `json:"status"`
 	Members     []string `json:"members"`
+
+	ClientAccess  *bool          `json:"clientAccess,omitempty"`
+	ClientCompany *CompanyOrNone `json:"clientCompany,omitempty"`
 }
 
+// Tool is a tool of a project. VisibleToClients is whether the source shows the
+// tool to clients and is left out where the source says nothing, which leaves
+// what Minka holds alone.
 type Tool struct {
 	Record
 	ProjectSourceID string `json:"projectSourceId"`
 	Kind            string `json:"kind"`
 	Name            string `json:"name"`
 	Position        int    `json:"position"`
+
+	VisibleToClients *bool `json:"visibleToClients,omitempty"`
 }
 
 // Category is a kind of post a project offers. It belongs to the project, not
@@ -165,7 +219,8 @@ type Step struct {
 }
 
 // Post is a post of a Posts tool. Status is never a draft: a draft is its
-// writer's own and no bundle carries one.
+// writer's own and no bundle carries one. VisibleToClients is whether the source
+// shows this post to clients, whatever it shows of the tool it stands in.
 type Post struct {
 	Record
 	ProjectSourceID  string  `json:"projectSourceId"`
@@ -175,6 +230,8 @@ type Post struct {
 	Body             string  `json:"body"`
 	PinnedAt         *string `json:"pinnedAt"`
 	Status           string  `json:"status"`
+
+	VisibleToClients *bool `json:"visibleToClients,omitempty"`
 }
 
 // Question is a question a Check-ins tool asks on a schedule. Weekdays count
@@ -185,6 +242,9 @@ type Post struct {
 //
 // Nothing hangs on a question: it carries no comments and no reactions, and
 // the format has no word for either of a question.
+//
+// VisibleToClients is whether the source shows this question to clients,
+// whatever it shows of the tool it stands in.
 type Question struct {
 	Record
 	ProjectSourceID string   `json:"projectSourceId"`
@@ -197,6 +257,8 @@ type Question struct {
 	Asked           []string `json:"asked"`
 	Paused          bool     `json:"paused"`
 	Status          string   `json:"status"`
+
+	VisibleToClients *bool `json:"visibleToClients,omitempty"`
 }
 
 // Answer is what somebody answered a question on one day. GroupOn is that day,
@@ -214,6 +276,8 @@ type Answer struct {
 // TodoList is a list of a To-dos tool. Minka puts every new list on top of its
 // tool, so the lists of a tool stand in the file from the bottom up: the last
 // line of a tool is the list on top. Status is active, archived or trashed.
+// VisibleToClients is whether the source shows this list to clients, whatever it
+// shows of the tool it stands in.
 type TodoList struct {
 	Record
 	ProjectSourceID string  `json:"projectSourceId"`
@@ -221,6 +285,8 @@ type TodoList struct {
 	Title           string  `json:"title"`
 	Description     *string `json:"description"`
 	Status          string  `json:"status"`
+
+	VisibleToClients *bool `json:"visibleToClients,omitempty"`
 }
 
 // TodoGroup is a named heading inside a list. A group goes to the end of its

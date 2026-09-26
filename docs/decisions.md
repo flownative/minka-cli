@@ -768,3 +768,25 @@ list by nothing but fewer cards than asked for, so a run that trusted either
 would truncate an archive and report success. **Implemented as:**
 `api.ArchivePageMax`, `api.Client.WholeArchiveOf`, `cli.app.wholeArchive`, see
 [The archive of a board](stable/archive.md).
+
+<a id="c-055"></a>
+## C-055 — A record says for itself whether clients see it
+
+*Applies to: `import basecamp`, `visibleToClients`, `client`, `company`, `clientAccess`*
+
+Whether clients see a record is read from that record and never from the tool it
+stands in, and where the source says nothing, nothing is written. A record that
+follows its container carries no such word and is counted where the source offers
+one, `client` is written either way, a company stands on a client alone, and a
+client is never said to be asked a question. A project's access and its company
+stand together or not at all. A company without an identifier or with a name
+Minka refuses ends the run, where the record that names it comes in.
+
+**Why:** A record that took the word of its tool would show a client what the
+source hides, and what a client has seen cannot be taken back; a company written
+away as none tells Minka to drop the one it holds, and a project that names a
+company and no access is one whose clients have none there.
+**Implemented as:** `basecamp.visibleToClientsOf`, `basecamp.visibilityOfItsOwn`,
+`basecamp.Extractor.clientsOf`, `basecamp.companyOf`, `basecamp.registry.refer`,
+`basecamp.seenPerson.aClient`, see
+[Importing from Basecamp](stable/import.md).

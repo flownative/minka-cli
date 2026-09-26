@@ -52,6 +52,18 @@ second Triage, Not now or Done on one board, the status of a project the run was
 asked for. Where a chat line is brought only by a later run and another line
 carries the same second, the order of the two can turn round, which is a known
 limit and written down with the rule.
+What the source says about clients comes with a bundle (C-055): `client` and the
+company on a person, `clientAccess` and the client company on a project, and
+`visibleToClients` on a tool, a post, a to-do list and a check-in question, read
+from each record and never from the tool it stands in. A record that follows what
+it hangs on carries no word of its own and is counted where the source offers
+one. A client is no member of a project in Minka, so the run counts the
+memberships that fall away and says no question is asked of a client. A company
+the source names without an identifier, or with a name Minka refuses, ends the
+run where the record that names it comes in: written away as none, it would tell
+Minka to drop the company it holds.
+Docs & Files and Forwards are not extracted, so a bundle says nothing of whether
+clients see them, which the report names as a gap.
 Mentions in the texts are references, the preview of a link is the link, a
 video or a player embedded in a text is an `<import-embed>` with its address,
 a link to a card, a message or a chat of the account is an
@@ -138,6 +150,17 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   controller's order, the text before the guard, and reads a guard's time in
   the forms the server reads and no wider. All of it read in the Minka code.
 
+- Everything a bundle says about clients: no extraction has met a client live.
+  What the fields are and how Minka reads them was read in its appliers
+  (`PeopleApplier`, `ProjectsApplier`, `ToolsApplier`, `WhatClientsSee`), and
+  what Basecamp answers was measured read-only against the live account before
+  the code was written, not live through a run of the CLI.
+- That being a client comes before the reasons which attach to the person,
+  having left and coming without an address, and after the one which attaches to
+  the project: the person three of the four reasons hold for is an invented one.
+  The account says `client: true` of a kind of person who is not retired and of
+  no other, so nothing live has ever put the client case against the rest. Held
+  against the order Minka takes a client out of a project in.
 - That a conversation with somebody from a foreign organisation gives 404: the
   fake API knows no organisations. Read in the Minka code.
 - That a foreign attachment silently disappears on saving: the fake does not
@@ -423,6 +446,11 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   `Round(0)` in `tick.decide`, which is what makes the sleeping machine a jump,
   can be dropped with every test staying green, and the sleeping machine of the
   live check is what says whether it is there.
+- Of the eight kinds of record whose word about clients falls to what they hang
+  on, the fake produces two: a group and a to-do. A card, a comment, a chat line,
+  a column, a step and an answer go through the same one place
+  (`Extractor.record`), so the rule is held for them by that and by nothing of
+  their own.
 - `TestARunThatIsStoppedIsInterruptedNotFailed` needs SIGINT to reach the
   stand-in, which sends it to itself. A shell sets SIGINT to ignored for a
   command it starts in the background, and a program inherits that, so the
