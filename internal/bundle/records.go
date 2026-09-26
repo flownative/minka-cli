@@ -292,8 +292,9 @@ type Answer struct {
 }
 
 // TodoList is a list of a To-dos tool. Minka puts every new list on top of its
-// tool, so the lists of a tool stand in the file from the bottom up: the last
-// line of a tool is the list on top. Status is active, archived or trashed.
+// tool, so the lists that are in use stand in the file from the bottom up: the
+// last line of a tool is the list on top. The ones the source has put away stand
+// before them in the order it lists them, which decides nothing there. Status is active, archived or trashed.
 // VisibleToClients is whether the source shows this list to clients, whatever it
 // shows of the tool it stands in.
 type TodoList struct {
@@ -385,9 +386,11 @@ type ForwardReply struct {
 // trashed and is the folder's own: what stands in it carries its own status and
 // goes along through the folder.
 //
-// A folder stands in the file after the folder it is in, and every kind of a
-// folder stands in the file from the bottom up, because Minka puts each new
-// entry on top of its kind there.
+// A folder stands in the file after the folder it is in. For an entry in use the
+// order of the file decides, bottom up, because Minka puts each new one on top of
+// its kind; for one that has left its place it decides nothing, Minka ordering an
+// archive by the moment a record was put away, so those stand first and in the
+// order the source lists them.
 //
 // VisibleToClients is what the source says of this folder, written at every
 // depth: Minka reads it below the top as well, where it is the one thing that

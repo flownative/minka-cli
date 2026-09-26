@@ -137,6 +137,10 @@ func (d Downloader) download(ctx context.Context, build func(context.Context) *e
 // command builds the call of the Basecamp CLI. "--out -" makes it stream the
 // file instead of choosing a name and a place for it. The address stands
 // behind "--", and the CLI is told not to ask anything.
+//
+// "--agent" is taken by `files download` although its own help does not list it,
+// which was seen live for both calls below: it is no mistake and no leftover, and
+// taking it out would put a run back among the questions a CLI asks a person.
 func (d Downloader) command(ctx context.Context, address string) *exec.Cmd {
 	binary := d.Binary
 	if binary == "" {

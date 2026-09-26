@@ -572,10 +572,11 @@ and Minka applies the kinds in an order of its own.
   tools, those that are switched off included; such a record names only what
   it hangs on, so every list of every tool is known before the first one is
   written, and a list of a tool that is not extracted is left out and counted.
-  Minka puts every new list on top of its tool, so the lists of a tool stand
-  in the file **from the bottom up**: the last line of a tool is the list on
-  top. What has left the list, the archived and the trashed ones, goes first,
-  where it cannot push the rest about. No `position` is written for a list, a
+  Minka puts every new list on top of its tool, so the lists that are **in use**
+  stand in the file **from the bottom up**: the last line of a tool is the list on
+  top. What has left the tool, the archived and the trashed ones, goes first and
+  in the order the source lists it, where it cannot push the rest about; their
+  order there decides nothing (C-062). No `position` is written for a list, a
   group or a to-do: Minka reads none, and a `todogroups` record that carried
   one would earn a warning. A list comes with its groups and its to-dos
   whatever its status, as a card comes with its steps. `status` is `active`,
@@ -702,10 +703,12 @@ and Minka applies the kinds in an order of its own.
   stood in, see What a bundle cannot carry. A walk is no snapshot here either: a
   folder a list that moved hands out twice is written once.
   A folder **stands after the folder it is in** — the applier stops at one whose
-  parent it has not seen — and each kind of a folder stands **from the bottom
-  up**, because Minka puts every new entry on top of its kind there: what has
-  left the folder comes first, then what is in use the other way round from the
-  way the source shows it, so the source's order comes out again. There is no
+  parent it has not seen. For an entry **in use** the order of the file decides:
+  it stands **from the bottom up**, because Minka puts every new one on top of its
+  kind, so the order the source shows comes out again. For one that has **left its
+  place** it decides nothing (C-062): those come first, in the order the source
+  lists them, and Minka reads that order nowhere, ordering an archive by the moment
+  a record was put away and taking that moment from the record itself. There is no
   `position` in the format, and a record that carried one would earn a warning.
   `status` is `active`, `archived` or `trashed` and is the folder's own;
   `docs.foldersByStatus` splits the folders of the bundle, as

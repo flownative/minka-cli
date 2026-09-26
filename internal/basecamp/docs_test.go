@@ -984,3 +984,33 @@ func TestAVaultRecordThatNamesNoVaultAboveItIsAPlaceOfItsOwn(t *testing.T) {
 		t.Error("neither was asked what stood in it, so nothing of them could be counted")
 	}
 }
+
+// What is in use stands in the file from the bottom up, so Minka puts it back in
+// the source's order; what the source has put away stands **before** all of it and
+// in the source's own order, not upside down. Nothing promises more than that: an
+// entry that has left its place shows in no list Minka orders, and reversing those
+// too would be a promise the code does not keep.
+func TestOnlyWhatIsInUseStandsInTheFileFromTheBottomUp(t *testing.T) {
+	dir, _ := extract(t, fakebasecamp.New(), docsProject)
+
+	// The account lists the documents it has put away newest first, as it lists
+	// every record of that kind, and the bundle keeps that order for them while
+	// turning the ones in use round.
+	standsAt := map[string]int{}
+	for i, record := range records(t, dir, bundle.Documents) {
+		standsAt[record["sourceId"].(string)] = i
+	}
+	for _, order := range [][]string{
+		// Put away at the top of the tool, in the order the account lists them.
+		{"9246", "9247"},
+		// In use at the top of the tool, the other way round from the account.
+		{"9245", "9244"},
+		// And everything put away stands before everything in use.
+		{"9247", "9245"},
+	} {
+		if standsAt[order[0]] >= standsAt[order[1]] {
+			t.Errorf("document %s stands at %d and %s at %d, want the first before the second",
+				order[0], standsAt[order[0]], order[1], standsAt[order[1]])
+		}
+	}
+}
