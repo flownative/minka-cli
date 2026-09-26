@@ -115,6 +115,9 @@ type importReport struct {
 	MessagesByType        map[string]int `json:"messagesByType"`
 	MessagesWithEmptyBody int            `json:"messagesWithEmptyBody"`
 	UploadLinesLeftOut    int            `json:"uploadLinesLeftOut"`
+	// LinesOfAnUnknownKind are the kinds of line the bundle has no word for,
+	// each with the chat it was met in and how many lines are left out there.
+	LinesOfAnUnknownKind []basecamp.UnknownLineKind `json:"linesOfAnUnknownKind"`
 	// LongestBody is the longest text per kind, in characters: a number and
 	// nothing of the text.
 	LongestBody map[bundle.Kind]int `json:"longestBody"`
@@ -183,6 +186,10 @@ over from there instead of being fetched again; the report counts both as
 filesFetched and filesReused. A file Basecamp lists and no longer has gets a
 record that says so (filesGone). The name of a file is made a plain one
 (fileNamesChanged), and no output ever says a name, a caption or an address.
+
+A line of a chat whose kind a bundle has no word for is left out and counted
+with that kind and the chat it stood in (linesOfAnUnknownKind); the run goes on,
+and a later run brings such a line once a bundle has a word for it.
 
 The lines of chats are written in parts, messages-0001.jsonl and on, each
 holding lines of one chat, and the manifest names them under parts. A part
@@ -299,11 +306,12 @@ it has been applied.`,
 				EmbedsLeftOut:        result.Bodies.EmbedsLeftOut,
 				References:           result.Bodies.References,
 
-				PostsByStatus:      result.PostsByStatus,
-				PostsLeftOut:       result.PostsLeftOut,
-				PostsWithEmptyBody: result.PostsWithEmptyBody,
-				MessagesByType:     result.MessagesByType,
-				UploadLinesLeftOut: result.UploadLinesLeftOut,
+				PostsByStatus:        result.PostsByStatus,
+				PostsLeftOut:         result.PostsLeftOut,
+				PostsWithEmptyBody:   result.PostsWithEmptyBody,
+				MessagesByType:       result.MessagesByType,
+				UploadLinesLeftOut:   result.UploadLinesLeftOut,
+				LinesOfAnUnknownKind: result.LinesOfAnUnknownKind,
 
 				QuestionsLeftOut:    result.QuestionsLeftOut,
 				AnchorsInferred:     result.AnchorsInferred,
@@ -381,6 +389,11 @@ it has been applied.`,
 					"line of a chat is left out, because it was files alone and Basecamp names none of them",
 					"lines of chats are left out, because they were files alone and Basecamp names none of them"))
 			}
+			if count := linesOfAnUnknownKind(report); count > 0 {
+				notices = append(notices, plural(count,
+					"line of a chat is left out, because a bundle has no word for its kind; data.linesOfAnUnknownKind names that kind and the chat it stood in, and a later run brings it once a bundle has one",
+					"lines of chats are left out, because a bundle has no word for their kinds; data.linesOfAnUnknownKind names each kind with the chat it stood in, and a later run brings them once a bundle has one"))
+			}
 			if leftover != "" {
 				notices = append(notices, "the bundle of the run before could not be removed and still lies at "+leftover+"; it holds personal data, remove it by hand")
 			}
@@ -452,6 +465,13 @@ func renderImportReport(w io.Writer, report importReport) {
 		fmt.Fprintf(w, "Messages are written in %d parts, %s to %s\n", len(names), names[0], names[len(names)-1])
 	}
 	fmt.Fprintf(w, "Lines that were files Basecamp names none of, left out: %d\n", report.UploadLinesLeftOut)
+	if count := linesOfAnUnknownKind(report); count > 0 {
+		kinds := make([]string, 0, len(report.LinesOfAnUnknownKind))
+		for _, met := range report.LinesOfAnUnknownKind {
+			kinds = append(kinds, fmt.Sprintf("%s in chat %s (%d)", met.Type, met.ChatSourceID, met.LeftOut))
+		}
+		fmt.Fprintf(w, "Lines of a kind a bundle has no word for, left out: %d — %s\n", count, strings.Join(kinds, ", "))
+	}
 	renderCheckins(w, report)
 	fmt.Fprintf(w, "In the texts: %s referred to, %s Basecamp lists nothing for dropped, %s, %s, %s\n",
 		plural(report.FilesInBodies, "file", "files"), plural(report.FilesDropped, "file", "files"),
@@ -501,6 +521,16 @@ func renderImportReport(w io.Writer, report importReport) {
 			fmt.Fprintf(w, "  %-16s %-18s %d\n", skipped.Kind, state, skipped.Count)
 		}
 	}
+}
+
+// linesOfAnUnknownKind is how many lines a run left out for want of a word for
+// their kind, over all kinds and chats.
+func linesOfAnUnknownKind(report importReport) int {
+	count := 0
+	for _, met := range report.LinesOfAnUnknownKind {
+		count += met.LeftOut
+	}
+	return count
 }
 
 // renderCheckins says what became of the questions of the check-ins a run met.

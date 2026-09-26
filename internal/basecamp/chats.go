@@ -38,14 +38,24 @@ type upload struct {
 
 const uploadLine = "Chat::Lines::Upload"
 
-// lineTypes are the kinds of line a chat has, by the names a report counts
-// them under. Basecamp hands out neither the lines somebody deleted nor the
-// ones it wrote itself, such as who joined.
+// lineTypes are the kinds of line a bundle has a word for, by the names a
+// report counts them under. Basecamp hands out neither the lines somebody
+// deleted nor the ones it wrote itself, such as who joined, and it grows kinds
+// of its own that are in none of these: such a line is left out and reported,
+// and whoever adds a word here has seen what Basecamp sends under it.
 var lineTypes = map[string]string{
 	"Chat::Lines::Text":        "text",
 	"Chat::Lines::RichText":    "richText",
 	uploadLine:                 "upload",
 	"Chat::Lines::Integration": "integration",
+}
+
+// UnknownLineKind is a kind of line a bundle has no word for, with the chat it
+// was met in and how many lines of it are left out there.
+type UnknownLineKind struct {
+	ChatSourceID string `json:"chatSourceId"`
+	Type         string `json:"type"`
+	LeftOut      int    `json:"leftOut"`
 }
 
 // extractChats adds the lines of every chat, chat by chat in the order of the
@@ -88,8 +98,8 @@ func (e *Extractor) extractChats(ctx context.Context, w *bundle.Writer) error {
 // once.
 //
 // A line is held to what a bundle can carry before anything of the chat is
-// written: a kind of line nobody knows ends the run, and so does a status
-// other than active, because a line of a bundle has none.
+// written: a status other than active ends the run, because a line of a bundle
+// has none, and a kind nobody knows leaves the line out.
 func (e *Extractor) extractChat(ctx context.Context, w *bundle.Writer, bucket, chat int64) error {
 	listed, err := getList[line](ctx, e.Source, fmt.Sprintf("buckets/%d/chats/%d/lines.json", bucket, chat))
 	if err != nil {
@@ -103,7 +113,8 @@ func (e *Extractor) extractChat(ctx context.Context, w *bundle.Writer, bucket, c
 		}
 		seen[found.ID] = true
 		if _, known := lineTypes[found.Type]; !known {
-			return &Error{Kind: API, Message: fmt.Sprintf("line %d of chat %d is of the type %q, which a bundle does not know", found.ID, chat, found.Type)}
+			e.leaveLineOut(chat, found.Type)
+			continue
 		}
 		if found.Status != bundle.StatusActive {
 			return &Error{Kind: API, Message: fmt.Sprintf("line %d of chat %d has the status %q, which a bundle cannot say of a line", found.ID, chat, found.Status)}
@@ -167,6 +178,22 @@ func (e *Extractor) extractChat(ctx context.Context, w *bundle.Writer, bucket, c
 		}
 	}
 	return nil
+}
+
+// leaveLineOut notes a line a bundle has no word for, counted per chat and
+// kind. Nobody comes into the bundle for such a line, its boosts are not asked
+// for and no part ends at it. The kind is reported because it is the only thing
+// that tells a sound effect from something that matters, and the chat because a
+// number nobody can place is a number nobody can check.
+func (e *Extractor) leaveLineOut(chat int64, kind string) {
+	id := sourceID(chat)
+	for i := range e.linesOfAnUnknownKind {
+		if met := &e.linesOfAnUnknownKind[i]; met.ChatSourceID == id && met.Type == kind {
+			met.LeftOut++
+			return
+		}
+	}
+	e.linesOfAnUnknownKind = append(e.linesOfAnUnknownKind, UnknownLineKind{ChatSourceID: id, Type: kind, LeftOut: 1})
 }
 
 // lineBody is the text of a line. What somebody wrote goes the way of every

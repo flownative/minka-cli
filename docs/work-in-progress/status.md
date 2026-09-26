@@ -25,6 +25,10 @@ status with their categories, comments and boosts, of each chat its lines as
 messages with their boosts, written in parts of one chat and some 10,000 lines
 each, and of each questionnaire its questions with the schedule Minka has words
 for and their answers with what hangs on them.
+A bundle has a word for four kinds of line, `Chat::Lines::Text`,
+`Chat::Lines::RichText`, `Chat::Lines::Upload` and `Chat::Lines::Integration`; a
+line of any other kind is left out and named in the report with its kind and the
+chat it stood in, so one exotic line does not cost the account (C-049).
 Mentions in the texts are references, the preview of a link is the link, a
 video or a player embedded in a text is an `<import-embed>` with its address,
 a link to a card, a message or a chat of the account is an
@@ -149,9 +153,13 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
 - Of the posts and chats of `import basecamp`: an outsider or a placeholder
   as the writer of something, a part that runs past its size because a second
   does, a trashed post, a post of a message board that is not extracted, a
-  file dropped into a chat without a usable key, and what ends a run: a line
-  with a status other than `active`, a category without a name and a person
-  without their times. Seen live, in a bundle that was checked reference by
+  file dropped into a chat without a usable key, a line of a kind a bundle has
+  no word for left out and counted with its kind and its chat, and what ends a
+  run: a line with a status other than `active`, a category without a name and a
+  person without their times. A fifth kind of line does exist: a dry run over
+  all 32 projects of the account met `Chat::Lines::Play` and ended on it, which
+  is what the rule is for; no run has gone through such a line yet. Seen live,
+  in a bundle that was checked reference by
   reference, its people against the kind Basecamp gives them: chats listed
   newest first in pages that grow, the four kinds of line, files dropped into
   a chat, bots and deleted people as writers who come retired although an
@@ -365,6 +373,10 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
 - Run the check-ins live, against a real questionnaire: whether a question ever
   comes without a `start_date`, whether an answer ever comes without a
   `group_on`, and whether a frequency turns up that is in none of the five.
+- Run a dry run over the whole account again and read `linesOfAnUnknownKind`:
+  which kinds of line turn up besides `Chat::Lines::Play`, in which chats and how
+  many, and decide per kind whether a bundle gets a word for it. Whoever adds
+  one has to have seen what Basecamp sends under it.
 - React to messages from `minka-ca`: check against the code, fake first,
   then the CLI, test and sabotage proof, check live, documentation in the
   same commit.

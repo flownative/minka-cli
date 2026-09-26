@@ -103,6 +103,72 @@ func TestALineOfEveryKindBecomesAMessage(t *testing.T) {
 	}
 }
 
+// A kind of line a bundle has no word for costs that line and nothing else: one
+// exotic line of one chat would otherwise cost the extraction of a whole
+// account.
+func TestALineOfAKindNobodyKnowsIsLeftOutAndTheRestOfItsChatIsWritten(t *testing.T) {
+	account := fakebasecamp.New()
+	// Nobody but the line of the unknown kind names this person.
+	campfire(account).Lines[8].Creator = stranger()
+	dir, result := extract(t, account, talkProject)
+	written := sourceIDs(messages(t, dir))
+
+	if slices.Contains(written, "9809") {
+		t.Error("a line of a kind nobody knows was written")
+	}
+	for _, id := range []string{"9801", "9802", "9803", "9804", "9805", "9806", "9807"} {
+		if !slices.Contains(written, id) {
+			t.Errorf("line %s of the chat was not written: %v", id, written)
+		}
+	}
+	if slices.Contains(sourceIDs(records(t, dir, bundle.People)), "555") {
+		t.Error("the writer of a line of a kind nobody knows came into the bundle")
+	}
+	if len(asked(account, "recordings/9809/")) != 0 {
+		t.Errorf("the boosts of a line of a kind nobody knows were asked for: %v", asked(account, "recordings/9809/"))
+	}
+	if want := map[string]int{"text": 4, "richText": 2, "upload": 2, "integration": 1}; !reflect.DeepEqual(result.MessagesByType, want) {
+		t.Errorf("messages by type %v, want %v", result.MessagesByType, want)
+	}
+}
+
+// Whoever reads a run has to be able to tell a sound effect from something that
+// matters, and only the kind says which it was.
+func TestTheKindOfALineNobodyKnowsIsCountedWithTheChatItStoodIn(t *testing.T) {
+	account := fakebasecamp.New()
+	campfire(account).Lines[3].Type = fakebasecamp.UnknownLine
+	campfire(account).Lines[4].Type = "Chat::Lines::Poll"
+	side(account).Lines[0].Type = "Chat::Lines::Poll"
+	_, result := extract(t, account, talkProject)
+
+	want := []basecamp.UnknownLineKind{
+		{ChatSourceID: "9033", Type: fakebasecamp.UnknownLine, LeftOut: 2},
+		{ChatSourceID: "9033", Type: "Chat::Lines::Poll", LeftOut: 1},
+		{ChatSourceID: "9035", Type: "Chat::Lines::Poll", LeftOut: 1},
+	}
+	if len(result.LinesOfAnUnknownKind) != len(want) {
+		t.Fatalf("the kinds nobody knows are %v, want %v", result.LinesOfAnUnknownKind, want)
+	}
+	for _, one := range want {
+		if !slices.Contains(result.LinesOfAnUnknownKind, one) {
+			t.Errorf("the kinds nobody knows are %v, want %v among them", result.LinesOfAnUnknownKind, one)
+		}
+	}
+	// What is left of the chats comes, and the kinds nobody knows count nowhere
+	// else.
+	if want := map[string]int{"text": 2, "richText": 2, "upload": 2, "integration": 0}; !reflect.DeepEqual(result.MessagesByType, want) {
+		t.Errorf("messages by type %v, want %v", result.MessagesByType, want)
+	}
+}
+
+// A run that met no such line says so with an empty list, not with nothing.
+func TestARunThatMetNoLineOfAnUnknownKindReportsNone(t *testing.T) {
+	_, result := extract(t, fakebasecamp.New(), boardProject)
+	if got := result.LinesOfAnUnknownKind; len(got) != 0 || got == nil {
+		t.Errorf("the kinds nobody knows are %v, want an empty list", got)
+	}
+}
+
 func TestAFileOfALineIsNamedByTheKeyOfItsStoredFileOrDropped(t *testing.T) {
 	account := fakebasecamp.New()
 	// Nobody but the line that is left out names this person.
@@ -546,11 +612,10 @@ func TestEveryPersonARecordOfATalkNamesIsInTheBundle(t *testing.T) {
 
 // talkTexts is text of the fake that no message may carry.
 var talkTexts = []string{"News", "Pitches", "Campfire", "Office move", "Reminder", "tea club", "Announcement", "faq", "Count me in", "Good morning",
-	"Build 42", "Goodbye", "minutes.pdf", "route.png", "Grace", "Ada", "Robot", "Deleted Somebody", "example.test"}
+	"Build 42", "Goodbye", "Whatever", "minutes.pdf", "route.png", "Grace", "Ada", "Robot", "Deleted Somebody", "example.test"}
 
 func TestWhatABundleCannotSayAboutATalkEndsTheRunWithoutNamingAnything(t *testing.T) {
 	for what, change := range map[string]func(*fakebasecamp.Account){
-		"a kind of line nobody knows":        func(a *fakebasecamp.Account) { campfire(a).Lines[3].Type = "Chat::Lines::Poll" },
 		"a line in the trash":                func(a *fakebasecamp.Account) { campfire(a).Lines[0].Status = "trashed" },
 		"a line without createdAt":           func(a *fakebasecamp.Account) { campfire(a).Lines[0].CreatedAt = "" },
 		"a line without updatedAt":           func(a *fakebasecamp.Account) { campfire(a).Lines[0].UpdatedAt = "" },
@@ -600,10 +665,9 @@ func TestALineThatCannotBeCarriedEndsTheRunBeforeItsChatIsWritten(t *testing.T) 
 		change  func(*fakebasecamp.Account)
 		message string
 	}{
-		"a kind of line nobody knows": {func(a *fakebasecamp.Account) { campfire(a).Lines[6].Type = "Chat::Lines::Poll" }, `line 9807 of chat 9033 is of the type "Chat::Lines::Poll", which a bundle does not know`},
-		"a line in the trash":         {func(a *fakebasecamp.Account) { campfire(a).Lines[6].Status = "trashed" }, `line 9807 of chat 9033 has the status "trashed", which a bundle cannot say of a line`},
-		"a line without a time":       {func(a *fakebasecamp.Account) { campfire(a).Lines[6].UpdatedAt = "" }, "when line 9807 was updated"},
-		"a line written at no time":   {func(a *fakebasecamp.Account) { campfire(a).Lines[6].CreatedAt = "at dawn" }, "line 9807 was created at something that is no time"},
+		"a line in the trash":       {func(a *fakebasecamp.Account) { campfire(a).Lines[6].Status = "trashed" }, `line 9807 of chat 9033 has the status "trashed", which a bundle cannot say of a line`},
+		"a line without a time":     {func(a *fakebasecamp.Account) { campfire(a).Lines[6].UpdatedAt = "" }, "when line 9807 was updated"},
+		"a line written at no time": {func(a *fakebasecamp.Account) { campfire(a).Lines[6].CreatedAt = "at dawn" }, "line 9807 was created at something that is no time"},
 	} {
 		account := fakebasecamp.New()
 		c.change(account)
