@@ -382,38 +382,60 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   those uploads were ordinary stored files of up to 3.3 MB, and both carried
   `visible_to_clients` **below the top of their tool**, which is the field the
   whole client rule hangs on.
-  **What that measurement caught**, and what it changed: the one shape of the
-  answer that had been guessed at rather than read — that an upload in a cloud
-  is told from an ordinary one by whether a stored key can be read out of its
-  address — was wrong, and a bundle of the account would have arrived with **no
-  uploads at all**, of the order of 278 files and 0.4 GB, counted and named and
-  gone. What says an upload has a file is now the record's own word, an address
-  to fetch one from, and never what a run can make of that address; an address a
-  run cannot ask for is a file it could not fetch, named under `missingFiles`
-  with the run ending non-zero, which a dry run now says as well. The title is
-  the source's own `title`, the name of the file standing in only where the
-  source calls the upload nothing.
+  Measured over the account besides: 18 archived folders over 3 buckets, 151
+  active and 115 archived documents, 267 active and 11 archived uploads, and
+  **nothing in the trash of any of the three kinds**; every one of the 28
+  projects has a `vault` dock entry, 8 of them switched off, so "no Docs & Files"
+  is a tool that is switched off and never a missing entry; a folder's own list
+  hands out what is in use alone, so every record the source has put away comes
+  from `projects/recordings.json`; an **archived folder answers not-found** for
+  its three lists, which is the branch a run passes over and the normal case,
+  not an exception; and Basecamp grows its page from 15 to 30, 50 and 100, which
+  a walk that asks until a page comes back empty does not care about.
+  **What that measurement caught**, and what it changed: the shape of an
+  upload's `download_url` had been taken from the wrong record. It is
+  `…/buckets/{b}/uploads/{id}/download/{name}` — the API's own address, no
+  `blobs` segment and no key of a stored file anywhere — for **all 278 uploads of
+  the account, one shape without exception**, and the
+  `…/blobs/{key}/download/{name}` shape read off it belongs to a file inside a
+  text, which carries a `key` of its own. So every upload took the branch for one
+  that names no stored file, and a bundle of the account would have arrived with
+  **no uploads at all**, of the order of 278 files and 0.4 GB, counted and named
+  and gone.
+  What says an upload has a file is now the record's own word, an address to
+  fetch one from, and the bytes are asked for **by the identifier of the upload
+  and of its project** (`basecamp files download <id> --in <project> --out -`):
+  the record names no stored file and its address answers with a redirect to a
+  store of its own, which `checkStorageAddress` refuses and which no run follows
+  — the query of that redirect carries the name of the file, so nothing of it is
+  ever logged. The title is the source's own `title`, the name of the file
+  standing in only where the source calls the upload nothing.
   **Still taken on trust of Basecamp** and held by nothing but the invented
-  account: the **shape of an upload's `download_url`**, which is the one thing
-  that decides whether a file is fetched at all — the fake gives it the shape
-  measured for a file dropped into a chat, `…/blobs/{key}/download/{name}` with
-  a key of the form of a UUID, and nothing has read the real one; that a vault
-  lists what stands in it topmost first, which is what the order of a bundle
-  turns on; that a folder the source archived or threw away can be asked what
-  stands in it, which no project walked so far had one of; that an upload in a
-  cloud names no file at all, and whether the account holds such an upload;
-  and that a folder takes neither comments nor boosts.
-  Invented for want of anything to measure: a folder, a document or an upload
-  whose status is none of the three; an upload in a cloud, with a comment and a
-  boost on it; a title longer than one Minka takes and an upload with neither a
-  title nor a name; a document whose whole text is a file the source no longer
-  has, and an upload whose own file is one;
-  a document and a description longer than Minka holds; an entry the source
+  account: that a vault lists what stands in it topmost first, which is what the
+  order of a bundle turns on; that an upload in a cloud names no file at all,
+  which **no record of the account has ever exercised** — the branch stands, and
+  nothing has disproved or proved it; that a folder takes neither comments nor
+  boosts; and the flags of the call that streams an upload's file, which are read
+  off the Basecamp CLI's own documentation and not off a run.
+  **Which fixtures still encode a guess rather than a reading**, which is the
+  list to read before the next run: a folder, a document or an upload whose
+  status is none of the three; **anything in the trash** of the three kinds, the
+  account holding none; an upload in a cloud, with a comment and a boost on it;
+  a title longer than one Minka takes and an upload with neither a title nor a
+  name; a document whose whole text is a file the source no longer has, and an
+  upload whose own file is one; a description with a file embedded in it, the
+  account's 278 uploads all carrying an empty `description_attachments`; a
+  document and a description longer than Minka holds; an entry the source
   lists twice; a folder the bundle cannot carry with a folder, a document and
   an upload standing in it; a Docs & Files tool that is switched off with an
-  archived folder and an archived document behind it; and a folder in use behind
+  archived folder and an archived document behind it; a folder in use behind
   such a tool, which is the only way to reach the count of an entry no place
-  ever claimed.
+  ever claimed; and a vault the source lists **without a parent**, which is how
+  it lists the vault at the top of a tool and which no record it has put away is
+  in, no whole tool of the account being put away. What the fake answers with
+  otherwise is the shape that was read: the key list of an upload, the address it
+  gives, the not-found of an archived folder, and a folder's own list holding what
+  is in use alone.
   Not counted and not asked for: how many earlier copies of its file an upload
   has. `versions` is a field Minka reads nowhere, and the upload says nothing
   of them, so a run that wanted the number would ask once per upload. That

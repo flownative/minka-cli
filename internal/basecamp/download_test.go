@@ -306,7 +306,7 @@ func TestADownloadThatHangsOrNeverEndsIsEndedWithTheBasecampCLI(t *testing.T) {
 			var got bytes.Buffer
 			var cli int
 			started := time.Now()
-			err := c.downloader.download(t.Context(), storageAddressOf(c.file), &got, func(pid int) { cli = pid })
+			err := c.downloader.download(t.Context(), c.downloader.commanding(storageAddressOf(c.file)), &got, func(pid int) { cli = pid })
 			var failed *Error
 			if !errors.As(err, &failed) || failed.Kind != Network || !strings.Contains(failed.Message, c.says) {
 				t.Fatalf("got %v, want a failure of the network that says %q", err, c.says)
@@ -343,7 +343,7 @@ func TestADownloadThatIsStoppedIsInterruptedAndEndsTheBasecampCLI(t *testing.T) 
 		going, cancel := context.WithCancel(t.Context())
 		var cli int
 		started := time.Now()
-		err = Downloader{Binary: binary}.download(going, storageAddressOf(file), &got, func(pid int) {
+		err = Downloader{Binary: binary}.download(going, Downloader{Binary: binary}.commanding(storageAddressOf(file)), &got, func(pid int) {
 			// A stop that comes before the Basecamp CLI runs has no process to
 			// end, and the test could not tell whether one was left behind.
 			cli = pid

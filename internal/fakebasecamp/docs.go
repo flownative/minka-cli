@@ -81,9 +81,8 @@ type UploadedFile struct {
 	// Gone is a file the account lists and no longer has.
 	Gone bool
 	// URLName replaces the name in the addresses of the file, and DownloadURL the
-	// whole address the account says the file is downloaded from: the one thing
-	// about an upload nothing has read off the real source, so a test gives it
-	// the shapes it might have.
+	// whole address the account says the file is downloaded from, which no run
+	// asks for: an upload's bytes come by its identifier.
 	URLName     string
 	DownloadURL string
 	// InTheCloud is an upload Basecamp holds no stored file for, one that lives
@@ -113,7 +112,8 @@ type UploadedFile struct {
 // longer than a title holds, one without a name at all, records the account
 // lists twice, an upload the source has renamed and one it calls nothing, an
 // upload on the shelf, one in the trash inside a folder that is
-// in use, one whose file the source no longer has, a document embedding a file
+// in use, a document on the shelf inside a folder that is in use, one whose file
+// the source no longer has, a document embedding a file
 // whose identifier is the identifier of an upload, a folder in use behind the
 // switched-off tool that no walk can see, and comments and boosts on a document
 // and on an upload.
@@ -187,15 +187,24 @@ func docsProject(ada, grace, former Person, tool func(int64, string, string, str
 	// records it has put away hands out and the folder does not.
 	binned := UploadedFile{ID: 9270, Status: "trashed", Title: "draft.pdf", Filename: "draft.pdf",
 		ContentType: "application/pdf", Bytes: 192, Creator: &ada, CreatedAt: at(3, 12), UpdatedAt: at(5, 13)}
+	// On the shelf inside a folder that is in use, which the project's own list of
+	// records it has put away hands out and the folder's own list does not: an
+	// entry keeps its own state wherever it stands.
+	shelved := Document{ID: 9255, Status: "archived", Title: "Of another year", Creator: &grace,
+		CreatedAt: at(2, 16), UpdatedAt: at(5, 16), Content: `<div>Kept</div>`}
 	handbook := Folder{ID: 9220, Title: "Handbook", Creator: &ada, CreatedAt: at(1, 8), UpdatedAt: at(1, 8),
 		VisibleToClients: &shown,
 		Folders:          []Folder{nested},
-		Documents:        []Document{chapter, appendix},
+		Documents:        []Document{chapter, appendix, shelved},
 		Uploads:          []UploadedFile{logo, binned},
 	}
 	press := Folder{ID: 9228, Title: "Press", Creator: &grace, CreatedAt: at(1, 10), UpdatedAt: at(1, 10)}
 	// On the shelf and in the trash, each holding an entry that is in use: an
 	// entry keeps its own state and goes along through the folder.
+	// A folder the source has put away hands out no list of what stands in it, so
+	// the document and the upload in use below these two are beyond the reach of
+	// any run: they stand here to be out of reach, and the run says how many such
+	// folders there were.
 	finished := Folder{ID: 9222, Status: "archived", Title: "Finished", Creator: &ada, CreatedAt: at(1, 11), UpdatedAt: at(5, 11),
 		Documents: []Document{{ID: 9242, Title: "Last year", Creator: &ada, CreatedAt: at(5, 8), UpdatedAt: at(5, 8),
 			Content: `<div>Done with</div>`}}}
@@ -305,7 +314,7 @@ func (a *Account) docs(path string, page int) ([]byte, bool) {
 	switch {
 	case vaultsPattern.MatchString(path):
 		match := vaultsPattern.FindStringSubmatch(path)
-		if p, in, known := a.theVault(match[1], match[2]); known {
+		if p, in, known := a.theVault(match[1], match[2]); known && in.answers {
 			var found []map[string]any
 			for i := range in.folders {
 				folder := &in.folders[i]
@@ -321,7 +330,7 @@ func (a *Account) docs(path string, page int) ([]byte, bool) {
 		}
 	case vaultDocumentsPattern.MatchString(path):
 		match := vaultDocumentsPattern.FindStringSubmatch(path)
-		if p, in, known := a.theVault(match[1], match[2]); known {
+		if p, in, known := a.theVault(match[1], match[2]); known && in.answers {
 			var found []map[string]any
 			for i := range in.documents {
 				document := &in.documents[i]
@@ -337,7 +346,7 @@ func (a *Account) docs(path string, page int) ([]byte, bool) {
 		}
 	case vaultUploadsPattern.MatchString(path):
 		match := vaultUploadsPattern.FindStringSubmatch(path)
-		if p, in, known := a.theVault(match[1], match[2]); known {
+		if p, in, known := a.theVault(match[1], match[2]); known && in.answers {
 			var found []map[string]any
 			for i := range in.uploads {
 				upload := &in.uploads[i]
@@ -391,8 +400,14 @@ func (a *Account) docs(path string, page int) ([]byte, bool) {
 
 // vault is one place of a Docs & Files tool that holds entries: the tool itself,
 // which is the vault at the top, or one of its folders.
+//
+// answers tells that the account hands out the three lists of the vault at all. A
+// folder the source has put away hands out none of them and answers not-found for
+// each, which is what the real account does for every archived folder, so what is
+// in use below such a folder is beyond the reach of any run.
 type vault struct {
 	id        int64
+	answers   bool
 	folders   []Folder
 	documents []Document
 	uploads   []UploadedFile
@@ -404,7 +419,8 @@ type vault struct {
 func (a *Account) eachVault(p *Project, visit func(vault)) {
 	var down func(Folder)
 	down = func(folder Folder) {
-		visit(vault{id: folder.ID, folders: folder.Folders, documents: folder.Documents, uploads: folder.Uploads})
+		visit(vault{id: folder.ID, answers: folder.status() == "active",
+			folders: folder.Folders, documents: folder.Documents, uploads: folder.Uploads})
 		for _, below := range folder.Folders {
 			down(below)
 		}
@@ -414,7 +430,7 @@ func (a *Account) eachVault(p *Project, visit func(vault)) {
 		if tool.Type != "vaults" {
 			continue
 		}
-		visit(vault{id: tool.ID, folders: tool.Folders, documents: tool.Documents, uploads: tool.Uploads})
+		visit(vault{id: tool.ID, answers: true, folders: tool.Folders, documents: tool.Documents, uploads: tool.Uploads})
 		for _, folder := range tool.Folders {
 			down(folder)
 		}
@@ -492,8 +508,10 @@ func (u *UploadedFile) urlName() string {
 	return u.Filename
 }
 
-// StoredKeyOfUpload is the key of the file an upload of a Docs & Files tool
-// stands for, which the account makes from the upload's own ID.
+// StoredKeyOfUpload is what the account serves the bytes of an upload's file
+// under, made from the upload's own ID. Basecamp names no such key on an upload
+// and nothing of a run ever sees this one: it is how a test says which file is to
+// fail or to come out at another size.
 func StoredKeyOfUpload(id int64) string { return FileKey(id) }
 
 func (a *Account) folderJSON(p *Project, in int64, folder *Folder) map[string]any {
@@ -507,6 +525,11 @@ func (a *Account) folderJSON(p *Project, in int64, folder *Folder) map[string]an
 		"documents_url": fmt.Sprintf("%sbuckets/%d/vaults/%d/documents.json", a.root(), p.ID, folder.ID),
 		"uploads_url":   fmt.Sprintf("%sbuckets/%d/vaults/%d/uploads.json", a.root(), p.ID, folder.ID),
 		"created_at":    folder.CreatedAt, "updated_at": folder.UpdatedAt,
+	}
+	// The vault at the top of a tool is listed without a parent, and the account
+	// can be told to list every vault that way.
+	if a.VaultsWithoutAParent {
+		delete(answer, "parent")
 	}
 	if folder.VisibleToClients != nil {
 		answer["visible_to_clients"] = *folder.VisibleToClients
@@ -567,7 +590,12 @@ func (a *Account) uploadedFileJSON(p *Project, in int64, upload *UploadedFile) m
 			answer["byte_size"] = nil
 		}
 		answer["width"], answer["height"] = 640, 480
-		answer["download_url"] = a.downloadURL(StoredKeyOfUpload(upload.ID), upload.urlName())
+		// The shape the account really answers with: the API's own address, no
+		// `blobs` segment and no key of a stored file anywhere. Asked for, it
+		// answers with a redirect to a store of its own, which nothing here
+		// follows — the bytes of an upload come by its identifier.
+		answer["download_url"] = fmt.Sprintf("%sbuckets/%d/uploads/%d/download/%s",
+			a.root(), p.ID, upload.ID, url.PathEscape(upload.urlName()))
 		if upload.DownloadURL != "" {
 			answer["download_url"] = upload.DownloadURL
 		}

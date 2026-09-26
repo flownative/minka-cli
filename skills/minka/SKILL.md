@@ -944,9 +944,9 @@ this:
   cloud — is left out and named by ID (`data.docs.withoutAStoredFile`), with its
   comments and its boosts (`data.docs.commentsWithoutTheirUpload`,
   `boostsWithoutTheirUpload`), because no run will ever have bytes for it. What
-  says so is the record and never the shape of the address: an upload whose
-  address a run cannot ask for **has** a file and is named under
-  `data.missingFiles`, the run ending non-zero, and a later run brings it. A
+  says so is the record and never the shape of the address: the bytes of an
+  upload's file are asked for **by the identifier of the upload and its
+  project**, the address the source gives being one no run follows. A
   document or a description longer than the 1,000,000 characters Minka holds is
   counted (`data.docs.longerThanMinkaTakes`) and comes as it is. A record that
   lost a file no run will bring is named (`data.docs.onlyAFileNoRunWillBring`),

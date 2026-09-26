@@ -1941,12 +1941,12 @@ func TestImportBasecampReportsTheDocsAndFilesOfAProject(t *testing.T) {
 	data := decode(t, env.Data)
 	want := map[string]any{
 		"foldersByStatus":       map[string]any{"active": float64(3), "archived": float64(1), "trashed": float64(1)},
-		"documentsByStatus":     map[string]any{"active": float64(7), "archived": float64(1), "trashed": float64(1)},
-		"uploadsByStatus":       map[string]any{"active": float64(7), "archived": float64(1), "trashed": float64(1)},
+		"documentsByStatus":     map[string]any{"active": float64(6), "archived": float64(2), "trashed": float64(1)},
+		"uploadsByStatus":       map[string]any{"active": float64(6), "archived": float64(1), "trashed": float64(1)},
 		"documentsWithoutWords": float64(1), "titlesFromTheFileName": float64(2),
 		"namesMadeIntoATitle": float64(1), "withoutAName": float64(1),
 		"withoutAStoredFile": []any{"9262"}, "commentsWithoutTheirUpload": float64(1), "boostsWithoutTheirUpload": float64(1),
-		"onlyAFileNoRunWillBring": []any{"9245", "9276"}, "foldersThatSaidNothingOfWhatIsInThem": float64(0),
+		"onlyAFileNoRunWillBring": []any{"9245", "9276"}, "foldersThatSaidNothingOfWhatIsInThem": float64(2),
 		"longerThanMinkaTakes": float64(0),
 		"leftOut":              map[string]any{"folders": float64(3), "documents": float64(5), "uploads": float64(2)},
 		"placesLeftOut": []any{
@@ -1972,10 +1972,10 @@ func TestImportBasecampReportsTheDocsAndFilesOfAProject(t *testing.T) {
 	r = e.run("import", "basecamp", "--project", "7011", "--out", out, "--styled")
 	expectCode(t, r, ExitOK)
 	for _, line := range []string{
-		"folders      5", "documents    9", "uploads      9",
+		"folders      5", "documents    9", "uploads      8",
 		"Folders: 3 active, 1 archived, 1 trashed",
-		"Documents: 7 active, 1 archived, 1 trashed; 1 of them without words",
-		"Uploads: 7 active, 1 archived, 1 trashed; 2 titled by the name of their file, 1 of them with neither",
+		"Documents: 6 active, 2 archived, 1 trashed; 1 of them without words",
+		"Uploads: 6 active, 1 archived, 1 trashed; 2 titled by the name of their file, 1 of them with neither",
 		"Uploads Basecamp names no stored file for, left out: 1 (upload 9262), with 1 comments and 1 boosts",
 		"Records that lost a file no run will bring, the documents among them wordless: 2 (record 9245, 9276)",
 		"Left out of the Docs & Files tools: 3 folders, 5 documents, 2 uploads",
@@ -1996,16 +1996,15 @@ func TestImportBasecampReportsTheDocsAndFilesOfAProject(t *testing.T) {
 		}
 	}
 
-	// A file whose address a run cannot ask for is a file no run will bring, and
-	// a **dry run** says so: it is what somebody reads before spending an hour on
-	// the files, and the address is the source's own word, not something only a
-	// download shows.
+	// The address the source gives an upload is asked for by nothing, so no
+	// address of one makes a run say anything: whatever shape it has, the file is
+	// fetched by the identifier of the upload, and a dry run ends well.
 	e = newImportEnv(t)
-	theUploadOfTheDocsProject(t, e.account, 9267).DownloadURL = "https://3.basecamp.test/4242/buckets/7011/uploads/9267/download/x"
+	theUploadOfTheDocsProject(t, e.account, 9267).DownloadURL = "not an address at all"
 	env, r = e.runJSON("import", "basecamp", "--project", "7011", "--dry-run")
-	expectCode(t, r, ExitAPI)
-	if got := decode(t, env.Data)["missingFiles"]; len(got.([]any)) != 1 {
-		t.Errorf("a dry run says %v of a file whose address it cannot ask for, want the one", got)
+	expectCode(t, r, ExitOK)
+	if got := decode(t, env.Data)["missingFiles"]; len(got.([]any)) != 0 {
+		t.Errorf("a dry run says %v of an upload whose address nothing asks for, want nothing", got)
 	}
 	if docs := decode(t, env.Data)["docs"].(map[string]any); len(docs["withoutAStoredFile"].([]any)) != 1 {
 		t.Errorf("a dry run says %v name no stored file, want the one in the cloud alone", docs["withoutAStoredFile"])
