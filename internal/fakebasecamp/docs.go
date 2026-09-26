@@ -57,9 +57,10 @@ type Document struct {
 }
 
 // UploadedFile is an upload of a Docs & Files tool: one stored file with a title
-// and a description. Basecamp names the stored file in the address it is
-// downloaded from and nowhere else, as it does for a file dropped into a chat,
-// and the key of that file is made from the upload's own ID here.
+// and a description. Basecamp names no stored file on such a record — the address
+// it gives is the API's own and answers with a redirect to a store of its own —
+// so the bytes are asked for by the identifier of the upload and of its project,
+// and the key this account serves them under is nothing a run ever sees.
 type UploadedFile struct {
 	ID int64
 	// Status is "active" when empty. ShownStatus replaces what the upload says
