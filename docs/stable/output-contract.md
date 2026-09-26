@@ -19,6 +19,14 @@ Text on a terminal, JSON otherwise.
 field the API gains reaches every client this way, without the CLI knowing it
 (C-002).
 
+The text view prints what holds of the thing it shows, which is not always the
+same set of lines: where a line would name a place something does not have, it
+is left out rather than filled in. A card in the archive of its board gets no
+`Column:` line — it stands in none, and the column it names is the one it was
+taken from — and says `Archived: yes, was in <column>` instead. What `--json`
+hands over is untouched by that: the resource carries every field the API
+sends, whatever the text view makes of it.
+
 Warnings are in `notice` with `--json`, on stderr otherwise, so that
 `--quiet | jq` never has anything foreign in the stream.
 

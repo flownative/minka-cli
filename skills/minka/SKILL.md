@@ -202,9 +202,10 @@ such as `Doing`.
   every project it is a member of, as a bare array of the same cards
   `cards show` gives. Each carries `project {id, name}` and `board {id, title}`
   besides `projectId` and `boardId`.
-- Cards in Done, cards in the trash, cards of an archived project and cards of
-  a project that was left are not among them, so the list is what is still to
-  do.
+- Cards in Done, cards in the trash, cards in the archive of their board, cards
+  of an archived project and cards of a project that was left are not among
+  them, so the list is what is still to do. A card that is not in the list is
+  therefore not necessarily done: it may have been archived.
 - The order is the order of the page: projects by name, then by `dueOn` with
   the overdue ones first and the ones without a date last.
 - It is the cheapest way to answer "what am I on?": one request instead of a
@@ -213,12 +214,24 @@ such as `Doing`.
   back out, on top of the column it hung in. Only a card that is in the trash
   can be restored: a second restore, a card that was never trashed and a card
   whose board or project is in the trash all exit 2.
+- A card in the archive of its board goes into the trash from there, and a
+  restore puts it back on the board, not into the archive: the restored card
+  says `archived: false`.
 - `trash list <projectId>` says what was taken out of a project, the newest
   first and at most 200 (a `notice` says when there are more). Every entry is
   `{kind, id, title, toolType, board, column, trashedAt, trashedBy,
-  restorable, blockedBy, appUrl}`. `kind` is `card`, `column` or `tool`;
-  `restorable` says whether `cards restore` takes it, `blockedBy` which of
-  board and column is in the way. Columns and tools come back in the web only.
+  restorable, blockedBy, appUrl}`.
+- `kind` is `tool`, `column`, `card`, `post`, `todoList`, `todo`, `todoGroup`,
+  `checkinQuestion`, `checkinAnswer`, `forward`, `folder`, `document` or
+  `upload`, and Minka may name further kinds.
+- `board` is a board only for a `card` and a `column`. For every other kind the
+  same field carries the tool the thing hung in, which the text view marks as a
+  tool; `column` is there for a card alone.
+- `restorable` says whether `cards restore` takes the entry, which only a card
+  is. `blockedBy` names what has to come back first: `board`, `column`, `tool`,
+  `todoList`, `todoGroup`, `question`, `folder` or `archivedFolder` — the last
+  one lies in an archive, not in the trash. Everything that is no card comes
+  back in the web only.
 
 ## Projects
 
@@ -282,6 +295,21 @@ such as `Doing`.
 - A card cannot be created on hold, by design: it comes into being in a
   column and goes on hold by a move. A card restored
   from the trash comes back off hold.
+
+## The archive of a board
+
+- Every card carries `archived`. It is true for a card in the archive of its
+  board: the card stands in no column, it can be read, and every write on it
+  exits 9 with `meta.apiCode` `cardArchived`.
+- Such a card still carries a `column`, and that is the column it was taken
+  from, which may have been deleted from the board since. The text view of
+  `cards show` therefore prints `Archived: yes, was in <column>` and no
+  `Column:` line, and the summary names the archive of the board instead of a
+  column.
+- A card in the archive is in no list this CLI has: `boards show` shows what
+  stands in the columns, and `cards mine` leaves it out. Read it by its `id`.
+- Putting a card into the archive, taking it back out and listing the archive of
+  a board are not commands of this CLI yet. They happen in the web.
 
 ## People and assignments
 
@@ -646,6 +674,21 @@ this:
   made of the last one that did not. The `notice` advises `minka hooks install`
   only while nothing has ever gone out; a signal that was turned away is no
   reason to install anything.
+- **A card in the archive of its board is not taken at work.** `minka work
+  start` on one exits 1 and says so, because no board shows a card in an archive
+  as alive: take it out of the archive first.
+- A card that is archived while somebody has it in hand is left out by Minka: it
+  answers the signal with 200 and `leftOut`, notes the other cards of the set,
+  and the card is taken out of the list of this machine, so that one card nobody
+  can work on does not put out the tiles of the rest. The shorter list is
+  reported with the next beat. It stands afterwards in `data.letGo` of `minka
+  work list` and of `minka heartbeat --json`, with `id`, `shortId`, `title`,
+  `reason` and `at`, and in the `notice` of `work list` in words, until it has
+  stood there eight hours. So a card that is missing from `work list` and named
+  in `letGo` was archived, not forgotten.
+- A `reason` this CLI does not know takes no card out of the list: the card
+  stays, the word is reported as it came, and the `notice` says so. Act on it
+  yourself.
 - `minka heartbeat` always exits 0 and prints nothing unless you ask with
   `--json`. Not signed in, no network, a token that was revoked: none of it
   stops your work, and none of it is reported as a failure. If the board shows

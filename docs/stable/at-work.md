@@ -12,6 +12,11 @@ given up in the same breath, and an empty set says that the client has
 stopped. A signal counts for three minutes. Nothing can be read back, and a
 card the agent may not see is passed over without a word.
 
+A card in the archive of its board is not taken, because nobody works on one.
+The answer is then 200 and names it in `leftOut` as `{cardId, reason}`, with the
+rest of the set noted all the same; an answer that leaves nothing out is the 204
+it always was.
+
 Only an agent may say so. A person's token is refused with `agentsOnly`.
 
 ## The list belongs to the machine
@@ -28,7 +33,10 @@ their own would take each other's cards away with every signal.
   list and the later write would drop the other's card.
 - `work start` asks the server for the card: a card that cannot be seen is
   refused here, at the one moment somebody can do something about it, instead
-  of being passed over in silence for as long as it is remembered.
+  of being passed over in silence for as long as it is remembered. A card in the
+  archive of its board is refused the same way, as usage: it is readable and no
+  board shows it as alive, so taking it up would end in a beat that lets it go
+  again and says so to nobody.
 - A card is given up eight hours after the session that took it up was last at
   it (C-040), and the next `work list` says so. A card remembers that session
   by the name it finds in `CLAUDE_CODE_SESSION_ID`, and every heartbeat of that
@@ -54,6 +62,19 @@ their own would take each other's cards away with every signal.
   move untrue, so both are passed over in silence; the `notice` says that the
   card left the list and whether the board has heard of it yet, and says
   nothing where the card was never in the list.
+- A card the host names in `leftOut` leaves the list, so that one card it will
+  not have cannot put out the tiles of everything else the machine is at work
+  on (C-053). The list is shorter than what the last signal carried then, which
+  is a list that has changed, so the next beat reports the corrected set at once
+  and `sentAt` and `sentCards` go on saying what went out. A word this CLI does
+  not know takes no card out of anything: the note is written and the card
+  stays, so the list is what it was and the set the host has spoken about is not
+  sent again before the minute is out. What was let go stands in `work list` as
+  `letGo` — the card as the list knew it, the word of the host and the moment —
+  and in its `notice` in words, because after the card is gone from the list
+  nothing else says why. `work start` and `work stop` name only a note about the
+  card they were given, since a note stands for as long as the window of C-040,
+  in which the notes are swept with the cards.
 - `work stop` asks nothing of the network and finds a card under either of the
   names it was remembered with. It needs the host all the same, so on a machine
   that is signed in nowhere it ends like every other command, with exit 3.

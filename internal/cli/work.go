@@ -57,7 +57,10 @@ The list belongs to the machine, not to this session: every session on it
 reports the same list together, and 'work stop' takes a card out again. So do
 'cards move' and 'cards done': a card that is moved on is one nobody is at
 work on any more, so take a card up in that order — move it first, then say
-'work start'.`,
+'work start'.
+
+A card in the archive of its board is refused: it can be read, and no board
+shows a card in an archive as alive.`,
 		Example: `  minka work start MNK-1A
   minka work start 0199... --json`,
 		Args: requireArgs("cardId"),
@@ -70,6 +73,18 @@ work on any more, so take a card up in that order — move it first, then say
 			if err != nil {
 				return err
 			}
+			// A card in the archive of its board can be read and not reported:
+			// the host leaves it out of every set at work. It is refused here,
+			// at the one moment somebody can do something about it, rather
+			// than taken up and let go again by the next beat, which says
+			// nothing to anybody.
+			if card.Archived {
+				return &Error{
+					Code:    CodeUsage,
+					Message: "the card lies in the archive of its board, and no board shows a card in an archive as alive",
+					Hint:    "Take the card out of the archive, then say: minka work start " + args[0],
+				}
+			}
 
 			handle, err := a.openStore(waitForTheStore)
 			if err != nil {
@@ -78,7 +93,7 @@ work on any more, so take a card up in that order — move it first, then say
 			defer handle.Close()
 
 			entry := handle.File.Host(s.host)
-			forgotten := entry.ForgetWhatRanOut(a.now())
+			forgotten, _ := entry.ForgetWhatRanOut(a.now())
 			entry.Beat(a.now())
 			entry.Start(work.Card{
 				ID:        card.ID,
@@ -91,7 +106,9 @@ work on any more, so take a card up in that order — move it first, then say
 				return &Error{Code: CodeConfig, Message: err.Error()}
 			}
 
-			return a.ok(a.workSuccess(entry, "Working on "+cardName(shortIdentifierOf(card), card.Title), nil, forgotten))
+			started := a.workSuccess(entry, "Working on "+cardName(shortIdentifierOf(card), card.Title), nil, forgotten)
+			started.notices = append(started.notices, noticesAboutTheCard(entry.LetGo, card.ID)...)
+			return a.ok(started)
 		},
 	}
 }
@@ -134,7 +151,7 @@ has nothing to answer about.`,
 			if !known {
 				return a.ok(sayingFirst("Nothing to stop", a.workSuccess(&work.Host{}, "Nothing to stop", map[string]any{"stopped": cardList(nil)}, 0)))
 			}
-			forgotten := entry.ForgetWhatRanOut(a.now())
+			forgotten, _ := entry.ForgetWhatRanOut(a.now())
 			beaten := entry.Beat(a.now())
 
 			var stopped []work.Card
@@ -168,7 +185,13 @@ has nothing to answer about.`,
 			if len(stopped) > 0 {
 				summary = "Stopped " + strings.Join(namesOf(stopped), ", ")
 			}
-			return a.ok(sayingFirst(summary, a.workSuccess(entry, summary, map[string]any{"stopped": cardList(stopped)}, forgotten)))
+			answer := sayingFirst(summary, a.workSuccess(entry, summary, map[string]any{"stopped": cardList(stopped)}, forgotten))
+			if len(args) == 1 {
+				// A card that is nothing to stop may be one the host would not
+				// have, and then this is where somebody learns it.
+				answer.notices = append(answer.notices, noticesAboutTheCard(entry.LetGo, args[0])...)
+			}
+			return a.ok(answer)
 		},
 	}
 	cmd.Flags().BoolVar(&all, "all", false, "Stop every card this machine is working on")
@@ -188,7 +211,11 @@ Going out and arriving are two moments. 'sentAt' says when a signal last went
 out, 'reportedAt' when one last arrived, and 'failure' what the host made of
 the last one that did not. A signal that never got as far as a request —
 nobody signed in, the store held by somebody else — leaves nothing behind;
-'minka heartbeat --json' says what it made of the moment.`,
+'minka heartbeat --json' says what it made of the moment.
+
+'letGo' are the cards the host would not have, with the word it gave for each.
+A card in the archive of its board is one of them: it is out of the list, and
+this is where it says why, for eight hours after it happened.`,
 		Args: requireArgs(),
 		RunE: func(*cobra.Command, []string) error {
 			host, err := a.hostOfTheStore()
@@ -207,12 +234,14 @@ nobody signed in, the store held by somebody else — leaves nothing behind;
 			if !known {
 				entry = &work.Host{}
 			}
-			forgotten := entry.ForgetWhatRanOut(a.now())
+			forgotten, _ := entry.ForgetWhatRanOut(a.now())
 			summary := fmt.Sprintf("%d cards", len(entry.Cards))
 			if len(entry.Cards) == 1 {
 				summary = "1 card"
 			}
-			return a.ok(a.workSuccess(entry, summary+" on "+host, nil, forgotten))
+			listed := a.workSuccess(entry, summary+" on "+host, nil, forgotten)
+			listed.notices = append(listed.notices, letGoNotices(entry.LetGo)...)
+			return a.ok(listed)
 		},
 	}
 }
@@ -236,6 +265,12 @@ it made of the moment, with the status and the code of the API where a request
 was turned away; what the last signal that went out made of it also stands in
 'minka work list'.
 
+A card the host will not have — one that was archived while somebody had it in
+hand — is taken out of the list of this machine, so the cards beside it go on
+being reported, and the shorter list goes out with the next beat. It stands in
+'letGo', here and in 'minka work list'. A word this CLI does not know takes no
+card out of anything and is reported as it came.
+
 With a card in hand it also sees to it that one process of this host keeps
 reporting on a timer, so that a tool call running for minutes does not let a
 tile go dark. 'keepalive' says what became of that.`,
@@ -246,19 +281,22 @@ tile go dark. 'keepalive' says what became of that.`,
 				return a.reportWhileNobodyElseDoes()
 			}
 
-			sent, reason, cards := a.signal(0)
-			if cards == nil {
-				cards = []string{}
+			beat := a.signal(0)
+			if beat.cards == nil {
+				beat.cards = []string{}
 			}
 			keepalive := a.whatBecameOfTheKeepalive()
 
 			if a.nobodyIsListening() {
 				return nil
 			}
+			summary := heartbeatSummary(beat.sent, beat.reason, beat.cards)
 			return a.ok(success{
-				data:    map[string]any{"sent": sent, "reason": reason, "cardIds": cards, "keepalive": keepalive},
-				summary: heartbeatSummary(sent, reason, cards),
-				text:    func(w io.Writer) { fmt.Fprintln(w, heartbeatSummary(sent, reason, cards)) },
+				data: map[string]any{"sent": beat.sent, "reason": beat.reason, "cardIds": beat.cards,
+					"keepalive": keepalive, "letGo": letGoList(beat.letGo)},
+				summary: summary,
+				notices: letGoNotices(beat.letGo),
+				text:    func(w io.Writer) { fmt.Fprintln(w, summary) },
 			})
 		},
 	}
@@ -280,32 +318,53 @@ func (a *app) nobodyIsListening() bool {
 // that does not answer, a token a person owns. Whoever reads a hook's exit
 // code is in the middle of other work, and none of these is something they
 // could do anything about from there.
-func (a *app) signal(wait time.Duration) (sent bool, reason string, cards []string) {
+// signalled is what became of one signal: whether it went out, why it did not,
+// which cards the host took, and what it said about the ones it did not.
+type signalled struct {
+	sent   bool
+	reason string
+	cards  []string
+	letGo  []work.LetGoCard
+}
+
+func (a *app) signal(wait time.Duration) signalled {
 	path, err := a.storePath()
 	if err != nil || work.Untouched(path) {
-		return false, "nothing is remembered on this machine", nil
+		return signalled{reason: "nothing is remembered on this machine"}
 	}
 	s, err := a.session()
 	if err != nil {
-		return false, "not signed in", nil
+		return signalled{reason: "not signed in"}
 	}
 
 	claimed, reason := a.claimTheSignal(path, s.host, wait)
 	if claimed == nil {
-		return false, reason, nil
+		return signalled{reason: reason}
 	}
 
 	ctx, cancel := context.WithTimeout(a.ctx, signalTimeout)
 	defer cancel()
-	err = s.client.NoteAtWork(ctx, claimed.clientID, claimed.cards)
-	a.noteTheOutcome(path, s.host, err)
+	leftOut, err := s.client.NoteAtWork(ctx, claimed.clientID, claimed.cards)
+	noted := a.noteTheOutcome(path, s.host, err, leftOut)
 	if err != nil {
 		// The failure as the list keeps it, so that the one word an agent
 		// reads here names the case: the status and the code of the API are
 		// what tells a revoked token from a person's one.
-		return false, err.Error(), claimed.cards
+		return signalled{reason: err.Error(), cards: claimed.cards}
 	}
-	return true, "", claimed.cards
+	return signalled{sent: true, cards: whatTheHostTook(claimed.cards, leftOut), letGo: noted}
+}
+
+// whatTheHostTook is the set that is now at work on the host: what was sent,
+// without the cards the host named as left out.
+func whatTheHostTook(sent []string, leftOut []api.LeftOutCard) []string {
+	took := make([]string, 0, len(sent))
+	for _, id := range sent {
+		if !slices.ContainsFunc(leftOut, func(c api.LeftOutCard) bool { return c.CardID == id }) {
+			took = append(took, id)
+		}
+	}
+	return took
 }
 
 // claim is a signal that is to go out: who says it and what it says.
@@ -336,7 +395,7 @@ func (a *app) claimTheSignal(path, host string, wait time.Duration) (*claim, str
 	// that a beat which comes after the window cannot raise a card that is
 	// over. The sign of life stands whatever the throttle then makes of the
 	// moment: it is about the work, not about the host's ear.
-	changed := entry.ForgetWhatRanOut(a.now()) > 0
+	_, changed := entry.ForgetWhatRanOut(a.now())
 	if a.somebodyIsAtWork(entry) {
 		changed = true
 	}
@@ -401,23 +460,53 @@ func (a *app) saving(handle *work.Handle, changed bool, reason string) string {
 // reads later can say why the board shows nothing. It is the one thing this
 // command gives up on quietly: the work itself is done, and the store may well
 // be held by the next session.
-func (a *app) noteTheOutcome(path, host string, failed error) {
+func (a *app) noteTheOutcome(path, host string, failed error, leftOut []api.LeftOutCard) []work.LetGoCard {
 	handle, err := work.Open(path, waitForTheStore)
 	if err != nil {
-		return
+		return nil
 	}
 	defer handle.Close()
 
+	var noted []work.LetGoCard
 	entry := handle.File.Host(host)
 	if failed != nil {
 		entry.Failure = failed.Error()
 		entry.FailedAt = a.now()
 	} else {
+		noted = a.writeDownWhatTheHostWouldNotHave(entry, leftOut)
 		entry.ReportedAt = a.now()
 		entry.Failure = ""
 		entry.FailedAt = time.Time{}
 	}
 	_ = handle.Save()
+	return noted
+}
+
+// writeDownWhatTheHostWouldNotHave takes the cards the host will not have out
+// of the list, so that the next signal carries what it does take and the tiles
+// of the others stay alight. It answers with the notes it wrote, which carry
+// the names: after a card is out of the list, nothing else names it.
+//
+// A word this CLI does not know takes no card out of anything. It is written
+// down and the card stays, because a list of this machine is not the host's to
+// shorten with a word nobody here can read. Such a set is not sent again before
+// the minute is out either: the list is what it was, and the host has said what
+// it thinks of it.
+//
+// What was sent stays what was sent. A list that is now shorter than the last
+// signal is a list that has changed, and a changed list is reported at once, so
+// the corrected set is at the host with the next beat rather than a minute
+// later.
+func (a *app) writeDownWhatTheHostWouldNotHave(entry *work.Host, leftOut []api.LeftOutCard) []work.LetGoCard {
+	var noted []work.LetGoCard
+	for _, left := range leftOut {
+		if left.Reason != api.ReasonCardArchived {
+			noted = append(noted, entry.NoteNotTaken(left.CardID, left.Reason, a.now()))
+			continue
+		}
+		noted = append(noted, entry.LetGoOf(left.CardID, left.Reason, a.now()))
+	}
+	return noted
 }
 
 // noLongerInHand is what a command says when it took the card out of the list
@@ -443,8 +532,7 @@ func (a *app) letGoOfTheCard(host, cardID string) (letGo, told bool) {
 	if !a.takeOutOfTheList(host, cardID) {
 		return false, false
 	}
-	sent, _, _ := a.signal(waitForTheStore)
-	return true, sent
+	return true, a.signal(waitForTheStore).sent
 }
 
 // takeOutOfTheList is the half that holds the lock, kept apart so that it is
@@ -462,7 +550,7 @@ func (a *app) takeOutOfTheList(host, cardID string) bool {
 	}
 	// Whoever writes the store sweeps it, so that what ran out is gone for the
 	// next reader as well; the card of this command is a different question.
-	swept := entry.ForgetWhatRanOut(a.now()) > 0
+	_, swept := entry.ForgetWhatRanOut(a.now())
 	gone := entry.Stop(cardID)
 	if !gone && !swept {
 		return false
@@ -602,6 +690,7 @@ func (s *session) findCard(ctx context.Context, name string) (api.Card, error) {
 func (a *app) workSuccess(entry *work.Host, summary string, more map[string]any, forgotten int) success {
 	data := map[string]any{
 		"cards":      cardList(entry.Cards),
+		"letGo":      letGoList(entry.LetGo),
 		"sentAt":     momentOrNil(entry.SentAt),
 		"reportedAt": momentOrNil(entry.ReportedAt),
 		"failure":    nullable(entry.Failure),
@@ -656,6 +745,54 @@ func sayingFirst(line string, s success) success {
 		rest(w)
 	}
 	return s
+}
+
+// letGoList is what the list and a heartbeat say about the cards a host did not
+// take: the note as it stands, so that an agent reads the word of the host
+// itself and not only what this CLI made of it.
+func letGoList(notes []work.LetGoCard) []map[string]any {
+	list := make([]map[string]any, 0, len(notes))
+	for _, note := range notes {
+		list = append(list, map[string]any{
+			"id": note.ID, "shortId": nullable(note.ShortID), "title": note.Title,
+			"reason": note.Reason, "at": note.At.UTC().Format(time.RFC3339),
+		})
+	}
+	return list
+}
+
+// noticesAboutTheCard says what a host would not have of the one card a command
+// names, and nothing about the others. A note stands for hours, and a command
+// that takes a card up or puts it down would otherwise say the same line about
+// somebody else's card every time.
+func noticesAboutTheCard(notes []work.LetGoCard, name string) []string {
+	var about []work.LetGoCard
+	for _, note := range notes {
+		if strings.EqualFold(note.ID, name) || (note.ShortID != "" && strings.EqualFold(note.ShortID, name)) {
+			about = append(about, note)
+		}
+	}
+	return letGoNotices(about)
+}
+
+// letGoNotices says in words what a host would not have, one line per card. The
+// card is named here because nothing else names it any more: it is out of the
+// list, and a list says what is in it.
+func letGoNotices(notes []work.LetGoCard) []string {
+	lines := make([]string, 0, len(notes))
+	for _, note := range notes {
+		name := cardName(note.ShortID, note.Title)
+		if name == "" {
+			name = note.ID
+		}
+		if note.Reason == api.ReasonCardArchived {
+			lines = append(lines, name+" lies in the archive of its board, so it is out of the list of this machine and no board shows it as alive")
+			continue
+		}
+		lines = append(lines, "the host would not take "+name+", and calls it "+note.Reason+
+			": the card stays in the list, because minka acts on no word of a host it does not know")
+	}
+	return lines
 }
 
 func cardList(cards []work.Card) []map[string]any {

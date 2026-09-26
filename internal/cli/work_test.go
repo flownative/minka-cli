@@ -8,11 +8,13 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/flownative/minka-cli/internal/api"
 	"github.com/flownative/minka-cli/internal/fakeapi"
 	"github.com/flownative/minka-cli/internal/work"
 )
@@ -860,5 +862,344 @@ func TestABeatThatComesTooLateRaisesNothing(t *testing.T) {
 	expectCode(t, r, ExitOK)
 	if left := cardIDsOfTheList(t, env); len(left) != 0 {
 		t.Errorf("%v was raised by a beat that came a day late", left)
+	}
+}
+
+// storeAsItLies reads the store from disk, the way another process would find
+// it, for the one host these tests report to.
+func (e *testEnv) storeAsItLies() *work.Host {
+	e.t.Helper()
+	content, err := os.ReadFile(e.storePath())
+	if err != nil {
+		e.t.Fatalf("no store at %s: %v", e.storePath(), err)
+	}
+	var file work.File
+	if err := json.Unmarshal(content, &file); err != nil {
+		e.t.Fatalf("the store is not JSON: %v", err)
+	}
+	if len(file.Hosts) != 1 {
+		e.t.Fatalf("%d hosts in the store, want one", len(file.Hosts))
+	}
+	for _, entry := range file.Hosts {
+		return entry
+	}
+	return nil
+}
+
+// cardIDsOfTheAnswer is what a heartbeat says it reported.
+func cardIDsOfTheAnswer(t *testing.T, env envelope) []string {
+	t.Helper()
+	var ids []string
+	for _, id := range decode(t, env.Data)["cardIds"].([]any) {
+		ids = append(ids, fmt.Sprint(id))
+	}
+	return ids
+}
+
+// letGoOfTheList is what the answer says about the cards the host would not
+// have, as pairs of card and reason.
+func letGoOfTheList(t *testing.T, env envelope) map[string]string {
+	t.Helper()
+	reasons := map[string]string{}
+	for _, note := range decode(t, env.Data)["letGo"].([]any) {
+		row := note.(map[string]any)
+		reasons[fmt.Sprint(row["id"])] = fmt.Sprint(row["reason"])
+	}
+	return reasons
+}
+
+// A card the host will not have is out of the list of this machine, and the
+// rest goes on being reported: one archived card must not put out the tiles of
+// everything else this machine is at work on.
+func TestACardTheHostLeavesOutFallsOutOfTheList(t *testing.T) {
+	e := newAgentEnv(t)
+	now := time.Date(2026, 9, 23, 10, 0, 0, 0, time.UTC)
+	archived, kept := e.fixture.CardInDoing, e.fixture.CardInTriage
+
+	expectCode(t, e.runAt(now, "work", "start", archived.ID, "--json"), ExitOK)
+	expectCode(t, e.runAt(now, "work", "start", kept.ID, "--json"), ExitOK)
+	expectCode(t, e.runAt(now, "heartbeat", "--json"), ExitOK)
+	if got := e.server.CardsAtWork(); len(got) != 2 {
+		t.Fatalf("the server holds %v, want both cards", got)
+	}
+
+	e.server.PutInTheArchive(archived)
+	env, r := e.runWithJSON(now.Add(61*time.Second), "heartbeat")
+	expectCode(t, r, ExitOK)
+	if reasons := letGoOfTheList(t, env); reasons[archived.ID] != "cardArchived" {
+		t.Errorf("the heartbeat says %v about what was left out", reasons)
+	}
+	if !strings.Contains(env.Notice, "archive of its board") {
+		t.Errorf("notice %q", env.Notice)
+	}
+	if got := e.server.CardsAtWork(); len(got) != 1 || got[0] != kept.ID {
+		t.Errorf("the server holds %v, want %s alone", got, kept.ID)
+	}
+	// What the beat says it reported is what the host took, not what went out.
+	if ids := cardIDsOfTheAnswer(t, env); len(ids) != 1 || ids[0] != kept.ID {
+		t.Errorf("the heartbeat says it reported %v", ids)
+	}
+	if env.Summary != "Reported 1 cards" {
+		t.Errorf("summary %q", env.Summary)
+	}
+
+	// Out of the store, so that every other session and the keepalive report
+	// the same shorter set. What the last signal carried it carried, so the set
+	// it was sent with stands as it was.
+	entry := e.storeAsItLies()
+	if len(entry.Cards) != 1 || entry.Cards[0].ID != kept.ID {
+		t.Errorf("the store holds %v", entry.Cards)
+	}
+	if !slices.Contains(entry.SentCards, archived.ID) {
+		t.Errorf("the set that went out was rewritten: %v", entry.SentCards)
+	}
+	if len(entry.LetGo) != 1 || entry.LetGo[0].ID != archived.ID || entry.LetGo[0].Title != archived.Title {
+		t.Errorf("the note of the store: %+v", entry.LetGo)
+	}
+
+	// Whoever reads the list afterwards learns why the card is gone.
+	env, r = e.runWithJSON(now.Add(62*time.Second), "work", "list")
+	expectCode(t, r, ExitOK)
+	if ids := cardIDsOfTheList(t, env); len(ids) != 1 || ids[0] != kept.ID {
+		t.Errorf("the list holds %v", ids)
+	}
+	if reasons := letGoOfTheList(t, env); reasons[archived.ID] != "cardArchived" {
+		t.Errorf("the list says %v about what was let go", reasons)
+	}
+	if !strings.Contains(env.Notice, "archive of its board") {
+		t.Errorf("notice of the list %q", env.Notice)
+	}
+
+	// A list that is shorter than the last signal has changed, so the next beat
+	// carries the corrected set at once and does not wait out the minute.
+	sent := len(e.signals())
+	expectCode(t, e.runAt(now.Add(63*time.Second), "heartbeat", "--json"), ExitOK)
+	if len(e.signals()) != sent+1 {
+		t.Fatalf("%d signals, want one more than %d", len(e.signals()), sent)
+	}
+	if ids := e.cardIDsOfTheSignal(); len(ids) != 1 || ids[0] != kept.ID {
+		t.Errorf("the next signal named %v", ids)
+	}
+}
+
+// A machine whose only card is in the archive reports an empty set and then
+// has nothing more to say: the tile goes out, and rightly.
+func TestAMachineWhoseOnlyCardIsArchivedFallsSilent(t *testing.T) {
+	e := newAgentEnv(t)
+	now := time.Date(2026, 9, 23, 10, 0, 0, 0, time.UTC)
+	card := e.fixture.CardInDoing
+
+	expectCode(t, e.runAt(now, "work", "start", card.ID, "--json"), ExitOK)
+	expectCode(t, e.runAt(now, "heartbeat", "--json"), ExitOK)
+	e.server.PutInTheArchive(card)
+	expectCode(t, e.runAt(now.Add(61*time.Second), "heartbeat", "--json"), ExitOK)
+
+	if got := e.server.CardsAtWork(); len(got) != 0 {
+		t.Errorf("the server still holds %v", got)
+	}
+	if entry := e.storeAsItLies(); len(entry.Cards) != 0 {
+		t.Errorf("the store holds %v", entry.Cards)
+	}
+
+	// The empty list is reported at once, and then there is nothing left to
+	// say: the tile goes out and stays out, without a signal per beat.
+	sent := len(e.signals())
+	expectCode(t, e.runAt(now.Add(62*time.Second), "heartbeat", "--json"), ExitOK)
+	if len(e.signals()) != sent+1 {
+		t.Fatalf("%d signals, want one more than %d", len(e.signals()), sent)
+	}
+	if ids := e.cardIDsOfTheSignal(); len(ids) != 0 {
+		t.Errorf("the corrected signal named %v", ids)
+	}
+	sent = len(e.signals())
+	expectCode(t, e.runAt(now.Add(10*time.Minute), "heartbeat", "--json"), ExitOK)
+	if len(e.signals()) != sent {
+		t.Errorf("%d signals with nothing left to report, want %d", len(e.signals()), sent)
+	}
+}
+
+// The hook says nothing about it and ends well: a card the host would not have
+// is nothing the agent in the middle of a tool call can act on. What happened
+// waits in the list.
+func TestTheHookIsSilentWhenTheHostLeavesACardOut(t *testing.T) {
+	e := newAgentEnv(t)
+	now := time.Date(2026, 9, 23, 10, 0, 0, 0, time.UTC)
+	card := e.fixture.CardInDoing
+
+	expectCode(t, e.runAt(now, "work", "start", card.ID, "--json"), ExitOK)
+	expectCode(t, e.runAt(now, "heartbeat", "--json"), ExitOK)
+	e.server.PutInTheArchive(card)
+
+	r := e.runAt(now.Add(61*time.Second), "heartbeat")
+	expectCode(t, r, ExitOK)
+	if r.stdout != "" || r.stderr != "" {
+		t.Errorf("the hook said something: %q %q", r.stdout, r.stderr)
+	}
+	if entry := e.storeAsItLies(); len(entry.Cards) != 0 || len(entry.LetGo) != 1 {
+		t.Errorf("the store holds %v and notes %+v", entry.Cards, entry.LetGo)
+	}
+}
+
+// A word this CLI does not know takes no card out of the list. The host is
+// told the same set again, and the list says what the host called it, so that
+// a new word of Minka's costs a report and not the work of a machine.
+func TestAWordThisMinkaDoesNotKnowTakesNoCardOutOfTheList(t *testing.T) {
+	e := newAgentEnv(t)
+	now := time.Date(2026, 9, 23, 10, 0, 0, 0, time.UTC)
+	card := e.fixture.CardInDoing
+	e.server.LeavesOutWithReason = "cardSomethingNew"
+
+	expectCode(t, e.runAt(now, "work", "start", card.ID, "--json"), ExitOK)
+	e.server.PutInTheArchive(card)
+	env, r := e.runWithJSON(now, "heartbeat")
+	expectCode(t, r, ExitOK)
+	if reasons := letGoOfTheList(t, env); reasons[card.ID] != "cardSomethingNew" {
+		t.Errorf("the heartbeat says %v", reasons)
+	}
+
+	entry := e.storeAsItLies()
+	if len(entry.Cards) != 1 || entry.Cards[0].ID != card.ID {
+		t.Errorf("the card left the list on a word nobody knows: %v", entry.Cards)
+	}
+	if len(entry.LetGo) != 1 || entry.LetGo[0].Reason != "cardSomethingNew" {
+		t.Errorf("the note of the store: %+v", entry.LetGo)
+	}
+
+	env, r = e.runWithJSON(now.Add(time.Second), "work", "list")
+	expectCode(t, r, ExitOK)
+	if ids := cardIDsOfTheList(t, env); len(ids) != 1 {
+		t.Errorf("the list holds %v", ids)
+	}
+	if !strings.Contains(env.Notice, "cardSomethingNew") || !strings.Contains(env.Notice, "stays in the list") {
+		t.Errorf("notice %q", env.Notice)
+	}
+
+	// And the host is not asked again before the minute is out: the list is what
+	// it was, and the host has said what it thinks of this set.
+	sent := len(e.signals())
+	expectCode(t, e.runAt(now.Add(2*time.Second), "heartbeat", "--json"), ExitOK)
+	if len(e.signals()) != sent {
+		t.Errorf("%d signals within the minute, want %d", len(e.signals()), sent)
+	}
+
+	// A condition that lasts is one note and one line, however often the host
+	// says it: a list that grew a line per signal would bury what it is for.
+	for minute := 2; minute <= 5; minute++ {
+		expectCode(t, e.runAt(now.Add(time.Duration(minute)*time.Minute), "heartbeat", "--json"), ExitOK)
+	}
+	if len(e.signals()) < sent+3 {
+		t.Fatalf("%d signals over four minutes, want at least %d", len(e.signals()), sent+3)
+	}
+	if notes := e.storeAsItLies().LetGo; len(notes) != 1 {
+		t.Errorf("%d notes about one card: %+v", len(notes), notes)
+	}
+	env, r = e.runWithJSON(now.Add(6*time.Minute), "work", "list")
+	expectCode(t, r, ExitOK)
+	if lines := strings.Count(env.Notice, "cardSomethingNew"); lines != 1 {
+		t.Errorf("the list says it %d times: %q", lines, env.Notice)
+	}
+}
+
+// A note about a card the host would not have belongs in the list. A command
+// that takes a card up or puts one down says it only about the card it names,
+// because a note stands for hours and would otherwise be read again at every
+// step, about somebody else's card.
+func TestANoteFollowsOnlyTheCardItIsAbout(t *testing.T) {
+	e := newAgentEnv(t)
+	now := time.Date(2026, 9, 23, 10, 0, 0, 0, time.UTC)
+	archived, other := e.fixture.CardInDoing, e.fixture.CardInTriage
+
+	expectCode(t, e.runAt(now, "work", "start", archived.ID, "--json"), ExitOK)
+	expectCode(t, e.runAt(now, "heartbeat", "--json"), ExitOK)
+	e.server.PutInTheArchive(archived)
+	expectCode(t, e.runAt(now.Add(61*time.Second), "heartbeat", "--json"), ExitOK)
+
+	env, r := e.runWithJSON(now.Add(2*time.Minute), "work", "start", other.ID)
+	expectCode(t, r, ExitOK)
+	if strings.Contains(env.Notice, "archive of its board") {
+		t.Errorf("taking up one card says this about another: %q", env.Notice)
+	}
+
+	env, r = e.runWithJSON(now.Add(3*time.Minute), "work", "list")
+	expectCode(t, r, ExitOK)
+	if !strings.Contains(env.Notice, "archive of its board") {
+		t.Errorf("the list says nothing about it: %q", env.Notice)
+	}
+
+	env, r = e.runWithJSON(now.Add(4*time.Minute), "work", "stop", archived.ID)
+	expectCode(t, r, ExitOK)
+	if !strings.Contains(env.Notice, "archive of its board") {
+		t.Errorf("stopping the card it is about says nothing: %q", env.Notice)
+	}
+}
+
+// A card in the archive of its board is refused where somebody can act on it,
+// not taken up and let go again by a beat that says nothing to anybody.
+func TestStartingAnArchivedCardIsRefused(t *testing.T) {
+	e := newAgentEnv(t)
+	card := e.fixture.CardInDoing
+	e.server.PutInTheArchive(card)
+
+	env, r := e.runJSON("", "work", "start", card.ID)
+	expectCode(t, r, ExitUsage)
+	if !strings.Contains(env.Error, "archive of its board") {
+		t.Errorf("error %q", env.Error)
+	}
+	if !strings.Contains(env.Hint, "out of the archive") {
+		t.Errorf("hint %q", env.Hint)
+	}
+	if len(e.signals()) != 0 {
+		t.Error("a signal went out for a card that cannot be reported")
+	}
+	if _, err := os.Stat(e.storePath()); err == nil {
+		t.Error("the archived card was remembered all the same")
+	}
+
+	// The card of a board is taken up as ever.
+	expectCode(t, e.run("", "work", "start", e.fixture.CardInTriage.ID, "--json"), ExitOK)
+	if entry := e.storeAsItLies(); len(entry.Cards) != 1 {
+		t.Errorf("the store holds %v", entry.Cards)
+	}
+}
+
+// An answer that leaves nothing out takes the whole set, and nothing of the
+// list is touched.
+func TestAnAnswerThatLeavesNothingOutChangesNothing(t *testing.T) {
+	now := time.Date(2026, 9, 23, 10, 0, 0, 0, time.UTC)
+	a := &app{now: func() time.Time { return now }}
+
+	for _, leftOut := range [][]api.LeftOutCard{nil, {}} {
+		entry := &work.Host{
+			Cards:     []work.Card{{ID: "a-card", Title: "Review the API", StartedAt: now}},
+			SentCards: []string{"a-card"},
+		}
+		if noted := a.writeDownWhatTheHostWouldNotHave(entry, leftOut); len(noted) != 0 {
+			t.Errorf("%+v was noted for %v", noted, leftOut)
+		}
+		if len(entry.Cards) != 1 || len(entry.SentCards) != 1 || len(entry.LetGo) != 0 {
+			t.Errorf("the list changed on an answer that left nothing out: %+v", entry)
+		}
+	}
+}
+
+// The note about a card the host would not have goes when a card of the list
+// goes: one window for everything the store keeps without being told again.
+func TestANoteAboutACardLetGoIsSweptWithTheList(t *testing.T) {
+	now := time.Date(2026, 9, 23, 10, 0, 0, 0, time.UTC)
+	entry := &work.Host{}
+	entry.Cards = []work.Card{{ID: "a-card", Title: "Review the API", StartedAt: now}}
+	entry.LetGoOf("a-card", api.ReasonCardArchived, now)
+
+	if _, changed := entry.ForgetWhatRanOut(now.Add(work.ForgottenAfter - time.Minute)); changed {
+		t.Error("the note went before its window was out")
+	}
+	if len(entry.LetGo) != 1 {
+		t.Fatalf("the note: %+v", entry.LetGo)
+	}
+	if _, changed := entry.ForgetWhatRanOut(now.Add(work.ForgottenAfter)); !changed {
+		t.Error("sweeping the note is not worth writing down")
+	}
+	if len(entry.LetGo) != 0 {
+		t.Errorf("the note stayed: %+v", entry.LetGo)
 	}
 }
