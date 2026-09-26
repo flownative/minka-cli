@@ -890,7 +890,8 @@ this:
   `data.forwards.withoutAnAddress`. Where what a mail says would reach Minka as
   nothing at all, the run writes a line of its own into the body
   (`data.forwards.givenALineOfTheRun`), because such a mail would be lost on
-  every run. A mail nobody is named for goes to the owner of the organization
+  every run. A file this run merely could not fetch is not that: the mail waits
+  for it, and the next run brings both. A mail nobody is named for goes to the owner of the organization
   (`data.forwards.withoutAForwarder`). An answer by mail is a record of its own
   and no comment: it belongs to somebody of the account or, for one from outside
   it, to the address alone and never to both

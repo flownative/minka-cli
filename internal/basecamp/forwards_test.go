@@ -188,8 +188,16 @@ func TestAMailThatWouldArriveEmptyCarriesALineOfTheRun(t *testing.T) {
 	case strings.Contains(player, "came without words"):
 		t.Errorf("the mail that was a player alone was told it said nothing: %q", player)
 	}
-	if result.Forwards.GivenALineOfTheRun != 3 {
-		t.Errorf("%d mails carry a line of the run, want the three", result.Forwards.GivenALineOfTheRun)
+	// An answer of nothing but a file nobody has any more goes the same way:
+	// Minka would pass it over on every run, and it is no item, so nothing of
+	// it is ever seen again.
+	answer, _ := recordWithID(t, records(t, dir, bundle.ForwardReplies), "9406")["body"].(string)
+	if !strings.Contains(answer, `<import-attachment ref="attachment-5304">`) ||
+		!strings.Contains(answer, "what it held could not be brought") {
+		t.Errorf("the answer that was a file nobody has any more: %q", answer)
+	}
+	if result.Forwards.GivenALineOfTheRun != 4 {
+		t.Errorf("%d mails carry a line of the run, want the four", result.Forwards.GivenALineOfTheRun)
 	}
 }
 
@@ -204,8 +212,8 @@ func TestAMailThatIsAFileWhichArrivesGetsNoLineOfTheRun(t *testing.T) {
 	if strings.Contains(body, "could not be brought") || strings.Contains(body, "came without words") {
 		t.Errorf("the mail whose file arrives carries a line of the run: %q", body)
 	}
-	if result.Forwards.GivenALineOfTheRun != 2 {
-		t.Errorf("%d mails carry a line of the run, want the two that are left", result.Forwards.GivenALineOfTheRun)
+	if result.Forwards.GivenALineOfTheRun != 3 {
+		t.Errorf("%d mails carry a line of the run, want the three that are left", result.Forwards.GivenALineOfTheRun)
 	}
 }
 
@@ -230,6 +238,10 @@ func TestAnAnswerByMailBelongsToAPersonOrToAnAddressAndNeverToBoth(t *testing.T)
 		{"sourceId": "9405", "createdAt": "2025-02-05T10:00:00.000Z", "updatedAt": "2025-02-05T10:00:00.000Z", "createdBy": nil,
 			"projectSourceId": forwardProject, "toolSourceId": "9290", "forwardSourceId": "9302",
 			"fromAddress": "otis@partner.test", "body": `<div>What is build 42?</div>`},
+		{"sourceId": "9406", "createdAt": "2025-02-08T09:00:00.000Z", "updatedAt": "2025-02-08T09:00:00.000Z", "createdBy": "102",
+			"projectSourceId": forwardProject, "toolSourceId": "9290", "forwardSourceId": "9304", "fromAddress": nil,
+			"body": `<import-attachment ref="attachment-5304"></import-attachment>` +
+				`<p>This mail came without words, and what it held could not be brought.</p>`},
 	}
 	if !reflect.DeepEqual(replies, want) {
 		t.Errorf("the answers by mail:\n got %v\nwant %v", replies, want)
@@ -389,11 +401,12 @@ func TestTheFilesOfAMailAndOfAnAnswerNameTheirOwnRecord(t *testing.T) {
 	}
 }
 
-// The forwarded mail of a run is read after everything it can point at. No
-// second look rewrites a reference of a forward, unlike one of a card or a post,
-// so a reference that found nothing when the mail was written stays a link for
-// ever.
-func TestForwardedMailIsReadAfterEverythingItCanPointAt(t *testing.T) {
+// The forwarded mail of a run is read after every other kind. Where a kind
+// stands decides one thing: a file met in two records belongs to the first that
+// named it, so a file that hangs in a card and in a mail alike stays the card's.
+// Nothing a mail points at gains by being written later — Minka reads the whole
+// bundle before it applies a line of it.
+func TestTheForwardedMailOfARunIsReadAfterEveryOtherKind(t *testing.T) {
 	account := fakebasecamp.New()
 	extract(t, account, boardProject, talkProject, checkinProject, todoProject, forwardProject)
 
@@ -465,24 +478,24 @@ func TestAMailLongerThanMinkaHoldsIsCounted(t *testing.T) {
 }
 
 // A record that says nothing of what became of it is in use, as the format
-// reads an absent status. Basecamp names one on a mail and none on an answer,
+// reads an absent status. Basecamp names one on a mail and on an answer alike,
 // and a run that read silence as a word it does not know would lose every
-// answer of an account the day the one changed into the other.
+// answer of an account the day that changed.
 func TestARecordThatSaysNothingOfItsStatusIsInUse(t *testing.T) {
 	account := fakebasecamp.New()
 	theMail(t, account, 9302).SaysNothingOfItsStatus = true
+	theMail(t, account, 9301).Replies[0].SaysNothingOfItsStatus = true
 	dir, result := extract(t, account, forwardProject)
 
 	if got := recordWithID(t, records(t, dir, bundle.Forwards), "9302")["status"]; got != bundle.StatusActive {
 		t.Errorf("the mail that says nothing of its status comes as %v", got)
 	}
-	// The answers of the fake say nothing of theirs either, and they are here.
-	if len(records(t, dir, bundle.ForwardReplies)) != 3 {
-		t.Errorf("%d answers by mail, want the three", len(records(t, dir, bundle.ForwardReplies)))
+	if len(records(t, dir, bundle.ForwardReplies)) != 4 {
+		t.Errorf("%d answers by mail, want the four", len(records(t, dir, bundle.ForwardReplies)))
 	}
 	for _, one := range result.RecordsLeftOut {
-		if one.Record == "forward" && one.Value == "" {
-			t.Errorf("a mail was left out for saying nothing of its status: %+v", one)
+		if (one.Record == "forward" || one.Record == "reply") && one.Value == "" {
+			t.Errorf("a record was left out for saying nothing of its status: %+v", one)
 		}
 	}
 }
@@ -495,7 +508,7 @@ func TestAMailOrAnAnswerMetTwiceIsWrittenOnce(t *testing.T) {
 	account.MailListMoves = true
 	dir, result := extract(t, account, forwardProject)
 
-	for kind, want := range map[bundle.Kind]int{bundle.Forwards: 10, bundle.ForwardReplies: 3} {
+	for kind, want := range map[bundle.Kind]int{bundle.Forwards: 10, bundle.ForwardReplies: 4} {
 		got := sourceIDs(records(t, dir, kind))
 		seen := map[string]bool{}
 		for _, id := range got {
@@ -557,5 +570,63 @@ func TestADryRunWritesTheLineForAFileAboveTheCeiling(t *testing.T) {
 	}
 	if result.Forwards.GivenALineOfTheRun != 3 {
 		t.Errorf("%d mails carry a line of the run, want the one whose file is too large with them", result.Forwards.GivenALineOfTheRun)
+	}
+}
+
+// A file this run merely could not fetch is not one that will never come. It
+// leaves no record, the run ends saying so, and the run after it brings the
+// file — so the mail waits with it rather than being written with a line that
+// says the file is lost, which no later run could take back.
+func TestAFileThatOnlyFailedThisTimeGetsNoLineOfTheRun(t *testing.T) {
+	account := fakebasecamp.New()
+	theMail(t, account, 9308).Files[0].Gone = false
+	account.FailFileOf[fakebasecamp.FileKey(5303)] = &basecamp.Error{Kind: basecamp.Network, Message: "the download broke off"}
+	dir, result := extract(t, account, forwardProject)
+
+	body, _ := recordWithID(t, records(t, dir, bundle.Forwards), "9308")["body"].(string)
+	if strings.Contains(body, "could not be brought") || strings.Contains(body, "came without words") {
+		t.Errorf("the mail whose file failed this time was told the file is lost: %q", body)
+	}
+	if len(result.Missing) != 1 {
+		t.Errorf("%d files named as missing, want the one", len(result.Missing))
+	}
+	// The answer whose file is really gone still carries its line.
+	if result.Forwards.GivenALineOfTheRun != 3 {
+		t.Errorf("%d mails carry a line of the run, want the three that are left", result.Forwards.GivenALineOfTheRun)
+	}
+}
+
+// A file above the ceiling of a run of Minka stays outside there however whole
+// it is here, so a mail that is nothing else arrives empty. The ceiling is
+// lowered for the test: a gibibyte belongs in no fixture.
+func TestAFileAboveTheCeilingOfARunGetsTheLineOfTheRun(t *testing.T) {
+	account := fakebasecamp.New()
+	theMail(t, account, 9308).Files[0].Gone = false
+	basecamp.WithTheCeilingOfARunAt(t, 1024)
+	dir, result := extract(t, account, forwardProject)
+
+	body, _ := recordWithID(t, records(t, dir, bundle.Forwards), "9308")["body"].(string)
+	if !strings.Contains(body, "what it held could not be brought") {
+		t.Errorf("the mail whose file is larger than Minka takes: %q", body)
+	}
+	// Its bytes come all the same: what this Minka takes is nothing the
+	// extractor decides.
+	if result.Files.Fetched != 3 {
+		t.Errorf("%d files fetched, want the three of the project", result.Files.Fetched)
+	}
+}
+
+// A mail that says nothing of how many answers it has is asked for them all the
+// same, as it is asked for its comments and its boosts: a field that goes away
+// must not take every answer by mail of an account with it.
+func TestAMailThatSaysNothingOfItsAnswersIsAskedForThem(t *testing.T) {
+	account := fakebasecamp.New()
+	for i := range inbox(account).Forwards {
+		inbox(account).Forwards[i].SaysNothingOfItsReplyCount = true
+	}
+	dir, _ := extract(t, account, forwardProject)
+
+	if got := len(records(t, dir, bundle.ForwardReplies)); got != 4 {
+		t.Errorf("%d answers by mail, want the four", got)
 	}
 }

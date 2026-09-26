@@ -354,11 +354,11 @@ type Extractor struct {
 	// fileOwners names the first owner of every file the walk has met, and
 	// fileRecords are the records of those files in the order they were met.
 	fileOwners map[string]string
-	// filesThatArrive holds the files whose bytes reach Minka, for the one kind
-	// of record that is lost without them. What is not in it does not arrive.
-	filesThatArrive map[string]bool
-	fileRecords     []bundle.Attachment
-	files           FileCounts
+	// filesThatNeverArrive holds the files no run will ever bring in, for the
+	// one kind of record that is lost without them.
+	filesThatNeverArrive map[string]bool
+	fileRecords          []bundle.Attachment
+	files                FileCounts
 }
 
 // talk names the tools of one project that hold posts, lines, questions and
@@ -429,7 +429,7 @@ func (e *Extractor) Extract(ctx context.Context, projectIDs []string, w *bundle.
 	e.longestBody = map[bundle.Kind]int{bundle.Cards: 0, bundle.Comments: 0, bundle.Posts: 0, bundle.Messages: 0, bundle.Answers: 0,
 		bundle.TodoLists: 0, bundle.Todos: 0, bundle.Forwards: 0, bundle.ForwardReplies: 0}
 	e.longestBodyRecords = map[bundle.Kind]LongestBodyRecord{}
-	e.fileOwners, e.filesThatArrive, e.fileRecords, e.files = map[string]string{}, map[string]bool{}, nil, FileCounts{}
+	e.fileOwners, e.filesThatNeverArrive, e.fileRecords, e.files = map[string]string{}, map[string]bool{}, nil, FileCounts{}
 
 	ids, err := sortedIDs(projectIDs)
 	if err != nil {
@@ -464,8 +464,8 @@ func (e *Extractor) Extract(ctx context.Context, projectIDs []string, w *bundle.
 	if err := e.extractTodos(ctx, w); err != nil {
 		return Result{}, err
 	}
-	// Last of all, because no second look rewrites a reference of a forward:
-	// what it points at has to be in the bundle before it.
+	// Last of all, so that a file standing in a card and in a mail alike belongs
+	// to the card: a file met twice keeps the record that named it first.
 	if err := e.extractForwards(ctx, w); err != nil {
 		return Result{}, err
 	}

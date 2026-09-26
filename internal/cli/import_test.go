@@ -1783,7 +1783,7 @@ func TestImportBasecampReportsTheForwardedMailOfAProject(t *testing.T) {
 	data := decode(t, env.Data)
 	want := map[string]any{
 		"byStatus": map[string]any{"active": float64(8), "trashed": float64(2)}, "fromTheShelf": float64(1),
-		"withoutASubject": float64(1), "subjectsChanged": float64(1), "givenALineOfTheRun": float64(3),
+		"withoutASubject": float64(1), "subjectsChanged": float64(1), "givenALineOfTheRun": float64(4),
 		"withoutAForwarder": float64(1), "withoutAnAddress": []any{"9307"},
 		"repliesFromOutside": float64(2), "repliesWithoutASender": []any{"9404"},
 		"reactionsOnRepliesLeftOut": float64(2), "longerThanMinkaTakes": float64(0),
@@ -1795,7 +1795,7 @@ func TestImportBasecampReportsTheForwardedMailOfAProject(t *testing.T) {
 		"1 forwarded mail is left out, because what the source calls its sender is no e-mail address Minka takes",
 		"1 answer by mail is left out, because the source names neither who wrote it nor an address",
 		"1 forwarded mail is on the shelf at the source and comes into the trash here",
-		"3 forwarded mails carry a line of the run's own",
+		"4 forwarded mails carry a line of the run's own",
 		"2 forwarded mails carry titles the run made of their subjects",
 		"1 forwarded mail names nobody who forwarded it",
 		"2 boosts on answers by mail are left out",
@@ -1815,13 +1815,13 @@ func TestImportBasecampReportsTheForwardedMailOfAProject(t *testing.T) {
 	r = e.run("import", "basecamp", "--project", "7010", "--out", out, "--styled")
 	expectCode(t, r, ExitOK)
 	for _, line := range []string{
-		"forwards     10", "forwardreplies 3",
+		"forwards     10", "forwardreplies 4",
 		"Forwarded mail: 8 active, 2 trashed; 1 of them on the shelf at the source",
 		"Mails without a subject: 1; subjects folded or cut short to make a title: 1",
-		"Mails carrying a line of the run's own, because what they say would arrive as nothing: 3",
+		"Mails carrying a line of the run's own, because what they say would arrive as nothing: 4",
 		"Mails nobody is named for, which Minka gives to the owner of the organization: 1",
 		"Mails whose sender is no address Minka takes, left out: 1 (forward 9307)",
-		"Answers by mail: 3, 2 of them from outside the account",
+		"Answers by mail: 4, 2 of them from outside the account",
 		"Answers naming neither a writer nor an address, left out: 1 (reply 9404)",
 		"Boosts on an answer by mail, which Minka takes none of, left out: 2",
 		"forward  9301     in project 7010:",

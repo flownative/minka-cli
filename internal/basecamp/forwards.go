@@ -63,13 +63,17 @@ type forward struct {
 	From    string     `json:"from"`
 	Content string     `json:"content"`
 	Files   []bodyFile `json:"content_attachments"`
-	// RepliesCount is how many answers by mail the forward has.
-	RepliesCount int `json:"replies_count"`
+	// RepliesCount is how many answers by mail the forward has, and nil where
+	// the source says nothing: then the list is asked for, as the comments and
+	// the boosts are, because a mail with no answers costs less than every
+	// answer of an account.
+	RepliesCount *int `json:"replies_count"`
 }
 
 // forwardReply is an answer by mail to a forward. Its writer is somebody of
 // the account or somebody from outside it, and the mail says nothing about
-// where it came from beyond that.
+// where it came from beyond that. It says what became of it as a forward does,
+// and how many boosts it has; it has no comments and so no count of them.
 type forwardReply struct {
 	recording
 	ID          int64      `json:"id"`
@@ -95,7 +99,8 @@ func (r forwardReply) status() string {
 }
 
 // replyStatuses are the words a bundle has for what became of a reply: it
-// carries no status at all, so only a reply that is in use comes.
+// carries no status at all, so only one that is in use comes, and the source
+// keeps whatever else it says of one.
 var replyStatuses = map[string]bool{bundle.StatusActive: true}
 
 // outsider is the kind of person Basecamp gives somebody who wrote to a
@@ -111,22 +116,23 @@ const outsider = "Outsider"
 // written oldest first, by created_at and then by ID, the inboxes in the order
 // of the tools. A walk is no snapshot: a forward met twice is written once.
 //
-// It comes last of all the kinds. A reference of a forward that points at
-// nothing when the forward is written is never looked at again, unlike one of
-// a card or a post, so everything a forward can point at is in the bundle
-// before it.
+// It comes last of all the kinds, which is a place and not a precondition:
+// Minka reads a bundle whole and applies the kinds in an order of its own, so
+// nothing a mail points at gains by being written first. What the place decides
+// is one thing, and it is why it is the last: a file met in two records belongs
+// to the first that named it, so a file that hangs in a card and in a mail
+// alike stays the card's.
 func (e *Extractor) extractForwards(ctx context.Context, w *bundle.Writer) error {
-	// A mail belongs to one inbox, but a walk of pages can hand one out twice
-	// where the list moved under it, and a source that listed one in two
-	// inboxes would put it in Minka twice.
-	met := map[int64]bool{}
 	for _, t := range e.talks {
 		for _, inbox := range t.inboxes {
 			listed, err := getList[forward](ctx, e.Source, fmt.Sprintf("buckets/%d/inboxes/%d/forwards.json", t.bucket, inbox))
 			if err != nil {
 				return err
 			}
+			// A walk of pages can hand one mail out twice, where the list moved
+			// under it between two requests.
 			carried := make([]forward, 0, len(listed))
+			met := map[int64]bool{}
 			for _, found := range listed {
 				if met[found.ID] {
 					continue
@@ -245,10 +251,12 @@ func (e *Extractor) writeForward(ctx context.Context, w *bundle.Writer, bucket i
 
 // writeForwardReplies adds the answers by mail to one forward, oldest first:
 // Minka reads them back by their moment, and the order of the file decides
-// between two of one second. A reply that is not in use is left out and
-// counted, because a bundle has no word for what became of one.
+// between two of one second. The list is asked for only where the mail says it
+// has answers, and where it says nothing about them at all. A reply that is not
+// in use is left out and counted, because a bundle has no word for what became
+// of one.
 func (e *Extractor) writeForwardReplies(ctx context.Context, w *bundle.Writer, bucket int64, toolID, forwardID string, found forward) error {
-	if found.RepliesCount == 0 {
+	if found.RepliesCount != nil && *found.RepliesCount == 0 {
 		return nil
 	}
 	listed, err := getList[forwardReply](ctx, e.Source, fmt.Sprintf("buckets/%d/inbox_forwards/%d/replies.json", bucket, found.ID))
@@ -533,11 +541,15 @@ func (e *Extractor) aBodyThatSaysSomething(body string) string {
 const paddingPHPTakesOff = " \t\n\r\x00\v"
 
 // whatWouldArriveOf reads a body the run wrote and says what of it reaches a
-// page: how many of the files it names will not come, the addresses of the
+// page: how many of the files it names will never come, the addresses of the
 // embeds in it, and whether what is left says nothing. It asks what saysNothing
 // asks of every other body and two questions more, so what is changed in the
-// one belongs in the other: a file whose bytes stay outside counts for nothing
+// one belongs in the other: a file that will never come counts for nothing
 // here, and so does an embed.
+//
+// A mention and a reference count for something, although Minka leaves either
+// as the words it was given where it finds no target — and a run writes words
+// into both, so a body of one of them alone says something there too.
 func (e *Extractor) whatWouldArriveOf(body string) (filesThatStayOut int, embedded []string, empty bool) {
 	reader := newBodyReader(body)
 	for {
@@ -554,7 +566,7 @@ func (e *Extractor) whatWouldArriveOf(body string) (filesThatStayOut int, embedd
 			if token.kind == nethtml.EndTagToken {
 				continue
 			}
-			if e.theFileArrives(token.attribute("ref")) {
+			if !e.theFileNeverArrives(token.attribute("ref")) {
 				return filesThatStayOut, embedded, false
 			}
 			filesThatStayOut++
