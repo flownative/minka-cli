@@ -739,9 +739,17 @@ func momentOf(what, field, value string) (time.Time, error) {
 	return moment, nil
 }
 
+// maxTimeSaid is how long a value may be for a message to say it. The shape of a
+// moment takes a fraction of a second of any length, so a value can be long
+// enough to drown the message, the envelope around it and every log it reaches,
+// while the first characters already say what is wrong. Forty is far more than a
+// moment needs. What matches the shape is ASCII throughout, so its length in
+// bytes is its length in characters.
+const maxTimeSaid = 40
+
 // noTime is how a message says a value that is no moment.
 func noTime(value string) string {
-	if momentShape.MatchString(value) {
+	if momentShape.MatchString(value) && len(value) <= maxTimeSaid {
 		return strconv.Quote(value) + ", which no calendar has"
 	}
 	return "something that is no time"

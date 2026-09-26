@@ -766,8 +766,9 @@ this:
   with the record and the field, and so does a day that is not `YYYY-MM-DD`
   where a card is due, where a to-do starts or is due, or where an answer
   belongs. The message says what stood there only where it has the shape of a
-  time: any other value is not repeated, because that field then holds whatever
-  the source put in it.
+  time and is short: a value of another shape is not repeated, because that field
+  then holds whatever the source put in it, and a long one is not repeated
+  because a message is no place to carry it.
 - A question of a check-in carries the rhythm, the weekdays counted from Monday,
   the time of day, the day the rhythm is counted from and whom it is asked of,
   which are the subscribers of the question and not whoever answered it. Only a
