@@ -707,7 +707,9 @@ and Minka applies the kinds in an order of its own.
   left the folder comes first, then what is in use the other way round from the
   way the source shows it, so the source's order comes out again. There is no
   `position` in the format, and a record that carried one would earn a warning.
-  `status` is `active`, `archived` or `trashed` and is the folder's own.
+  `status` is `active`, `archived` or `trashed` and is the folder's own;
+  `docs.foldersByStatus` splits the folders of the bundle, as
+  `docs.documentsByStatus` and `docs.uploadsByStatus` do the other two kinds.
   **A folder takes neither comments nor reactions**, here as in Minka and as in
   Basecamp, so neither is written and neither is asked for: Minka counts one
   that names a folder with what it will never take, and no later run takes it
@@ -722,7 +724,8 @@ and Minka applies the kinds in an order of its own.
 - **Documents** are the documents of those tools, `documents.jsonl`, with
   `folderSourceId` `null` at the top of the tool. `title` is the title, `body`
   the document as Basecamp renders it, rewritten like every other text, and
-  `null` where the document has no words, which Minka takes. `status` is the
+  `null` where the document has no words, which Minka takes and
+  `docs.documentsWithoutWords` counts. `status` is the
   document's **own**: one in a folder the source archived or threw away carries
   `active` and goes along through the folder in Minka, and a run that wrote the
   folder's word onto it would put it away one by one and never bring it back
@@ -743,7 +746,9 @@ and Minka applies the kinds in an order of its own.
   comes; the format keeps `versions` free for the earlier copies and reads it
   nowhere, so a bundle writes none, and the upload says neither how many there
   are nor which. An upload Basecamp names no stored file for is left out with
-  everything pointing at it (C-060). Comments, boosts and the files of the
+  everything pointing at it (C-060), named in `docs.withoutAStoredFile` and
+  counted with what fell in `docs.commentsWithoutTheirUpload` and
+  `docs.boostsWithoutTheirUpload`. Comments, boosts and the files of the
   description use `upload` as their kind.
 - **A document or a description longer than the 1,000,000 characters Minka
   holds** is counted (`docs.longerThanMinkaTakes`) and comes as it is, as a mail
