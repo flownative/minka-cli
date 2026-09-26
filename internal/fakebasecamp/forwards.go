@@ -79,7 +79,8 @@ func OutsiderByNameAlone(id int64, address string) Person {
 // one that is nothing but a file the source no longer has, one that says nothing
 // at all, one that is nothing but an embedded player, one nobody is named for,
 // replies from inside and outside the account, one of those named by their name
-// alone and one whose address Minka would refuse, a reply in the trash, and a
+// alone, one whose address stands inside a pair of quotation marks and one whose
+// address Minka would refuse, a reply in the trash, and a
 // boost on a reply that comes and one on a reply that does not, and an answer
 // that is nothing but a file the source no longer has.
 func forwardProject(ada, grace, former Person, tool func(int64, string, string, string, bool, int, *Person) Tool) Project {
@@ -91,7 +92,9 @@ func forwardProject(ada, grace, former Person, tool func(int64, string, string, 
 		return t
 	}
 
-	anna := Outsider(901, "anna@supplier.test")
+	// A writer from outside whose address the source holds as the mail header
+	// had it, inside a pair of quotation marks around the whole of it.
+	anna := Outsider(901, `"anna@supplier.test"`)
 	// Somebody from outside whose address a mail server would take and Minka
 	// would not: no domain of its own.
 	daemon := Outsider(902, "postmaster@localhost")
@@ -182,7 +185,8 @@ func forwardProject(ada, grace, former Person, tool func(int64, string, string, 
 
 	second := tool(9292, "inbox", "inboxes", "Second inbox", true, 2, &grace)
 	second.Forwards = []Forward{
-		{ID: 9321, Subject: "Another mailbox", From: "post@supplier.test", Creator: &grace,
+		// A sender inside a pair of quotation marks around the whole address.
+		{ID: 9321, Subject: "Another mailbox", From: `"post@supplier.test"`, Creator: &grace,
 			CreatedAt: at(18, 8), UpdatedAt: at(18, 8), Content: "Over here."},
 	}
 

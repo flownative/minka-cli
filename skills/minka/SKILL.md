@@ -798,6 +798,14 @@ this:
   none; `notice` says how many. The run still exits 0 and running it again
   changes nothing: only somebody with access to the account can repair the
   address there. Never look the address up to quote it.
+- Every address a bundle carries — a person's `email`, the sender of a
+  forwarded mail, the sender of an answer by mail — is read the way Minka reads
+  it, no wider: one that would stop the applier is left out here instead. One
+  pair of quotation marks around the whole of an address comes off before it is
+  read, which is the one thing a run repairs rather than passes on;
+  `data.addressesUnquoted` counts the records it happened to — one mailbox
+  written that way in many records counts in each of them — a `notice` says how
+  many, and no output names an address.
 - `data.creatorProbesRefused` counts the tools asked for who created a project
   that Basecamp refuses this identity. They are passed over and a `notice`
   says how many: the run exits 0, and a project may come without a creator
@@ -887,8 +895,10 @@ this:
   folded and cut short (`data.forwards.withoutASubject`,
   `data.forwards.subjectsChanged`). A mail whose sender is no e-mail address
   Minka takes is left out and named by ID in
-  `data.forwards.withoutAnAddress`. Where what a mail says would reach Minka as
-  nothing at all, the run writes a line of its own into the body
+  `data.forwards.withoutAnAddress`; a sender inside a pair of quotation marks
+  comes out without them and is counted in `data.addressesUnquoted`. Where what
+  a mail says would reach Minka as nothing at all, the run writes a line of its
+  own into the body
   (`data.forwards.givenALineOfTheRun`), because such a mail would be lost on
   every run. A file this run merely could not fetch is not that: the mail waits
   for it, and the next run brings both. A mail nobody is named for goes to the

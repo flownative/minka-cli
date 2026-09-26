@@ -47,6 +47,17 @@ costing the mail or the run and a sender that is no address leaves the mail out
 run (C-057), and what the source keeps on its shelf comes into the trash, where
 it can be brought back (C-058). Somebody who wrote to a project from outside the
 account stays an address and becomes nobody.
+Every address a bundle carries — a person's, a mail's sender, an answer's —
+is read the way Minka reads it and no wider (C-059), so that none of them
+stops the applier after hours of walking, and one pair of quotation marks
+around the whole of an address comes off before it is read: the one place a
+run repairs what the source says instead of passing it on, counted per record
+in `addressesUnquoted`.
+That rule is held against Minka's own reader over 193,531 inputs — the seams of
+the rule, a combinatorial sweep, byte mutations of addresses that pass, random
+strings — compared on what Minka makes of what a bundle would carry and not of
+the input: no case the CLI takes and Minka refuses, and the narrow differences
+are the three C-059 names.
 A record the source describes with a word a bundle has none for is left out and
 counted, and the run goes on (C-050): a chat line of an unknown kind — a bundle
 has a word for `Chat::Lines::Text`, `Chat::Lines::RichText`,
@@ -203,12 +214,13 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   Basecamp or rate limited, a creator who left the account, a dock entry
   asked for the creator of a project that the identity may not see, and that an
   address which is none comes out as `null` with its person named in
-  `invalidAddresses`: the account holds such an address, but on nobody the
-  projects extracted refer to, and it holds nobody retired. A run that is
-  killed was not seen live either. Seen live: a missing Basecamp CLI, masked
-  addresses ending the run, a missing project as `not_found`, people of the
-  account being left out, and files that could not be fetched, with the bundle
-  written without them and the run ending as `network`, and a 525 of a
+  `invalidAddresses`, and that a person's address inside a pair of quotation
+  marks comes into the bundle without them: the account holds such an address,
+  but on nobody the projects extracted refer to, and it holds nobody retired.
+  A run that is killed was not seen live either. Seen live: a missing Basecamp
+  CLI, masked addresses ending the run, a missing project as `not_found`, people
+  of the account being left out, and files that could not be fetched, with the
+  bundle written without them and the run ending as `network`, and a 525 of a
   gateway in front of Basecamp ending a run. That a request which failed for
   a reason that may pass is asked again is tested against the fake and a
   stand-in of the Basecamp CLI only. The classes are the exit codes and codes
@@ -285,11 +297,18 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   the request while the status of the list is ignored, so **no mail of any
   status but `active` can be got out of Basecamp at all** and the shelf becoming
   the trash may never fire. Measured too, and the one measurement that says the
-  run is needed: of the senders of the account a handful are addresses Minka
-  refuses — a whole address in quotation marks, a local part over 64 bytes —
-  so a mail left out for its sender is no invented case but one the first real
-  run will meet, and writing such a sender would have ended the applier after
-  hours of walking.
+  run is needed: over 28 active projects, 9 inboxes that are switched on and 54
+  forwards, four senders are addresses Minka refuses. Two of the four are the
+  whole address written inside a pair of quotation marks, which the run takes
+  off — about 4% of the mail of the projects swept — and two have a local
+  part over 64 bytes and stay out whatever is done. So a mail left out for its
+  sender is no invented case but one the first real run will meet, and writing
+  such a sender would have ended the applier after hours of walking. The same
+  sweep says what the account holds in the other direction, which is what it is
+  worth here — that the rule takes nothing Minka refuses is held above, over a
+  corpus built for it: the only over-strictness the account holds is a bracketed
+  literal address of a machine and a top label of one letter, neither of them
+  anybody's mail, and of the two only the bracketed one is still left out.
   What the run does with all that rests on the invented account, with three
   things held against Minka's own reading rather than against a
   test here: every address and every title the run would write was put through
@@ -301,7 +320,8 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   Invented for want of anything to measure: a mail or an answer whose `status`
   says anything but `active`, and one that says nothing of its status, which
   Basecamp always names; a sender that is
-  no address, of the two shapes the account holds and of the others; a mail
+  no address, of the shape the account holds and of the others, and one inside a
+  pair of quotation marks, which is a shape the account holds; a mail
   without a subject and one whose subject is longer than a
   title holds; a mail whose body is nothing but a file the source no longer has,
   one whose file this run could not fetch, one above the ceiling of a run of
@@ -565,9 +585,13 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
 - Extract the forwarded mail of a project live, and check the bundle record by
   record as the boards and the chats were checked. What is still open there is
   what no reading of the source answers: what a body looks like that the run has
-  to write a line of its own into, and how the mails whose sender Minka refuses
-  read in the report. Whether a mail on the shelf exists at all is a question
-  for Basecamp and not for a run: nothing the API offers hands one out.
+  to write a line of its own into, how the mails whose sender Minka refuses read
+  in the report, and what `addressesUnquoted` comes out at. The sweep of the
+  account counted the senders of mails alone and found two, while the number
+  counts a record at a time and takes in the senders of answers and the people
+  as well, so a larger number is no sign of anything wrong. Whether a mail on the
+  shelf exists at all is a question for Basecamp and not for a run: nothing the
+  API offers hands one out.
 - Extract the to-dos of a project live: whether `todoset` is the dock entry, the
   fields of a list, a group and a to-do, the two lists of what is open and what is
   done, the recordings of the archived and the trashed ones, whether a list on
