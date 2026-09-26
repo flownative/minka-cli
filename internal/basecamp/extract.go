@@ -176,10 +176,24 @@ type Result struct {
 	// TodoListsByStatus counts the lists of the bundle: active, archived,
 	// trashed.
 	TodoListsByStatus map[string]int
+	// TodosByStatus counts the to-dos of the bundle: active, trashed. The shelf
+	// is the list's alone.
+	TodosByStatus map[string]int
 	// TodosLeftOut counts the archived and trashed lists, groups and to-dos that
 	// hang on nothing the run extracts: a To-dos tool that is switched off, a
 	// list or a group that is gone.
 	TodosLeftOut int
+	// TodosNotDone counts the to-dos the source has open. A later run reopens
+	// nothing, so one that is done in Minka stays done.
+	TodosNotDone int
+	// TodosWithPeople counts the to-dos that name somebody as an assignee or as
+	// somebody to tell when it is done. A later run leaves the people of a to-do
+	// as they stand in Minka, so a change at the source never arrives.
+	TodosWithPeople int
+	// TodosWithSubtasks counts the to-dos that had subtasks and SubtasksLeftOut
+	// how many there were: a bundle carries none.
+	TodosWithSubtasks int
+	SubtasksLeftOut   int
 	// QuestionsLeftOut are the questions left out because Minka has no words
 	// for their schedule, each with the field that made it impossible.
 	QuestionsLeftOut []ImpossibleQuestion
@@ -257,7 +271,12 @@ type Extractor struct {
 	bodies                BodyCounts
 
 	todoListsByStatus map[string]int
+	todosByStatus     map[string]int
 	todosLeftOut      int
+	todosNotDone      int
+	todosWithPeople   int
+	todosWithSubtasks int
+	subtasksLeftOut   int
 
 	questionsLeftOut    []ImpossibleQuestion
 	anchorsInferred     []InferredAnchor
@@ -324,7 +343,9 @@ func (e *Extractor) Extract(ctx context.Context, projectIDs []string, w *bundle.
 		e.messagesByType[name] = 0
 	}
 	e.todoListsByStatus = map[string]int{bundle.StatusActive: 0, bundle.StatusArchived: 0, bundle.StatusTrashed: 0}
-	e.todosLeftOut = 0
+	e.todosByStatus = map[string]int{bundle.StatusActive: 0, bundle.StatusTrashed: 0}
+	e.todosLeftOut, e.todosNotDone, e.todosWithPeople = 0, 0, 0
+	e.todosWithSubtasks, e.subtasksLeftOut = 0, 0
 	e.longestBody = map[bundle.Kind]int{bundle.Cards: 0, bundle.Comments: 0, bundle.Posts: 0, bundle.Messages: 0, bundle.Answers: 0,
 		bundle.TodoLists: 0, bundle.Todos: 0}
 	e.longestBodyRecords = map[bundle.Kind]LongestBodyRecord{}
@@ -396,7 +417,12 @@ func (e *Extractor) Extract(ctx context.Context, projectIDs []string, w *bundle.
 		RecordsLeftOut:     e.recordsLeftOut,
 
 		TodoListsByStatus: e.todoListsByStatus,
+		TodosByStatus:     e.todosByStatus,
 		TodosLeftOut:      e.todosLeftOut,
+		TodosNotDone:      e.todosNotDone,
+		TodosWithPeople:   e.todosWithPeople,
+		TodosWithSubtasks: e.todosWithSubtasks,
+		SubtasksLeftOut:   e.subtasksLeftOut,
 
 		QuestionsLeftOut:    e.questionsLeftOut,
 		AnchorsInferred:     e.anchorsInferred,

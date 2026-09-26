@@ -205,7 +205,7 @@ func New() *Account {
 			fileProject(ada, grace, tool),
 			referenceProject(ada, grace, tool),
 			checkinProject(ada, grace, linus, edsger, niklaus, deleted, tool),
-			todoProject(ada, grace, edsger, tool),
+			todoProject(ada, grace, edsger, former, tool),
 		},
 		SubtasksURL:  map[int64]string{},
 		Fail:         map[string]error{},
