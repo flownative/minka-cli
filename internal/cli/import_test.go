@@ -101,12 +101,12 @@ func TestImportBasecampWritesABundleAndReportsWhatItHolds(t *testing.T) {
 
 	want := map[string]any{
 		"source": "basecamp", "sourceInstance": "4242", "dryRun": false, "bundle": out,
-		"counts":  map[string]any{"people": float64(5), "projects": float64(2), "tools": float64(5), "columns": float64(3), "attachments": float64(4)},
+		"counts":  map[string]any{"people": float64(5), "projects": float64(2), "tools": float64(6), "columns": float64(3), "attachments": float64(4)},
 		"avatars": map[string]any{"count": float64(4), "initialsDistinguishable": false},
 		"skippedTools": []any{
 			map[string]any{"kind": "kanban_board", "enabled": false, "count": float64(1)},
 			map[string]any{"kind": "schedule", "enabled": false, "count": float64(1)},
-			map[string]any{"kind": "todoset", "enabled": true, "count": float64(2)},
+			map[string]any{"kind": "todoset", "enabled": false, "count": float64(1)},
 			map[string]any{"kind": "vault", "enabled": true, "count": float64(1)},
 		},
 		"missingFiles": []any{}, "invalidAddresses": []any{}, "peopleLeftOut": float64(3),
@@ -131,7 +131,7 @@ func TestImportBasecampWritesABundleAndReportsWhatItHolds(t *testing.T) {
 	if got := decode(t, env.Data); !reflect.DeepEqual(got, want) {
 		t.Errorf("data:\n got %v\nwant %v", got, want)
 	}
-	if !env.OK || !strings.Contains(env.Summary, "5 people, 2 projects, 5 tools, 0 cards, 0 posts, 0 messages") {
+	if !env.OK || !strings.Contains(env.Summary, "5 people, 2 projects, 6 tools, 0 cards, 0 posts, 0 messages") {
 		t.Errorf("ok %v, summary %q", env.OK, env.Summary)
 	}
 
@@ -158,7 +158,7 @@ func TestImportBasecampAsTextAndAsBareData(t *testing.T) {
 	for _, want := range []string{
 		"Bundle: " + out, "Source: basecamp 4242", "people       5", "attachments  4",
 		"Avatars: 4, initials not distinguishable",
-		"todoset          not part of Minka  2", "kanban_board     switched off       1",
+		"todoset          switched off       1", "kanban_board     switched off       1",
 	} {
 		if !strings.Contains(r.stdout, want) {
 			t.Errorf("the text lacks %q:\n%s", want, r.stdout)
@@ -185,7 +185,7 @@ func TestADryRunWalksBasecampAndWritesNothing(t *testing.T) {
 	expectCode(t, r, ExitOK)
 
 	data := decode(t, env.Data)
-	wantCounts := map[string]any{"people": float64(5), "projects": float64(1), "tools": float64(4), "columns": float64(3), "attachments": float64(4)}
+	wantCounts := map[string]any{"people": float64(5), "projects": float64(1), "tools": float64(5), "columns": float64(3), "attachments": float64(4)}
 	if !reflect.DeepEqual(data["counts"], wantCounts) {
 		t.Errorf("counts %v, want %v", data["counts"], wantCounts)
 	}
@@ -277,7 +277,7 @@ func TestARunWithFilesMissingWritesTheBundleAndSaysSoInEveryMode(t *testing.T) {
 	if !reflect.DeepEqual(data["missingFiles"], wantMissing) {
 		t.Errorf("missingFiles %v, want %v", data["missingFiles"], wantMissing)
 	}
-	wantCounts := map[string]any{"people": float64(5), "projects": float64(1), "tools": float64(4), "columns": float64(3), "attachments": float64(3)}
+	wantCounts := map[string]any{"people": float64(5), "projects": float64(1), "tools": float64(5), "columns": float64(3), "attachments": float64(3)}
 	if !reflect.DeepEqual(data["counts"], wantCounts) || data["bundle"] != out {
 		t.Errorf("counts %v, bundle %v", data["counts"], data["bundle"])
 	}
