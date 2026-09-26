@@ -810,10 +810,10 @@ The title of a card, a post or a to-do still ends the run, because that one
 somebody can put right where it stands. `fromAddress` is what a forward is
 about and the field takes nothing else, so a mail whose sender is none cannot be
 carried at all — and ending a walk of hours over one mail would leave a whole
-account unimported. The address is asked more strictly than Minka asks, so that
-what a bundle carries is always taken.
+account unimported. The address is read as Minka reads it ([C-059](#c-059)), so
+that what a bundle carries is always taken.
 **Implemented as:** `basecamp.aSubjectAsATitle`,
-`basecamp.anAddressAMailCanCarry`, see
+`basecamp.anAddressMinkaTakes`, see
 [Importing from Basecamp](stable/import.md).
 
 <a id="c-057"></a>
@@ -858,4 +858,46 @@ click, so nothing is lost and nothing is said falsely. Leaving it out as
 [C-050](#c-050) leaves out what a bundle cannot express would lose the mail for
 ever: no later run can bring it either, because Minka will have no shelf for it.
 **Implemented as:** `basecamp.Extractor.writeForward`, see
+[Importing from Basecamp](stable/import.md).
+
+<a id="c-059"></a>
+## C-059 — One rule for every address, and one pair of quotation marks comes off
+
+*Applies to: `import basecamp`, the `email` of a person and the `fromAddress` of
+a forward and of an answer by mail*
+
+Every address a bundle carries is held to one rule, and that rule is Minka's
+reading of an address: PHP's `filter_var` with the plain local part of
+`EmailAddress` on top of it, read from that code and measured against it. Three
+places where it is not Minka's, each of them narrower or beside the reading and
+none of them wider:
+
+- A domain written as a bracketed literal address of a machine is left out,
+  although Minka takes it.
+- A NUL at either end is left out, although Minka trims one away and takes what
+  is left: `strings.TrimSpace` takes off what PHP's `trim` takes off, apart from
+  that one byte.
+- Minka lowercases an address before it reads it; a bundle carries the case the
+  source gave. So a bundle can hold one mailbox in two spellings, and Minka
+  makes them one without a word. Nothing here changes that.
+
+One pair of quotation marks around the whole of an address comes off before the
+address is read, counted per record in `addressesUnquoted` and named in a
+`notice`.
+
+**Why:** Minka reads all three fields through one value object and stops the
+import where it refuses one, after a walk of hours that cannot be repeated
+cheaply, so a rule wider than Minka's writes a bundle that cannot be applied,
+and one narrower than Minka's loses somebody for nothing. Two rules in two
+places drift apart. A bracketed literal is nobody's mailbox and a NUL around an
+address is nobody's either, and reading either exactly as PHP reads it is a risk
+in the direction that stops a run, where being narrower costs at most one
+address. The quotation marks are the one place a run repairs what the source
+says instead of passing it on: a mail header is nobody's to repair where it
+stands, Minka refuses every such address, and the reading alone would turn away
+what the stripping saves. It is that pair and nothing else — no other character
+is trimmed, unfolded or mended, and a mark at one end alone is no pair — and the
+number in the report keeps the repair from being a silent one.
+**Implemented as:** `basecamp.anAddressMinkaTakes`,
+`basecamp.minkaTakesTheAddress`, see
 [Importing from Basecamp](stable/import.md).

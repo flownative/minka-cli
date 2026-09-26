@@ -33,6 +33,11 @@ type importReport struct {
 	// InvalidAddresses holds IDs only: neither the address nor the name of
 	// somebody belongs into an output that ends up in a log.
 	InvalidAddresses []string `json:"invalidAddresses"`
+	// AddressesUnquoted counts the records a run took a pair of quotation marks
+	// off the address of: the one place a run repairs what the source says
+	// rather than passing it on. One mailbox written that way in many records
+	// counts in each of them.
+	AddressesUnquoted int `json:"addressesUnquoted"`
 	// PeopleLeftOut are the people of the account no record of the bundle
 	// refers to; counts.people is who was written.
 	PeopleLeftOut int `json:"peopleLeftOut"`
@@ -225,10 +230,13 @@ longer than the 200 characters a title holds, or that runs over several lines,
 is folded into one line and cut short (forwards.withoutASubject,
 forwards.subjectsChanged). A mail whose sender is no e-mail address Minka takes
 is left out and named by ID (forwards.withoutAnAddress): the field takes nothing
-else. Where what a mail says would reach Minka as nothing at all — no words, and
-a file that will never come — the run writes a line of its own into the body
-(forwards.givenALineOfTheRun), because such a mail is written empty there and
-lost on every run after this one.
+else. Every address a bundle carries — a person's, a mail's sender, an answer's
+— is read the way Minka reads it, and one pair of quotation marks around the
+whole of an address comes off first (addressesUnquoted), which is the one thing
+a run repairs rather than passes on. Where what a mail says would reach Minka
+as nothing at all — no words, and a file that will never come — the run writes
+a line of its own into the body (forwards.givenALineOfTheRun), because such a
+mail is written empty there and lost on every run after this one.
 
 An answer by mail is a record of its own and no comment. It belongs to somebody
 of the account or, where it came from outside it, to the address alone, and
@@ -383,6 +391,7 @@ it has been applied.`,
 				MissingFiles:   result.Missing,
 
 				InvalidAddresses:     result.InvalidAddresses,
+				AddressesUnquoted:    result.AddressesUnquoted,
 				PeopleLeftOut:        result.PeopleLeftOut,
 				CreatorProbesRefused: result.CreatorProbesRefused,
 
@@ -447,6 +456,11 @@ it has been applied.`,
 			var notices []string
 			if count := len(report.InvalidAddresses); count > 0 {
 				notices = append(notices, plural(count, "person comes", "people come")+" without an e-mail address, and so without a login, because the one Basecamp holds is none; data.invalidAddresses names them by ID, and only the source can repair it")
+			}
+			if count := report.AddressesUnquoted; count > 0 {
+				notices = append(notices, plural(count,
+					"record came with its e-mail address inside a pair of quotation marks, which the run took off before reading it: with them Minka takes no address at all, and they are the one thing a run repairs rather than passes on",
+					"records came with an e-mail address inside a pair of quotation marks, which the run took off before reading them: with them Minka takes no address at all, and they are the one thing a run repairs rather than passes on. One mailbox written that way in many records counts in each of them"))
 			}
 			if count := report.CreatorProbesRefused; count > 0 {
 				notices = append(notices, plural(count,
@@ -640,6 +654,9 @@ func renderImportReport(w io.Writer, report importReport) {
 	fmt.Fprintf(w, "People of the account nothing refers to, left out: %d\n", report.PeopleLeftOut)
 	if count := len(report.InvalidAddresses); count > 0 {
 		fmt.Fprintf(w, "Invalid addresses: %d (person %s)\n", count, strings.Join(report.InvalidAddresses, ", "))
+	}
+	if report.AddressesUnquoted > 0 {
+		fmt.Fprintf(w, "Records whose address a pair of quotation marks came off: %d\n", report.AddressesUnquoted)
 	}
 	if report.CreatorProbesRefused > 0 {
 		fmt.Fprintf(w, "Tools this identity may not see, asked for the creator of a project and passed over: %d\n", report.CreatorProbesRefused)

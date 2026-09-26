@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"sort"
 	"strings"
-	"unicode"
 
 	"github.com/flownative/minka-cli/internal/bundle"
 )
@@ -26,6 +25,7 @@ type registry struct {
 	account  map[int64]person
 	referred map[int64]*seenPerson
 	invalid  map[int64]bool
+	unquoted int
 }
 
 type seenPerson struct {
@@ -89,7 +89,7 @@ func (r *registry) listAccount(people []person) error {
 			continue
 		}
 		given++
-		if !looksLikeAnAddress(p.EmailAddress) {
+		if _, _, anAddress := anAddressMinkaTakes(p.EmailAddress); !anAddress {
 			malformed++
 		}
 	}
@@ -97,7 +97,7 @@ func (r *registry) listAccount(people []person) error {
 		return &Error{
 			Kind:    API,
 			Message: fmt.Sprintf("Basecamp gave e-mail addresses that are none: %d of %d", malformed, given),
-			Hint:    "That many are no flaw in the data. Look at what the identity the Basecamp CLI is signed in as may see: basecamp auth status",
+			Hint:    "That many are no flaw in the data. Either the identity the Basecamp CLI is signed in as hides the addresses of others, which basecamp auth status says, or the account writes its addresses in a shape Minka takes none of: outside ASCII, or with a domain of one label.",
 		}
 	}
 
@@ -139,10 +139,17 @@ func (r *registry) refer(named *person, present bool) (*string, error) {
 	if err := requireTimestamps(fmt.Sprintf("person %d", p.ID), p.CreatedAt, p.UpdatedAt); err != nil {
 		return nil, err
 	}
-	// An address that is none is left out, not repaired.
-	if p.EmailAddress != "" && !looksLikeAnAddress(p.EmailAddress) {
-		p.EmailAddress = ""
-		r.invalid[p.ID] = true
+	// An address that is none is left out, not repaired, and the one repair
+	// there is — a pair of quotation marks around the whole of it — is counted.
+	if p.EmailAddress != "" {
+		address, unquoted, anAddress := anAddressMinkaTakes(p.EmailAddress)
+		p.EmailAddress = address
+		switch {
+		case !anAddress:
+			r.invalid[p.ID] = true
+		case unquoted:
+			r.unquoted++
+		}
 	}
 	seen := &seenPerson{person: p, listed: listed || present}
 	// A company a bundle cannot carry ends the run: said here, where the client
@@ -259,30 +266,12 @@ func (r *registry) invalidAddresses() []string {
 	return names
 }
 
+// unquotedAddresses counts the people whose address came inside a pair of
+// quotation marks that the run took off, one for each of them.
+func (r *registry) unquotedAddresses() int {
+	return r.unquoted
+}
+
 // mask is the character Basecamp puts in the place of what an identity may
 // not see.
 const mask = '\u2022'
-
-// looksLikeAnAddress is a plain check of the shape, not of what a mail server
-// would take: something without whitespace, one @, and a domain of at least
-// two labels made of letters, digits and hyphens. Letters of any script count,
-// so that a domain in somebody's own language passes; the glyphs a source may
-// mask an address with do not.
-func looksLikeAnAddress(address string) bool {
-	local, domain, found := strings.Cut(address, "@")
-	if !found || local == "" || strings.ContainsFunc(address, unicode.IsSpace) {
-		return false
-	}
-	labels := strings.Split(domain, ".")
-	if len(labels) < 2 {
-		return false
-	}
-	for _, label := range labels {
-		if label == "" || strings.ContainsFunc(label, func(r rune) bool {
-			return !unicode.IsLetter(r) && !unicode.IsDigit(r) && r != '-'
-		}) {
-			return false
-		}
-	}
-	return true
-}

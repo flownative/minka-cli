@@ -608,7 +608,7 @@ func TestMostAddressesBeingNoneEndsTheRunBeforeAnythingElseIsAskedFor(t *testing
 
 func TestSomebodyWithAnAddressThatIsNoneComesWithoutOneAndIsNamedByID(t *testing.T) {
 	account := fakebasecamp.New()
-	account.People[3].Email = `"linus@example.test"`               // 103, a member
+	account.People[3].Email = "linus@exämple.test"                 // 103, a member
 	account.People[4].Email = "nobody refers to this one"          // 105, left out
 	account.Projects[0].Dock[2].Creator.Email = "former colleague" // 99, a creator who left
 	dir, result := extract(t, account, "7001")
@@ -621,6 +621,31 @@ func TestSomebodyWithAnAddressThatIsNoneComesWithoutOneAndIsNamedByID(t *testing
 		addresses[person["sourceId"].(string)] = person["email"]
 	}
 	want := map[string]any{"99": nil, "101": "ada@example.test", "102": "grace@example.test", "103": nil, "104": "edsger@example.test"}
+	if !reflect.DeepEqual(addresses, want) {
+		t.Errorf("addresses %v, want %v", addresses, want)
+	}
+}
+
+// The one place a run repairs what the source says rather than passing it on,
+// held at the door a person comes through and counted in the report.
+func TestAPersonsAddressInQuotationMarksComesIntoTheBundleWithoutThem(t *testing.T) {
+	account := fakebasecamp.New()
+	account.People[3].Email = `"linus@example.test"`                  // 103, a member
+	account.Projects[0].Dock[2].Creator.Email = `"former@other.test"` // 99, a creator who left
+	dir, result := extract(t, account, "7001")
+
+	if len(result.InvalidAddresses) != 0 {
+		t.Errorf("a pair of quotation marks made an address none: %v", result.InvalidAddresses)
+	}
+	if result.AddressesUnquoted != 2 {
+		t.Errorf("%d addresses came out of quotation marks, want the two that stood in them", result.AddressesUnquoted)
+	}
+	addresses := map[string]any{}
+	for _, person := range records(t, dir, bundle.People) {
+		addresses[person["sourceId"].(string)] = person["email"]
+	}
+	want := map[string]any{"99": "former@other.test", "101": "ada@example.test", "102": "grace@example.test",
+		"103": "linus@example.test", "104": "edsger@example.test"}
 	if !reflect.DeepEqual(addresses, want) {
 		t.Errorf("addresses %v, want %v", addresses, want)
 	}
