@@ -253,7 +253,7 @@ one rule here, and that rule is Minka's (C-059):
   each at most 63 characters and beginning and ending with a letter or a digit,
   the last of them beginning with a letter; ASCII throughout; 254 characters in
   all. Whitespace around it comes off first, as Minka trims before it reads.
-- Two shapes Minka takes are left out all the same: a domain written as a
+- One shape Minka takes is left out all the same: a domain written as a
   bracketed literal address of a machine, `[192.168.1.1]` or `[IPv6:…]`.
   Nobody's mailbox is written that way, and reading one exactly as PHP reads it
   is a risk in the direction that stops a run.
@@ -264,7 +264,7 @@ one rule here, and that rule is Minka's (C-059):
   This is the **one place** a run repairs what the source says instead of
   passing it on, and it is that pair and nothing else: no other character is
   trimmed, unfolded or mended. `addressesUnquoted` counts how often it
-  happened, over people and mail alike, and a `notice` says how many. The one
+  happens, over people and mail alike, and a `notice` says how many. The one
   repair a run makes is a number in the report and never a silent change.
   A pair around a whole address is never a loss: an address Minka takes ends in
   a letter or a digit, and the quoted local part, `"ada b"@example.test`, keeps

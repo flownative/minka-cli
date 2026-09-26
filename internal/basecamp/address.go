@@ -13,11 +13,11 @@ import (
 // there.
 //
 // It is a reading of PHP's `filter_var` with the plain local part Minka asks
-// for on top of it, measured against that reader rather than guessed. Two
-// shapes Minka takes are left out all the same, because the domain is written
-// as a bracketed IP literal and no mailbox of a person is written that way:
+// for on top of it, measured against that reader rather than guessed. One shape
+// Minka takes is left out all the same, a domain written as a bracketed literal
+// address of a machine: no mailbox of a person is written that way, and
 // matching PHP's reading of one exactly is a risk in the direction that stops a
-// run, and the direction that merely loses an address is the cheaper one.
+// run, where the direction that merely loses an address is the cheaper one.
 const (
 	// maxAddressLength is the whole of an address, maxLocalPartLength what
 	// stands before the "@" and maxLabelLength one label of the domain, in
