@@ -5,6 +5,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"unicode"
 
 	"github.com/flownative/minka-cli/internal/basecamp"
 	"github.com/flownative/minka-cli/internal/bundle"
@@ -120,7 +121,7 @@ func TestTheDocsAndFilesOfAToolComeAsFoldersDocumentsAndUploads(t *testing.T) {
 	}
 
 	upload := recordWithID(t, records(t, dir, bundle.Uploads), "9260")
-	if upload["title"] != "logo.png" || upload["file"] != "upload-9260" || upload["folderSourceId"] != "9220" {
+	if upload["title"] != "The mark we use" || upload["file"] != "upload-9260" || upload["folderSourceId"] != "9220" {
 		t.Errorf("the upload with its file: %v", upload)
 	}
 
@@ -311,33 +312,64 @@ func TestTheStatusOfAnEntryIsItsOwnAndNeverItsFoldersS(t *testing.T) {
 	}
 }
 
-// The title of an upload is the name of its file, because Minka derives nothing
-// from a file and refuses an upload without a title. A name is whatever a file
-// system allowed, so it is made into a title the way a subject is, and the run
-// says how many.
-func TestAnUploadCarriesTheNameOfItsFileAsATitleMinkaTakes(t *testing.T) {
+// The title of an upload is **what the source calls it**, which Basecamp fills
+// from the name of the file and anybody can rename; the name of the file stands
+// in where the source calls it nothing, because Minka derives nothing from a file
+// and refuses an upload without a title. A title too long is shortened **the way
+// Minka shortens the name of a file** for an upload somebody makes there: the
+// extension stays and the stem before it is cut to make room, with no ellipsis.
+func TestAnUploadCarriesTheTitleTheSourceGivesItAndElseTheNameOfItsFile(t *testing.T) {
 	dir, result := extract(t, fakebasecamp.New(), docsProject)
 
 	uploads := records(t, dir, bundle.Uploads)
-	if got := recordWithID(t, uploads, "9260")["title"]; got != "logo.png" {
-		t.Errorf("the upload carries the title %v, want the name of its file", got)
+	// Renamed at the source: the title is the source's and not the file's name.
+	if got := recordWithID(t, uploads, "9260")["title"]; got != "The mark we use" {
+		t.Errorf("a renamed upload carries the title %v, want what the source calls it", got)
 	}
-	long := recordWithID(t, uploads, "9263")["title"].(string)
-	if count := len([]rune(long)); count > 200 || !strings.HasSuffix(long, "…") {
-		t.Errorf("a name longer than a title holds became a title of %d characters ending in %q", count, long[len(long)-3:])
+	// Called nothing at the source: the name of the file stands in.
+	if got := recordWithID(t, uploads, "9267")["title"]; got != "minutes.pdf" {
+		t.Errorf("an upload the source calls nothing carries the title %v, want the name of its file", got)
 	}
 	if got := recordWithID(t, uploads, "9264")["title"]; got != "(no name)" {
-		t.Errorf("an upload whose file has no name carries the title %v", got)
+		t.Errorf("an upload with neither a title nor a name carries the title %v", got)
 	}
 	if result.Docs.NamesMadeIntoATitle != 1 || result.Docs.WithoutAName != 1 {
-		t.Errorf("%d names made into a title and %d without a name, want one of each",
+		t.Errorf("%d titles made to fit and %d with neither a title nor a name, want one of each",
 			result.Docs.NamesMadeIntoATitle, result.Docs.WithoutAName)
+	}
+	if result.Docs.TitlesFromTheFileName != 2 {
+		t.Errorf("%d uploads take the name of their file as their title, want the two the source calls nothing",
+			result.Docs.TitlesFromTheFileName)
+	}
+
+	// The rule read off ItemTitle::fromFilename: a dot and up to eight letters
+	// or digits at the end are the extension and stay, the stem is cut to make
+	// room, and a name whose end is no extension of that shape is cut like any
+	// other text. Nothing ends in an ellipsis: Minka writes none either.
+	for name, want := range map[string]string{
+		strings.Repeat("a", 260) + ".pdf":       strings.Repeat("a", 196) + ".pdf",
+		strings.Repeat("a", 260):                strings.Repeat("a", 200),
+		strings.Repeat("a", 260) + ".toolong":   strings.Repeat("a", 192) + ".toolong",
+		strings.Repeat("a", 260) + ".extension": strings.Repeat("a", 200),
+		strings.Repeat("ä", 260) + ".png":       strings.Repeat("ä", 196) + ".png",
+	} {
+		account := fakebasecamp.New()
+		theUpload(t, account, 9267).Title, theUpload(t, account, 9267).Filename = "", name
+		dir, _ := extract(t, account, docsProject)
+		if got := recordWithID(t, records(t, dir, bundle.Uploads), "9267")["title"]; got != want {
+			t.Errorf("a name of %d characters became a title of %d, want the stem cut and the extension kept",
+				len([]rune(name)), len([]rune(got.(string))))
+		}
+	}
+	if got := recordWithID(t, uploads, "9263")["title"].(string); !strings.HasSuffix(got, ".jpeg") || strings.Contains(got, "…") {
+		t.Errorf("the long name of the account lost its extension or gained an ellipsis")
 	}
 
 	// Whatever the source calls a file, what comes out is a title Minka takes.
-	for _, name := range []string{"", "  ", "a\nb", strings.Repeat("ä", 500), string([]byte{0xff, 'x'})} {
+	for _, name := range []string{"", "  ", "a\nb", strings.Repeat("ä", 500), string([]byte{0xff, 'x'}), ".pdf",
+		strings.Repeat("ä", 500) + ".pdf"} {
 		account := fakebasecamp.New()
-		theUpload(t, account, 9267).Filename = name
+		theUpload(t, account, 9267).Title, theUpload(t, account, 9267).Filename = "", name
 		dir, _ := extract(t, account, docsProject)
 		title := recordWithID(t, records(t, dir, bundle.Uploads), "9267")["title"].(string)
 		switch {
@@ -345,6 +377,8 @@ func TestAnUploadCarriesTheNameOfItsFileAsATitleMinkaTakes(t *testing.T) {
 			t.Errorf("the name %q became a title of nothing", name)
 		case len([]rune(title)) > 200:
 			t.Errorf("the name %q became a title of %d characters", name, len([]rune(title)))
+		case strings.ContainsFunc(title, unicode.IsControl):
+			t.Errorf("the name %q became a title holding a character nobody can see", name)
 		}
 	}
 }
@@ -466,6 +500,34 @@ func DocsPlace(t *testing.T, result basecamp.Result, id string) basecamp.DocsPla
 	return basecamp.DocsPlaceLeftOut{}
 }
 
+// An entry of a place no walk ever sees is counted all the same, with no place to
+// name it against: a folder that is **in use** behind a Docs & Files tool that is
+// switched off stands in none of the project's lists of records it has put away,
+// and the tool is never read, so nothing can place the archived document inside
+// it. Counted and not named is all a run can do; not counted at all would be a
+// bundle saying it holds more of the source than it does.
+func TestAnEntryOfAPlaceNoWalkEverSeesIsCounted(t *testing.T) {
+	_, result := extract(t, fakebasecamp.New(), docsProject)
+
+	// No place of the report is that folder: the walk never met it, so there is
+	// nothing to name the document against.
+	for _, place := range result.Docs.PlacesLeftOut {
+		if place.SourceID == "9230" {
+			t.Error("the folder in use behind the switch is named as a place, and no walk can see it")
+		}
+	}
+
+	// Take the document out of the account and the number drops: it is that
+	// record the count is about, and no other.
+	account := fakebasecamp.New()
+	theFolder(t, account, 9230).Documents = nil
+	_, without := extract(t, account, docsProject)
+	if without.Docs.LeftOut.Documents != result.Docs.LeftOut.Documents-1 {
+		t.Errorf("without the document behind the switch %d documents are left out, want one fewer than %d",
+			without.Docs.LeftOut.Documents, result.Docs.LeftOut.Documents)
+	}
+}
+
 // A Docs & Files tool the source has switched off is not read at all, and nothing
 // that stands in it reaches the bundle. What the project's own lists of records it
 // has put away hand out of such a tool is counted and named with the tool it fell
@@ -538,18 +600,29 @@ func TestNoCommentAndNoBoostOfAFolderIsWrittenOrAskedFor(t *testing.T) {
 	}
 }
 
-// A record that stands or falls with a file no run will ever bring is written
-// all the same and named: Minka keeps nothing of such a record and asks for the
-// file again on every run, so it arrives there only once the source hands the
-// file out again. That is a document whose whole text is such a file, and an
-// upload whose own file is one. A run that said nothing would leave the record,
-// its comments and its boosts out of Minka with the number nobody looked at.
-func TestARecordThatStandsOrFallsWithAFileThatNeverComesIsWrittenAndNamed(t *testing.T) {
+// A document whose whole text is a file no run will ever bring **arrives
+// wordless**: the tag left in would cost the document altogether, because Minka
+// keeps nothing of such a text and asks for the file again on every run, so the
+// title, the comments and the boosts would arrive on no run while the file is
+// gone. It gets no line of the run's own as a mail does — there the body is a
+// field that must not be empty, and here it is not.
+//
+// An upload is the one of the three that cannot come without its file, the field
+// being required, and it is named for that.
+func TestADocumentThatSaysNothingButAFileThatNeverComesArrivesWordless(t *testing.T) {
 	dir, result := extract(t, fakebasecamp.New(), docsProject)
 
 	held := recordWithID(t, records(t, dir, bundle.Documents), "9245")
-	if held["body"] != `<import-attachment ref="attachment-5402"></import-attachment>` {
-		t.Errorf("the document of nothing but a file carries %v", held["body"])
+	if held["body"] != nil {
+		t.Errorf("the document of nothing but a file carries %v, want no words at all", held["body"])
+	}
+	if held["title"] != "The picture" || held["status"] != bundle.StatusActive {
+		t.Errorf("the wordless document lost its title or its status: %v", held)
+	}
+	// It arrives, and so does everything that hangs on it, which is the whole
+	// point of taking the tag out.
+	if result.Docs.DocumentsWithoutWords != 1 {
+		t.Errorf("%d documents came without words, want the one", result.Docs.DocumentsWithoutWords)
 	}
 	if got := recordWithID(t, records(t, dir, bundle.Uploads), "9276")["file"]; got != "upload-9276" {
 		t.Errorf("the upload whose file is gone names %v", got)
@@ -558,18 +631,33 @@ func TestARecordThatStandsOrFallsWithAFileThatNeverComesIsWrittenAndNamed(t *tes
 		t.Errorf("the records that stand or fall with a file that never comes are %v", got)
 	}
 
-	// A document that says something beside the file is not one of them: it keeps
-	// its words and loses the file alone.
-	account := fakebasecamp.New()
-	theDocument(t, account, 9245).Content = `<div>See this</div>` + theDocument(t, account, 9245).Content
-	_, result = extract(t, account, docsProject)
-	if got := result.Docs.OnlyAFileNoRunWillBring; !reflect.DeepEqual(got, []string{"9276"}) {
-		t.Errorf("a document with words beside its file is named among %v", got)
+	// A document that says something beside the file keeps its words, loses the
+	// file alone, and is named for nothing: Minka writes it as it stands. The
+	// words are put behind the tag as well as before it, because a reader that
+	// gave up at the first file would never see them.
+	tag := `<import-attachment ref="attachment-5402"></import-attachment>`
+	words := `<div>See this</div>`
+	for _, before := range []bool{true, false} {
+		account := fakebasecamp.New()
+		embed := theDocument(t, account, 9245).Content
+		body := tag + words
+		if before {
+			theDocument(t, account, 9245).Content, body = words+embed, words+tag
+		} else {
+			theDocument(t, account, 9245).Content = embed + words
+		}
+		dir, result = extract(t, account, docsProject)
+		if got := result.Docs.OnlyAFileNoRunWillBring; !reflect.DeepEqual(got, []string{"9276"}) {
+			t.Errorf("a document with words beside its file is named among %v", got)
+		}
+		if got := recordWithID(t, records(t, dir, bundle.Documents), "9245")["body"]; got != body {
+			t.Errorf("a document with words beside its file carries %v, want %v", got, body)
+		}
 	}
 
 	// A file this run merely could not fetch is no file that will never come:
 	// the upload waits for it, and the run after this one brings both.
-	account = fakebasecamp.New()
+	account := fakebasecamp.New()
 	theUpload(t, account, 9276).Gone = false
 	account.FailFileOf[fakebasecamp.StoredKeyOfUpload(9276)] = &basecamp.Error{Kind: basecamp.Network, Message: "the network failed"}
 	_, result = extract(t, account, docsProject)
@@ -665,7 +753,10 @@ func TestATitleOfAFolderOrADocumentMinkaRefusesEndsTheRun(t *testing.T) {
 	}
 }
 
-// A dry run walks the same way and brings no file.
+// A dry run walks the same way and brings no file. Two things it cannot know,
+// because all it has of a file is the size the source gives it: which record
+// stands or falls with a file the source no longer has, and therefore which
+// document arrives wordless for it.
 func TestADryRunOfDocsAndFilesWalksTheSameWay(t *testing.T) {
 	account := fakebasecamp.New()
 	_, wet := extract(t, account, docsProject)
@@ -677,7 +768,13 @@ func TestADryRunOfDocsAndFilesWalksTheSameWay(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got, want := result.Docs, asADryRunKnowsIt(wet).Docs; !reflect.DeepEqual(got, want) {
+	if result.Docs.DocumentsWithoutWords != wet.Docs.DocumentsWithoutWords-1 {
+		t.Errorf("a dry run says %d documents came without words and a run says %d, want one fewer",
+			result.Docs.DocumentsWithoutWords, wet.Docs.DocumentsWithoutWords)
+	}
+	want := asADryRunKnowsIt(wet).Docs
+	want.DocumentsWithoutWords = result.Docs.DocumentsWithoutWords
+	if got := result.Docs; !reflect.DeepEqual(got, want) {
 		t.Errorf("a dry run says of the Docs & Files\n got %v\nwant %v", got, want)
 	}
 	if len(dry.Downloads) > 0 {
@@ -789,5 +886,47 @@ func TestAListOfAFolderThatIsPutAwayMayBeGoneAndOneOfAFolderInUseMayNot(t *testi
 	var failed *basecamp.Error
 	if !errors.As(err, &failed) || failed.Kind != basecamp.NotFound {
 		t.Errorf("a list of a folder in use that is not there ended the run as %v, want not found", err)
+	}
+}
+
+// An upload whose address a run cannot ask for **still has a file**: it comes
+// into the bundle, the file is named among the missing ones, and the run ends
+// non-zero so nobody takes the bundle for whole. Reading the shape of the address
+// as the word on whether the upload has a file at all would leave every file of
+// a Docs & Files tool out, counted and named and gone — which is what a bundle of
+// the real account did until the address was measured.
+func TestAnUploadWhoseAddressARunCannotAskForKeepsItsFileAndIsNamedMissing(t *testing.T) {
+	for what, address := range map[string]string{
+		"an address of the app and not of the store": "https://3.basecamp.test/4242/buckets/7011/uploads/9267/download/minutes.pdf",
+		"an address with no key in it":               "https://storage.3.basecamp.com/4242/uploads/9267/download/minutes.pdf",
+		"a key of no shape a run can ask for":        "https://storage.3.basecamp.com/4242/blobs/BAh7CEki=/download/minutes.pdf",
+	} {
+		account := fakebasecamp.New()
+		theUpload(t, account, 9267).DownloadURL = address
+		dir, result := extract(t, account, docsProject)
+
+		upload := recordWithID(t, records(t, dir, bundle.Uploads), "9267")
+		if upload["file"] != "upload-9267" {
+			t.Errorf("%s: the upload names %v, want its file", what, upload["file"])
+		}
+		if len(result.Docs.WithoutAStoredFile) != 1 || result.Docs.WithoutAStoredFile[0] != "9262" {
+			t.Errorf("%s: the uploads said to name no stored file are %v, want the one in the cloud alone",
+				what, result.Docs.WithoutAStoredFile)
+		}
+		named := false
+		for _, missing := range result.Missing {
+			if missing.AttachmentSourceID == "upload-9267" && missing.OwnerKind == bundle.OwnerUpload {
+				named = true
+			}
+		}
+		if !named {
+			t.Errorf("%s: the file is in neither the bundle nor the missing ones: %v", what, result.Missing)
+		}
+		// And no message says what the file is called or where it lies.
+		for _, missing := range result.Missing {
+			if strings.Contains(missing.Reason, "minutes") || strings.Contains(missing.Reason, "storage.") {
+				t.Errorf("%s: the reason says what the file is called or where it lies: %q", what, missing.Reason)
+			}
+		}
 	}
 }

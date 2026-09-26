@@ -2,6 +2,7 @@ package fakebasecamp
 
 import (
 	"fmt"
+	"net/url"
 	"regexp"
 	"sort"
 	"strconv"
@@ -65,9 +66,13 @@ type UploadedFile struct {
 	// about it, wherever it is listed.
 	Status      string
 	ShownStatus string
-	// Title is what Basecamp calls the upload, Filename the name of the file.
+	// Title is what Basecamp calls the upload, which it fills from the name of
+	// the file and anybody can rename; Filename is the name of the file itself.
 	Title       string
 	Description string
+	// Position is the place the source shows the upload at, which the format has
+	// no word for and no run reads.
+	Position    int
 	Filename    string
 	ContentType string
 	Bytes       int64
@@ -75,8 +80,12 @@ type UploadedFile struct {
 	NoSize bool
 	// Gone is a file the account lists and no longer has.
 	Gone bool
-	// URLName replaces the name in the addresses of the file.
-	URLName string
+	// URLName replaces the name in the addresses of the file, and DownloadURL the
+	// whole address the account says the file is downloaded from: the one thing
+	// about an upload nothing has read off the real source, so a test gives it
+	// the shapes it might have.
+	URLName     string
+	DownloadURL string
 	// InTheCloud is an upload Basecamp holds no stored file for, one that lives
 	// in a Google Drive or another cloud: the answer names no file to download.
 	InTheCloud bool
@@ -102,9 +111,12 @@ type UploadedFile struct {
 // document and an upload of a status nobody knows, an upload Basecamp holds no
 // stored file for with a comment and a boost on it, one whose file name is
 // longer than a title holds, one without a name at all, records the account
-// lists twice, an upload on the shelf, one in the trash inside a folder that is
-// in use, one whose file the source no longer has, and comments and boosts on a
-// document and on an upload.
+// lists twice, an upload the source has renamed and one it calls nothing, an
+// upload on the shelf, one in the trash inside a folder that is
+// in use, one whose file the source no longer has, a document embedding a file
+// whose identifier is the identifier of an upload, a folder in use behind the
+// switched-off tool that no walk can see, and comments and boosts on a document
+// and on an upload.
 //
 // The folder inside the first one is the case the whole tool turns on: it is
 // hidden from clients below a folder the source shows, which is what makes Minka
@@ -139,11 +151,21 @@ func docsProject(ada, grace, former Person, tool func(int64, string, string, str
 		},
 		Boosts: []Boost{{ID: 9281, Content: "👍", CreatedAt: at(2, 13), Booster: &grace}},
 	}
+	// A file whose identifier is the identifier of an upload of the same tool.
+	// Basecamp counts attachments and recordings in tables of their own, so the
+	// two can be the same number, and then a reference made of the number alone
+	// would name one file for two records.
+	// Its stored file is its own: one blob is one name and one size, whoever
+	// points at it, so the key is no upload's.
+	sameNumber := File{ID: 9260, SGID: SGID("gid://bc3/Attachment/9260?expires_in"), Key: FileKey(7260),
+		Filename: "table.png", ContentType: "image/png", Bytes: 640}
 	appendix := Document{ID: 9252, Title: "Appendix", Creator: &grace, CreatedAt: at(2, 14), UpdatedAt: at(2, 14),
-		Content: `<div>The rest</div>`}
+		Content: `<div>The rest</div>` + Embed{File: sameNumber}.HTML(), Files: []File{sameNumber}}
 
+	// Renamed at the source: what it is called is not the name of its file, and
+	// the title is the source's to give.
 	logo := UploadedFile{
-		ID: 9260, Title: "logo.png", Filename: "logo.png", ContentType: "image/png", Bytes: 4096,
+		ID: 9260, Title: "The mark we use", Filename: "logo.png", ContentType: "image/png", Bytes: 4096, Position: 1,
 		Creator: &ada, CreatedAt: at(3, 8), UpdatedAt: at(3, 9), VisibleToClients: &shown,
 		Description: `<div>The one we use</div>`,
 		Comments: []Comment{{ID: 9273, Creator: &grace, CreatedAt: at(3, 10), UpdatedAt: at(3, 10),
@@ -177,7 +199,7 @@ func docsProject(ada, grace, former Person, tool func(int64, string, string, str
 	finished := Folder{ID: 9222, Status: "archived", Title: "Finished", Creator: &ada, CreatedAt: at(1, 11), UpdatedAt: at(5, 11),
 		Documents: []Document{{ID: 9242, Title: "Last year", Creator: &ada, CreatedAt: at(5, 8), UpdatedAt: at(5, 8),
 			Content: `<div>Done with</div>`}}}
-	dropped := Folder{ID: 9223, Status: "trashed", Title: "Dropped", Creator: &ada, CreatedAt: at(1, 12), UpdatedAt: at(5, 12),
+	dropped := Folder{ID: 9223, Status: "trashed", Title: "Thrown out", Creator: &ada, CreatedAt: at(1, 12), UpdatedAt: at(5, 12),
 		Uploads: []UploadedFile{{ID: 9261, Title: "old.pdf", Filename: "old.pdf", ContentType: "application/pdf", Bytes: 256,
 			Creator: &ada, CreatedAt: at(5, 9), UpdatedAt: at(5, 9)}}}
 	// A word a bundle has none for, on a folder that is in use: it is left out,
@@ -209,8 +231,9 @@ func docsProject(ada, grace, former Person, tool func(int64, string, string, str
 			Content: `<div>Waiting</div>`},
 	}
 	docs.Uploads = []UploadedFile{
-		{ID: 9267, Title: "minutes.pdf", Filename: "minutes.pdf", ContentType: "application/pdf", Bytes: 1536,
-			Creator: &grace, CreatedAt: at(9, 8), UpdatedAt: at(9, 8),
+		// Called nothing at the source, so the name of its file stands in.
+		{ID: 9267, Title: "", Filename: "minutes.pdf", ContentType: "application/pdf", Bytes: 1536,
+			Twice: true, Creator: &grace, CreatedAt: at(9, 8), UpdatedAt: at(9, 8),
 			Description: `<div>Of the last meeting, see ` + Embed{File: chart}.HTML() + `</div>`, Files: []File{chart}},
 		// In a cloud, so Basecamp names no file: the upload is left out, and the
 		// comment and the boost on it go with it.
@@ -243,9 +266,17 @@ func docsProject(ada, grace, former Person, tool func(int64, string, string, str
 	// and what the project's own lists of archived records hand out of it is
 	// left out and counted.
 	closed := tool(9212, "vault", "vaults", "Old files", false, 0, &ada)
-	closed.Folders = []Folder{{ID: 9227, Status: "archived", Title: "Behind a switch", Creator: &ada, CreatedAt: at(11, 8), UpdatedAt: at(11, 9),
-		Documents: []Document{{ID: 9253, Status: "archived", Title: "Nobody reads this", Creator: &ada, CreatedAt: at(11, 10), UpdatedAt: at(11, 11),
-			Content: `<div>Nothing</div>`}}}}
+	closed.Folders = []Folder{
+		{ID: 9227, Status: "archived", Title: "Behind a switch", Creator: &ada, CreatedAt: at(11, 8), UpdatedAt: at(11, 9),
+			Documents: []Document{{ID: 9253, Status: "archived", Title: "Nobody reads this", Creator: &ada, CreatedAt: at(11, 10), UpdatedAt: at(11, 11),
+				Content: `<div>Nothing</div>`}}},
+		// In use, and so in none of the project's lists of records it has put
+		// away: behind a switch a run does not read, it is a folder no walk ever
+		// sees, and the archived document in it names a vault nothing can place.
+		{ID: 9230, Title: "In use behind a switch", Creator: &ada, CreatedAt: at(11, 14), UpdatedAt: at(11, 14),
+			Documents: []Document{{ID: 9254, Status: "archived", Title: "Under a folder nothing sees", Creator: &ada,
+				CreatedAt: at(11, 15), UpdatedAt: at(11, 16), Content: `<div>Nothing either</div>`}}},
+	}
 	closed.Documents = []Document{{ID: 9251, Status: "archived", Title: "Behind a switch as well", Creator: &ada,
 		CreatedAt: at(11, 12), UpdatedAt: at(11, 13), Content: `<div>Nothing either</div>`}}
 
@@ -504,17 +535,29 @@ func (a *Account) documentJSON(p *Project, in int64, document *Document) map[str
 	return answer
 }
 
-// uploadedFileJSON is an upload as Basecamp answers one. An upload that lives in
-// a cloud names no stored file, so neither the name nor the address of one is in
-// the answer.
+// uploadedFileJSON is an upload as Basecamp answers one, with every key a
+// record of the account was read to carry. An upload that lives in a cloud names
+// no stored file, so neither the name, the size, the type nor the address of one
+// is in the answer.
+//
+// The keys the extractor reads nothing from are here so that it is seen reading
+// nothing from them: `position`, which the format has no word for, and
+// `inherits_status`, `height` and `width`, which a bundle says nothing of.
 func (a *Account) uploadedFileJSON(p *Project, in int64, upload *UploadedFile) map[string]any {
 	answer := map[string]any{
 		"id": upload.ID, "status": upload.shownStatus(), "title": upload.Title, "type": "Upload",
 		"description": upload.Description, "description_attachments": a.filesJSON(upload.Files),
 		"parent":         map[string]any{"id": in, "type": "Vault"},
+		"bucket":         map[string]any{"id": p.ID, "name": p.Name, "type": "Project"},
 		"comments_count": len(upload.Comments), "comments_url": fmt.Sprintf("%sbuckets/%d/recordings/%d/comments.json", a.root(), p.ID, upload.ID),
 		"boosts_count": len(upload.Boosts), "boosts_url": fmt.Sprintf("%sbuckets/%d/recordings/%d/boosts.json", a.root(), p.ID, upload.ID),
-		"created_at": upload.CreatedAt, "updated_at": upload.UpdatedAt,
+		"subscription_url": fmt.Sprintf("%sbuckets/%d/recordings/%d/subscription.json", a.root(), p.ID, upload.ID),
+		"bookmark_url":     fmt.Sprintf("%sbuckets/%d/recordings/%d/bookmark.json", a.root(), p.ID, upload.ID),
+		"url":              fmt.Sprintf("%sbuckets/%d/uploads/%d.json", a.root(), p.ID, upload.ID),
+		"app_url":          fmt.Sprintf("https://3.basecamp.test/%s/buckets/%d/uploads/%d", a.ID, p.ID, upload.ID),
+		"position":         upload.Position,
+		"inherits_status":  true,
+		"created_at":       upload.CreatedAt, "updated_at": upload.UpdatedAt,
 	}
 	if !upload.InTheCloud {
 		answer["filename"] = upload.Filename
@@ -523,7 +566,13 @@ func (a *Account) uploadedFileJSON(p *Project, in int64, upload *UploadedFile) m
 		if upload.NoSize {
 			answer["byte_size"] = nil
 		}
+		answer["width"], answer["height"] = 640, 480
 		answer["download_url"] = a.downloadURL(StoredKeyOfUpload(upload.ID), upload.urlName())
+		if upload.DownloadURL != "" {
+			answer["download_url"] = upload.DownloadURL
+		}
+		answer["app_download_url"] = fmt.Sprintf("https://3.basecamp.test/%s/buckets/%d/uploads/%d/download/%s",
+			a.ID, p.ID, upload.ID, url.PathEscape(upload.urlName()))
 	}
 	if upload.VisibleToClients != nil {
 		answer["visible_to_clients"] = *upload.VisibleToClients

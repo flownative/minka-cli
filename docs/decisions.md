@@ -713,12 +713,19 @@ see why — and the later of two moments the source itself said is no guess.
 <a id="c-052"></a>
 ## C-052 — What falls with a place a bundle cannot carry is asked for and counted
 
-*Applies to: the lists, groups and to-dos of a bundle, the report of a run*
+*Applies to: the lists, groups and to-dos of a bundle, its folders, documents
+and uploads, the report of a run*
 
-The groups and to-dos of a to-do list, and the to-dos of a group, that a bundle
-does not carry are asked for although none of them is written, counted per kind
-and named with the place they fell with. Such a walk asks for what it counts and
-for nothing else, and the one failure it passes over is `not_found`.
+What stood in a place a bundle does not carry is asked for although none of it is
+written, counted per kind and named with the place it fell with: the groups and
+to-dos of a to-do list, the to-dos of a group, and the folders, documents and
+uploads of a folder of Docs & Files, whose own folders are places of their own,
+so the walk grows while it goes. Such a walk asks for what it counts and for
+nothing else, and the one failure it passes over is `not_found`. A **tool** that
+is switched off is asked nothing: one the source has switched off is a tool the
+run does not read at all, so what the project's own lists of records it has put
+away hand out of it is counted where it is met, and an entry no place ever
+claimed is counted without a place to name it against.
 
 **Why:** [C-050](#c-050) promises that what is left out is counted, and a place
 that took a subtree with it silently would make every number of a run say that a
@@ -727,8 +734,9 @@ walk is fenced to them, and a place Basecamp no longer has is passed over rather
 than ending a run over records it left out anyway — the only place where a wrong
 assumption about an answer counts too few instead of ending the run, which is why
 the [Status](work-in-progress/status.md) names it.
-**Implemented as:** `basecamp.Extractor.countWhatFellWithAPlace`, see
-[Importing from Basecamp](stable/import.md).
+**Implemented as:** `basecamp.Extractor.countWhatFellWithAPlace`,
+`basecamp.Extractor.countWhatFellWithAVault`, `basecamp.countWhatWasNeverPlaced`,
+see [Importing from Basecamp](stable/import.md).
 
 <a id="c-053"></a>
 ## C-053 — A card the host will not have leaves the list, and an unknown word takes nothing
@@ -812,16 +820,18 @@ file is whatever a file system allowed: neither is anybody's to repair at the
 source, so a run that refused one would never come to an end, however often it
 is started. The title of a card, a post, a to-do, a folder or a document still
 ends the run, because that one somebody can put right where it stands. An
-upload has no other title — Minka derives nothing from a file and refuses an
-upload without one — so folding the name is the only way it comes at all.
-`fromAddress` is what a forward is
-about and the field takes nothing else, so a mail whose sender is none cannot be
+upload has no other title, Minka deriving nothing from a file, so its name is
+folded rather than ending a walk of hours over a name nobody typed. **A name too
+long is shortened the way Minka shortens one** (`ItemTitle::fromFilename`): the
+extension stays and the stem is cut to make room, with no ellipsis, so one file
+carries the same title whether it was uploaded there or brought here.
+`fromAddress` is what a forward is about and the field takes nothing else, so a
+mail whose sender is none cannot be
 carried at all — and ending a walk of hours over one mail would leave a whole
 account unimported. The address is read as Minka reads it ([C-059](#c-059)), so
 that what a bundle carries is always taken.
-**Implemented as:** `basecamp.aTitleMinkaTakes`,
-`basecamp.anAddressMinkaTakes`, see
-[Importing from Basecamp](stable/import.md).
+**Implemented as:** `basecamp.aTitleMinkaTakes`, `basecamp.aFileNameAsATitle`,
+`basecamp.anAddressMinkaTakes`, see [Importing from Basecamp](stable/import.md).
 
 <a id="c-057"></a>
 ## C-057 — A mail that would arrive with nothing in it carries a line of the run
@@ -836,19 +846,25 @@ one. The tag of the file stays where it stood, and an embed gets its address as
 a link and no sentence. A file this run merely could not fetch is not one that
 will never come: the mail waits for it.
 
-**Why:** Minka writes such a body empty and remembers the mail as finished, or
-passes it over before it is remembered and passes it over again on every run
-afterwards; either way the subject, the sender, the answers and the comments are
-lost, and no run can mend it from that side. The extractor is the one place that
-knows a file can never come, and a run that said so of one it could simply not
-fetch would take the mail from every run after it. An embed is Minka's own
+**Why:** `body` is a field of a forward that must not be empty, so writing one
+is the only way the mail comes at all: Minka writes such a body empty and
+remembers the mail as finished, or passes it over before it is remembered and
+passes it over again on every run afterwards; either way the subject, the
+sender, the answers and the comments are lost. The extractor is the one place
+that knows a file can never come, and a run that said so of one it could simply
+not fetch would take the mail from every run after it. An embed is Minka's own
 reading of an address, so a mail that hangs on one alone gets the address as a
-link, which every reading keeps, and no sentence: Minka usually takes the
-embed, and a run that called such a mail wordless would be putting that in
-writing under somebody's name.
+link, which every reading keeps, and no sentence.
+A **document** gets no such line, and neither does the description of an upload:
+those fields are optional and Minka writes a document without words, so the tag
+of the file that will never come is taken out instead and the record arrives
+wordless with everything on it. The difference between the two kinds is the
+field, not the loss — and nobody puts invented words into something a person
+wrote where there is a way not to.
 **Implemented as:** `basecamp.Extractor.aBodyThatSaysSomething`,
 `basecamp.Extractor.whatWouldArriveOf`,
-`basecamp.Extractor.theFileNeverArrives`, see
+`basecamp.Extractor.theFileNeverArrives`,
+`basecamp.Extractor.wordlessWhereItsOnlyFileNeverComes`, see
 [Importing from Basecamp](stable/import.md).
 
 <a id="c-058"></a>
@@ -916,14 +932,21 @@ number in the report keeps the repair from being a silent one.
 
 An upload Basecamp names no stored file for, one that lives in a cloud, is left
 out and named by its `sourceId`, and its comments and its boosts are neither
-asked for nor written. All three are counted and a `notice` says so.
+asked for nor written. All three are counted and a `notice` says so. **What says
+so is the record and never the shape of the address:** an upload the source gives
+an address to fetch a file from has a file, and one whose address a run cannot
+ask for is a file it could not fetch — named under `missingFiles`, the run ending
+non-zero, and a later run brings it.
 
 **Why:** `file` takes the `sourceId` of a file of the bundle and nothing else,
 and no run will ever have bytes to fetch for a file that lies somewhere else,
 so such an upload would be counted in Minka as waiting on every run. What
 pointed at it falls with it ([C-052](#c-052)): a comment naming an upload the
 bundle does not carry stops the applier, and carrying it would cost the import
-rather than the one upload.
+rather than the one upload. The record and not the address decides, because a
+reading of the address that is wrong by one shape leaves **every** file of a tool
+out of the bundle, counted and named and gone, where a file that cannot be
+fetched costs one exit code and a later run.
 **Implemented as:** `basecamp.fileOfAnUpload`,
 `basecamp.Extractor.writeUpload`, see
 [Importing from Basecamp](stable/import.md).

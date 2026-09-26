@@ -711,9 +711,8 @@ and Minka applies the kinds in an order of its own.
   `docs.foldersByStatus` splits the folders of the bundle, as
   `docs.documentsByStatus` and `docs.uploadsByStatus` do the other two kinds.
   **A folder takes neither comments nor reactions**, here as in Minka and as in
-  Basecamp, so neither is written and neither is asked for: Minka counts one
-  that names a folder with what it will never take, and no later run takes it
-  either.
+  Basecamp, so neither is written and neither is asked for: Minka counts one that
+  names a folder with what it will never take, and no later run takes it either.
   A folder the source has put away may hand out no list of what stands in it,
   and that is passed over rather than ending the run; a folder that is in use
   has to answer, and a list of one that is not there ends the run. What is in
@@ -725,19 +724,27 @@ and Minka applies the kinds in an order of its own.
   `folderSourceId` `null` at the top of the tool. `title` is the title, `body`
   the document as Basecamp renders it, rewritten like every other text, and
   `null` where the document has no words, which Minka takes and
-  `docs.documentsWithoutWords` counts. `status` is the
-  document's **own**: one in a folder the source archived or threw away carries
+  `docs.documentsWithoutWords` counts. `status` is the document's **own**: one
+  in a folder the source archived or threw away carries
   `active` and goes along through the folder in Minka, and a run that wrote the
   folder's word onto it would put it away one by one and never bring it back
   with the folder. Comments on a document are `comments` with `parentKind`
   `document`, its boosts `reactions` with `targetKind` `document`, its files
   `attachments` with `ownerKind` `document`.
 - **Uploads** are one stored file each, standing beside a text instead of inside
-  one, `uploads.jsonl`. `title` is the **name of the file**, because Minka
-  derives nothing from a file and refuses an upload without a title; a name
-  Minka would refuse is made into a title as the subject of a mail is (C-056),
-  counted in `docs.namesMadeIntoATitle` and `docs.withoutAName`. `file` is the
-  `sourceId` of the file's record in `attachments.jsonl`, which is `upload-<id>`
+  one, `uploads.jsonl`. `title` is **what the source calls the upload**:
+  Basecamp fills it from the name of the file and anybody can rename it, so the
+  title is the one to take. Where the source calls it nothing, **the name of its
+  file stands in** (`docs.titlesFromTheFileName`), because Minka derives nothing
+  from a file and refuses an upload without a title; where there is neither, the
+  title is `(no name)` (`docs.withoutAName`). A title Minka would refuse is made
+  into one it takes (C-056) and counted in `docs.namesMadeIntoATitle`: every
+  character nobody can see becomes a blank, and a title too long is shortened
+  **the way Minka shortens the name of a file** for an upload somebody makes
+  there (`ItemTitle::fromFilename`) — the extension stays, the stem before it is
+  cut to make room, and nothing ends in an ellipsis, so one file carries the same
+  title whether it was uploaded there or brought here.
+  `file` is the `sourceId` of the file's record in `attachments.jsonl`, which is `upload-<id>`
   and never the reference a text uses for a file: a stored file has one place in
   Minka, so a text that embedded the same file and an upload that stood for it
   would be one reference used twice, the text would claim it, and the upload
@@ -748,27 +755,44 @@ and Minka applies the kinds in an order of its own.
   are nor which. An upload Basecamp names no stored file for is left out with
   everything pointing at it (C-060), named in `docs.withoutAStoredFile` and
   counted with what fell in `docs.commentsWithoutTheirUpload` and
-  `docs.boostsWithoutTheirUpload`. Comments, boosts and the files of the
+  `docs.boostsWithoutTheirUpload`. **What says so is the record and never the
+  shape of the address:** an upload the source gives an address to fetch a file
+  from has a file, whatever a run can make of that address, and one whose
+  address a run cannot ask for is a file it could not fetch — named under
+  `missingFiles`, the run ending non-zero, and a later run brings it. Reading the
+  shape of the address as the word on whether there is a file at all would leave
+  every file of a tool out of a bundle, counted and named and gone. Comments, boosts and the files of the
   description use `upload` as their kind.
 - **A document or a description longer than the 1,000,000 characters Minka
   holds** is counted (`docs.longerThanMinkaTakes`) and comes as it is, as a mail
   does: Minka passes such a record over on every run with everything hanging on
   it, and a run that shortened it would decide in the one place nobody can
-  repeat. A record that **stands or falls with a file no run will ever bring**
-  is written all the same and named by its `sourceId`
-  (`docs.onlyAFileNoRunWillBring`) — a document whose whole text is such a file,
-  and an upload whose own file is one: Minka keeps nothing of such a record and
-  asks for the file again on every run, which is what rescues it where the
-  source hands the file out again and what loses it where the file is gone for
-  good. A file this run merely could not fetch is not one that will never come:
-  the record waits for it, and the run after this one brings both. It gets no line of the run's own as a mail does (C-057), because such a
+  repeat. A record that lost **a file no run will ever bring** is named by its
+  `sourceId` (`docs.onlyAFileNoRunWillBring`), and the two kinds it can be end
+  differently, because the one field is optional and the other is not:
+  - A **document**, or the description of an upload, whose whole text was that
+    file **arrives without words**: the tag comes out, so nothing is left, and
+    the record is written empty with its title, its comments and its boosts. The
+    tag left in would cost the whole record — Minka keeps nothing of a text that
+    is nothing but a file it has not got and asks for the file again on every
+    run — and the premise of the case is that the file stays gone. It gets **no
+    line of the run's own** as a forwarded mail does (C-057): there the body is a
+    field that must not be empty, so an invented sentence was the only way the
+    mail came at all, and here it is not; a document is read as something a
+    person wrote.
+  - An **upload** whose own file it is cannot be written: `file` is required and
+    takes the identifier of a file of the bundle and nothing else. Minka keeps
+    nothing of it and asks for the file again on every run.
+
+  A file this run merely could not fetch is not one that will never come:
+  the tag stays, the record waits for it, and the run after this one writes it
+  whole. It gets no line of the run's own as a mail does (C-057), because such a
   record is not remembered as finished and the run after the one that finds the
   file writes it whole.
 - **Comments** are those of cards, of posts, of answers, of to-do lists, of
   to-dos, of forwarded mail, of documents and of uploads, `parentKind`
   `card`, `post`, `answer`, `todolist`, `todo`, `forward`, `document` or
-  `upload`,
-  per parent oldest first, by `created_at` and then by ID: the applier reads
+  `upload`, per parent oldest first, by `created_at` and then by ID: the applier reads
   the order of the comments of a parent from the file. Basecamp hands out the
   rendered text of a comment only. A comment in the trash is left out with
   its boosts and counted (`commentsTrashed`); any other comes, the archived
@@ -776,9 +800,8 @@ and Minka applies the kinds in an order of its own.
 - **Reactions** are the boosts of a card (`targetKind` `card`), of a post
   (`post`), of an answer (`answer`), of a to-do list (`todolist`), of a to-do
   (`todo`), of a forwarded mail (`forward`), of a document (`document`), of an
-  upload (`upload`), of a comment (`comment`) and of a
-  line (`message`), with `content`
-  as it is, a text of some words included: what Minka takes for a reaction is
+  upload (`upload`), of a comment (`comment`) and of a line (`message`), with
+  `content` as it is, a text of some words included: what Minka takes for a reaction is
   the applier's to decide. The boosts of a card or a post stand before those
   of its comments. A boost has one time, which is both `createdAt` and
   `updatedAt`.
@@ -817,9 +840,12 @@ request of their own: a list shows them in
 full. A Docs & Files tool costs three requests per vault it holds — its folders,
 its documents and its uploads, the vault at the top of the tool included — and a
 project with such a tool six more for the records it has put away, one per kind
-and status, whatever the tool.
-Comments are asked for only where a card or a post says it has some,
-boosts only where a card, a post, a comment or a line says so, and the answers
+and status, whatever the tool. A folder the bundle **cannot** carry costs three
+more, for counting what fell with it, and a folder of that folder three again.
+Comments are asked for only where a card, a post, a document or an upload says
+it has some,
+boosts only where a card, a post, a document, an upload, a comment or a line says
+so, and the answers
 of a mail only where it says it has some. A **mail** says how many comments and
 how many boosts it has as little as Basecamp knows, so both of its lists are
 asked for whatever they hold: two requests a mail, and one more where it has

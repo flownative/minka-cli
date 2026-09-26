@@ -228,14 +228,6 @@ func (e *Extractor) attachFile(ctx context.Context, w *bundle.Writer, ownerKind 
 	if file.contentType != "" {
 		record.ContentType = &file.contentType
 	}
-	if w.Discards() {
-		// All a dry run knows of a file is the size the source gives it.
-		if file.byteSize != nil && *file.byteSize > e.LargestFile {
-			e.filesThatNeverArrive[file.ref] = true
-		}
-		e.fileRecords = append(e.fileRecords, record)
-		return nil
-	}
 	missing := func(failed *Error) {
 		e.missing = append(e.missing, MissingFile{
 			AttachmentSourceID: file.ref,
@@ -244,6 +236,25 @@ func (e *Extractor) attachFile(ctx context.Context, w *bundle.Writer, ownerKind 
 			Reason:             failed.Message,
 			Retryable:          failed.Transient(),
 		})
+	}
+	if w.Discards() {
+		// All a dry run knows of a file is what the source says about it — the
+		// size, and whether the address it gives can be asked for at all. The
+		// second is asked here and not left to the run, because a dry run is what
+		// somebody looks at before spending an hour, and a file no address can be
+		// built for is one no run will ever bring.
+		if file.byteSize != nil && *file.byteSize > e.LargestFile {
+			e.filesThatNeverArrive[file.ref] = true
+		}
+		if _, err := e.storageAddress(file); err != nil {
+			var failed *Error
+			if errors.As(err, &failed) {
+				missing(failed)
+			}
+			return nil
+		}
+		e.fileRecords = append(e.fileRecords, record)
+		return nil
 	}
 
 	stored, reused, err := w.ReuseFile(file.ref, name)
