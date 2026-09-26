@@ -278,7 +278,11 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   `content_attachments`, `creator` and `boosts_count`, that such a creator can be
   an `Outsider`, and that `projects/recordings.json?type=Inbox::Forward` refuses
   the request, so there is no list of the archived and the trashed mails of a
-  project. Everything the run does with all that rests on the invented account.
+  project. Everything the run does with all that rests on the invented account,
+  with two exceptions held against Minka's own reading rather than against a
+  test here: every address and every title the run would write was put through
+  PHP's `filter_var`, the plain local part of `EmailAddress` and the three
+  refusals of `IsName`, and not one of them is refused.
   Invented for want of anything to measure: that an inbox lists its mail newest
   first; a mail whose `status` says anything but `active`, the account holding
   none, so the shelf becoming the trash has never been seen; a mail that says
