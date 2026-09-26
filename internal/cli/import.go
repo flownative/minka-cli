@@ -209,9 +209,11 @@ forwarded mail with the answers by mail, the comments and the boosts of each,
 and of each Docs & Files tool its folders, documents and uploads with the
 comments, the boosts and the files of each.
 
-The lists of a to-do set stand in the bundle from the bottom up, because Minka
-puts every new list on top of its tool, and the groups and the to-dos of a list
-in the order of the list. A list comes with the state the source left it in, a
+The lists of a to-do set that are in use stand in the bundle from the bottom up,
+because Minka puts every new list on top of its tool; the ones the source has put
+away stand before them in the order it lists them, which decides nothing, Minka
+ordering an archive by the moment a record was put away. The groups and the
+to-dos of a list come in the order of the list. A list comes with the state the source left it in, a
 group and a to-do with the trash alone, because Minka gives neither of the two a
 shelf: one the source has put on the shelf is left out and counted, and so is
 whatever stood in a list or a group the bundle does not carry — todosLeftOut
@@ -265,9 +267,12 @@ the first record's. A folder, a document and an
 upload each carry the state the source left them in — active, archived or
 trashed — and never the state of the folder they stand in: what stands in a
 folder that was archived or thrown away goes along through the folder in Minka
-and comes back with it. Every kind of a folder stands in the bundle from the
-bottom up, because Minka puts each new entry on top of its kind there, and a
-folder stands after the folder it is in. A folder whose status a bundle has no
+and comes back with it. For an entry **in use** the order of the file
+decides: Minka puts each new one on top of its kind, so the bundle carries them
+from the bottom up and the source's order comes out again. For one that has left
+its place it decides nothing — Minka orders an archive by the moment a record was
+put away and takes that moment from the record itself — so those stand first and
+in the order the source lists them. A folder stands after the folder it is in. A folder whose status a bundle has no
 word for is left out with everything below it, which is left out with it
 (docs.leftOut counts the folders, documents and uploads, docs.placesLeftOut
 names every place that took entries with it); so are the entries of a Docs &

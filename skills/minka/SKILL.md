@@ -875,7 +875,9 @@ this:
   file, which are left out and which a `notice` counts as well. Lines
   somebody deleted and the lines Basecamp writes itself are not in its API.
 - A to-do set becomes a tool of kind `todos`. Its lists stand in the bundle from
-  the bottom up, because Minka puts every new list on top, and the groups and the
+  the bottom up where they are in use, because Minka puts every new list on top,
+  the ones the source has put away standing before them as it lists them, where
+  their order decides nothing, and the groups and the
   to-dos of a list in the order of the list. `data.todoListsByStatus` splits the
   lists and `data.todosByStatus` the to-dos. A
   list knows the shelf and the trash, a group and a to-do the trash alone: one the
@@ -924,9 +926,11 @@ this:
   No output ever names a subject or an address.
 - A Docs & Files tool becomes a tool of kind `files`, and what stands in it
   `folders`, `documents` and `uploads`. A folder stands in the bundle after the
-  folder it is in, and each kind of a folder from the bottom up, because Minka
-  puts every new entry on top of its kind there; there is no position in the
-  format. `data.docs.foldersByStatus`, `documentsByStatus` and
+  folder it is in. For an entry in use the order of the file decides, bottom up,
+  because Minka puts every new one on top of its kind; for one that has left its
+  place it decides nothing, Minka ordering an archive by the moment a record was
+  put away, so those stand first as the source lists them. There is no position in
+  the format. `data.docs.foldersByStatus`, `documentsByStatus` and
   `uploadsByStatus` split them. The status of an entry is its **own** and never
   the status of its folder: what stands in a folder the source archived or threw
   away carries `active` and goes along through the folder in Minka. A document

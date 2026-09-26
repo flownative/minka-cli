@@ -35,8 +35,8 @@ board the posts of every status with their categories, comments and boosts, of
 each chat its lines as messages with their boosts, written in parts of one
 chat and some 10,000 lines each, of each questionnaire its questions with the
 schedule Minka has words for and their answers with what hangs on them, of
-each to-do set its lists from the bottom up, because Minka puts every new list
-on top, with their groups and their to-dos in the order of the list and what
+each to-do set its lists, the ones in use from the bottom up because Minka puts
+every new list on top, with their groups and their to-dos in the order of the list and what
 hangs on a list and a to-do, of each inbox its forwarded mail with the
 answers by mail, the comments and the boosts of each, and of each Docs & Files
 tool its folders, documents and uploads with the comments, the boosts and the
@@ -52,12 +52,14 @@ run (C-057), and what the source keeps on its shelf comes into the trash, where
 it can be brought back (C-058). Somebody who wrote to a project from outside the
 account stays an address and becomes nobody.
 Of the Docs & Files, three things are the extractor's own doing. A folder
-stands in the bundle after the folder it is in and each kind of a folder from
-the bottom up, because Minka reads the order of the file and puts every new
-entry on top of its kind. The status of an entry is its own and never that of
+stands in the bundle after the folder it is in; for an entry in use the order of
+the file decides, bottom up, because Minka puts every new one on top of its kind,
+and for one that has left its place it decides nothing (C-062), so those stand
+first as the source lists them. The status of an entry is its own and never that of
 its folder, so what stands in a folder the source put away comes in as it is
-and goes along through the folder there. And the title of an upload is the name
-of its file, folded to fit where the name is one Minka would refuse (C-056),
+and goes along through the folder there. And the title of an upload is what the
+source calls it, the name of its file standing in and folded to fit where the
+source calls it nothing and the name is one Minka would refuse (C-056),
 because Minka derives nothing from a file and refuses an upload without a
 title.
 Every address a bundle carries — a person's, a mail's sender, an answer's —
@@ -410,6 +412,25 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   — the query of that redirect carries the name of the file, so nothing of it is
   ever logged. The title is the source's own `title`, the name of the file
   standing in only where the source calls the upload nothing.
+  **That route is proven live and by more than a run's own word.** Two
+  extractions into bundles outside the repository ended 0, every upload's bytes
+  arrived with the size and the digest they were expected to have, computed anew
+  rather than taken from the run, and one file was fetched again by hand and came
+  back byte for byte the same; the second bundle holds 214 files and 496 MB, with
+  none missing, none gone and no request asked twice. `--agent` is taken by
+  `files download` although its own help does not list it, which is written down
+  where the call is built so that nobody removes it as a mistake. Every reference
+  of both bundles resolves, Minka's own `verify-bundle.sh` ends 0 on both, and the
+  status of every entry is its own with not one inheriting its folder's. The two
+  archived folders of those projects really did answer not-found for their
+  contents and their archived documents came out of the recordings list, so the
+  path the walk was built for is the path the source takes.
+  **Minka has applied both.** On a worktree instance, exit 0, everything created —
+  one folder with two documents and four uploads, and four folders including the
+  two archived with sixteen documents and one upload — and on a second and a third
+  run everything is passed over, so the import is idempotent against what a bundle
+  of ours says. The blob storage grew by 23 and 359 files. Both bundles are
+  deleted, as the rule for a bundle holding personal data asks.
   **Still taken on trust of Basecamp** and held by nothing but the invented
   account: that a vault lists what stands in it topmost first, which is what the
   order of a bundle turns on; that an upload in a cloud names no file at all,
@@ -422,7 +443,9 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   status is none of the three; **anything in the trash** of the three kinds, the
   account holding none; an upload in a cloud, with a comment and a boost on it;
   a title longer than one Minka takes and an upload with neither a title nor a
-  name; a document whose whole text is a file the source no longer has, and an
+  name — the titles of both live bundles were put through Minka's rule again and
+  none would be refused, and neither project exercised the folding at all,
+  `namesMadeIntoATitle` and `titlesFromTheFileName` both coming out zero; a document whose whole text is a file the source no longer has, and an
   upload whose own file is one; a description with a file embedded in it, every
   upload of the account that was read carrying an empty
   `description_attachments`; a

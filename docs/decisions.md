@@ -977,3 +977,23 @@ having said the opposite of it.
 **Implemented as:** `basecamp.visibilityOfItsOwn`,
 `basecamp.Extractor.writeFolder`, `writeDocument`, `writeUpload`, see
 [Importing from Basecamp](stable/import.md).
+
+<a id="c-062"></a>
+## C-062 — The order of the file decides for what is in use and for nothing else
+
+*Applies to: `import basecamp`, the order of the lists of a To-dos tool and of
+the folders, documents and uploads of a Docs & Files tool*
+
+A record **in use** stands in its file from the bottom up, because Minka puts
+every new one on top of its kind, so the order the source shows comes out again.
+A record that has **left its place** stands before all of them, in the order the
+source lists it, and that order is not turned round.
+
+**Why:** Minka orders an archive by the moment a record was put away — `archived_at
+DESC, id` — and its import takes that moment from the record's own `updatedAt`, so
+what the file says about the order of such records is never read. Turning them
+round would be work for nothing and a promise the code would then have to keep;
+saying nothing about them would leave the next reader of `inFileOrder` to measure
+it again.
+**Implemented as:** `basecamp.inFileOrder`, see
+[Importing from Basecamp](stable/import.md).

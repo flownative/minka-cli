@@ -1084,9 +1084,15 @@ func statusOrInUse(said string) string {
 }
 
 // inFileOrder are the records of one kind in one place in the order a bundle
-// writes them. Minka puts every new one on top of its kind there, so what is in
-// use goes the other way round from the way the source shows it; what has left
-// the place goes first, where it cannot push the rest about.
+// writes them.
+//
+// For a record **in use** the order decides: Minka puts every new one on top of
+// its kind, so the file carries them the other way round from the way the source
+// shows them and the source's order comes out again. For one that has **left its
+// place** it decides nothing, so it goes first, in the order the source lists it,
+// where it cannot push the rest about: Minka orders an archive by the moment a
+// record was put away and its import takes that moment from the record itself, so
+// what the file says about those is never read.
 func inFileOrder[T any](gone, shown []T) []T {
 	all := make([]T, 0, len(gone)+len(shown))
 	all = append(all, gone...)
