@@ -90,6 +90,11 @@ type importReport struct {
 	PostsByStatus      map[string]int `json:"postsByStatus"`
 	PostsLeftOut       int            `json:"postsLeftOut"`
 	PostsWithEmptyBody int            `json:"postsWithEmptyBody"`
+	// TodoListsByStatus splits counts.todolists. TodosLeftOut are the archived
+	// and trashed lists, groups and to-dos that hang on nothing the run
+	// extracts.
+	TodoListsByStatus map[string]int `json:"todoListsByStatus"`
+	TodosLeftOut      int            `json:"todosLeftOut"`
 	// QuestionsLeftOut are the questions left out because Minka has no words
 	// for their schedule, each with the field that made it impossible.
 	// AnchorsInferred are the questions asked every other week whose startsOn
@@ -321,6 +326,9 @@ it has been applied.`,
 				UploadLinesLeftOut: result.UploadLinesLeftOut,
 				RecordsLeftOut:     result.RecordsLeftOut,
 
+				TodoListsByStatus: result.TodoListsByStatus,
+				TodosLeftOut:      result.TodosLeftOut,
+
 				QuestionsLeftOut:    result.QuestionsLeftOut,
 				AnchorsInferred:     result.AnchorsInferred,
 				NobodyAsked:         result.NobodyAsked,
@@ -437,7 +445,7 @@ it has been applied.`,
 
 // measuredKinds are the kinds whose longest text a run measures, in the order
 // the report names them.
-var measuredKinds = []bundle.Kind{bundle.Cards, bundle.Comments, bundle.Posts, bundle.Messages, bundle.Answers}
+var measuredKinds = []bundle.Kind{bundle.Cards, bundle.Comments, bundle.Posts, bundle.Messages, bundle.Answers, bundle.TodoLists, bundle.Todos}
 
 func renderImportReport(w io.Writer, report importReport) {
 	if report.DryRun {
@@ -485,6 +493,7 @@ func renderImportReport(w io.Writer, report importReport) {
 		}
 	}
 	renderCheckins(w, report)
+	renderTodos(w, report)
 	fmt.Fprintf(w, "In the texts: %s referred to, %s Basecamp lists nothing for dropped, %s, %s, %s\n",
 		plural(report.FilesInBodies, "file", "files"), plural(report.FilesDropped, "file", "files"),
 		plural(report.MentionsUnresolved, "mention left as a name", "mentions left as names"),
@@ -508,9 +517,9 @@ func renderImportReport(w io.Writer, report importReport) {
 	}
 	fmt.Fprintf(w, "Names of files changed: %d; captions too long for a reference, left off: %d; files met under a second owner: %d\n",
 		report.FileNamesChanged, report.CaptionsDropped, report.FilesOfSeveralOwners)
-	fmt.Fprintf(w, "Longest text in characters: cards %d, comments %d, posts %d, messages %d, answers %d\n",
+	fmt.Fprintf(w, "Longest text in characters: cards %d, comments %d, posts %d, messages %d, answers %d, to-do lists %d, to-dos %d\n",
 		report.LongestBody[bundle.Cards], report.LongestBody[bundle.Comments], report.LongestBody[bundle.Posts], report.LongestBody[bundle.Messages],
-		report.LongestBody[bundle.Answers])
+		report.LongestBody[bundle.Answers], report.LongestBody[bundle.TodoLists], report.LongestBody[bundle.Todos])
 	for _, kind := range measuredKinds {
 		if one, has := report.LongestBodyRecords[kind]; has {
 			fmt.Fprintf(w, "  %-8s %-8s in %s %s: %d\n", one.Record, one.SourceID, one.In, one.InSourceID, one.Characters)
@@ -589,6 +598,18 @@ func renderCheckins(w io.Writer, report importReport) {
 	fmt.Fprintf(w, "Answers that say nothing, left out: %d; answers in the trash, left out: %d\n",
 		report.AnswersWithoutABody, report.AnswersTrashed)
 	fmt.Fprintf(w, "Answers Basecamp names no day for, dated by when they were written: %d\n", report.AnswersWithoutADay)
+}
+
+// renderTodos says what became of the to-do lists a run met. A run that met no
+// To-dos tool says nothing about them.
+func renderTodos(w io.Writer, report importReport) {
+	_, met := report.Counts[bundle.TodoLists]
+	if !met && report.TodosLeftOut == 0 {
+		return
+	}
+	fmt.Fprintf(w, "To-do lists: %d active, %d archived, %d trashed\n",
+		report.TodoListsByStatus[bundle.StatusActive], report.TodoListsByStatus[bundle.StatusArchived], report.TodoListsByStatus[bundle.StatusTrashed])
+	fmt.Fprintf(w, "Archived and trashed lists, groups and to-dos that hang on nothing extracted, left out: %d\n", report.TodosLeftOut)
 }
 
 // incompleteImport is the end of a run that wrote its bundle without some of

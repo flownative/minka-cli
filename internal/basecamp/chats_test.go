@@ -703,7 +703,8 @@ func TestTheLongestTextOfAKindIsMeasuredInCharactersAndNamesItsRecord(t *testing
 	doing(account).Cards[1].Content = strings.Repeat("€", 600)
 	_, result := extract(t, account, boardProject, talkProject)
 
-	want := map[bundle.Kind]int{bundle.Cards: 600, bundle.Comments: 500, bundle.Posts: 300, bundle.Messages: 250, bundle.Answers: 0}
+	want := map[bundle.Kind]int{bundle.Cards: 600, bundle.Comments: 500, bundle.Posts: 300, bundle.Messages: 250, bundle.Answers: 0,
+		bundle.TodoLists: 0, bundle.Todos: 0}
 	if !reflect.DeepEqual(result.LongestBody, want) {
 		t.Errorf("the longest texts are %v, want %v", result.LongestBody, want)
 	}

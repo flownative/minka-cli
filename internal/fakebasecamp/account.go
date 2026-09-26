@@ -71,6 +71,9 @@ type Tool struct {
 	// Questions are the questions of a questionnaire, in the order the account
 	// lists them.
 	Questions []Question
+	// TodoLists are the lists of a To-dos tool, in the order the account shows
+	// them.
+	TodoLists []TodoList
 }
 
 // Account is the fake. It is a basecamp.Source, a basecamp.AvatarFetcher and
@@ -202,6 +205,7 @@ func New() *Account {
 			fileProject(ada, grace, tool),
 			referenceProject(ada, grace, tool),
 			checkinProject(ada, grace, linus, edsger, niklaus, deleted, tool),
+			todoProject(ada, grace, edsger, tool),
 		},
 		SubtasksURL:  map[int64]string{},
 		Fail:         map[string]error{},
@@ -319,6 +323,9 @@ func (a *Account) Get(_ context.Context, path string) ([]byte, error) {
 			return answer, nil
 		}
 		if answer, known := a.checkins(path, page); known {
+			return answer, nil
+		}
+		if answer, known := a.todos(path, page); known {
 			return answer, nil
 		}
 	}

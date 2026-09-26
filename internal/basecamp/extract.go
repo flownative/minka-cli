@@ -173,6 +173,13 @@ type Result struct {
 	// said a word a bundle has none for, counted per kind of record, per word
 	// and per place.
 	RecordsLeftOut []LeftOutRecords
+	// TodoListsByStatus counts the lists of the bundle: active, archived,
+	// trashed.
+	TodoListsByStatus map[string]int
+	// TodosLeftOut counts the archived and trashed lists, groups and to-dos that
+	// hang on nothing the run extracts: a To-dos tool that is switched off, a
+	// list or a group that is gone.
+	TodosLeftOut int
 	// QuestionsLeftOut are the questions left out because Minka has no words
 	// for their schedule, each with the field that made it impossible.
 	QuestionsLeftOut []ImpossibleQuestion
@@ -249,6 +256,9 @@ type Extractor struct {
 	longestBodyRecords    map[bundle.Kind]LongestBodyRecord
 	bodies                BodyCounts
 
+	todoListsByStatus map[string]int
+	todosLeftOut      int
+
 	questionsLeftOut    []ImpossibleQuestion
 	anchorsInferred     []InferredAnchor
 	nobodyAsked         []NobodyAsked
@@ -264,13 +274,14 @@ type Extractor struct {
 	files       FileCounts
 }
 
-// talk names the tools of one project that hold posts, lines and questions,
-// each kind in the order of the tools.
+// talk names the tools of one project that hold posts, lines, questions and
+// to-dos, each kind in the order of the tools.
 type talk struct {
 	bucket         int64
 	messageBoards  []int64
 	chats          []int64
 	questionnaires []int64
+	todosets       []int64
 }
 
 type skippedKey struct {
@@ -312,7 +323,10 @@ func (e *Extractor) Extract(ctx context.Context, projectIDs []string, w *bundle.
 	for _, name := range lineTypes {
 		e.messagesByType[name] = 0
 	}
-	e.longestBody = map[bundle.Kind]int{bundle.Cards: 0, bundle.Comments: 0, bundle.Posts: 0, bundle.Messages: 0, bundle.Answers: 0}
+	e.todoListsByStatus = map[string]int{bundle.StatusActive: 0, bundle.StatusArchived: 0, bundle.StatusTrashed: 0}
+	e.todosLeftOut = 0
+	e.longestBody = map[bundle.Kind]int{bundle.Cards: 0, bundle.Comments: 0, bundle.Posts: 0, bundle.Messages: 0, bundle.Answers: 0,
+		bundle.TodoLists: 0, bundle.Todos: 0}
 	e.longestBodyRecords = map[bundle.Kind]LongestBodyRecord{}
 	e.fileOwners, e.fileRecords, e.files = map[string]string{}, nil, FileCounts{}
 
@@ -346,6 +360,9 @@ func (e *Extractor) Extract(ctx context.Context, projectIDs []string, w *bundle.
 	if err := e.extractCheckins(ctx, w); err != nil {
 		return Result{}, err
 	}
+	if err := e.extractTodos(ctx, w); err != nil {
+		return Result{}, err
+	}
 
 	avatars, err := e.writePeople(ctx, w)
 	if err != nil {
@@ -377,6 +394,9 @@ func (e *Extractor) Extract(ctx context.Context, projectIDs []string, w *bundle.
 		MessagesByType:     e.messagesByType,
 		UploadLinesLeftOut: e.uploadLinesLeftOut,
 		RecordsLeftOut:     e.recordsLeftOut,
+
+		TodoListsByStatus: e.todoListsByStatus,
+		TodosLeftOut:      e.todosLeftOut,
 
 		QuestionsLeftOut:    e.questionsLeftOut,
 		AnchorsInferred:     e.anchorsInferred,
@@ -526,6 +546,8 @@ func (e *Extractor) extractProject(ctx context.Context, id int64, w *bundle.Writ
 			talks.chats = append(talks.chats, tool.entry.ID)
 		case bundle.ToolCheckins:
 			talks.questionnaires = append(talks.questionnaires, tool.entry.ID)
+		case bundle.ToolTodos:
+			talks.todosets = append(talks.todosets, tool.entry.ID)
 		}
 	}
 	e.talks = append(e.talks, talks)

@@ -183,7 +183,7 @@ func (e *Extractor) extractQuestions(ctx context.Context, w *bundle.Writer, buck
 // the field that made it impossible, and its answers go with it: an answer
 // without its question has nothing to hang on.
 func (e *Extractor) writeQuestion(ctx context.Context, w *bundle.Writer, bucket, tool int64, found question) error {
-	title, err := questionTitle(found)
+	title, err := itemTitle("question", found.ID, found.Title)
 	if err != nil {
 		return err
 	}
@@ -292,18 +292,19 @@ func (e *Extractor) leaveQuestionOut(id int64, field string) {
 	e.questionsLeftOut = append(e.questionsLeftOut, ImpossibleQuestion{QuestionSourceID: sourceID(id), Field: field})
 }
 
-// questionTitle is the title of a question as a bundle carries it, without the
+// itemTitle is the title of a record as a bundle carries it, without the
 // whitespace around it that Minka takes off anyway. A title Minka refuses ends
-// the run instead of reaching it, as it would end the applier's.
-func questionTitle(found question) (string, error) {
-	title := strings.TrimSpace(found.Title)
+// the run instead of reaching it, as it would end the applier's. No message
+// quotes a title: it is what somebody wrote.
+func itemTitle(what string, id int64, value string) (string, error) {
+	title := strings.TrimSpace(value)
 	switch {
 	case title == "":
-		return "", &Error{Kind: API, Message: fmt.Sprintf("question %d has no title", found.ID)}
+		return "", &Error{Kind: API, Message: fmt.Sprintf("%s %d has no title", what, id)}
 	case utf8.RuneCountInString(title) > maxTitle:
-		return "", &Error{Kind: API, Message: fmt.Sprintf("the title of question %d is longer than the %d characters a title may have", found.ID, maxTitle)}
+		return "", &Error{Kind: API, Message: fmt.Sprintf("the title of %s %d is longer than the %d characters a title may have", what, id, maxTitle)}
 	case strings.ContainsFunc(title, unicode.IsControl):
-		return "", &Error{Kind: API, Message: fmt.Sprintf("the title of question %d holds a character nobody can see", found.ID)}
+		return "", &Error{Kind: API, Message: fmt.Sprintf("the title of %s %d holds a character nobody can see", what, id)}
 	}
 	return title, nil
 }
