@@ -1785,8 +1785,8 @@ func TestImportBasecampReportsTheForwardedMailOfAProject(t *testing.T) {
 		"byStatus": map[string]any{"active": float64(8), "trashed": float64(2)}, "fromTheShelf": float64(1),
 		"withoutASubject": float64(1), "subjectsChanged": float64(1), "givenALineOfTheRun": float64(3),
 		"withoutAForwarder": float64(1), "withoutAnAddress": []any{"9307"},
-		"repliesFromOutside": float64(1), "repliesWithoutASender": []any{"9404"},
-		"reactionsOnRepliesLeftOut": float64(1), "longerThanMinkaTakes": float64(0),
+		"repliesFromOutside": float64(2), "repliesWithoutASender": []any{"9404"},
+		"reactionsOnRepliesLeftOut": float64(2), "longerThanMinkaTakes": float64(0),
 	}
 	if !reflect.DeepEqual(data["forwards"], want) {
 		t.Errorf("forwards:\n got %v\nwant %v", data["forwards"], want)
@@ -1798,7 +1798,7 @@ func TestImportBasecampReportsTheForwardedMailOfAProject(t *testing.T) {
 		"3 forwarded mails carry a line of the run's own",
 		"2 forwarded mails carry titles the run made of their subjects",
 		"1 forwarded mail names nobody who forwarded it",
-		"1 boost on an answer by mail is left out",
+		"2 boosts on answers by mail are left out",
 	} {
 		if !strings.Contains(env.Notice, notice) {
 			t.Errorf("notice %q does not say %q", env.Notice, notice)
@@ -1806,7 +1806,7 @@ func TestImportBasecampReportsTheForwardedMailOfAProject(t *testing.T) {
 	}
 	// Never a subject, never an address, never a name of a file: a report ends up
 	// in a log.
-	for _, secret := range []string{"Invoice", "supplier.test", "invoice.pdf", "localhost", "anna@"} {
+	for _, secret := range []string{"Invoice", "supplier.test", "partner.test", "invoice.pdf", "localhost", "anna@"} {
 		if strings.Contains(r.stdout+r.stderr, secret) {
 			t.Errorf("the output says %q:\n%s", secret, r.stdout)
 		}
@@ -1815,15 +1815,15 @@ func TestImportBasecampReportsTheForwardedMailOfAProject(t *testing.T) {
 	r = e.run("import", "basecamp", "--project", "7010", "--out", out, "--styled")
 	expectCode(t, r, ExitOK)
 	for _, line := range []string{
-		"forwards     10", "forwardreplies 2",
+		"forwards     10", "forwardreplies 3",
 		"Forwarded mail: 8 active, 2 trashed; 1 of them on the shelf at the source",
 		"Mails without a subject: 1; subjects folded or cut short to make a title: 1",
 		"Mails carrying a line of the run's own, because what they say would arrive as nothing: 3",
 		"Mails nobody is named for, which Minka gives to the owner of the organization: 1",
 		"Mails whose sender is no address Minka takes, left out: 1 (forward 9307)",
-		"Answers by mail: 2, 1 of them from outside the account",
+		"Answers by mail: 3, 2 of them from outside the account",
 		"Answers naming neither a writer nor an address, left out: 1 (reply 9404)",
-		"Boosts on an answer by mail, which Minka takes none of, left out: 1",
+		"Boosts on an answer by mail, which Minka takes none of, left out: 2",
 		"forward  9301     in project 7010:",
 	} {
 		if !strings.Contains(r.stdout, line) {

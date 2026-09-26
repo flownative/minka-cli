@@ -119,6 +119,10 @@ type Account struct {
 	// MemberEmail replaces the address of a person in the list of a project.
 	MemberEmail map[int64]string
 
+	// MailListMoves has a list of forwarded mail hand the last record of a page
+	// out again as the first of the next, as a list does that something was
+	// added to between two requests.
+	MailListMoves bool
 	// OnHoldInColumn lists the cards that are set aside among the cards of
 	// their column as well.
 	OnHoldInColumn bool

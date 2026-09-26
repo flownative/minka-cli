@@ -227,12 +227,14 @@ func (e *Extractor) attachFile(ctx context.Context, w *bundle.Writer, ownerKind 
 		record.ContentType = &file.contentType
 	}
 	if w.Discards() {
-		e.noteWhetherItArrives(file.ref, file.byteSize == nil || *file.byteSize <= largestFileMinkaTakes)
+		// All a dry run knows of a file is the size the source gives it.
+		if file.byteSize == nil || *file.byteSize <= largestFileMinkaTakes {
+			e.filesThatArrive[file.ref] = true
+		}
 		e.fileRecords = append(e.fileRecords, record)
 		return nil
 	}
 	missing := func(failed *Error) {
-		e.noteWhetherItArrives(file.ref, false)
 		e.missing = append(e.missing, MissingFile{
 			AttachmentSourceID: file.ref,
 			OwnerKind:          ownerKind,
@@ -279,7 +281,6 @@ func (e *Extractor) attachFile(ctx context.Context, w *bundle.Writer, ownerKind 
 		case failed.Kind == NotFound:
 			record.Gone = true
 			e.files.Gone++
-			e.noteWhetherItArrives(file.ref, false)
 			e.fileRecords = append(e.fileRecords, record)
 			return nil
 		default:
@@ -297,19 +298,22 @@ func (e *Extractor) attachFile(ctx context.Context, w *bundle.Writer, ownerKind 
 	}
 
 	e.files.Bytes += stored.Bytes
-	e.noteWhetherItArrives(file.ref, stored.Bytes <= largestFileMinkaTakes)
+	if stored.Bytes <= largestFileMinkaTakes {
+		e.filesThatArrive[file.ref] = true
+	}
 	record.Holds(stored)
 	e.fileRecords = append(e.fileRecords, record)
 	return nil
 }
 
-// noteWhetherItArrives writes down whether the bytes of a file will reach
-// Minka: whether the bundle carries them and whether Minka takes a file of
-// that size. Only a record whose body is nothing else asks, because such a
-// record is written empty there and never looked at again; for every other
-// body a file that stays outside leaves a hole and nothing more.
-func (e *Extractor) noteWhetherItArrives(ref string, arrives bool) {
-	e.filesThatArrive[ref] = arrives
+// theFileArrives tells whether the bytes of a file reach Minka: whether the
+// bundle carries them and whether Minka takes a file of that size. Only what
+// arrives is written down, so a file the walk never met, one it could not
+// fetch, one the source no longer has and one too large all answer the same.
+// Only a record whose body is nothing else asks: for every other body a file
+// that stays outside leaves a hole and nothing more.
+func (e *Extractor) theFileArrives(ref string) bool {
+	return e.filesThatArrive[ref]
 }
 
 // sizeDiffers is the failure of a download that ended well and brought

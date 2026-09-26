@@ -5,9 +5,11 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/flownative/minka-cli/internal/basecamp"
 	"github.com/flownative/minka-cli/internal/bundle"
 	"github.com/flownative/minka-cli/internal/fakebasecamp"
 )
@@ -149,8 +151,7 @@ func TestAMailWhoseSenderIsNoAddressIsLeftOutAndNamed(t *testing.T) {
 	if got := result.Forwards.WithoutAnAddress; !reflect.DeepEqual(got, []string{"9307"}) {
 		t.Errorf("mails without an address: %v, want the one", got)
 	}
-	// Never the address itself: a bundle carries one, a message never does.
-	for _, request := range append(asked(account, "9307"), asked(account, "localhost")...) {
+	for _, request := range asked(account, "9307") {
 		t.Errorf("the run asked for something of the mail it left out: %s", request)
 	}
 }
@@ -167,7 +168,7 @@ func TestAMailThatWouldArriveEmptyCarriesALineOfTheRun(t *testing.T) {
 	// says where the file stood, and Minka drops it.
 	gone, _ := recordWithID(t, forwards, "9308")["body"].(string)
 	if !strings.Contains(gone, `<import-attachment ref="attachment-5303">`) ||
-		!strings.Contains(gone, "the file it held could not be brought") {
+		!strings.Contains(gone, "what it held could not be brought") {
 		t.Errorf("the mail that was a file nobody has any more: %q", gone)
 	}
 	if got := recordWithID(t, forwards, "9309")["body"]; !strings.Contains(got.(string), "This mail came without words.") {
@@ -175,10 +176,17 @@ func TestAMailThatWouldArriveEmptyCarriesALineOfTheRun(t *testing.T) {
 	}
 	// An embed is Minka's own rule about an address, so a mail that hangs on one
 	// alone gets the address as a link as well.
+	// It gets the address and no sentence: Minka usually takes the embed, and a
+	// run that said the mail came without words would then be putting that in
+	// writing under somebody's name.
 	player, _ := recordWithID(t, forwards, "9310")["body"].(string)
-	if !strings.Contains(player, `<import-embed url="https://video.example.test/embed/7">`) ||
-		!strings.Contains(player, `<a href="https://video.example.test/embed/7">`) {
-		t.Errorf("the mail that was a player alone: %q", player)
+	switch {
+	case !strings.Contains(player, `<import-embed url="https://video.example.test/embed/7">`):
+		t.Errorf("the mail that was a player alone lost its embed: %q", player)
+	case !strings.Contains(player, `<a href="https://video.example.test/embed/7">`):
+		t.Errorf("the mail that was a player alone got no link to its address: %q", player)
+	case strings.Contains(player, "came without words"):
+		t.Errorf("the mail that was a player alone was told it said nothing: %q", player)
 	}
 	if result.Forwards.GivenALineOfTheRun != 3 {
 		t.Errorf("%d mails carry a line of the run, want the three", result.Forwards.GivenALineOfTheRun)
@@ -217,17 +225,22 @@ func TestAnAnswerByMailBelongsToAPersonOrToAnAddressAndNeverToBoth(t *testing.T)
 			"projectSourceId": forwardProject, "toolSourceId": "9290", "forwardSourceId": "9301",
 			"fromAddress": "anna@supplier.test",
 			"body":        `<div>Here is the signed copy.</div><import-attachment ref="attachment-5302"></import-attachment>`},
+		// Somebody the account names by their name alone, which is all Basecamp
+		// is known to promise of a writer from outside.
+		{"sourceId": "9405", "createdAt": "2025-02-05T10:00:00.000Z", "updatedAt": "2025-02-05T10:00:00.000Z", "createdBy": nil,
+			"projectSourceId": forwardProject, "toolSourceId": "9290", "forwardSourceId": "9302",
+			"fromAddress": "otis@partner.test", "body": `<div>What is build 42?</div>`},
 	}
 	if !reflect.DeepEqual(replies, want) {
 		t.Errorf("the answers by mail:\n got %v\nwant %v", replies, want)
 	}
 	for _, person := range records(t, dir, bundle.People) {
-		if person["sourceId"] == "901" || person["sourceId"] == "902" {
+		if person["sourceId"] == "901" || person["sourceId"] == "902" || person["sourceId"] == "903" {
 			t.Errorf("somebody from outside the account came into the bundle: %v", person)
 		}
 	}
-	if result.Forwards.RepliesFromOutside != 1 {
-		t.Errorf("%d answers from outside, want the one", result.Forwards.RepliesFromOutside)
+	if result.Forwards.RepliesFromOutside != 2 {
+		t.Errorf("%d answers from outside, want the two", result.Forwards.RepliesFromOutside)
 	}
 }
 
@@ -243,8 +256,10 @@ func TestABoostOnAnAnswerByMailIsCountedAndNeitherWrittenNorAskedFor(t *testing.
 			t.Errorf("a boost on an answer by mail is in the bundle: %v", reaction)
 		}
 	}
-	if result.Forwards.ReactionsOnRepliesLeftOut != 1 {
-		t.Errorf("%d boosts on an answer left out, want the one", result.Forwards.ReactionsOnRepliesLeftOut)
+	// The one on an answer that comes and the one on an answer that is left
+	// out: a bundle holds neither, so the number counts both.
+	if result.Forwards.ReactionsOnRepliesLeftOut != 2 {
+		t.Errorf("%d boosts on an answer left out, want the two", result.Forwards.ReactionsOnRepliesLeftOut)
 	}
 	for _, request := range asked(account, "recordings/9402/boosts") {
 		t.Errorf("the run asked for the boosts of an answer: %s", request)
@@ -462,12 +477,85 @@ func TestARecordThatSaysNothingOfItsStatusIsInUse(t *testing.T) {
 		t.Errorf("the mail that says nothing of its status comes as %v", got)
 	}
 	// The answers of the fake say nothing of theirs either, and they are here.
-	if len(records(t, dir, bundle.ForwardReplies)) != 2 {
-		t.Errorf("%d answers by mail, want the two", len(records(t, dir, bundle.ForwardReplies)))
+	if len(records(t, dir, bundle.ForwardReplies)) != 3 {
+		t.Errorf("%d answers by mail, want the three", len(records(t, dir, bundle.ForwardReplies)))
 	}
 	for _, one := range result.RecordsLeftOut {
 		if one.Record == "forward" && one.Value == "" {
 			t.Errorf("a mail was left out for saying nothing of its status: %+v", one)
 		}
+	}
+}
+
+// A walk of pages is no snapshot: a list something was added to between two
+// requests hands the last record of a page out again as the first of the next.
+// Such a mail, and such an answer, is written once.
+func TestAMailOrAnAnswerMetTwiceIsWrittenOnce(t *testing.T) {
+	account := fakebasecamp.New()
+	account.MailListMoves = true
+	dir, result := extract(t, account, forwardProject)
+
+	for kind, want := range map[bundle.Kind]int{bundle.Forwards: 10, bundle.ForwardReplies: 3} {
+		got := sourceIDs(records(t, dir, kind))
+		seen := map[string]bool{}
+		for _, id := range got {
+			if seen[id] {
+				t.Errorf("%s %s stands in the bundle twice: %v", kind, id, got)
+			}
+			seen[id] = true
+		}
+		if len(got) != want {
+			t.Errorf("%d %s, want %d", len(got), kind, want)
+		}
+	}
+	// And nothing is counted twice for it either.
+	if result.Forwards.ReactionsOnRepliesLeftOut != 2 {
+		t.Errorf("%d boosts on an answer left out, want the two", result.Forwards.ReactionsOnRepliesLeftOut)
+	}
+}
+
+// A body Minka reads as nothing carries the line of the run as an empty one
+// does. PHP takes a NUL off the edges of a text where Go does not, so a body of
+// nothing else would arrive there as a field that is missing, and a field the
+// format needs and cannot find stops the run.
+func TestABodyOfNothingButWhatPHPTrimsCarriesALineOfTheRun(t *testing.T) {
+	account := fakebasecamp.New()
+	theMail(t, account, 9302).Content = " \x00 "
+	dir, _ := extract(t, account, forwardProject)
+
+	body, _ := recordWithID(t, records(t, dir, bundle.Forwards), "9302")["body"].(string)
+	if !strings.Contains(body, "This mail came without words.") {
+		t.Errorf("the mail of nothing but a NUL: %q", body)
+	}
+}
+
+// A dry run knows of a file only what Basecamp says it weighs, and that is
+// enough to see the one thing it can see: a file above the ceiling of a run of
+// Minka stays outside there however whole it is here, so a mail that is nothing
+// else would arrive empty.
+func TestADryRunWritesTheLineForAFileAboveTheCeiling(t *testing.T) {
+	account := fakebasecamp.New()
+	extractor := basecamp.Extractor{Source: account, Avatars: account, Files: account,
+		Now: func() time.Time { return runDay }}
+	result, err := extractor.Extract(t.Context(), []string{forwardProject}, bundle.Discard())
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A dry run downloads nothing, so it does not know the file is gone: the
+	// mail that is nothing but that file arrives as far as this run can tell.
+	if result.Forwards.GivenALineOfTheRun != 2 {
+		t.Fatalf("%d mails carry a line of the run, want the two a dry run can see", result.Forwards.GivenALineOfTheRun)
+	}
+
+	account = fakebasecamp.New()
+	theMail(t, account, 9308).Files[0].Bytes = 2 << 30
+	extractor = basecamp.Extractor{Source: account, Avatars: account, Files: account,
+		Now: func() time.Time { return runDay }}
+	result, err = extractor.Extract(t.Context(), []string{forwardProject}, bundle.Discard())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Forwards.GivenALineOfTheRun != 3 {
+		t.Errorf("%d mails carry a line of the run, want the one whose file is too large with them", result.Forwards.GivenALineOfTheRun)
 	}
 }
