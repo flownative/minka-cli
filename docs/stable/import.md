@@ -131,8 +131,11 @@ would be somebody else's; an address outside the account, because it is a
 request the run may not make; a title Minka refuses, because the applier would
 refuse it too; a second Triage, Not now or Done on one board, because the cards
 of the second would end up in a column nobody had; a boost that does not say
-whose it is; and the status of a **project** the run was given by name, because
-a run that was asked for that project has to say that it cannot have it.
+whose it is, because `createdBy` takes `null` and a reaction with an empty one
+reads as the author of what it hangs on, which would lay it at the feet of
+somebody who never gave it; and the status of a **project** the run was given by
+name, because a run that was asked for that project has to say that it cannot
+have it.
 
 A card, a post and a comment are held to all of this where the walk first meets
 them, before anything that hangs on them is asked for, and the lines of a chat

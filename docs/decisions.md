@@ -651,10 +651,14 @@ all of it, and a run of hours would have to be repeated for a single fortnightly
 question nobody ever answered. Nothing here is final: the question uses no
 `sourceId`, so a later run writes it as soon as Minka has a word for its
 schedule, or as soon as the question is answered — unlike `asked`, which the
-first run settles. The line it stands on is [C-050](#c-050); what is its own is
-that no single word makes a schedule impossible but a reading of several fields
-together, and that the report names every such question by its `sourceId` rather
-than counting them. **Implemented as:** `basecamp.scheduleOf`,
+first run settles. The line it stands on is [C-050](#c-050); its own is the
+report, and the report is the part somebody acts on: a counted record says how
+many are gone, a named one says *which* question is gone, and it has to, because
+with a question all its answers fall. What decides the form is therefore not how
+many records there are but how much hangs on one. Besides, no single word makes a
+schedule impossible but a reading of several fields together, `group_on` among
+them, which is no word of the source at all. **Implemented as:**
+`basecamp.scheduleOf`,
 `basecamp.Extractor.leaveQuestionOut`, see
 [Importing from Basecamp](stable/import.md).
 
@@ -676,13 +680,17 @@ where it stood; the run goes on. Where going on would put something wrong into
 the bundle, the run ends as `api_error` instead: a record without its times or
 with a time that is none, a day or a zone that would give somebody else's day, an
 address outside the account, a title Minka refuses, a second Triage, Not now or
-Done on one board, and the status of a project the run was asked for by name.
+Done on one board, a reaction Basecamp does not say whose it is, and the status
+of a project the run was asked for by name.
 
 **Why:** A bundle has no field to say an unknown word in, so such a record is
-lost whatever the run does, and one exotic record must not cost the extraction of
-a whole account — while a record put in the wrong place is a mistake nobody can
-tell from the truth afterwards. Nothing that is left out is final: the source
-keeps it, and a later run brings it as soon as a bundle has a word for it.
+lost whatever the run does, and one exotic record must not cost a whole account.
+A record put in the wrong place, or laid at the feet of somebody who never did
+it, is the other thing: a mistake nobody can tell from the truth afterwards. A
+field the format leaves open is no way out where it reads as something else —
+`createdBy` takes `null`, and for a reaction an empty one reads as the author of
+what it hangs on. Nothing left out is final: the source keeps it, and a later run
+brings it once a bundle has a word for it.
 **Implemented as:** `basecamp.Extractor.met`, `basecamp.Extractor.leaveOut`,
 `basecamp.lineTypes`, `basecamp.columnRoles`, see
 [Importing from Basecamp](stable/import.md).
