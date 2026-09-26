@@ -757,14 +757,13 @@ host takes a card out of the list of a machine by itself.
 
 *Applies to: `boards archive`, `api.Client.ArchivedCards`, `api.Client.WholeArchiveOf`*
 
-A `--limit` outside 1 to 100 is refused as this CLI's own usage error rather than
-cut down to the bound. A walk of several pages ends only on an answer that
-carried no card. What it promises is that every card which lay in the archive for
-the whole run appears exactly once — not the archive of one moment, which it says
-in a `notice`.
+A `--limit` outside 1 to 100 is refused as a usage error rather than cut down to
+the bound, a walk of several pages ends only on an answer that carried no card,
+and what it promises is every card of the whole run exactly once — not the
+archive of one moment, which it says in a `notice`.
 
-**Why:** The server cuts a larger page down without a word and says the end of
-the list by nothing but fewer cards than were asked for, so a run that took
-either at face value would truncate an archive and report success.
-**Implemented as:** `api.ArchivePageMax`, `api.Client.WholeArchiveOf`,
-`cli.app.wholeArchive`, see [The archive of a board](stable/archive.md).
+**Why:** The server cuts a larger page down in silence and marks the end of a
+list by nothing but fewer cards than asked for, so a run that trusted either
+would truncate an archive and report success. **Implemented as:**
+`api.ArchivePageMax`, `api.Client.WholeArchiveOf`, `cli.app.wholeArchive`, see
+[The archive of a board](stable/archive.md).
