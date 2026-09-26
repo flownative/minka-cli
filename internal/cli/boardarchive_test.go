@@ -638,6 +638,57 @@ func TestACardTrashedOutOfTheArchiveKeepsNothingOfIt(t *testing.T) {
 	}
 }
 
+// Where no card of the last page is left to ask behind, nothing can check the end
+// of the list: an answer that carried nothing has to stand for it, and a card
+// that left the archive in that moment reads exactly the same. A page of one card
+// is in that place from the start, and such a run says so rather than reporting
+// an end it could not check.
+func TestARunThatCouldNotCheckTheEndOfTheListSaysSo(t *testing.T) {
+	e := newTestEnv(t)
+	ids := anArchiveOf(e, 3)
+	e.server.RacesOnTheArchiveBoundariesOf = []string{ids[1]}
+
+	env, r := e.runJSON("", "boards", "archive", e.fixture.Board.ID, "--limit", "1", "--all")
+	expectCode(t, r, ExitOK)
+	if got := archiveIDs(t, env.Data); !slices.Equal(got, ids) {
+		t.Fatalf("%d cards of %d: %q", len(got), len(ids), got)
+	}
+	if !strings.Contains(env.Notice, "the end of the list could not be checked") {
+		t.Errorf("notice %q passes an end off as checked", env.Notice)
+	}
+
+	// A page of two or more is in the same place once the fallback has used up
+	// the cards of the last page: a refusal takes the one candidate, and the race
+	// on the card it fell back to leaves nothing to ask behind. Two cards are
+	// missing from the run, and that is what the notice is for.
+	e = newTestEnv(t)
+	ids = anArchiveOf(e, 4)
+	e.server.ForgetsTheArchiveBoundariesOf = []string{ids[1]}
+	e.server.RacesOnTheArchiveBoundariesOf = []string{ids[0], ids[0]}
+
+	env, r = e.runJSON("", "boards", "archive", e.fixture.Board.ID, "--limit", "2", "--all")
+	expectCode(t, r, ExitOK)
+	if got := archiveIDs(t, env.Data); !slices.Equal(got, ids[:2]) {
+		t.Fatalf("%d cards: %q", len(got), got)
+	}
+	want := []string{"", ids[1], ids[0], ids[0]}
+	if got := cursorsAskedWith(e); !slices.Equal(got, want) {
+		t.Fatalf("the pages were asked for behind\n got: %q\nwant: %q", got, want)
+	}
+	if !strings.Contains(env.Notice, "the end of the list could not be checked") {
+		t.Errorf("notice %q passes an end off as checked", env.Notice)
+	}
+
+	// A run that could check its end says nothing of the kind.
+	e = newTestEnv(t)
+	anArchiveOf(e, 4)
+	env, r = e.runJSON("", "boards", "archive", e.fixture.Board.ID, "--limit", "2", "--all")
+	expectCode(t, r, ExitOK)
+	if strings.Contains(env.Notice, "could not be checked") {
+		t.Errorf("a run that settled its end doubts it: %q", env.Notice)
+	}
+}
+
 // A page nobody sized is the one the server gives without a limit, and this CLI
 // names it in every request: a default that drifted from the server's would be
 // read as the server's own.

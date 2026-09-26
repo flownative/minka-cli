@@ -73,6 +73,12 @@ type ArchiveRun struct {
 	// BeganAgain says that no card of a page was left in the archive to carry
 	// the cursor, so the walk started over where it began.
 	BeganAgain bool
+	// TookTheEndOnTrust says that no card of the last page was left to ask
+	// behind, so nothing but an answer that carried nothing stood for the end of
+	// the list. A card going in a race reads exactly the same, and a card behind
+	// it would have been missed, so this is the one walk that does not promise
+	// every card which lay in the archive throughout.
+	TookTheEndOnTrust bool
 }
 
 // WholeArchiveOf walks the archive of a board to its end, a page of pageSize at
@@ -91,7 +97,9 @@ type ArchiveRun struct {
 //
 // Nothing of the walk rests on the answers being what the address promises: an
 // answer that does not carry it past a cursor it has already asked with ends it
-// rather than sending the same request again for ever.
+// rather than sending the same request again for ever. And where no card of the
+// last page is left to ask behind, there is nothing to check the end against, so
+// the walk says of that end that it took it on trust.
 func (c *Client) WholeArchiveOf(ctx context.Context, boardID, before string, pageSize int) (ArchiveRun, error) {
 	var run ArchiveRun
 	seen := map[string]bool{}
@@ -152,10 +160,12 @@ func (c *Client) WholeArchiveOf(ctx context.Context, boardID, before string, pag
 				cursor, candidates = candidates[0], candidates[1:]
 				continue
 			}
-			// A page of one card leaves no other card to ask behind, so the
-			// weakest probe there is has to do: the same cursor once more, and a
-			// second empty answer closes the list.
+			// Where no card of the last page is left to ask behind, the weakest
+			// probe there is has to do: the same cursor once more, and a second
+			// empty answer closes the list. It closes it unchecked, and the walk
+			// carries that back rather than passing it off as the end.
 			if emptyAnswerBehind {
+				run.TookTheEndOnTrust = true
 				return run, nil
 			}
 			emptyAnswerBehind = true
