@@ -23,11 +23,16 @@ reports success. Therefore, by [C-054](../decisions.md#c-054):
 - `--limit` outside 1 to 100 is a usage error of this CLI, refused before a
   request goes out, with the bound named. `api.Client.ArchivedCards` refuses the
   same bound again, so nothing inside the CLI can reach the silent cut either.
-- A walk ends only on an answer that carried nothing, never on a page of cards.
-  A page that was full is followed by one more request.
-- An empty answer behind a full page is asked once more with the same cursor,
-  and only a second empty answer closes the list. Where no cursor was sent, or
-  the page before was already shorter than asked for, there is nothing to doubt.
+- A walk ends only on an answer that carried no card, never on a page of them.
+  That is stricter than the address asks for — a page shorter than the one asked
+  for is already the end — and it is meant so: a run pays one request at its end
+  whether the last page was full or short, and it does not go wrong where the
+  largest page the server serves changes under it.
+- An empty answer behind a full page is no end either: it can as well be the
+  cursor's card going between the server's check and its read. The page behind
+  the card before the cursor settles which of the two it was. Where no cursor was
+  sent, or the page before was already shorter than asked for, there is nothing
+  to doubt.
 
 ## The weakness of the cursor, and what may be promised
 
@@ -39,11 +44,25 @@ carries that in its own debts; it is not this CLI's to fix.
 
 A walk therefore keeps the ids of the **whole** page it last read. On
 `archivedCardsBeforeUnknown` it falls back through them, from the last card of
-that page towards its first, instead of starting again at the first page, and it
-deduplicates by id over the whole run and counts what it swallowed. Only when no
-card of that page is left does it begin again where it started, once, and say so
-in a `notice`. A walk that still cannot go on ends as `validation` and hands over
-what it read as `data`, with its notices.
+that page towards its first, instead of starting again at the first page. An
+empty answer behind a full page is met with the same fallback rather than with
+the cursor it just used: where the list has really ended, the page behind the
+card before the cursor holds the cursor's card and nothing beyond it, and where
+the list went on, it holds what follows — so one request settles it either way,
+where the same cursor asked again can only be refused for a card that is gone or
+come back as empty as before. Only a page of one card leaves no other card to ask
+behind; there the same cursor is asked once more, and a second empty answer closes
+the list.
+
+A walk deduplicates by id over the whole run and counts what it swallowed. Only
+when no card of the last page is left does it begin again where it started, once,
+and say so in a `notice`. A walk that still cannot go on ends as `validation` and
+hands over what it read as `data`, with its notices.
+
+Nothing of a walk rests on the answers being what the address promises. A page
+that ends on a card the walk has already asked behind carries it nowhere, and
+asking on would be the same request for ever, so such an answer ends the run as
+`api_error` with what it read.
 
 What a reader may be promised: **every card that lay in the archive for the whole
 run appears exactly once.** What may not be promised: **completeness against a
@@ -63,6 +82,7 @@ one page says so in a `notice`, not in small print.
 | 422 `cardNotArchived` | `cards unarchive` on a card of a board | 9 |
 | 422 `projectArchived` | both writes, before either code above | 9 |
 | 404 | both writes, for a card in the trash | 2 |
+| 200 with a page that carries a run no further | `boards archive --all` | 7 |
 
 A card in the **trash** answers 404 on both writes, where a post of an archive
 answers 422. The hint therefore names the trash and `cards restore`, and does not

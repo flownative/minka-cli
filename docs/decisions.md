@@ -757,18 +757,14 @@ host takes a card out of the list of a machine by itself.
 
 *Applies to: `boards archive`, `api.Client.ArchivedCards`, `api.Client.WholeArchiveOf`*
 
-A `--limit` outside 1 to 100 is a usage error of this CLI, refused before a
-request goes out; the client refuses the same bound again. A walk of several
-pages ends only on an answer that carried no card, asks an empty answer behind a
-full page once more, falls back through the ids of the whole last page where the
-cursor's card has left the archive, and deduplicates by id. It promises that
-every card which lay in the archive for the whole run appears exactly once, and
-says in a `notice` that it promises nothing about one moment.
+A `--limit` outside 1 to 100 is refused as this CLI's own usage error rather than
+cut down to the bound. A walk of several pages ends only on an answer that
+carried no card. What it promises is that every card which lay in the archive for
+the whole run appears exactly once — not the archive of one moment, which it says
+in a `notice`.
 
-**Why:** The server cuts a larger page down without a word, and the only sign its
-answer carries for the end of the list is fewer cards than were asked for. The
-two together would let a command truncate an archive at a hundred cards and
-report success, which is the one outcome a reader cannot tell from the truth. What
-the address cannot say, the command says instead of leaving it to be assumed.
+**Why:** The server cuts a larger page down without a word and says the end of
+the list by nothing but fewer cards than were asked for, so a run that took
+either at face value would truncate an archive and report success.
 **Implemented as:** `api.ArchivePageMax`, `api.Client.WholeArchiveOf`,
 `cli.app.wholeArchive`, see [The archive of a board](stable/archive.md).

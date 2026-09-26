@@ -287,8 +287,8 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   a move refuses — an archived card before a column without the area on hold —
   is read in the Minka code alone.
 - Of the archive of a board, all of it. No page, no walk and neither write has
-  been seen live; everything rests on the Minka code as it stands at
-  `e8460237` — `BoardApiController::archivedCardsAction`,
+  been seen live; everything rests on the Minka code —
+  `BoardApiController::archivedCardsAction`,
   `ToolQueryService::findArchivedCardsOf` and `isArchivedCardOf`, the two
   handlers, and the weakness of the cursor as Minka's own debts write it down.
   The fake mirrors that code: the order of the refusals with the 404 for the
@@ -298,8 +298,10 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   deciding a tie, `cardArchived` and `cardNotArchived` behind `projectArchived`,
   and a card in the trash as an address that has nothing. It gives the boundary
   card's disappearance in both forms, which no live run can be made to produce on
-  purpose: `ForgetsTheArchiveBoundaryOf` for the 422 and
-  `RacesOnTheArchiveBoundaryOf` for the empty 200 of the race. What the fake
+  purpose, and as many cards at a time as a walk can lose:
+  `ForgetsTheArchiveBoundariesOf` for the 422 and
+  `RacesOnTheArchiveBoundariesOf` for the empty 200 of the race, where the same
+  card named twice is that window met twice. What the fake
   cannot show at all is a column deleted from a board, so that a card comes back
   into the first working column or into Triage instead of the column it left: the
   fake deletes no columns, and that branch is read in

@@ -238,7 +238,8 @@ An unknown board, or one of a project you are not a member of, exits 2
 (not_found). A --before that names no card in the archive of this board exits 9
 (validation) with meta.apiCode archivedCardsBeforeUnknown: somebody took that
 card back onto the board or into the trash. A run that ends that way hands over
-what it read before it, with its notices.`, api.ArchivePageDefault, api.ArchivePageMax),
+what it read before it, with its notices, and so does one that ends with 7
+(api_error) because a page of the archive carried it no further.`, api.ArchivePageDefault, api.ArchivePageMax),
 		Example: `  minka boards archive 0199...
   minka boards archive 0199... --limit 100 --all
   minka boards archive 0199... --before 0199... --limit 25`,

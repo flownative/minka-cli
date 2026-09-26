@@ -405,17 +405,19 @@ type Server struct {
 	// with a word it does not know must not depend on the server's choice.
 	LeavesOutWithReason string
 
-	// ForgetsTheArchiveBoundaryOf is the card a page of an archive may not start
-	// behind although it lies in the archive: naming it refuses the page with
-	// archivedCardsBeforeUnknown, the way the server does once somebody has
-	// taken that card out of the archive between two pages of one walk.
-	ForgetsTheArchiveBoundaryOf string
+	// ForgetsTheArchiveBoundariesOf are the cards a page of an archive may not
+	// start behind although they lie in the archive: naming one refuses the page
+	// with archivedCardsBeforeUnknown, the way the server does once somebody has
+	// taken that card out of the archive between two pages of one walk. One walk
+	// can lose one boundary after another, which is why this is a set.
+	ForgetsTheArchiveBoundariesOf []string
 
-	// RacesOnTheArchiveBoundaryOf is the same loss in its narrow form: the check
-	// that the card lies in the archive passes, and by the time the page is read
-	// the card is gone, so the answer is an empty page that reads like the end
-	// of the list. One page answers that way, and the mark is spent with it.
-	RacesOnTheArchiveBoundaryOf string
+	// RacesOnTheArchiveBoundariesOf is the same loss in its narrow form: the
+	// check that the card lies in the archive passes, and by the time the page is
+	// read the card is gone, so the answer is an empty page that reads like the
+	// end of the list. One page answers that way for one entry, which is spent
+	// with it, and the same card named twice is that window met twice.
+	RacesOnTheArchiveBoundariesOf []string
 
 	// SendsAFileShort hands a file out one byte shorter than it was said to
 	// be, which no Minka does: what a client makes of bytes that are not the
@@ -994,14 +996,14 @@ func (s *Server) archivedCards(w http.ResponseWriter, r *http.Request, person *P
 		if uuidPattern.MatchString(before) {
 			boundary = s.inTheArchiveOf(board, before)
 		}
-		if boundary == nil || before == s.ForgetsTheArchiveBoundaryOf {
+		if boundary == nil || slices.Contains(s.ForgetsTheArchiveBoundariesOf, before) {
 			unprocessable(w, "archivedCardsBeforeUnknown", "The page starts behind a card in the archive of this board, named by its id.")
 			return
 		}
-		if before == s.RacesOnTheArchiveBoundaryOf {
+		if raced := slices.Index(s.RacesOnTheArchiveBoundariesOf, before); raced >= 0 {
 			// The card went between the check above and the read below, so the
 			// page comes back empty although the list goes on.
-			s.RacesOnTheArchiveBoundaryOf = ""
+			s.RacesOnTheArchiveBoundariesOf = slices.Delete(s.RacesOnTheArchiveBoundariesOf, raced, raced+1)
 			writeJSON(w, http.StatusOK, []any{})
 			return
 		}
