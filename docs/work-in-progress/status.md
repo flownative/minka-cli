@@ -64,6 +64,14 @@ which is somebody of the account's own company or an admin. Under one that
 may not, masked addresses were seen live ending the run as `forbidden`. Only
 the people the chosen projects refer to come into a bundle.
 
+A dry run over the whole account walks through: all thirty-two projects, and of
+the words a bundle has no place for that account holds exactly one, the kind of
+line a run used to end on. What such a run is worth is the size it names before
+anything is fetched, and one thing it named that nobody expected: a comment
+seven times longer than what Minka takes, which the applier passes over rather
+than ending on. A run into a bundle over the whole account is still owed, and
+its size is Robert's and Shaun's to allow.
+
 The working notes on the back of a card are read with `cards notes show` and
 written with `cards notes set`, which needs `--expect` or `--force` (C-042).
 Seen live against the local instance, which runs Minka's main with the notes
@@ -382,13 +390,17 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   in `authorization.md` and E-191.
 - `import basecamp` brings the to-dos of a project along: the applier is on
   Minka's `main`, the format in its `import-format.md`.
-- Run the check-ins live, against a real questionnaire: whether a question ever
-  comes without a `start_date`, whether an answer ever comes without a
-  `group_on`, and whether a frequency turns up that is in none of the five.
-- Run a dry run over the whole account again and read `recordsLeftOut`: which
-  words turn up besides `Chat::Lines::Play`, on which kind of record, where and
-  how many, and decide per word whether a bundle gets one for it. Whoever adds
-  one has to have seen what Basecamp sends under it.
+- Write the bundle of the whole account, once Robert or Shaun has allowed its
+  size: a dry run over it goes through and names what it would fetch. What it
+  leaves out of the words a bundle has no place for is the one kind of line and
+  nothing else, so the next surprise is the first one nobody has met yet — read
+  `recordsLeftOut` of that run as well, and whoever gives a bundle a word for
+  something has to have seen what Basecamp sends under it.
+- What the check-ins still owe is only the rare shapes: the dry run over the
+  whole account met no question without a `start_date`, no answer without a
+  `group_on`, no frequency outside the five and none whose schedule Minka cannot
+  express, so those four wait for an account that holds them rather than for a
+  run.
 - React to messages from `minka-ca`: check against the code, fake first,
   then the CLI, test and sabotage proof, check live, documentation in the
   same commit.
