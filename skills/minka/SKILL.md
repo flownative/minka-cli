@@ -886,7 +886,7 @@ this:
   `data.todosWithSubtasks` and `data.subtasksLeftOut` count what fell away, and a
   `notice` says so. A to-do that comes again at the source comes as an ordinary
   one, because Minka has no repeating to-do: the schedule stays behind and
-  `data.todosThatRepeat` counts them, with a `notice`. Two differences a later run
+  `data.todosThatRepeat` counts the ones a bundle carries, with a `notice`. Two differences a later run
   cannot repair, each with a
   `notice`: it leaves the people of a to-do as they stand in Minka
   (`data.todosWithPeople`) and reopens nothing it once ticked off

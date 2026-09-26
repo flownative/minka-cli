@@ -595,10 +595,10 @@ Minka applies the kinds in an order of its own.
   **A to-do can hang on a To-dos tool itself** and stand in no list and no group
   of it. A bundle holds a to-do in a list alone, so such a to-do is left out,
   counted in `todosLeftOut` and named in `todosWithoutAList` with its identifier
-  and its project (C-060); the walk of the lists never meets it, so the to-dos of each tool are
-  asked for under the tool's own identifier, and a failure of that request ends
-  the run. A to-do goes to the end of
-  its list or its group, so the order of the file is the order of the list:
+  and its project (C-060); the walk of the lists never meets it, so the to-dos
+  of every tool that is switched on are asked for under the tool's own
+  identifier, and a failure of that request ends the run. A to-do goes to the
+  end of its list or its group, so the order of the file is the order of the list:
   what is open as Basecamp lists it, then what is done, then what it has
   thrown away. `groupSourceId` names a group of the to-do's own list and is
   `null` for a to-do standing in the list itself; both it and a `listSourceId`
@@ -614,9 +614,9 @@ Minka applies the kinds in an order of its own.
   for never.
   **A schedule is not carried either:** a to-do that comes again at the source
   comes here as an ordinary to-do, because Minka has no repeating one, and
-  `todosThatRepeat` counts them. Basecamp leaves the key of a schedule out
-  altogether where nothing repeats, so that the key is there is the whole test,
-  and nothing in it is read.
+  `todosThatRepeat` counts the ones a bundle carries. Basecamp leaves the key of
+  a schedule out altogether where nothing repeats, so that the key is there is
+  the whole test, and nothing in it is read.
 - **Forwards** are the mails somebody forwarded into a project, one record per
   mail of every inbox that is switched on. Basecamp lists the mails of an
   inbox itself and hands out **no** list of the archived and the trashed ones

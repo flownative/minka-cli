@@ -28,8 +28,8 @@ type todoList struct {
 }
 
 // hangsOn is what a record of Basecamp stands in: which record, and of what
-// kind. The kind is what tells a to-do standing in a list from one hanging on a
-// To-dos tool itself, for which a bundle has no place.
+// kind. The kind is how a to-do says that it hangs on a To-dos tool itself
+// rather than in a list of one, which a bundle has no place for.
 type hangsOn struct {
 	ID   int64  `json:"id"`
 	Type string `json:"type"`

@@ -1099,3 +1099,33 @@ func TestAToDoThatComesAgainIsCarriedWithoutItsSchedule(t *testing.T) {
 		}
 	}
 }
+
+// The to-dos hanging on a tool itself are asked for under the tool's own
+// identifier, and a failure of that request ends the run — the other rule than
+// the one for a place the bundle does not carry, where not being there is passed
+// over. A tool the dock has just named is no place the source lost, and it
+// answers an empty list where it holds no such to-do, so a failure there is a
+// failure: passing it over would lose the very to-dos this walk is for, and the
+// report would say that none stood in no list.
+func TestAToolThatWillNotSayTheToDosOfItsOwnEndsTheRun(t *testing.T) {
+	for _, refused := range []struct {
+		path string
+		kind basecamp.Kind
+	}{
+		{"buckets/7008/todolists/9080/todos.json", basecamp.NotFound},
+		{"buckets/7008/todolists/9080/todos.json?completed=true", basecamp.NotFound},
+		{"buckets/7008/todolists/9080/todos.json", basecamp.Forbidden},
+	} {
+		account := fakebasecamp.New()
+		account.Fail[refused.path] = &basecamp.Error{Kind: refused.kind, Message: "Basecamp says no"}
+		extractor := basecamp.Extractor{Source: account, Avatars: account, Files: account, Now: func() time.Time { return runDay }}
+
+		_, err := extractor.Extract(t.Context(), []string{todoProject}, bundle.Discard())
+
+		var failed *basecamp.Error
+		if !errors.As(err, &failed) || failed.Kind != refused.kind {
+			t.Errorf("%s answering %v ended the run with %v, want the run to end with %v",
+				refused.path, refused.kind, err, refused.kind)
+		}
+	}
+}
