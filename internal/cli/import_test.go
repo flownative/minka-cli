@@ -113,6 +113,8 @@ func TestImportBasecampWritesABundleAndReportsWhatItHolds(t *testing.T) {
 		"creatorProbesRefused": float64(0),
 		"cardsByStatus":        map[string]any{"active": float64(0), "archived": float64(0), "trashed": float64(0)},
 		"cardsOnHold":          float64(0), "cardsLeftOut": float64(0), "commentsTrashed": float64(0),
+		"todoListsByStatus":  map[string]any{"active": float64(0), "archived": float64(0), "trashed": float64(0)},
+		"todosLeftOut":       float64(0),
 		"mentionsUnresolved": float64(0), "filesInBodies": float64(0), "filesDropped": float64(0), "linkPreviews": float64(0), "picturesLinked": float64(0), "embeds": float64(0), "embedsLeftOut": float64(0),
 		"filesExpected": float64(0), "filesBytesExpected": float64(0), "filesBytes": float64(0), "filesFetched": float64(0), "filesReused": float64(0),
 		"filesGone": float64(0), "fileNamesChanged": float64(0), "captionsDropped": float64(0), "filesOfSeveralOwners": float64(0),
@@ -123,7 +125,8 @@ func TestImportBasecampWritesABundleAndReportsWhatItHolds(t *testing.T) {
 		"questionsLeftOut": []any{}, "anchorsInferred": []any{}, "nobodyAsked": []any{},
 		"askedLeftOut":        map[string]any{"notInTheProject": float64(0), "retired": float64(0), "withoutAnAddress": float64(0)},
 		"answersWithoutABody": float64(0), "answersWithoutADay": float64(0), "answersTrashed": float64(0),
-		"longestBody":        map[string]any{"cards": float64(0), "comments": float64(0), "posts": float64(0), "messages": float64(0), "answers": float64(0)},
+		"longestBody": map[string]any{"cards": float64(0), "comments": float64(0), "posts": float64(0), "messages": float64(0), "answers": float64(0),
+			"todolists": float64(0), "todos": float64(0)},
 		"longestBodyRecords": map[string]any{},
 		"references":         map[string]any{"cards": float64(0), "posts": float64(0), "tools": float64(0)},
 		"requestsRetried":    float64(0),
@@ -995,7 +998,8 @@ func TestImportBasecampReportsThePostsAndTheChatsOfAProject(t *testing.T) {
 		"uploadLinesLeftOut": float64(1), "messagesWithEmptyBody": float64(1), "picturesLinked": float64(1),
 		"recordsLeftOut": []any{map[string]any{"record": "line", "field": "type", "value": fakebasecamp.UnknownLine,
 			"in": "chat", "inSourceId": "9033", "leftOut": float64(2)}},
-		"longestBody": map[string]any{"cards": float64(0), "comments": float64(94), "posts": float64(212), "messages": float64(213), "answers": float64(0)},
+		"longestBody": map[string]any{"cards": float64(0), "comments": float64(94), "posts": float64(212), "messages": float64(213), "answers": float64(0),
+			"todolists": float64(0), "todos": float64(0)},
 		"longestBodyRecords": map[string]any{
 			"comments": map[string]any{"record": "comment", "sourceId": "9752", "in": "project", "inSourceId": "7004", "characters": float64(94)},
 			"posts":    map[string]any{"record": "post", "sourceId": "9701", "in": "project", "inSourceId": "7004", "characters": float64(212)},
@@ -1588,7 +1592,8 @@ func TestImportBasecampReportsTheCheckinsOfAProject(t *testing.T) {
 		"askedLeftOut": map[string]any{
 			"notInTheProject": float64(1), "retired": float64(1), "withoutAnAddress": float64(1)},
 		"answersWithoutABody": float64(1), "answersWithoutADay": float64(0), "answersTrashed": float64(0),
-		"longestBody": map[string]any{"cards": float64(0), "comments": float64(17), "posts": float64(0), "messages": float64(0), "answers": float64(150)},
+		"longestBody": map[string]any{"cards": float64(0), "comments": float64(17), "posts": float64(0), "messages": float64(0), "answers": float64(150),
+			"todolists": float64(0), "todos": float64(0)},
 		"longestBodyRecords": map[string]any{
 			"comments": map[string]any{"record": "comment", "sourceId": "9350", "in": "project", "inSourceId": "7007", "characters": float64(17)},
 			"answers":  map[string]any{"record": "answer", "sourceId": "9320", "in": "project", "inSourceId": "7007", "characters": float64(150)},
