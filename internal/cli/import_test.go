@@ -1710,7 +1710,7 @@ func TestImportBasecampReportsTheToDosOfAProject(t *testing.T) {
 		"todosByStatus":     map[string]any{"active": float64(7), "trashed": float64(1)},
 		"todosLeftOut":      map[string]any{"lists": float64(1), "groups": float64(2), "todos": float64(2)},
 		"todoPlacesLeftOut": []any{
-			map[string]any{"record": "to-do list", "sourceId": "9406", "groups": float64(0), "todos": float64(1)},
+			map[string]any{"record": "to-do list", "sourceId": "9406", "groups": float64(1), "todos": float64(1)},
 			map[string]any{"record": "group", "sourceId": "9414", "groups": float64(0), "todos": float64(1)},
 		},
 		"todosNotDone": float64(6), "todosWithPeople": float64(2),
@@ -1753,7 +1753,7 @@ func TestImportBasecampReportsTheToDosOfAProject(t *testing.T) {
 		"To-dos: 7 active, 1 trashed; 6 of them still open, 2 carrying people",
 		"To-dos that had subtasks: 1, with 2 subtasks a bundle has no word for",
 		"Left out of the To-dos tools: 1 lists, 2 groups, 2 to-dos",
-		"  with to-do list 9406 fell: 0 groups, 1 to-dos",
+		"  with to-do list 9406 fell: 1 groups, 1 to-dos",
 		"  with group 9414 fell: 0 groups, 1 to-dos",
 	} {
 		if !strings.Contains(r.stdout, want) {

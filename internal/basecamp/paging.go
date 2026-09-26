@@ -14,6 +14,9 @@ import (
 // another follows, so pages are asked for until one comes back empty. A page
 // is read into its entries when it arrives and let go of: a chat has
 // thousands of pages' worth, and only what a run needs of them is held.
+//
+// A failure hands back the pages that did arrive, for a caller that can go on
+// with fewer records than the source has; most cannot and pass the failure on.
 func getList[T any](ctx context.Context, source Source, path string) ([]T, error) {
 	separator := "?"
 	if strings.Contains(path, "?") {
@@ -25,11 +28,11 @@ func getList[T any](ctx context.Context, source Source, path string) ([]T, error
 	for page := 1; ; page++ {
 		content, err := source.Get(ctx, fmt.Sprintf("%s%spage=%d", path, separator, page))
 		if err != nil {
-			return nil, err
+			return all, err
 		}
 		var items []json.RawMessage
 		if err := json.Unmarshal(content, &items); err != nil {
-			return nil, &Error{Kind: API, Message: fmt.Sprintf("Basecamp answered %s with something that is no list", path)}
+			return all, &Error{Kind: API, Message: fmt.Sprintf("Basecamp answered %s with something that is no list", path)}
 		}
 		if len(items) == 0 {
 			return all, nil
@@ -39,14 +42,14 @@ func getList[T any](ctx context.Context, source Source, path string) ([]T, error
 		// giving up is the safe answer to both.
 		digest := sha256.Sum256(content)
 		if digest == previous {
-			return nil, &Error{Kind: API, Message: fmt.Sprintf("Basecamp answered page %d of %s with the page before it: the list ignores the page, or it moved under the walk", page, path)}
+			return all, &Error{Kind: API, Message: fmt.Sprintf("Basecamp answered page %d of %s with the page before it: the list ignores the page, or it moved under the walk", page, path)}
 		}
 		previous = digest
 
 		for _, item := range items {
 			var entry T
 			if err := json.Unmarshal(item, &entry); err != nil {
-				return nil, &Error{Kind: API, Message: fmt.Sprintf("Basecamp answered %s with an entry that cannot be read: %s", path, err)}
+				return all, &Error{Kind: API, Message: fmt.Sprintf("Basecamp answered %s with an entry that cannot be read: %s", path, err)}
 			}
 			all = append(all, entry)
 		}

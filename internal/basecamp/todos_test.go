@@ -25,13 +25,13 @@ import (
 // a run extracts.
 const todoProject = "7008"
 
-// listsTheAccountShows are the lists of a tool in the order the account answers
-// with, which is the order they stand in at the source. Read from the answer and
-// not from the fixture: what a test holds against the bundle is what the account
-// said.
-func listsTheAccountShows(t *testing.T, account *fakebasecamp.Account, bucket, tool int64) []string {
+// listsTheAccountShowsInFull are the lists of a tool as the account answers them,
+// and listsTheAccountShows their identifiers alone, in the order they stand in at
+// the source. Read from the answer and not from the fixture: what a test holds
+// against the bundle is what the account said.
+func listsTheAccountShowsInFull(t *testing.T, account *fakebasecamp.Account, bucket, tool int64) []map[string]any {
 	t.Helper()
-	var ids []string
+	var lists []map[string]any
 	for page := 1; ; page++ {
 		content, err := account.Get(context.Background(),
 			"buckets/"+strconv.FormatInt(bucket, 10)+"/todosets/"+strconv.FormatInt(tool, 10)+"/todolists.json?page="+strconv.Itoa(page))
@@ -43,12 +43,19 @@ func listsTheAccountShows(t *testing.T, account *fakebasecamp.Account, bucket, t
 			t.Fatal(err)
 		}
 		if len(listed) == 0 {
-			return ids
+			return lists
 		}
-		for _, one := range listed {
-			ids = append(ids, strconv.FormatInt(int64(one["id"].(float64)), 10))
-		}
+		lists = append(lists, listed...)
 	}
+}
+
+func listsTheAccountShows(t *testing.T, account *fakebasecamp.Account, bucket, tool int64) []string {
+	t.Helper()
+	var ids []string
+	for _, one := range listsTheAccountShowsInFull(t, account, bucket, tool) {
+		ids = append(ids, strconv.FormatInt(int64(one["id"].(float64)), 10))
+	}
+	return ids
 }
 
 // groupsTheAccountShows are the groups of a list as the account answers them,
@@ -98,6 +105,39 @@ func todosTheAccountShows(t *testing.T, account *fakebasecamp.Account, bucket, i
 		}
 		todos = append(todos, listed...)
 	}
+}
+
+// recordingsTheAccountShows are the records of a kind and a status that the
+// account lists across a project, as it answers them.
+func recordingsTheAccountShows(t *testing.T, account *fakebasecamp.Account, bucket int64, kind, status string) []map[string]any {
+	t.Helper()
+	var records []map[string]any
+	for page := 1; ; page++ {
+		content, err := account.Get(context.Background(), fmt.Sprintf(
+			"projects/recordings.json?type=%s&bucket=%d&status=%s&page=%d", kind, bucket, status, page))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var listed []map[string]any
+		if err := json.Unmarshal(content, &listed); err != nil {
+			t.Fatal(err)
+		}
+		if len(listed) == 0 {
+			return records
+		}
+		records = append(records, listed...)
+	}
+}
+
+// listedTwice is how often the account named a record among what it answered.
+func listedTwice(listed []map[string]any, id float64) int {
+	count := 0
+	for _, one := range listed {
+		if one["id"] == id {
+			count++
+		}
+	}
+	return count
 }
 
 // The lists of a To-dos tool come with the text and the state the source left
@@ -177,7 +217,7 @@ func TestWhatFallsWithAPlaceThatIsLeftOutIsCountedAndNamed(t *testing.T) {
 		t.Errorf("left out %+v, want %+v: the list and the group of the tool that is switched off, the group on the shelf, and the two to-dos that fell with them", result.TodosLeftOut, want)
 	}
 	places := []basecamp.TodoPlaceLeftOut{
-		{Record: "to-do list", SourceID: "9406", Todos: 1},
+		{Record: "to-do list", SourceID: "9406", Groups: 1, Todos: 1},
 		{Record: "group", SourceID: "9414", Todos: 1},
 	}
 	if !slices.Equal(result.TodoPlacesLeftOut, places) {
@@ -577,7 +617,7 @@ func TestAStatusNoBundleKnowsLeavesAListOrAToDoOutAndTheRunGoesOn(t *testing.T) 
 	}
 	places := []basecamp.TodoPlaceLeftOut{
 		{Record: "to-do list", SourceID: "9402", Groups: 1},
-		{Record: "to-do list", SourceID: "9406", Todos: 1},
+		{Record: "to-do list", SourceID: "9406", Groups: 1, Todos: 1},
 		{Record: "group", SourceID: "9414", Todos: 1},
 		{Record: "group", SourceID: "9416", Todos: 1},
 	}
@@ -602,15 +642,22 @@ func TestAListAGroupOrAToDoMetTwiceIsWrittenOnce(t *testing.T) {
 	}
 	theTodo(account, 9421).Twice = true
 
-	listed := groupsTheAccountShows(t, account, 7008, 9401)
-	twice := 0
-	for _, group := range listed {
-		if group["id"].(float64) == 9411 {
-			twice++
+	// Every one of them read from what the account answered: a fake that lists a
+	// record once makes this test pass over nothing.
+	for what, listed := range map[string][]map[string]any{
+		"the list among the lists of its tool":   listsTheAccountShowsInFull(t, account, 7008, 9080),
+		"the list among the archived records":    recordingsTheAccountShows(t, account, 7008, "Todolist", "archived"),
+		"the group among the groups of its list": groupsTheAccountShows(t, account, 7008, 9401),
+		"the group among the trashed records":    recordingsTheAccountShows(t, account, 7008, "Todolist", "trashed"),
+		"the to-do among the to-dos of its list": todosTheAccountShows(t, account, 7008, 9401, false),
+	} {
+		twice := 0
+		for _, id := range []float64{9401, 9403, 9411, 9413, 9421} {
+			twice += listedTwice(listed, id) / 2
 		}
-	}
-	if twice != 2 {
-		t.Fatalf("the account lists the group %d times among %v, and the test needs it twice", twice, listed)
+		if twice != 1 {
+			t.Fatalf("%s: the account lists none of them twice, so the safeguard is held by nothing: %v", what, listed)
+		}
 	}
 
 	dir, _ := extract(t, account, todoProject)
@@ -896,5 +943,42 @@ func TestAPlaceThatIsGoneTakesNothingWithItAndCostsNoRun(t *testing.T) {
 	var failed *basecamp.Error
 	if !errors.As(err, &failed) || failed.Kind != basecamp.Forbidden {
 		t.Errorf("a request that was refused ended the run with %v, want forbidden", err)
+	}
+}
+
+// Counting what fell with a place buys numbers with requests, so it asks for
+// exactly what it counts and for nothing else: the groups of a list, the to-dos
+// of a place, and neither comments, nor boosts, nor the groups of a group, which
+// has none. What nothing writes must cost no more than its number.
+func TestCountingWhatFellAsksForNothingBeyondIt(t *testing.T) {
+	account := fakebasecamp.New()
+	_, result := extract(t, account, todoProject)
+
+	if len(result.TodoPlacesLeftOut) == 0 {
+		t.Fatal("no place took records with it, so the fence is around nothing")
+	}
+	// Every place the bundle does not carry, those that took nothing with them
+	// included.
+	places := []string{"9406", "9414", "9415"}
+	var asked []string
+	for _, request := range account.Requests {
+		for _, place := range places {
+			if strings.Contains(request, "/"+place+"/") {
+				asked = append(asked, request)
+			}
+		}
+	}
+	want := []string{
+		"buckets/7008/todolists/9406/groups.json?page=1",
+		"buckets/7008/todolists/9406/todos.json?page=1",
+		"buckets/7008/todolists/9406/todos.json?completed=true&page=1",
+		"buckets/7008/todolists/9414/todos.json?page=1",
+		"buckets/7008/todolists/9414/todos.json?page=2",
+		"buckets/7008/todolists/9414/todos.json?completed=true&page=1",
+		"buckets/7008/todolists/9415/todos.json?page=1",
+		"buckets/7008/todolists/9415/todos.json?completed=true&page=1",
+	}
+	if !slices.Equal(asked, want) {
+		t.Errorf("the counting asked for\n%v\nwant\n%v", asked, want)
 	}
 }

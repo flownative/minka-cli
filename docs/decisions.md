@@ -716,12 +716,15 @@ see why — and the later of two moments the source itself said is no guess.
 
 The groups and to-dos of a to-do list, and the to-dos of a group, that a bundle
 does not carry are asked for although none of them is written, counted per kind
-and named with the place they fell with.
+and named with the place they fell with. Such a walk asks for what it counts and
+for nothing else, and the one failure it passes over is `not_found`.
 
 **Why:** [C-050](#c-050) promises that what is left out is counted, and a place
 that took a subtree with it silently would make every number of a run say that a
-bundle holds more of the source than it does. The requests are the price, and a
-place Basecamp no longer has is passed over rather than ending a run over records
-it left out anyway.
+bundle holds more of the source than it does. The requests are the price, so the
+walk is fenced to them, and a place Basecamp no longer has is passed over rather
+than ending a run over records it left out anyway — the only place where a wrong
+assumption about an answer counts too few instead of ending the run, which is why
+the [Status](work-in-progress/status.md) names it.
 **Implemented as:** `basecamp.Extractor.countWhatFellWithAPlace`, see
 [Importing from Basecamp](stable/import.md).
