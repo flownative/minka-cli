@@ -92,9 +92,11 @@ fine), `commentNotReadable`, `cardDueDateNotADate`, `personNotAProjectMember`, `
 `unsupportedMediaType`, `projectArchived`.
 
 That is not all of them: Minka has a code for every refusal of every endpoint,
-and the ones a single command can meet stand in the section about that command
-— the notes of a card, reactions and uploads each name their own. Read the code
-you got, do not expect it in this list.
+far more than the CLI can meet, and the list above holds the ones that come up
+most. Codes of their own stand where their subject is described — projects,
+cards on hold, people and assignments, steps, the working notes on the back of
+a card, due dates, reactions and uploads. Read the code you got, do not expect
+it in a list.
 
 Minka answers everything you may not see with 404, never 403, so exit 4 is
 not expected in practice.
