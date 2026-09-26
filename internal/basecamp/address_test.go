@@ -117,13 +117,15 @@ func TestAnAddressIsAsLongAsMinkaAllows(t *testing.T) {
 	}
 }
 
-// The one shape Minka takes and a run leaves out, on purpose: a domain written
-// as a bracketed literal address of a machine, in either of its two spellings.
-// Nobody's mailbox is written that way, and reading one exactly as PHP reads it
-// is a risk in the direction that stops a run.
-func TestAnAddressAtABracketedMachineIsLeftOutAlthoughMinkaTakesIt(t *testing.T) {
-	for _, address := range []string{"ada@[192.168.1.1]", "ada@[IPv6:::1]"} {
-		if minkaTakesTheAddress(address) {
+// The two shapes Minka takes and a run leaves out, on purpose: a domain written
+// as a bracketed literal address of a machine, in either of its two spellings,
+// and an address with a NUL at one end, which PHP trims away. Neither is
+// anybody's mailbox, and reading either exactly as PHP reads it is a risk in the
+// direction that stops a run.
+func TestTheShapesMinkaTakesAndARunLeavesOut(t *testing.T) {
+	for _, address := range []string{"ada@[192.168.1.1]", "ada@[IPv6:::1]",
+		"ada@example.test\x00", "\x00ada@example.test"} {
+		if _, _, anAddress := anAddressMinkaTakes(address); anAddress {
 			t.Errorf("%q came through, and the rule says it does not", address)
 		}
 	}
