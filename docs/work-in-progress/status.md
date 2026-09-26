@@ -52,8 +52,9 @@ has a word for `Chat::Lines::Text`, `Chat::Lines::RichText`,
 `Chat::Lines::Upload` and `Chat::Lines::Integration` — or with a status other
 than `active`, a column of a kind a bundle has no role for, a card, a post,
 a comment, a question or an answer with a status a bundle does not know, a draft
-among them, and a group or a to-do the source has put on the shelf, which a
-bundle gives none. What stood in a list or a group a bundle cannot carry falls
+among them, a group or a to-do the source has put on the shelf, which a
+bundle gives none, a forwarded mail of a status that is none of the three, and
+an answer by mail that says anything but `active`. What stood in a list or a group a bundle cannot carry falls
 with it, is asked for to be counted and is named with the place it fell with
 (C-052), so that no run says a bundle holds more of the source than it does.
 `recordsLeftOut` names each with the kind of record, the word and where it
