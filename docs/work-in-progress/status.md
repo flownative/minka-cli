@@ -420,10 +420,13 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   tile that stays alight through a tool call of five minutes, the word in
   `heartbeat --json`, the tile going out with `work stop`, no keepalive left
   behind afterwards — and, at some point, a machine that really slept.
-- Commands for the to-dos of a project: the addresses are on Minka's `main`
-  and unreleased, the contract stands in its `authorization.md` and E-190.
-- Commands for the check-ins of a project: likewise unreleased, the contract
-  in `authorization.md` and E-191.
+- Commands for the to-dos of a project: the addresses are released, the
+  contract stands in Minka's `authorization.md` and E-190.
+- Commands for the check-ins of a project: released as well, the contract in
+  `authorization.md` and E-191.
+- Of the ninety-odd addresses the API offers, about half have no command. Four
+  cards say which: the lists and groups of to-dos, the to-dos and their
+  subtasks, the check-ins, and the archive of cards and posts.
 - Extract the to-dos of a project live: whether `todoset` is the dock entry, the
   fields of a list, a group and a to-do, the two lists of what is open and what is
   done, the recordings of the archived and the trashed ones, whether a list on
