@@ -889,12 +889,12 @@ func TestAnAddressInQuotationMarksComesOutWithoutThemAndIsCounted(t *testing.T) 
 				t.Errorf("%v: the output names %q:\n%s", mode, secret, output)
 			}
 		}
-		if !strings.Contains(output, "1 e-mail address stood inside a pair of quotation marks") {
+		if !strings.Contains(output, "1 record came with its e-mail address inside a pair of quotation marks") {
 			t.Errorf("%v: no notice says how many came out of quotation marks:\n%s", mode, output)
 		}
 
 		if mode[0] == "--styled" {
-			if !strings.Contains(r.stdout, "Addresses a pair of quotation marks came off: 1") {
+			if !strings.Contains(r.stdout, "Records whose address a pair of quotation marks came off: 1") {
 				t.Errorf("the text:\n%s", r.stdout)
 			}
 			continue

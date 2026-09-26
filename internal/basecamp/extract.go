@@ -180,8 +180,9 @@ type Result struct {
 	// InvalidAddresses are the IDs of the people who came without an e-mail
 	// address because the one the source holds is none.
 	InvalidAddresses []string
-	// AddressesUnquoted counts the addresses a run took a pair of quotation
-	// marks off before it read them, over people and mail alike.
+	// AddressesUnquoted counts the records a run took a pair of quotation marks
+	// off the address of, over people and mail alike: one mailbox written that
+	// way in many records counts in each of them.
 	AddressesUnquoted int
 	// PeopleLeftOut counts the people of the account nothing in the bundle
 	// refers to, who are therefore not in it.
@@ -311,8 +312,8 @@ type Extractor struct {
 	// creatorProbesRefused counts the dock entries asked for the creator of a
 	// project that the identity may not see.
 	creatorProbesRefused int
-	// addressesUnquoted counts the addresses of the forwarded mail a run took a
-	// pair of quotation marks off. Those of people are counted in the registry.
+	// addressesUnquoted counts the mails and the answers a run took a pair of
+	// quotation marks off the sender of. People are counted in the registry.
 	addressesUnquoted int
 
 	peopleAsClients              int
