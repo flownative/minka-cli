@@ -6,10 +6,17 @@ stands where the work currently is.
 ## Where we are
 
 The CLI serves what `/api/v1` offers: projects, boards, cards including the
-trash, columns with their area for cards on hold, assignees, due dates,
-steps, subscribers, comments, chats, private conversations, uploads,
-mentions, reactions and one's own cards across all projects. `minka
-commands` lists them all, built from the command tree itself.
+trash and the archive of a board, columns with their area for cards on hold,
+assignees, due dates, steps, subscribers, comments, chats, private
+conversations, uploads, mentions, reactions and one's own cards across all
+projects. `minka commands` lists them all, built from the command tree itself.
+
+The archive of a board is read with `boards archive`, and `cards archive` and
+`cards unarchive` move a card in and out of it. `--all` walks every page in one
+run and works around the weakness Minka carries in its own debts: a cursor that
+counts only while the card it names lies in the archive. The rule the commands
+follow is [The archive of a board](../stable/archive.md) (C-054). None of it has
+been seen live: the whole feature is checked against the fake, see below.
 
 A file goes both ways: `uploads create` puts one in, `uploads download`
 fetches its bytes back. Every text says which files hang in it, so reading a
@@ -279,6 +286,27 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   address that has nothing instead of 422 `cardArchived`, and the order in which
   a move refuses — an archived card before a column without the area on hold —
   is read in the Minka code alone.
+- Of the archive of a board, all of it. No page, no walk and neither write has
+  been seen live; everything rests on the Minka code —
+  `BoardApiController::archivedCardsAction`,
+  `ToolQueryService::findArchivedCardsOf` and `isArchivedCardOf`, the two
+  handlers, and the weakness of the cursor as Minka's own debts write it down.
+  The fake mirrors that code: the order of the refusals with the 404 for the
+  board before both 422s, `archivedCardsLimitNotANumber` for a limit that is no
+  whole number of at least one, the silent cut of a page above 100, the order
+  `archivedAt` descending with a card whose moment nobody noted last and the id
+  deciding a tie, `cardArchived` and `cardNotArchived` behind `projectArchived`,
+  and a card in the trash as an address that has nothing. It gives the boundary
+  card's disappearance in both forms, which no live run can be made to produce on
+  purpose, and as many cards at a time as a walk can lose:
+  `ForgetsTheArchiveBoundariesOf` for the 422, which takes the card out of the
+  archive with the refusal because one status decides the cursor and the listing
+  alike, and `RacesOnTheArchiveBoundariesOf` for the empty 200 of the race, where
+  the card stays and the same card named twice is that window met twice. What the fake
+  cannot show at all is a column deleted from a board, so that a card comes back
+  into the first working column or into Triage instead of the column it left: the
+  fake deletes no columns, and that branch is read in
+  `UnarchiveCardHandler` alone.
 - That a card is left out of a set at work is read live nowhere yet: it was read
   in Minka's code, and the answer the fake gives is the one that code builds.
   What a word for it that this CLI does not know does to the list is seen

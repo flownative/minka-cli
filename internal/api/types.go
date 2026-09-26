@@ -117,6 +117,18 @@ const (
 	TrashColumn = "column"
 )
 
+// ArchivedCard is one card in the archive of a board, as the archive lists it:
+// what it is, and when and by whom it was put away. The card itself is read at
+// its own address and carries everything else.
+type ArchivedCard struct {
+	ID         string           `json:"id"`
+	ShortID    *string          `json:"shortId"` // such as "MNK-1A", nil where the board shows no short identifiers
+	Title      string           `json:"title"`
+	ArchivedAt *string          `json:"archivedAt"` // nil for a card put away before the moment was noted
+	ArchivedBy *PersonReference `json:"archivedBy"` // nil where nobody is known
+	AppURL     string           `json:"appUrl"`
+}
+
 // LeftOutCard is a card the host did not take into the set an agent says it is
 // at work on, together with the word it gives for why. The host may learn
 // further words, so a client acts on the ones it knows and passes the rest on.

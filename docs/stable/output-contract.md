@@ -27,6 +27,13 @@ taken from — and says `Archived: yes, was in <column>` instead. What `--json`
 hands over is untouched by that: the resource carries every field the API
 sends, whatever the text view makes of it.
 
+Where one command reads several answers, `data` is the list of their records as
+they came, element by element, and nothing around it: `boards archive --all`
+hands over the JSON of every card of every page unchanged, so a field the API
+gains still reaches a reader (C-002). What the pages meant together — how many
+were read, what came twice, what cannot be promised — is in `notice`, never
+woven into the records.
+
 Warnings are in `notice` with `--json`, on stderr otherwise, so that
 `--quiet | jq` never has anything foreign in the stream.
 
