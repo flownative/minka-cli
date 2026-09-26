@@ -9,6 +9,12 @@ CLI converts nothing in either direction and prints the body alone on standard
 output — what it has to say about the notes goes the other way, so that what
 was shown can be sent back byte for byte (C-042).
 
+A write replaces them as a whole, so it says what it replaces: `cards notes
+set` needs `--expect <updatedAt>` — the time that was read, or `none` for notes
+nobody had written yet — or `--force`, and there is no default. The CLI does not
+read the notes itself to fill `--expect` in, because a guard protects only what
+the writer read before beginning to write (C-042).
+
 ## Markdown → HTML
 
 `internal/markdown` converts with goldmark and writes only elements and
