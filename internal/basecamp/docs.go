@@ -51,6 +51,15 @@ type DocsCounts struct {
 	// that are longer than Minka holds. Minka passes such a record over on every
 	// run, with everything hanging on it, and the text is not cut short.
 	LongerThanMinkaTakes int `json:"longerThanMinkaTakes"`
+	// SilentAboutClientsBelowTheTop counts the folders, documents and uploads
+	// standing **inside a folder** whose record says nothing about whether clients
+	// see them. Nothing is written for such an entry, so Minka reads it as one
+	// that changes nothing above it, and a folder at the top that ought to be
+	// hidden from clients stays shown. At the top of a tool silence costs nothing —
+	// Minka reads an absent word as private — so only the depth that can cost the
+	// rule is counted, and a run that met one of them says so out loud rather than
+	// letting the safest-looking answer of the source pass without a number.
+	SilentAboutClientsBelowTheTop int `json:"silentAboutClientsBelowTheTop"`
 	// LeftOut counts what a bundle does not carry of the Docs & Files tools, per
 	// kind of record, and PlacesLeftOut names the folders and tools that took
 	// entries with them.
@@ -423,6 +432,7 @@ func (e *Extractor) writeFolder(w *bundle.Writer, walk *docsWalk, tool, in int64
 		named := sourceID(in)
 		record.ParentSourceID = &named
 	}
+	e.countIfItIsSilentAboutClients(record.VisibleToClients, record.ParentSourceID != nil)
 	if err := w.Add(bundle.Folders, record); err != nil {
 		return err
 	}
@@ -471,6 +481,7 @@ func (e *Extractor) writeDocument(ctx context.Context, w *bundle.Writer, walk *d
 	} else {
 		e.docs.DocumentsWithoutWords++
 	}
+	e.countIfItIsSilentAboutClients(record.VisibleToClients, folderID != nil)
 	if err := w.Add(bundle.Documents, record); err != nil {
 		return err
 	}
@@ -554,6 +565,7 @@ func (e *Extractor) writeUpload(ctx context.Context, w *bundle.Writer, walk *doc
 	if description != "" {
 		record.Description = &description
 	}
+	e.countIfItIsSilentAboutClients(record.VisibleToClients, folderID != nil)
 	if err := w.Add(bundle.Uploads, record); err != nil {
 		return err
 	}
@@ -590,6 +602,20 @@ func (e *Extractor) wordlessWhereItsOnlyFileNeverComes(text, sourceID string) st
 	}
 	e.docs.OnlyAFileNoRunWillBring = append(e.docs.OnlyAFileNoRunWillBring, sourceID)
 	return ""
+}
+
+// countIfItIsSilentAboutClients notes an entry of Docs & Files the source says
+// nothing about clients of, where it stands inside a folder and the silence can
+// therefore cost the rule: nothing is written, Minka reads such an entry as one
+// that changes nothing above it, and a folder at the top that ought to be hidden
+// from clients stays shown. A number is all a run can do about it — what the
+// source says is the source's — but a run that said nothing would let the harm
+// the whole tool is written to prevent arrive through the safest-looking answer
+// there is.
+func (e *Extractor) countIfItIsSilentAboutClients(said *bool, insideAFolder bool) {
+	if said == nil && insideAFolder {
+		e.docs.SilentAboutClientsBelowTheTop++
+	}
 }
 
 // fileOfAnUpload is the one file an upload stands for, as a run brings it, and

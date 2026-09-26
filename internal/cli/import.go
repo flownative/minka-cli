@@ -649,6 +649,11 @@ it has been applied.`,
 					"boost on an answer by mail is left out, because Minka takes no reaction on one; the answer comes",
 					"boosts on answers by mail are left out, because Minka takes no reaction on one; the answers come"))
 			}
+			if count := report.Docs.SilentAboutClientsBelowTheTop; count > 0 {
+				notices = append(notices, plural(count,
+					"folder, document or upload standing inside a folder says nothing about whether clients see it, so nothing is written for it and Minka reads it as one that changes nothing above it. Where the folder at the top of its tool is shown to clients, that word is the one thing which would have hidden it, so compare that entry against the source before the bundle is applied; where the top is hidden or says nothing itself, nothing is lost",
+					"folders, documents or uploads standing inside folders say nothing about whether clients see them, so nothing is written for them and Minka reads them as entries that change nothing above them. Where the folder at the top of their tool is shown to clients, that word is the one thing which would have hidden it, so compare those entries against the source before the bundle is applied; where the top is hidden or says nothing itself, nothing is lost"))
+			}
 			if count := report.Docs.FoldersThatSaidNothingOfWhatIsInThem; count > 0 {
 				notices = append(notices, plural(count,
 					"folder of a Docs & Files tool would not say what stands in it, so what is in use below it is in no bundle and no later run finds it either; nothing can count it, and the folder itself comes",
@@ -951,7 +956,8 @@ func renderDocs(w io.Writer, report importReport) {
 	docs := report.Docs
 	metNothing := report.Counts[bundle.Folders] == 0 && report.Counts[bundle.Documents] == 0 && report.Counts[bundle.Uploads] == 0 &&
 		docs.LeftOut == (basecamp.DocsLeftOut{}) && len(docs.WithoutAStoredFile) == 0 &&
-		len(docs.OnlyAFileNoRunWillBring) == 0 && docs.FoldersThatSaidNothingOfWhatIsInThem == 0
+		len(docs.OnlyAFileNoRunWillBring) == 0 && docs.FoldersThatSaidNothingOfWhatIsInThem == 0 &&
+		docs.SilentAboutClientsBelowTheTop == 0
 	if metNothing {
 		return
 	}
@@ -977,6 +983,10 @@ func renderDocs(w io.Writer, report importReport) {
 	}
 	if docs.LongerThanMinkaTakes > 0 {
 		fmt.Fprintf(w, "Documents and descriptions longer than Minka holds, which it passes over on every run: %d\n", docs.LongerThanMinkaTakes)
+	}
+	if docs.SilentAboutClientsBelowTheTop > 0 {
+		fmt.Fprintf(w, "Entries inside a folder that say nothing about whether clients see them, which cannot hide the folder above them: %d\n",
+			docs.SilentAboutClientsBelowTheTop)
 	}
 	if docs.FoldersThatSaidNothingOfWhatIsInThem > 0 {
 		fmt.Fprintf(w, "Folders that would not say what stands in them, so that what is in use below them is in no bundle: %d\n",

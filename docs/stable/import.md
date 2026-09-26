@@ -1271,6 +1271,15 @@ therefore read from the source and never guessed (C-055).
   below a top folder the source shows is hidden from clients, the import hides
   that top folder with everything in it and names it. An entry that left the
   word out would be imported in the open under a folder clients see.
+  So an entry **inside a folder** that the source says nothing about is counted
+  (`docs.silentAboutClientsBelowTheTop`) and named in a `notice`: nothing is
+  written for it, Minka reads it as one that changes nothing above it, and where
+  the folder at the top of its tool is shown to clients that word was the one
+  thing which would have hidden it. The count is all a run can do — what the
+  source says is the source's — but a run that said nothing would let the harm
+  this tool is written to prevent arrive through the safest-looking answer there
+  is. At the top of a tool the same silence costs nothing and is not counted:
+  Minka reads an absent word as private there.
 - **What follows what it hangs on** — a to-do, a group, a card, a step, an
   answer, a comment, a line of a chat, a forwarded mail, an answer by mail —
   carries no word of its own, because a
