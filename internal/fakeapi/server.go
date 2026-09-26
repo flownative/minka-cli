@@ -182,6 +182,14 @@ type TrashedCard struct {
 	TrashedBy string // person ID
 }
 
+// ArchivedCard is a card that was put into the archive of its board. It keeps
+// the column it was taken from, which is the column it goes on naming although
+// it stands in none.
+type ArchivedCard struct {
+	Card   *Card
+	Column *Column
+}
+
 // TrashEntries is how many entries an answer carries at most, as the server
 // caps them.
 const TrashEntries = 200
@@ -364,6 +372,7 @@ type Server struct {
 	Chats    []*Chat
 	Uploads  []*Upload
 	Trash    []*TrashedCard
+	Archive  []*ArchivedCard
 
 	// IgnoresProjectStatus makes the server answer like a Minka from before
 	// projects could be archived: no status, and the filter goes unnoticed.
@@ -556,6 +565,23 @@ func (s *Server) WritingRequests() []RecordedRequest {
 		}
 	}
 	return writing
+}
+
+// PutInTheArchive takes a card off its board into the archive of the board, as
+// archiving it does. It leaves its column, and the column stays with it: that
+// is the column an archived card names, on a board where it may have been
+// deleted since.
+func (s *Server) PutInTheArchive(card *Card) {
+	for _, board := range s.Boards {
+		for _, column := range board.Columns {
+			if !slices.Contains(column.Cards, card) {
+				continue
+			}
+			column.Cards = slices.DeleteFunc(column.Cards, func(c *Card) bool { return c == card })
+			s.Archive = append(s.Archive, &ArchivedCard{Card: card, Column: column})
+			return
+		}
+	}
 }
 
 // FailNextWith makes the next request answer with this status and a body that
@@ -813,6 +839,11 @@ func (s *Server) projectOfCard(cardID string) *Project {
 			}
 		}
 	}
+	if archived := s.inTheArchive(cardID); archived != nil {
+		if board := s.boardOfColumn(archived.Column); board != nil {
+			return s.projectOf(board)
+		}
+	}
 	return nil
 }
 
@@ -961,8 +992,13 @@ func (s *Server) projectOf(board *Board) *Project {
 	return &Project{}
 }
 
+// card answers one card, from its board or from the archive of its board: a
+// card in the archive is read at its own address like any other.
 func (s *Server) card(w http.ResponseWriter, r *http.Request, person *Person) {
 	board, column, card := s.visibleCard(r.PathValue("cardId"), person)
+	if card == nil {
+		board, column, card = s.visibleArchivedCard(r.PathValue("cardId"), person)
+	}
 	if card == nil {
 		notFound(w)
 		return
@@ -2544,10 +2580,17 @@ func (s *Server) assigneeReferences(card *Card) []any {
 	return list
 }
 
-// removeCard moves a card to the trash. The fake forgets it, which reads the
-// same: every later request for it is 404.
+// removeCard moves a card to the trash, from its board or from the archive of
+// its board. The fake forgets where it came from, which reads the same: every
+// later request for it is 404, and what a restore gives back is a card on the
+// board either way.
 func (s *Server) removeCard(w http.ResponseWriter, r *http.Request, person *Person) {
 	_, column, card := s.visibleCard(r.PathValue("cardId"), person)
+	fromTheArchive := false
+	if card == nil {
+		_, column, card = s.visibleArchivedCard(r.PathValue("cardId"), person)
+		fromTheArchive = card != nil
+	}
 	if card == nil {
 		notFound(w)
 		return
@@ -2555,7 +2598,11 @@ func (s *Server) removeCard(w http.ResponseWriter, r *http.Request, person *Pers
 	if s.refusedAsArchived(w, s.projectOfCard(r.PathValue("cardId"))) {
 		return
 	}
-	column.Cards = slices.DeleteFunc(column.Cards, func(c *Card) bool { return c == card })
+	if fromTheArchive {
+		s.Archive = slices.DeleteFunc(s.Archive, func(a *ArchivedCard) bool { return a.Card == card })
+	} else {
+		column.Cards = slices.DeleteFunc(column.Cards, func(c *Card) bool { return c == card })
+	}
 	s.Trash = append(s.Trash, &TrashedCard{Card: card, Column: column, TrashedAt: s.now, TrashedBy: person.ID})
 
 	// The server sends its JSON Content-Type along with the empty 204.
@@ -2711,6 +2758,31 @@ func (s *Server) visibleColumn(id string, person *Person) (*Board, *Column) {
 	return nil, nil
 }
 
+// visibleArchivedCard finds a card in the archive of a board of a project this
+// person is in, together with the board and the column it was taken from.
+func (s *Server) visibleArchivedCard(id string, person *Person) (*Board, *Column, *Card) {
+	archived := s.inTheArchive(id)
+	if archived == nil {
+		return nil, nil, nil
+	}
+	board := s.boardOfColumn(archived.Column)
+	if board == nil || s.visibleProject(board.ProjectID, person) == nil {
+		return nil, nil, nil
+	}
+	return board, archived.Column, archived.Card
+}
+
+// inTheArchive is the entry of a board's archive for this card, and nil for a
+// card that stands on a board.
+func (s *Server) inTheArchive(id string) *ArchivedCard {
+	for _, archived := range s.Archive {
+		if archived.Card.ID == id {
+			return archived
+		}
+	}
+	return nil
+}
+
 func (s *Server) visibleCard(id string, person *Person) (*Board, *Column, *Card) {
 	for _, b := range s.Boards {
 		if s.visibleProject(b.ProjectID, person) == nil {
@@ -2741,6 +2813,7 @@ func (s *Server) cardResource(board *Board, column *Column, card *Card) map[stri
 		"description": card.Description, "descriptionSource": card.Description,
 		"attachments":  s.attachmentsIn(board.ProjectID, card.Description),
 		"column":       map[string]any{"id": column.ID, "type": column.Type, "title": columnTitle(column), "customTitle": column.CustomTitle},
+		"archived":     s.inTheArchive(card.ID) != nil,
 		"commentCount": len(card.Comments), "createdAt": timestamp(card.CreatedAt),
 		"creator": s.personReference(card.CreatorID), "completedAt": timestampOrNil(card.CompletedAt),
 		"completedBy": s.personReferenceOrNil(card.CompletedByID), "assignees": s.assigneeReferences(card),

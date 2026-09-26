@@ -134,7 +134,14 @@ func renderCard(w io.Writer, card api.Card) {
 		fmt.Fprintf(w, "Short ID: %s\n", *card.ShortID)
 	}
 	fmt.Fprintf(w, "Card: %s\nBoard: %s\nProject: %s\n", card.ID, card.BoardID, card.ProjectID)
-	fmt.Fprintf(w, "Column: %s (%s, %s)\n", card.Column.Title, card.Column.Type, card.Column.ID)
+	// A card in the archive stands in no column, and the column it names may
+	// have been deleted from the board since, so the line says where it was
+	// instead of a place it has.
+	if card.Archived {
+		fmt.Fprintf(w, "Archived: yes, was in %s (%s, %s)\n", card.Column.Title, card.Column.Type, card.Column.ID)
+	} else {
+		fmt.Fprintf(w, "Column: %s (%s, %s)\n", card.Column.Title, card.Column.Type, card.Column.ID)
+	}
 	if card.OnHold {
 		fmt.Fprintln(w, "On hold: yes")
 	}
@@ -195,6 +202,15 @@ func renderCard(w io.Writer, card api.Card) {
 			}
 		}
 	}
+}
+
+// cardSummary says which card this is and where it lies. A card in the archive
+// of its board lies in no column, so it is named by the board it was taken off.
+func cardSummary(card api.Card) string {
+	if card.Archived {
+		return fmt.Sprintf("Card %s in the archive of %s", card.Title, card.Board.Title)
+	}
+	return fmt.Sprintf("Card %s in %s", card.Title, card.Column.Title)
 }
 
 // fileLine names the files hanging in a comment or a message, in one line,

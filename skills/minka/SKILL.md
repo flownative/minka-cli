@@ -202,9 +202,10 @@ such as `Doing`.
   every project it is a member of, as a bare array of the same cards
   `cards show` gives. Each carries `project {id, name}` and `board {id, title}`
   besides `projectId` and `boardId`.
-- Cards in Done, cards in the trash, cards of an archived project and cards of
-  a project that was left are not among them, so the list is what is still to
-  do.
+- Cards in Done, cards in the trash, cards in the archive of their board, cards
+  of an archived project and cards of a project that was left are not among
+  them, so the list is what is still to do. A card that is not in the list is
+  therefore not necessarily done: it may have been archived.
 - The order is the order of the page: projects by name, then by `dueOn` with
   the overdue ones first and the ones without a date last.
 - It is the cheapest way to answer "what am I on?": one request instead of a
@@ -213,6 +214,9 @@ such as `Doing`.
   back out, on top of the column it hung in. Only a card that is in the trash
   can be restored: a second restore, a card that was never trashed and a card
   whose board or project is in the trash all exit 2.
+- A card in the archive of its board goes into the trash from there, and a
+  restore puts it back on the board, not into the archive: the restored card
+  says `archived: false`.
 - `trash list <projectId>` says what was taken out of a project, the newest
   first and at most 200 (a `notice` says when there are more). Every entry is
   `{kind, id, title, toolType, board, column, trashedAt, trashedBy,
@@ -282,6 +286,21 @@ such as `Doing`.
 - A card cannot be created on hold, by design: it comes into being in a
   column and goes on hold by a move. A card restored
   from the trash comes back off hold.
+
+## The archive of a board
+
+- Every card carries `archived`. It is true for a card in the archive of its
+  board: the card stands in no column, it can be read, and every write on it
+  exits 9 with `meta.apiCode` `cardArchived`.
+- Such a card still carries a `column`, and that is the column it was taken
+  from, which may have been deleted from the board since. The text view of
+  `cards show` therefore prints `Archived: yes, was in <column>` and no
+  `Column:` line, and the summary names the archive of the board instead of a
+  column.
+- A card in the archive is in no list this CLI has: `boards show` shows what
+  stands in the columns, and `cards mine` leaves it out. Read it by its `id`.
+- Putting a card into the archive, taking it back out and listing the archive of
+  a board are not commands of this CLI yet. They happen in the web.
 
 ## People and assignments
 

@@ -44,8 +44,9 @@ func (a *app) newCardsMineCmd() *cobra.Command {
 		Use:   "mine",
 		Short: "List the cards you are responsible for, across all projects",
 		Long: `Lists the cards the account of the token is assigned to, in every project it is
-a member of. Cards in Done, cards in the trash and cards of a project that was
-left are not among them.
+a member of. Cards in Done, cards in the trash, cards in the archive of their
+board and cards of a project that was left are not among them. A card that is
+missing here is therefore not necessarily done: it may have been archived.
 
 The order is the one the web page has: projects by name, and inside a project
 the cards by due date, the overdue ones first and those without a date last.
@@ -81,6 +82,8 @@ func (a *app) newCardsRestoreCmd() *cobra.Command {
 		Use:   "restore <cardId>",
 		Short: "Take a card out of the trash",
 		Long: `Takes a card out of the trash and puts it back on top of the column it hung in.
+A card that was in the archive of its board before it went into the trash comes
+back onto the board, not into the archive.
 
 Only a card that is in the trash can be restored. A card that was never there,
 a card restored already and a card whose board or project is itself in the
@@ -125,7 +128,11 @@ func (a *app) newCardsShowCmd() *cobra.Command {
 		Short: "Show a card with its description and comments",
 		Long: `Shows a card with its column, description and comments. In text output the
 description is converted to Markdown, which cards edit --description turns back
-into the same HTML; in JSON it is the HTML the server stores.`,
+into the same HTML; in JSON it is the HTML the server stores.
+
+A card in the archive of its board is shown as well, and says so: it stands in
+no column, and the one it names is the column it was taken from. Reading it
+works, writing on it is refused.`,
 		Args: requireArgs("cardId"),
 		RunE: func(_ *cobra.Command, args []string) error {
 			s, err := a.session()
@@ -142,7 +149,7 @@ into the same HTML; in JSON it is the HTML the server stores.`,
 
 			return a.ok(success{
 				data:        card.Raw,
-				summary:     fmt.Sprintf("Card %s in %s", card.Value.Title, card.Value.Column.Title),
+				summary:     cardSummary(card.Value),
 				breadcrumbs: cardBreadcrumbs(card.Value.ID),
 				text:        func(w io.Writer) { renderCard(w, card.Value) },
 			})
@@ -607,7 +614,10 @@ func (a *app) newCardsDeleteCmd() *cobra.Command {
 
 A card in the trash reads like one that never existed. Showing, moving,
 commenting on or deleting it again exits with 2 (not_found). Deleting twice
-leaves the card in the trash all the same; only the second exit code differs.`,
+leaves the card in the trash all the same; only the second exit code differs.
+
+A card in the archive of its board goes into the trash from there, and leaves
+the archive behind: cards restore puts it back on the board.`,
 		Args: requireArgs("cardId"),
 		RunE: func(_ *cobra.Command, args []string) error {
 			s, err := a.session()

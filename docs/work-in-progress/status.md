@@ -125,7 +125,7 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
 ## Checked against the fake only
 
 - Of the notes of a card: `cardNotesHasControlCharacters`, and `cardArchived`
-  for a card in its board's archive, which the fake does not know either.
+  for a card in its board's archive, which no write of the fake answers.
   Notes over 100000 characters are refused before sending, counted as the
   server counts them since it was brought into line. The fake refuses in the
   controller's order, the text before the guard, and reads a guard's time in
@@ -271,9 +271,13 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   refusals of a working column without the area, of the system columns and of a
   column that is not there, each with its code, and the area with its count in
   the text view of the board and of the card.
-- The fake API knows no archived card, so what Minka answers a move of one is
-  not mirrored: that an archived card is named before a column without the
-  area on hold is read in the Minka code alone.
+- The fake API knows a card in the archive of its board: it says `archived`, is
+  read at its own address, stands in no list, goes into the trash from the
+  archive and comes back onto the board. What it does not mirror is the refusal
+  of a write on such a card: every write answers as an address that has nothing
+  instead of 422 `cardArchived`, and the order in which a move refuses — an
+  archived card before a column without the area on hold — is read in the Minka
+  code alone.
 - Of saying what one is working on, what is left: a tile that lights up and one
   that goes quiet. The signal itself got through on `minka.flownative.com`,
   which knows this CLI as an agent, and the hook has reported out of a real
