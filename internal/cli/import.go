@@ -928,11 +928,15 @@ func renderForwards(w io.Writer, report importReport) {
 }
 
 // renderDocs says what became of the Docs & Files a run met. A run that met no
-// Docs & Files tool says nothing about them.
+// Docs & Files tool says nothing about them, and one that met a tool whose
+// entries are all left out says what became of them: a report that fell silent
+// there would be the one place a whole tool goes missing without a word.
 func renderDocs(w io.Writer, report importReport) {
 	docs := report.Docs
-	_, met := report.Counts[bundle.Folders]
-	if !met && report.Counts[bundle.Documents] == 0 && report.Counts[bundle.Uploads] == 0 && docs.LeftOut == (basecamp.DocsLeftOut{}) {
+	metNothing := report.Counts[bundle.Folders] == 0 && report.Counts[bundle.Documents] == 0 && report.Counts[bundle.Uploads] == 0 &&
+		docs.LeftOut == (basecamp.DocsLeftOut{}) && len(docs.WithoutAStoredFile) == 0 &&
+		len(docs.OnlyAFileNoRunWillBring) == 0 && docs.FoldersThatSaidNothingOfWhatIsInThem == 0
+	if metNothing {
 		return
 	}
 	fmt.Fprintf(w, "Folders: %d active, %d archived, %d trashed\n",

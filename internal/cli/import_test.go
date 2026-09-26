@@ -1980,6 +1980,41 @@ func TestImportBasecampReportsTheDocsAndFilesOfAProject(t *testing.T) {
 			t.Errorf("a run over a project without a Docs & Files tool says %q:\n%s", quiet, r.stdout)
 		}
 	}
+
+	// One that met a tool of which the bundle carries nothing at all still says
+	// what became of it: a report that fell silent there would be the one place
+	// a whole tool goes missing without a word.
+	e = newImportEnv(t)
+	onlyInTheCloud(t, e.account)
+	r = e.run("import", "basecamp", "--project", "7011", "--out", filepath.Join(t.TempDir(), "cloud"), "--styled")
+	expectCode(t, r, ExitOK)
+	if want := "Uploads Basecamp names no stored file for, left out:"; !strings.Contains(r.stdout, want) {
+		t.Errorf("a run whose Docs & Files come to nothing says nothing of them:\n%s", r.stdout)
+	}
+}
+
+// onlyInTheCloud leaves the docs project with nothing a bundle can carry: every
+// folder and document gone from the account, and every upload in a cloud.
+func onlyInTheCloud(t *testing.T, a *fakebasecamp.Account) {
+	t.Helper()
+	var strip func([]fakebasecamp.Folder)
+	strip = func(folders []fakebasecamp.Folder) {
+		for i := range folders {
+			strip(folders[i].Folders)
+			for u := range folders[i].Uploads {
+				folders[i].Uploads[u].InTheCloud = true
+			}
+			folders[i].Documents = nil
+		}
+	}
+	for d := range a.Projects[10].Dock {
+		tool := &a.Projects[10].Dock[d]
+		strip(tool.Folders)
+		tool.Folders, tool.Documents = nil, nil
+		for u := range tool.Uploads {
+			tool.Uploads[u].InTheCloud = true
+		}
+	}
 }
 
 func TestImportBasecampSaysWhatABundleHoldsAboutClients(t *testing.T) {
