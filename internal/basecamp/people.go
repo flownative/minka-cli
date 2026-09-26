@@ -50,6 +50,15 @@ func (s seenPerson) retired() bool {
 	return true
 }
 
+// aClient tells whether a bundle says somebody is a client of the source. The
+// legacy kind of person counts as one whatever the flag says of them: only the
+// word client keeps somebody the import finds here by their address out of the
+// projects, and a kind of person Basecamp made before the flag existed is no
+// reason to put a client among the people of a project.
+func (s seenPerson) aClient() bool {
+	return s.Client || s.PersonableType == "Client"
+}
+
 func newRegistry() *registry {
 	return &registry{account: map[int64]person{}, referred: map[int64]*seenPerson{}, invalid: map[int64]bool{}}
 }

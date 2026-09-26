@@ -109,10 +109,12 @@ func TestImportBasecampWritesABundleAndReportsWhatItHolds(t *testing.T) {
 			map[string]any{"kind": "todoset", "enabled": false, "count": float64(1)},
 			map[string]any{"kind": "vault", "enabled": true, "count": float64(1)},
 		},
-		"missingFiles": []any{}, "invalidAddresses": []any{}, "peopleLeftOut": float64(3),
+		"missingFiles": []any{}, "invalidAddresses": []any{}, "peopleLeftOut": float64(7),
 		"creatorProbesRefused": float64(0),
-		"cardsByStatus":        map[string]any{"active": float64(0), "archived": float64(0), "trashed": float64(0)},
-		"cardsOnHold":          float64(0), "cardsLeftOut": float64(0), "commentsTrashed": float64(0),
+		"peopleAsClients":      float64(0), "clientMemberships": float64(0), "companiesLeftOut": float64(0),
+		"visibilityLeftToTheContainer": float64(0),
+		"cardsByStatus":                map[string]any{"active": float64(0), "archived": float64(0), "trashed": float64(0)},
+		"cardsOnHold":                  float64(0), "cardsLeftOut": float64(0), "commentsTrashed": float64(0),
 		"todoListsByStatus": map[string]any{"active": float64(0), "archived": float64(0), "trashed": float64(0)},
 		"todosByStatus":     map[string]any{"active": float64(0), "trashed": float64(0)},
 		"todosNotDone":      float64(0), "todosWithPeople": float64(0),
@@ -792,7 +794,7 @@ func TestMaskedAddressesAreForbiddenAndNeverShown(t *testing.T) {
 		r := e.run(append([]string{"import", "basecamp", "--project", "7001", "--out", filepath.Join(parent, "made", "bundle")}, mode...)...)
 		expectCode(t, r, ExitForbidden)
 		output := r.stdout + r.stderr
-		for _, want := range []string{"2 of 6", "may not see the e-mail addresses"} {
+		for _, want := range []string{"2 of 10", "may not see the e-mail addresses"} {
 			if !strings.Contains(output, want) {
 				t.Errorf("%v: the output lacks %q:\n%s", mode, want, output)
 			}
@@ -837,7 +839,7 @@ func TestSomebodyWithAnAddressThatIsNoneComesWithoutALoginAndTheRunSucceeds(t *t
 
 		switch mode[0] {
 		case "--styled":
-			if !strings.Contains(r.stdout, "Invalid addresses: 3 (person 99, 102, 103)") || !strings.Contains(r.stdout, "left out: 3") {
+			if !strings.Contains(r.stdout, "Invalid addresses: 3 (person 99, 102, 103)") || !strings.Contains(r.stdout, "left out: 7") {
 				t.Errorf("the text:\n%s", r.stdout)
 			}
 		case "--quiet":
@@ -866,13 +868,13 @@ func TestSomebodyWithAnAddressThatIsNoneComesWithoutALoginAndTheRunSucceeds(t *t
 
 func TestMostAddressesBeingNoneEndsTheRunWithNothingWritten(t *testing.T) {
 	e := newImportEnv(t)
-	for _, i := range []int{0, 3, 4, 6} {
+	for _, i := range []int{0, 3, 4, 6, 7, 8} {
 		e.account.People[i].Email = "x***@*****.***"
 	}
 	parent := t.TempDir()
 	env, r := e.runJSON("import", "basecamp", "--project", "7001", "--out", filepath.Join(parent, "made", "bundle"))
 	expectCode(t, r, ExitAPI)
-	if env.Code != CodeAPI || !strings.Contains(env.Error, "4 of 6") || !strings.Contains(env.Hint, "identity") || strings.Contains(r.stdout, "***") {
+	if env.Code != CodeAPI || !strings.Contains(env.Error, "6 of 10") || !strings.Contains(env.Hint, "identity") || strings.Contains(r.stdout, "***") {
 		t.Errorf("code %q, error %q, hint %q", env.Code, env.Error, env.Hint)
 	}
 	if entries, _ := os.ReadDir(parent); len(entries) != 0 {
@@ -887,7 +889,7 @@ func TestPeopleNothingRefersToAreLeftOutAndCounted(t *testing.T) {
 	expectCode(t, r, ExitOK)
 
 	data := decode(t, env.Data)
-	if data["peopleLeftOut"] != float64(6) || decode(t, env.Data)["counts"].(map[string]any)["people"] != float64(1) {
+	if data["peopleLeftOut"] != float64(10) || decode(t, env.Data)["counts"].(map[string]any)["people"] != float64(1) {
 		t.Errorf("left out %v, counts %v", data["peopleLeftOut"], data["counts"])
 	}
 	files := filesUnder(t, out)
@@ -1761,6 +1763,52 @@ func TestImportBasecampReportsTheToDosOfAProject(t *testing.T) {
 	} {
 		if !strings.Contains(r.stdout, want) {
 			t.Errorf("the text lacks %q:\n%s", want, r.stdout)
+		}
+	}
+}
+
+func TestImportBasecampSaysWhatABundleHoldsAboutClients(t *testing.T) {
+	e := newImportEnv(t)
+	out := filepath.Join(t.TempDir(), "bundle")
+
+	env, r := e.runJSON("import", "basecamp", "--project", "7009", "--out", out)
+	expectCode(t, r, ExitOK)
+
+	data := decode(t, env.Data)
+	want := map[string]any{"peopleAsClients": float64(4), "clientMemberships": float64(4),
+		"companiesLeftOut": float64(1), "visibilityLeftToTheContainer": float64(2)}
+	for field, number := range want {
+		if data[field] != number {
+			t.Errorf("%s is %v, want %v", field, data[field], number)
+		}
+	}
+	for _, notice := range []string{
+		"4 memberships of projects belong to clients",
+		"1 company of the source comes without an identifier or without a name",
+		"2 tools of projects are Docs & Files or Forwards",
+	} {
+		if !strings.Contains(env.Notice, notice) {
+			t.Errorf("no notice says %q:\n%s", notice, env.Notice)
+		}
+	}
+	// Never a name and never a company: a report is read by whoever ran the
+	// import and ends up in a log.
+	for _, secret := range []string{"Northwind", "Iris", "Otto", "Nora", "Cora"} {
+		if strings.Contains(r.stdout+r.stderr, secret) {
+			t.Errorf("the output names %q:\n%s", secret, r.stdout)
+		}
+	}
+
+	r = e.run("import", "basecamp", "--project", "7009", "--out", out, "--styled")
+	expectCode(t, r, ExitOK)
+	for _, line := range []string{
+		"Clients: 4, with 4 memberships Minka leaves out of their projects",
+		"Companies without an identifier or without a name, left out: 1",
+		"Words about clients on a record that follows what it hangs on, left out: 2",
+		"Docs & Files and Forwards tools a run does not extract, whose word about clients no bundle carries: 2",
+	} {
+		if !strings.Contains(r.stdout, line) {
+			t.Errorf("the text lacks %q:\n%s", line, r.stdout)
 		}
 	}
 }

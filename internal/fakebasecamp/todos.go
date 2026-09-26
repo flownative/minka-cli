@@ -34,6 +34,10 @@ type TodoList struct {
 	// that moves under a walk does: among the lists of a tool, among the groups of
 	// a list, and among the recordings of the project.
 	Twice bool
+	// VisibleToClients is what the list says about clients, which is its own word
+	// and not that of its tool. A group carries one as well, which no bundle has a
+	// word for.
+	VisibleToClients *bool
 }
 
 // todoProject is a project with every case of a To-dos tool: a tool whose lists
@@ -173,6 +177,9 @@ type Todo struct {
 	Boosts    []Boost
 	// Twice has the list of to-dos hold this one twice.
 	Twice bool
+	// VisibleToClients is what the to-do says about clients, which no bundle has a
+	// word for: a to-do follows its list.
+	VisibleToClients *bool
 }
 
 var (
@@ -404,6 +411,9 @@ func (a *Account) todoJSON(p *Project, in *TodoList, t *Todo) map[string]any {
 		"boosts_count": len(t.Boosts), "boosts_url": fmt.Sprintf("%sbuckets/%d/recordings/%d/boosts.json", a.root(), p.ID, t.ID),
 		"created_at": t.CreatedAt, "updated_at": t.UpdatedAt,
 	}
+	if t.VisibleToClients != nil {
+		answer["visible_to_clients"] = *t.VisibleToClients
+	}
 	if t.Creator != nil {
 		answer["creator"] = a.person(*t.Creator)
 	}
@@ -423,6 +433,9 @@ func (a *Account) todoListJSON(p *Project, parentID int64, parentType string, l 
 		"todos_url":  fmt.Sprintf("%sbuckets/%d/todolists/%d/todos.json", a.root(), p.ID, l.ID),
 		"groups_url": fmt.Sprintf("%sbuckets/%d/todolists/%d/groups.json", a.root(), p.ID, l.ID),
 		"created_at": l.CreatedAt, "updated_at": l.UpdatedAt,
+	}
+	if l.VisibleToClients != nil {
+		answer["visible_to_clients"] = *l.VisibleToClients
 	}
 	if l.Creator != nil {
 		answer["creator"] = a.person(*l.Creator)

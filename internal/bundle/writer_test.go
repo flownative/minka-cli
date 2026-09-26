@@ -61,8 +61,8 @@ func TestABundleHoldsALinePerRecordAndAManifestWithTheCounts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := `{"sourceId":"101","createdAt":"2020-01-01T08:00:00Z","updatedAt":"2024-01-01T08:00:00Z","createdBy":null,"name":"Ada Example","email":null,"avatar":null,"retired":false}` + "\n" +
-		`{"sourceId":"102","createdAt":"","updatedAt":"","createdBy":null,"name":"Grace Sample","email":null,"avatar":"101","retired":false}` + "\n"
+	want := `{"sourceId":"101","createdAt":"2020-01-01T08:00:00Z","updatedAt":"2024-01-01T08:00:00Z","createdBy":null,"name":"Ada Example","email":null,"avatar":null,"retired":false,"client":false}` + "\n" +
+		`{"sourceId":"102","createdAt":"","updatedAt":"","createdBy":null,"name":"Grace Sample","email":null,"avatar":"101","retired":false,"client":false}` + "\n"
 	if string(people) != want {
 		t.Errorf("people.jsonl:\n%s\nwant:\n%s", people, want)
 	}
