@@ -142,8 +142,13 @@ type Card struct {
 	DescriptionSource string `json:"descriptionSource"`
 	// Attachments are the files hanging in the description, and in no comment
 	// of the card.
-	Attachments  []Attachment      `json:"attachments"`
-	Column       ColumnReference   `json:"column"`
+	Attachments []Attachment `json:"attachments"`
+	// Column is where the card lies, and for a card in the archive of its board
+	// the column it was taken from, which may be gone from the board by now.
+	Column ColumnReference `json:"column"`
+	// Archived says the card lies in the archive of its board: it stands in no
+	// column, it is readable, and every write on it is refused.
+	Archived     bool              `json:"archived"`
 	OnHold       bool              `json:"onHold"` // waiting in the area on hold of its column
 	CommentCount int               `json:"commentCount"`
 	CreatedAt    string            `json:"createdAt"`
