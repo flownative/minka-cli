@@ -237,7 +237,10 @@ never to both: somebody from outside never becomes a person
 named (forwards.repliesWithoutASender), and a boost on an answer is counted and
 not carried (forwards.reactionsOnRepliesLeftOut), because Minka takes no
 reaction on one. Comments and boosts hang on the mail itself, and a mail says
-how many of neither, so both are asked for of every one of them.
+how many of neither, so both are asked for of every one of them. A body longer
+than the 1,000,000 characters Minka holds is counted
+(forwards.longerThanMinkaTakes) and comes as it is: Minka passes such a mail
+over on every run, with everything hanging on it.
 
 A question comes with the schedule Minka has words for: the weekdays counted
 from Monday, the time of day, the day the rhythm is counted from, and whom it is
