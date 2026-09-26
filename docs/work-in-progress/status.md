@@ -155,6 +155,11 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   (`PeopleApplier`, `ProjectsApplier`, `ToolsApplier`, `WhatClientsSee`), and
   what Basecamp answers was measured read-only against the live account before
   the code was written, not live through a run of the CLI.
+- That being a client comes before every other reason somebody cannot be asked
+  a question: the person two of the four reasons hold for is an invented one.
+  The account says `client: true` of a kind of person who is not retired and of
+  no other, so nothing live has ever put the client case against the rest. Held
+  against the order Minka takes a client out of a project in.
 - That a conversation with somebody from a foreign organisation gives 404: the
   fake API knows no organisations. Read in the Minka code.
 - That a foreign attachment silently disappears on saving: the fake does not
