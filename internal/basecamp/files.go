@@ -168,6 +168,13 @@ func plainName(name string) (string, bool) {
 	return plain, plain != name
 }
 
+// largestFileMinkaTakes is the ceiling one file meets on the way in, in bytes.
+// Above it the file stays outside there however whole it is here, so a record
+// whose body is nothing but that file arrives empty. An instance may be told
+// another number; this is the one the format names, and a run can be told
+// another, which is how a test reaches what lies above it without a gibibyte.
+const largestFileMinkaTakes = 1 << 30
+
 // attachFiles brings the files a text refers to, in the order of their
 // references, as attachments of whatever carries the text.
 func (e *Extractor) attachFiles(ctx context.Context, w *bundle.Writer, ownerKind string, owner bundle.Record, files []sourceFile) error {
@@ -222,6 +229,10 @@ func (e *Extractor) attachFile(ctx context.Context, w *bundle.Writer, ownerKind 
 		record.ContentType = &file.contentType
 	}
 	if w.Discards() {
+		// All a dry run knows of a file is the size the source gives it.
+		if file.byteSize != nil && *file.byteSize > e.LargestFile {
+			e.filesThatNeverArrive[file.ref] = true
+		}
 		e.fileRecords = append(e.fileRecords, record)
 		return nil
 	}
@@ -272,6 +283,7 @@ func (e *Extractor) attachFile(ctx context.Context, w *bundle.Writer, ownerKind 
 		case failed.Kind == NotFound:
 			record.Gone = true
 			e.files.Gone++
+			e.filesThatNeverArrive[file.ref] = true
 			e.fileRecords = append(e.fileRecords, record)
 			return nil
 		default:
@@ -289,9 +301,24 @@ func (e *Extractor) attachFile(ctx context.Context, w *bundle.Writer, ownerKind 
 	}
 
 	e.files.Bytes += stored.Bytes
+	if stored.Bytes > e.LargestFile {
+		e.filesThatNeverArrive[file.ref] = true
+	}
 	record.Holds(stored)
 	e.fileRecords = append(e.fileRecords, record)
 	return nil
+}
+
+// theFileNeverArrives tells that no run will ever bring the bytes of a file to
+// Minka: the source no longer has it, or it weighs more than a run takes there.
+// A file this run merely could not fetch is not one of them — it leaves no
+// record at all, the run ends non-zero, and the run after it brings the file —
+// and neither is one the walk has not met yet.
+//
+// Only a record whose body is nothing else asks: for every other body a file
+// that stays outside leaves a hole and nothing more.
+func (e *Extractor) theFileNeverArrives(ref string) bool {
+	return e.filesThatNeverArrive[ref]
 }
 
 // sizeDiffers is the failure of a download that ended well and brought

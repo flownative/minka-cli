@@ -132,8 +132,14 @@ func TestImportBasecampWritesABundleAndReportsWhatItHolds(t *testing.T) {
 		"askedLeftOut": map[string]any{"notInTheProject": float64(0), "clients": float64(0),
 			"retired": float64(0), "withoutAnAddress": float64(0)},
 		"answersWithoutABody": float64(0), "answersWithoutADay": float64(0), "answersTrashed": float64(0),
+		"forwards": map[string]any{
+			"byStatus": map[string]any{"active": float64(0), "trashed": float64(0)}, "fromTheShelf": float64(0),
+			"withoutASubject": float64(0), "subjectsChanged": float64(0), "givenALineOfTheRun": float64(0),
+			"withoutAForwarder": float64(0), "withoutAnAddress": []any{},
+			"repliesFromOutside": float64(0), "repliesWithoutASender": []any{}, "reactionsOnRepliesLeftOut": float64(0),
+			"longerThanMinkaTakes": float64(0)},
 		"longestBody": map[string]any{"cards": float64(0), "comments": float64(0), "posts": float64(0), "messages": float64(0), "answers": float64(0),
-			"todolists": float64(0), "todos": float64(0)},
+			"todolists": float64(0), "todos": float64(0), "forwards": float64(0), "forwardreplies": float64(0)},
 		"longestBodyRecords": map[string]any{},
 		"references":         map[string]any{"cards": float64(0), "posts": float64(0), "tools": float64(0)},
 		"requestsRetried":    float64(0),
@@ -1006,7 +1012,7 @@ func TestImportBasecampReportsThePostsAndTheChatsOfAProject(t *testing.T) {
 		"recordsLeftOut": []any{map[string]any{"record": "line", "field": "type", "value": fakebasecamp.UnknownLine,
 			"in": "chat", "inSourceId": "9033", "leftOut": float64(2)}},
 		"longestBody": map[string]any{"cards": float64(0), "comments": float64(94), "posts": float64(212), "messages": float64(213), "answers": float64(0),
-			"todolists": float64(0), "todos": float64(0)},
+			"todolists": float64(0), "todos": float64(0), "forwards": float64(0), "forwardreplies": float64(0)},
 		"longestBodyRecords": map[string]any{
 			"comments": map[string]any{"record": "comment", "sourceId": "9752", "in": "project", "inSourceId": "7004", "characters": float64(94)},
 			"posts":    map[string]any{"record": "post", "sourceId": "9701", "in": "project", "inSourceId": "7004", "characters": float64(212)},
@@ -1600,7 +1606,7 @@ func TestImportBasecampReportsTheCheckinsOfAProject(t *testing.T) {
 			"notInTheProject": float64(1), "clients": float64(0), "retired": float64(1), "withoutAnAddress": float64(1)},
 		"answersWithoutABody": float64(1), "answersWithoutADay": float64(0), "answersTrashed": float64(0),
 		"longestBody": map[string]any{"cards": float64(0), "comments": float64(17), "posts": float64(0), "messages": float64(0), "answers": float64(150),
-			"todolists": float64(0), "todos": float64(0)},
+			"todolists": float64(0), "todos": float64(0), "forwards": float64(0), "forwardreplies": float64(0)},
 		"longestBodyRecords": map[string]any{
 			"comments": map[string]any{"record": "comment", "sourceId": "9350", "in": "project", "inSourceId": "7007", "characters": float64(17)},
 			"answers":  map[string]any{"record": "answer", "sourceId": "9320", "in": "project", "inSourceId": "7007", "characters": float64(150)},
@@ -1768,6 +1774,73 @@ func TestImportBasecampReportsTheToDosOfAProject(t *testing.T) {
 	}
 }
 
+func TestImportBasecampReportsTheForwardedMailOfAProject(t *testing.T) {
+	e := newImportEnv(t)
+	out := filepath.Join(t.TempDir(), "bundle")
+
+	env, r := e.runJSON("import", "basecamp", "--project", "7010", "--out", out)
+	expectCode(t, r, ExitOK)
+	data := decode(t, env.Data)
+	want := map[string]any{
+		"byStatus": map[string]any{"active": float64(8), "trashed": float64(2)}, "fromTheShelf": float64(1),
+		"withoutASubject": float64(1), "subjectsChanged": float64(1), "givenALineOfTheRun": float64(4),
+		"withoutAForwarder": float64(1), "withoutAnAddress": []any{"9307"},
+		"repliesFromOutside": float64(2), "repliesWithoutASender": []any{"9404"},
+		"reactionsOnRepliesLeftOut": float64(2), "longerThanMinkaTakes": float64(0),
+	}
+	if !reflect.DeepEqual(data["forwards"], want) {
+		t.Errorf("forwards:\n got %v\nwant %v", data["forwards"], want)
+	}
+	for _, notice := range []string{
+		"1 forwarded mail is left out, because what the source calls its sender is no e-mail address Minka takes",
+		"1 answer by mail is left out, because the source names neither who wrote it nor an address",
+		"1 forwarded mail is on the shelf at the source and comes into the trash here",
+		"4 forwarded mails or answers by mail carry a line of the run's own",
+		"2 forwarded mails carry titles the run made of their subjects",
+		"1 forwarded mail names nobody who forwarded it",
+		"2 boosts on answers by mail are left out",
+	} {
+		if !strings.Contains(env.Notice, notice) {
+			t.Errorf("notice %q does not say %q", env.Notice, notice)
+		}
+	}
+	// Never a subject, never an address, never a name of a file: a report ends up
+	// in a log.
+	for _, secret := range []string{"Invoice", "supplier.test", "partner.test", "invoice.pdf", "localhost", "anna@"} {
+		if strings.Contains(r.stdout+r.stderr, secret) {
+			t.Errorf("the output says %q:\n%s", secret, r.stdout)
+		}
+	}
+
+	r = e.run("import", "basecamp", "--project", "7010", "--out", out, "--styled")
+	expectCode(t, r, ExitOK)
+	for _, line := range []string{
+		"forwards     10", "forwardreplies 4",
+		"Forwarded mail: 8 active, 2 trashed; 1 of them on the shelf at the source",
+		"Mails without a subject: 1; subjects folded or cut short to make a title: 1",
+		"Mails and answers carrying a line of the run's own, because what they say would arrive as nothing: 4",
+		"Mails nobody is named for, which Minka gives to the owner of the organization: 1",
+		"Mails whose sender is no address Minka takes, left out: 1 (forward 9307)",
+		"Answers by mail: 4, 2 of them from outside the account",
+		"Answers naming neither a writer nor an address, left out: 1 (reply 9404)",
+		"Boosts on an answer by mail, which Minka takes none of, left out: 2",
+		"forward  9301     in project 7010:",
+	} {
+		if !strings.Contains(r.stdout, line) {
+			t.Errorf("the text lacks %q:\n%s", line, r.stdout)
+		}
+	}
+
+	// A run that met no inbox says nothing of forwarded mail at all.
+	r = e.run("import", "basecamp", "--project", "7003", "--out", filepath.Join(t.TempDir(), "boards"), "--styled")
+	expectCode(t, r, ExitOK)
+	for _, quiet := range []string{"Forwarded mail:", "Answers by mail:", "Mails without a subject"} {
+		if strings.Contains(r.stdout, quiet) {
+			t.Errorf("a run over a project without an inbox says %q:\n%s", quiet, r.stdout)
+		}
+	}
+}
+
 func TestImportBasecampSaysWhatABundleHoldsAboutClients(t *testing.T) {
 	e := newImportEnv(t)
 	out := filepath.Join(t.TempDir(), "bundle")
@@ -1777,7 +1850,7 @@ func TestImportBasecampSaysWhatABundleHoldsAboutClients(t *testing.T) {
 
 	data := decode(t, env.Data)
 	want := map[string]any{"peopleAsClients": float64(5), "clientMemberships": float64(5),
-		"visibilityLeftToTheContainer": float64(2)}
+		"visibilityLeftToTheContainer": float64(4)}
 	for field, number := range want {
 		if data[field] != number {
 			t.Errorf("%s is %v, want %v", field, data[field], number)
@@ -1786,7 +1859,7 @@ func TestImportBasecampSaysWhatABundleHoldsAboutClients(t *testing.T) {
 	for _, notice := range []string{
 		"5 memberships of projects belong to clients",
 		"4 people questions ask cannot be said to be asked",
-		"2 tools of projects are Docs & Files or Forwards",
+		"1 tool of a project is a Docs & Files",
 	} {
 		if !strings.Contains(env.Notice, notice) {
 			t.Errorf("no notice says %q:\n%s", notice, env.Notice)
@@ -1805,8 +1878,8 @@ func TestImportBasecampSaysWhatABundleHoldsAboutClients(t *testing.T) {
 	for _, line := range []string{
 		"Clients: 5, with 5 memberships Minka leaves out of their projects",
 		"4 a client,",
-		"Words about clients on a record that follows what it hangs on, left out: 2",
-		"Docs & Files and Forwards tools a run does not extract, whose word about clients no bundle carries: 2",
+		"Words about clients on a record that follows what it hangs on, left out: 4",
+		"Docs & Files tools a run does not extract, whose word about clients no bundle carries: 1",
 	} {
 		if !strings.Contains(r.stdout, line) {
 			t.Errorf("the text lacks %q:\n%s", line, r.stdout)

@@ -156,6 +156,13 @@ func (a *Account) storedFile(key string) (storedFile, bool) {
 			listed(one.Files)
 			commented(one.Comments)
 		})
+		a.eachForward(&a.Projects[p], func(forward *Forward) {
+			listed(forward.Files)
+			commented(forward.Comments)
+			for _, reply := range forward.Replies {
+				listed(reply.Files)
+			}
+		})
 	}
 	if found == nil {
 		return storedFile{}, false

@@ -35,10 +35,10 @@ func clientPeople() (iris, otto, nora, cora, tessa Person) {
 // the source says about what they see: two tools of one kind whose word differs,
 // a tool shown to clients holding a post and a list that are kept from them, a
 // tool kept from them holding a post and a question that are shown, and a group
-// and a to-do whose word falls to what they hang on. Its Docs & Files and its two
-// Forwards are the tools a run does not extract, one of them switched off; one
-// of its questions is asked of a client beside an employee, the other of clients
-// alone.
+// and a to-do whose word falls to what they hang on, and an Email forwards tool
+// the clients do not see. Its Docs & Files is the tool a run does not extract,
+// and one of its two Forwards is switched off; one of its questions is asked of a
+// client beside an employee, the other of clients alone.
 //
 // Its members are an employee and five clients, so that a run says how many
 // memberships Minka will leave out.
@@ -88,6 +88,18 @@ func clientProject(ada, iris, otto, nora, cora, tessa Person, tool func(int64, s
 		{ID: 9242, Title: "Together", Creator: &ada, CreatedAt: at(3, 11), UpdatedAt: at(3, 11), VisibleToClients: &shown},
 	}
 
+	// A tool of forwarded mail that the clients do not see, holding a mail and an
+	// answer that say what the source says of every one of them: neither has a
+	// word of its own in a bundle, and both follow the tool.
+	forwards := tool(9227, "inbox", "inboxes", "Forwards", true, 8, &ada)
+	forwards.VisibleToClients = &hidden
+	forwards.Forwards = []Forward{
+		{ID: 9235, Subject: "For the client", From: "hello@northwind.test", Creator: &ada,
+			CreatedAt: at(5, 8), UpdatedAt: at(5, 8), Content: "Passed on.", VisibleToClients: &hidden,
+			Replies: []Reply{{ID: 9236, Creator: &ada, CreatedAt: at(5, 9), UpdatedAt: at(5, 9),
+				Content: `<div>Noted.</div>`, VisibleToClients: &hidden}}},
+	}
+
 	// A tool they do not see, holding a question they do.
 	checkins := tool(9225, "questionnaire", "questionnaires", "Check-ins", true, 6, &ada)
 	checkins.VisibleToClients = &hidden
@@ -111,7 +123,7 @@ func clientProject(ada, iris, otto, nora, cora, tessa Person, tool func(int64, s
 		Members: []int64{ada.ID, iris.ID, otto.ID, nora.ID, cora.ID, tessa.ID},
 		Dock: []Tool{news, notes, chat, clientChat, todos, checkins,
 			tool(9226, "vault", "vaults", "Docs & Files", true, 7, &ada),
-			tool(9227, "inbox", "inboxes", "Forwards", true, 8, &ada),
+			forwards,
 			tool(9228, "inbox", "inboxes", "Old forwards", false, 0, &ada)},
 	}
 }

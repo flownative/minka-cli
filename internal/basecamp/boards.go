@@ -589,6 +589,13 @@ func (e *Extractor) writeComments(ctx context.Context, w *bundle.Writer, bucket 
 	if count == 0 {
 		return nil, nil
 	}
+	return e.askForComments(ctx, w, bucket, parentKind, parent)
+}
+
+// askForComments is writeComments for a kind of record that does not say how
+// many comments it has: then the list is the only way to find out, and a
+// record with none costs the request.
+func (e *Extractor) askForComments(ctx context.Context, w *bundle.Writer, bucket int64, parentKind string, parent int64) ([]comment, error) {
 	listed, err := getList[comment](ctx, e.Source, fmt.Sprintf("buckets/%d/recordings/%d/comments.json", bucket, parent))
 	if err != nil {
 		return nil, err
