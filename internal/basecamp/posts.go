@@ -214,13 +214,14 @@ func (e *Extractor) writePost(ctx context.Context, w *bundle.Writer, bucket int6
 	}
 
 	record := bundle.Post{
-		Record:          origin,
-		ProjectSourceID: sourceID(bucket),
-		ToolSourceID:    toolID,
-		Title:           found.Subject,
-		Body:            body,
-		PinnedAt:        pinnedAt,
-		Status:          found.Status,
+		Record:           origin,
+		ProjectSourceID:  sourceID(bucket),
+		ToolSourceID:     toolID,
+		Title:            found.Subject,
+		Body:             body,
+		PinnedAt:         pinnedAt,
+		Status:           found.Status,
+		VisibleToClients: visibleToClientsOf(found.recording),
 	}
 	if found.Category != nil && found.Category.ID != 0 {
 		id := sourceID(found.Category.ID)

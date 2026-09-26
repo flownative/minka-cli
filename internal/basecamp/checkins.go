@@ -104,6 +104,7 @@ type NobodyAsked struct {
 // that a bundle cannot name as being asked.
 type AskedLeftOut struct {
 	NotInTheProject  int `json:"notInTheProject"`
+	Clients          int `json:"clients"`
 	Retired          int `json:"retired"`
 	WithoutAnAddress int `json:"withoutAnAddress"`
 }
@@ -111,8 +112,9 @@ type AskedLeftOut struct {
 // dayFormat is how both Basecamp and Minka write a day.
 const dayFormat = "2006-01-02"
 
-// maxTitle is the length of a title Minka takes, in characters.
-const maxTitle = 200
+// maxName is the length of a title and of a company's name Minka takes, in
+// characters: both are held to the same rule there.
+const maxName = 200
 
 // rhythms are the frequencies of a Basecamp schedule that Minka has a rhythm
 // for, each named by the rhythm it comes to where several weekdays are chosen.
@@ -236,7 +238,8 @@ func (e *Extractor) writeQuestion(ctx context.Context, w *bundle.Writer, bucket,
 		Paused:          when.paused,
 		// What the source says of a question comes through: one it has shelved
 		// would otherwise arrive active and start asking people again.
-		Status: found.Status,
+		Status:           found.Status,
+		VisibleToClients: visibleToClientsOf(found.recording),
 	})
 	if err != nil {
 		return err
@@ -303,8 +306,8 @@ func itemTitle(what string, id int64, value string) (string, error) {
 	switch {
 	case title == "":
 		return "", &Error{Kind: API, Message: fmt.Sprintf("%s %d has no title", what, id)}
-	case utf8.RuneCountInString(title) > maxTitle:
-		return "", &Error{Kind: API, Message: fmt.Sprintf("the title of %s %d is longer than the %d characters a title may have", what, id, maxTitle)}
+	case utf8.RuneCountInString(title) > maxName:
+		return "", &Error{Kind: API, Message: fmt.Sprintf("the title of %s %d is longer than the %d characters a title may have", what, id, maxName)}
 	case strings.ContainsFunc(title, unicode.IsControl):
 		return "", &Error{Kind: API, Message: fmt.Sprintf("the title of %s %d holds a character nobody can see", what, id)}
 	}
@@ -461,11 +464,15 @@ func lastDayAnswered(answers []answered) (time.Time, bool) {
 // them again, so the first one decides.
 //
 // Only somebody the bundle carries as a member of the project can be asked in
-// Minka, and only somebody Minka can hand a question to: whoever is not a
-// member, whoever has left and whoever comes without an address is left out and
-// counted. Minka's own run would otherwise end in a failure that names no file
-// and no line, while its dry run stayed green. The second number is how many of
-// the subscribers of this one question fell out that way.
+// Minka, and only somebody Minka hands a question to at all: whoever is not a
+// member, whoever is a client, whoever has left and whoever comes without an
+// address is left out and counted. Minka takes all four out of the people a
+// question asks itself. A client is in no project there, whatever the bundle
+// says of the project's members; somebody who has left and somebody without an
+// address are retired there, and a retired person is no member of a project. A
+// bundle that named them all the same would say a question is asked of people
+// who never get it, and the counters of the run would say it too. The second
+// number is how many of the subscribers of this one question fell out that way.
 //
 // They come in the order of their IDs and each once, however Basecamp lists
 // them: two runs over an unchanged account write the same bytes.
@@ -490,6 +497,9 @@ func (e *Extractor) askedOf(ctx context.Context, bucket, question int64) ([]stri
 		switch {
 		case !members[subscriber.ID]:
 			e.askedLeftOut.NotInTheProject++
+			leftOut++
+		case known.aClient():
+			e.askedLeftOut.Clients++
 			leftOut++
 		case known.retired():
 			e.askedLeftOut.Retired++

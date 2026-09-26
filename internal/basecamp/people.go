@@ -5,6 +5,8 @@ import (
 	"sort"
 	"strings"
 	"unicode"
+
+	"github.com/flownative/minka-cli/internal/bundle"
 )
 
 // registry decides who comes into a bundle: the people some record of the
@@ -31,6 +33,9 @@ type seenPerson struct {
 	// listed tells that the list of the account or the members of a project
 	// name the person.
 	listed bool
+	// company is what the bundle carries for a client, read where they come
+	// in. Nobody else has one: Minka reads a company on a client alone.
+	company *bundle.CompanyOrNone
 }
 
 // retired tells whether somebody comes as an author and nothing more. The
@@ -48,6 +53,15 @@ func (s seenPerson) retired() bool {
 		return !s.listed
 	}
 	return true
+}
+
+// aClient tells whether a bundle says somebody is a client of the source. The
+// legacy kind of person counts as one whatever the flag says of them: only the
+// word client keeps somebody the import finds here by their address out of the
+// projects, and a kind of person Basecamp made before the flag existed is no
+// reason to put a client among the people of a project.
+func (s seenPerson) aClient() bool {
+	return s.Client || s.PersonableType == "Client"
 }
 
 func newRegistry() *registry {
@@ -130,7 +144,17 @@ func (r *registry) refer(named *person, present bool) (*string, error) {
 		p.EmailAddress = ""
 		r.invalid[p.ID] = true
 	}
-	r.referred[p.ID] = &seenPerson{person: p, listed: listed || present}
+	seen := &seenPerson{person: p, listed: listed || present}
+	// A company a bundle cannot carry ends the run: said here, where the client
+	// comes in, and not at the end of a run of hours.
+	if seen.aClient() {
+		company, err := companyOf("person", p.ID, p.Company)
+		if err != nil {
+			return nil, err
+		}
+		seen.company = company
+	}
+	r.referred[p.ID] = seen
 	return &id, nil
 }
 

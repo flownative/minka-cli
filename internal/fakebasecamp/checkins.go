@@ -25,6 +25,9 @@ type Question struct {
 	// Twice has the list of questions hold this one twice, as a list that moves
 	// under a walk does.
 	Twice bool
+	// VisibleToClients is what the question says about clients, which is its own
+	// word and not that of its tool.
+	VisibleToClients *bool
 }
 
 // Schedule is when a question is asked. Days count Sunday as 0, as Basecamp
@@ -281,6 +284,9 @@ func (a *Account) questionJSON(p *Project, tool *Tool, q *Question) map[string]a
 		"comments_count":   0,
 		"subscription_url": fmt.Sprintf("%sbuckets/%d/recordings/%d/subscription.json", a.root(), p.ID, q.ID),
 		"created_at":       q.CreatedAt, "updated_at": q.UpdatedAt,
+	}
+	if q.VisibleToClients != nil {
+		answer["visible_to_clients"] = *q.VisibleToClients
 	}
 	if q.Creator != nil {
 		answer["creator"] = a.person(*q.Creator)

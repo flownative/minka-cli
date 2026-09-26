@@ -40,6 +40,15 @@ type importReport struct {
 	// project that Basecamp refused: they are passed over, and a project may
 	// come without a creator because of it.
 	CreatorProbesRefused int `json:"creatorProbesRefused"`
+	// PeopleAsClients are the people the bundle says are clients of the source and
+	// ClientMemberships the memberships of a project that are theirs: Minka leaves
+	// a client out of the members of every project.
+	PeopleAsClients   int `json:"peopleAsClients"`
+	ClientMemberships int `json:"clientMemberships"`
+	// VisibilityLeftToTheContainer are the records the source says whether clients
+	// see them although a bundle has no word for it of such a record: they follow
+	// what they hang on.
+	VisibilityLeftToTheContainer int `json:"visibilityLeftToTheContainer"`
 	// CardsByStatus splits counts.cards; CardsOnHold are those of them that
 	// were set aside within their column.
 	CardsByStatus map[string]int `json:"cardsByStatus"`
@@ -201,9 +210,9 @@ reopens nothing it once ticked off (todosNotDone).
 A question comes with the schedule Minka has words for: the weekdays counted
 from Monday, the time of day, the day the rhythm is counted from, and whom it is
 asked of, which are the subscribers of the question and not whoever answered it.
-Only a member of the project who is still there and has an address can be asked
-(askedLeftOut). A question whose schedule Minka cannot express is left out with
-its answers and named with the field that made it impossible
+Only a member of the project who is no client, is still there and has an address
+can be asked (askedLeftOut). A question whose schedule Minka cannot express is
+left out with its answers and named with the field that made it impossible
 (questionsLeftOut); one whose schedule has run out comes paused; one asked every
 other week is anchored on the day it was last answered (anchorsInferred) and
 left out where nobody ever answered it. An answer that says nothing or lies in
@@ -225,6 +234,23 @@ over from there instead of being fetched again; the report counts both as
 filesFetched and filesReused. A file Basecamp lists and no longer has gets a
 record that says so (filesGone). The name of a file is made a plain one
 (fileNamesChanged), and no output ever says a name, a caption or an address.
+
+What the source says about clients comes with it: whether somebody is a client
+and which company they belong to, whether a project works with clients and with
+which company, and whether the source shows a tool, a post, a to-do list or a
+check-in question to clients. That word is always the record's own and never the
+word of the tool it stands in: a post of a board the clients see can be one the
+source keeps from them. Where the source says nothing, nothing is written and
+Minka leaves what it holds alone. A record that follows what it hangs on — a
+to-do, a group, a card, an answer, a comment — carries no word of its own, and
+where the source offers one it is counted (visibilityLeftToTheContainer). A
+client is no member of a project in Minka, so clientMemberships says how many
+memberships the import leaves out and no question is ever said to be asked of
+one. Docs & Files and Forwards are not extracted at all, so a bundle says
+nothing about whether clients see them. A company the source names without an
+identifier, or with a name Minka refuses, ends the run where the record that
+names it comes in: writing the record without it would tell Minka to drop the
+company it holds.
 
 A record the source describes with a word a bundle has none for is left out
 and the run goes on: a line of a chat of an unknown kind or with a status other
@@ -325,6 +351,10 @@ it has been applied.`,
 				PeopleLeftOut:        result.PeopleLeftOut,
 				CreatorProbesRefused: result.CreatorProbesRefused,
 
+				PeopleAsClients:              result.PeopleAsClients,
+				ClientMemberships:            result.ClientMemberships,
+				VisibilityLeftToTheContainer: result.VisibilityLeftToTheContainer,
+
 				CardsByStatus:      result.CardsByStatus,
 				CardsOnHold:        result.CardsOnHold,
 				CardsLeftOut:       result.CardsLeftOut,
@@ -386,6 +416,16 @@ it has been applied.`,
 					"tool of a project could not be asked who created the project, because Basecamp refuses it to this identity; a project may therefore come without a creator",
 					"tools of projects could not be asked who created their project, because Basecamp refuses them to this identity; a project may therefore come without a creator"))
 			}
+			if count := report.ClientMemberships; count > 0 {
+				notices = append(notices, plural(count,
+					"membership of a project belongs to a client, and Minka leaves a client out of the members of every project: the bundle says it, the import does not carry it over",
+					"memberships of projects belong to clients, and Minka leaves a client out of the members of every project: the bundle says them, the import does not carry them over"))
+			}
+			if count := toolsSilentAboutClients(report); count > 0 {
+				notices = append(notices, plural(count,
+					"tool of a project is a Docs & Files or a Forwards, which a run does not extract: the bundle says nothing of whether clients see it or what stands in it, and a later run brings it",
+					"tools of projects are Docs & Files or Forwards, which a run does not extract: the bundle says nothing of whether clients see them or what stands in them, and a later run brings them"))
+			}
 			if count := report.FilesDropped; count > 0 {
 				notices = append(notices, plural(count,
 					"file embedded in a text or dropped into a chat could not be named, because Basecamp lists no file for it; of an embedded one only the caption stays in the text",
@@ -421,10 +461,10 @@ it has been applied.`,
 					"question of a check-in comes asking nobody at all and will ask nobody again, because whom it is asked of is what the first run makes of it; data.nobodyAsked names it",
 					"questions of check-ins come asking nobody at all and will ask nobody again, because whom they are asked of is what the first run makes of them; data.nobodyAsked names each"))
 			}
-			if count := report.AskedLeftOut.NotInTheProject + report.AskedLeftOut.Retired + report.AskedLeftOut.WithoutAnAddress; count > 0 {
+			if count := askedLeftOut(report); count > 0 {
 				notices = append(notices, plural(count,
-					"person a question asks cannot be said to be asked, because they are no member of the project, have left, or come without an address; the question comes without them",
-					"people questions ask cannot be said to be asked, because they are no members of their project, have left, or come without an address; the questions come without them"))
+					"person a question asks cannot be said to be asked, because they are no member of the project, are a client, have left, or come without an address; the question comes without them",
+					"people questions ask cannot be said to be asked, because they are no members of their project, are clients, have left, or come without an address; the questions come without them"))
 			}
 			if count := report.AnswersWithoutADay; count > 0 {
 				notices = append(notices, plural(count,
@@ -527,6 +567,16 @@ func renderImportReport(w io.Writer, report importReport) {
 		fmt.Fprintf(w, "Tools this identity may not see, asked for the creator of a project and passed over: %d\n", report.CreatorProbesRefused)
 	}
 
+	if report.PeopleAsClients > 0 || report.ClientMemberships > 0 {
+		fmt.Fprintf(w, "Clients: %d, with %d memberships Minka leaves out of their projects\n", report.PeopleAsClients, report.ClientMemberships)
+	}
+	if report.VisibilityLeftToTheContainer > 0 {
+		fmt.Fprintf(w, "Words about clients on a record that follows what it hangs on, left out: %d\n", report.VisibilityLeftToTheContainer)
+	}
+	if count := toolsSilentAboutClients(report); count > 0 {
+		fmt.Fprintf(w, "Docs & Files and Forwards tools a run does not extract, whose word about clients no bundle carries: %d\n", count)
+	}
+
 	fmt.Fprintf(w, "\nCards: %d active, %d archived, %d trashed; %d of them on hold\n",
 		report.CardsByStatus[bundle.StatusActive], report.CardsByStatus[bundle.StatusArchived], report.CardsByStatus[bundle.StatusTrashed], report.CardsOnHold)
 	fmt.Fprintf(w, "Archived and trashed cards whose column is in no extracted board, left out: %d\n", report.CardsLeftOut)
@@ -604,6 +654,27 @@ func renderImportReport(w io.Writer, report importReport) {
 	}
 }
 
+// toolsSilentAboutClients counts the tools of a run whose word about clients no
+// bundle carries, because a run does not extract that kind of tool at all: the
+// extractor says which kinds those are. Only the ones that are switched on
+// count, because a tool the source has switched off shows nobody anything.
+func toolsSilentAboutClients(report importReport) int {
+	count := 0
+	for _, skipped := range report.SkippedTools {
+		if skipped.Enabled && basecamp.SaysNothingAboutClients(skipped.Kind) {
+			count += skipped.Count
+		}
+	}
+	return count
+}
+
+// askedLeftOut is how many people a run could not say a question asks, over
+// every reason.
+func askedLeftOut(report importReport) int {
+	left := report.AskedLeftOut
+	return left.NotInTheProject + left.Clients + left.Retired + left.WithoutAnAddress
+}
+
 // recordsLeftOut is how many records a run left out for want of a word for what
 // the source said of them, over every kind of record, word and place. It counts
 // records and not entries: one entry may stand for many.
@@ -641,8 +712,8 @@ func renderCheckins(w io.Writer, report importReport) {
 		fmt.Fprintf(w, "Questions asked every other week anchored on the day they were last answered: %d — %s\n",
 			len(anchored), strings.Join(anchored, ", "))
 	}
-	fmt.Fprintf(w, "People a question asks that the bundle cannot say are asked: %d no member of the project, %d no longer there, %d without an address\n",
-		report.AskedLeftOut.NotInTheProject, report.AskedLeftOut.Retired, report.AskedLeftOut.WithoutAnAddress)
+	fmt.Fprintf(w, "People a question asks that the bundle cannot say are asked: %d no member of the project, %d a client, %d no longer there, %d without an address\n",
+		report.AskedLeftOut.NotInTheProject, report.AskedLeftOut.Clients, report.AskedLeftOut.Retired, report.AskedLeftOut.WithoutAnAddress)
 	if len(report.NobodyAsked) > 0 {
 		asking := make([]string, 0, len(report.NobodyAsked))
 		for _, question := range report.NobodyAsked {
