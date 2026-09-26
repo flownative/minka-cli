@@ -857,10 +857,13 @@ this:
   carry the word at **every** depth, and not only at the top of their tool,
   because Minka reads it below the top as well — something hidden from clients
   below a folder the source shows makes Minka hide that folder with everything
-  in it. An entry inside a folder that the source says nothing about is counted
-  (`data.docs.silentAboutClientsBelowTheTop`) and named in a `notice`: nothing is
-  written for it, so it can hide nothing above it, and where the folder at the top
-  of its tool is shown to clients that word was the one thing which would have. No output ever names a person or a company.
+  in it. An entry inside a folder that the source says nothing about is named in
+  `data.docs.silentAboutClientsInsideAFolder` — the kind, the `sourceId` and the
+  project, never a title — with a `notice`: nothing is written for it, so it can
+  hide nothing above it, and where the folder at the top of its tool is shown to
+  clients that word was the one thing which would have. It is named rather than
+  counted because the only thing to do about it is to compare it against the
+  source. No output ever names a person or a company.
 - `data.cardsByStatus` splits the cards, `data.cardsOnHold` counts those set
   aside within their column, `data.cardsLeftOut` the archived and trashed
   cards whose column is in no extracted board, `data.commentsTrashed` the

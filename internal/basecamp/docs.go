@@ -51,20 +51,34 @@ type DocsCounts struct {
 	// that are longer than Minka holds. Minka passes such a record over on every
 	// run, with everything hanging on it, and the text is not cut short.
 	LongerThanMinkaTakes int `json:"longerThanMinkaTakes"`
-	// SilentAboutClientsBelowTheTop counts the folders, documents and uploads
+	// SilentAboutClientsInsideAFolder are the folders, documents and uploads
 	// standing **inside a folder** whose record says nothing about whether clients
-	// see them. Nothing is written for such an entry, so Minka reads it as one
-	// that changes nothing above it, and a folder at the top that ought to be
-	// hidden from clients stays shown. At the top of a tool silence costs nothing —
-	// Minka reads an absent word as private — so only the depth that can cost the
-	// rule is counted, and a run that met one of them says so out loud rather than
-	// letting the safest-looking answer of the source pass without a number.
-	SilentAboutClientsBelowTheTop int `json:"silentAboutClientsBelowTheTop"`
+	// see them, each named so that it can be compared against the source, which is
+	// the whole point of saying anything about it. Nothing is written for such an
+	// entry, so Minka reads it as one that changes nothing above it, and a folder
+	// at the top that ought to be hidden from clients stays shown. At the top of a
+	// tool silence costs nothing — Minka reads an absent word as private — so only
+	// the depth that can cost the rule is named, and a run that met one of them
+	// says so out loud rather than letting the safest-looking answer of the source
+	// pass without a word.
+	SilentAboutClientsInsideAFolder []EntrySilentAboutClients `json:"silentAboutClientsInsideAFolder"`
 	// LeftOut counts what a bundle does not carry of the Docs & Files tools, per
 	// kind of record, and PlacesLeftOut names the folders and tools that took
 	// entries with them.
 	LeftOut       DocsLeftOut        `json:"leftOut"`
 	PlacesLeftOut []DocsPlaceLeftOut `json:"placesLeftOut"`
+}
+
+// EntrySilentAboutClients is one entry of a Docs & Files tool, standing inside a
+// folder, that the source says nothing about clients of. It names the kind of
+// entry, the record and the project it stands in, and never a title: a number
+// alone is a number nobody can trace back to the source, and what such an entry
+// is called is nobody's to print.
+type EntrySilentAboutClients struct {
+	// Record is the kind of entry: a folder, a document or an upload.
+	Record          string `json:"record"`
+	SourceID        string `json:"sourceId"`
+	ProjectSourceID string `json:"projectSourceId"`
 }
 
 // DocsLeftOut counts what a bundle does not carry of the Docs & Files tools, per
@@ -432,7 +446,7 @@ func (e *Extractor) writeFolder(w *bundle.Writer, walk *docsWalk, tool, in int64
 		named := sourceID(in)
 		record.ParentSourceID = &named
 	}
-	e.countIfItIsSilentAboutClients(record.VisibleToClients, record.ParentSourceID != nil)
+	e.nameItIfItIsSilentAboutClients(record.VisibleToClients, record.ParentSourceID != nil, "folder", origin.SourceID, walk.projectID)
 	if err := w.Add(bundle.Folders, record); err != nil {
 		return err
 	}
@@ -481,7 +495,7 @@ func (e *Extractor) writeDocument(ctx context.Context, w *bundle.Writer, walk *d
 	} else {
 		e.docs.DocumentsWithoutWords++
 	}
-	e.countIfItIsSilentAboutClients(record.VisibleToClients, folderID != nil)
+	e.nameItIfItIsSilentAboutClients(record.VisibleToClients, folderID != nil, "document", origin.SourceID, walk.projectID)
 	if err := w.Add(bundle.Documents, record); err != nil {
 		return err
 	}
@@ -565,7 +579,7 @@ func (e *Extractor) writeUpload(ctx context.Context, w *bundle.Writer, walk *doc
 	if description != "" {
 		record.Description = &description
 	}
-	e.countIfItIsSilentAboutClients(record.VisibleToClients, folderID != nil)
+	e.nameItIfItIsSilentAboutClients(record.VisibleToClients, folderID != nil, "upload", origin.SourceID, walk.projectID)
 	if err := w.Add(bundle.Uploads, record); err != nil {
 		return err
 	}
@@ -604,18 +618,22 @@ func (e *Extractor) wordlessWhereItsOnlyFileNeverComes(text, sourceID string) st
 	return ""
 }
 
-// countIfItIsSilentAboutClients notes an entry of Docs & Files the source says
+// nameItIfItIsSilentAboutClients notes an entry of Docs & Files the source says
 // nothing about clients of, where it stands inside a folder and the silence can
 // therefore cost the rule: nothing is written, Minka reads such an entry as one
 // that changes nothing above it, and a folder at the top that ought to be hidden
-// from clients stays shown. A number is all a run can do about it — what the
+// from clients stays shown. Saying so is all a run can do about it — what the
 // source says is the source's — but a run that said nothing would let the harm
 // the whole tool is written to prevent arrive through the safest-looking answer
-// there is.
-func (e *Extractor) countIfItIsSilentAboutClients(said *bool, insideAFolder bool) {
-	if said == nil && insideAFolder {
-		e.docs.SilentAboutClientsBelowTheTop++
+// there is. It is **named** and not only counted, because the one thing to do
+// about it is to go and compare it against the source, which nobody can do with a
+// number.
+func (e *Extractor) nameItIfItIsSilentAboutClients(said *bool, insideAFolder bool, record, sourceID, projectID string) {
+	if said != nil || !insideAFolder {
+		return
 	}
+	e.docs.SilentAboutClientsInsideAFolder = append(e.docs.SilentAboutClientsInsideAFolder,
+		EntrySilentAboutClients{Record: record, SourceID: sourceID, ProjectSourceID: projectID})
 }
 
 // fileOfAnUpload is the one file an upload stands for, as a run brings it, and
