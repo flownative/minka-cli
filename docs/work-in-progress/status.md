@@ -278,6 +278,10 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   instead of 422 `cardArchived`, and the order in which a move refuses — an
   archived card before a column without the area on hold — is read in the Minka
   code alone.
+- The trash of the fake holds cards alone. That a post, a to-do, a question, a
+  folder or a document names its tool in the field `board`, and that `blockedBy`
+  can name a to-do list, a group, a question or a folder in the trash or in an
+  archive, is read in Minka's code and held against the text view on its own.
 - Of saying what one is working on, what is left: a tile that lights up and one
   that goes quiet. The signal itself got through on `minka.flownative.com`,
   which knows this CLI as an agent, and the hook has reported out of a real
