@@ -613,6 +613,11 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   done, the recordings of the archived and the trashed ones, whether a list on
   the shelf or in the trash answers for its groups and its to-dos, and what a
   place the account no longer has answers when it is asked for what fell with it.
+  Two shapes were measured at the account and have still never come through a
+  run: what a tool answers when it is asked for the to-dos hanging on itself and
+  it has none — a failure there ends the run — and how the six to-dos that stand
+  in no list read in `todosWithoutAList`, the twelve schedules in
+  `todosThatRepeat`.
   Then check the bundle record by record, as the boards and the chats were
   checked.
 - Write the bundle of the whole account, once Robert or Shaun has allowed its
