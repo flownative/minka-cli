@@ -100,7 +100,12 @@ func todoProject(ada, grace, edsger, former Person, tool func(int64, string, str
 		{ID: 9423, Status: "trashed", Title: "Cancelled", Creator: &ada, CreatedAt: at(2, 10), UpdatedAt: at(3, 10)},
 	}
 
-	later := TodoList{ID: 9402, Title: "Later", Creator: &grace, CreatedAt: at(1, 9), UpdatedAt: at(1, 9)}
+	// A second list with a group of its own: a to-do that named a group of
+	// another list would be seen naming it.
+	later := TodoList{ID: 9402, Title: "Later", Creator: &grace, CreatedAt: at(1, 9), UpdatedAt: at(1, 9),
+		Groups: []TodoList{{ID: 9416, Title: "Some day", Creator: &grace, CreatedAt: at(1, 19), UpdatedAt: at(1, 19), Todos: []Todo{
+			{ID: 9429, Title: "Think about it", Creator: &grace, CreatedAt: at(3, 8), UpdatedAt: at(3, 8)},
+		}}}}
 	finished := TodoList{ID: 9403, Status: "archived", Title: "Finished", Creator: &ada, CreatedAt: at(1, 10), UpdatedAt: at(3, 10)}
 	dropped := TodoList{ID: 9404, Status: "trashed", Title: "Dropped", Creator: &ada, CreatedAt: at(1, 11), UpdatedAt: at(3, 11)}
 
