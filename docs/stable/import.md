@@ -848,14 +848,25 @@ files of its texts the same way.
   `questionsLeftOut`, `anchorsInferred`, `nobodyAsked`, `askedLeftOut`
   (`notInTheProject`,
   `retired`, `withoutAnAddress`), `answersWithoutABody`, `answersWithoutADay`,
-  `answersTrashed`, `longestBody`, `requestsRetried` and the absolute path of
+  `answersTrashed`, `longestBody`, `longestBodyRecords`, `requestsRetried` and the absolute path of
   the bundle. The lines about check-ins are shown only by a run that met a
   questionnaire. `filesBytes` is
   what the files of the bundle weigh, fetched or taken over; it and
   `filesFetched`, `filesReused` and `filesGone` are 0 in a dry run.
   `longestBody` is the longest text per kind, `cards`, `comments`, `posts`,
   `messages` and `answers`, in characters: whoever sets the limits of where a bundle
-  goes has to know it. `requestsRetried` is a number, 0 for a run that met no
+  goes has to know it. `longestBodyRecords` names, under the same kinds, the
+  record each number was measured on, so that it can be looked at at the
+  source: `record` is the kind of record (`card`, `comment`, `post`, `line`,
+  `answer`), `sourceId` which one, `in` and `inSourceId` where it stands — the
+  chat of a line, the project of everything else — and `characters` the length,
+  the number `longestBody` holds. Of two texts of the same length the one the
+  run met first is named; a kind whose longest text has no characters names no
+  record and is missing from `longestBodyRecords`. The numbers stay where they
+  are: a reader of `longestBody` reads on unchanged. The text shows a line per
+  named record under the line of the numbers. Basecamp's address of a record is
+  not in it, because the run does not carry one; the identifier and the place
+  are what it names. `requestsRetried` is a number, 0 for a run that met no
   failure; the text shows its line only when it is more, and so it does for
   `creatorProbesRefused`, `embeds`, `embedsLeftOut`, `references` and
   `recordsLeftOut`, whose lines come one per entry under a line that counts the
