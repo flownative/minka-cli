@@ -67,6 +67,7 @@ var toolKinds = map[string]string{
 	"chat":          bundle.ToolChat,
 	"message_board": bundle.ToolPosts,
 	"questionnaire": bundle.ToolCheckins,
+	"todoset":       bundle.ToolTodos,
 }
 
 // SkippedTools counts dock entries of one kind that a run left out, either

@@ -11,7 +11,8 @@ import (
 )
 
 // The first project of the fake was created at 09:00:00 UTC. Its tools 9001 to
-// 9004 are extracted; 9005 to 9009 are not, two of them being switched off.
+// 9004 and 9009 are extracted; 9005 to 9008 are not, three of them being
+// switched off.
 const withTheProject = "2022-05-01T09:00:00.150Z"
 
 func creatorOfProject(t *testing.T, account *fakebasecamp.Account, project string) any {
@@ -23,7 +24,7 @@ func creatorOfProject(t *testing.T, account *fakebasecamp.Account, project strin
 // toolRequests are the requests for tools the run does not extract.
 func toolRequests(account *fakebasecamp.Account) []string {
 	var requests []string
-	for _, kind := range []string{"todosets", "schedules", "vaults", "card_tables/9007", "card_tables/9021"} {
+	for _, kind := range []string{"todosets/9005", "schedules", "vaults", "card_tables/9007", "card_tables/9021"} {
 		requests = append(requests, asked(account, kind)...)
 	}
 	slices.Sort(requests)
@@ -82,7 +83,7 @@ func TestTheOldestToolMadeWithAProjectNamesItsCreator(t *testing.T) {
 	dock[4].ID, dock[4].CreatedAt, dock[4].Creator = 9000, withTheProject, &edsger
 	dock[3].CreatedAt, dock[3].Creator = withTheProject, &ada
 	if got := creatorOfProject(t, account, "7001"); got != "101" {
-		t.Errorf("created by %v, want 101: the to-dos are no tool of the bundle", got)
+		t.Errorf("created by %v, want 101: the to-dos that are switched off are no tool of the bundle", got)
 	}
 	if requests := toolRequests(account); len(requests) != 0 {
 		t.Errorf("asked for %v although a tool of the bundle answers", requests)
@@ -146,9 +147,9 @@ func TestOnlyAFewOtherToolsAreAskedAndOnlyUntilOneAnswers(t *testing.T) {
 		t.Errorf("asked for %v, want the others in the order they were made in, up to the one that answers: %v", got, want)
 	}
 
-	// Only the fifth would answer: that is more than a run asks for.
+	// Only the fourth would answer: that is more than a run asks for.
 	account = fakebasecamp.New()
-	account.Projects[0].Dock[8].CreatedAt = withTheProject
+	account.Projects[0].Dock[7].CreatedAt = withTheProject
 	if got := creatorOfProject(t, account, "7001"); got != nil {
 		t.Errorf("created by %v, want nobody", got)
 	}

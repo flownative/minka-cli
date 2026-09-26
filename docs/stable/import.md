@@ -260,8 +260,8 @@ those of answers.
   paragraph per block, a `<br>` per line break.
 - **Tools** are the dock entries that are switched on and that Minka has a
   counterpart for: `kanban_board` → `board`, `chat` → `chat`, `message_board`
-  → `posts`, `questionnaire` → `checkins`, several of a kind where a project
-  has several. Creator and
+  → `posts`, `questionnaire` → `checkins`, `todoset` → `todos`, several of a
+  kind where a project has several. Creator and
   timestamps come from the tool itself. Every other entry is counted as
   skipped, per kind and whether it was switched on, and shown in the report.
 - **Columns** are the lists of a card table: `Kanban::Triage` → `triage`,
