@@ -292,10 +292,17 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   `todolists.json` of the tool names that identifier; and `repetition_schedule`,
   which twelve to-dos of the account carry and the other 3,244 leave out
   altogether rather than sending an empty one, with the same ten fields every
-  time. Neither shape has been met by a run, so how Basecamp answers a request for
-  the to-dos of a tool that has none of its own rests on the invented account too:
-  a failure of that request ends the run, where a place the bundle does not carry
-  is passed over when it is gone.
+  time. How Basecamp answers that path is measured as well: a to-do set that holds
+  no to-do of its own answers 200 with an empty array and no error, one that holds
+  lists with to-dos in them answers the same, and `?completed=true` does too,
+  which is why a failure of that request ends the run where a place the bundle
+  does not carry is passed over when it is gone. The path hands out the to-dos
+  hanging on the tool alone and never those of its lists, so the run's reading of
+  `parent.type` is a second hold on the same thing and not what carries it.
+  An active to-do hanging on the to-do set of a tool that is **switched off**
+  stays invisible, as an active list of such a tool already is: the walk never
+  learns that tool's identifier, so the same gap holds for both and nothing counts
+  what stands there.
 - Of the forwarded mail of `import basecamp`: no extraction has met an inbox
   live, and the shape of the source is measured all the same, read-only and
   without a run. Measured: that a dock entry of an inbox is
@@ -614,10 +621,8 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   the shelf or in the trash answers for its groups and its to-dos, and what a
   place the account no longer has answers when it is asked for what fell with it.
   Two shapes were measured at the account and have still never come through a
-  run: what a tool answers when it is asked for the to-dos hanging on itself and
-  it has none — a failure there ends the run — and how the six to-dos that stand
-  in no list read in `todosWithoutAList`, the twelve schedules in
-  `todosThatRepeat`.
+  run: how the six to-dos that stand in no list read in `todosWithoutAList`, and
+  the twelve schedules in `todosThatRepeat`.
   Then check the bundle record by record, as the boards and the chats were
   checked.
 - Write the bundle of the whole account, once Robert or Shaun has allowed its
