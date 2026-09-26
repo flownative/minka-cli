@@ -751,3 +751,24 @@ host takes a card out of the list of a machine by itself.
 **Implemented as:** `cli.app.writeDownWhatTheHostWouldNotHave`,
 `work.Host.LetGoOf` and `NoteNotTaken`, see
 [Saying what you are working on](stable/at-work.md).
+
+<a id="c-054"></a>
+## C-054 — The page of an archive is bounded here, and a walk ends only on nothing
+
+*Applies to: `boards archive`, `api.Client.ArchivedCards`, `api.Client.WholeArchiveOf`*
+
+A `--limit` outside 1 to 100 is a usage error of this CLI, refused before a
+request goes out; the client refuses the same bound again. A walk of several
+pages ends only on an answer that carried no card, asks an empty answer behind a
+full page once more, falls back through the ids of the whole last page where the
+cursor's card has left the archive, and deduplicates by id. It promises that
+every card which lay in the archive for the whole run appears exactly once, and
+says in a `notice` that it promises nothing about one moment.
+
+**Why:** The server cuts a larger page down without a word, and the only sign its
+answer carries for the end of the list is fewer cards than were asked for. The
+two together would let a command truncate an archive at a hundred cards and
+report success, which is the one outcome a reader cannot tell from the truth. What
+the address cannot say, the command says instead of leaving it to be assumed.
+**Implemented as:** `api.ArchivePageMax`, `api.Client.WholeArchiveOf`,
+`cli.app.wholeArchive`, see [The archive of a board](stable/archive.md).

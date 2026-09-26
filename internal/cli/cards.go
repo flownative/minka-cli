@@ -33,10 +33,133 @@ func (a *app) newCardsCmd() *cobra.Command {
 		a.newCardsSubscribeCmd(),
 		a.newCardsUnsubscribeCmd(),
 		a.newCardsDoneCmd(),
+		a.newCardsArchiveCmd(),
+		a.newCardsUnarchiveCmd(),
 		a.newCardsDeleteCmd(),
 		a.newCardsRestoreCmd(),
 		a.newCardsNotesCmd(),
 	)
+}
+
+// apiCodeCardArchived is what Minka answers a write on a card that lies in the
+// archive of its board, putting it away a second time included.
+const apiCodeCardArchived = "cardArchived"
+
+// apiCodeCardNotArchived is what Minka answers an attempt to bring a card back
+// that stands on its board.
+const apiCodeCardNotArchived = "cardNotArchived"
+
+// cardInTheTrashHint says where a card that answers like one that never existed
+// may have gone. A card in the trash is 404 here, unlike a post, which is
+// refused with a code of its own: the two are not told apart by the same word.
+const cardInTheTrashHint = "It does not exist, it is in the trash, or it belongs to a project you are not a member of. A card in the trash comes back with: minka cards restore <cardId> — the trash is not the archive."
+
+func (a *app) newCardsArchiveCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "archive <cardId>",
+		Short: "Put a card away into the archive of its board",
+		Long: `Takes a card off its board into the archive of the board, as putting it away on
+the web does, and answers with the card, which now says archived: true.
+
+The card stays where it was in one sense only — it goes on naming the column it
+was taken from. It stands in no column, it is in no list of this CLI, and every
+write on it is refused with 9 (validation) and meta.apiCode cardArchived until
+it comes back. "cards show" reads it, "boards archive <boardId>" lists it, and
+"cards unarchive" brings it back.
+
+A card that lies in the archive already exits 9 with cardArchived. A card in
+the trash exits 2 (not_found): the trash is not the archive.
+
+The board leaves a card of an archive out of the set an agent says it is working
+on, so a card this machine has in hand drops out of that list with the next
+signal.`,
+		Args: requireArgs("cardId"),
+		RunE: func(_ *cobra.Command, args []string) error {
+			s, err := a.session()
+			if err != nil {
+				return err
+			}
+			if err := s.resolveCard(a.ctx, &args[0]); err != nil {
+				return err
+			}
+			card, err := s.client.ArchiveCard(a.ctx, args[0])
+			if err != nil {
+				return cardArchiveRefusal(s, err)
+			}
+
+			summary := fmt.Sprintf("Put card %s into the archive of %s", card.Value.Title, card.Value.Board.Title)
+			return a.ok(success{
+				data:        card.Raw,
+				summary:     summary,
+				breadcrumbs: cardBreadcrumbs(card.Value.ID),
+				text: func(w io.Writer) {
+					fmt.Fprintf(w, "%s, out of %s.\n%s\n", summary, card.Value.Column.Title, card.Value.AppURL)
+				},
+			})
+		},
+	}
+}
+
+func (a *app) newCardsUnarchiveCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "unarchive <cardId>",
+		Short: "Bring a card back out of the archive of its board",
+		Long: `Brings a card back out of the archive of its board onto the board, and answers
+with the card, which says where it landed.
+
+It goes to the top of the column it was taken from. Where that column is gone
+from the board, it lands in the first working column, and in Triage on a board
+that has none. The answer names the column either way.
+
+A card comes back off hold, whatever it was when it was put away. Nobody asks
+for that and the answer does not say it, so this command does.
+
+A card that stands on its board exits 9 (validation) with meta.apiCode
+cardNotArchived. A card in the trash exits 2 (not_found) and comes back with
+"cards restore" instead.`,
+		Args: requireArgs("cardId"),
+		RunE: func(_ *cobra.Command, args []string) error {
+			s, err := a.session()
+			if err != nil {
+				return err
+			}
+			if err := s.resolveCard(a.ctx, &args[0]); err != nil {
+				return err
+			}
+			card, err := s.client.UnarchiveCard(a.ctx, args[0])
+			if err != nil {
+				return cardArchiveRefusal(s, err)
+			}
+
+			summary := fmt.Sprintf("Brought card %s out of the archive to %s", card.Value.Title, card.Value.Column.Title)
+			return a.ok(success{
+				data:        card.Raw,
+				summary:     summary,
+				notices:     []string{"a card out of the archive comes back off hold, whatever it was when it was put away"},
+				breadcrumbs: cardBreadcrumbs(card.Value.ID),
+				text: func(w io.Writer) {
+					fmt.Fprintf(w, "%s.\n%s\n", summary, card.Value.AppURL)
+				},
+			})
+		},
+	}
+}
+
+// cardArchiveRefusal classifies a failed write on the archive of a board. Both
+// codes name a state the card is in, and the hint says what to do about it; an
+// address that has nothing names the trash, which is where a card that reads
+// like one that never existed has most likely gone.
+func cardArchiveRefusal(s *session, err error) *Error {
+	e := s.fail(err)
+	switch {
+	case e.APICode == apiCodeCardArchived:
+		e.Hint = "The card lies in the archive of its board already. Bring it back with: minka cards unarchive <cardId>"
+	case e.APICode == apiCodeCardNotArchived:
+		e.Hint = "The card stands on its board. Put it away with: minka cards archive <cardId>"
+	case e.Code == CodeNotFound:
+		e.Hint = cardInTheTrashHint
+	}
+	return e
 }
 
 func (a *app) newCardsMineCmd() *cobra.Command {

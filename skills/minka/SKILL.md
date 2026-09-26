@@ -144,12 +144,15 @@ minka me --json
 minka projects list [--archived] --json
 minka boards list <projectId> --json
 minka boards show <boardId> --json
+minka boards archive <boardId> [--before <cardId>] [--limit <n>] [--all] --json
 minka cards mine --json
 minka cards show <cardId> --json
 minka cards create --board <boardId> --title "Title" [--column <column>] [--assignee <person>]... [--due YYYY-MM-DD] [--description - < body.md] --json
 minka cards edit <cardId> [--title "New"] [--due YYYY-MM-DD] [--description - < body.md] --json
 minka cards move <cardId> --column <column> [--on-hold] [--top | --bottom | --after <cardId> | --before <cardId>] --json
 minka cards done <cardId> --json
+minka cards archive <cardId> --json
+minka cards unarchive <cardId> --json
 minka cards delete <cardId> --json
 minka cards restore <cardId> --json
 minka columns on-hold <column> [--board <boardId>] [--off] --json
@@ -306,10 +309,58 @@ such as `Doing`.
   `cards show` therefore prints `Archived: yes, was in <column>` and no
   `Column:` line, and the summary names the archive of the board instead of a
   column.
-- A card in the archive is in no list this CLI has: `boards show` shows what
-  stands in the columns, and `cards mine` leaves it out. Read it by its `id`.
-- Putting a card into the archive, taking it back out and listing the archive of
-  a board are not commands of this CLI yet. They happen in the web.
+- A card in the archive is in no list of the board: `boards show` shows what
+  stands in the columns, and `cards mine` leaves it out. `boards archive
+  <boardId>` is the one list it is in; read the card itself by its `id`.
+- `cards archive <cardId>` puts a card away, `cards unarchive <cardId>` brings
+  it back. Putting away a card that lies in the archive exits 9 with
+  `cardArchived`, bringing back one that stands on its board exits 9 with
+  `cardNotArchived`, and an archived project exits 9 with `projectArchived`
+  before either. A card in the **trash** exits 2 (`not_found`) on both, and
+  comes back with `cards restore` instead — the trash is not the archive.
+- A card brought back lands at the top of the column it was taken from, or in
+  the first working column where that column is gone from the board, or in
+  Triage on a board that has none; the answer names the column. It comes back
+  **off hold**, whatever it was when it was put away, which nothing in the
+  answer says: the command says it in a `notice`.
+- The board leaves a card of an archive out of the set an agent says it is
+  working on, so a card in hand drops out of `work list` with the next signal.
+  `cards archive` does not take it out by itself.
+
+### Reading the archive
+
+- `boards archive <boardId> [--before <cardId>] [--limit <n>] [--all]` lists the
+  cards a board has put away, the one put away last first. Each carries `id`,
+  `shortId`, `title`, `archivedAt`, `archivedBy` and `appUrl` — and nothing
+  else: the card itself is read with `cards show <cardId>`.
+- A page holds 50 cards by default and **at most 100**. A larger `--limit` is
+  refused here with exit 1 (`usage`), and that refusal is a safeguard, not a
+  restriction: the server cuts a larger page down to 100 without saying so, and
+  the only sign its answer carries for the end of the archive is a page shorter
+  than asked for. Asking for 500 would therefore hand you 100 cards that read
+  like the whole archive. Do not work around it by asking the API directly.
+- `--before <cardId>` gives the page behind that card. Take it from the
+  `breadcrumbs` of a page rather than working it out; `--before` needs the `id`,
+  not the short identifier. A card that no longer lies in the archive of that
+  board exits 9 with `meta.apiCode` `archivedCardsBeforeUnknown`: somebody took
+  it back onto the board or into the trash. That is no end of the list — read
+  the archive again from the beginning.
+- `--all` walks every page to the end in one run and works around the weakness
+  above by itself: it keeps the ids of the whole last page and falls back
+  through them when the one it named is gone, it asks an empty answer after a
+  full page a second time, and it lists every card once.
+- **What a run of `--all` promises:** every card that lay in the archive for the
+  whole run appears exactly once. **What it does not promise:** the archive at
+  one moment. A card put away during the run lands on the first page, which the
+  run has already passed, and can be missed; a card taken out of the archive
+  during the run vanishes from the result with no trace, and the API says
+  nothing about either. A run of more than one page says this in its `notice`,
+  together with how many pages it read, how many cards came twice and whether it
+  had to begin again. Do not report the result of a multi-page run as a count of
+  what the archive holds right now.
+- A run that ends on `archivedCardsBeforeUnknown` still hands over what it read:
+  the error envelope carries that as `data` with the notices, and the exit code
+  9 says that something is missing from it.
 
 ## People and assignments
 

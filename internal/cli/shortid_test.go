@@ -174,10 +174,16 @@ func TestEveryCommandThatTakesACardTakesItsShortIdentifier(t *testing.T) {
 			before := len(e.server.Requests())
 
 			_, r := e.runJSON("", args...)
-			if name == "cards restore" {
+			switch name {
+			case "cards restore":
 				// A card in the trash goes by no short identifier.
 				expectCode(t, r, ExitNotFound)
-			} else {
+			case "cards unarchive":
+				// The card stands on its board, so bringing it back is refused
+				// — after the short identifier was looked up, which is what is
+				// under test here.
+				expectCode(t, r, ExitValidation)
+			default:
 				expectCode(t, r, ExitOK)
 			}
 

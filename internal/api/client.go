@@ -419,6 +419,21 @@ func (c *Client) RestoreCard(ctx context.Context, cardID string) (Result[Card], 
 	return request[Card](ctx, c, http.MethodPost, "/cards/"+url.PathEscape(cardID)+"/restore", nil)
 }
 
+// ArchiveCard takes a card off its board into the archive of the board and
+// answers with the card, which now says it is archived. A card that lies there
+// already is refused with cardArchived; a card in the trash answers like one
+// that never existed.
+func (c *Client) ArchiveCard(ctx context.Context, cardID string) (Result[Card], error) {
+	return request[Card](ctx, c, http.MethodPost, "/cards/"+url.PathEscape(cardID)+"/archive", nil)
+}
+
+// UnarchiveCard brings a card back out of the archive onto its board, at the
+// top of the column it was taken from, and off hold. A card that stands on its
+// board is refused with cardNotArchived.
+func (c *Client) UnarchiveCard(ctx context.Context, cardID string) (Result[Card], error) {
+	return request[Card](ctx, c, http.MethodPost, "/cards/"+url.PathEscape(cardID)+"/unarchive", nil)
+}
+
 // EditComment changes a comment of the person of the token.
 func (c *Client) EditComment(ctx context.Context, cardID, commentID, body string) (Result[Comment], error) {
 	return request[Comment](ctx, c, http.MethodPatch, "/cards/"+url.PathEscape(cardID)+"/comments/"+url.PathEscape(commentID), map[string]string{"body": body})

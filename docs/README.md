@@ -38,6 +38,11 @@ the documentation says what holds; how it came about is in git.
   every case it can meet, what the keepalive reports while one long tool call
   runs, how the hook is written — before any work on `work`, `heartbeat` or
   `hooks`.
+- [The archive of a board](stable/archive.md): Why the page size is bounded in
+  the CLI, what a walk of several pages promises and what it does not, how a
+  cursor that has left the archive is worked around, the refusals of the two
+  writes — before any work on `boards archive`, `cards archive` or `cards
+  unarchive`.
 - [Testing](stable/testing.md): Fake API, sabotage proofs, what a test pins
   down, what it may demand of time — read before your first test.
 
