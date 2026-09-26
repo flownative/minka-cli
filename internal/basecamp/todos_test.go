@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"slices"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/flownative/minka-cli/internal/basecamp"
@@ -482,5 +483,192 @@ func TestWhatHangsOnAToDoGoesTheWayEveryDiscussionGoes(t *testing.T) {
 	file := recordWithID(t, records(t, dir, bundle.Attachments), "attachment-5063")
 	if file["ownerKind"] != bundle.OwnerTodo || file["ownerSourceId"] != "9421" || file["file"] != "attachment-5063/card.png" {
 		t.Errorf("the file of the notes of a to-do: %v", file)
+	}
+}
+
+func todoSet(a *fakebasecamp.Account) *fakebasecamp.Tool { return &a.Projects[7].Dock[0] }
+
+// theList is a list or a group of the first To-dos tool of the fake, by its ID.
+func theList(a *fakebasecamp.Account, id int64) *fakebasecamp.TodoList {
+	for i := range todoSet(a).TodoLists {
+		list := &todoSet(a).TodoLists[i]
+		if list.ID == id {
+			return list
+		}
+		for g := range list.Groups {
+			if list.Groups[g].ID == id {
+				return &list.Groups[g]
+			}
+		}
+	}
+	panic("the fake has no to-do list " + strconv.FormatInt(id, 10))
+}
+
+// theTodo is a to-do of the first To-dos tool of the fake, by its ID.
+func theTodo(a *fakebasecamp.Account, id int64) *fakebasecamp.Todo {
+	for i := range todoSet(a).TodoLists {
+		list := &todoSet(a).TodoLists[i]
+		for _, in := range append([]*fakebasecamp.TodoList{list}, groupsOf(list)...) {
+			for t := range in.Todos {
+				if in.Todos[t].ID == id {
+					return &in.Todos[t]
+				}
+			}
+		}
+	}
+	panic("the fake has no to-do " + strconv.FormatInt(id, 10))
+}
+
+func groupsOf(list *fakebasecamp.TodoList) []*fakebasecamp.TodoList {
+	groups := make([]*fakebasecamp.TodoList, 0, len(list.Groups))
+	for i := range list.Groups {
+		groups = append(groups, &list.Groups[i])
+	}
+	return groups
+}
+
+// A status a bundle has no word for leaves the record out and is counted, and the
+// run goes on: a bundle has no field to say such a word in, so the record is lost
+// whatever the run does.
+func TestAStatusNoBundleKnowsLeavesAListOrAToDoOutAndTheRunGoesOn(t *testing.T) {
+	account := fakebasecamp.New()
+	theList(account, 9402).ShownStatus = "draft"
+	theTodo(account, 9421).ShownStatus = "draft"
+	dir, result := extract(t, account, todoProject)
+
+	if ids := sourceIDs(records(t, dir, bundle.TodoLists)); slices.Contains(ids, "9402") {
+		t.Errorf("a list of a status nobody knows came along: %v", ids)
+	}
+	if ids := sourceIDs(records(t, dir, bundle.Todos)); slices.Contains(ids, "9421") {
+		t.Errorf("a to-do of a status nobody knows came along: %v", ids)
+	}
+	want := []basecamp.LeftOutRecords{
+		{Record: "to-do list", Field: "status", Value: "draft", In: "project", InSourceID: "7008", LeftOut: 1},
+		{Record: "group", Field: "status", Value: "archived", In: "project", InSourceID: "7008", LeftOut: 1},
+		{Record: "to-do", Field: "status", Value: "draft", In: "project", InSourceID: "7008", LeftOut: 1},
+	}
+	if got := result.RecordsLeftOut; !slices.Equal(got, want) {
+		t.Errorf("records left out:\n got %v\nwant %v", got, want)
+	}
+	// Nothing of a record that is left out is asked for.
+	if asked := asked(account, "recordings/9421/"); len(asked) > 0 {
+		t.Errorf("a run asked for what hangs on a to-do it left out: %v", asked)
+	}
+}
+
+// A walk is no snapshot: a list or a to-do the source lists twice is written
+// once.
+func TestAListOrAToDoMetTwiceIsWrittenOnce(t *testing.T) {
+	account := fakebasecamp.New()
+	theList(account, 9401).Twice = true
+	theTodo(account, 9421).Twice = true
+	dir, _ := extract(t, account, todoProject)
+
+	lists := 0
+	for _, list := range records(t, dir, bundle.TodoLists) {
+		if list["sourceId"] == "9401" {
+			lists++
+		}
+	}
+	todos := 0
+	for _, one := range records(t, dir, bundle.Todos) {
+		if one["sourceId"] == "9421" {
+			todos++
+		}
+	}
+	if lists != 1 || todos != 1 {
+		t.Errorf("the list came %d times and the to-do %d, want once each", lists, todos)
+	}
+}
+
+// A title the applier refuses ends the run where the walk meets it, for a list,
+// a group and a to-do alike, and no message quotes a title.
+func TestATitleNoToDoCanCarryEndsTheRun(t *testing.T) {
+	titles := map[string]string{
+		"nothing at all":          "",
+		"whitespace alone":        "   ",
+		"more than 200 letters":   strings.Repeat("ä", 201),
+		"a character nobody sees": "Print the \x01 invitations",
+	}
+	for what, title := range titles {
+		for _, of := range []struct {
+			record string
+			id     int64
+			set    func(*fakebasecamp.Account, string)
+		}{
+			{"list", 9401, func(a *fakebasecamp.Account, title string) { theList(a, 9401).Title = title }},
+			{"group", 9411, func(a *fakebasecamp.Account, title string) { theList(a, 9411).Title = title }},
+			{"to-do", 9421, func(a *fakebasecamp.Account, title string) { theTodo(a, 9421).Title = title }},
+		} {
+			account := fakebasecamp.New()
+			of.set(account, title)
+			err := extractExpectingAnError(t, account, todoProject)
+			if !strings.Contains(err.Error(), strconv.FormatInt(of.id, 10)) {
+				t.Errorf("%s of a %s: the run ended with %q, which does not name the record", what, of.record, err)
+			}
+			if title != "" && strings.Contains(err.Error(), title) {
+				t.Errorf("%s of a %s: the failure quotes the title", what, of.record)
+			}
+		}
+	}
+
+	// A title of exactly 200 letters, and one whose whitespace makes it longer,
+	// come through.
+	account := fakebasecamp.New()
+	theTodo(account, 9421).Title = "  " + strings.Repeat("ä", 200) + "  "
+	dir, _ := extract(t, account, todoProject)
+	if got := recordWithID(t, records(t, dir, bundle.Todos), "9421")["title"]; got != strings.Repeat("ä", 200) {
+		t.Errorf("a title of 200 letters comes as %d characters", len([]rune(got.(string))))
+	}
+}
+
+// The days of a to-do are held to what Minka takes: a day of another shape, and
+// a start after the day it is due, end the run rather than reaching a bundle the
+// applier would refuse.
+func TestDaysNoToDoCanHaveEndTheRun(t *testing.T) {
+	cases := map[string]func(*fakebasecamp.Todo){
+		"a start of another shape": func(one *fakebasecamp.Todo) { one.StartsOn = "20.04.2025" },
+		"a day that is no day":     func(one *fakebasecamp.Todo) { one.DueOn = "2025-13-45" },
+		"a day Go reads loosely":   func(one *fakebasecamp.Todo) { one.DueOn = "2025-4-1" },
+		"a start after the end":    func(one *fakebasecamp.Todo) { one.StartsOn, one.DueOn = "2025-05-02", "2025-05-01" },
+	}
+	for what, break_ := range cases {
+		account := fakebasecamp.New()
+		break_(theTodo(account, 9421))
+		err := extractExpectingAnError(t, account, todoProject)
+		if !strings.Contains(err.Error(), "9421") {
+			t.Errorf("%s: the run ended with %q, which does not name the to-do", what, err)
+		}
+	}
+
+	// A start on the day it is due is a day and no range, which Minka takes.
+	account := fakebasecamp.New()
+	theTodo(account, 9421).StartsOn, theTodo(account, 9421).DueOn = "2025-05-01", "2025-05-01"
+	dir, _ := extract(t, account, todoProject)
+	one := recordWithID(t, records(t, dir, bundle.Todos), "9421")
+	if one["startsOn"] != "2025-05-01" || one["dueOn"] != "2025-05-01" {
+		t.Errorf("a to-do that starts on the day it is due: %v", one)
+	}
+}
+
+// Times that are missing or are no times end the run: a record without them
+// would be put in the wrong place, and one whose completion is no time would
+// never be held against the moment it was touched.
+func TestATodoWithoutItsTimesEndsTheRun(t *testing.T) {
+	cases := map[string]func(*fakebasecamp.Account){
+		"a list without a created":   func(a *fakebasecamp.Account) { theList(a, 9401).CreatedAt = "" },
+		"a group without an updated": func(a *fakebasecamp.Account) { theList(a, 9411).UpdatedAt = "" },
+		"a to-do without its times":  func(a *fakebasecamp.Account) { theTodo(a, 9421).CreatedAt, theTodo(a, 9421).UpdatedAt = "", "" },
+		"a completion that is no time": func(a *fakebasecamp.Account) {
+			theTodo(a, 9422).Completion = &fakebasecamp.Completion{At: "in the morning"}
+		},
+		"an updated that is no time": func(a *fakebasecamp.Account) { theTodo(a, 9422).UpdatedAt = "in the morning" },
+	}
+	for what, break_ := range cases {
+		account := fakebasecamp.New()
+		break_(account)
+		if err := extractExpectingAnError(t, account, todoProject); err.Message == "" {
+			t.Errorf("%s: the run ended without saying why", what)
+		}
 	}
 }

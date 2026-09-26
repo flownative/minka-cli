@@ -11,8 +11,10 @@ import (
 // these as well, and the account answers both the same way.
 type TodoList struct {
 	ID int64
-	// Status is "active" when empty.
+	// Status is "active" when empty. ShownStatus replaces what the list says
+	// about it, wherever it is listed.
 	Status      string
+	ShownStatus string
 	Title       string
 	Description string
 	Creator     *Person
@@ -138,9 +140,11 @@ func todoProject(ada, grace, edsger, former Person, tool func(int64, string, str
 // Todo is a to-do of a list or of one of its groups.
 type Todo struct {
 	ID int64
-	// Status is "active" when empty.
-	Status string
-	Title  string
+	// Status is "active" when empty. ShownStatus replaces what the to-do says
+	// about it, wherever it is listed.
+	Status      string
+	ShownStatus string
+	Title       string
 	// Notes are the notes of a to-do as Basecamp renders them.
 	Notes     string
 	StartsOn  string
@@ -323,11 +327,29 @@ func (l *TodoList) status() string {
 	return l.Status
 }
 
+// shownStatus is what the list says about its status where it is listed, which a
+// test can make something a bundle has no word for.
+func (l *TodoList) shownStatus() string {
+	if l.ShownStatus != "" {
+		return l.ShownStatus
+	}
+	return l.status()
+}
+
 func (t *Todo) status() string {
 	if t.Status == "" {
 		return "active"
 	}
 	return t.Status
+}
+
+// shownStatus is what the to-do says about its status where it is listed, which
+// a test can make something a bundle has no word for.
+func (t *Todo) shownStatus() string {
+	if t.ShownStatus != "" {
+		return t.ShownStatus
+	}
+	return t.status()
 }
 
 func (a *Account) todoJSON(p *Project, in *TodoList, t *Todo) map[string]any {
@@ -345,7 +367,7 @@ func (a *Account) todoJSON(p *Project, in *TodoList, t *Todo) map[string]any {
 		return all
 	}
 	answer := map[string]any{
-		"id": t.ID, "status": t.status(), "title": t.Title, "content": t.Title, "type": "Todo",
+		"id": t.ID, "status": t.shownStatus(), "title": t.Title, "content": t.Title, "type": "Todo",
 		"description": t.Notes, "description_attachments": a.filesJSON(t.Files),
 		"parent":    map[string]any{"id": in.ID, "type": "Todolist"},
 		"starts_on": orNull(t.StartsOn), "due_on": orNull(t.DueOn),
@@ -366,7 +388,7 @@ func (a *Account) todoJSON(p *Project, in *TodoList, t *Todo) map[string]any {
 
 func (a *Account) todoListJSON(p *Project, parentID int64, parentType string, l *TodoList) map[string]any {
 	answer := map[string]any{
-		"id": l.ID, "status": l.status(), "title": l.Title, "name": l.Title, "type": "Todolist",
+		"id": l.ID, "status": l.shownStatus(), "title": l.Title, "name": l.Title, "type": "Todolist",
 		"description": l.Description, "description_attachments": a.filesJSON(l.Files),
 		"parent":         map[string]any{"id": parentID, "type": parentType},
 		"comments_count": len(l.Comments), "comments_url": fmt.Sprintf("%sbuckets/%d/recordings/%d/comments.json", a.root(), p.ID, l.ID),
