@@ -66,9 +66,9 @@ type ArchiveRun struct {
 	Raw []json.RawMessage
 	// Pages counts the answers that carried cards.
 	Pages int
-	// Duplicates counts the cards that came a second time because a page had
-	// to start behind an earlier card of the page before it. They are listed
-	// once.
+	// Duplicates counts the cards a walk read a second time because a cursor did
+	// not hold: the page that carried it on, and the page it began again with,
+	// both lie over ground it had covered. They are listed once.
 	Duplicates int
 	// BeganAgain says that no card of a page was left in the archive to carry
 	// the cursor, so the walk started over where it began.
