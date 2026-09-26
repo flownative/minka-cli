@@ -281,7 +281,8 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   project. Everything the run does with all that rests on the invented account.
   Invented for want of anything to measure: that an inbox lists its mail newest
   first; a mail whose `status` says anything but `active`, the account holding
-  none, so the shelf becoming the trash has never been seen; an answer whose
+  none, so the shelf becoming the trash has never been seen; a mail that says
+  nothing of its status, which Basecamp always names; an answer whose
   `status` says anything at all, because Basecamp names none; a sender that is
   no address; a mail without a subject and one whose subject is longer than a
   title holds; a mail whose body is nothing but a file the source no longer has,

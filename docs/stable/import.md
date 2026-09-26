@@ -569,6 +569,10 @@ point at is in the bundle before it.
   A mail Basecamp names nobody for comes with `createdBy` `null`, which Minka
   gives to the owner of the organization without a word; the run counts them
   (`forwards.withoutAForwarder`) and a `notice` says so.
+  A record of Basecamp that says nothing of what became of it is in use, as the
+  format reads an absent `status`: Basecamp names one on a mail and none on an
+  answer, and reading silence as a word nobody knows would lose every answer of
+  an account the day the one turned into the other.
   `status` is `active` or `trashed`. **What the source keeps on its shelf
   becomes the trash** (C-058), counted in `forwards.fromTheShelf` and named in
   a `notice`: Minka gives a forward no shelf, its trash holds the mail with

@@ -448,3 +448,26 @@ func TestAMailLongerThanMinkaHoldsIsCounted(t *testing.T) {
 		t.Errorf("the longest mail is %d characters", got)
 	}
 }
+
+// A record that says nothing of what became of it is in use, as the format
+// reads an absent status. Basecamp names one on a mail and none on an answer,
+// and a run that read silence as a word it does not know would lose every
+// answer of an account the day the one changed into the other.
+func TestARecordThatSaysNothingOfItsStatusIsInUse(t *testing.T) {
+	account := fakebasecamp.New()
+	theMail(t, account, 9302).SaysNothingOfItsStatus = true
+	dir, result := extract(t, account, forwardProject)
+
+	if got := recordWithID(t, records(t, dir, bundle.Forwards), "9302")["status"]; got != bundle.StatusActive {
+		t.Errorf("the mail that says nothing of its status comes as %v", got)
+	}
+	// The answers of the fake say nothing of theirs either, and they are here.
+	if len(records(t, dir, bundle.ForwardReplies)) != 2 {
+		t.Errorf("%d answers by mail, want the two", len(records(t, dir, bundle.ForwardReplies)))
+	}
+	for _, one := range result.RecordsLeftOut {
+		if one.Record == "forward" && one.Value == "" {
+			t.Errorf("a mail was left out for saying nothing of its status: %+v", one)
+		}
+	}
+}

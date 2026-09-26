@@ -12,19 +12,21 @@ import (
 type Forward struct {
 	ID int64
 	// Status is "active" when empty. ShownStatus replaces what the forward says
-	// about it, wherever it is listed.
-	Status      string
-	ShownStatus string
-	Subject     string
-	From        string
-	Content     string
-	Creator     *Person
-	CreatedAt   string
-	UpdatedAt   string
-	Files       []File
-	Replies     []Reply
-	Comments    []Comment
-	Boosts      []Boost
+	// about it, and SaysNothingOfItsStatus leaves the field out of the answer
+	// altogether, which is a Basecamp nobody has met.
+	Status                 string
+	ShownStatus            string
+	SaysNothingOfItsStatus bool
+	Subject                string
+	From                   string
+	Content                string
+	Creator                *Person
+	CreatedAt              string
+	UpdatedAt              string
+	Files                  []File
+	Replies                []Reply
+	Comments               []Comment
+	Boosts                 []Boost
 	// VisibleToClients is what the forward says about clients, which a bundle has
 	// no word for: an Email forwards tool is shown to them as a whole.
 	VisibleToClients *bool
@@ -241,6 +243,9 @@ func (a *Account) forwardJSON(p *Project, forward *Forward) map[string]any {
 		// forward neither.
 		"replies_url": fmt.Sprintf("%sbuckets/%d/inbox_forwards/%d/replies.json", a.root(), p.ID, forward.ID),
 		"created_at":  forward.CreatedAt, "updated_at": forward.UpdatedAt,
+	}
+	if forward.SaysNothingOfItsStatus {
+		delete(answer, "status")
 	}
 	if forward.VisibleToClients != nil {
 		answer["visible_to_clients"] = *forward.VisibleToClients
