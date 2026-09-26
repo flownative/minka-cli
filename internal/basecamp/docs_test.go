@@ -261,7 +261,7 @@ func TestTheFoldersOfATheBundleStandParentsFirstAndEachKindFromTheBottomUp(t *te
 		t.Errorf("the documents stand in the order %v", got)
 	}
 	if got := sourceIDs(records(t, dir, bundle.Uploads)); !reflect.DeepEqual(got,
-		[]string{"9269", "9264", "9263", "9267", "9261", "9270", "9260", "9265"}) {
+		[]string{"9269", "9276", "9264", "9263", "9267", "9261", "9270", "9260", "9265"}) {
 		t.Errorf("the uploads stand in the order %v", got)
 	}
 }
@@ -305,7 +305,7 @@ func TestTheStatusOfAnEntryIsItsOwnAndNeverItsFoldersS(t *testing.T) {
 		t.Errorf("the documents by status are %v", got)
 	}
 	if got := result.Docs.UploadsByStatus; !reflect.DeepEqual(got,
-		map[string]int{bundle.StatusActive: 6, bundle.StatusArchived: 1, bundle.StatusTrashed: 1}) {
+		map[string]int{bundle.StatusActive: 7, bundle.StatusArchived: 1, bundle.StatusTrashed: 1}) {
 		t.Errorf("the uploads by status are %v", got)
 	}
 }
@@ -537,20 +537,24 @@ func TestNoCommentAndNoBoostOfAFolderIsWrittenOrAskedFor(t *testing.T) {
 	}
 }
 
-// A document or an upload whose whole text is a file no run will ever bring is
-// written all the same and named: Minka keeps nothing of such a record and waits
-// for the file, so it arrives there only if the source hands the file out again.
-// A run that said nothing would leave the record, its comments and its boosts out
-// of Minka with the number nobody looked at.
-func TestADocumentThatSaysNothingButAFileThatNeverComesIsWrittenAndNamed(t *testing.T) {
+// A record that stands or falls with a file no run will ever bring is written
+// all the same and named: Minka keeps nothing of such a record and asks for the
+// file again on every run, so it arrives there only once the source hands the
+// file out again. That is a document whose whole text is such a file, and an
+// upload whose own file is one. A run that said nothing would leave the record,
+// its comments and its boosts out of Minka with the number nobody looked at.
+func TestARecordThatStandsOrFallsWithAFileThatNeverComesIsWrittenAndNamed(t *testing.T) {
 	dir, result := extract(t, fakebasecamp.New(), docsProject)
 
-	waiting := recordWithID(t, records(t, dir, bundle.Documents), "9245")
-	if waiting["body"] != `<import-attachment ref="attachment-5402"></import-attachment>` {
-		t.Errorf("the document of nothing but a file carries %v", waiting["body"])
+	held := recordWithID(t, records(t, dir, bundle.Documents), "9245")
+	if held["body"] != `<import-attachment ref="attachment-5402"></import-attachment>` {
+		t.Errorf("the document of nothing but a file carries %v", held["body"])
 	}
-	if got := result.Docs.OnlyAFileNoRunWillBring; !reflect.DeepEqual(got, []string{"9245"}) {
-		t.Errorf("the records waiting for a file that never comes are %v, want the one document", got)
+	if got := recordWithID(t, records(t, dir, bundle.Uploads), "9276")["file"]; got != "upload-9276" {
+		t.Errorf("the upload whose file is gone names %v", got)
+	}
+	if got := result.Docs.OnlyAFileNoRunWillBring; !reflect.DeepEqual(got, []string{"9245", "9276"}) {
+		t.Errorf("the records that stand or fall with a file that never comes are %v", got)
 	}
 
 	// A document that says something beside the file is not one of them: it keeps
@@ -558,8 +562,18 @@ func TestADocumentThatSaysNothingButAFileThatNeverComesIsWrittenAndNamed(t *test
 	account := fakebasecamp.New()
 	theDocument(t, account, 9245).Content = `<div>See this</div>` + theDocument(t, account, 9245).Content
 	_, result = extract(t, account, docsProject)
-	if len(result.Docs.OnlyAFileNoRunWillBring) != 0 {
-		t.Errorf("a document with words beside its file is named as waiting: %v", result.Docs.OnlyAFileNoRunWillBring)
+	if got := result.Docs.OnlyAFileNoRunWillBring; !reflect.DeepEqual(got, []string{"9276"}) {
+		t.Errorf("a document with words beside its file is named among %v", got)
+	}
+
+	// A file this run merely could not fetch is no file that will never come:
+	// the upload waits for it, and the run after this one brings both.
+	account = fakebasecamp.New()
+	theUpload(t, account, 9276).Gone = false
+	account.FailFileOf[fakebasecamp.StoredKeyOfUpload(9276)] = &basecamp.Error{Kind: basecamp.Network, Message: "the network failed"}
+	_, result = extract(t, account, docsProject)
+	if got := result.Docs.OnlyAFileNoRunWillBring; !reflect.DeepEqual(got, []string{"9245"}) {
+		t.Errorf("an upload whose file only failed this time is named among %v", got)
 	}
 }
 

@@ -102,8 +102,9 @@ type UploadedFile struct {
 // document and an upload of a status nobody knows, an upload Basecamp holds no
 // stored file for with a comment and a boost on it, one whose file name is
 // longer than a title holds, one without a name at all, records the account
-// lists twice, an upload on the shelf and one in the trash inside a folder that
-// is in use, and comments and boosts on a document and on an upload.
+// lists twice, an upload on the shelf, one in the trash inside a folder that is
+// in use, one whose file the source no longer has, and comments and boosts on a
+// document and on an upload.
 //
 // The folder inside the first one is the case the whole tool turns on: it is
 // hidden from clients below a folder the source shows, which is what makes Minka
@@ -227,6 +228,10 @@ func docsProject(ada, grace, former Person, tool func(int64, string, string, str
 		// On the shelf at the top of the tool.
 		{ID: 9269, Status: "archived", Title: "last-year.pdf", Filename: "last-year.pdf", ContentType: "application/pdf", Bytes: 480,
 			Creator: &grace, CreatedAt: at(9, 15), UpdatedAt: at(10, 15)},
+		// The one file the upload stands for is one the source no longer has, so
+		// no run will ever bring it and Minka keeps nothing of the upload.
+		{ID: 9276, Title: "lost.pdf", Filename: "lost.pdf", ContentType: "application/pdf", Bytes: 220, Gone: true,
+			Creator: &ada, CreatedAt: at(9, 16), UpdatedAt: at(9, 16)},
 	}
 
 	// A second tool of the same kind: a project may hold several.

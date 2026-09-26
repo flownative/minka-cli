@@ -36,8 +36,9 @@ func clientPeople() (iris, otto, nora, cora, tessa Person) {
 // a tool shown to clients holding a post and a list that are kept from them, a
 // tool kept from them holding a post and a question that are shown, and a group
 // and a to-do whose word falls to what they hang on, and an Email forwards tool
-// the clients do not see. Its Docs & Files is the tool a run does not extract,
-// and one of its two Forwards is switched off; one of its questions is asked of a
+// the clients do not see. Its Docs & Files is shown to them and holds nothing,
+// what stands in one being the docs project's to show, and one of its two
+// Forwards is switched off; one of its questions is asked of a
 // client beside an employee, the other of clients alone.
 //
 // Its members are an employee and five clients, so that a run says how many

@@ -391,7 +391,8 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   Invented for want of anything to measure: a folder, a document or an upload
   whose status is none of the three; an upload in a cloud, with a comment and a
   boost on it; a file name longer than a title holds and an upload without a
-  name at all; a document whose whole text is a file the source no longer has;
+  name at all; a document whose whole text is a file the source no longer has,
+  and an upload whose own file is one;
   a document and a description longer than Minka holds; an entry the source
   lists twice; a folder the bundle cannot carry with a folder, a document and
   an upload standing in it; and a Docs & Files tool that is switched off with an
