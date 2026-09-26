@@ -385,8 +385,11 @@ func TestAWalkFallsBackThroughOneLostBoundaryAfterAnother(t *testing.T) {
 	if got := cursorsAskedWith(e); !slices.Equal(got, want) {
 		t.Fatalf("the pages were asked for behind\n got: %q\nwant: %q", got, want)
 	}
-	if !strings.Contains(env.Notice, "2 cards came a second time") {
-		t.Errorf("notice %q does not count what was swallowed", env.Notice)
+	// A card the archive will not be read behind has left it, so the page behind
+	// an earlier card of the same page no longer holds it: the fallback of a lost
+	// boundary costs no card twice.
+	if strings.Contains(env.Notice, "came a second time") {
+		t.Errorf("a card that left the archive was listed again: %q", env.Notice)
 	}
 	if strings.Contains(env.Notice, "began again") {
 		t.Errorf("the walk started over although cards of the page were left: %q", env.Notice)
@@ -436,8 +439,8 @@ func TestAWalkCarriesOnBehindAnotherCardOfTheSamePage(t *testing.T) {
 	if got := archiveIDs(t, env.Data); !slices.Equal(got, ids) {
 		t.Fatalf("%d cards of %d, each once: %q", len(got), len(ids), got)
 	}
-	if !strings.Contains(env.Notice, "1 card came a second time") {
-		t.Errorf("notice %q does not count what was swallowed", env.Notice)
+	if strings.Contains(env.Notice, "came a second time") {
+		t.Errorf("a card that left the archive was listed again: %q", env.Notice)
 	}
 	if strings.Contains(env.Notice, "began again") {
 		t.Errorf("the walk started over although a card of the page was left: %q", env.Notice)
@@ -450,19 +453,21 @@ func TestAWalkCarriesOnBehindAnotherCardOfTheSamePage(t *testing.T) {
 func TestAWalkWithNoCardLeftToCarryOnBehindBeginsAgainAndSaysSo(t *testing.T) {
 	e := newTestEnv(t)
 	ids := anArchiveOf(e, 3)
-	// A page of one leaves one candidate, and it is the card the archive will
-	// not be read behind: there is nothing of that page to fall back through.
-	e.server.ForgetsTheArchiveBoundariesOf = []string{ids[0]}
+	// A page of one leaves no candidate at all, so the card the archive will not
+	// be read behind sends the walk back to where it began; the card the walk
+	// reaches there has left the archive as well, and then there is nowhere left
+	// to go.
+	e.server.ForgetsTheArchiveBoundariesOf = []string{ids[0], ids[1]}
 
 	env, r := e.runJSON("", "boards", "archive", e.fixture.Board.ID, "--limit", "1", "--all")
 	expectCode(t, r, ExitValidation)
 	if env.Meta["apiCode"] != "archivedCardsBeforeUnknown" {
 		t.Fatalf("apiCode %v", env.Meta["apiCode"])
 	}
-	if !strings.Contains(env.Notice, "began again") || !strings.Contains(env.Notice, "the run broke off after 1 card") {
+	if !strings.Contains(env.Notice, "began again") || !strings.Contains(env.Notice, "the run broke off after 2 cards") {
 		t.Errorf("notice %q", env.Notice)
 	}
-	if got := archiveIDs(t, env.Data); !slices.Equal(got, ids[:1]) {
+	if got := archiveIDs(t, env.Data); !slices.Equal(got, ids[:2]) {
 		t.Errorf("a walk that broke off hands over what it read: %s", env.Data)
 	}
 	if !strings.Contains(env.Hint, "again from the beginning") {
@@ -635,6 +640,43 @@ func TestACardTrashedOutOfTheArchiveKeepsNothingOfIt(t *testing.T) {
 	expectCode(t, r, ExitOK)
 	if got := archiveIDs(t, env.Data); len(got) != 0 {
 		t.Fatalf("the archive of the board holds %q", got)
+	}
+}
+
+// A page asked for to check the end of the list proves the end only where it is
+// shorter than asked for. A full one of cards already read proves nothing: a run
+// that began again has read far beyond the page it checks against, so a page of
+// known cards says nothing about what lies behind it. The run here loses two
+// boundaries of one page, begins again, and meets the race on a cursor that only
+// the second walk asks with — and the two cards behind that answer lay in the
+// archive the whole time.
+func TestAFullPageOfKnownCardsIsNoEndOfTheList(t *testing.T) {
+	e := newTestEnv(t)
+	ids := anArchiveOf(e, 10)
+	e.server.ForgetsTheArchiveBoundariesOf = []string{ids[1], ids[5], ids[4]}
+	e.server.RacesOnTheArchiveBoundariesOf = []string{ids[2]}
+
+	env, r := e.runJSON("", "boards", "archive", e.fixture.Board.ID, "--limit", "2", "--all")
+	expectCode(t, r, ExitOK)
+	if got := archiveIDs(t, env.Data); !slices.Equal(got, ids) {
+		t.Fatalf("%d cards of %d, each once: %q", len(got), len(ids), got)
+	}
+	// The path: the first walk loses both cards of its page and begins again, the
+	// second meets the empty answer behind a full page, checks it behind the card
+	// before it — and that answer holds two cards it has read, which is no end.
+	want := []string{
+		"", ids[1], ids[0], ids[3], ids[5], ids[4],
+		"", ids[2], ids[0], ids[3], ids[7], ids[9], ids[8],
+	}
+	if got := cursorsAskedWith(e); !slices.Equal(got, want) {
+		t.Fatalf("the pages were asked for behind\n got: %q\nwant: %q", got, want)
+	}
+	if !strings.Contains(env.Notice, "began again") {
+		t.Errorf("notice %q does not say that the run began again", env.Notice)
+	}
+	// The end of this run was checked: the last page was shorter than asked for.
+	if strings.Contains(env.Notice, "could not be checked") {
+		t.Errorf("notice %q doubts an end it checked", env.Notice)
 	}
 }
 

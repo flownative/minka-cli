@@ -178,7 +178,12 @@ func (c *Client) WholeArchiveOf(ctx context.Context, boardID, before string, pag
 			return run, err
 		}
 		if settlingTheEnd {
-			if !holdsACardNotYetRead(cards, seen) {
+			// Only a page shorter than asked for reaches the end of the list, and
+			// only one that brings nothing new says the empty answer before it was
+			// that end. A full page proves nothing however well known its cards
+			// are: a walk that began again has read far beyond the page it checks
+			// against, and the list goes on behind it.
+			if len(cards) < pageSize && !holdsACardNotYetRead(cards, seen) {
 				return run, nil
 			}
 			settlingTheEnd = false

@@ -47,10 +47,14 @@ A walk therefore keeps the ids of the **whole** page it last read. On
 that page towards its first, instead of starting again at the first page. An
 empty answer behind a full page is met with the same fallback rather than with
 the cursor it just used: where the list has really ended, the page behind the
-card before the cursor holds the cursor's card and nothing beyond it, and where
-the list went on, it holds what follows — so one request settles it either way,
-where the same cursor asked again can only be refused for a card that is gone or
-come back as empty as before.
+card before the cursor is **shorter than asked for and holds nothing the run has
+not read**, and where the list went on, it holds what follows — so one request
+settles it either way, where the same cursor asked again can only be refused for
+a card that is gone or come back as empty as before.
+
+Both halves of that are needed. A **full** page proves nothing however well known
+its cards are: a run that has begun again read far beyond the page it is checking
+against, so known cards there say nothing about what lies behind them.
 
 That holds as long as a card of the last page is left to ask behind. Where none
 is, the same cursor is asked once more and a second empty answer closes the list
