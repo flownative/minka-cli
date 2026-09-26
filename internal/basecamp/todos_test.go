@@ -1,8 +1,11 @@
 package basecamp_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"reflect"
 	"slices"
 	"strconv"
@@ -669,6 +672,62 @@ func TestATodoWithoutItsTimesEndsTheRun(t *testing.T) {
 		break_(account)
 		if err := extractExpectingAnError(t, account, todoProject); err.Message == "" {
 			t.Errorf("%s: the run ended without saying why", what)
+		}
+	}
+}
+
+// A dry run walks the To-dos tools the same way and reports the same, and it
+// downloads nothing.
+func TestADiscardedRunOverToDosAsksTheSameAndCountsTheSame(t *testing.T) {
+	written := fakebasecamp.New()
+	dir, want := extract(t, written, todoProject)
+
+	dry := fakebasecamp.New()
+	writer := bundle.Discard()
+	extractor := basecamp.Extractor{Source: dry, Avatars: dry, Files: dry}
+	got, err := extractor.Extract(t.Context(), []string{todoProject}, writer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(dry.Requests, written.Requests) {
+		t.Errorf("a dry run asked for\n%v\na real one for\n%v", dry.Requests, written.Requests)
+	}
+	if want = asADryRunKnowsIt(want); !reflect.DeepEqual(got, want) {
+		t.Errorf("a dry run reports\n%+v\na real one\n%+v", got, want)
+	}
+	if len(dry.Downloads) != 0 || len(written.Downloads) == 0 {
+		t.Errorf("a dry run downloaded %d files, a real one %d", len(dry.Downloads), len(written.Downloads))
+	}
+	wantCounts := map[bundle.Kind]int{bundle.People: 4, bundle.Projects: 1, bundle.Tools: 2,
+		bundle.TodoLists: 5, bundle.TodoGroups: 4, bundle.Todos: 8,
+		bundle.Comments: 2, bundle.Reactions: 4, bundle.Attachments: 5}
+	if counts := writer.Counts(); !reflect.DeepEqual(counts, wantCounts) {
+		t.Errorf("counts %v, want %v", counts, wantCounts)
+	}
+	for kind, count := range wantCounts {
+		if len(records(t, dir, kind)) != count {
+			t.Errorf("the real run wrote %d %s, the dry one counted %d", len(records(t, dir, kind)), kind, count)
+		}
+	}
+}
+
+// Two runs over an unchanged account write the same bytes: the order a bundle
+// puts its records in is its own, and no map decides it.
+func TestTwoRunsOverTheSameToDosWriteTheSameBytes(t *testing.T) {
+	first, _ := extract(t, fakebasecamp.New(), todoProject)
+	second, _ := extract(t, fakebasecamp.New(), todoProject)
+
+	for _, name := range []string{"todolists.jsonl", "todogroups.jsonl", "todos.jsonl", "comments.jsonl", "reactions.jsonl", "attachments.jsonl", "people.jsonl"} {
+		a, err := os.ReadFile(filepath.Join(first, name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		b, err := os.ReadFile(filepath.Join(second, name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !bytes.Equal(a, b) {
+			t.Errorf("%s differs between two runs:\n%s\n%s", name, a, b)
 		}
 	}
 }
