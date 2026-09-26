@@ -236,7 +236,8 @@ func (e *Extractor) writeQuestion(ctx context.Context, w *bundle.Writer, bucket,
 		Paused:          when.paused,
 		// What the source says of a question comes through: one it has shelved
 		// would otherwise arrive active and start asking people again.
-		Status: found.Status,
+		Status:           found.Status,
+		VisibleToClients: visibleToClientsOf(found.recording),
 	})
 	if err != nil {
 		return err

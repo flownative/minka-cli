@@ -30,6 +30,16 @@ type Person struct {
 	TimeZone  string
 	CreatedAt string
 	UpdatedAt string
+	// Client is the flag Basecamp puts on everybody and Company whom a client
+	// belongs to, which is null for anybody else.
+	Client  bool
+	Company *Company
+}
+
+// Company is a company of the account, as a person and a project name one.
+type Company struct {
+	ID   int64
+	Name string
 }
 
 type Project struct {
@@ -46,6 +56,13 @@ type Project struct {
 	Categories []Category
 	// URL replaces the address the account would give the project.
 	URL string
+	// ClientsEnabled tells that the project works with clients and ClientCompany
+	// names the company, which the answer holds only where it does.
+	// SaysNothingAboutClients leaves both keys out, as a source that knows
+	// nothing of clients answers.
+	ClientsEnabled          bool
+	ClientCompany           *Company
+	SaysNothingAboutClients bool
 }
 
 // Tool is an entry of a project's dock. Type is the segment of its address,
@@ -74,6 +91,9 @@ type Tool struct {
 	// TodoLists are the lists of a To-dos tool, in the order the account shows
 	// them.
 	TodoLists []TodoList
+	// VisibleToClients is what the recording of the tool says about clients; the
+	// dock entry says nothing of it either way.
+	VisibleToClients *bool
 }
 
 // Account is the fake. It is a basecamp.Source, a basecamp.AvatarFetcher and
@@ -147,7 +167,8 @@ func (a *Account) UsersOnly() {
 // and a tool whose creator has left; their one board and their one To-dos tool
 // are empty. The third
 // project holds the boards, the fourth the message boards and the chats, the
-// fifth the files.
+// fifth the files, and the last the clients, with the four kinds of client in
+// its list of people.
 func New() *Account {
 	ada := Person{ID: 101, Name: "Ada Example", Email: "ada@example.test", CreatedAt: "2020-01-01T08:00:00.000Z", UpdatedAt: "2024-01-01T08:00:00.000Z"}
 	grace := Person{ID: 102, Name: "Grace Sample", Email: "grace@example.test", CreatedAt: "2020-02-01T08:00:00.000Z", UpdatedAt: "2024-02-01T08:00:00.000Z"}
@@ -163,6 +184,8 @@ func New() *Account {
 			CreatedAt: fmt.Sprintf("2022-05-%02dT10:00:00.000Z", id-9000), UpdatedAt: fmt.Sprintf("2025-05-%02dT10:00:00.000Z", id-9000)}
 	}
 
+	iris, otto, nora, cora := clientPeople()
+
 	bugs := tool(9003, "kanban_board", "card_tables", "Bugs", true, 3, &former)
 	for i, kind := range []string{Triage, NotNow, Done} {
 		bugs.Lists = append(bugs.Lists, List{ID: 9091 + int64(i), Type: kind, Title: "A column every table has", Creator: &former,
@@ -172,7 +195,7 @@ func New() *Account {
 	return &Account{
 		ID:       "4242",
 		PageSize: 2,
-		People:   []Person{grace, ada, edsger, linus, niklaus, bot, deleted},
+		People:   []Person{grace, ada, edsger, linus, niklaus, bot, deleted, iris, otto, nora, cora},
 		Former:   former,
 		Bot:      bot,
 		Deleted:  deleted,
@@ -206,6 +229,7 @@ func New() *Account {
 			referenceProject(ada, grace, tool),
 			checkinProject(ada, grace, linus, edsger, niklaus, deleted, tool),
 			todoProject(ada, grace, edsger, former, tool),
+			clientProject(ada, iris, otto, nora, cora, tool),
 		},
 		SubtasksURL:  map[int64]string{},
 		Fail:         map[string]error{},
@@ -236,6 +260,7 @@ func (a *Account) person(p Person) map[string]any {
 	answer := map[string]any{
 		"id": p.ID, "name": p.Name, "email_address": p.Email, "avatar_url": a.avatarURL(p),
 		"created_at": p.CreatedAt, "updated_at": p.UpdatedAt, "personable_type": "User",
+		"client": p.Client, "company": companyJSON(p.Company),
 	}
 	if p.TimeZone != "" {
 		answer["time_zone"] = p.TimeZone
@@ -244,10 +269,23 @@ func (a *Account) person(p Person) map[string]any {
 	case "":
 	case "Integration":
 		answer["personable_type"], answer["email_address"] = p.Kind, nil
+	case "Client":
+		// The kind Basecamp had for a client before the flag, and nobody who is
+		// gone: no time of death.
+		answer["personable_type"] = p.Kind
 	default:
 		answer["personable_type"], answer["tombstoned_at"] = p.Kind, p.UpdatedAt
 	}
 	return answer
+}
+
+// companyJSON is a company as Basecamp answers one: its identifier and its
+// name, or null where it names none.
+func companyJSON(c *Company) any {
+	if c == nil {
+		return nil
+	}
+	return map[string]any{"id": c.ID, "name": c.Name}
 }
 
 var (
@@ -305,6 +343,9 @@ func (a *Account) Get(_ context.Context, path string) ([]byte, error) {
 			for _, tool := range p.Dock {
 				if strconv.FormatInt(tool.ID, 10) == match[3] && tool.Type == match[2] {
 					answer := map[string]any{"id": tool.ID, "title": tool.Title, "created_at": tool.CreatedAt, "updated_at": tool.UpdatedAt}
+					if tool.VisibleToClients != nil {
+						answer["visible_to_clients"] = *tool.VisibleToClients
+					}
 					if tool.Creator != nil {
 						answer["creator"] = a.person(*tool.Creator)
 					}
@@ -372,10 +413,18 @@ func (a *Account) projectJSON(p Project) map[string]any {
 	if address == "" {
 		address = fmt.Sprintf("%sprojects/%d.json", a.root(), p.ID)
 	}
-	return map[string]any{
+	answer := map[string]any{
 		"id": p.ID, "name": p.Name, "description": p.Description, "status": p.Status,
 		"created_at": p.CreatedAt, "updated_at": p.UpdatedAt, "url": address, "dock": dock,
 	}
+	if !p.SaysNothingAboutClients {
+		answer["clients_enabled"] = p.ClientsEnabled
+		// Only a project that works with clients names a company.
+		if p.ClientCompany != nil {
+			answer["client_company"] = companyJSON(p.ClientCompany)
+		}
+	}
+	return answer
 }
 
 func (a *Account) Fetch(_ context.Context, address string) (basecamp.Avatar, error) {

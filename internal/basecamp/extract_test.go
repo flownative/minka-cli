@@ -103,15 +103,15 @@ func TestPeopleOfTheAccountComeWithEmailAvatarAndWhetherTheyAreStillThere(t *tes
 
 	want := []map[string]any{
 		{"sourceId": "99", "createdAt": "2019-01-01T08:00:00.000Z", "updatedAt": "2021-01-01T08:00:00.000Z", "createdBy": nil,
-			"name": "Former Colleague", "email": "former@example.test", "avatar": "avatar-99", "retired": true},
+			"name": "Former Colleague", "email": "former@example.test", "avatar": "avatar-99", "retired": true, "client": false},
 		{"sourceId": "101", "createdAt": "2020-01-01T08:00:00.000Z", "updatedAt": "2024-01-01T08:00:00.000Z", "createdBy": nil,
-			"name": "Ada Example", "email": "ada@example.test", "avatar": "avatar-101", "retired": false},
+			"name": "Ada Example", "email": "ada@example.test", "avatar": "avatar-101", "retired": false, "client": false},
 		{"sourceId": "102", "createdAt": "2020-02-01T08:00:00.000Z", "updatedAt": "2024-02-01T08:00:00.000Z", "createdBy": nil,
-			"name": "Grace Sample", "email": "grace@example.test", "avatar": "avatar-102", "retired": false},
+			"name": "Grace Sample", "email": "grace@example.test", "avatar": "avatar-102", "retired": false, "client": false},
 		{"sourceId": "103", "createdAt": "2020-03-01T08:00:00.000Z", "updatedAt": "2024-03-01T08:00:00.000Z", "createdBy": nil,
-			"name": "Linus Placeholder", "email": nil, "avatar": "avatar-103", "retired": false},
+			"name": "Linus Placeholder", "email": nil, "avatar": "avatar-103", "retired": false, "client": false},
 		{"sourceId": "104", "createdAt": "2020-04-01T08:00:00.000Z", "updatedAt": "2024-04-01T08:00:00.000Z", "createdBy": nil,
-			"name": "Edsger Invented", "email": "edsger@example.test", "avatar": nil, "retired": false},
+			"name": "Edsger Invented", "email": "edsger@example.test", "avatar": nil, "retired": false, "client": false},
 	}
 	if got := records(t, dir, bundle.People); !reflect.DeepEqual(got, want) {
 		t.Errorf("people:\n got %v\nwant %v", got, want)
@@ -156,9 +156,10 @@ func TestAProjectComesWithItsMembersAndItsDescriptionAsHTML(t *testing.T) {
 	want := []map[string]any{
 		{"sourceId": "7001", "createdAt": "2022-05-01T09:00:00.000Z", "updatedAt": "2025-06-01T09:00:00.000Z", "createdBy": nil,
 			"name": "Example Project", "description": "<p>First line<br>second &lt;line&gt;</p><p>Last &amp; least</p>",
-			"status": "active", "members": []any{"101", "102", "103", "104"}},
+			"status": "active", "members": []any{"101", "102", "103", "104"}, "clientAccess": false, "clientCompany": nil},
 		{"sourceId": "7002", "createdAt": "2023-01-01T09:00:00.000Z", "updatedAt": "2023-06-01T09:00:00.000Z", "createdBy": nil,
-			"name": "Second Project", "description": "", "status": "archived", "members": []any{"101"}},
+			"name": "Second Project", "description": "", "status": "archived", "members": []any{"101"},
+			"clientAccess": false, "clientCompany": nil},
 	}
 	if got := records(t, dir, bundle.Projects); !reflect.DeepEqual(got, want) {
 		t.Errorf("projects:\n got %v\nwant %v", got, want)
@@ -594,15 +595,15 @@ func endsBeforeAnythingElse(t *testing.T, change func(*fakebasecamp.Account), wa
 // Project 7002 has to do with Ada alone. The mask is on somebody the bundle
 // would not even hold: it still says that the identity sees no addresses.
 func TestOneMaskedAddressEndsTheRunBeforeAnythingElseIsAskedFor(t *testing.T) {
-	endsBeforeAnythingElse(t, func(a *fakebasecamp.Account) { a.People[4].Email = maskedAddress }, basecamp.Forbidden, "1 of 5")
+	endsBeforeAnythingElse(t, func(a *fakebasecamp.Account) { a.People[4].Email = maskedAddress }, basecamp.Forbidden, "1 of 9")
 }
 
 func TestMostAddressesBeingNoneEndsTheRunBeforeAnythingElseIsAskedFor(t *testing.T) {
 	endsBeforeAnythingElse(t, func(a *fakebasecamp.Account) {
-		for _, i := range []int{0, 2, 4} {
+		for _, i := range []int{0, 2, 4, 6, 7, 8} {
 			a.People[i].Email = "a\u25cf\u25cf@\u25cf\u25cf\u25cf.\u25cf\u25cf"
 		}
-	}, basecamp.API, "3 of 5")
+	}, basecamp.API, "6 of 9")
 }
 
 func TestSomebodyWithAnAddressThatIsNoneComesWithoutOneAndIsNamedByID(t *testing.T) {
@@ -644,8 +645,8 @@ func TestOnlyPeopleARecordRefersToComeIntoTheBundle(t *testing.T) {
 	for _, person := range records(t, dir, bundle.People) {
 		written = append(written, person["sourceId"].(string))
 	}
-	if !slices.Equal(written, []string{"101"}) || result.PeopleLeftOut != 6 {
-		t.Errorf("wrote %v and left %d out, want the one member and 6 left out", written, result.PeopleLeftOut)
+	if !slices.Equal(written, []string{"101"}) || result.PeopleLeftOut != 10 {
+		t.Errorf("wrote %v and left %d out, want the one member and 10 left out", written, result.PeopleLeftOut)
 	}
 	if len(account.AvatarRequests) != 1 || !strings.Contains(account.AvatarRequests[0], "/people/101/") {
 		t.Errorf("downloaded %v, want the avatar of the one person only", account.AvatarRequests)
@@ -655,7 +656,7 @@ func TestOnlyPeopleARecordRefersToComeIntoTheBundle(t *testing.T) {
 	}
 
 	_, result = extract(t, fakebasecamp.New(), "7001", "7002")
-	if result.PeopleLeftOut != 3 {
-		t.Errorf("%d left out, want the three nobody refers to", result.PeopleLeftOut)
+	if result.PeopleLeftOut != 7 {
+		t.Errorf("%d left out, want the seven nobody refers to", result.PeopleLeftOut)
 	}
 }

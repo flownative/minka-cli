@@ -31,6 +31,19 @@ type person struct {
 	TimeZone  string `json:"time_zone"`
 	CreatedAt string `json:"created_at"`
 	UpdatedAt string `json:"updated_at"`
+	// Client tells that Basecamp counts somebody a client and Company names whom
+	// they belong to. Basecamp says both of everybody, on the list of the account,
+	// among the people of a project and on the creator of a record alike, so
+	// nobody misses the word for having turned up as an author alone.
+	Client  bool                `json:"client"`
+	Company *companyAtTheSource `json:"company"`
+}
+
+// companyAtTheSource is a company Basecamp names: for a client, and for a
+// project that works with clients.
+type companyAtTheSource struct {
+	ID   int64  `json:"id"`
+	Name string `json:"name"`
 }
 
 type project struct {
@@ -42,6 +55,11 @@ type project struct {
 	UpdatedAt   string      `json:"updated_at"`
 	URL         string      `json:"url"`
 	Dock        []dockEntry `json:"dock"`
+	// ClientsEnabled tells that the project works with clients and ClientCompany
+	// names the company; Basecamp leaves the company out of a project that works
+	// with none. Nil is a source that says nothing of clients at all.
+	ClientsEnabled *bool               `json:"clients_enabled"`
+	ClientCompany  *companyAtTheSource `json:"client_company"`
 }
 
 type dockEntry struct {
@@ -58,6 +76,10 @@ type recording struct {
 	CreatedAt string  `json:"created_at"`
 	UpdatedAt string  `json:"updated_at"`
 	Creator   *person `json:"creator"`
+	// VisibleToClients is whether Basecamp shows the record to clients. Every
+	// recording carries it, a tool and what stands in one alike; a dock entry
+	// carries none of it, so it is read where the tool itself is read.
+	VisibleToClients *bool `json:"visible_to_clients"`
 }
 
 // toolKinds maps the tools of a Basecamp project that Minka has a counterpart
@@ -163,6 +185,21 @@ type Result struct {
 	// project that Basecamp refused the identity. They are passed over, so a
 	// project may come without a creator it would otherwise have.
 	CreatorProbesRefused int
+	// PeopleAsClients counts the people the bundle says are clients of the source,
+	// and ClientMemberships the memberships of a project that are theirs: Minka
+	// leaves a client out of the members of every project, so that many
+	// memberships of the bundle do not arrive.
+	PeopleAsClients   int
+	ClientMemberships int
+	// CompaniesLeftOut counts the records that name a company without an
+	// identifier or without a name, which no bundle carries: such a record comes
+	// saying that the source names none. It names no company, because a company
+	// says whom somebody works for.
+	CompaniesLeftOut int
+	// VisibilityLeftToTheContainer counts the records the source says whether
+	// clients see them although a bundle has no word for it of such a record:
+	// they follow what they hang on.
+	VisibilityLeftToTheContainer int
 	// CardsByStatus counts the cards of the bundle: active, archived, trashed.
 	CardsByStatus map[string]int
 	// CardsOnHold counts the cards that were set aside within their column.
@@ -269,6 +306,11 @@ type Extractor struct {
 	// creatorProbesRefused counts the dock entries asked for the creator of a
 	// project that the identity may not see.
 	creatorProbesRefused int
+
+	peopleAsClients              int
+	clientMemberships            int
+	companiesLeftOut             int
+	visibilityLeftToTheContainer int
 	// talks are the message boards, chats and questionnaires of the projects
 	// walked so far.
 	talks []talk
@@ -356,6 +398,7 @@ func (e *Extractor) Extract(ctx context.Context, projectIDs []string, w *bundle.
 	e.skipped = map[skippedKey]int{}
 	e.missing = []MissingFile{}
 	e.creatorProbesRefused = 0
+	e.peopleAsClients, e.clientMemberships, e.companiesLeftOut, e.visibilityLeftToTheContainer = 0, 0, 0, 0
 	e.account, e.apiRoot = "", ""
 	e.cardsByStatus = map[string]int{bundle.StatusActive: 0, bundle.StatusArchived: 0, bundle.StatusTrashed: 0}
 	e.cardsOnHold, e.cardsLeftOut, e.commentsTrashed, e.bodies = 0, 0, 0, BodyCounts{}
@@ -432,10 +475,16 @@ func (e *Extractor) Extract(ctx context.Context, projectIDs []string, w *bundle.
 		InvalidAddresses:     e.people.invalidAddresses(),
 		PeopleLeftOut:        e.people.leftOut(),
 		CreatorProbesRefused: e.creatorProbesRefused,
-		CardsByStatus:        e.cardsByStatus,
-		CardsOnHold:          e.cardsOnHold,
-		CardsLeftOut:         e.cardsLeftOut,
-		CommentsTrashed:      e.commentsTrashed,
+
+		PeopleAsClients:              e.peopleAsClients,
+		ClientMemberships:            e.clientMemberships,
+		CompaniesLeftOut:             e.companiesLeftOut,
+		VisibilityLeftToTheContainer: e.visibilityLeftToTheContainer,
+
+		CardsByStatus:   e.cardsByStatus,
+		CardsOnHold:     e.cardsOnHold,
+		CardsLeftOut:    e.cardsLeftOut,
+		CommentsTrashed: e.commentsTrashed,
 
 		PostsByStatus:      e.postsByStatus,
 		PostsLeftOut:       e.postsLeftOut,
@@ -528,6 +577,9 @@ func (e *Extractor) extractProject(ctx context.Context, id int64, w *bundle.Writ
 		if reference != nil {
 			memberIDs = append(memberIDs, *reference)
 			e.members[id][members[i].ID] = true
+			if seen, referred := e.people.known(members[i].ID); referred && seen.aClient() {
+				e.clientMemberships++
+			}
 		}
 	}
 
@@ -569,12 +621,15 @@ func (e *Extractor) extractProject(ctx context.Context, id int64, w *bundle.Writ
 		return err
 	}
 	projectID := sourceID(p.ID)
+	clientAccess, clientCompany := e.clientsOf(p)
 	err = w.Add(bundle.Projects, bundle.Project{
-		Record:      bundle.Record{SourceID: projectID, CreatedAt: p.CreatedAt, UpdatedAt: p.UpdatedAt, CreatedBy: creator},
-		Name:        p.Name,
-		Description: textToHTML(p.Description),
-		Status:      p.Status,
-		Members:     memberIDs,
+		Record:        bundle.Record{SourceID: projectID, CreatedAt: p.CreatedAt, UpdatedAt: p.UpdatedAt, CreatedBy: creator},
+		Name:          p.Name,
+		Description:   textToHTML(p.Description),
+		Status:        p.Status,
+		Members:       memberIDs,
+		ClientAccess:  clientAccess,
+		ClientCompany: clientCompany,
 	})
 	if err != nil {
 		return err
@@ -589,11 +644,12 @@ func (e *Extractor) extractProject(ctx context.Context, id int64, w *bundle.Writ
 		}
 		kind := toolKinds[tool.entry.Name]
 		err = w.Add(bundle.Tools, bundle.Tool{
-			Record:          record,
-			ProjectSourceID: projectID,
-			Kind:            kind,
-			Name:            tool.entry.Title,
-			Position:        tool.entry.Position,
+			Record:           record,
+			ProjectSourceID:  projectID,
+			Kind:             kind,
+			Name:             tool.entry.Title,
+			Position:         tool.entry.Position,
+			VisibleToClients: visibleToClientsOf(tool.details.recording),
 		})
 		if err != nil {
 			return err
@@ -822,6 +878,13 @@ func (e *Extractor) writePeople(ctx context.Context, w *bundle.Writer) (int, err
 		}
 		if seen.EmailAddress != "" {
 			record.Email = &seen.EmailAddress
+		}
+		// A company stands on a client alone: Minka reads it nowhere else, and
+		// where somebody who is not a client works is nothing an import needs.
+		record.Client = seen.aClient()
+		if record.Client {
+			e.peopleAsClients++
+			record.Company = e.companyOf(seen.Company)
 		}
 
 		if seen.AvatarURL != "" {

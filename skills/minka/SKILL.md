@@ -820,6 +820,21 @@ this:
 - A person comes with `retired: true` unless Basecamp calls them a user: a
   bot, somebody who was deleted and an outsider are authors and nothing more,
   whichever identity ran the import.
+- What the source says about clients comes with the bundle: `client` on every
+  person, `company` on a client alone, `clientAccess` and `clientCompany` on a
+  project, and `visibleToClients` on a tool, a post, a to-do list and a check-in
+  question. That word is always the record's own and never the word of its tool:
+  a post of a board the clients see can be one the source keeps from them. Where
+  the source says nothing, nothing is written and Minka leaves what it holds
+  alone. A record that follows what it hangs on — a to-do, a group, a card, an
+  answer, a comment — carries none, and `data.visibilityLeftToTheContainer`
+  counts the words the source offered there. `data.peopleAsClients` counts the
+  clients, `data.clientMemberships` the memberships Minka leaves out because a
+  client is no member of a project there, and `data.companiesLeftOut` the
+  companies the source names without an identifier or without a name, which no
+  bundle carries. Docs & Files and Forwards are not extracted at all, so the
+  bundle says nothing of whether clients see them; a `notice` names that gap.
+  No output ever names a person or a company.
 - `data.cardsByStatus` splits the cards, `data.cardsOnHold` counts those set
   aside within their column, `data.cardsLeftOut` the archived and trashed
   cards whose column is in no extracted board, `data.commentsTrashed` the

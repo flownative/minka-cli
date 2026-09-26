@@ -34,6 +34,9 @@ type Post struct {
 	Comments    []Comment
 	Boosts      []Boost
 	Files       []File
+	// VisibleToClients is what the message says about clients, which is its own
+	// word and not that of its board.
+	VisibleToClients *bool
 }
 
 const (
@@ -380,6 +383,9 @@ func (a *Account) postJSON(p *Project, board *Tool, post *Post) map[string]any {
 		"comments_count": len(post.Comments), "comments_url": fmt.Sprintf("%sbuckets/%d/recordings/%d/comments.json", a.root(), p.ID, post.ID),
 		"boosts_count": len(post.Boosts), "boosts_url": fmt.Sprintf("%sbuckets/%d/recordings/%d/boosts.json", a.root(), p.ID, post.ID),
 		"created_at": post.CreatedAt, "updated_at": post.UpdatedAt,
+	}
+	if post.VisibleToClients != nil {
+		answer["visible_to_clients"] = *post.VisibleToClients
 	}
 	if post.ShownStatus != "" {
 		answer["status"] = post.ShownStatus

@@ -485,23 +485,28 @@ func TestWithoutANumberAPartHoldsTenThousandLines(t *testing.T) {
 // alone for anybody else: the people of a bundle are the same under both.
 func TestABotAndSomebodyDeletedAreRetiredWhicheverListTheAccountShows(t *testing.T) {
 	var first string
-	for view, change := range map[string]func(*fakebasecamp.Account){
-		"what an admin sees":     func(*fakebasecamp.Account) {},
-		"what anybody else sees": func(a *fakebasecamp.Account) { a.UsersOnly() },
+	// The list anybody else sees holds users alone: of the three it lacks, the bot
+	// and who was deleted are named by a record, so one person fewer is left out.
+	for view, look := range map[string]struct {
+		change  func(*fakebasecamp.Account)
+		leftOut int
+	}{
+		"what an admin sees":     {func(*fakebasecamp.Account) {}, 5},
+		"what anybody else sees": {func(a *fakebasecamp.Account) { a.UsersOnly() }, 4},
 	} {
 		account := fakebasecamp.New()
-		change(account)
+		look.change(account)
 		dir, result := extract(t, account, talkProject)
 		people := records(t, dir, bundle.People)
 
 		// A bot has no address; of somebody deleted Basecamp keeps theirs.
 		want := map[string]any{"sourceId": "801", "createdAt": "2021-06-01T08:00:00.000Z", "updatedAt": "2021-06-01T08:00:00.000Z", "createdBy": nil,
-			"name": "Build Robot", "email": nil, "avatar": "avatar-801", "retired": true}
+			"name": "Build Robot", "email": nil, "avatar": "avatar-801", "retired": true, "client": false}
 		if got := recordWithID(t, people, "801"); !reflect.DeepEqual(got, want) {
 			t.Errorf("%s: the bot:\n got %v\nwant %v", view, got, want)
 		}
 		want = map[string]any{"sourceId": "802", "createdAt": "2019-06-01T08:00:00.000Z", "updatedAt": "2022-06-01T08:00:00.000Z", "createdBy": nil,
-			"name": "Deleted Somebody", "email": "deleted@example.test", "avatar": "avatar-802", "retired": true}
+			"name": "Deleted Somebody", "email": "deleted@example.test", "avatar": "avatar-802", "retired": true, "client": false}
 		if got := recordWithID(t, people, "802"); !reflect.DeepEqual(got, want) {
 			t.Errorf("%s: somebody deleted:\n got %v\nwant %v", view, got, want)
 		}
@@ -515,8 +520,8 @@ func TestABotAndSomebodyDeletedAreRetiredWhicheverListTheAccountShows(t *testing
 			t.Errorf("%s: somebody who cannot be asked for was asked for: %v", view, got)
 		}
 		// Whoever is in the list and in no record is left out, of any kind.
-		if result.PeopleLeftOut != 1 {
-			t.Errorf("%s: %d people left out, want the one user no record names", view, result.PeopleLeftOut)
+		if result.PeopleLeftOut != look.leftOut {
+			t.Errorf("%s: %d people left out, want %d", view, result.PeopleLeftOut, look.leftOut)
 		}
 
 		content, err := os.ReadFile(filepath.Join(dir, "people.jsonl"))
@@ -541,8 +546,8 @@ func TestABotNoRecordNamesStaysOutOfTheBundle(t *testing.T) {
 			t.Errorf("person %s came into a bundle no record of which names them", id)
 		}
 	}
-	if result.PeopleLeftOut != 2 {
-		t.Errorf("%d people left out, want the bot and who was deleted", result.PeopleLeftOut)
+	if result.PeopleLeftOut != 6 {
+		t.Errorf("%d people left out, want the bot, who was deleted and the four clients", result.PeopleLeftOut)
 	}
 }
 
