@@ -686,3 +686,60 @@ func TestADryRunOfDocsAndFilesWalksTheSameWay(t *testing.T) {
 		t.Error("a dry run asked Basecamp for something else than a run")
 	}
 }
+
+// A bundle is closed under its own references or it is no bundle: a folder, a
+// document or an upload naming a folder the bundle does not carry stops the
+// applier where it reads the field, after a walk of hours, and so does a comment
+// or a boost naming an entry that is not there. This holds every reference of
+// the Docs & Files down at once.
+func TestEveryReferenceOfDocsAndFilesLeadsToARecordOfTheBundle(t *testing.T) {
+	dir, _ := extract(t, fakebasecamp.New(), docsProject)
+
+	of := func(kind bundle.Kind) map[string]bool {
+		known := map[string]bool{}
+		for _, record := range recordsOrNone(t, dir, kind) {
+			known[record["sourceId"].(string)] = true
+		}
+		return known
+	}
+	folders, documents, uploads := of(bundle.Folders), of(bundle.Documents), of(bundle.Uploads)
+	tools, projects, files := of(bundle.Tools), of(bundle.Projects), of(bundle.Attachments)
+	entries := map[string]map[string]bool{
+		bundle.OwnerDocument: documents, bundle.OwnerUpload: uploads, "folder": folders,
+	}
+
+	for kind, in := range map[bundle.Kind]string{bundle.Folders: "parentSourceId", bundle.Documents: "folderSourceId", bundle.Uploads: "folderSourceId"} {
+		for _, record := range records(t, dir, kind) {
+			if !tools[record["toolSourceId"].(string)] {
+				t.Errorf("%s %v names a tool that is not in the bundle", kind, record["sourceId"])
+			}
+			if !projects[record["projectSourceId"].(string)] {
+				t.Errorf("%s %v names a project that is not in the bundle", kind, record["sourceId"])
+			}
+			if folder, inAFolder := record[in].(string); inAFolder && !folders[folder] {
+				t.Errorf("%s %v stands in folder %s, which is not in the bundle", kind, record["sourceId"], folder)
+			}
+		}
+	}
+	for _, record := range records(t, dir, bundle.Uploads) {
+		if !files[record["file"].(string)] {
+			t.Errorf("upload %v names a file that has no record in the bundle", record["sourceId"])
+		}
+	}
+	for _, record := range records(t, dir, bundle.Comments) {
+		if known, ofADocsEntry := entries[record["parentKind"].(string)]; ofADocsEntry && !known[record["parentSourceId"].(string)] {
+			t.Errorf("comment %v hangs on a %v that is not in the bundle", record["sourceId"], record["parentKind"])
+		}
+	}
+	for _, record := range records(t, dir, bundle.Reactions) {
+		if known, ofADocsEntry := entries[record["targetKind"].(string)]; ofADocsEntry && !known[record["targetSourceId"].(string)] {
+			t.Errorf("boost %v hangs on a %v that is not in the bundle", record["sourceId"], record["targetKind"])
+		}
+	}
+	// Every file of a document or an upload belongs to one that is in the bundle.
+	for _, record := range records(t, dir, bundle.Attachments) {
+		if known, ofADocsEntry := entries[record["ownerKind"].(string)]; ofADocsEntry && !known[record["ownerSourceId"].(string)] {
+			t.Errorf("file %v belongs to a %v that is not in the bundle", record["sourceId"], record["ownerKind"])
+		}
+	}
+}
