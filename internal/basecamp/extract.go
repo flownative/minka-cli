@@ -761,11 +761,10 @@ func (e *Extractor) skippedTools() []SkippedTools {
 // measure notes how long a text of a kind is, in characters, and which record
 // it was: whoever sets the limits of where a bundle goes has to know the
 // longest text, and a number that names no record is a number nobody can
-// check. Of two texts of the same length the one met first keeps the place; a
-// text of no characters names no record, because there is nothing to look at.
+// check. Of two texts of the same length the one met first keeps the place.
 func (e *Extractor) measure(kind bundle.Kind, text string, of LongestBodyRecord) {
 	length := utf8.RuneCountInString(text)
-	if length == 0 || length <= e.longestBody[kind] {
+	if length <= e.longestBody[kind] {
 		return
 	}
 	of.Characters = length
