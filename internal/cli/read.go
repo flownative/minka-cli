@@ -2,6 +2,7 @@ package cli
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"text/tabwriter"
@@ -272,7 +273,7 @@ what it read before it, with its notices, and so does one that ends with 7
 			cards := page.Value
 			return a.ok(success{
 				data:        page.Raw,
-				summary:     plural(len(cards), "card", "cards") + " in the archive",
+				summary:     plural(len(cards), "card", "cards"),
 				breadcrumbs: archiveBreadcrumbs(args[0], cards, limit),
 				text:        func(w io.Writer) { renderArchivedCards(w, cards) },
 			})
@@ -365,6 +366,12 @@ func archiveBreadcrumbs(boardID string, cards []api.ArchivedCard, limit int) []B
 // was to start behind is the one refusal a caller can act on: it says nothing
 // about the board and everything about the cursor.
 func archiveRefusal(s *session, err error, boardID string) *Error {
+	// A page beyond the bound is nobody's answer but this CLI's own refusal of
+	// the caller, and it is reported as the usage error it is.
+	if errors.Is(err, api.ErrArchivePageOutOfBounds) {
+		return &Error{Code: CodeUsage, Message: err.Error()}
+	}
+
 	e := s.fail(err)
 	switch {
 	case e.APICode == api.CodeArchivedCardsBeforeUnknown:

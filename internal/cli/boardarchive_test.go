@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/flownative/minka-cli/internal/api"
 	"github.com/flownative/minka-cli/internal/fakeapi"
 )
 
@@ -173,7 +174,7 @@ func TestAPageOfAnArchiveListsTheCardsPutAwayLastFirst(t *testing.T) {
 
 	env, r := e.runJSON("", "boards", "archive", e.fixture.Board.ID)
 	expectCode(t, r, ExitOK)
-	if env.Summary != "4 cards in the archive" {
+	if env.Summary != "4 cards" {
 		t.Errorf("summary %q", env.Summary)
 	}
 	// The card whose moment nobody noted sorts as the oldest, as the server
@@ -634,5 +635,57 @@ func TestACardTrashedOutOfTheArchiveKeepsNothingOfIt(t *testing.T) {
 	expectCode(t, r, ExitOK)
 	if got := archiveIDs(t, env.Data); len(got) != 0 {
 		t.Fatalf("the archive of the board holds %q", got)
+	}
+}
+
+// A page nobody sized is the one the server gives without a limit, and this CLI
+// names it in every request: a default that drifted from the server's would be
+// read as the server's own.
+func TestAPageOfAnArchiveAsksForFiftyCardsWhereNobodySaysOtherwise(t *testing.T) {
+	e := newTestEnv(t)
+	anArchiveOf(e, 1)
+
+	_, r := e.runJSON("", "boards", "archive", e.fixture.Board.ID)
+	expectCode(t, r, ExitOK)
+	asked := pagesAskedFor(e)
+	if len(asked) != 1 || !strings.Contains(asked[0].Query, "limit=50") {
+		t.Fatalf("the page was asked for with %q", asked)
+	}
+}
+
+// What a whole run hands over is a list of cards, a run that read nothing
+// included, and it names no page behind it: there is none left to read.
+func TestAWholeRunHandsOverAListAndNamesNoPageBehindIt(t *testing.T) {
+	e := newTestEnv(t)
+
+	env, r := e.runJSON("", "boards", "archive", e.fixture.Board.ID, "--all")
+	expectCode(t, r, ExitOK)
+	if string(env.Data) != "[]" {
+		t.Errorf("a run that read nothing hands over %s", env.Data)
+	}
+
+	e = newTestEnv(t)
+	anArchiveOf(e, 10)
+	env, r = e.runJSON("", "boards", "archive", e.fixture.Board.ID, "--limit", "10", "--all")
+	expectCode(t, r, ExitOK)
+	for _, crumb := range env.Breadcrumbs {
+		if crumb.Action == "more" || crumb.Action == "all" {
+			t.Errorf("a whole run sends a reader after %q: %s", crumb.Action, crumb.Cmd)
+		}
+	}
+	if !slices.ContainsFunc(env.Breadcrumbs, func(b Breadcrumb) bool { return b.Action == "show" }) {
+		t.Errorf("breadcrumbs %+v", env.Breadcrumbs)
+	}
+}
+
+// A page this client will not ask for is nobody's answer but its own refusal of
+// the caller, and no command reaches it: it is reported as the usage error it is
+// and not as something the server said.
+func TestAPageBeyondTheBoundIsReportedAsAUsageError(t *testing.T) {
+	s := &session{host: "https://minka.example"}
+
+	e := archiveRefusal(s, api.ErrArchivePageOutOfBounds, "0199")
+	if e.Code != CodeUsage || e.ExitCode() != ExitUsage {
+		t.Errorf("code %q, exit %d", e.Code, e.ExitCode())
 	}
 }

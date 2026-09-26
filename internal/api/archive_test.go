@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -119,5 +120,29 @@ func TestAWalkHandsBackWhatItReadBeforeItBrokeOff(t *testing.T) {
 	}
 	if requests != 4 {
 		t.Fatalf("%d requests, want the page, the refusal, the page again and the refusal again", requests)
+	}
+}
+
+// The JSON of a page is cut into the JSON of its cards, so that a field the API
+// gains reaches a reader of several pages as well. An answer that does not give
+// one piece per card is none to read cards out of, whatever it is instead.
+func TestAPageThatDoesNotGiveOnePiecePerCardIsRefused(t *testing.T) {
+	for _, page := range []struct {
+		raw   string
+		cards int
+	}{
+		{`{"id":"a"}`, 1},
+		{`[{"id":"a"}]`, 2},
+	} {
+		each, err := eachCardOf(json.RawMessage(page.raw), page.cards)
+		var apiErr *Error
+		if each != nil || !errors.As(err, &apiErr) || apiErr.Code != "unexpectedResponse" {
+			t.Errorf("%s as %d cards: %v, %v", page.raw, page.cards, each, err)
+		}
+	}
+
+	each, err := eachCardOf(json.RawMessage(`[{"id":"a"},{"id":"b"}]`), 2)
+	if err != nil || len(each) != 2 || string(each[1]) != `{"id":"b"}` {
+		t.Fatalf("a page of two cards: %v, %v", each, err)
 	}
 }
