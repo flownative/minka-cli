@@ -425,6 +425,30 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   archived folders of those projects really did answer not-found for their
   contents and their archived documents came out of the recordings list, so the
   path the walk was built for is the path the source takes.
+  **The client rule is a live measurement and no longer a rule we believe.** A
+  third extraction went over the one project of the account that can answer the
+  question — four of its projects work with clients and only that one carries a
+  `visibleToClients: true` at all, entries below the top of a tool, and a tree
+  with both words in it. Exit 0, 437 seconds, 202 files, nothing left out. Of its
+  20 records of the three kinds — 1 folder, 9 documents, 10 uploads — **every one
+  carries the field and not one lacks it**, at both depths, the four that stand
+  inside a folder included: 4 `true` and 12 `false` at the top of a tool and 4
+  `false` below it, each compared one by one against the source's own
+  `visible_to_clients` with **no difference at all**. Nothing the source shows is
+  written as hidden and nothing it hides is written as shown.
+  And the shape the whole card exists for is one the account holds: both Docs &
+  Files tools of that project are shown to clients at the source, and one of them
+  holds sixteen entries of which **every single one is hidden** — the folder and
+  its four uploads among them. So a tool the source shows, holding entries the
+  source hides, is no fixture: the run took the record's own word every time and
+  the tool's never once.
+  Measured with it: `clientAccess` and the client company on the project, exactly
+  two people with `client: true` and exactly those two carrying a company, all 211
+  digests matching, every reference resolving, and `verify-bundle.sh` green.
+  The naming of an entry inside a folder that says nothing about clients found
+  **nothing to say** on that project, every record below the top carrying the
+  field at the source: a safeguard that has met the real world and come back
+  empty, which is what it is for.
   **Minka has applied both.** On a worktree instance, exit 0, everything created —
   one folder with two documents and four uploads, and four folders including the
   two archived with sixteen documents and one upload — and on a second and a third
@@ -438,6 +462,21 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   nothing has disproved or proved it; that a folder takes neither comments nor
   boosts; and the flags of the call that streams an upload's file, which are read
   off the Basecamp CLI's own documentation and not off a run.
+  **What no live run has met yet**, and so still rests on the invented account:
+  a **folder inside a folder** — none of the three projects has one, so a parent
+  standing before its child is only trivially exercised live; an **entry in use
+  inside a folder the source has put away**, the client project holding nothing
+  archived or trashed of the three kinds at all; and a hidden entry below a
+  **shown folder**, the only folder there being hidden itself, so the case of a
+  container that is shown holding something hidden was met one level up, at the
+  tool, and not at a folder.
+  **Which commit the live measurements rest on.** The three bundles were made
+  from this branch while it was being worked on, the third from a dirty tree whose
+  manifest names the extractor `v0.15.0-41-g69630d5-dirty`; that binary did not
+  carry the naming of an entry that says nothing about clients. So what is
+  measured above is the behaviour of the branch and not of its last commit, and
+  one confirming extraction over that one project on the final commit is owed
+  before the account is walked.
   **Which fixtures still encode a guess rather than a reading**, which is the
   list to read before the next run: a folder, a document or an upload whose
   status is none of the three; **anything in the trash** of the three kinds, the
@@ -729,19 +768,18 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   as well, so a larger number is no sign of anything wrong. Whether a mail on the
   shelf exists at all is a question for Basecamp and not for a run: nothing the
   API offers hands one out.
-- **Extract the Docs & Files of a project into a bundle live, and check it
-  record by record** as the boards and the chats were checked, before the account
-  is walked for MNK-53. The one thing no reading can settle is whether the bytes
-  of an upload arrive: they are asked for by the identifier of the upload and of
-  its project, and the flags of that call are read off the Basecamp CLI's own
-  documentation and not off a run — where they are wrong, every file of every
-  tool comes out under `missingFiles`, loudly and with nothing in the bundle.
-  Open besides: whether the account holds an upload in a cloud at all and
-  what such a record looks like; and whether a vault really lists what stands in
-  it topmost first, which the order of a bundle turns on. Keep an eye on the one
-  thing that cannot be taken back: that every
-  folder, document and upload the source says anything about clients of carries
-  the word, at every depth.
+- **One confirming extraction of the Docs & Files on the final commit**, over the
+  one project that works with clients and carries both words, before the account
+  is walked for MNK-53. Three bundles are checked record by record already, the
+  client rule among them, but they were made from the branch while it was being
+  worked on and the third from a dirty tree, so what is measured is the branch's
+  behaviour and not this commit's. Seven minutes turns the one into the other.
+  Open besides, and none of it settled by that run: whether the account holds an
+  upload in a cloud at all and what such a record looks like; whether a vault
+  really lists what stands in it topmost first, which the order of a bundle turns
+  on; and the three shapes no project walked so far holds — a folder inside a
+  folder, an entry in use inside a folder that was put away, and a hidden entry
+  below a folder that is shown.
 - Extract the to-dos of a project live: whether `todoset` is the dock entry, the
   fields of a list, a group and a to-do, the two lists of what is open and what is
   done, the recordings of the archived and the trashed ones, whether a list on
