@@ -293,15 +293,16 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   the trash may never fire. Measured too, and the one measurement that says the
   run is needed: over 28 active projects, 9 inboxes that are switched on and 54
   forwards, four senders are addresses Minka refuses. Two of the four are the
-  whole address written inside a pair of quotation marks, which the run now
-  takes off — about 4% of the mail of the projects swept — and two have a local
+  whole address written inside a pair of quotation marks, which the run takes
+  off — about 4% of the mail of the projects swept — and two have a local
   part over 64 bytes and stay out whatever is done. So a mail left out for its
   sender is no invented case but one the first real run will meet, and writing
   such a sender would have ended the applier after hours of walking. Measured in
   the other direction as well: of 8,301 addresses a run would write, `filter_var`
   refuses none, which is the direction that decides whether a run stops; the only
-  over-strictness the account showed is a bracketed literal address of a machine
-  and a top label of one letter, neither of them anybody's mail.
+  over-strictness the account holds is a bracketed literal address of a machine
+  and a top label of one letter, neither of them anybody's mail, and of the two
+  only the bracketed one is still left out.
   What the run does with all that rests on the invented account, with three
   things held against Minka's own reading rather than against a
   test here: every address and every title the run would write was put through
