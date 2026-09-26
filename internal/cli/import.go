@@ -115,6 +115,10 @@ type importReport struct {
 	MessagesByType        map[string]int `json:"messagesByType"`
 	MessagesWithEmptyBody int            `json:"messagesWithEmptyBody"`
 	UploadLinesLeftOut    int            `json:"uploadLinesLeftOut"`
+	// RecordsLeftOut are the records a bundle cannot carry because the source
+	// said a word it has none for, counted per kind of record, per word and per
+	// place.
+	RecordsLeftOut []basecamp.LeftOutRecords `json:"recordsLeftOut"`
 	// LongestBody is the longest text per kind, in characters: a number and
 	// nothing of the text.
 	LongestBody map[bundle.Kind]int `json:"longestBody"`
@@ -183,6 +187,13 @@ over from there instead of being fetched again; the report counts both as
 filesFetched and filesReused. A file Basecamp lists and no longer has gets a
 record that says so (filesGone). The name of a file is made a plain one
 (fileNamesChanged), and no output ever says a name, a caption or an address.
+
+A record the source describes with a word a bundle has none for is left out
+and the run goes on: a line of a chat of an unknown kind or with a status other
+than active, a column of a kind a bundle has no role for, and a card, a post, a
+comment, a question or an answer with a status a bundle does not know, a draft
+among them. recordsLeftOut counts them per kind of record, per word and per
+place, so a later run can bring what a bundle by then has a word for.
 
 The lines of chats are written in parts, messages-0001.jsonl and on, each
 holding lines of one chat, and the manifest names them under parts. A part
@@ -304,6 +315,7 @@ it has been applied.`,
 				PostsWithEmptyBody: result.PostsWithEmptyBody,
 				MessagesByType:     result.MessagesByType,
 				UploadLinesLeftOut: result.UploadLinesLeftOut,
+				RecordsLeftOut:     result.RecordsLeftOut,
 
 				QuestionsLeftOut:    result.QuestionsLeftOut,
 				AnchorsInferred:     result.AnchorsInferred,
@@ -381,6 +393,11 @@ it has been applied.`,
 					"line of a chat is left out, because it was files alone and Basecamp names none of them",
 					"lines of chats are left out, because they were files alone and Basecamp names none of them"))
 			}
+			if count := recordsLeftOut(report); count > 0 {
+				notices = append(notices, plural(count,
+					"record is left out, because the source describes it with a word a bundle has none for; data.recordsLeftOut names the kind of record, the word and where it stood, and a later run brings it once a bundle has a word for it",
+					"records are left out, because the source describes them with words a bundle has none for; data.recordsLeftOut names each kind of record with the word and where it stood, and a later run brings them once a bundle has words for them"))
+			}
 			if leftover != "" {
 				notices = append(notices, "the bundle of the run before could not be removed and still lies at "+leftover+"; it holds personal data, remove it by hand")
 			}
@@ -452,6 +469,12 @@ func renderImportReport(w io.Writer, report importReport) {
 		fmt.Fprintf(w, "Messages are written in %d parts, %s to %s\n", len(names), names[0], names[len(names)-1])
 	}
 	fmt.Fprintf(w, "Lines that were files Basecamp names none of, left out: %d\n", report.UploadLinesLeftOut)
+	if count := recordsLeftOut(report); count > 0 {
+		fmt.Fprintf(w, "Records the source describes with a word a bundle has none for, left out: %d\n", count)
+		for _, one := range report.RecordsLeftOut {
+			fmt.Fprintf(w, "  %-8s %-6s %-24s in %s %s: %d\n", one.Record, one.Field, one.Value, one.In, one.InSourceID, one.LeftOut)
+		}
+	}
 	renderCheckins(w, report)
 	fmt.Fprintf(w, "In the texts: %s referred to, %s Basecamp lists nothing for dropped, %s, %s, %s\n",
 		plural(report.FilesInBodies, "file", "files"), plural(report.FilesDropped, "file", "files"),
@@ -501,6 +524,17 @@ func renderImportReport(w io.Writer, report importReport) {
 			fmt.Fprintf(w, "  %-16s %-18s %d\n", skipped.Kind, state, skipped.Count)
 		}
 	}
+}
+
+// recordsLeftOut is how many records a run left out for want of a word for what
+// the source said of them, over every kind of record, word and place. It counts
+// records and not entries: one entry may stand for many.
+func recordsLeftOut(report importReport) int {
+	count := 0
+	for _, one := range report.RecordsLeftOut {
+		count += one.LeftOut
+	}
+	return count
 }
 
 // renderCheckins says what became of the questions of the check-ins a run met.

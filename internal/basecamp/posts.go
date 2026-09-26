@@ -63,7 +63,8 @@ func (e *Extractor) extractPosts(ctx context.Context, w *bundle.Writer, bucket i
 			return nil
 		}
 		placed[found.ID] = true
-		if err := met("post", found.ID, found.Status, found.recording); err != nil {
+		carried, err := e.met("post", found.ID, found.Status, found.recording, "project", sourceID(bucket))
+		if err != nil || !carried {
 			return err
 		}
 		posts[board] = append(posts[board], found)

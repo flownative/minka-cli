@@ -206,7 +206,8 @@ func (e *Extractor) extractBoards(ctx context.Context, w *bundle.Writer, bucket 
 			return nil
 		}
 		placed[found.ID] = true
-		if err := met("card", found.ID, found.Status, found.recording); err != nil {
+		carried, err := e.met("card", found.ID, found.Status, found.recording, "project", projectID)
+		if err != nil || !carried {
 			return err
 		}
 		at.column.place(found, at.onHold)
@@ -296,19 +297,29 @@ func (e *Extractor) extractBoards(ctx context.Context, w *bundle.Writer, bucket 
 // somebody made in the order of their positions, Done. The position of a
 // column is its number in that order, because Basecamp gives the three columns
 // every card table has none.
+//
+// A kind of list a bundle has no role for is left out and counted, and the board
+// comes with the columns that are left; it takes the cards standing in it with
+// it, which are never asked for. A second Triage, Not now or Done ends the run
+// instead: the applier stops at one, and putting the cards of the second
+// somewhere else would be a board nobody had.
 func (e *Extractor) writeColumns(w *bundle.Writer, projectID string, b *board) error {
 	roles := map[string]int{}
+	carried := make([]cardList, 0, len(b.lists))
 	for _, list := range b.lists {
 		role, known := columnRoles[list.Type]
 		if !known {
-			return &Error{Kind: API, Message: fmt.Sprintf("column %d of board %d is of the type %q, which a bundle does not know", list.ID, b.id, list.Type)}
+			e.leaveOut("column", "type", list.Type, "board", sourceID(b.id))
+			continue
 		}
 		// A board has one Triage, one Not now and one Done, and the applier stops
 		// at a second one.
 		if roles[role]++; role != bundle.RoleWork && roles[role] > 1 {
 			return &Error{Kind: API, Message: fmt.Sprintf("board %d has more than one column of the role %s", b.id, role)}
 		}
+		carried = append(carried, list)
 	}
+	b.lists = carried
 	sort.SliceStable(b.lists, func(i, j int) bool {
 		a, c := b.lists[i], b.lists[j]
 		if roleOrder[columnRoles[a.Type]] != roleOrder[columnRoles[c.Type]] {
@@ -341,14 +352,36 @@ func (e *Extractor) writeColumns(w *bundle.Writer, projectID string, b *board) e
 	return nil
 }
 
-// met refuses what a bundle cannot carry where the walk first meets it, for
-// everything that is listed with a status: a run that cannot end well ends
-// before it asks for what hangs on such a record, and says what is wrong.
-func met(what string, id int64, status string, origin recording) error {
+// met holds a record to what a bundle can carry where the walk first meets it,
+// for everything that is listed with a status. The first value says whether the
+// record is carried; a run reaches nothing that hangs on one it is not.
+//
+// A status a bundle has no word for leaves the record out and is counted: a
+// bundle has no field to say such a status in, so the record is lost whatever
+// the run does, and going on costs it and nothing else. Times that are missing
+// or are no times end the run, because a record without them would be put in
+// the wrong place.
+func (e *Extractor) met(what string, id int64, status string, origin recording, in, inSourceID string) (bool, error) {
 	if !recordStatuses[status] {
-		return &Error{Kind: API, Message: fmt.Sprintf("%s %d has the status %q, which a bundle does not know", what, id, status)}
+		e.leaveOut(what, "status", status, in, inSourceID)
+		return false, nil
 	}
-	return requireTimestamps(fmt.Sprintf("%s %d", what, id), origin.CreatedAt, origin.UpdatedAt)
+	return true, requireTimestamps(fmt.Sprintf("%s %d", what, id), origin.CreatedAt, origin.UpdatedAt)
+}
+
+// leaveOut notes a record a bundle cannot carry, counted per kind of record,
+// per word of the source that made it impossible and per place it stood in. A
+// number nobody writes down is a number nobody can check, and the word is the
+// only thing that tells a sound effect from something that matters.
+func (e *Extractor) leaveOut(record, field, value, in, inSourceID string) {
+	for i := range e.recordsLeftOut {
+		if one := &e.recordsLeftOut[i]; one.Record == record && one.Field == field && one.Value == value && one.InSourceID == inSourceID {
+			one.LeftOut++
+			return
+		}
+	}
+	e.recordsLeftOut = append(e.recordsLeftOut,
+		LeftOutRecords{Record: record, Field: field, Value: value, In: in, InSourceID: inSourceID, LeftOut: 1})
 }
 
 // record is what every record of a bundle carries, taken from what Basecamp
@@ -526,8 +559,12 @@ func (e *Extractor) writeComments(ctx context.Context, w *bundle.Writer, bucket 
 	}
 	comments := make([]comment, 0, len(listed))
 	for _, c := range listed {
-		if err := met("comment", c.ID, c.Status, c.recording); err != nil {
+		carried, err := e.met("comment", c.ID, c.Status, c.recording, "project", sourceID(bucket))
+		if err != nil {
 			return nil, err
+		}
+		if !carried {
+			continue
 		}
 		if c.Status == bundle.StatusTrashed {
 			e.commentsTrashed++

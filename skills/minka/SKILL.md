@@ -724,6 +724,15 @@ this:
   `data.uploadLinesLeftOut` counts the lines of which Basecamp names no
   file, which are left out and which a `notice` counts as well. Lines
   somebody deleted and the lines Basecamp writes itself are not in its API.
+- A record the source describes with a word a bundle has none for is left out
+  and the run goes on: a chat line of an unknown kind or with a status other
+  than `active`, a column of a kind a bundle has no role for, and a card, a
+  post, a comment, a question or an answer with a status a bundle does not
+  know, a draft among them. `data.recordsLeftOut` names each with the kind of
+  record, the field, the word the source said there, where it stood and how
+  many records it cost, and a `notice` counts the records. A record whose times
+  are missing or are no times still ends the run: it would be put in the wrong
+  place.
 - A question of a check-in carries the rhythm, the weekdays counted from Monday,
   the time of day, the day the rhythm is counted from and whom it is asked of,
   which are the subscribers of the question and not whoever answered it. Only a

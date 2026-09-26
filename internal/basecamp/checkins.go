@@ -156,8 +156,12 @@ func (e *Extractor) extractQuestions(ctx context.Context, w *bundle.Writer, buck
 			continue
 		}
 		seen[found.ID] = true
-		if err := met("question", found.ID, found.Status, found.recording); err != nil {
+		carried, err := e.met("question", found.ID, found.Status, found.recording, "project", sourceID(bucket))
+		if err != nil {
 			return err
+		}
+		if !carried {
+			continue
 		}
 		questions = append(questions, found)
 	}
@@ -192,7 +196,7 @@ func (e *Extractor) writeQuestion(ctx context.Context, w *bundle.Writer, bucket,
 		return nil
 	}
 
-	answers, err := e.answersOf(ctx, found)
+	answers, err := e.answersOf(ctx, found, sourceID(bucket))
 	if err != nil {
 		return err
 	}
@@ -510,7 +514,7 @@ func (e *Extractor) askedOf(ctx context.Context, bucket, question int64) ([]stri
 //
 // An answer in the trash is left out and counted, as a comment in the trash is:
 // somebody threw it away, and a bundle has no place to say so.
-func (e *Extractor) answersOf(ctx context.Context, found question) ([]answered, error) {
+func (e *Extractor) answersOf(ctx context.Context, found question, in string) ([]answered, error) {
 	if found.AnswersCount == 0 {
 		return nil, nil
 	}
@@ -530,8 +534,12 @@ func (e *Extractor) answersOf(ctx context.Context, found question) ([]answered, 
 			continue
 		}
 		seen[one.ID] = true
-		if err := met("answer", one.ID, one.Status, one.recording); err != nil {
+		carried, err := e.met("answer", one.ID, one.Status, one.recording, "project", in)
+		if err != nil {
 			return nil, err
+		}
+		if !carried {
+			continue
 		}
 		if one.Status == bundle.StatusTrashed {
 			e.answersTrashed++
