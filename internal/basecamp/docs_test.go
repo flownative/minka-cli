@@ -703,7 +703,7 @@ func TestADocumentLongerThanMinkaHoldsIsCounted(t *testing.T) {
 func TestAnEntryTheSourceListsTwiceIsWrittenOnce(t *testing.T) {
 	dir, _ := extract(t, fakebasecamp.New(), docsProject)
 
-	for _, kind := range []bundle.Kind{bundle.Folders, bundle.Documents} {
+	for _, kind := range []bundle.Kind{bundle.Folders, bundle.Documents, bundle.Uploads} {
 		seen := map[string]int{}
 		for _, record := range records(t, dir, kind) {
 			seen[record["sourceId"].(string)]++

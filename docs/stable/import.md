@@ -1122,9 +1122,13 @@ is asked to take it.
   fetched when its owner is written, and its record is held until the people
   are written at the end of the run.
 - **Through the Basecamp CLI.** `basecamp files download <address> --out -
-  --agent` streams the bytes of a file to its standard output. `--out -`
+  --agent` streams the bytes of a file to its standard output, and
+  `basecamp files download <uploadId> --in <projectId> --out - --agent` those of
+  the one file of an upload of Docs & Files, which has no address of that kind.
+  `--out -`
   matters: given a directory, the Basecamp CLI chooses the name itself and
-  overwrites a file of that name. The address stands behind `--`, and
+  overwrites a file of that name. What the call names stands behind `--`, both
+  identifiers being the source's own written as digits, and
   `BASECAMP_NONINTERACTIVE=1` is set.
 - **The address** is
   `https://storage.3.basecamp.com/<account>/blobs/<key>/download/<name>`.
@@ -1138,6 +1142,12 @@ is asked to take it.
   `download_url` itself, and sends its token to the API it is signed in at,
   whatever host the address names. The preview address of a file is never
   fetched: a bundle carries the original.
+  **An upload of Docs & Files has no such address**, and none is built for it:
+  Basecamp names no stored file on the record, and the address it does give is
+  the API's own, `…/buckets/<bucket>/uploads/<id>/download/<name>`, which answers
+  with a redirect to a store of its own. That redirect is never followed — it is
+  no storage address of the pattern, and its query carries the name of the file —
+  so the file is asked for by the two identifiers instead.
   Right before the call the address is held against one pattern
   (`checkStorageAddress`): https, a host that begins with `storage.` and
   ends in `.basecamp.com`, digits for the account, a key of the shape of a
