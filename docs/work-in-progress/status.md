@@ -72,7 +72,8 @@ with it, is asked for to be counted and is named with the place it fell with
 (C-052), so that no run says a bundle holds more of the source than it does. A
 to-do that hangs on a To-dos tool itself stands in no list a bundle can name, so
 it is left out, counted and named with its project (C-060), and the to-dos of
-every tool are asked for under the tool's own identifier for that reason.
+every tool that is switched on are asked for under the tool's own identifier for
+that reason.
 `recordsLeftOut` names each with the kind of record, the word and where it
 stood, so one exotic record does not cost the account. What still ends
 a run is what would be written wrongly: times that are missing or are none, a
@@ -299,10 +300,13 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   does not carry is passed over when it is gone. The path hands out the to-dos
   hanging on the tool alone and never those of its lists, so the run's reading of
   `parent.type` is a second hold on the same thing and not what carries it.
-  An active to-do hanging on the to-do set of a tool that is **switched off**
+  An **active** to-do hanging on the to-do set of a tool that is switched off
   stays invisible, as an active list of such a tool already is: the walk never
-  learns that tool's identifier, so the same gap holds for both and nothing counts
-  what stands there.
+  learns that tool's identifier, so the same gap holds for both. One on the shelf
+  or in the trash is named all the same, because the records of a project name
+  every to-do set of it, switched off or not. Where **every** To-dos tool of a
+  project is switched off, the project is passed over whole and not even those
+  are counted.
 - Of the forwarded mail of `import basecamp`: no extraction has met an inbox
   live, and the shape of the source is measured all the same, read-only and
   without a run. Measured: that a dock entry of an inbox is
