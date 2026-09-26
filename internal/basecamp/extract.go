@@ -414,9 +414,11 @@ func ValidProjectID(value string) bool {
 // gets the same records, except that no avatar and no file is downloaded.
 //
 // The walk goes kind by kind: the projects with their tools and boards, then
-// the message boards of all of them, then the chats, then the questionnaires.
+// the message boards of all of them, then the chats, then the questionnaires,
+// then the To-dos tools, then the inboxes and last the Docs & Files tools.
 // So the comments and the reactions of a bundle stand in the order of what they
-// hang on: those of cards, those of posts, those of lines, those of answers.
+// hang on: those of cards, those of posts, those of lines, those of answers,
+// those of lists and to-dos, those of mails, those of documents and uploads.
 func (e *Extractor) Extract(ctx context.Context, projectIDs []string, w *bundle.Writer) (Result, error) {
 	if e.LargestFile == 0 {
 		e.LargestFile = largestFileMinkaTakes
