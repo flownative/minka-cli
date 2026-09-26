@@ -778,7 +778,7 @@ this:
   bundle or not, with the address as it stood and the words of the link as
   plain text: `data.references` counts them by `cards`, `posts` and
   `tools`. `data.longestBody` is the longest text per kind
-  (`cards`, `comments`, `posts`, `messages`) in characters, and
+  (`cards`, `comments`, `posts`, `messages`, `answers`) in characters, and
   `data.longestBodyRecords` names under the same kinds which record it was
   measured on (`record`, `sourceId`, `in`, `inSourceId`, `characters`), so that
   a number can be looked at at the source; a kind whose longest text has no
