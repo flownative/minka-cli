@@ -165,7 +165,12 @@ func TestAPairOfQuotationMarksAroundAWholeAddressComesOff(t *testing.T) {
 	// A pair that saves nothing saves nothing: what is inside has to be an
 	// address of its own, and a run that took the marks off and wrote the rest
 	// would put a sender into the bundle that Minka refuses all the same.
-	for _, given := range []string{`"ada at example"`, `"ada@localhost"`, `""`, `"`} {
+	//
+	// And it is one pair, around the whole of it: a mark at one end only is no
+	// pair, and a second pair is not the one a header writes. Both of those are
+	// addresses Minka refuses and a wider repair would carry.
+	for _, given := range []string{`"ada at example"`, `"ada@localhost"`, `""`, `"`,
+		`ada@example.test"`, `"ada@example.test`, `""ada@example.test""`} {
 		address, unquoted, anAddress := anAddressMinkaTakes(given)
 		if anAddress || address != "" || unquoted {
 			t.Errorf("%q came out as %q (unquoted %v, an address %v)", given, address, unquoted, anAddress)

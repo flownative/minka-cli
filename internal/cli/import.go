@@ -33,9 +33,10 @@ type importReport struct {
 	// InvalidAddresses holds IDs only: neither the address nor the name of
 	// somebody belongs into an output that ends up in a log.
 	InvalidAddresses []string `json:"invalidAddresses"`
-	// AddressesUnquoted counts the addresses a run took a pair of quotation
-	// marks off before it read them: the one place a run repairs what the
-	// source says rather than passing it on.
+	// AddressesUnquoted counts the records a run took a pair of quotation marks
+	// off the address of: the one place a run repairs what the source says
+	// rather than passing it on. One mailbox written that way in many records
+	// counts in each of them.
 	AddressesUnquoted int `json:"addressesUnquoted"`
 	// PeopleLeftOut are the people of the account no record of the bundle
 	// refers to; counts.people is who was written.
@@ -458,8 +459,8 @@ it has been applied.`,
 			}
 			if count := report.AddressesUnquoted; count > 0 {
 				notices = append(notices, plural(count,
-					"e-mail address stood inside a pair of quotation marks, which the run took off before reading it: with them Minka takes no address at all, and they are the one thing a run repairs rather than passes on",
-					"e-mail addresses stood inside a pair of quotation marks, which the run took off before reading them: with them Minka takes no address at all, and they are the one thing a run repairs rather than passes on"))
+					"record came with its e-mail address inside a pair of quotation marks, which the run took off before reading it: with them Minka takes no address at all, and they are the one thing a run repairs rather than passes on",
+					"records came with an e-mail address inside a pair of quotation marks, which the run took off before reading them: with them Minka takes no address at all, and they are the one thing a run repairs rather than passes on. One mailbox written that way in many records counts in each of them"))
 			}
 			if count := report.CreatorProbesRefused; count > 0 {
 				notices = append(notices, plural(count,
@@ -655,7 +656,7 @@ func renderImportReport(w io.Writer, report importReport) {
 		fmt.Fprintf(w, "Invalid addresses: %d (person %s)\n", count, strings.Join(report.InvalidAddresses, ", "))
 	}
 	if report.AddressesUnquoted > 0 {
-		fmt.Fprintf(w, "Addresses a pair of quotation marks came off: %d\n", report.AddressesUnquoted)
+		fmt.Fprintf(w, "Records whose address a pair of quotation marks came off: %d\n", report.AddressesUnquoted)
 	}
 	if report.CreatorProbesRefused > 0 {
 		fmt.Fprintf(w, "Tools this identity may not see, asked for the creator of a project and passed over: %d\n", report.CreatorProbesRefused)

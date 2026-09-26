@@ -97,7 +97,7 @@ func (r *registry) listAccount(people []person) error {
 		return &Error{
 			Kind:    API,
 			Message: fmt.Sprintf("Basecamp gave e-mail addresses that are none: %d of %d", malformed, given),
-			Hint:    "That many are no flaw in the data. Look at what the identity the Basecamp CLI is signed in as may see: basecamp auth status",
+			Hint:    "That many are no flaw in the data. Either the identity the Basecamp CLI is signed in as hides the addresses of others, which basecamp auth status says, or the account writes its addresses in a shape Minka takes none of: outside ASCII, or with a domain of one label.",
 		}
 	}
 
@@ -267,7 +267,7 @@ func (r *registry) invalidAddresses() []string {
 }
 
 // unquotedAddresses counts the people whose address came inside a pair of
-// quotation marks that the run took off.
+// quotation marks that the run took off, one for each of them.
 func (r *registry) unquotedAddresses() int {
 	return r.unquoted
 }

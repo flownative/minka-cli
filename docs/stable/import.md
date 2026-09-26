@@ -232,7 +232,9 @@ as well, and whoever of it comes into the bundle later:
   (`sourceProblemShare`), that is no flaw in the data any more but an identity
   or a source that hides addresses, with another glyph than `•` for instance,
   and the account would come through as people without logins. The run ends
-  as `api_error` with a hint to look at what the identity may see.
+  as `api_error`, and the hint names both readings of that many: an identity
+  that hides the addresses of others, or an account whose addresses are of a
+  shape Minka takes none of.
 
 A message counts the addresses concerned out of those given. No output ever
 names an address or whose it is, and `invalidAddresses` holds IDs, never names.
@@ -253,19 +255,26 @@ one rule here, and that rule is Minka's (C-059):
   each at most 63 characters and beginning and ending with a letter or a digit,
   the last of them beginning with a letter; ASCII throughout; 254 characters in
   all. Whitespace around it comes off first, as Minka trims before it reads.
-- One shape Minka takes is left out all the same: a domain written as a
-  bracketed literal address of a machine, `[192.168.1.1]` or `[IPv6:…]`.
-  Nobody's mailbox is written that way, and reading one exactly as PHP reads it
-  is a risk in the direction that stops a run.
+- Two shapes Minka takes are left out all the same, both of them nobody's
+  mailbox: a domain written as a bracketed literal address of a machine,
+  `[192.168.1.1]` or `[IPv6:…]`, and an address with a NUL at one end, which
+  Minka trims away and this does not. Reading either exactly as PHP reads it is
+  a risk in the direction that stops a run, and being narrower costs at most one
+  address.
+- One thing the rule does not do: Minka lowercases an address before it reads
+  it, and a bundle carries the case the source gave. So a bundle can hold one
+  mailbox in two spellings, which Minka makes one without a word.
 - **One pair of quotation marks around the whole of an address comes off**
   before the address is read: `"ada@example.test"` becomes `ada@example.test`.
   Minka refuses every such address, a mail header is nobody's to repair where
   it stands, and the reading alone would turn away the addresses this saves.
   This is the **one place** a run repairs what the source says instead of
   passing it on, and it is that pair and nothing else: no other character is
-  trimmed, unfolded or mended. `addressesUnquoted` counts how often it
-  happens, over people and mail alike, and a `notice` says how many. The one
-  repair a run makes is a number in the report and never a silent change.
+  trimmed, unfolded or mended, and a mark at one end alone is no pair.
+  `addressesUnquoted` counts the records it happened to, over people and mail
+  alike — one mailbox written that way in many records counts in each of them —
+  and a `notice` says how many. The one repair a run makes is a number in the
+  report and never a silent change.
   A pair around a whole address is never a loss: an address Minka takes ends in
   a letter or a digit, and the quoted local part, `"ada b"@example.test`, keeps
   its closing mark before the `@` and is left as it stands.
