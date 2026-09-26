@@ -18,17 +18,16 @@ anything being taken out of the text.
 
 `minka import basecamp` extracts the structure, the boards, the message
 boards, the chats, the check-ins and the to-dos of Basecamp projects into an
-import bundle
-for Minka's applier: people with avatars, projects with members, the boards,
-chats, message boards, questionnaires and to-do sets as tools, of each board the
-columns,
-cards, steps, comments and boosts, of each message board the posts of every
-status with their categories, comments and boosts, of each chat its lines as
-messages with their boosts, written in parts of one chat and some 10,000 lines
-each, of each questionnaire its questions with the schedule Minka has words
-for and their answers with what hangs on them, and of each to-do set its lists
-from the bottom up, because Minka puts every new list on top, with their groups
-and their to-dos in the order of the list and what hangs on a list and a to-do.
+import bundle for Minka's applier: people with avatars, projects with members,
+the boards, chats, message boards, questionnaires and to-do sets as tools, of
+each board the columns, cards, steps, comments and boosts, of each message
+board the posts of every status with their categories, comments and boosts, of
+each chat its lines as messages with their boosts, written in parts of one
+chat and some 10,000 lines each, of each questionnaire its questions with the
+schedule Minka has words for and their answers with what hangs on them, and of
+each to-do set its lists from the bottom up, because Minka puts every new list
+on top, with their groups and their to-dos in the order of the list and what
+hangs on a list and a to-do.
 A record the source describes with a word a bundle has none for is left out and
 counted, and the run goes on (C-050): a chat line of an unknown kind — a bundle
 has a word for `Chat::Lines::Text`, `Chat::Lines::RichText`,
@@ -38,8 +37,9 @@ a comment, a question or an answer with a status a bundle does not know, a draft
 among them, and a group or a to-do the source has put on the shelf, which a
 bundle gives none. What stood in a list or a group a bundle cannot carry falls
 with it, is asked for to be counted and is named with the place it fell with
-(C-052), so that no run says a bundle holds more of the source than it does. `recordsLeftOut` names each with the kind of record, the word and
-where it stood, so one exotic record does not cost the account. What still ends
+(C-052), so that no run says a bundle holds more of the source than it does.
+`recordsLeftOut` names each with the kind of record, the word and where it
+stood, so one exotic record does not cost the account. What still ends
 a run is what would be written wrongly: times that are missing or are none, a
 second Triage, Not now or Done on one board, the status of a project the run was
 asked for. Where a chat line is brought only by a later run and another line
