@@ -245,11 +245,14 @@ func TestEveryRecordOfAToDosToolNamesRecordsOfTheBundle(t *testing.T) {
 
 // A group goes to the end of its list, so the order of the file is the order of
 // the list: the groups in use as the source has them, then the one it has thrown
-// away, which comes with its status rather than being left out.
+// away, which comes with its status rather than being left out. The groups of a
+// list follow their list, so the second list of the tool comes with its own.
 func TestTheGroupsOfAListComeInTheOrderOfTheListAndKeepTheirStatus(t *testing.T) {
 	dir, _ := extract(t, fakebasecamp.New(), todoProject)
 
 	want := []map[string]any{
+		{"sourceId": "9416", "createdAt": "2025-04-01T19:00:00.000Z", "updatedAt": "2025-04-01T19:00:00.000Z", "createdBy": "102",
+			"projectSourceId": "7008", "toolSourceId": "9080", "listSourceId": "9402", "title": "Some day", "status": "active"},
 		{"sourceId": "9411", "createdAt": "2025-04-01T14:00:00.000Z", "updatedAt": "2025-04-01T14:00:00.000Z", "createdBy": "101",
 			"projectSourceId": "7008", "toolSourceId": "9080", "listSourceId": "9401", "title": "Before the launch", "status": "active"},
 		{"sourceId": "9412", "createdAt": "2025-04-01T15:00:00.000Z", "updatedAt": "2025-04-01T15:00:00.000Z", "createdBy": "102",
@@ -325,6 +328,11 @@ func TestTheToDosOfAListComeInItsOrderWithTheirDaysAndPeople(t *testing.T) {
 	notes := `<div>On thick paper, says <import-mention ref="104">Edsger Invented</import-mention></div>` +
 		`<import-attachment ref="attachment-5063"></import-attachment>`
 	want := []map[string]any{
+		{"sourceId": "9429", "createdAt": "2025-04-03T08:00:00.000Z", "updatedAt": "2025-04-03T08:00:00.000Z", "createdBy": "102",
+			"projectSourceId": "7008", "toolSourceId": "9080", "listSourceId": "9402", "groupSourceId": "9416",
+			"title": "Think about it", "notes": nil, "startsOn": nil, "dueOn": nil,
+			"assignees": []any{}, "notifyWhenDone": []any{},
+			"completedAt": nil, "completedBy": nil, "status": "active"},
 		{"sourceId": "9421", "createdAt": "2025-04-02T08:00:00.000Z", "updatedAt": "2025-04-02T08:00:00.000Z", "createdBy": "101",
 			"projectSourceId": "7008", "toolSourceId": "9080", "listSourceId": "9401", "groupSourceId": nil,
 			"title": "Print the invitations", "notes": notes, "startsOn": "2025-04-20", "dueOn": "2025-05-01",
@@ -364,7 +372,7 @@ func TestTheToDosOfAListComeInItsOrderWithTheirDaysAndPeople(t *testing.T) {
 	if got := records(t, dir, bundle.Todos); !reflect.DeepEqual(got, want) {
 		t.Errorf("to-dos:\n got %v\nwant %v", got, want)
 	}
-	if got := result.TodosByStatus; !reflect.DeepEqual(got, map[string]int{"active": 6, "trashed": 1}) {
+	if got := result.TodosByStatus; !reflect.DeepEqual(got, map[string]int{"active": 7, "trashed": 1}) {
 		t.Errorf("to-dos by status: %v", got)
 	}
 	// Somebody who has left the account comes into the bundle for being on a
