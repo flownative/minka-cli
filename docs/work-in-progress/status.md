@@ -17,21 +17,26 @@ card, a comment or a message gives the identifier a download takes, without
 anything being taken out of the text.
 
 `minka import basecamp` extracts the structure, the boards, the message
-boards, the chats and the check-ins of Basecamp projects into an import bundle
+boards, the chats, the check-ins and the to-dos of Basecamp projects into an
+import bundle
 for Minka's applier: people with avatars, projects with members, the boards,
-chats, message boards and questionnaires as tools, of each board the columns,
+chats, message boards, questionnaires and to-do sets as tools, of each board the
+columns,
 cards, steps, comments and boosts, of each message board the posts of every
 status with their categories, comments and boosts, of each chat its lines as
 messages with their boosts, written in parts of one chat and some 10,000 lines
-each, and of each questionnaire its questions with the schedule Minka has words
-for and their answers with what hangs on them.
+each, of each questionnaire its questions with the schedule Minka has words
+for and their answers with what hangs on them, and of each to-do set its lists
+from the bottom up, because Minka puts every new list on top, with their groups
+and their to-dos in the order of the list and what hangs on a list and a to-do.
 A record the source describes with a word a bundle has none for is left out and
 counted, and the run goes on (C-050): a chat line of an unknown kind — a bundle
 has a word for `Chat::Lines::Text`, `Chat::Lines::RichText`,
 `Chat::Lines::Upload` and `Chat::Lines::Integration` — or with a status other
-than `active`, a column of a kind a bundle has no role for, and a card, a post,
+than `active`, a column of a kind a bundle has no role for, a card, a post,
 a comment, a question or an answer with a status a bundle does not know, a draft
-among them. `recordsLeftOut` names each with the kind of record, the word and
+among them, and a group or a to-do the source has put on the shelf, which a
+bundle gives none. `recordsLeftOut` names each with the kind of record, the word and
 where it stood, so one exotic record does not cost the account. What still ends
 a run is what would be written wrongly: times that are missing or are none, a
 second Triage, Not now or Done on one board, the status of a project the run was
@@ -191,6 +196,22 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   out, posts with and without a category, archived posts, a second message
   board with categories no list holds, previews of links and pictures at a
   foreign address as links, and five parts of one chat each.
+- Of the to-dos of `import basecamp`: all of it. No extraction has met a To-dos
+  tool live, so everything about them rests on the invented account and on
+  reading: that a dock entry of a to-do set is called `todoset`, which is read
+  in the code of a client that speaks to the real Basecamp and not from an answer
+  of it; that a list, a group and a to-do carry `title`, `description` with
+  `description_attachments`, `starts_on`, `due_on`, `assignees`,
+  `completion_subscribers`, `completion` and `subtasks_count` under those names;
+  that the lists of a tool come from its `todolists.json` topmost first and the
+  groups of a list from its `groups.json` in the order of the list; that what is
+  done is listed apart, under `todos.json?completed=true`; that the archived and
+  the trashed lists, groups and to-dos of a project come as recordings of the
+  types `Todolist` and `Todo`, a group being a `Todolist` whose parent is a list;
+  and that the groups and the to-dos of a list on the shelf or in the trash can
+  be asked for at all, which is what a run does for a list of any status. A to-do
+  whose completion is newer than the moment the source says it was touched
+  (C-051) is a shape the invented account holds and no real one has shown.
 - Of the files of `import basecamp`: a download that breaks off, a file
   whose size differs from what Basecamp says, a file that is gone, a name that
   has to be changed, a caption too long, and one file under two owners.
@@ -392,8 +413,11 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   and unreleased, the contract stands in its `authorization.md` and E-190.
 - Commands for the check-ins of a project: likewise unreleased, the contract
   in `authorization.md` and E-191.
-- `import basecamp` brings the to-dos of a project along: the applier is on
-  Minka's `main`, the format in its `import-format.md`.
+- Extract the to-dos of a project live: whether `todoset` is the dock entry, the
+  fields of a list, a group and a to-do, the two lists of what is open and what is
+  done, the recordings of the archived and the trashed ones, and whether a list on
+  the shelf or in the trash answers for its groups and its to-dos. Then check the
+  bundle record by record, as the boards and the chats were checked.
 - Write the bundle of the whole account, once Robert or Shaun has allowed its
   size: a dry run over it goes through and names what it would fetch. What it
   leaves out of the words a bundle has no place for is the one kind of line and
