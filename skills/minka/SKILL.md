@@ -700,19 +700,20 @@ this:
   says how many: the run exits 0, and a project may come without a creator
   because of it. An identity that may see nothing at all still exits 4.
 - So far a bundle holds the structure, the boards, the message boards, the
-  chats and the check-ins: the people the projects refer to (members and
-  whoever a record names; `data.peopleLeftOut` counts the rest of the
-  account's list, which holds more for an admin than for anybody else, the
-  people written do not differ) with their
-  avatars, the projects with their members, the card tables, chats, message
-  boards and questionnaires that are switched on, of each card table the
-  columns, the cards with the archived and the trashed ones, their steps,
-  comments and boosts, of each message board its messages as posts, the
-  archived and the trashed ones included, with their categories, comments and
-  boosts, of each chat its lines as messages with their boosts, and of each
-  questionnaire its questions with their answers, comments and boosts.
-  `data.skippedTools` counts what was left out, per kind and whether it was
-  switched on; `data.counts` is what the manifest says.
+  chats, the check-ins and the to-dos: the people the projects refer to
+  (members and whoever a record names; `data.peopleLeftOut` counts the rest of
+  the account's list, which holds more for an admin than for anybody else, the
+  people written do not differ) with their avatars, the projects with their
+  members, the card tables, chats, message boards, questionnaires and to-do
+  sets that are switched on, of each card table the columns, the cards with
+  the archived and the trashed ones, their steps, comments and boosts, of each
+  message board its messages as posts, the archived and the trashed ones
+  included, with their categories, comments and boosts, of each chat its lines
+  as messages with their boosts, of each questionnaire its questions with
+  their answers, comments and boosts, and of each to-do set its lists with
+  their groups and to-dos. `data.skippedTools` counts what was left out, per
+  kind and whether it was switched on; `data.counts` is what the manifest
+  says.
 - A person comes with `retired: true` unless Basecamp calls them a user: a
   bot, somebody who was deleted and an outsider are authors and nothing more,
   whichever identity ran the import.
@@ -732,11 +733,30 @@ this:
   `data.uploadLinesLeftOut` counts the lines of which Basecamp names no
   file, which are left out and which a `notice` counts as well. Lines
   somebody deleted and the lines Basecamp writes itself are not in its API.
+- A to-do set becomes a tool of kind `todos`. Its lists stand in the bundle from
+  the bottom up, because Minka puts every new list on top, and the groups and the
+  to-dos of a list in the order of the list. `data.todoListsByStatus` splits the
+  lists and `data.todosByStatus` the to-dos. A
+  list knows the shelf and the trash, a group and a to-do the trash alone: one the
+  source has put on the shelf is left out and counted. `data.todosLeftOut` counts
+  per kind (`lists`, `groups`, `todos`) what the bundle holds none of, whatever
+  the reason, and `data.todoPlacesLeftOut` names every list and group that took
+  records with it, with how many groups and to-dos fell with it; a `notice` says
+  how many such places there were. Nothing hangs on a group,
+  which the format has no word for; a list and a to-do carry comments, boosts and
+  the files of their text. A to-do is never said to be older than the tick the
+  source put on it, or Minka would never write the tick. Subtasks are not carried:
+  `data.todosWithSubtasks` and `data.subtasksLeftOut` count what fell away, and a
+  `notice` says so. Two differences a later run cannot repair, each with a
+  `notice`: it leaves the people of a to-do as they stand in Minka
+  (`data.todosWithPeople`) and reopens nothing it once ticked off
+  (`data.todosNotDone`).
 - A record the source describes with a word a bundle has none for is left out
   and the run goes on: a chat line of an unknown kind or with a status other
-  than `active`, a column of a kind a bundle has no role for, and a card, a
+  than `active`, a column of a kind a bundle has no role for, a card, a
   post, a comment, a question or an answer with a status a bundle does not
-  know, a draft among them. `data.recordsLeftOut` names each with the kind of
+  know, a draft among them, and a group or a to-do the source has put on the
+  shelf. `data.recordsLeftOut` names each with the kind of
   record, the field, the word the source said there, where it stood and how
   many records it cost, and a `notice` counts the records. A record whose times
   are missing or are no times still ends the run: it would be put in the wrong
@@ -780,7 +800,8 @@ this:
   bundle or not, with the address as it stood and the words of the link as
   plain text: `data.references` counts them by `cards`, `posts` and
   `tools`. `data.longestBody` is the longest text per kind
-  (`cards`, `comments`, `posts`, `messages`, `answers`) in characters, and
+  (`cards`, `comments`, `posts`, `messages`, `answers`, `todolists`, `todos`)
+  in characters, and
   `data.longestBodyRecords` names under the same kinds which record it was
   measured on (`record`, `sourceId`, `in`, `inSourceId`, `characters`), so that
   a number can be looked at at the source; a kind whose longest text has no

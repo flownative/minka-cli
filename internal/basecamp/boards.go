@@ -362,7 +362,13 @@ func (e *Extractor) writeColumns(w *bundle.Writer, projectID string, b *board) e
 // or are no times end the run, because a record without them would be put in
 // the wrong place.
 func (e *Extractor) met(what string, id int64, status string, origin recording, in, inSourceID string) (bool, error) {
-	if !recordStatuses[status] {
+	return e.metAmong(recordStatuses, what, id, status, origin, in, inSourceID)
+}
+
+// metAmong is met for a kind that has a word for fewer statuses than a card
+// does: a group and a to-do know the trash and no shelf.
+func (e *Extractor) metAmong(statuses map[string]bool, what string, id int64, status string, origin recording, in, inSourceID string) (bool, error) {
+	if !statuses[status] {
 		e.leaveOut(what, "status", status, in, inSourceID)
 		return false, nil
 	}

@@ -694,3 +694,37 @@ brings it once a bundle has a word for it.
 **Implemented as:** `basecamp.Extractor.met`, `basecamp.Extractor.leaveOut`,
 `basecamp.lineTypes`, `basecamp.columnRoles`, see
 [Importing from Basecamp](stable/import.md).
+
+<a id="c-051"></a>
+## C-051 — A to-do is never said to be older than its completion
+
+*Applies to: `todos.jsonl`, the `updatedAt` of a to-do*
+
+A to-do whose completion is newer than the moment the source says it was last
+touched is written as touched when it was done; `completedAt` stays as it is.
+
+**Why:** Minka passes a record over whole whose `updatedAt` has not moved since
+the run before, so such a to-do would stay open here for ever with nobody able to
+see why — and the later of two moments the source itself said is no guess.
+**Implemented as:** `basecamp.touchedAtLeastWhenDone`, see
+[Importing from Basecamp](stable/import.md).
+
+<a id="c-052"></a>
+## C-052 — What falls with a place a bundle cannot carry is asked for and counted
+
+*Applies to: the lists, groups and to-dos of a bundle, the report of a run*
+
+The groups and to-dos of a to-do list, and the to-dos of a group, that a bundle
+does not carry are asked for although none of them is written, counted per kind
+and named with the place they fell with. Such a walk asks for what it counts and
+for nothing else, and the one failure it passes over is `not_found`.
+
+**Why:** [C-050](#c-050) promises that what is left out is counted, and a place
+that took a subtree with it silently would make every number of a run say that a
+bundle holds more of the source than it does. The requests are the price, so the
+walk is fenced to them, and a place Basecamp no longer has is passed over rather
+than ending a run over records it left out anyway — the only place where a wrong
+assumption about an answer counts too few instead of ending the run, which is why
+the [Status](work-in-progress/status.md) names it.
+**Implemented as:** `basecamp.Extractor.countWhatFellWithAPlace`, see
+[Importing from Basecamp](stable/import.md).

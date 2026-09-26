@@ -112,16 +112,19 @@ the record out where a bundle cannot express it at all and its absence stays
 nameable.**
 
 Left out and counted, the run going on: a record the source describes with a
-word a bundle has none for. A bundle has no field to say such a word in, so the
-record is lost whatever the run does, and going on costs it and nothing else.
-That is a kind of chat line a bundle does not know, a chat line whose status is
-not `active`, because a message of a bundle has no status at all, a kind of
-column a bundle has no role for, and a card, a post, a comment, a question or
-an answer whose status is neither `active` nor `archived` nor `trashed`, a
-draft among them. `recordsLeftOut` names each with the kind of record, the
-field, the word the source said there, the record it stood in and how many were
-left out, counting records and not entries. Nothing hangs on a record that is
-left out: nobody comes into the bundle for it, and nothing of it is asked for.
+word a bundle has none for. A bundle has no field to say such a word in, so
+the record is lost whatever the run does, and going on costs it and nothing
+else. That is a kind of chat line a bundle does not know, a chat line whose
+status is not `active`, because a message of a bundle has no status at all, a
+kind of column a bundle has no role for, and a card, a post, a comment, a
+question or an answer whose status is neither `active` nor `archived` nor
+`trashed`, a draft among them, a to-do list of such a status, and a group or a
+to-do whose status is neither `active` nor `trashed`, the shelf among them,
+because a bundle gives neither of the two a shelf. `recordsLeftOut` names each
+with the kind of record, the field, the word the source said there, the record
+it stood in and how many were left out, counting records and not entries.
+Nothing hangs on a record that is left out: nobody comes into the bundle for
+it, and nothing of it is asked for.
 
 The run ends as `api_error` where going on would put something wrong into the
 bundle: a record without `created_at` or `updated_at` and a time that is none,
@@ -129,8 +132,9 @@ because the record would be placed wrongly among the others; a day of another
 shape than `YYYY-MM-DD`; a time zone the run does not know, because the day
 would be somebody else's; an address outside the account, because it is a
 request the run may not make; a title Minka refuses, because the applier would
-refuse it too; a second Triage, Not now or Done on one board, because the cards
-of the second would end up in a column nobody had; a boost that does not say
+refuse it too, and for the same reason a start after the day a to-do is due; a
+second Triage, Not now or Done on one board, because the cards of the second
+would end up in a column nobody had; a boost that does not say
 whose it is, because `createdBy` takes `null` and a reaction with an empty one
 reads as the author of what it hangs on, which would lay it at the feet of
 somebody who never gave it; and the status of a **project** the run was given by
@@ -183,19 +187,20 @@ names an address or whose it is, and `invalidAddresses` holds IDs, never names.
 
 ## What a bundle holds so far
 
-The structure, the boards, the message boards, the chats and the check-ins:
-`manifest.json`, `people.jsonl`, `projects.jsonl`, `tools.jsonl`,
+The structure, the boards, the message boards, the chats, the check-ins and the
+to-dos: `manifest.json`, `people.jsonl`, `projects.jsonl`, `tools.jsonl`,
 `categories.jsonl`, `columns.jsonl`, `cards.jsonl`, `steps.jsonl`,
-`posts.jsonl`, `questions.jsonl`, `answers.jsonl`, `messages.jsonl` or its
+`posts.jsonl`, `questions.jsonl`, `answers.jsonl`, `todolists.jsonl`,
+`todogroups.jsonl`, `todos.jsonl`, `messages.jsonl` or its
 parts, `comments.jsonl`, `reactions.jsonl`, `attachments.jsonl` and `files/`
-with the avatars and the files of texts, chats and answers. A file of a kind
-the projects have nothing of is missing.
+with the avatars and the files of texts, chats, answers, lists and to-dos. A
+file of a kind the projects have nothing of is missing.
 
 The walk goes kind by kind across the projects of a run (C-028): the projects
 with their tools and boards, then the message boards of all projects, then
-the chats, then the questionnaires. So comments and reactions stand in the
-order of what they hang on: those of cards, those of posts, those of lines,
-those of answers.
+the chats, then the questionnaires, then the To-dos tools. So comments and
+reactions stand in the order of what they hang on: those of cards, those of
+posts, those of lines, those of answers, those of lists and of to-dos.
 
 - **People** are the ones a record of the bundle refers to, and nobody else:
   the members of the projects named and whoever a record names: its creator,
@@ -260,8 +265,8 @@ those of answers.
   paragraph per block, a `<br>` per line break.
 - **Tools** are the dock entries that are switched on and that Minka has a
   counterpart for: `kanban_board` → `board`, `chat` → `chat`, `message_board`
-  → `posts`, `questionnaire` → `checkins`, several of a kind where a project
-  has several. Creator and
+  → `posts`, `questionnaire` → `checkins`, `todoset` → `todos`, several of a
+  kind where a project has several. Creator and
   timestamps come from the tool itself. Every other entry is counted as
   skipped, per kind and whether it was switched on, and shown in the report.
 - **Columns** are the lists of a card table: `Kanban::Triage` → `triage`,
@@ -432,15 +437,70 @@ those of answers.
   (`answersWithoutABody`), because the applier refuses such a body. A question
   that has no answer costs no request. Comments, boosts and files hang on the
   answer.
-- **Comments** are those of cards, of posts and of answers, `parentKind`
-  `card`, `post` or `answer`,
+- **To-do lists** are the lists of every To-dos tool, and the archived and
+  the trashed ones. Basecamp lists the lists of a tool itself, and the
+  archived and the trashed ones of a project in one list across all its To-dos
+  tools, those that are switched off included; such a record names only what
+  it hangs on, so every list of every tool is known before the first one is
+  written, and a list of a tool that is not extracted is left out and counted.
+  Minka puts every new list on top of its tool, so the lists of a tool stand
+  in the file **from the bottom up**: the last line of a tool is the list on
+  top. What has left the list, the archived and the trashed ones, goes first,
+  where it cannot push the rest about. No `position` is written for a list, a
+  group or a to-do: Minka reads none, and a `todogroups` record that carried
+  one would earn a warning. A list comes with its groups and its to-dos
+  whatever its status, as a card comes with its steps. `status` is `active`,
+  `archived` or `trashed`; any other word leaves the list out, see What a
+  bundle cannot carry. The description is the rendered text and goes the way
+  every other text goes; a list without one comes with `description` `null`.
+  Comments and boosts hang on a list as they hang on a card.
+- **Groups** are the named headings of a list. Basecamp makes a group a
+  to-do list of its own, and what a record hangs on is what tells the two
+  apart. A group goes to the end of its list, so the order of the file is the
+  order of the list: the groups in use as Basecamp lists them, then the ones
+  it has thrown away. `status` is `active` or `trashed`, because the shelf is
+  the list's alone, so a group the source has put on the shelf is left out and
+  counted. A group of a list that is not extracted is left out and counted as
+  well. **Nothing hangs on a group:** the format has no word for a comment, a
+  reaction or a file of one, such a record would wait in Minka for ever, so
+  none is written and none is asked for.
+- **To-dos** are those of every list and of every group, and the archived
+  and the trashed ones. Basecamp lists what is open apart from what is done,
+  and the archived and the trashed ones of a project in one list across all
+  its To-dos tools; one that stands in neither a list nor a group of the
+  bundle is left out and counted. A list or a group the bundle does not carry
+  takes what stood in it with it, and what fell is asked for and counted all
+  the same (C-052): `todosLeftOut` counts the lists, the groups and the to-dos
+  a bundle does not carry, each kind on its own, and `todoPlacesLeftOut` names
+  every list and group that took records with it, with how many groups and
+  to-dos those were. Such a request is made for the counting alone, so a place
+  Basecamp no longer has takes nothing with it and does not end the run; every
+  other failure of it ends the run as everywhere. A to-do goes to the end of
+  its list or its group, so the order of the file is the order of the list:
+  what is open as Basecamp lists it, then what is done, then what it has
+  thrown away. `groupSourceId` names a group of the to-do's own list and is
+  `null` for a to-do standing in the list itself; both it and a `listSourceId`
+  that named anything else would be disguised in Minka as "the list is not in
+  use here". `status` is `active` or `trashed`, as a group's is. The notes are
+  the rendered text, `assignees` and `notifyWhenDone` are the people the
+  source names, in the order of their IDs and each once, `completedAt` and
+  `completedBy` come from the completion Basecamp records, and `startsOn` and
+  `dueOn` as given. Comments, boosts and files hang on a to-do. **`updatedAt`
+  is never older than `completedAt`** (C-051). **Subtasks are not carried:**
+  the format has no word for them, so all that is left of them is how many
+  there were, counted in `todosWithSubtasks` and `subtasksLeftOut` and asked
+  for never.
+- **Comments** are those of cards, of posts, of answers, of to-do lists and of
+  to-dos, `parentKind`
+  `card`, `post`, `answer`, `todolist` or `todo`,
   per parent oldest first, by `created_at` and then by ID: the applier reads
   the order of the comments of a parent from the file. Basecamp hands out the
   rendered text of a comment only. A comment in the trash is left out with
   its boosts and counted (`commentsTrashed`); any other comes, the archived
   comment of an archived card as well.
 - **Reactions** are the boosts of a card (`targetKind` `card`), of a post
-  (`post`), of an answer (`answer`), of a comment (`comment`) and of a line
+  (`post`), of an answer (`answer`), of a to-do list (`todolist`), of a to-do
+  (`todo`), of a comment (`comment`) and of a line
   (`message`), with `content`
   as it is, a text of some words included: what Minka takes for a reaction is
   the applier's to decide. The boosts of a card or a post stand before those
@@ -682,7 +742,8 @@ see Files that cannot be fetched (C-030).
 - **The record** carries `filename`, `contentType` as Basecamp says it, or
   `null`, `bytes`, `sha256`, `file`, which is exactly
   `<sourceId>/<filename>`, `ownerKind` (`card`, `comment`, `post`, `message`,
-  `answer`) and `ownerSourceId`. Basecamp gives a file neither a time nor a creator, so
+  `answer`, `todolist`, `todo`) and `ownerSourceId`. Basecamp gives a file
+  neither a time nor a creator, so
   `createdAt` and `updatedAt` are those of its owner, and `createdBy` is
   `null`, which the format reads as the author of the owner. Avatars stay as
   they are, with their person as creator.
@@ -845,18 +906,23 @@ files of its texts the same way.
   `filesFetched`, `filesReused`, `filesGone`, `fileNamesChanged`,
   `captionsDropped`, `filesOfSeveralOwners`, `linkPreviews`,
   `picturesLinked`, `embeds`, `embedsLeftOut`, `references`,
+  `todoListsByStatus`, `todosByStatus`, `todosLeftOut` (`lists`, `groups`,
+  `todos`), `todoPlacesLeftOut` (`record`, `sourceId`, `groups`, `todos`),
+  `todosNotDone`, `todosWithPeople`, `todosWithSubtasks`, `subtasksLeftOut`,
   `questionsLeftOut`, `anchorsInferred`, `nobodyAsked`, `askedLeftOut`
   (`notInTheProject`,
   `retired`, `withoutAnAddress`), `answersWithoutABody`, `answersWithoutADay`,
   `answersTrashed`, `longestBody`, `longestBodyRecords`, `requestsRetried` and the absolute path of
   the bundle. The lines about check-ins are shown only by a run that met a
-  questionnaire. `filesBytes` is
-  what the files of the bundle weigh, fetched or taken over; it and
+  questionnaire, and those about to-dos only by one that met a To-dos tool.
+  `filesBytes` is what the files of the bundle weigh, fetched or taken over; it
+  and
   `filesFetched`, `filesReused` and `filesGone` are 0 in a dry run.
   `longestBody` is the longest text per kind, `cards`, `comments`, `posts`,
-  `messages` and `answers`, in characters: whoever sets the limits of where a bundle
-  goes has to know it. `longestBodyRecords` names, under the same kinds, the
-  record each number was measured on, so that it can be looked at at the
+  `messages`, `answers`, `todolists` and `todos`, in characters: whoever sets
+  the limits of where a bundle goes has to know it. `longestBodyRecords` names,
+  under the same kinds, the record each number was measured on, so that it can
+  be looked at at the
   source: `record` is the kind of record (`card`, `comment`, `post`, `line`,
   `answer`), `sourceId` which one, `in` and `inSourceId` where it stands — the
   chat of a line, the project of everything else — and `characters` the length,
