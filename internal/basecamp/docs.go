@@ -579,7 +579,7 @@ func shelvedInVaults[T any](ctx context.Context, source Source, bucket int64, ki
 // they fell with.
 //
 // They are asked for although none of them is written: what is left out is
-// counted (C-050), and a record that falls with its place would otherwise be gone
+// counted, and a record that falls with its place would otherwise be gone
 // without a number. A folder of such a folder is a place of its own, so the walk
 // grows while it goes. A **tool** is asked nothing: one that is switched off is a
 // tool the run does not read, and what the project's own lists of records it has

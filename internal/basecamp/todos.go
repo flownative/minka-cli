@@ -251,7 +251,7 @@ func aGroupThatFell(id int64) lostPlace { return lostPlace{record: "group", id: 
 // or a group the bundle does not carry, and names the place they fell with.
 //
 // They are asked for although none of them is written: what is left out is
-// counted (C-050), and a record that falls with its place would otherwise be gone
+// counted, and a record that falls with its place would otherwise be gone
 // without a number — no run could say how much of the source a bundle holds. A
 // group of such a list is a place of its own, so the walk grows while it goes.
 func (e *Extractor) countWhatFellWithAPlace(ctx context.Context, bucket int64, lost []lostPlace, strays []todoList, shelvedTodos []todo, met, placed map[int64]bool) error {
