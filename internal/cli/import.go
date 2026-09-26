@@ -319,7 +319,10 @@ bundle or not (references, by kind).
 
 Every file a reference names comes with a record and its bytes under files/,
 whatever its size and type, streamed from the Basecamp CLI (basecamp files
-download). A file that is still whole in the bundle being replaced is taken
+download). A file of a text or a chat is fetched at a storage address, the one
+file of an upload of Docs & Files by the identifier of the upload and its
+project: Basecamp names no stored file on such a record, and the address it gives
+leads to a store of its own that no run follows. A file that is still whole in the bundle being replaced is taken
 over from there instead of being fetched again; the report counts both as
 filesFetched and filesReused. A file Basecamp lists and no longer has gets a
 record that says so (filesGone). The name of a file is made a plain one

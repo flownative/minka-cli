@@ -125,6 +125,11 @@ type Account struct {
 	// MemberEmail replaces the address of a person in the list of a project.
 	MemberEmail map[int64]string
 
+	// VaultsWithoutAParent leaves the parent out of every vault the account lists
+	// among the records it has put away, the way it lists the vault at the top of
+	// a tool: a shape no record of a real account has been seen in, because no
+	// whole Docs & Files tool of it has been put away.
+	VaultsWithoutAParent bool
 	// MailListMoves has a list of forwarded mail hand the last record of a page
 	// out again as the first of the next, as a list does that something was
 	// added to between two requests.
@@ -157,8 +162,11 @@ type Account struct {
 
 	Requests       []string
 	AvatarRequests []string
-	// Downloads are the addresses files were asked for at.
-	Downloads []string
+	// Downloads are the addresses files were asked for at, and UploadDownloads
+	// the "<project>/<upload>" of every file of a Docs & Files tool that was asked
+	// for by its identifiers.
+	Downloads       []string
+	UploadDownloads []string
 }
 
 // UsersOnly takes everybody out of the list of the account who is no user,

@@ -10,6 +10,7 @@ import (
 	"io/fs"
 	"os"
 	"os/exec"
+	"strconv"
 	"sync/atomic"
 	"time"
 )
@@ -47,17 +48,34 @@ type Downloader struct {
 }
 
 func (d Downloader) Download(ctx context.Context, address string, into io.Writer) error {
-	return d.download(ctx, address, into, nil)
+	if err := checkStorageAddress(address); err != nil {
+		return err
+	}
+	return d.download(ctx, d.commanding(address), into, nil)
+}
+
+// DownloadUpload writes the one file of an upload of a Docs & Files tool into a
+// writer, asked for by the identifier of the upload and the project it stands in.
+//
+// Such a file is named nowhere: the record carries no key of a stored file, and
+// the address it gives answers with a redirect to a store of its own that no run
+// may follow — which is the guard `checkStorageAddress` is there for, and it
+// stays exactly as strict as it is. The Basecamp CLI knows the way and is asked
+// to take it.
+func (d Downloader) DownloadUpload(ctx context.Context, project, upload int64, into io.Writer) error {
+	return d.download(ctx, func(running context.Context) *exec.Cmd { return d.commandForUpload(running, project, upload) }, into, nil)
+}
+
+// commanding is the call that streams the file at a storage address.
+func (d Downloader) commanding(address string) func(context.Context) *exec.Cmd {
+	return func(running context.Context) *exec.Cmd { return d.command(running, address) }
 }
 
 // download is Download, and says which process the Basecamp CLI is as soon as
 // there is one. Whoever watches a download knows from then on what has to be
 // gone when it ends, and need not wait for the CLI to say so itself: a
 // download may be given up before the CLI has run a single line of its own.
-func (d Downloader) download(ctx context.Context, address string, into io.Writer, started func(pid int)) error {
-	if err := checkStorageAddress(address); err != nil {
-		return err
-	}
+func (d Downloader) download(ctx context.Context, build func(context.Context) *exec.Cmd, into io.Writer, started func(pid int)) error {
 	if ctx.Err() != nil {
 		return &Error{Kind: Interrupted, Message: "interrupted"}
 	}
@@ -83,7 +101,7 @@ func (d Downloader) download(ctx context.Context, address string, into io.Writer
 	limit := time.AfterFunc(timeLimit, giveUp(fmt.Sprintf("the download did not end within %s and was given up", timeLimit)))
 	defer limit.Stop()
 
-	cmd := d.command(running, address)
+	cmd := build(running)
 	stdout := &watchedOutput{into: into, alive: func() { idle.Reset(idleTimeout) }}
 	cmd.Stdout = stdout
 
@@ -125,6 +143,21 @@ func (d Downloader) command(ctx context.Context, address string) *exec.Cmd {
 		binary = "basecamp"
 	}
 	cmd := exec.CommandContext(ctx, binary, "files", "download", "--out", "-", "--agent", "--", address)
+	cmd.Env = append(os.Environ(), "BASECAMP_NONINTERACTIVE=1")
+	cmd.WaitDelay = childWaitDelay
+	return cmd
+}
+
+// commandForUpload builds the call that streams the file of an upload. Both
+// numbers are the source's own identifiers and are written as digits, so nothing
+// of an answer becomes part of the call.
+func (d Downloader) commandForUpload(ctx context.Context, project, upload int64) *exec.Cmd {
+	binary := d.Binary
+	if binary == "" {
+		binary = "basecamp"
+	}
+	cmd := exec.CommandContext(ctx, binary, "files", "download",
+		"--in", strconv.FormatInt(project, 10), "--out", "-", "--agent", "--", strconv.FormatInt(upload, 10))
 	cmd.Env = append(os.Environ(), "BASECAMP_NONINTERACTIVE=1")
 	cmd.WaitDelay = childWaitDelay
 	return cmd

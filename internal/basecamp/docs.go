@@ -234,6 +234,17 @@ func (e *Extractor) extractDocsOfProject(ctx context.Context, w *bundle.Writer, 
 	for _, found := range folders {
 		walk.foldersGone[found.Parent.ID] = append(walk.foldersGone[found.Parent.ID], found)
 	}
+	// A vault record that names no vault above it is the vault at the top of a
+	// tool and no folder of one: the dock entry itself, which the source lists
+	// that way. It stands in nothing, so nothing can place it; it becomes a place
+	// of its own, counted with what stood in it, rather than falling out of the
+	// walk without a word.
+	sort.SliceStable(walk.foldersGone[0], func(i, j int) bool { return walk.foldersGone[0][i].ID < walk.foldersGone[0][j].ID })
+	for _, found := range walk.foldersGone[0] {
+		walk.lost = append(walk.lost, lostVaultPlace{record: "folder", id: found.ID, aFolder: true})
+		walk.metFolders[found.ID] = true
+	}
+	delete(walk.foldersGone, 0)
 	documents, err := shelvedInVaults[vaultDocument](ctx, e.Source, t.bucket, "Document")
 	if err != nil {
 		return err
@@ -484,7 +495,7 @@ func (e *Extractor) writeDocument(ctx context.Context, w *bundle.Writer, walk *d
 // source: the format keeps a field free for them and reads it nowhere, and the
 // upload says neither how many there are nor which.
 func (e *Extractor) writeUpload(ctx context.Context, w *bundle.Writer, walk *docsWalk, tool int64, folderID *string, found vaultUpload) error {
-	file, aFile := fileOfAnUpload(found)
+	file, aFile := fileOfAnUpload(found, walk.bucket)
 	if !aFile {
 		e.docs.WithoutAStoredFile = append(e.docs.WithoutAStoredFile, sourceID(found.ID))
 		e.docs.CommentsWithoutTheirUpload += found.CommentsCount
@@ -581,27 +592,29 @@ func (e *Extractor) wordlessWhereItsOnlyFileNeverComes(text, sourceID string) st
 	return ""
 }
 
-// fileOfAnUpload is the stored file an upload stands for, as a run brings it, and
-// whether the record names a stored file at all.
+// fileOfAnUpload is the one file an upload stands for, as a run brings it, and
+// whether the record names a file at all.
 //
-// **It is the record that says so and never the shape of the address.** An upload
-// the source gives an address to fetch a file from has a file, whatever a run can
-// make of that address: an address a run cannot ask for is a file it could
-// not fetch, which the run says out loud and a later one brings, while treating
-// it as an upload that has no file at all would leave every file of a tool out of
-// the bundle, counted and named and gone. An upload that lies in a cloud names no
-// file, and that is the one this leaves out.
+// **It is the record that says so and never the shape of the address**, and the
+// bytes are asked for **by the identifier of the upload and its project**:
+// Basecamp names no stored file on such a record and answers the address it does
+// give with a redirect to a store of its own that no run follows, so there is no
+// storage address to build and none is looked for. The
+// `…/blobs/{key}/download/{name}` shape belongs to a file inside a text, which
+// carries its key; reading an upload as if it did leaves every file of a tool out
+// of a bundle, counted and named and gone. An upload that lies in a cloud names
+// no file at all, and that is the one this leaves out.
 //
-// The reference is the upload's own and never the key of the file: a stored file
+// The reference is the upload's own and never the key of a file: a stored file
 // has one place in Minka, so a text that embedded the same file and an upload
 // that stood for it would be one reference used twice, the text would claim it,
 // and the upload would stay out.
-func fileOfAnUpload(found vaultUpload) (sourceFile, bool) {
+func fileOfAnUpload(found vaultUpload, bucket int64) (sourceFile, bool) {
 	if found.DownloadURL == "" {
 		return sourceFile{}, false
 	}
 	return sourceFile{
-		ref: fmt.Sprintf("upload-%d", found.ID), key: blobKey(found.DownloadURL),
+		ref: fmt.Sprintf("upload-%d", found.ID), upload: found.ID, bucket: bucket,
 		filename: found.Filename, contentType: found.ContentType, byteSize: found.ByteSize, downloadURL: found.DownloadURL,
 	}, true
 }

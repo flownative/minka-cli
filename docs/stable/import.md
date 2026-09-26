@@ -748,7 +748,11 @@ and Minka applies the kinds in an order of its own.
   and never the reference a text uses for a file: a stored file has one place in
   Minka, so a text that embedded the same file and an upload that stood for it
   would be one reference used twice, the text would claim it, and the upload
-  would stay out. `description` is the rich text beside the file, or `null`, and
+  would stay out. **The bytes of that file are asked for by the identifier of the
+  upload and of its project**, and at no address: Basecamp names no stored file
+  on such a record, and the address it does give answers with a redirect to a
+  store of its own, which no run follows — see Files. `description` is the rich
+  text beside the file, or `null`, and
   `status` is its own as a document's is. Only the file the source shows now
   comes; the format keeps `versions` free for the earlier copies and reads it
   nowhere, so a bundle writes none, and the upload says neither how many there
@@ -757,11 +761,10 @@ and Minka applies the kinds in an order of its own.
   counted with what fell in `docs.commentsWithoutTheirUpload` and
   `docs.boostsWithoutTheirUpload`. **What says so is the record and never the
   shape of the address:** an upload the source gives an address to fetch a file
-  from has a file, whatever a run can make of that address, and one whose
-  address a run cannot ask for is a file it could not fetch — named under
-  `missingFiles`, the run ending non-zero, and a later run brings it. Reading the
-  shape of the address as the word on whether there is a file at all would leave
-  every file of a tool out of a bundle, counted and named and gone. Comments, boosts and the files of the
+  from has a file, and nothing looks at what that address is made of, because
+  nothing asks for it. Reading it for the key of a stored file, as a file inside a
+  text is read, leaves every file of a tool out of a bundle, counted and named and
+  gone. Comments, boosts and the files of the
   description use `upload` as their kind.
 - **A document or a description longer than the 1,000,000 characters Minka
   holds** is counted (`docs.longerThanMinkaTakes`) and comes as it is, as a mail
@@ -1084,6 +1087,18 @@ text of a card, a comment or a post, `blob-<key>` for a file dropped into a
 chat, `upload-<id>` for the file an upload of Docs & Files stands for. The one
 reference without a record is a file the run could not fetch,
 see Files that cannot be fetched (C-030).
+
+**A file comes by one of two routes.** A file of a text or a chat is fetched **at
+a storage address** the extractor builds from the key of its stored file, held to
+one pattern right before the call. The one file of an **upload** of a Docs & Files
+tool is fetched **by the identifier of the upload and of its project**: Basecamp
+names no stored file on such a record, and the address it does give —
+`…/buckets/{b}/uploads/{id}/download/{name}`, the API's own — answers with a
+redirect to a store of its own that is no storage address of the pattern. The
+pattern stays exactly as strict as it is and the redirect is never followed: what
+it leads to is not a place a run fetches from, and its query carries the name of
+the file. `basecamp files download <id> --in <project> --out -` knows the way and
+is asked to take it.
 
 - **The record** carries `filename`, `contentType` as Basecamp says it, or
   `null`, `bytes`, `sha256`, `file`, which is exactly

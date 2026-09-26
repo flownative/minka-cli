@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/url"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/flownative/minka-cli/internal/basecamp"
@@ -109,6 +110,67 @@ func (a *Account) Download(ctx context.Context, address string, into io.Writer) 
 	return err
 }
 
+// DownloadUpload streams the one file of an upload of a Docs & Files tool the way
+// the Basecamp CLI does when it is asked for one by its identifier: the account
+// names no stored file on such a record and its own address leads to a store of
+// its own, so nothing but the two identifiers reaches this.
+func (a *Account) DownloadUpload(ctx context.Context, project, upload int64, into io.Writer) error {
+	a.UploadDownloads = append(a.UploadDownloads, fmt.Sprintf("%d/%d", project, upload))
+	notFound := &basecamp.Error{Kind: basecamp.NotFound, Message: "Basecamp: resource not found"}
+
+	found, known := a.uploadedFile(project, upload)
+	if !known || found.Gone {
+		return notFound
+	}
+	if ctx.Err() != nil {
+		return &basecamp.Error{Kind: basecamp.Interrupted, Message: "interrupted"}
+	}
+	key := StoredKeyOfUpload(upload)
+	if a.BeforeDownload != nil {
+		a.BeforeDownload(key)
+	}
+	size := found.Bytes
+	if found.NoSize {
+		size = sizeWithoutSaying
+	}
+	if served, replaced := a.ServeBytes[key]; replaced {
+		size = served
+	}
+	if err := a.FailFileOf[key]; err == basecamp.ErrLooksLikeAFailure {
+		if _, copyErr := io.Copy(into, FileContent(key, size)); copyErr != nil {
+			return copyErr
+		}
+		return err
+	} else if err != nil {
+		if _, copyErr := io.Copy(into, FileContent(key, size/2)); copyErr != nil {
+			return copyErr
+		}
+		return err
+	}
+	_, err := io.Copy(into, FileContent(key, size))
+	return err
+}
+
+// uploadedFile finds an upload of a Docs & Files tool of one project.
+func (a *Account) uploadedFile(project, id int64) (UploadedFile, bool) {
+	p := a.project(strconv.FormatInt(project, 10))
+	if p == nil {
+		return UploadedFile{}, false
+	}
+	var found *UploadedFile
+	a.eachVault(p, func(in vault) {
+		for i := range in.uploads {
+			if in.uploads[i].ID == id && !in.uploads[i].InTheCloud && found == nil {
+				found = &in.uploads[i]
+			}
+		}
+	})
+	if found == nil {
+		return UploadedFile{}, false
+	}
+	return *found, true
+}
+
 // storedFile finds a file by its key, wherever in the account it is.
 func (a *Account) storedFile(key string) (storedFile, bool) {
 	var found *storedFile
@@ -171,9 +233,6 @@ func (a *Account) storedFile(key string) (storedFile, bool) {
 			for _, upload := range in.uploads {
 				listed(upload.Files)
 				commented(upload.Comments)
-				if !upload.InTheCloud && found == nil && StoredKeyOfUpload(upload.ID) == key {
-					found = &storedFile{Key: key, URLName: upload.urlName(), Bytes: upload.Bytes, NoSize: upload.NoSize, Gone: upload.Gone}
-				}
 			}
 		})
 	}

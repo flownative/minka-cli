@@ -3,6 +3,7 @@ package basecamp_test
 import (
 	"errors"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"unicode"
@@ -224,12 +225,13 @@ func TestNoEntryBelowATopFolderIsSilentAboutClientsWhereTheSourceSpeaks(t *testi
 	}
 
 	// And the word follows the source when the source changes it: an entry the
-	// source hides below a shown top says false, whatever its depth.
+	// source hides below a shown top says false, whatever its depth and whatever
+	// became of it.
 	hidden := false
-	theDocument(t, account, 9242).VisibleToClients = &hidden
+	theDocument(t, account, 9255).VisibleToClients = &hidden
 	dir, _ = extract(t, account, docsProject)
-	if got := recordWithID(t, records(t, dir, bundle.Documents), "9242")["visibleToClients"]; got != false {
-		t.Errorf("a document hidden from clients in a folder on the shelf says %v", got)
+	if got := recordWithID(t, records(t, dir, bundle.Documents), "9255")["visibleToClients"]; got != false {
+		t.Errorf("a document on the shelf that is hidden from clients says %v", got)
 	}
 }
 
@@ -259,11 +261,11 @@ func TestTheFoldersOfATheBundleStandParentsFirstAndEachKindFromTheBottomUp(t *te
 	// Per folder and per kind, the bundle is the source's order upside down, and
 	// what has left the folder goes first, where it cannot push the rest about.
 	if got := sourceIDs(records(t, dir, bundle.Documents)); !reflect.DeepEqual(got,
-		[]string{"9246", "9247", "9245", "9244", "9242", "9252", "9240", "9241", "9248"}) {
+		[]string{"9246", "9247", "9245", "9244", "9255", "9252", "9240", "9241", "9248"}) {
 		t.Errorf("the documents stand in the order %v", got)
 	}
 	if got := sourceIDs(records(t, dir, bundle.Uploads)); !reflect.DeepEqual(got,
-		[]string{"9269", "9276", "9264", "9263", "9267", "9261", "9270", "9260", "9265"}) {
+		[]string{"9269", "9276", "9264", "9263", "9267", "9270", "9260", "9265"}) {
 		t.Errorf("the uploads stand in the order %v", got)
 	}
 }
@@ -292,22 +294,27 @@ func TestTheStatusOfAnEntryIsItsOwnAndNeverItsFoldersS(t *testing.T) {
 	if got := recordWithID(t, records(t, dir, bundle.Folders), "9222")["status"]; got != bundle.StatusArchived {
 		t.Errorf("the folder on the shelf comes as %v", got)
 	}
-	if got := recordWithID(t, records(t, dir, bundle.Documents), "9242")["status"]; got != bundle.StatusActive {
-		t.Errorf("the document in a folder on the shelf comes as %v, want active", got)
+	// On the shelf and in the trash inside a folder that is in use: the entry
+	// carries what became of **it**, and the folder above it is untouched.
+	if got := recordWithID(t, records(t, dir, bundle.Documents), "9255")["status"]; got != bundle.StatusArchived {
+		t.Errorf("the document on the shelf inside a folder in use comes as %v", got)
 	}
-	if got := recordWithID(t, records(t, dir, bundle.Uploads), "9261")["status"]; got != bundle.StatusActive {
-		t.Errorf("the upload in a folder in the trash comes as %v, want active", got)
+	if got := recordWithID(t, records(t, dir, bundle.Uploads), "9270")["status"]; got != bundle.StatusTrashed {
+		t.Errorf("the upload in the trash inside a folder in use comes as %v", got)
+	}
+	if got := recordWithID(t, records(t, dir, bundle.Folders), "9220")["status"]; got != bundle.StatusActive {
+		t.Errorf("the folder holding them comes as %v, want active", got)
 	}
 	if got := result.Docs.FoldersByStatus; !reflect.DeepEqual(got,
 		map[string]int{bundle.StatusActive: 3, bundle.StatusArchived: 1, bundle.StatusTrashed: 1}) {
 		t.Errorf("the folders by status are %v", got)
 	}
 	if got := result.Docs.DocumentsByStatus; !reflect.DeepEqual(got,
-		map[string]int{bundle.StatusActive: 7, bundle.StatusArchived: 1, bundle.StatusTrashed: 1}) {
+		map[string]int{bundle.StatusActive: 6, bundle.StatusArchived: 2, bundle.StatusTrashed: 1}) {
 		t.Errorf("the documents by status are %v", got)
 	}
 	if got := result.Docs.UploadsByStatus; !reflect.DeepEqual(got,
-		map[string]int{bundle.StatusActive: 7, bundle.StatusArchived: 1, bundle.StatusTrashed: 1}) {
+		map[string]int{bundle.StatusActive: 6, bundle.StatusArchived: 1, bundle.StatusTrashed: 1}) {
 		t.Errorf("the uploads by status are %v", got)
 	}
 }
@@ -889,44 +896,91 @@ func TestAListOfAFolderThatIsPutAwayMayBeGoneAndOneOfAFolderInUseMayNot(t *testi
 	}
 }
 
-// An upload whose address a run cannot ask for **still has a file**: it comes
-// into the bundle, the file is named among the missing ones, and the run ends
-// non-zero so nobody takes the bundle for whole. Reading the shape of the address
-// as the word on whether the upload has a file at all would leave every file of
-// a Docs & Files tool out, counted and named and gone — which is what a bundle of
-// the real account did until the address was measured.
-func TestAnUploadWhoseAddressARunCannotAskForKeepsItsFileAndIsNamedMissing(t *testing.T) {
+// The file of an upload is fetched **by the identifier of the upload and its
+// project**, and the address the source gives is asked for by nothing: Basecamp
+// names no stored file on such a record, and the address it does give answers with
+// a redirect to a store of its own that no run follows. Whatever shape that
+// address has, the file comes.
+//
+// This is the rule a bundle of the real account was measured against: reading the
+// address for a key of a stored file, as a file inside a text is read, left every
+// upload of every tool out of the bundle, counted as an upload the source names no
+// file for, and gone.
+func TestTheFileOfAnUploadIsFetchedByItsIdentifierAndNotByAnyAddress(t *testing.T) {
 	for what, address := range map[string]string{
-		"an address of the app and not of the store": "https://3.basecamp.test/4242/buckets/7011/uploads/9267/download/minutes.pdf",
-		"an address with no key in it":               "https://storage.3.basecamp.com/4242/uploads/9267/download/minutes.pdf",
-		"a key of no shape a run can ask for":        "https://storage.3.basecamp.com/4242/blobs/BAh7CEki=/download/minutes.pdf",
+		"the address the account really gives":     "",
+		"an address of a store and not of the app": "https://storage.3.basecamp.com/4242/blobs/5a1b2c3d-9267-4000-8000-000000009267/download/x.pdf",
+		"an address with no key in it":             "https://storage.3.basecamp.com/4242/uploads/9267/download/x.pdf",
+		"an address of no shape anybody has seen":  "https://example.test/whatever",
+		"no address of a shape at all":             "not an address",
 	} {
 		account := fakebasecamp.New()
-		theUpload(t, account, 9267).DownloadURL = address
+		if address != "" {
+			theUpload(t, account, 9267).DownloadURL = address
+		}
 		dir, result := extract(t, account, docsProject)
 
 		upload := recordWithID(t, records(t, dir, bundle.Uploads), "9267")
 		if upload["file"] != "upload-9267" {
 			t.Errorf("%s: the upload names %v, want its file", what, upload["file"])
 		}
+		file := recordWithID(t, records(t, dir, bundle.Attachments), "upload-9267")
+		if file["gone"] != nil || file["bytes"] != float64(1536) {
+			t.Errorf("%s: the file came as %v, want the bytes the source says it has", what, file)
+		}
 		if len(result.Docs.WithoutAStoredFile) != 1 || result.Docs.WithoutAStoredFile[0] != "9262" {
 			t.Errorf("%s: the uploads said to name no stored file are %v, want the one in the cloud alone",
 				what, result.Docs.WithoutAStoredFile)
 		}
-		named := false
-		for _, missing := range result.Missing {
-			if missing.AttachmentSourceID == "upload-9267" && missing.OwnerKind == bundle.OwnerUpload {
-				named = true
+		// Asked for by the two identifiers, and at no address.
+		if !slices.Contains(account.UploadDownloads, "7011/9267") {
+			t.Errorf("%s: the file was not asked for by the upload and its project: %v", what, account.UploadDownloads)
+		}
+		for _, asked := range account.Downloads {
+			if strings.Contains(asked, "9267") {
+				t.Errorf("%s: the file was asked for at the address %s", what, asked)
 			}
 		}
-		if !named {
-			t.Errorf("%s: the file is in neither the bundle nor the missing ones: %v", what, result.Missing)
+	}
+}
+
+// A vault record that names no vault above it is the vault at the **top of a
+// tool** and no folder of one: the source lists every dock entry that way. Such a
+// record stands in nothing and nothing can place it, so it becomes a place of its
+// own, counted and named with whatever stood in it, rather than falling out of the
+// walk without a word.
+//
+// No record of the account has that shape, because only the records the source has
+// put away are read and no whole Docs & Files tool of it is put away. The shape is
+// invented, and a fixture makes it by taking a folder's parent off.
+func TestAVaultRecordThatNamesNoVaultAboveItIsAPlaceOfItsOwn(t *testing.T) {
+	_, normal := extract(t, fakebasecamp.New(), docsProject)
+
+	account := fakebasecamp.New()
+	account.VaultsWithoutAParent = true
+	dir, result := extract(t, account, docsProject)
+
+	// The two folders the source has put away name no vault above them now, so
+	// neither is in the bundle and both are counted among the folders it does not
+	// carry — where before they were carried.
+	for _, record := range records(t, dir, bundle.Folders) {
+		if record["sourceId"] == "9222" || record["sourceId"] == "9223" {
+			t.Errorf("folder %v names no vault above it and is in the bundle all the same", record["sourceId"])
 		}
-		// And no message says what the file is called or where it lies.
-		for _, missing := range result.Missing {
-			if strings.Contains(missing.Reason, "minutes") || strings.Contains(missing.Reason, "storage.") {
-				t.Errorf("%s: the reason says what the file is called or where it lies: %q", what, missing.Reason)
-			}
+	}
+	if result.Docs.LeftOut.Folders != normal.Docs.LeftOut.Folders+2 {
+		t.Errorf("%d folders are left out and %d were before, want two more: the ones that name no vault",
+			result.Docs.LeftOut.Folders, normal.Docs.LeftOut.Folders)
+	}
+	// And they are places, so anything the source had put away inside them would
+	// be counted against them rather than dropped without a number.
+	asked := 0
+	for _, request := range account.Requests {
+		if strings.Contains(request, "/vaults/9222/") || strings.Contains(request, "/vaults/9223/") {
+			asked++
 		}
+	}
+	if asked == 0 {
+		t.Error("neither was asked what stood in it, so nothing of them could be counted")
 	}
 }
