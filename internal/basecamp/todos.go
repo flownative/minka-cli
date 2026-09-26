@@ -109,10 +109,13 @@ func (e *Extractor) extractTodosOfProject(ctx context.Context, w *bundle.Writer,
 	if err != nil {
 		return err
 	}
+	// What Basecamp lists as a to-do list and no tool of the run holds is a
+	// group of a list, which is known only once every list is.
+	var mayBeGroups []todoList
 	for _, found := range shelved {
 		tool, mine := byTool[found.Parent.ID]
 		if !mine {
-			e.todosLeftOut++
+			mayBeGroups = append(mayBeGroups, found)
 			continue
 		}
 		carried, err := e.metTodoList(met, found, projectID)
@@ -124,9 +127,33 @@ func (e *Extractor) extractTodosOfProject(ctx context.Context, w *bundle.Writer,
 		}
 	}
 
+	carried := map[int64]bool{}
+	for _, tool := range tools {
+		for _, found := range tool.inFileOrder() {
+			carried[found.ID] = true
+		}
+	}
+	groupsGone := map[int64][]todoList{}
+	for _, found := range mayBeGroups {
+		if !carried[found.Parent.ID] {
+			e.todosLeftOut++
+			continue
+		}
+		taken, err := e.metTodoGroup(met, found, projectID)
+		if err != nil {
+			return err
+		}
+		if taken {
+			groupsGone[found.Parent.ID] = append(groupsGone[found.Parent.ID], found)
+		}
+	}
+
 	for _, tool := range tools {
 		for _, found := range tool.inFileOrder() {
 			if err := e.writeTodoList(ctx, w, bucket, tool.id, found); err != nil {
+				return err
+			}
+			if err := e.writeTodoGroups(ctx, w, bucket, tool.id, found.ID, groupsGone[found.ID], met, projectID); err != nil {
 				return err
 			}
 		}
@@ -156,6 +183,65 @@ func (e *Extractor) metTodoList(met map[int64]bool, found todoList, projectID st
 	}
 	met[found.ID] = true
 	return e.met("to-do list", found.ID, found.Status, found.recording, "project", projectID)
+}
+
+// metTodoGroup holds a group to what a bundle can carry. A group knows the trash
+// and no shelf, so a group the source has put on the shelf is left out and
+// counted: a bundle has no word for it.
+func (e *Extractor) metTodoGroup(met map[int64]bool, found todoList, projectID string) (bool, error) {
+	if met[found.ID] {
+		return false, nil
+	}
+	met[found.ID] = true
+	return e.metAmong(todoStatuses, "group", found.ID, found.Status, found.recording, "project", projectID)
+}
+
+// writeTodoGroups adds the groups of one list: those in use as Basecamp lists
+// them, then the ones it has thrown away. A group goes to the end of its list,
+// so the order of the file is the order of the list.
+//
+// Nothing hangs on a group. The format has no word for a comment, a reaction or
+// a file of one, so such a record would wait in Minka for ever: none is written
+// and none is asked for.
+func (e *Extractor) writeTodoGroups(ctx context.Context, w *bundle.Writer, bucket, tool, list int64, gone []todoList, met map[int64]bool, projectID string) error {
+	listed, err := getList[todoList](ctx, e.Source, fmt.Sprintf("buckets/%d/todolists/%d/groups.json", bucket, list))
+	if err != nil {
+		return err
+	}
+	groups := make([]todoList, 0, len(listed)+len(gone))
+	for _, found := range listed {
+		taken, err := e.metTodoGroup(met, found, projectID)
+		if err != nil {
+			return err
+		}
+		if taken {
+			groups = append(groups, found)
+		}
+	}
+	groups = append(groups, gone...)
+
+	for _, found := range groups {
+		title, err := itemTitle("group", found.ID, found.Title)
+		if err != nil {
+			return err
+		}
+		origin, err := e.record("group", found.ID, found.recording)
+		if err != nil {
+			return err
+		}
+		err = w.Add(bundle.TodoGroups, bundle.TodoGroup{
+			Record:          origin,
+			ProjectSourceID: projectID,
+			ToolSourceID:    sourceID(tool),
+			ListSourceID:    sourceID(list),
+			Title:           title,
+			Status:          found.Status,
+		})
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // writeTodoList adds a list with its text, its comments and its boosts.

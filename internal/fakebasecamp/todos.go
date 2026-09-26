@@ -21,6 +21,9 @@ type TodoList struct {
 	Files       []File
 	Comments    []Comment
 	Boosts      []Boost
+	// Groups are the groups of a list, in the order the account lists them. A
+	// group has none of its own.
+	Groups []TodoList
 	// Twice has the list of lists hold this one twice, as a list that moves
 	// under a walk does.
 	Twice bool
@@ -28,8 +31,10 @@ type TodoList struct {
 
 // todoProject is a project with every case of a To-dos tool: a tool whose lists
 // the account shows in the order they stand in, one on the shelf and one in the
-// trash, a second tool of the same kind, and a tool that is switched off whose
-// list hangs on nothing a run extracts.
+// trash, groups in use, one in the trash and one on the shelf, a group carrying
+// what no group of a bundle can carry, a second tool of the same kind, and a
+// tool that is switched off whose list and whose group hang on nothing a run
+// extracts.
 func todoProject(ada, grace, edsger Person, tool func(int64, string, string, string, bool, int, *Person) Tool) Project {
 	at := func(day, hour int) string { return fmt.Sprintf("2025-04-%02dT%02d:00:00.000Z", day, hour) }
 
@@ -45,6 +50,19 @@ func todoProject(ada, grace, edsger Person, tool func(int64, string, string, str
 		},
 		Boosts: []Boost{{ID: 9461, Content: "👍", CreatedAt: at(2, 10), Booster: &edsger}},
 	}
+	sketch := File{ID: 5062, SGID: SGID("gid://bc3/Attachment/5062?expires_in"), Key: FileKey(5062), Filename: "sketch.png", ContentType: "image/png", Bytes: 256}
+	// A group with everything a group cannot carry: a text with a file, comments
+	// and boosts. None of it reaches a bundle, and none of it is asked for.
+	launch.Groups = []TodoList{
+		{ID: 9411, Title: "Before the launch", Creator: &ada, CreatedAt: at(1, 14), UpdatedAt: at(1, 14),
+			Description: `<div>What comes first</div>` + EmbeddedFile(sketch.SGID, "sketch.png"), Files: []File{sketch},
+			Comments: []Comment{{ID: 9455, Creator: &grace, CreatedAt: at(2, 14), UpdatedAt: at(2, 14), Content: `<div>Good heading</div>`}},
+			Boosts:   []Boost{{ID: 9465, Content: "👀", CreatedAt: at(2, 15), Booster: &grace}}},
+		{ID: 9412, Title: "After the launch", Creator: &grace, CreatedAt: at(1, 15), UpdatedAt: at(1, 15)},
+		{ID: 9413, Status: "trashed", Title: "Given up", Creator: &ada, CreatedAt: at(1, 16), UpdatedAt: at(3, 16)},
+		{ID: 9414, Status: "archived", Title: "On the shelf", Creator: &ada, CreatedAt: at(1, 17), UpdatedAt: at(3, 17)},
+	}
+
 	later := TodoList{ID: 9402, Title: "Later", Creator: &grace, CreatedAt: at(1, 9), UpdatedAt: at(1, 9)}
 	finished := TodoList{ID: 9403, Status: "archived", Title: "Finished", Creator: &ada, CreatedAt: at(1, 10), UpdatedAt: at(3, 10)}
 	dropped := TodoList{ID: 9404, Status: "trashed", Title: "Dropped", Creator: &ada, CreatedAt: at(1, 11), UpdatedAt: at(3, 11)}
@@ -61,7 +79,8 @@ func todoProject(ada, grace, edsger Person, tool func(int64, string, string, str
 
 	retired := tool(9082, "todoset", "todosets", "Old to-dos", false, 0, &ada)
 	retired.TodoLists = []TodoList{
-		{ID: 9406, Status: "archived", Title: "Of a tool nobody sees", Creator: &ada, CreatedAt: at(1, 13), UpdatedAt: at(3, 13)},
+		{ID: 9406, Status: "archived", Title: "Of a tool nobody sees", Creator: &ada, CreatedAt: at(1, 13), UpdatedAt: at(3, 13),
+			Groups: []TodoList{{ID: 9415, Status: "trashed", Title: "Of a list nobody sees", Creator: &ada, CreatedAt: at(1, 18), UpdatedAt: at(3, 18)}}},
 	}
 
 	return Project{
@@ -74,6 +93,7 @@ func todoProject(ada, grace, edsger Person, tool func(int64, string, string, str
 
 var (
 	todoListsPattern      = regexp.MustCompile(`^buckets/([0-9]+)/todosets/([0-9]+)/todolists\.json$`)
+	todoGroupsPattern     = regexp.MustCompile(`^buckets/([0-9]+)/todolists/([0-9]+)/groups\.json$`)
 	todoRecordingsPattern = regexp.MustCompile(`^projects/recordings\.json\?type=Todolist&bucket=([0-9]+)&status=(archived|trashed)$`)
 )
 
@@ -103,6 +123,20 @@ func (a *Account) todos(path string, page int) ([]byte, bool) {
 				return a.pageOf(found, page), true
 			}
 		}
+	case todoGroupsPattern.MatchString(path):
+		match := todoGroupsPattern.FindStringSubmatch(path)
+		if p := a.project(match[1]); p != nil {
+			if list, known := a.theTodoList(p, match[2]); known {
+				var found []map[string]any
+				for i := range list.Groups {
+					group := &list.Groups[i]
+					if group.status() == "active" {
+						found = append(found, a.todoListJSON(p, list.ID, "Todolist", group))
+					}
+				}
+				return a.pageOf(found, page), true
+			}
+		}
 	case todoRecordingsPattern.MatchString(path):
 		match := todoRecordingsPattern.FindStringSubmatch(path)
 		if p := a.project(match[1]); p != nil {
@@ -110,6 +144,11 @@ func (a *Account) todos(path string, page int) ([]byte, bool) {
 			a.eachTodoList(p, func(tool *Tool, list *TodoList) {
 				if list.status() == match[2] {
 					found = append(found, a.todoListJSON(p, tool.ID, "Todoset", list))
+				}
+				for i := range list.Groups {
+					if group := &list.Groups[i]; group.status() == match[2] {
+						found = append(found, a.todoListJSON(p, list.ID, "Todolist", group))
+					}
 				}
 			})
 			// One list across all To-dos tools, whatever tool a list is of.
@@ -120,8 +159,39 @@ func (a *Account) todos(path string, page int) ([]byte, bool) {
 	return nil, false
 }
 
+// eachTodoListAndGroup visits the lists of every To-dos tool of a project and
+// the groups of those lists. The account answers for a group whatever it answers
+// for a list, so a run that asks for what no group of a bundle can carry gets an
+// answer and not a refusal: what such a run does with it is then what a test
+// sees.
+func (a *Account) eachTodoListAndGroup(p *Project, visit func(*TodoList)) {
+	a.eachTodoList(p, func(_ *Tool, list *TodoList) {
+		visit(list)
+		for i := range list.Groups {
+			visit(&list.Groups[i])
+		}
+	})
+}
+
+// theTodoList finds a list or a group of a project by its ID.
+func (a *Account) theTodoList(p *Project, id string) (*TodoList, bool) {
+	var found *TodoList
+	a.eachTodoList(p, func(_ *Tool, list *TodoList) {
+		if strconv.FormatInt(list.ID, 10) == id {
+			found = list
+		}
+		for i := range list.Groups {
+			if strconv.FormatInt(list.Groups[i].ID, 10) == id {
+				found = &list.Groups[i]
+			}
+		}
+	})
+	return found, found != nil
+}
+
 // eachTodoList visits the lists of every To-dos tool of a project, those of
-// tools that are switched off included.
+// tools that are switched off included. A group is no list of its own here: it
+// hangs on the list that holds it.
 func (a *Account) eachTodoList(p *Project, visit func(*Tool, *TodoList)) {
 	for t := range p.Dock {
 		for l := range p.Dock[t].TodoLists {

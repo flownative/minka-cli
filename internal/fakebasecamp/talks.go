@@ -309,7 +309,7 @@ func (a *Account) commentsOf(p *Project, id string) ([]Comment, bool) {
 			}
 		}
 	}
-	a.eachTodoList(p, func(_ *Tool, list *TodoList) {
+	a.eachTodoListAndGroup(p, func(list *TodoList) {
 		if strconv.FormatInt(list.ID, 10) == id {
 			comments, found = list.Comments, true
 		}
@@ -352,7 +352,7 @@ func (a *Account) boostsOf(p *Project, id string) ([]Boost, bool) {
 			}
 		}
 	}
-	a.eachTodoList(p, func(_ *Tool, list *TodoList) {
+	a.eachTodoListAndGroup(p, func(list *TodoList) {
 		is(list.ID, list.Boosts)
 		for _, comment := range list.Comments {
 			is(comment.ID, comment.Boosts)

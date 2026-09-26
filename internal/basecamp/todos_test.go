@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/flownative/minka-cli/internal/basecamp"
 	"github.com/flownative/minka-cli/internal/bundle"
 	"github.com/flownative/minka-cli/internal/fakebasecamp"
 )
@@ -40,6 +41,28 @@ func listsTheAccountShows(t *testing.T, account *fakebasecamp.Account, bucket, t
 		for _, one := range listed {
 			ids = append(ids, strconv.FormatInt(int64(one["id"].(float64)), 10))
 		}
+	}
+}
+
+// groupsTheAccountShows are the groups of a list as the account answers them,
+// each in full: what a test holds against the bundle is what the account said.
+func groupsTheAccountShows(t *testing.T, account *fakebasecamp.Account, bucket, list int64) []map[string]any {
+	t.Helper()
+	var groups []map[string]any
+	for page := 1; ; page++ {
+		content, err := account.Get(context.Background(),
+			"buckets/"+strconv.FormatInt(bucket, 10)+"/todolists/"+strconv.FormatInt(list, 10)+"/groups.json?page="+strconv.Itoa(page))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var listed []map[string]any
+		if err := json.Unmarshal(content, &listed); err != nil {
+			t.Fatal(err)
+		}
+		if len(listed) == 0 {
+			return groups
+		}
+		groups = append(groups, listed...)
 	}
 }
 
@@ -95,16 +118,20 @@ func TestTheListsOfAToolAreWrittenFromTheBottomUp(t *testing.T) {
 	}
 }
 
-// A list that hangs on a To-dos tool the run does not extract has nowhere to go:
-// it is left out and counted, and the run goes on.
-func TestAListOfAToolThatIsNotExtractedIsLeftOutAndCounted(t *testing.T) {
+// A list that hangs on a To-dos tool the run does not extract has nowhere to go,
+// and neither has a group of such a list: both are left out and counted, and the
+// run goes on.
+func TestWhatHangsOnNoExtractedToolIsLeftOutAndCounted(t *testing.T) {
 	dir, result := extract(t, fakebasecamp.New(), todoProject)
 
 	if ids := sourceIDs(records(t, dir, bundle.TodoLists)); slices.Contains(ids, "9406") {
 		t.Errorf("the list of a tool that is switched off came along: %v", ids)
 	}
-	if result.TodosLeftOut != 1 {
-		t.Errorf("%d records left out, want the one list of the tool that is switched off", result.TodosLeftOut)
+	if ids := sourceIDs(records(t, dir, bundle.TodoGroups)); slices.Contains(ids, "9415") {
+		t.Errorf("the group of a list nobody extracts came along: %v", ids)
+	}
+	if result.TodosLeftOut != 2 {
+		t.Errorf("%d records left out, want the list and the group of the tool that is switched off", result.TodosLeftOut)
 	}
 }
 
@@ -151,5 +178,87 @@ func TestEveryRecordOfAToDosToolNamesRecordsOfTheBundle(t *testing.T) {
 		if by := list["createdBy"]; by != nil && !named(people, by) {
 			t.Errorf("list %v was made by %v, who is not in the bundle", list["sourceId"], by)
 		}
+	}
+	lists := sourceIDs(records(t, dir, bundle.TodoLists))
+	for _, group := range records(t, dir, bundle.TodoGroups) {
+		if !named(projects, group["projectSourceId"]) || !named(tools, group["toolSourceId"]) || !named(lists, group["listSourceId"]) {
+			t.Errorf("group %v names the project %v, the tool %v and the list %v",
+				group["sourceId"], group["projectSourceId"], group["toolSourceId"], group["listSourceId"])
+		}
+		if by := group["createdBy"]; by != nil && !named(people, by) {
+			t.Errorf("group %v was made by %v, who is not in the bundle", group["sourceId"], by)
+		}
+	}
+}
+
+// A group goes to the end of its list, so the order of the file is the order of
+// the list: the groups in use as the source has them, then the one it has thrown
+// away, which comes with its status rather than being left out.
+func TestTheGroupsOfAListComeInTheOrderOfTheListAndKeepTheirStatus(t *testing.T) {
+	dir, _ := extract(t, fakebasecamp.New(), todoProject)
+
+	want := []map[string]any{
+		{"sourceId": "9411", "createdAt": "2025-04-01T14:00:00.000Z", "updatedAt": "2025-04-01T14:00:00.000Z", "createdBy": "101",
+			"projectSourceId": "7008", "toolSourceId": "9080", "listSourceId": "9401", "title": "Before the launch", "status": "active"},
+		{"sourceId": "9412", "createdAt": "2025-04-01T15:00:00.000Z", "updatedAt": "2025-04-01T15:00:00.000Z", "createdBy": "102",
+			"projectSourceId": "7008", "toolSourceId": "9080", "listSourceId": "9401", "title": "After the launch", "status": "active"},
+		{"sourceId": "9413", "createdAt": "2025-04-01T16:00:00.000Z", "updatedAt": "2025-04-03T16:00:00.000Z", "createdBy": "101",
+			"projectSourceId": "7008", "toolSourceId": "9080", "listSourceId": "9401", "title": "Given up", "status": "trashed"},
+	}
+	if got := records(t, dir, bundle.TodoGroups); !reflect.DeepEqual(got, want) {
+		t.Errorf("groups:\n got %v\nwant %v", got, want)
+	}
+}
+
+// A group knows the trash and no shelf, so a bundle has no word for one the
+// source has put on the shelf: it is left out, counted with the word that made
+// it impossible, and the run goes on.
+func TestAGroupOnTheShelfIsLeftOutAndCounted(t *testing.T) {
+	dir, result := extract(t, fakebasecamp.New(), todoProject)
+
+	if ids := sourceIDs(records(t, dir, bundle.TodoGroups)); slices.Contains(ids, "9414") {
+		t.Errorf("a group on the shelf came along: %v", ids)
+	}
+	want := []basecamp.LeftOutRecords{{Record: "group", Field: "status", Value: "archived", In: "project", InSourceID: "7008", LeftOut: 1}}
+	if got := result.RecordsLeftOut; !slices.Equal(got, want) {
+		t.Errorf("records left out:\n got %v\nwant %v", got, want)
+	}
+}
+
+// The format has no word for a comment, a reaction or a file of a group, so such
+// a record would wait in Minka for ever: none is written, and none is asked for.
+// The account holds all three on a group and answers for it as it does for a
+// list, so a run that took them would be seen taking them.
+func TestNothingEverHangsOnAGroup(t *testing.T) {
+	account := fakebasecamp.New()
+	dir, _ := extract(t, account, todoProject)
+
+	shown := groupsTheAccountShows(t, account, 7008, 9401)
+	if len(shown) == 0 {
+		t.Fatal("the account shows no group of the list, and the test needs one that carries something")
+	}
+	group := shown[0]
+	if group["id"].(float64) != 9411 || group["comments_count"].(float64) == 0 || group["boosts_count"].(float64) == 0 ||
+		len(group["description_attachments"].([]any)) == 0 {
+		t.Fatalf("the account says of the group %v, and the test needs one with a comment, a boost and a file", group)
+	}
+
+	for _, comment := range records(t, dir, bundle.Comments) {
+		if comment["parentSourceId"] == "9411" || comment["sourceId"] == "9455" {
+			t.Errorf("a comment of a group was written: %v", comment)
+		}
+	}
+	for _, reaction := range records(t, dir, bundle.Reactions) {
+		if reaction["targetSourceId"] == "9411" || reaction["sourceId"] == "9465" {
+			t.Errorf("a reaction of a group was written: %v", reaction)
+		}
+	}
+	for _, file := range records(t, dir, bundle.Attachments) {
+		if file["ownerSourceId"] == "9411" || file["sourceId"] == "attachment-5062" {
+			t.Errorf("a file of a group was written: %v", file)
+		}
+	}
+	if asked := asked(account, "recordings/9411/"); len(asked) > 0 {
+		t.Errorf("a run asked for what hangs on a group: %v", asked)
 	}
 }

@@ -148,7 +148,7 @@ func (a *Account) storedFile(key string) (storedFile, bool) {
 				}
 			}
 		}
-		a.eachTodoList(&a.Projects[p], func(_ *Tool, list *TodoList) {
+		a.eachTodoListAndGroup(&a.Projects[p], func(list *TodoList) {
 			listed(list.Files)
 			commented(list.Comments)
 		})
