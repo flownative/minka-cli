@@ -1,6 +1,7 @@
 package basecamp_test
 
 import (
+	"errors"
 	"reflect"
 	"strings"
 	"testing"
@@ -741,5 +742,52 @@ func TestEveryReferenceOfDocsAndFilesLeadsToARecordOfTheBundle(t *testing.T) {
 		if known, ofADocsEntry := entries[record["ownerKind"].(string)]; ofADocsEntry && !known[record["ownerSourceId"].(string)] {
 			t.Errorf("file %v belongs to a %v that is not in the bundle", record["sourceId"], record["ownerKind"])
 		}
+	}
+}
+
+// A folder the source has put away may hand out no list of what stands in it:
+// that is passed over, and what is in use below such a folder is then beyond the
+// reach of any run, while what the source has put away comes from the project's
+// own lists either way. A folder that is in use has to answer, and a run that is
+// told there is no such list ends rather than writing a folder the source shows
+// as an empty one.
+func TestAListOfAFolderThatIsPutAwayMayBeGoneAndOneOfAFolderInUseMayNot(t *testing.T) {
+	gone := func() error { return &basecamp.Error{Kind: basecamp.NotFound, Message: "Basecamp: resource not found"} }
+
+	account := fakebasecamp.New()
+	for _, path := range []string{"documents", "uploads", "vaults"} {
+		account.Fail["buckets/7011/vaults/9222/"+path+".json"] = gone()
+		account.Fail["buckets/7011/vaults/9223/"+path+".json"] = gone()
+	}
+	dir, result := extract(t, account, docsProject)
+	// The folders themselves still come: the project's own lists of records it
+	// has put away hand them out, and no list of theirs is needed for that.
+	folders := records(t, dir, bundle.Folders)
+	for _, id := range []string{"9222", "9223"} {
+		recordWithID(t, folders, id)
+	}
+	// What is in use below them reaches no bundle, and nothing can count it:
+	// the run says how many folders would not say what stands in them.
+	for kind, id := range map[bundle.Kind]string{bundle.Documents: "9242", bundle.Uploads: "9261"} {
+		for _, record := range records(t, dir, kind) {
+			if record["sourceId"] == id {
+				t.Errorf("%s %s came out of a folder that would not say what stands in it", kind, id)
+			}
+		}
+	}
+	if result.Docs.FoldersThatSaidNothingOfWhatIsInThem != 2 {
+		t.Errorf("%d folders would not say what stands in them, want the two",
+			result.Docs.FoldersThatSaidNothingOfWhatIsInThem)
+	}
+
+	// The same of a folder that is in use ends the run: a folder the source
+	// shows and the bundle writes empty is a folder somebody will look into.
+	account = fakebasecamp.New()
+	account.Fail["buckets/7011/vaults/9220/documents.json"] = gone()
+	extractor := basecamp.Extractor{Source: account, Avatars: account, Files: account}
+	_, err := extractor.Extract(t.Context(), []string{docsProject}, bundle.Discard())
+	var failed *basecamp.Error
+	if !errors.As(err, &failed) || failed.Kind != basecamp.NotFound {
+		t.Errorf("a list of a folder in use that is not there ended the run as %v, want not found", err)
 	}
 }

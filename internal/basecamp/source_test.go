@@ -347,18 +347,21 @@ func (g *goneAfterAPage) Get(_ context.Context, _ string) ([]byte, error) {
 // already shown with it, and the number of what fell would be quietly too low.
 func TestCountingKeepsWhatCameBeforeAPlaceWasGone(t *testing.T) {
 	source := &goneAfterAPage{kind: NotFound}
-	counted, err := listedUnlessItIsGone[person](t.Context(), source, "buckets/1/todolists/2/todos.json", false)
+	counted, wasGone, err := listedUnlessItIsGone[person](t.Context(), source, "buckets/1/todolists/2/todos.json", false)
 	if err != nil {
 		t.Fatalf("a place that is not there ended the counting: %v", err)
 	}
 	if len(counted) != 2 {
 		t.Errorf("counted %d records, want the two that arrived before the place was gone", len(counted))
 	}
+	if !wasGone {
+		t.Error("a place that is not there is not said to be gone")
+	}
 
 	// Every other failure is what it is anywhere, and hands back what it read all
 	// the same.
 	source = &goneAfterAPage{kind: Forbidden}
-	counted, err = listedUnlessItIsGone[person](t.Context(), source, "buckets/1/todolists/2/todos.json", false)
+	counted, _, err = listedUnlessItIsGone[person](t.Context(), source, "buckets/1/todolists/2/todos.json", false)
 	var failed *Error
 	if !errors.As(err, &failed) || failed.Kind != Forbidden {
 		t.Errorf("a refusal came back as %v, want forbidden", err)
@@ -371,7 +374,7 @@ func TestCountingKeepsWhatCameBeforeAPlaceWasGone(t *testing.T) {
 	// that is not there where the bundle carries the place means a bundle with a
 	// hole in it.
 	source = &goneAfterAPage{kind: NotFound}
-	if _, err := listedUnlessItIsGone[person](t.Context(), source, "buckets/1/vaults/2/documents.json", true); !errors.As(err, &failed) || failed.Kind != NotFound {
+	if _, _, err := listedUnlessItIsGone[person](t.Context(), source, "buckets/1/vaults/2/documents.json", true); !errors.As(err, &failed) || failed.Kind != NotFound {
 		t.Errorf("a list of a place in use that is not there came back as %v, want not found", err)
 	}
 }

@@ -72,14 +72,16 @@ func getOne[T any](ctx context.Context, source Source, path string) (T, error) {
 // listedUnlessItIsGone reads a list of a place the source may no longer hand out
 // at all: one the bundle does not carry and whose records are only counted, and
 // one that is on the shelf or in the trash, which Basecamp does not always let
-// anybody look into. Not being there is the one failure that is passed over;
-// every other ends the run as it does anywhere. inUse says that the place is one
-// the source must answer for, and then nothing is passed over.
-func listedUnlessItIsGone[T any](ctx context.Context, source Source, path string, inUse bool) ([]T, error) {
+// anybody look into. Not being there is the one failure that is passed over, and
+// the second value says that it was, so that a run can tell what it could not
+// read from what was not there; every other failure ends the run as it does
+// anywhere. inUse says that the place is one the source must answer for, and
+// then nothing is passed over.
+func listedUnlessItIsGone[T any](ctx context.Context, source Source, path string, inUse bool) ([]T, bool, error) {
 	listed, err := getList[T](ctx, source, path)
 	var failed *Error
 	if !inUse && errors.As(err, &failed) && failed.Kind == NotFound {
-		return listed, nil
+		return listed, true, nil
 	}
-	return listed, err
+	return listed, false, err
 }

@@ -948,7 +948,10 @@ this:
   asks for the file again on every run. A file this run merely could not fetch
   is not that: the record waits for it, and the next run brings both. `data.docs.leftOut` counts per kind
   what the bundle holds none of, and `data.docs.placesLeftOut` names every
-  folder and every tool that took entries with it. No output ever names a file,
+  folder and every tool that took entries with it. A folder the source has put
+  away that would not say what stands in it is passed over and counted
+  (`data.docs.foldersThatSaidNothingOfWhatIsInThem`): what is in use below it is
+  in no bundle and nothing can count it. No output ever names a file,
   a folder or a document.
 - A record the source describes with a word a bundle has none for is left out
   and the run goes on: a chat line of an unknown kind or with a status other

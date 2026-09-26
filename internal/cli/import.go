@@ -269,7 +269,10 @@ folder stands after the folder it is in. A folder whose status a bundle has no
 word for is left out with everything below it, which is left out with it
 (docs.leftOut counts the folders, documents and uploads, docs.placesLeftOut
 names every place that took entries with it); so are the entries of a Docs &
-Files tool that is switched off, which counts as a skipped tool.
+Files tool that is switched off, which counts as a skipped tool. A folder the
+source has put away that hands out no list of what stands in it is passed over
+and counted (docs.foldersThatSaidNothingOfWhatIsInThem): what is in use below
+such a folder reaches no bundle, and nothing can count it.
 
 A document carries its title, its text, its files, its comments and its boosts.
 An upload is one stored file beside a text: its title is the name of the file,
@@ -630,6 +633,11 @@ it has been applied.`,
 					"boost on an answer by mail is left out, because Minka takes no reaction on one; the answer comes",
 					"boosts on answers by mail are left out, because Minka takes no reaction on one; the answers come"))
 			}
+			if count := report.Docs.FoldersThatSaidNothingOfWhatIsInThem; count > 0 {
+				notices = append(notices, plural(count,
+					"folder of a Docs & Files tool would not say what stands in it, so what is in use below it is in no bundle and no later run finds it either; nothing can count it, and the folder itself comes",
+					"folders of Docs & Files tools would not say what stands in them, so what is in use below them is in no bundle and no later run finds it either; nothing can count it, and the folders themselves come"))
+			}
 			if count := len(report.Docs.WithoutAStoredFile); count > 0 {
 				notices = append(notices, plural(count,
 					"upload of a Docs & Files tool is left out, because Basecamp names no stored file for it: what lies in a cloud is no file a run can fetch, so its comments and its boosts go with it. data.docs.withoutAStoredFile names it by ID",
@@ -946,6 +954,10 @@ func renderDocs(w io.Writer, report importReport) {
 	}
 	if docs.LongerThanMinkaTakes > 0 {
 		fmt.Fprintf(w, "Documents and descriptions longer than Minka holds, which it passes over on every run: %d\n", docs.LongerThanMinkaTakes)
+	}
+	if docs.FoldersThatSaidNothingOfWhatIsInThem > 0 {
+		fmt.Fprintf(w, "Folders that would not say what stands in them, so that what is in use below them is in no bundle: %d\n",
+			docs.FoldersThatSaidNothingOfWhatIsInThem)
 	}
 	left := docs.LeftOut
 	fmt.Fprintf(w, "Left out of the Docs & Files tools: %d folders, %d documents, %d uploads\n", left.Folders, left.Documents, left.Uploads)
