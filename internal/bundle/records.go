@@ -12,28 +12,31 @@ const Format = 1
 type Kind string
 
 const (
-	People      Kind = "people"
-	Projects    Kind = "projects"
-	Tools       Kind = "tools"
-	Categories  Kind = "categories"
-	Columns     Kind = "columns"
-	Cards       Kind = "cards"
-	Steps       Kind = "steps"
-	Posts       Kind = "posts"
-	Questions   Kind = "questions"
-	Answers     Kind = "answers"
-	TodoLists   Kind = "todolists"
-	TodoGroups  Kind = "todogroups"
-	Todos       Kind = "todos"
-	Messages    Kind = "messages"
-	Comments    Kind = "comments"
-	Reactions   Kind = "reactions"
-	Attachments Kind = "attachments"
+	People         Kind = "people"
+	Projects       Kind = "projects"
+	Tools          Kind = "tools"
+	Categories     Kind = "categories"
+	Columns        Kind = "columns"
+	Cards          Kind = "cards"
+	Steps          Kind = "steps"
+	Posts          Kind = "posts"
+	Questions      Kind = "questions"
+	Answers        Kind = "answers"
+	TodoLists      Kind = "todolists"
+	TodoGroups     Kind = "todogroups"
+	Todos          Kind = "todos"
+	Forwards       Kind = "forwards"
+	ForwardReplies Kind = "forwardreplies"
+	Messages       Kind = "messages"
+	Comments       Kind = "comments"
+	Reactions      Kind = "reactions"
+	Attachments    Kind = "attachments"
 )
 
 // Kinds lists every kind in the order of the format, which is the order a
 // report shows them in.
-var Kinds = []Kind{People, Projects, Tools, Categories, Columns, Cards, Steps, Posts, Questions, Answers, TodoLists, TodoGroups, Todos, Messages, Comments, Reactions, Attachments}
+var Kinds = []Kind{People, Projects, Tools, Categories, Columns, Cards, Steps, Posts, Questions, Answers, TodoLists, TodoGroups, Todos,
+	Forwards, ForwardReplies, Messages, Comments, Reactions, Attachments}
 
 const (
 	ToolBoard    = "board"
@@ -41,15 +44,18 @@ const (
 	ToolPosts    = "posts"
 	ToolCheckins = "checkins"
 	ToolTodos    = "todos"
+	ToolForwards = "forwards"
 
-	OwnerAnswer   = "answer"
-	OwnerCard     = "card"
-	OwnerComment  = "comment"
-	OwnerMessage  = "message"
-	OwnerPerson   = "person"
-	OwnerPost     = "post"
-	OwnerTodo     = "todo"
-	OwnerTodoList = "todolist"
+	OwnerAnswer       = "answer"
+	OwnerCard         = "card"
+	OwnerComment      = "comment"
+	OwnerForward      = "forward"
+	OwnerForwardReply = "forwardreply"
+	OwnerMessage      = "message"
+	OwnerPerson       = "person"
+	OwnerPost         = "post"
+	OwnerTodo         = "todo"
+	OwnerTodoList     = "todolist"
 
 	RoleTriage = "triage"
 	RoleWork   = "work"
@@ -62,6 +68,7 @@ const (
 
 	ParentAnswer   = "answer"
 	ParentCard     = "card"
+	ParentForward  = "forward"
 	ParentPost     = "post"
 	ParentTodo     = "todo"
 	ParentTodoList = "todolist"
@@ -69,6 +76,7 @@ const (
 	TargetAnswer   = "answer"
 	TargetCard     = "card"
 	TargetComment  = "comment"
+	TargetForward  = "forward"
 	TargetMessage  = "message"
 	TargetPost     = "post"
 	TargetTodo     = "todo"
@@ -327,6 +335,39 @@ type Todo struct {
 	CompletedAt     *string  `json:"completedAt"`
 	CompletedBy     *string  `json:"completedBy"`
 	Status          string   `json:"status"`
+}
+
+// Forward is a mail somebody forwarded into a project. Title is the subject,
+// CreatedBy whoever forwarded it and CreatedAt the moment they did. The sender
+// stays an address and never becomes a person; FromName is what the source
+// calls them and is nil where it says nothing.
+//
+// Status is active or trashed: forwards have no shelf in Minka, and a bundle
+// that said one would stop the run. Whether clients see a forward is the word
+// of its tool, so a forward carries none of its own.
+type Forward struct {
+	Record
+	ProjectSourceID string  `json:"projectSourceId"`
+	ToolSourceID    string  `json:"toolSourceId"`
+	Title           string  `json:"title"`
+	FromAddress     string  `json:"fromAddress"`
+	FromName        *string `json:"fromName"`
+	Body            string  `json:"body"`
+	Status          string  `json:"status"`
+}
+
+// ForwardReply is an answer by mail to a forward: a record of its own and no
+// comment, so nothing hangs on it. CreatedBy is the person who wrote it where
+// the bundle carries them, and then FromAddress is nil; for somebody from
+// outside it is the other way round, because an outsider never becomes a
+// person. One of the two is always there.
+type ForwardReply struct {
+	Record
+	ProjectSourceID string  `json:"projectSourceId"`
+	ToolSourceID    string  `json:"toolSourceId"`
+	ForwardSourceID string  `json:"forwardSourceId"`
+	FromAddress     *string `json:"fromAddress"`
+	Body            string  `json:"body"`
 }
 
 // Message is one line of a chat.

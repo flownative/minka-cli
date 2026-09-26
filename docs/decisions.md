@@ -790,3 +790,66 @@ company and no access is one whose clients have none there.
 `basecamp.Extractor.clientsOf`, `basecamp.companyOf`, `basecamp.registry.refer`,
 `basecamp.seenPerson.aClient`, see
 [Importing from Basecamp](stable/import.md).
+
+<a id="c-056"></a>
+## C-056 — A mail is made to fit where nobody can repair it at the source
+
+*Applies to: `import basecamp`, the `title` and the `fromAddress` of a forward*
+
+The subject of a forwarded mail becomes a title Minka takes: every character
+nobody can see becomes a blank, what is left is trimmed, a mail without a
+subject is called `(no subject)`, and one longer than 200 characters is cut
+before the last character and ends in an ellipsis. A sender that is no e-mail
+address Minka takes leaves the mail out, named by its `sourceId`, and the run
+goes on. Both are counted and named in a `notice`.
+
+**Why:** A subject is whatever a mail server let through, and a sender is
+whatever stood in a header: neither is anybody's to repair at the source, so a
+run that refused one would never come to an end, however often it is started.
+The title of a card, a post or a to-do still ends the run, because that one
+somebody can put right where it stands. `fromAddress` is what a forward is
+about and the field takes nothing else, so a mail whose sender is none cannot be
+carried at all — and ending a walk of hours over one mail would leave a whole
+account unimported. The address is asked more strictly than Minka asks, so that
+what a bundle carries is always taken.
+**Implemented as:** `basecamp.aSubjectAsATitle`,
+`basecamp.anAddressAMailCanCarry`, see
+[Importing from Basecamp](stable/import.md).
+
+<a id="c-057"></a>
+## C-057 — A mail that would arrive with nothing in it carries a line of the run
+
+*Applies to: `import basecamp`, the `body` of a forward and of an answer by mail*
+
+Where the body of a mail would reach Minka as nothing at all — the mail says
+nothing, what it says is a file that will never come, or it is nothing but an
+embed — the run writes one line of its own behind the body and counts the mails
+that carry one. The tag of the file stays where it stood.
+
+**Why:** Minka writes such a body empty and remembers the mail as finished, or
+passes it over before it is remembered and passes it over again on every run
+afterwards; either way the subject, the sender, the answers and the comments are
+lost, and no run can mend it from that side. The extractor is the one place that
+knows a file will never come. An embed is Minka's own reading of an address, so a
+mail that hangs on one alone gets the address as a link, which every reading
+keeps.
+**Implemented as:** `basecamp.Extractor.aBodyThatSaysSomething`,
+`basecamp.Extractor.whatWouldArriveOf`,
+`basecamp.Extractor.noteWhetherItArrives`, see
+[Importing from Basecamp](stable/import.md).
+
+<a id="c-058"></a>
+## C-058 — The shelf of a forwarded mail becomes the trash
+
+*Applies to: `import basecamp`, the `status` of a forward*
+
+A forwarded mail the source keeps on its shelf is written `trashed`, and the run
+says how many.
+
+**Why:** Minka gives a forward no shelf and stops a run at the word `archived`,
+while its trash holds the mail with everything on it and hands it back on one
+click, so nothing is lost and nothing is said falsely. Leaving it out as
+[C-050](#c-050) leaves out what a bundle cannot express would lose the mail for
+ever: no later run can bring it either, because Minka will have no shelf for it.
+**Implemented as:** `basecamp.Extractor.writeForward`, see
+[Importing from Basecamp](stable/import.md).

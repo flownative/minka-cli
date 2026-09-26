@@ -803,18 +803,22 @@ this:
   says how many: the run exits 0, and a project may come without a creator
   because of it. An identity that may see nothing at all still exits 4.
 - So far a bundle holds the structure, the boards, the message boards, the
-  chats, the check-ins and the to-dos: the people the projects refer to
+  chats, the check-ins, the to-dos and the forwarded mail: the people the
+  projects refer to
   (members and whoever a record names; `data.peopleLeftOut` counts the rest of
   the account's list, which holds more for an admin than for anybody else, the
   people written do not differ) with their avatars, the projects with their
-  members, the card tables, chats, message boards, questionnaires and to-do
-  sets that are switched on, of each card table the columns, the cards with
+  members, the card tables, chats, message boards, questionnaires, to-do
+  sets and inboxes that are switched on, of each card table the columns, the
+  cards with
   the archived and the trashed ones, their steps, comments and boosts, of each
   message board its messages as posts, the archived and the trashed ones
   included, with their categories, comments and boosts, of each chat its lines
   as messages with their boosts, of each questionnaire its questions with
-  their answers, comments and boosts, and of each to-do set its lists with
-  their groups and to-dos. `data.skippedTools` counts what was left out, per
+  their answers, comments and boosts, of each to-do set its lists with
+  their groups and to-dos, and of each inbox its forwarded mail with the answers
+  by mail, the comments and the boosts of each. `data.skippedTools` counts what
+  was left out, per
   kind and whether it was switched on; `data.counts` is what the manifest
   says.
 - A person comes with `retired: true` unless Basecamp calls them a user: a
@@ -834,9 +838,10 @@ this:
   said to be asked of a client, which `data.askedLeftOut.clients` counts. A
   company the source names without an identifier, or with a name Minka refuses,
   ends the run where the record that names it comes in: written away as none it
-  would tell Minka to drop the company it holds. Docs & Files and Forwards are
-  not extracted at all, so the bundle says nothing of whether clients see them;
-  a `notice` names that gap. No output ever names a person or a company.
+  would tell Minka to drop the company it holds. Docs & Files is not extracted
+  at all, so the bundle says nothing of whether clients see it; a `notice` names
+  that gap. An Email forwards tool carries its word, and a mail and an answer
+  follow it. No output ever names a person or a company.
 - `data.cardsByStatus` splits the cards, `data.cardsOnHold` counts those set
   aside within their column, `data.cardsLeftOut` the archived and trashed
   cards whose column is in no extracted board, `data.commentsTrashed` the
@@ -871,12 +876,35 @@ this:
   `notice`: it leaves the people of a to-do as they stand in Minka
   (`data.todosWithPeople`) and reopens nothing it once ticked off
   (`data.todosNotDone`).
+- An inbox becomes a tool of kind `forwards`, and its mails `forwards` with
+  their `forwardreplies`. `title` is the subject, `fromAddress` the sender, who
+  stays an address and never becomes a person, `fromName` always `null`, and the
+  body the mail as the source holds it, line breaks and all: Minka turns those
+  into paragraphs. `data.forwards.byStatus` splits the mails; what the source
+  keeps on its shelf comes into the trash, where it can be brought back, and
+  `data.forwards.fromTheShelf` counts it. A subject nobody wrote becomes
+  `(no subject)` and one longer than 200 characters or over several lines is
+  folded and cut short (`data.forwards.withoutASubject`,
+  `data.forwards.subjectsChanged`). A mail whose sender is no e-mail address
+  Minka takes is left out and named by ID in
+  `data.forwards.withoutAnAddress`. Where what a mail says would reach Minka as
+  nothing at all, the run writes a line of its own into the body
+  (`data.forwards.givenALineOfTheRun`), because such a mail would be lost on
+  every run. A mail nobody is named for goes to the owner of the organization
+  (`data.forwards.withoutAForwarder`). An answer by mail is a record of its own
+  and no comment: it belongs to somebody of the account or, for one from outside
+  it, to the address alone and never to both
+  (`data.forwards.repliesFromOutside`); one naming neither is left out and named
+  (`data.forwards.repliesWithoutASender`), and a boost on an answer is counted
+  and not carried (`data.forwards.reactionsOnRepliesLeftOut`). Comments and
+  boosts hang on the mail itself. No output ever names a subject or an address.
 - A record the source describes with a word a bundle has none for is left out
   and the run goes on: a chat line of an unknown kind or with a status other
   than `active`, a column of a kind a bundle has no role for, a card, a
   post, a comment, a question or an answer with a status a bundle does not
-  know, a draft among them, and a group or a to-do the source has put on the
-  shelf. `data.recordsLeftOut` names each with the kind of
+  know, a draft among them, a group or a to-do the source has put on the
+  shelf, a forwarded mail of a status that is none of the three, and an answer
+  by mail that says anything but `active`. `data.recordsLeftOut` names each with the kind of
   record, the field, the word the source said there, where it stood and how
   many records it cost, and a `notice` counts the records. A record whose times
   are missing or are no times still ends the run: it would be put in the wrong

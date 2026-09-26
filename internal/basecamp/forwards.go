@@ -1,0 +1,532 @@
+package basecamp
+
+import (
+	"context"
+	"fmt"
+	"html"
+	"regexp"
+	"strings"
+	"unicode"
+	"unicode/utf8"
+
+	"github.com/flownative/minka-cli/internal/bundle"
+	nethtml "golang.org/x/net/html"
+)
+
+// ForwardCounts says what became of the forwarded mail of a run.
+type ForwardCounts struct {
+	// ByStatus counts the forwards of the bundle: active, trashed.
+	ByStatus map[string]int `json:"byStatus"`
+	// FromTheShelf counts the forwards the source keeps on its shelf, which
+	// come as trashed: Minka gives a forward no shelf, and its trash is the one
+	// place such a mail can be brought back from.
+	FromTheShelf int `json:"fromTheShelf"`
+	// WithoutASubject counts the mails that came with none and carry the title
+	// a run gives them; SubjectsChanged counts those whose subject had to be
+	// folded into one line or cut short to make a title of it.
+	WithoutASubject int `json:"withoutASubject"`
+	SubjectsChanged int `json:"subjectsChanged"`
+	// GivenALineOfTheRun counts the forwards and the replies a run wrote a line
+	// of its own into, because what the mail says would reach Minka as nothing.
+	GivenALineOfTheRun int `json:"givenALineOfTheRun"`
+	// WithoutAForwarder counts the forwards Basecamp names nobody for, which
+	// Minka gives to the owner of the organization without a word.
+	WithoutAForwarder int `json:"withoutAForwarder"`
+	// WithoutAnAddress are the forwards left out because what the source calls
+	// the sender is no address Minka takes, by sourceId.
+	WithoutAnAddress []string `json:"withoutAnAddress"`
+	// RepliesFromOutside counts the replies whose sender stays an address,
+	// because somebody from outside the account never becomes a person.
+	RepliesFromOutside int `json:"repliesFromOutside"`
+	// RepliesWithoutASender are the replies left out because the source names
+	// neither somebody nor an address, by sourceId.
+	RepliesWithoutASender []string `json:"repliesWithoutASender"`
+	// ReactionsOnRepliesLeftOut counts the boosts on a reply: Minka passes such
+	// a reaction over, so a bundle carries none.
+	ReactionsOnRepliesLeftOut int `json:"reactionsOnRepliesLeftOut"`
+}
+
+// forward is a mail somebody forwarded into a project. Basecamp names the
+// sender by their address alone, holds the mail as text with line breaks and a
+// few tags in it, and says neither how many comments nor how many boosts it
+// has.
+type forward struct {
+	recording
+	ID      int64      `json:"id"`
+	Status  string     `json:"status"`
+	Subject string     `json:"subject"`
+	From    string     `json:"from"`
+	Content string     `json:"content"`
+	Files   []bodyFile `json:"content_attachments"`
+	// RepliesCount is how many answers by mail the forward has.
+	RepliesCount int `json:"replies_count"`
+}
+
+// forwardReply is an answer by mail to a forward. Its writer is somebody of
+// the account or somebody from outside it, and the mail says nothing about
+// where it came from beyond that.
+type forwardReply struct {
+	recording
+	ID          int64      `json:"id"`
+	Status      string     `json:"status"`
+	Content     string     `json:"content"`
+	Files       []bodyFile `json:"content_attachments"`
+	BoostsCount int        `json:"boosts_count"`
+}
+
+// A record of Basecamp that says nothing of what became of it is in use.
+func (f forward) status() string {
+	if f.Status == "" {
+		return bundle.StatusActive
+	}
+	return f.Status
+}
+
+func (r forwardReply) status() string {
+	if r.Status == "" {
+		return bundle.StatusActive
+	}
+	return r.Status
+}
+
+// replyStatuses are the words a bundle has for what became of a reply: it
+// carries no status at all, so only a reply that is in use comes.
+var replyStatuses = map[string]bool{bundle.StatusActive: true}
+
+// outsider is the kind of person Basecamp gives somebody who wrote to a
+// project from outside the account.
+const outsider = "Outsider"
+
+// extractForwards adds the forwarded mail of every Email forwards tool, with
+// what hangs on a forward: its replies, its comments and its boosts.
+//
+// Basecamp lists the forwards of an inbox itself and hands out no list of the
+// archived and the trashed ones of a project — it refuses to be asked for one
+// — so a bundle holds what an inbox shows. The forwards of an inbox are
+// written oldest first, by created_at and then by ID, the inboxes in the order
+// of the tools. A walk is no snapshot: a forward met twice is written once.
+//
+// It comes last of all the kinds. A reference of a forward that points at
+// nothing when the forward is written is never looked at again, unlike one of
+// a card or a post, so everything a forward can point at is in the bundle
+// before it.
+func (e *Extractor) extractForwards(ctx context.Context, w *bundle.Writer) error {
+	for _, t := range e.talks {
+		for _, inbox := range t.inboxes {
+			listed, err := getList[forward](ctx, e.Source, fmt.Sprintf("buckets/%d/inboxes/%d/forwards.json", t.bucket, inbox))
+			if err != nil {
+				return err
+			}
+			carried := make([]forward, 0, len(listed))
+			met := map[int64]bool{}
+			for _, found := range listed {
+				if met[found.ID] {
+					continue
+				}
+				met[found.ID] = true
+				taken, err := e.metAmong(recordStatuses, "forward", found.ID, found.status(), found.recording, "project", sourceID(t.bucket))
+				if err != nil {
+					return err
+				}
+				if taken {
+					carried = append(carried, found)
+				}
+			}
+			if err := oldestFirst(carried, "forward", func(f forward) (int64, string) { return f.ID, f.CreatedAt }); err != nil {
+				return err
+			}
+			for _, found := range carried {
+				if err := e.writeForward(ctx, w, t.bucket, sourceID(inbox), found); err != nil {
+					return err
+				}
+			}
+		}
+	}
+	return nil
+}
+
+// writeForward adds one mail with its files, its replies, its comments and its
+// boosts.
+//
+// What the source keeps on its shelf comes as trashed, and the run says how
+// many: Minka has no shelf for a forward and would stop at the word, while its
+// trash keeps the mail and hands it back. A forward whose sender is no address
+// Minka takes is left out and named: `fromAddress` is the one thing a forward
+// is about, the field takes nothing else, and a run that wrote it as it stands
+// would stop where the applier reads it.
+func (e *Extractor) writeForward(ctx context.Context, w *bundle.Writer, bucket int64, toolID string, found forward) error {
+	projectID := sourceID(bucket)
+	address, anAddress := anAddressAMailCanCarry(found.From)
+	if !anAddress {
+		e.forwards.WithoutAnAddress = append(e.forwards.WithoutAnAddress, sourceID(found.ID))
+		return nil
+	}
+	origin, err := e.record("forward", found.ID, found.recording)
+	if err != nil {
+		return err
+	}
+	if origin.CreatedBy == nil {
+		e.forwards.WithoutAForwarder++
+	}
+	title, withoutASubject, changed := aSubjectAsATitle(found.Subject)
+	if withoutASubject {
+		e.forwards.WithoutASubject++
+	}
+	if changed {
+		e.forwards.SubjectsChanged++
+	}
+
+	body, files, err := e.rewriteBody(found.Content, "", found.Files)
+	if err != nil {
+		return err
+	}
+	// Before the body is settled: only what became of the files says whether
+	// the mail reaches Minka with anything in it.
+	if err := e.attachFiles(ctx, w, bundle.OwnerForward, origin, files); err != nil {
+		return err
+	}
+	body = e.aBodyThatSaysSomething(body)
+
+	status := bundle.StatusActive
+	switch found.status() {
+	case bundle.StatusArchived:
+		status = bundle.StatusTrashed
+		e.forwards.FromTheShelf++
+	case bundle.StatusTrashed:
+		status = bundle.StatusTrashed
+	}
+	// Basecamp gives the sender as an address and never as a name.
+	err = w.Add(bundle.Forwards, bundle.Forward{
+		Record:          origin,
+		ProjectSourceID: projectID,
+		ToolSourceID:    toolID,
+		Title:           title,
+		FromAddress:     address,
+		Body:            body,
+		Status:          status,
+	})
+	if err != nil {
+		return err
+	}
+	e.measure(bundle.Forwards, body, LongestBodyRecord{Record: "forward", SourceID: origin.SourceID, In: "project", InSourceID: projectID})
+	e.forwards.ByStatus[status]++
+
+	if err := e.writeForwardReplies(ctx, w, bucket, toolID, origin.SourceID, found); err != nil {
+		return err
+	}
+	// A forward says neither how many comments nor how many boosts it has, so
+	// both lists are asked for: a count of zero here is the field missing and
+	// not a mail nobody answered.
+	comments, err := e.askForComments(ctx, w, bucket, bundle.ParentForward, found.ID)
+	if err != nil {
+		return err
+	}
+	if err := e.writeBoosts(ctx, w, bucket, bundle.TargetForward, found.ID); err != nil {
+		return err
+	}
+	for _, commented := range comments {
+		if commented.BoostsCount > 0 {
+			if err := e.writeBoosts(ctx, w, bucket, bundle.TargetComment, commented.ID); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// writeForwardReplies adds the answers by mail to one forward, oldest first:
+// Minka reads them back by their moment, and the order of the file decides
+// between two of one second. A reply that is not in use is left out and
+// counted, because a bundle has no word for what became of one.
+func (e *Extractor) writeForwardReplies(ctx context.Context, w *bundle.Writer, bucket int64, toolID, forwardID string, found forward) error {
+	if found.RepliesCount == 0 {
+		return nil
+	}
+	listed, err := getList[forwardReply](ctx, e.Source, fmt.Sprintf("buckets/%d/inbox_forwards/%d/replies.json", bucket, found.ID))
+	if err != nil {
+		return err
+	}
+	carried := make([]forwardReply, 0, len(listed))
+	met := map[int64]bool{}
+	for _, reply := range listed {
+		if met[reply.ID] {
+			continue
+		}
+		met[reply.ID] = true
+		taken, err := e.metAmong(replyStatuses, "reply", reply.ID, reply.status(), reply.recording, "project", sourceID(bucket))
+		if err != nil {
+			return err
+		}
+		if taken {
+			carried = append(carried, reply)
+		}
+	}
+	if err := oldestFirst(carried, "reply", func(r forwardReply) (int64, string) { return r.ID, r.CreatedAt }); err != nil {
+		return err
+	}
+	for _, reply := range carried {
+		if err := e.writeForwardReply(ctx, w, bucket, toolID, forwardID, reply); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// writeForwardReply adds one answer by mail.
+//
+// Somebody from outside the account stays an address and becomes nobody: a
+// person of a bundle is somebody of the organization, and whoever wrote to a
+// project from their own mailbox is not. The two are never written together,
+// because Minka reads the person and drops the address without a word. A reply
+// with neither is left out and named: it would stop the applier.
+//
+// The boosts of a reply are counted and not written. Minka passes a reaction
+// on one over, so a bundle carrying them would say more than arrives.
+func (e *Extractor) writeForwardReply(ctx context.Context, w *bundle.Writer, bucket int64, toolID, forwardID string, reply forwardReply) error {
+	projectID := sourceID(bucket)
+	address, fromOutside := theAddressOfAnOutsider(reply.Creator)
+	if fromOutside {
+		// Asked before the record is made: referring to them would write them
+		// into the bundle as somebody of the organization.
+		reply.Creator = nil
+	}
+	origin, err := e.record("reply", reply.ID, reply.recording)
+	if err != nil {
+		return err
+	}
+	var fromAddress *string
+	if fromOutside && address != "" {
+		fromAddress = &address
+	}
+	if origin.CreatedBy == nil && fromAddress == nil {
+		e.forwards.RepliesWithoutASender = append(e.forwards.RepliesWithoutASender, sourceID(reply.ID))
+		return nil
+	}
+	if fromAddress != nil {
+		e.forwards.RepliesFromOutside++
+	}
+
+	body, files, err := e.rewriteBody(reply.Content, "", reply.Files)
+	if err != nil {
+		return err
+	}
+	if err := e.attachFiles(ctx, w, bundle.OwnerForwardReply, origin, files); err != nil {
+		return err
+	}
+	body = e.aBodyThatSaysSomething(body)
+
+	err = w.Add(bundle.ForwardReplies, bundle.ForwardReply{
+		Record:          origin,
+		ProjectSourceID: projectID,
+		ToolSourceID:    toolID,
+		ForwardSourceID: forwardID,
+		FromAddress:     fromAddress,
+		Body:            body,
+	})
+	if err != nil {
+		return err
+	}
+	e.measure(bundle.ForwardReplies, body, LongestBodyRecord{Record: "reply", SourceID: origin.SourceID, In: "project", InSourceID: projectID})
+	e.forwards.ReactionsOnRepliesLeftOut += reply.BoostsCount
+	return nil
+}
+
+// theAddressOfAnOutsider is what a reply from outside the account says about
+// whoever wrote it, and whether they are one. Basecamp gives such a writer the
+// address as their name as well, so the name stands in where the field for an
+// address is empty.
+func theAddressOfAnOutsider(writer *person) (string, bool) {
+	if writer == nil || writer.PersonableType != outsider {
+		return "", false
+	}
+	for _, said := range []string{writer.EmailAddress, writer.Name} {
+		if address, anAddress := anAddressAMailCanCarry(said); anAddress {
+			return address, true
+		}
+	}
+	return "", true
+}
+
+const (
+	// noSubject is the title a mail gets that came without one. A title cannot
+	// be empty here, and a mail without a subject is a mail all the same.
+	noSubject = "(no subject)"
+	// maxTitleLength is how long a title Minka takes, in characters, and
+	// ellipsis what says that the rest of a subject is not there.
+	maxTitleLength = 200
+	ellipsis       = "…"
+)
+
+// aSubjectAsATitle makes the subject of a mail into a title Minka takes, and
+// says whether the mail came without one and whether the subject had to be
+// changed.
+//
+// A title is one line, not empty, of at most 200 characters and free of
+// characters nobody can see, and a subject is none of that: it is whatever a
+// mail server let through. The applier stops at a title it cannot take, and
+// nobody can repair a subject at the source, so it is made into a title here
+// rather than costing the mail or the run: every character nobody can see
+// becomes a blank, what is left is trimmed, and what is longer than a title
+// holds is cut before the last character and ends in an ellipsis.
+func aSubjectAsATitle(subject string) (title string, withoutASubject, changed bool) {
+	// A subject that is not UTF-8 is a title Minka reads as one long control
+	// character, whatever else is in it.
+	folded := strings.ToValidUTF8(subject, " ")
+	folded = strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) {
+			return ' '
+		}
+		return r
+	}, folded)
+	changed = folded != subject
+	folded = strings.TrimSpace(folded)
+	if folded == "" {
+		return noSubject, true, false
+	}
+	if utf8.RuneCountInString(folded) <= maxTitleLength {
+		return folded, false, changed
+	}
+	cut := []rune(folded)[:maxTitleLength-utf8.RuneCountInString(ellipsis)]
+	return strings.TrimRight(string(cut), " \t") + ellipsis, false, true
+}
+
+var (
+	// mailboxLocalPart is what stands before the last "@" of an address Minka
+	// takes: the ordinary characters in groups separated by single dots, and
+	// never the quoted form, which another reader could take for the end of the
+	// address.
+	mailboxLocalPart = regexp.MustCompile("^[A-Za-z0-9!#$%&'*+/=?^_`{|}~-]+(?:\\.[A-Za-z0-9!#$%&'*+/=?^_`{|}~-]+)*$")
+	// mailboxLabel is one label of the domain: letters, digits and hyphens,
+	// beginning and ending with neither a hyphen nor nothing.
+	mailboxLabel = regexp.MustCompile(`^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?$`)
+	// mailboxTopLabel is the last label, which names no host of its own.
+	mailboxTopLabel = regexp.MustCompile(`^[A-Za-z]{2,}$`)
+)
+
+const (
+	// maxAddressLength is the whole of an address, maxLocalPartLength what
+	// stands before the "@" and maxLabelLength one label of the domain, in
+	// bytes, as the standards of mail draw them.
+	maxAddressLength    = 254
+	maxLocalPartLength  = 64
+	maxDomainLength     = 253
+	maxLabelLength      = 63
+	minDomainLabelCount = 2
+)
+
+// anAddressAMailCanCarry is the address a bundle writes for the sender of a
+// mail, and whether the source gave one. The whitespace around it goes, and
+// nothing else of it is touched.
+//
+// It is asked more strictly than Minka asks: what passes here passes there, and
+// an address of a shape nobody writes is left out rather than risked. A
+// `fromAddress` Minka turns down stops the whole run, and a bundle of an
+// account of years cannot be mended once a run of hours has ended on one mail.
+func anAddressAMailCanCarry(value string) (string, bool) {
+	address := strings.TrimSpace(value)
+	at := strings.LastIndex(address, "@")
+	if at < 0 || len(address) > maxAddressLength || !ascii(address) {
+		return "", false
+	}
+	local, domain := address[:at], address[at+1:]
+	if len(local) > maxLocalPartLength || len(domain) > maxDomainLength || !mailboxLocalPart.MatchString(local) {
+		return "", false
+	}
+	labels := strings.Split(domain, ".")
+	if len(labels) < minDomainLabelCount || !mailboxTopLabel.MatchString(labels[len(labels)-1]) {
+		return "", false
+	}
+	for _, label := range labels {
+		if len(label) > maxLabelLength || !mailboxLabel.MatchString(label) {
+			return "", false
+		}
+	}
+	return address, true
+}
+
+// ascii tells whether every character of a value is one of the first 128: an
+// address of any other is one no mail server of the source could have read
+// either.
+func ascii(value string) bool {
+	for i := range len(value) {
+		if value[i] >= utf8.RuneSelf {
+			return false
+		}
+	}
+	return true
+}
+
+// The lines a run writes into a mail that would arrive with nothing in it.
+const (
+	withoutWords         = "<p>This mail came without words.</p>"
+	withoutWordsAndAFile = "<p>This mail came without words, and the file it held could not be brought.</p>"
+	withoutWordsAndFiles = "<p>This mail came without words, and the files it held could not be brought.</p>"
+)
+
+// aBodyThatSaysSomething is the body of a mail with a line of the run's own
+// behind it, where what the mail says would reach Minka as nothing at all.
+//
+// Such a body is written empty there and the mail is remembered as finished,
+// or passed over before it is remembered and passed over again by every run
+// after this one — with its subject, its sender, its replies and its comments.
+// Neither can be mended from that side, so the run says here what became of the
+// mail. A file that will never come keeps its tag beside the line: the tag says
+// where the file stood, and Minka drops it.
+//
+// An embed counts for nothing here although Minka usually takes one: whether it
+// does is its rule, read from its own reading of an address, and a mail that
+// hangs on that alone is lost wherever the two read one differently. Its
+// address comes as a link, which every reading keeps.
+func (e *Extractor) aBodyThatSaysSomething(body string) string {
+	filesThatStayOut, embedded, empty := e.whatWouldArriveOf(body)
+	if !empty {
+		return body
+	}
+	e.forwards.GivenALineOfTheRun++
+	line := withoutWords
+	switch {
+	case filesThatStayOut == 1:
+		line = withoutWordsAndAFile
+	case filesThatStayOut > 1:
+		line = withoutWordsAndFiles
+	}
+	for _, address := range embedded {
+		line += `<p><a href="` + html.EscapeString(address) + `">` + html.EscapeString(address) + `</a></p>`
+	}
+	return body + line
+}
+
+// whatWouldArriveOf reads a body the run wrote and says what of it reaches a
+// page: how many of the files it names will not come, the addresses of the
+// embeds in it, and whether what is left says nothing. It asks what
+// saysNothing asks of every other body, and counts a file whose bytes stay
+// outside and an embed for nothing.
+func (e *Extractor) whatWouldArriveOf(body string) (filesThatStayOut int, embedded []string, empty bool) {
+	reader := newBodyReader(body)
+	for {
+		token, more := reader.next()
+		switch {
+		case !more:
+			return filesThatStayOut, embedded, true
+		case token.kind == nethtml.TextToken:
+			if !blank(token.raw) {
+				return filesThatStayOut, embedded, false
+			}
+		case token.kind == nethtml.CommentToken || token.kind == nethtml.DoctypeToken:
+		case token.name == "import-attachment":
+			if token.kind == nethtml.EndTagToken {
+				continue
+			}
+			if e.filesThatArrive[token.attribute("ref")] {
+				return filesThatStayOut, embedded, false
+			}
+			filesThatStayOut++
+		case token.name == "import-embed":
+			if token.kind != nethtml.EndTagToken {
+				embedded = append(embedded, token.attribute("url"))
+			}
+		case token.name != "br" && token.name != "div" && token.name != "p":
+			return filesThatStayOut, embedded, false
+		}
+	}
+}
