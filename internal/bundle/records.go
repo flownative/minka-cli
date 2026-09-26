@@ -27,6 +27,9 @@ const (
 	Todos          Kind = "todos"
 	Forwards       Kind = "forwards"
 	ForwardReplies Kind = "forwardreplies"
+	Folders        Kind = "folders"
+	Documents      Kind = "documents"
+	Uploads        Kind = "uploads"
 	Messages       Kind = "messages"
 	Comments       Kind = "comments"
 	Reactions      Kind = "reactions"
@@ -36,7 +39,7 @@ const (
 // Kinds lists every kind in the order of the format, which is the order a
 // report shows them in.
 var Kinds = []Kind{People, Projects, Tools, Categories, Columns, Cards, Steps, Posts, Questions, Answers, TodoLists, TodoGroups, Todos,
-	Forwards, ForwardReplies, Messages, Comments, Reactions, Attachments}
+	Forwards, ForwardReplies, Folders, Documents, Uploads, Messages, Comments, Reactions, Attachments}
 
 const (
 	ToolBoard    = "board"
@@ -45,10 +48,12 @@ const (
 	ToolCheckins = "checkins"
 	ToolTodos    = "todos"
 	ToolForwards = "forwards"
+	ToolFiles    = "files"
 
 	OwnerAnswer       = "answer"
 	OwnerCard         = "card"
 	OwnerComment      = "comment"
+	OwnerDocument     = "document"
 	OwnerForward      = "forward"
 	OwnerForwardReply = "forwardreply"
 	OwnerMessage      = "message"
@@ -56,6 +61,7 @@ const (
 	OwnerPost         = "post"
 	OwnerTodo         = "todo"
 	OwnerTodoList     = "todolist"
+	OwnerUpload       = "upload"
 
 	RoleTriage = "triage"
 	RoleWork   = "work"
@@ -68,19 +74,23 @@ const (
 
 	ParentAnswer   = "answer"
 	ParentCard     = "card"
+	ParentDocument = "document"
 	ParentForward  = "forward"
 	ParentPost     = "post"
 	ParentTodo     = "todo"
 	ParentTodoList = "todolist"
+	ParentUpload   = "upload"
 
 	TargetAnswer   = "answer"
 	TargetCard     = "card"
 	TargetComment  = "comment"
+	TargetDocument = "document"
 	TargetForward  = "forward"
 	TargetMessage  = "message"
 	TargetPost     = "post"
 	TargetTodo     = "todo"
 	TargetTodoList = "todolist"
+	TargetUpload   = "upload"
 
 	// The four rhythms a question can be asked in. Daily means on each of the
 	// chosen weekdays.
@@ -368,6 +378,65 @@ type ForwardReply struct {
 	ForwardSourceID string  `json:"forwardSourceId"`
 	FromAddress     *string `json:"fromAddress"`
 	Body            string  `json:"body"`
+}
+
+// Folder is a folder of a Docs & Files tool. ParentSourceID names the folder it
+// stands in and is nil at the top of the tool. Status is active, archived or
+// trashed and is the folder's own: what stands in it carries its own status and
+// goes along through the folder.
+//
+// A folder stands in the file after the folder it is in, and every kind of a
+// folder stands in the file from the bottom up, because Minka puts each new
+// entry on top of its kind there.
+//
+// VisibleToClients is what the source says of this folder, written at every
+// depth: Minka reads it below the top as well, where it is the one thing that
+// can hide a top folder the source shows. A folder takes no comments and no
+// reactions.
+type Folder struct {
+	Record
+	ProjectSourceID string  `json:"projectSourceId"`
+	ToolSourceID    string  `json:"toolSourceId"`
+	ParentSourceID  *string `json:"parentSourceId"`
+	Title           string  `json:"title"`
+	Status          string  `json:"status"`
+
+	VisibleToClients *bool `json:"visibleToClients,omitempty"`
+}
+
+// Document is a document of a Docs & Files tool. FolderSourceID names the
+// folder it stands in and is nil at the top of the tool. Status and
+// VisibleToClients are a folder's.
+type Document struct {
+	Record
+	ProjectSourceID string  `json:"projectSourceId"`
+	ToolSourceID    string  `json:"toolSourceId"`
+	FolderSourceID  *string `json:"folderSourceId"`
+	Title           string  `json:"title"`
+	Body            *string `json:"body"`
+	Status          string  `json:"status"`
+
+	VisibleToClients *bool `json:"visibleToClients,omitempty"`
+}
+
+// Upload is one stored file of a Docs & Files tool standing beside a text
+// rather than inside one. Title is the name of the file, because Minka derives
+// nothing from it, and File names the record of the file in attachments.jsonl.
+// Status and VisibleToClients are a folder's.
+//
+// Only the file the source shows now comes; the format keeps `versions` free
+// for the older ones and reads it nowhere, so a bundle writes none.
+type Upload struct {
+	Record
+	ProjectSourceID string  `json:"projectSourceId"`
+	ToolSourceID    string  `json:"toolSourceId"`
+	FolderSourceID  *string `json:"folderSourceId"`
+	Title           string  `json:"title"`
+	File            string  `json:"file"`
+	Description     *string `json:"description"`
+	Status          string  `json:"status"`
+
+	VisibleToClients *bool `json:"visibleToClients,omitempty"`
 }
 
 // Message is one line of a chat.

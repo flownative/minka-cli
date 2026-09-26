@@ -811,21 +811,25 @@ this:
   says how many: the run exits 0, and a project may come without a creator
   because of it. An identity that may see nothing at all still exits 4.
 - So far a bundle holds the structure, the boards, the message boards, the
-  chats, the check-ins, the to-dos and the forwarded mail: the people the
+  chats, the check-ins, the to-dos, the forwarded mail and the Docs & Files:
+  the people the
   projects refer to
   (members and whoever a record names; `data.peopleLeftOut` counts the rest of
   the account's list, which holds more for an admin than for anybody else, the
   people written do not differ) with their avatars, the projects with their
   members, the card tables, chats, message boards, questionnaires, to-do
-  sets and inboxes that are switched on, of each card table the columns, the
+  sets, inboxes and Docs & Files tools that are switched on, of each card table
+  the columns, the
   cards with
   the archived and the trashed ones, their steps, comments and boosts, of each
   message board its messages as posts, the archived and the trashed ones
   included, with their categories, comments and boosts, of each chat its lines
   as messages with their boosts, of each questionnaire its questions with
   their answers, comments and boosts, of each to-do set its lists with
-  their groups and to-dos, and of each inbox its forwarded mail with the answers
-  by mail, the comments and the boosts of each. `data.skippedTools` counts what
+  their groups and to-dos, of each inbox its forwarded mail with the answers
+  by mail, the comments and the boosts of each, and of each Docs & Files tool
+  its folders, documents and uploads with the comments, the boosts and the files
+  of each. `data.skippedTools` counts what
   was left out, per
   kind and whether it was switched on; `data.counts` is what the manifest
   says.
@@ -834,8 +838,9 @@ this:
   whichever identity ran the import.
 - What the source says about clients comes with the bundle: `client` on every
   person, `company` on a client alone, `clientAccess` and `clientCompany` on a
-  project, and `visibleToClients` on a tool, a post, a to-do list and a check-in
-  question. That word is always the record's own and never the word of its tool:
+  project, and `visibleToClients` on a tool, a post, a to-do list, a check-in
+  question and every folder, document and upload of Docs & Files. That word is
+  always the record's own and never the word of its tool:
   a post of a board the clients see can be one the source keeps from them. Where
   the source says nothing, nothing is written and Minka leaves what it holds
   alone. A record that follows what it hangs on — a to-do, a group, a card, an
@@ -846,10 +851,13 @@ this:
   said to be asked of a client, which `data.askedLeftOut.clients` counts. A
   company the source names without an identifier, or with a name Minka refuses,
   ends the run where the record that names it comes in: written away as none it
-  would tell Minka to drop the company it holds. Docs & Files is not extracted
-  at all, so the bundle says nothing of whether clients see it; a `notice` names
-  that gap. An Email forwards tool carries its word, and a mail and an answer
-  follow it. No output ever names a person or a company.
+  would tell Minka to drop the company it holds. An Email forwards tool carries
+  its word, and a mail and an answer follow it. **An entry of Docs & Files is
+  the one exception to the rule above:** a folder, a document and an upload
+  carry the word at **every** depth, and not only at the top of their tool,
+  because Minka reads it below the top as well — something hidden from clients
+  below a folder the source shows makes Minka hide that folder with everything
+  in it. No output ever names a person or a company.
 - `data.cardsByStatus` splits the cards, `data.cardsOnHold` counts those set
   aside within their column, `data.cardsLeftOut` the archived and trashed
   cards whose column is in no extracted board, `data.commentsTrashed` the
@@ -914,14 +922,41 @@ this:
   Minka holds is counted in `data.forwards.longerThanMinkaTakes` and comes as it
   is: Minka passes such a mail over on every run, with everything hanging on it.
   No output ever names a subject or an address.
+- A Docs & Files tool becomes a tool of kind `files`, and what stands in it
+  `folders`, `documents` and `uploads`. A folder stands in the bundle after the
+  folder it is in, and each kind of a folder from the bottom up, because Minka
+  puts every new entry on top of its kind there; there is no position in the
+  format. `data.docs.foldersByStatus`, `documentsByStatus` and
+  `uploadsByStatus` split them. The status of an entry is its **own** and never
+  the status of its folder: what stands in a folder the source archived or threw
+  away carries `active` and goes along through the folder in Minka. A document
+  carries its title, its text, its files, its comments and its boosts; a folder
+  takes neither comments nor boosts, here as in Basecamp, so neither is asked
+  for. An upload is one stored file beside a text, and its title is the **name
+  of the file**: a name longer than 200 characters, over several lines or
+  missing altogether is folded and cut short as a subject is
+  (`data.docs.namesMadeIntoATitle`, `data.docs.withoutAName`). Only the file the
+  source shows now comes. An upload Basecamp names no stored file for — one in a
+  cloud — is left out and named by ID (`data.docs.withoutAStoredFile`), with its
+  comments and its boosts (`data.docs.commentsWithoutTheirUpload`,
+  `boostsWithoutTheirUpload`), because no run will ever have bytes for it. A
+  document or a description longer than the 1,000,000 characters Minka holds is
+  counted (`data.docs.longerThanMinkaTakes`) and comes as it is, and one whose
+  whole text is a file no run will bring is named
+  (`data.docs.onlyAFileNoRunWillBring`): Minka keeps nothing of such a record
+  and asks for the file again on every run. `data.docs.leftOut` counts per kind
+  what the bundle holds none of, and `data.docs.placesLeftOut` names every
+  folder and every tool that took entries with it. No output ever names a file,
+  a folder or a document.
 - A record the source describes with a word a bundle has none for is left out
   and the run goes on: a chat line of an unknown kind or with a status other
   than `active`, a column of a kind a bundle has no role for, a card, a
   post, a comment, a question or an answer with a status a bundle does not
   know, a draft among them, a group or a to-do the source has put on the
-  shelf, a forwarded mail of a status that is none of the three, and an answer
-  by mail that says anything but `active`; `data.recordsLeftOut` calls the last
-  two `forward` and `reply`. `data.recordsLeftOut` names each with the kind of
+  shelf, a forwarded mail of a status that is none of the three, an answer
+  by mail that says anything but `active`, and a folder, a document or an
+  upload of Docs & Files whose status is none of the three;
+  `data.recordsLeftOut` calls the mail and the answer `forward` and `reply`. `data.recordsLeftOut` names each with the kind of
   record, the field, the word the source said there, where it stood and how
   many records it cost, and a `notice` counts the records. A record whose times
   are missing or are no times still ends the run: it would be put in the wrong

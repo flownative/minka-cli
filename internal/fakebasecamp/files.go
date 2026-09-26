@@ -163,6 +163,19 @@ func (a *Account) storedFile(key string) (storedFile, bool) {
 				listed(reply.Files)
 			}
 		})
+		a.eachVault(&a.Projects[p], func(in vault) {
+			for _, document := range in.documents {
+				listed(document.Files)
+				commented(document.Comments)
+			}
+			for _, upload := range in.uploads {
+				listed(upload.Files)
+				commented(upload.Comments)
+				if !upload.InTheCloud && found == nil && StoredKeyOfUpload(upload.ID) == key {
+					found = &storedFile{Key: key, URLName: upload.urlName(), Bytes: upload.Bytes, NoSize: upload.NoSize, Gone: upload.Gone}
+				}
+			}
+		})
 	}
 	if found == nil {
 		return storedFile{}, false

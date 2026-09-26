@@ -792,27 +792,34 @@ company and no access is one whose clients have none there.
 [Importing from Basecamp](stable/import.md).
 
 <a id="c-056"></a>
-## C-056 — A mail is made to fit where nobody can repair it at the source
+## C-056 — What nobody can repair at the source is made to fit
 
-*Applies to: `import basecamp`, the `title` and the `fromAddress` of a forward*
+*Applies to: `import basecamp`, the `title` and the `fromAddress` of a forward,
+the `title` of an upload*
 
-The subject of a forwarded mail becomes a title Minka takes: every character
-nobody can see becomes a blank, what is left is trimmed, a mail without a
-subject is called `(no subject)`, and one longer than 200 characters is cut
-before the last character and ends in an ellipsis. A sender that is no e-mail
-address Minka takes leaves the mail out, named by its `sourceId`, and the run
-goes on. Both are counted and named in a `notice`.
+Two things a bundle carries are nobody's to put right where they stand: the
+subject of a forwarded mail, and the name of the file an upload of Docs & Files
+stands for. Either becomes a title Minka takes: every character nobody can see
+becomes a blank, what is left is trimmed, what is longer than 200 characters is
+cut before the last character and ends in an ellipsis, and what is left of
+nothing is called `(no subject)` for a mail and `(no name)` for an upload. A
+sender that is no e-mail address Minka takes leaves the **mail** out, named by
+its `sourceId`, and the run goes on. All of it is counted and named in a
+`notice`.
 
-**Why:** A subject is whatever a mail server let through, and a sender is
-whatever stood in a header: neither is anybody's to repair at the source, so a
-run that refused one would never come to an end, however often it is started.
-The title of a card, a post or a to-do still ends the run, because that one
-somebody can put right where it stands. `fromAddress` is what a forward is
+**Why:** A subject is whatever a mail server let through, and the name of a
+file is whatever a file system allowed: neither is anybody's to repair at the
+source, so a run that refused one would never come to an end, however often it
+is started. The title of a card, a post, a to-do, a folder or a document still
+ends the run, because that one somebody can put right where it stands. An
+upload has no other title — Minka derives nothing from a file and refuses an
+upload without one — so folding the name is the only way it comes at all.
+`fromAddress` is what a forward is
 about and the field takes nothing else, so a mail whose sender is none cannot be
 carried at all — and ending a walk of hours over one mail would leave a whole
 account unimported. The address is read as Minka reads it ([C-059](#c-059)), so
 that what a bundle carries is always taken.
-**Implemented as:** `basecamp.aSubjectAsATitle`,
+**Implemented as:** `basecamp.aTitleMinkaTakes`,
 `basecamp.anAddressMinkaTakes`, see
 [Importing from Basecamp](stable/import.md).
 
@@ -900,4 +907,46 @@ is trimmed, unfolded or mended, and a mark at one end alone is no pair — and t
 number in the report keeps the repair from being a silent one.
 **Implemented as:** `basecamp.anAddressMinkaTakes`,
 `basecamp.minkaTakesTheAddress`, see
+[Importing from Basecamp](stable/import.md).
+
+<a id="c-060"></a>
+## C-060 — An upload without a stored file is left out with everything pointing at it
+
+*Applies to: `import basecamp`, the uploads of a Docs & Files tool*
+
+An upload Basecamp names no stored file for, one that lives in a cloud, is left
+out and named by its `sourceId`, and its comments and its boosts are neither
+asked for nor written. All three are counted and a `notice` says so.
+
+**Why:** `file` takes the `sourceId` of a file of the bundle and nothing else,
+and no run will ever have bytes to fetch for a file that lies somewhere else,
+so such an upload would be counted in Minka as waiting on every run. What
+pointed at it falls with it ([C-052](#c-052)): a comment naming an upload the
+bundle does not carry stops the applier, and carrying it would cost the import
+rather than the one upload.
+**Implemented as:** `basecamp.fileOfAnUpload`,
+`basecamp.Extractor.writeUpload`, see
+[Importing from Basecamp](stable/import.md).
+
+<a id="c-061"></a>
+## C-061 — Every entry of Docs & Files says for itself what clients see, at every depth
+
+*Applies to: `import basecamp`, the `visibleToClients` of a folder, a document
+and an upload*
+
+A folder, a document and an upload carry what the source says about clients
+wherever they stand, and not only at the top of their tool. This is the one
+place where a record standing inside another carries the word: everywhere else
+what hangs on something follows it and says nothing ([C-055](#c-055)).
+
+**Why:** Minka reads the word below the top as well, and there it is the one
+thing that can hide a folder at the top: where something below a top folder the
+source shows is hidden from clients, the import hides that top folder with
+everything in it and names it. An entry that left the word out would be
+imported in the open under a folder clients see, and what a client has seen
+cannot be taken back. The rule is read from
+`WhatClientsSee::followTheFolderAbove()` and from nothing else, Minka's prose
+having said the opposite of it.
+**Implemented as:** `basecamp.visibilityOfItsOwn`,
+`basecamp.Extractor.writeFolder`, `writeDocument`, `writeUpload`, see
 [Importing from Basecamp](stable/import.md).

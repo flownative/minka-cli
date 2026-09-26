@@ -334,18 +334,37 @@ func TestAQuestionAskedOfClientsAloneComesAskingNobody(t *testing.T) {
 	}
 }
 
-// A kind of tool is either extracted or silent about clients, never both: what a
-// run extracts is asked first, so the day Docs & Files is extracted this test
-// fails and the gap in the report goes with it, as it went with the forwards.
-func TestAKindOfToolIsEitherExtractedOrSilentAboutClients(t *testing.T) {
-	silent := map[string]bool{
-		"vault":        true,
-		"kanban_board": false, "chat": false, "message_board": false, "questionnaire": false, "todoset": false,
-		"inbox": false, "schedule": false,
+// Every kind of tool Minka has a counterpart for is extracted, so no bundle is
+// silent about whether clients see one of them. The gap the report used to name
+// is gone with the last kind a run left out.
+func TestEveryKindOfToolMinkaHasIsExtracted(t *testing.T) {
+	account := fakebasecamp.New()
+	dir, result := extract(t, account, everyKindOfTool...)
+
+	kinds := map[string]bool{}
+	for _, record := range records(t, dir, bundle.Tools) {
+		kinds[record["kind"].(string)] = true
 	}
-	for kind, want := range silent {
-		if got := basecamp.SaysNothingAboutClients(kind); got != want {
-			t.Errorf("%s says nothing about clients: %v, want %v", kind, got, want)
+	for _, kind := range []string{bundle.ToolBoard, bundle.ToolChat, bundle.ToolPosts, bundle.ToolCheckins,
+		bundle.ToolTodos, bundle.ToolForwards, bundle.ToolFiles} {
+		if !kinds[kind] {
+			t.Errorf("no tool of the kind %s is in the bundle", kind)
+		}
+	}
+	// What is left out of a dock is a kind Minka has nothing for, or a tool the
+	// source has switched off, and never a kind a run passes over.
+	for _, skipped := range result.Skipped {
+		if skipped.Enabled && toolKindsOfMinka[skipped.Kind] {
+			t.Errorf("%d tools of the kind %s are skipped although Minka has one", skipped.Count, skipped.Kind)
 		}
 	}
 }
+
+// toolKindsOfMinka are the kinds of Basecamp dock entry Minka has a counterpart
+// for, named here so that the test above sees a kind that stops being extracted.
+var toolKindsOfMinka = map[string]bool{"kanban_board": true, "chat": true, "message_board": true,
+	"questionnaire": true, "todoset": true, "inbox": true, "vault": true}
+
+// everyKindOfTool are the projects of the fake that hold every kind of tool
+// between them.
+var everyKindOfTool = []string{"7001", boardProject, talkProject, checkinProject, todoProject, forwardProject, docsProject}
