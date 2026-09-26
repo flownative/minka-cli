@@ -96,7 +96,6 @@ func TestAToolAddedLaterNeverNamesTheCreatorOfAProject(t *testing.T) {
 		"just outside the window":        "2022-05-01T09:00:05.001Z",
 		"before the project":             "2022-05-01T08:59:59.999Z",
 		"the same letters, an hour away": "2022-05-01T09:00:00.150+01:00",
-		"no time at all":                 "in the morning",
 	} {
 		account := fakebasecamp.New()
 		if createdAt != "" {
@@ -115,6 +114,37 @@ func TestAToolAddedLaterNeverNamesTheCreatorOfAProject(t *testing.T) {
 		account.Projects[0].Dock[0].CreatedAt = createdAt
 		if got := creatorOfProject(t, account, "7001"); got != "101" {
 			t.Errorf("%s: created by %v, want 101", createdAt, got)
+		}
+	}
+}
+
+// A tool that is only asked for and whose time is no moment says nothing about
+// the creator: the window compares moments, and what is no moment falls into no
+// window. A tool of the bundle never gets that far, because its time ends the
+// run where the tool is written.
+func TestAToolAskedForAtNoMomentNamesNobody(t *testing.T) {
+	edsger := fakebasecamp.Person{ID: 104, Name: "Edsger Invented", Email: "edsger@example.test"}
+	probed := "buckets/7001/todosets/9005.json"
+
+	// The precondition: with a moment of the window, that very tool answers.
+	account := fakebasecamp.New()
+	account.Projects[0].Dock[4].CreatedAt, account.Projects[0].Dock[4].Creator = withTheProject, &edsger
+	if got := creatorOfProject(t, account, "7001"); got != "104" {
+		t.Fatalf("created by %v, want 104: the to-do set is the tool that is asked for", got)
+	}
+
+	for what, createdAt := range map[string]string{
+		"a relative word":       "now",
+		"a time without a zone": "2022-05-01T09:00:00.150",
+		"no time at all":        "in the morning",
+	} {
+		account := fakebasecamp.New()
+		account.Projects[0].Dock[4].CreatedAt, account.Projects[0].Dock[4].Creator = createdAt, &edsger
+		if got := creatorOfProject(t, account, "7001"); got != nil {
+			t.Errorf("%s: created by %v, want nobody", what, got)
+		}
+		if requests := asked(account, probed); len(requests) == 0 {
+			t.Errorf("%s: the tool with the time was never asked for: %v", what, account.Requests)
 		}
 	}
 }

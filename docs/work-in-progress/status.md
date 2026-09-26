@@ -169,6 +169,15 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   stand-in of the Basecamp CLI only. The classes are the exit codes and codes
   the Basecamp CLI shows; of its source only the failure object and the
   wording of an API failure were read.
+- That a time of a record which is no moment ends the run: no real account has
+  ever sent one, so every such string is an invented one. Held against the
+  expression the applier reads a moment with, string by string, and for every
+  kind of record and every field a moment reaches a bundle through, the to-do
+  lists, groups and to-dos included.
+  At two places the run is stricter than that expression, which takes them and
+  no calendar has them: an hour of `24`, as in `…T24:00:00Z`, and a leap second,
+  as in `…:60Z`. A run that ends on one of them is doing what it is meant to,
+  and nobody need go looking for the cause.
 - Of the boards of `import basecamp`: a mention in a stored note that has no
   rendering, a mention of somebody who left the account, a boost on a card, a
   trashed comment, a card whose column is in no extracted board, more steps
