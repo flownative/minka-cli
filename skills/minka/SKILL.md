@@ -760,7 +760,15 @@ this:
   record, the field, the word the source said there, where it stood and how
   many records it cost, and a `notice` counts the records. A record whose times
   are missing or are no times still ends the run: it would be put in the wrong
-  place.
+  place. A time is a moment written one way, `2024-02-05T17:00:00.000Z` or
+  `2024-02-05T17:00:00+01:00`: a relative word such as `now`, a time without a
+  zone, and a moment of the right shape that no calendar has end the run, named
+  with the record and the field, and so does a day that is not `YYYY-MM-DD`
+  where a card is due, where a to-do starts or is due, or where an answer
+  belongs. The message says what stood there only where it has the shape of a
+  time and is short: a value of another shape is not repeated, because that field
+  then holds whatever the source put in it, and a long one is not repeated
+  because a message is no place to carry it.
 - A question of a check-in carries the rhythm, the weekdays counted from Monday,
   the time of day, the day the rhythm is counted from and whom it is asked of,
   which are the subscribers of the question and not whoever answered it. Only a

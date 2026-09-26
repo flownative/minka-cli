@@ -161,9 +161,9 @@ func oldestFirstWithMoments[T any](items []T, what string, key func(T) (id int64
 	created := make(map[int64]time.Time, len(items))
 	for _, item := range items {
 		id, createdAt := key(item)
-		parsed, err := time.Parse(time.RFC3339Nano, createdAt)
+		parsed, err := momentOf(fmt.Sprintf("%s %d", what, id), "created", createdAt)
 		if err != nil {
-			return nil, &Error{Kind: API, Message: fmt.Sprintf("Basecamp says that %s %d was created at something that is no time", what, id)}
+			return nil, err
 		}
 		created[id] = parsed
 	}
@@ -423,8 +423,11 @@ func (e *Extractor) writeCard(ctx context.Context, w *bundle.Writer, bucket int6
 			assigneeIDs = append(assigneeIDs, *reference)
 		}
 	}
-	completedAt, completedBy, err := e.completed(found.Completion)
+	completedAt, completedBy, err := e.completed("card", found.ID, found.Completion)
 	if err != nil {
+		return err
+	}
+	if err := requireTheDayItIsDue(found); err != nil {
 		return err
 	}
 	description, files, err := e.rewriteBody(found.Content, found.Description, found.Files)
@@ -490,11 +493,33 @@ func (e *Extractor) writeDiscussion(ctx context.Context, w *bundle.Writer, bucke
 	return nil
 }
 
+// requireTheDayItIsDue holds the day a card is due to the shape both Basecamp
+// and Minka write a day in. The bundle carries the day as it comes, and Minka
+// reads whatever it is given, so a shape that is no day would put the card on
+// somebody else's day or on none.
+func requireTheDayItIsDue(found placedCard) error {
+	if found.DueOn == nil || *found.DueOn == "" {
+		return nil
+	}
+	if _, aDate := aDay(*found.DueOn); !aDate {
+		return &Error{
+			Kind:    API,
+			Message: fmt.Sprintf("card %d is due on %s", found.ID, noDay(*found.DueOn)),
+		}
+	}
+	return nil
+}
+
 // completed says when and by whom something was completed. Basecamp says so in
-// a record of its own, which is there only for what is completed.
-func (e *Extractor) completed(c *completion) (at, by *string, err error) {
+// a record of its own, which is there only for what is completed. A moment that
+// is none ends the run: the bundle carries it as it comes, and a card would be
+// completed at a moment nobody meant.
+func (e *Extractor) completed(what string, id int64, c *completion) (at, by *string, err error) {
 	if c == nil || c.CreatedAt == "" {
 		return nil, nil, nil
+	}
+	if _, err := momentOf(fmt.Sprintf("%s %d", what, id), "completed", c.CreatedAt); err != nil {
+		return nil, nil, err
 	}
 	by, err = e.people.refer(c.Creator, false)
 	return &c.CreatedAt, by, err
@@ -527,7 +552,7 @@ func (e *Extractor) writeSteps(ctx context.Context, w *bundle.Writer, projectID,
 		if err != nil {
 			return err
 		}
-		completedAt, completedBy, err := e.completed(s.Completion)
+		completedAt, completedBy, err := e.completed("step", s.ID, s.Completion)
 		if err != nil {
 			return err
 		}

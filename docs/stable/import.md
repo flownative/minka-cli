@@ -141,12 +141,48 @@ somebody who never gave it; and the status of a **project** the run was given by
 name, because a run that was asked for that project has to say that it cannot
 have it.
 
+A moment is a date, a time of day, a fraction of a second where there is one,
+and the zone it is meant in, with nothing around it: `2024-02-05T17:00:00.000Z`
+and `2024-02-05T17:00:00+01:00`. Every moment the run reads is read where it is
+read — `created_at` and `updated_at` of every kind of record, the moment a card,
+a step or a to-do was completed, the moment a boost was given — and anything else ends
+the run, named with the record and the field: a relative word such as `now` or
+`tomorrow`, a time without a zone, a day written another way, and a moment of the
+right shape that no calendar has, the thirtieth of February among them. The
+applier draws the line in the same place, so neither side takes what the other
+turns down: a line two programs draw differently is no line but the place where a
+time changes its meaning without a word. A moment is read whether the bundle
+computes with it or only carries it on, and the moment a card or a to-do was
+completed therefore ends a run wherever Basecamp names one, not only for a card in
+Done and not only for a to-do that is done.
+
+The day a card is due is held to `YYYY-MM-DD` the same way, as the days a to-do
+runs are and the day an answer belongs to is; a day of a **schedule** leaves its
+question out instead, see Questions.
+
+**Exactly one moment the run reads is forgiven:** the `created_at` of a tool that
+is asked for nothing but the creator of a project. Such a tool is no record of a
+bundle, nothing of it is written, and a moment that is none there says only that
+the tool answers nothing about who made the project, as a tool without a creator
+says nothing; the project then comes without a creator, see Projects. Every
+moment of every record a bundle carries ends the run.
+
+A message says what stood in the field only where it has the shape of a moment,
+or of a day, and is at most 40 characters long (`maxTimeSaid`): the thirtieth of
+February reads like a time and is none, and a reader who is not told the value
+has nothing to go on. A value of any other shape is not repeated, because a
+field that holds no time holds whatever the source put there, a name among it. A
+longer one is not repeated either: the shape of a moment takes a fraction of a
+second of any length, and a message that floods every log it reaches is a harm
+of its own, however little it gives away. A day needs no such length, its shape
+admitting ten characters and no other number.
+
 A card, a post and a comment are held to all of this where the walk first meets
 them, before anything that hangs on them is asked for, and the lines of a chat
 before the first of them is written. A message of a failure names the record by
 its ID and what is missing. Of what Basecamp said, the report and the message
-quote a status, a kind of column and a kind of line, and never a title, a name,
-a text or an address.
+quote a status, a kind of column, a kind of line and a time of the shape of one,
+and never a title, a name, a text or an address.
 
 ## What the Basecamp identity needs
 
@@ -299,8 +335,8 @@ posts, those of lines, those of answers, those of lists and of to-dos.
   A card that was set aside within its column belongs to that column, never
   to the list Basecamp keeps such cards in, and carries `onHold: true`; the
   key is left out otherwise. `completedAt` and `completedBy` come from the
-  completion Basecamp records, `dueOn` as given, `assignees` in the order of
-  their IDs. The note is the stored one (`content`), and `null` when empty.
+  completion Basecamp records, `dueOn` as given and held to the shape of a day,
+  `assignees` in the order of their IDs. The note is the stored one (`content`), and `null` when empty.
 - **Steps** come with the card, which shows them itself; only when it has
   more than it shows is their list asked for. Whom a step is assigned to and
   when it is due is left out, because a step in Minka has neither.
@@ -485,7 +521,7 @@ posts, those of lines, those of answers, those of lists and of to-dos.
   the rendered text, `assignees` and `notifyWhenDone` are the people the
   source names, in the order of their IDs and each once, `completedAt` and
   `completedBy` come from the completion Basecamp records, and `startsOn` and
-  `dueOn` as given. Comments, boosts and files hang on a to-do. **`updatedAt`
+  `dueOn` as given, both held to the shape of a day. Comments, boosts and files hang on a to-do. **`updatedAt`
   is never older than `completedAt`** (C-051). **Subtasks are not carried:**
   the format has no word for them, so all that is left of them is how many
   there were, counted in `todosWithSubtasks` and `subtasksLeftOut` and asked
