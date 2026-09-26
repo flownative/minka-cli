@@ -213,7 +213,8 @@ The lists of a to-do set that are in use stand in the bundle from the bottom up,
 because Minka puts every new list on top of its tool; the ones the source has put
 away stand before them in the order it lists them, which decides nothing, Minka
 ordering an archive by the moment a record was put away. The groups and the
-to-dos of a list come in the order of the list. A list comes with the state the source left it in, a
+to-dos of a list come in the order of the list. A list comes with the state the
+source left it in, a
 group and a to-do with the trash alone, because Minka gives neither of the two a
 shelf: one the source has put on the shelf is left out and counted, and so is
 whatever stood in a list or a group the bundle does not carry — todosLeftOut
@@ -272,7 +273,8 @@ decides: Minka puts each new one on top of its kind, so the bundle carries them
 from the bottom up and the source's order comes out again. For one that has left
 its place it decides nothing — Minka orders an archive by the moment a record was
 put away and takes that moment from the record itself — so those stand first and
-in the order the source lists them. A folder stands after the folder it is in. A folder whose status a bundle has no
+in the order the source lists them. A folder stands after the folder it is in.
+A folder whose status a bundle has no
 word for is left out with everything below it, which is left out with it
 (docs.leftOut counts the folders, documents and uploads, docs.placesLeftOut
 names every place that took entries with it); so are the entries of a Docs &
@@ -327,7 +329,8 @@ whatever its size and type, streamed from the Basecamp CLI (basecamp files
 download). A file of a text or a chat is fetched at a storage address, the one
 file of an upload of Docs & Files by the identifier of the upload and its
 project: Basecamp names no stored file on such a record, and the address it gives
-leads to a store of its own that no run follows. A file that is still whole in the bundle being replaced is taken
+leads to a store of its own that no run follows.
+A file that is still whole in the bundle being replaced is taken
 over from there instead of being fetched again; the report counts both as
 filesFetched and filesReused. A file Basecamp lists and no longer has gets a
 record that says so (filesGone). The name of a file is made a plain one
