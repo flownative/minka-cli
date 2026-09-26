@@ -834,10 +834,11 @@ passes it over before it is remembered and passes it over again on every run
 afterwards; either way the subject, the sender, the answers and the comments are
 lost, and no run can mend it from that side. The extractor is the one place that
 knows a file can never come, and a run that said so of one it could simply not
-fetch would take the mail from every run after it. An embed is Minka's own reading of an address, so a
-mail that hangs on one alone gets the address as a link, which every reading
-keeps, and no sentence: Minka usually takes the embed, and a run that called such
-a mail wordless would be putting that in writing under somebody's name.
+fetch would take the mail from every run after it. An embed is Minka's own
+reading of an address, so a mail that hangs on one alone gets the address as a
+link, which every reading keeps, and no sentence: Minka usually takes the
+embed, and a run that called such a mail wordless would be putting that in
+writing under somebody's name.
 **Implemented as:** `basecamp.Extractor.aBodyThatSaysSomething`,
 `basecamp.Extractor.whatWouldArriveOf`,
 `basecamp.Extractor.theFileNeverArrives`, see

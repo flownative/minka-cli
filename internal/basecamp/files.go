@@ -171,10 +171,9 @@ func plainName(name string) (string, bool) {
 // largestFileMinkaTakes is the ceiling one file meets on the way in, in bytes.
 // Above it the file stays outside there however whole it is here, so a record
 // whose body is nothing but that file arrives empty. An instance may be told
-// another number; this is the one the format names.
-//
-// A variable so that a test can reach what lies above it without a gibibyte.
-var largestFileMinkaTakes int64 = 1 << 30
+// another number; this is the one the format names, and a run can be told
+// another, which is how a test reaches what lies above it without a gibibyte.
+const largestFileMinkaTakes = 1 << 30
 
 // attachFiles brings the files a text refers to, in the order of their
 // references, as attachments of whatever carries the text.
@@ -231,7 +230,7 @@ func (e *Extractor) attachFile(ctx context.Context, w *bundle.Writer, ownerKind 
 	}
 	if w.Discards() {
 		// All a dry run knows of a file is the size the source gives it.
-		if file.byteSize != nil && *file.byteSize > largestFileMinkaTakes {
+		if file.byteSize != nil && *file.byteSize > e.LargestFile {
 			e.filesThatNeverArrive[file.ref] = true
 		}
 		e.fileRecords = append(e.fileRecords, record)
@@ -302,7 +301,7 @@ func (e *Extractor) attachFile(ctx context.Context, w *bundle.Writer, ownerKind 
 	}
 
 	e.files.Bytes += stored.Bytes
-	if stored.Bytes > largestFileMinkaTakes {
+	if stored.Bytes > e.LargestFile {
 		e.filesThatNeverArrive[file.ref] = true
 	}
 	record.Holds(stored)

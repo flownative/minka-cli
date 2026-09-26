@@ -39,7 +39,8 @@ on top, with their groups and their to-dos in the order of the list and what
 hangs on a list and a to-do, and of each inbox its forwarded mail with the
 answers by mail, the comments and the boosts of each.
 The inboxes come last of all, so that a file standing in a card and in a mail
-alike belongs to the card. Three things of such a mail are the extractor's own doing, each
+alike belongs to the card. Three things of such a mail are the extractor's own
+doing, each
 written down as a rule: a subject Minka would refuse becomes a title rather than
 costing the mail or the run and a sender that is no address leaves the mail out
 (C-056), a body that would reach Minka as nothing at all carries one line of the
@@ -54,7 +55,8 @@ than `active`, a column of a kind a bundle has no role for, a card, a post,
 a comment, a question or an answer with a status a bundle does not know, a draft
 among them, a group or a to-do the source has put on the shelf, which a
 bundle gives none, a forwarded mail of a status that is none of the three, and
-an answer by mail that says anything but `active`. What stood in a list or a group a bundle cannot carry falls
+an answer by mail that says anything but `active`. What stood in a list or a
+group a bundle cannot carry falls
 with it, is asked for to be counted and is named with the place it fell with
 (C-052), so that no run says a bundle holds more of the source than it does.
 `recordsLeftOut` names each with the kind of record, the word and where it
@@ -312,10 +314,11 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   answers it has; and a
   boost on a mail, of which the account holds none, so the list a run asks for of
   every mail has never answered with one.
-  One number of the report will be far larger live than the fake suggests:
-  every mail and every answer of the account carries a word about clients, and
-  every one of them is counted in `visibilityLeftToTheContainer`, where the fake
-  offers one of each.
+  One number of the report will be larger live than the fake suggests: every
+  mail of the account carries a word about clients, and every one of them is
+  counted in `visibilityLeftToTheContainer`, where the fake offers one. Of the
+  answers only one list was read, and what it says about clients was not among
+  what was measured.
 - Of the files of `import basecamp`: a download that breaks off, a file
   whose size differs from what Basecamp says, a file that is gone, a name that
   has to be changed, a caption too long, and one file under two owners.

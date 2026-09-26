@@ -602,8 +602,21 @@ func TestAFileThatOnlyFailedThisTimeGetsNoLineOfTheRun(t *testing.T) {
 func TestAFileAboveTheCeilingOfARunGetsTheLineOfTheRun(t *testing.T) {
 	account := fakebasecamp.New()
 	theMail(t, account, 9308).Files[0].Gone = false
-	basecamp.WithTheCeilingOfARunAt(t, 1024)
-	dir, result := extract(t, account, forwardProject)
+	dir := filepath.Join(t.TempDir(), "bundle")
+	writer, err := bundle.Create(dir, basecamp.SourceName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer writer.Abort()
+	extractor := basecamp.Extractor{Source: account, Avatars: account, Files: account, LargestFile: 1024,
+		Now: func() time.Time { return runDay }}
+	result, err := extractor.Extract(t.Context(), []string{forwardProject}, writer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := writer.Commit(bundle.Manifest{}); err != nil {
+		t.Fatal(err)
+	}
 
 	body, _ := recordWithID(t, records(t, dir, bundle.Forwards), "9308")["body"].(string)
 	if !strings.Contains(body, "what it held could not be brought") {
@@ -616,16 +629,32 @@ func TestAFileAboveTheCeilingOfARunGetsTheLineOfTheRun(t *testing.T) {
 	}
 }
 
-// A mail that says nothing of how many answers it has is asked for them all the
-// same, as it is asked for its comments and its boosts: a field that goes away
-// must not take every answer by mail of an account with it.
-func TestAMailThatSaysNothingOfItsAnswersIsAskedForThem(t *testing.T) {
+// A mail that says how many answers it has and says none costs no request, and
+// one that says nothing of them at all is asked all the same, as it is asked
+// for its comments and its boosts: a field that goes away must not take every
+// answer by mail of an account with it.
+func TestTheAnswersOfAMailAreAskedForByACountAndWhereThereIsNone(t *testing.T) {
+	// 9303 is the mail nobody answered, so the request for its answers is the
+	// one that says which of the two is happening.
+	const theAnswersOfTheMailNobodyAnswered = "inbox_forwards/9303/replies"
+
 	account := fakebasecamp.New()
+	dir, _ := extract(t, account, forwardProject)
+	if asked := asked(account, theAnswersOfTheMailNobodyAnswered); len(asked) > 0 {
+		t.Errorf("a mail that says it has no answers was asked for them: %v", asked)
+	}
+	if got := len(records(t, dir, bundle.ForwardReplies)); got != 4 {
+		t.Errorf("%d answers by mail, want the four", got)
+	}
+
+	account = fakebasecamp.New()
 	for i := range inbox(account).Forwards {
 		inbox(account).Forwards[i].SaysNothingOfItsReplyCount = true
 	}
-	dir, _ := extract(t, account, forwardProject)
-
+	dir, _ = extract(t, account, forwardProject)
+	if len(asked(account, theAnswersOfTheMailNobodyAnswered)) == 0 {
+		t.Error("a mail that says nothing of its answers was asked for none")
+	}
 	if got := len(records(t, dir, bundle.ForwardReplies)); got != 4 {
 		t.Errorf("%d answers by mail, want the four", got)
 	}

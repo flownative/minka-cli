@@ -98,9 +98,9 @@ func (r forwardReply) status() string {
 	return r.Status
 }
 
-// replyStatuses are the words a bundle has for what became of a reply: it
-// carries no status at all, so only one that is in use comes, and the source
-// keeps whatever else it says of one.
+// replyStatuses are the words a bundle has for what became of a reply, which
+// are none: the record has no such field, so only one the source says is in
+// use comes, and whatever else it says of one stays at the source.
 var replyStatuses = map[string]bool{bundle.StatusActive: true}
 
 // outsider is the kind of person Basecamp gives somebody who wrote to a

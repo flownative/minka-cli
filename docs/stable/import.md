@@ -122,7 +122,8 @@ question or an answer whose status is neither `active` nor `archived` nor
 to-do whose status is neither `active` nor `trashed`, the shelf among them,
 because a bundle gives neither of the two a shelf, a forwarded mail of a status
 that is none of the three, and an answer by mail that says anything but
-`active`, because a bundle gives an answer no status at all. `recordsLeftOut` names each
+`active`, because a bundle gives an answer no status at all. `recordsLeftOut`
+names each
 with the kind of record, the field, the word the source said there, the record
 it stood in and how many were left out, counting records and not entries.
 Nothing hangs on a record that is left out: nobody comes into the bundle for
@@ -258,10 +259,11 @@ the chats, then the questionnaires, then the To-dos tools, and last the
 inboxes. So comments and
 reactions stand in the order of what they hang on: those of cards, those of
 posts, those of lines, those of answers, those of lists and of to-dos, those of
-mails. The inboxes come last because **no second look rewrites a reference of a
-forward**, unlike one of a card or a post: a reference that found nothing when
-the mail was written stays the source's link for ever, so everything a mail can
-point at is in the bundle before it.
+mails. Where a kind stands in that order decides one thing and no more: a file
+met in two records belongs to the first that named it, so a file that hangs in
+a card and in a mail alike stays the card's. Nothing a record points at gains by
+being written earlier — the bundle is whole before Minka reads a line of it, and
+Minka applies the kinds in an order of its own.
 
 - **People** are the ones a record of the bundle refers to, and nobody else:
   the members of the projects named and whoever a record names: its creator,
@@ -558,9 +560,8 @@ point at is in the bundle before it.
   of a project: asked for one it answers with a refusal of the request, so a
   bundle holds what an inbox shows and nothing else. The mails of an inbox are
   written oldest first, by `created_at` and then by ID, the inboxes in the
-  order of the tools; a walk is no snapshot here either, and a mail met twice —
-  by a list that moved between two pages, or by two inboxes — is written once,
-  under the first inbox that showed it.
+  order of the tools; a walk is no snapshot here either, and a mail a list that
+  moved hands out twice is written once.
   `title` is the subject, `createdBy` whoever forwarded it and `createdAt` the
   moment they did. `fromAddress` is the sender, who **stays an address**:
   nobody comes into the bundle for a sender, and `fromName` is always `null`,
@@ -571,9 +572,9 @@ point at is in the bundle before it.
   gives to the owner of the organization without a word; the run counts them
   (`forwards.withoutAForwarder`) and a `notice` says so.
   A record of Basecamp that says nothing of what became of it is in use, as the
-  format reads an absent `status`: Basecamp names one on a mail and none on an
-  answer, and reading silence as a word nobody knows would lose every answer of
-  an account the day the one turned into the other.
+  format reads an absent `status`: Basecamp names one on a mail and on an answer
+  alike, and reading silence as a word nobody knows would lose every record of
+  an account the day that changed.
   `status` is `active` or `trashed`. **What the source keeps on its shelf
   becomes the trash** (C-058), counted in `forwards.fromTheShelf` and named in
   a `notice`: Minka gives a forward no shelf, its trash holds the mail with
@@ -587,7 +588,10 @@ point at is in the bundle before it.
   Comments on a mail are `comments` with `parentKind` `forward` and its boosts
   are `reactions` with `targetKind` `forward`. A mail says **how many of
   neither**, so both lists are asked for of every one of them: a count of zero
-  there is the field missing and not a mail nobody answered. Its files are
+  there is the field missing and not a mail nobody answered. Its answers it does
+  count, and they are asked for where it says it has some **and where it says
+  nothing about them at all**, so that a field the source drops does not take
+  every answer of an account with it. Its files are
   `attachments` with `ownerKind` `forward`.
 - **Answers by mail** are the replies to a forward, `forwardreplies`, a record
   of its own and no comment, oldest first per mail: Minka reads them back by
