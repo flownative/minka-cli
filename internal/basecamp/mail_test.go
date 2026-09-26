@@ -43,6 +43,13 @@ func TestWhatASubjectBecomes(t *testing.T) {
 	if _, _, changed := aTitleMinkaTakes("Re:\nit", noSubject); !changed {
 		t.Error("a subject folded into one line is not said to have changed")
 	}
+	// Whitespace around a subject is no change the run had to make: Minka trims
+	// a name before it reads it, so such a subject is a title as it stands.
+	for _, subject := range []string{"  Invoice  ", "Invoice\n", "\tInvoice"} {
+		if _, _, changed := aTitleMinkaTakes(subject, noSubject); changed {
+			t.Errorf("%q is said to have been changed, and only its whitespace came off", subject)
+		}
+	}
 
 	// Longer than a title holds: cut before the last character, ending in an
 	// ellipsis and never in whitespace, and counted as changed.

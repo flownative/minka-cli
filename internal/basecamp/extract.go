@@ -94,6 +94,19 @@ var toolKinds = map[string]string{
 	"vault":         bundle.ToolFiles,
 }
 
+// ToolKindsARunExtracts are the kinds of Basecamp dock entry a run brings over,
+// by the word a bundle gives the tool. It is the map itself and not a copy of
+// it: whoever teaches the extractor a kind teaches this, so that a test can hold
+// every one of them against what a bundle carries and nobody has to keep a
+// second list in step.
+func ToolKindsARunExtracts() map[string]string {
+	kinds := make(map[string]string, len(toolKinds))
+	for name, kind := range toolKinds {
+		kinds[name] = kind
+	}
+	return kinds
+}
+
 // SkippedTools counts dock entries of one kind that a run left out, either
 // because Minka has nothing like them or because they are switched off.
 type SkippedTools struct {

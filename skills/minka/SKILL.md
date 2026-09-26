@@ -932,21 +932,30 @@ this:
   away carries `active` and goes along through the folder in Minka. A document
   carries its title, its text, its files, its comments and its boosts; a folder
   takes neither comments nor boosts, here as in Basecamp, so neither is asked
-  for. An upload is one stored file beside a text, and its title is the **name
-  of the file**: a name longer than 200 characters, over several lines or
-  missing altogether is folded and cut short as a subject is
-  (`data.docs.namesMadeIntoATitle`, `data.docs.withoutAName`). Only the file the
+  for. An upload is one stored file beside a text, and its title is **what the
+  source calls it**, which Basecamp fills from the name of the file and anybody
+  can rename;
+  the name of the file stands in where the source calls it nothing
+  (`data.docs.titlesFromTheFileName`) and `(no name)` where there is neither
+  (`data.docs.withoutAName`). A title Minka would refuse is folded to fit
+  (`data.docs.namesMadeIntoATitle`), a name too long the way Minka shortens one:
+  the extension stays and the stem is cut. Only the file the
   source shows now comes. An upload Basecamp names no stored file for — one in a
   cloud — is left out and named by ID (`data.docs.withoutAStoredFile`), with its
   comments and its boosts (`data.docs.commentsWithoutTheirUpload`,
-  `boostsWithoutTheirUpload`), because no run will ever have bytes for it. A
+  `boostsWithoutTheirUpload`), because no run will ever have bytes for it. What
+  says so is the record and never the shape of the address: an upload whose
+  address a run cannot ask for **has** a file and is named under
+  `data.missingFiles`, the run ending non-zero, and a later run brings it. A
   document or a description longer than the 1,000,000 characters Minka holds is
   counted (`data.docs.longerThanMinkaTakes`) and comes as it is. A record that
-  stands or falls with a file no run will bring — a document whose whole text is
-  such a file, an upload whose own file is one — is written all the same and
-  named (`data.docs.onlyAFileNoRunWillBring`): Minka keeps nothing of it and
-  asks for the file again on every run. A file this run merely could not fetch
-  is not that: the record waits for it, and the next run brings both. `data.docs.leftOut` counts per kind
+  lost a file no run will bring is named (`data.docs.onlyAFileNoRunWillBring`),
+  and the two kinds end differently because the one field is optional and the
+  other is not: a document whose whole text was that file arrives **without
+  words**, its title, comments and boosts with it, while an upload cannot be
+  written without its file at all and Minka asks for the file again on every
+  run. A file this run merely could not fetch is not that: the record waits for
+  it, and the next run brings it whole. `data.docs.leftOut` counts per kind
   what the bundle holds none of, and `data.docs.placesLeftOut` names every
   folder and every tool that took entries with it. A folder the source has put
   away that would not say what stands in it is passed over and counted

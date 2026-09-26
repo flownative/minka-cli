@@ -361,45 +361,81 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   counted in `visibilityLeftToTheContainer`, where the fake offers one. Of the
   answers only one list was read, and what it says about clients was not among
   what was measured.
-- Of the Docs & Files of `import basecamp`: **all of it, and more of it than
-  for any other kind.** No extraction has met a Docs & Files tool live, and
-  nothing of the source was measured before the code was written either: the
-  account was measured for its size and not for its shapes. What the bundle has
-  to carry was read in Minka's own code — `FoldersApplier`, `DocumentsApplier`,
+- Of the Docs & Files of `import basecamp`. What the bundle has to carry was
+  read in Minka's own code — `FoldersApplier`, `DocumentsApplier`,
   `UploadsApplier`, `EntriesOfDocsAndFiles` and `WhatClientsSee` — and `E-195`,
   and read there rather than in Minka's prose, which said the opposite of the
   client rule until the code was read against it.
-  Taken on trust of Basecamp and held by nothing but the invented account: that
-  a dock entry of a Docs & Files tool is called `vault` and **is itself the
-  vault at the top**, so that what stands directly in the tool names the dock
-  entry as its parent; that a vault lists what stands in it at
-  `buckets/{b}/vaults/{v}/vaults.json`, `documents.json` and `uploads.json`, in
-  the order it shows them, topmost first; that the archived and the trashed
-  folders, documents and uploads of a project come as recordings of the types
-  `Vault`, `Document` and `Upload`, which the Basecamp CLI does not offer for a
-  vault and which its own documentation of the types does not name either; that
-  a folder carries `title` and `parent`, a document `title`, `content` and
-  `content_attachments`, and an upload `filename`, `content_type`, `byte_size`,
-  `download_url`, `description` and `description_attachments` under those
-  names; that an upload's stored file is named in its `download_url` and
-  nowhere else, as a file dropped into a chat is; that an upload in a cloud
-  names no file to download at all, which is the one thing the shape of the
-  answer is guessed at rather than read; that a folder the source archived or
-  threw away can be asked what stands in it, which a run does and passes over a
-  refusal of for a folder that is not in use, counting the folders that would
-  not answer; and that a folder takes neither comments nor boosts.
+  **Measured live**, read-only, by dry runs over three projects that went
+  through and by reading two upload records raw: that a dock entry of a Docs &
+  Files tool is called `vault` and **is itself the vault at the top**, so what
+  stands directly in the tool names the dock entry as its parent; that a vault
+  answers for what stands in it at `buckets/{b}/vaults/{v}/vaults.json`,
+  `documents.json` and `uploads.json`; that `projects/recordings.json` takes the
+  types `Vault`, `Document` and `Upload`, which the Basecamp CLI offers for
+  neither and its own list of types does not name; and that an upload carries
+  `id, status, title, description, description_attachments, filename,
+  content_type, byte_size, download_url, app_download_url, parent, position,
+  visible_to_clients, inherits_status, comments_count, boosts_count, creator,
+  created_at, updated_at, bucket, url, app_url, bookmark_url, subscription_url,
+  height, width` — the whole key list, which the fake now answers with. Two of
+  those uploads were ordinary stored files of up to 3.3 MB, and both carried
+  `visible_to_clients` **below the top of their tool**, which is the field the
+  whole client rule hangs on.
+  **What that measurement caught**, and what it changed: the one shape of the
+  answer that had been guessed at rather than read — that an upload in a cloud
+  is told from an ordinary one by whether a stored key can be read out of its
+  address — was wrong, and a bundle of the account would have arrived with **no
+  uploads at all**, of the order of 278 files and 0.4 GB, counted and named and
+  gone. What says an upload has a file is now the record's own word, an address
+  to fetch one from, and never what a run can make of that address; an address a
+  run cannot ask for is a file it could not fetch, named under `missingFiles`
+  with the run ending non-zero, which a dry run now says as well. The title is
+  the source's own `title`, the name of the file standing in only where the
+  source calls the upload nothing.
+  **Still taken on trust of Basecamp** and held by nothing but the invented
+  account: the **shape of an upload's `download_url`**, which is the one thing
+  that decides whether a file is fetched at all — the fake gives it the shape
+  measured for a file dropped into a chat, `…/blobs/{key}/download/{name}` with
+  a key of the form of a UUID, and nothing has read the real one; that a vault
+  lists what stands in it topmost first, which is what the order of a bundle
+  turns on; that a folder the source archived or threw away can be asked what
+  stands in it, which no project walked so far had one of; that an upload in a
+  cloud names no file at all, and whether the account holds such an upload;
+  and that a folder takes neither comments nor boosts.
   Invented for want of anything to measure: a folder, a document or an upload
   whose status is none of the three; an upload in a cloud, with a comment and a
-  boost on it; a file name longer than a title holds and an upload without a
-  name at all; a document whose whole text is a file the source no longer has,
-  and an upload whose own file is one;
+  boost on it; a title longer than one Minka takes and an upload with neither a
+  title nor a name; a document whose whole text is a file the source no longer
+  has, and an upload whose own file is one;
   a document and a description longer than Minka holds; an entry the source
   lists twice; a folder the bundle cannot carry with a folder, a document and
-  an upload standing in it; and a Docs & Files tool that is switched off with an
-  archived folder and an archived document behind it.
+  an upload standing in it; a Docs & Files tool that is switched off with an
+  archived folder and an archived document behind it; and a folder in use behind
+  such a tool, which is the only way to reach the count of an entry no place
+  ever claimed.
   Not counted and not asked for: how many earlier copies of its file an upload
   has. `versions` is a field Minka reads nowhere, and the upload says nothing
-  of them, so a run that wanted the number would ask once per upload.
+  of them, so a run that wanted the number would ask once per upload. That
+  **eight** files of the account have older versions is a number of the card's
+  own read-only measurement of the account and of no run of the CLI; nothing
+  here measured it and nothing here can.
+- **The one belief of the Docs & Files that ends the whole run, and nothing has
+  checked it.** The title of a **folder** and of a **document** is held to
+  `IsName` and **ends the run** where Minka would refuse it: longer than 200
+  characters, or holding any character nobody can see. That is right — somebody
+  can put such a title right where it stands, as they can a card's — but it is
+  the last branch before the account is walked once, and a title of a folder or
+  a document that Minka refuses would end a walk of hours at the end of it.
+  One branch ago the same belief was checked for the mail: every address and
+  every title a run would write was put through PHP's own reading, and none was
+  refused. **Nothing of the kind was done here.** The check owed is exact and
+  cheap: `maxName` and `IsName::MAX_LENGTH` are both 200 and the expression
+  `\p{Cc}` is exactly `unicode.IsControl`, so every folder name and document
+  title of the account has to be read once, read-only, and held against those
+  two. Until that is done, a run over the account may end on a title nobody
+  looked at. A name a **file** carries is not in this: it is folded and never
+  ends a run (C-056).
 - Of the files of `import basecamp`: a download that breaks off, a file
   whose size differs from what Basecamp says, a file that is gone, a name that
   has to be changed, a caption too long, and one file under two owners.
@@ -653,17 +689,29 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   as well, so a larger number is no sign of anything wrong. Whether a mail on the
   shelf exists at all is a question for Basecamp and not for a run: nothing the
   API offers hands one out.
-- **Extract the Docs & Files of a project live, before the account is walked
-  for MNK-53.** Nothing of the source was measured, so this is the one kind
-  where the first live request may end the run: whether `recordings.json` takes
-  `type=Vault`, `type=Document` and `type=Upload` at all; whether the dock
-  entry of a Docs & Files tool is the vault at the top; whether a folder the
-  source archived or threw away answers for what stands in it; what an upload
-  in a cloud looks like, and whether such an upload exists in the account at
-  all; whether an upload's `download_url` names the stored file. A dry run over
-  one project with a Docs & Files tool answers all of it and costs nothing.
-  Then check the bundle record by record, as the boards and the chats were
-  checked, with an eye on the one thing that cannot be taken back: that every
+- **Read every folder name and document title of the account against `IsName`,
+  read-only, before the account is walked.** A title Minka refuses ends the
+  whole run, and no reading has been done: 200 characters and `\p{Cc}`, the
+  same two checks the addresses and the titles of the mail were put through one
+  branch ago. It is the cheapest thing owed and the one that can cost a walk of
+  hours at the end of it. A dry run does not settle it: it reads the same
+  titles, but nothing holds them against Minka's own reading.
+- **Read the `download_url` of one upload of the account, before a run fetches
+  anything.** It is the last unread shape of the Docs & Files and the one that
+  decides whether a single file is fetched: a run builds a storage address from
+  the key in it, and where the address has none every file of every Docs & Files
+  tool comes out under `missingFiles` — loudly, and with nothing in the bundle.
+  A **dry run says it now** without fetching a byte, so the cost of finding out
+  is one dry run over one project; what it cannot say is what to put in its
+  place, which the value itself will.
+- **Extract the Docs & Files of a project into a bundle live, and check it
+  record by record** as the boards and the chats were checked, before the account
+  is walked for MNK-53. Open besides the address: whether a folder the source
+  archived or threw away answers for what stands in it, which no project walked
+  so far had one of; whether the account holds an upload in a cloud at all and
+  what such a record looks like; and whether a vault really lists what stands in
+  it topmost first, which the order of a bundle turns on. Keep an eye on the one
+  thing that cannot be taken back: that every
   folder, document and upload the source says anything about clients of carries
   the word, at every depth.
 - Extract the to-dos of a project live: whether `todoset` is the dock entry, the
