@@ -239,6 +239,23 @@ func TestAPageOfAnArchiveNamesTheOneBehindIt(t *testing.T) {
 	}
 }
 
+// cursorsAskedWith are the cards the pages of a run were asked to start behind,
+// in the order the requests went out, with the empty string for a page that was
+// asked for without a cursor.
+func cursorsAskedWith(e *testEnv) []string {
+	var cursors []string
+	for _, request := range pagesAskedFor(e) {
+		cursor := ""
+		for _, pair := range strings.Split(request.Query, "&") {
+			if after, found := strings.CutPrefix(pair, "before="); found {
+				cursor = after
+			}
+		}
+		cursors = append(cursors, cursor)
+	}
+	return cursors
+}
+
 // Fewer cards than were asked for is the only sign the answer has for the end of
 // the archive, so a page that was full is never the end: one more request is
 // owed, and only nothing coming back closes the list.
@@ -254,39 +271,146 @@ func TestAFullLastPageIsNotTheEndOfAnArchive(t *testing.T) {
 	if !strings.Contains(env.Summary, "20 cards in the archive, read in 2 pages") {
 		t.Errorf("summary %q", env.Summary)
 	}
-	// Two full pages, the empty answer behind them, and that answer once more,
-	// because an empty page behind a full one could be the card of the cursor
-	// going instead of the end of the list.
-	if asked := pagesAskedFor(e); len(asked) != 4 {
-		for _, request := range asked {
-			t.Logf("asked %s", request.Query)
-		}
-		t.Fatalf("%d requests, want 4", len(asked))
+	// Two full pages, the empty answer behind them, and the page behind the
+	// card before the last one, which settles that the empty answer was the end
+	// of the list: it brings that last card and nothing beyond it.
+	want := []string{"", ids[9], ids[19], ids[18]}
+	if got := cursorsAskedWith(e); !slices.Equal(got, want) {
+		t.Fatalf("the pages were asked for behind\n got: %q\nwant: %q", got, want)
+	}
+	// A page asked for to settle the end is no page of the archive, and the card
+	// it brought back was read once.
+	if strings.Contains(env.Notice, "came a second time") {
+		t.Errorf("nothing came twice here: %q", env.Notice)
 	}
 }
 
 // The race the server carries as a debt: the card of the cursor goes between the
 // check that it lies in the archive and the read of the page, so the page comes
-// back empty and reads like the end. The same cursor is asked once more, and the
-// walk carries on.
-func TestAnEmptyPageBehindAFullOneIsAskedAgain(t *testing.T) {
+// back empty and reads like the end. Asking the same cursor again would only
+// meet the same emptiness; the page behind the card before it says either way
+// whether the list has ended, and the walk carries on.
+func TestAnEmptyPageBehindAFullOneIsSettledBehindTheCardBeforeIt(t *testing.T) {
 	e := newTestEnv(t)
 	ids := anArchiveOf(e, 25)
-	e.server.RacesOnTheArchiveBoundaryOf = ids[19]
+	// The same window met twice, which is what a cursor asked for a second time
+	// runs into: the answer reads like the end of the list, and five cards would
+	// be missing from a run that reported success.
+	e.server.RacesOnTheArchiveBoundariesOf = []string{ids[19], ids[19]}
 
 	env, r := e.runJSON("", "boards", "archive", e.fixture.Board.ID, "--limit", "10", "--all")
 	expectCode(t, r, ExitOK)
-	// The precondition: the walk really met the race. The mark is spent by the
-	// one page that answers with nothing, so a mark still standing would mean
-	// no page was ever asked behind that card.
-	if e.server.RacesOnTheArchiveBoundaryOf != "" {
-		t.Fatal("no page was asked behind the card the race was set on")
-	}
 	if got := archiveIDs(t, env.Data); !slices.Equal(got, ids) {
 		t.Fatalf("the walk stopped at the empty page: %d cards of %d: %q", len(got), len(ids), got)
 	}
-	if strings.Contains(env.Notice, "came a second time") {
-		t.Errorf("nothing came twice here: %q", env.Notice)
+	// The cursor of the page that came back empty is asked with once and never
+	// again; what follows it is read behind the card before it.
+	want := []string{"", ids[9], ids[19], ids[18], ids[24]}
+	if got := cursorsAskedWith(e); !slices.Equal(got, want) {
+		t.Fatalf("the pages were asked for behind\n got: %q\nwant: %q", got, want)
+	}
+	if !strings.Contains(env.Notice, "1 card came a second time") {
+		t.Errorf("notice %q does not count what was swallowed", env.Notice)
+	}
+}
+
+// A page shorter than asked for is the end of the list as the address tells it,
+// so nothing behind it is doubted: the empty answer that follows closes the run,
+// and no further request is spent on it.
+func TestAnEmptyPageBehindAShortOneIsTheEndOfTheArchive(t *testing.T) {
+	e := newTestEnv(t)
+	ids := anArchiveOf(e, 12)
+
+	env, r := e.runJSON("", "boards", "archive", e.fixture.Board.ID, "--limit", "10", "--all")
+	expectCode(t, r, ExitOK)
+	if got := archiveIDs(t, env.Data); !slices.Equal(got, ids) {
+		t.Fatalf("%d cards of %d: %q", len(got), len(ids), got)
+	}
+	want := []string{"", ids[9], ids[11]}
+	if got := cursorsAskedWith(e); !slices.Equal(got, want) {
+		t.Fatalf("the pages were asked for behind\n got: %q\nwant: %q", got, want)
+	}
+}
+
+// A walk of the whole archive starts where it was told to start. A cursor the
+// command was given and passed no further would read the archive from the top
+// and look right doing it.
+func TestAWalkOfTheWholeArchiveStartsBehindTheCardItWasGiven(t *testing.T) {
+	e := newTestEnv(t)
+	ids := anArchiveOf(e, 25)
+
+	env, r := e.runJSON("", "boards", "archive", e.fixture.Board.ID, "--before", ids[4], "--limit", "10", "--all")
+	expectCode(t, r, ExitOK)
+	if got := archiveIDs(t, env.Data); !slices.Equal(got, ids[5:]) {
+		t.Fatalf("%d cards, want the 20 behind the fifth: %q", len(got), got)
+	}
+	if got := cursorsAskedWith(e); len(got) == 0 || got[0] != ids[4] {
+		t.Fatalf("the first page was asked for behind %q", got)
+	}
+
+	// Where the card the run was told to start behind is the one that has left
+	// the archive, there is nothing of an earlier page to fall back through and
+	// nowhere to begin again: the run ends on the refusal, once.
+	e = newTestEnv(t)
+	ids = anArchiveOf(e, 25)
+	e.server.ForgetsTheArchiveBoundariesOf = []string{ids[4]}
+
+	env, r = e.runJSON("", "boards", "archive", e.fixture.Board.ID, "--before", ids[4], "--limit", "10", "--all")
+	expectCode(t, r, ExitValidation)
+	if env.Meta["apiCode"] != "archivedCardsBeforeUnknown" {
+		t.Fatalf("apiCode %v", env.Meta["apiCode"])
+	}
+	if strings.Contains(env.Notice, "began again") {
+		t.Errorf("the run began again where it had nowhere to begin: %q", env.Notice)
+	}
+	if want := []string{ids[4]}; !slices.Equal(cursorsAskedWith(e), want) {
+		t.Errorf("the pages were asked for behind %q, want %q", cursorsAskedWith(e), want)
+	}
+}
+
+// One walk can lose one boundary after another, and every one of them sends it
+// one card further back through the page it last read, never to the top.
+func TestAWalkFallsBackThroughOneLostBoundaryAfterAnother(t *testing.T) {
+	e := newTestEnv(t)
+	ids := anArchiveOf(e, 25)
+	e.server.ForgetsTheArchiveBoundariesOf = []string{ids[19], ids[18]}
+
+	env, r := e.runJSON("", "boards", "archive", e.fixture.Board.ID, "--limit", "10", "--all")
+	expectCode(t, r, ExitOK)
+	if got := archiveIDs(t, env.Data); !slices.Equal(got, ids) {
+		t.Fatalf("%d cards of %d, each once: %q", len(got), len(ids), got)
+	}
+	want := []string{"", ids[9], ids[19], ids[18], ids[17], ids[24]}
+	if got := cursorsAskedWith(e); !slices.Equal(got, want) {
+		t.Fatalf("the pages were asked for behind\n got: %q\nwant: %q", got, want)
+	}
+	if !strings.Contains(env.Notice, "2 cards came a second time") {
+		t.Errorf("notice %q does not count what was swallowed", env.Notice)
+	}
+	if strings.Contains(env.Notice, "began again") {
+		t.Errorf("the walk started over although cards of the page were left: %q", env.Notice)
+	}
+}
+
+// A page of one card leaves no other card of it to ask behind, so the same
+// cursor is all there is to ask with again — and a walk that meets the race
+// twice must doubt the second empty answer as it doubted the first.
+func TestAWalkWithAPageOfOneAsksTheSameCursorAgain(t *testing.T) {
+	e := newTestEnv(t)
+	ids := anArchiveOf(e, 3)
+	e.server.RacesOnTheArchiveBoundariesOf = []string{ids[0], ids[1]}
+
+	env, r := e.runJSON("", "boards", "archive", e.fixture.Board.ID, "--limit", "1", "--all")
+	expectCode(t, r, ExitOK)
+	if got := archiveIDs(t, env.Data); !slices.Equal(got, ids) {
+		t.Fatalf("%d cards of %d: %q", len(got), len(ids), got)
+	}
+	if len(e.server.RacesOnTheArchiveBoundariesOf) != 0 {
+		t.Errorf("a page was never asked behind %q", e.server.RacesOnTheArchiveBoundariesOf)
+	}
+	want := []string{"", ids[0], ids[0], ids[1], ids[1], ids[2], ids[2]}
+	if got := cursorsAskedWith(e); !slices.Equal(got, want) {
+		t.Fatalf("the pages were asked for behind\n got: %q\nwant: %q", got, want)
 	}
 }
 
@@ -297,7 +421,7 @@ func TestAnEmptyPageBehindAFullOneIsAskedAgain(t *testing.T) {
 func TestAWalkCarriesOnBehindAnotherCardOfTheSamePage(t *testing.T) {
 	e := newTestEnv(t)
 	ids := anArchiveOf(e, 25)
-	e.server.ForgetsTheArchiveBoundaryOf = ids[19]
+	e.server.ForgetsTheArchiveBoundariesOf = []string{ids[19]}
 
 	env, r := e.runJSON("", "boards", "archive", e.fixture.Board.ID, "--limit", "10", "--all")
 	expectCode(t, r, ExitOK)
@@ -327,7 +451,7 @@ func TestAWalkWithNoCardLeftToCarryOnBehindBeginsAgainAndSaysSo(t *testing.T) {
 	ids := anArchiveOf(e, 3)
 	// A page of one leaves one candidate, and it is the card the archive will
 	// not be read behind: there is nothing of that page to fall back through.
-	e.server.ForgetsTheArchiveBoundaryOf = ids[0]
+	e.server.ForgetsTheArchiveBoundariesOf = []string{ids[0]}
 
 	env, r := e.runJSON("", "boards", "archive", e.fixture.Board.ID, "--limit", "1", "--all")
 	expectCode(t, r, ExitValidation)

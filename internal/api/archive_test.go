@@ -50,6 +50,40 @@ func TestNoPageOfAnArchiveIsAskedForBeyondWhatTheServerServes(t *testing.T) {
 	}
 }
 
+// A page that ends on the card it was asked to start behind carries a walk no
+// further: the next request would be the one just sent. Such an answer ends the
+// walk with what it read, rather than sending the same question for ever.
+func TestAWalkEndsWhereAPageCarriesItNoFurther(t *testing.T) {
+	const bothCards = `[{"id":"a","shortId":null,"title":"One","archivedAt":null,"archivedBy":null,"appUrl":"u"},
+		{"id":"b","shortId":null,"title":"Two","archivedAt":null,"archivedBy":null,"appUrl":"u"}]`
+	const theBoundaryItself = `[{"id":"b","shortId":null,"title":"Two","archivedAt":null,"archivedBy":null,"appUrl":"u"}]`
+	requests := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		// A server that takes the card of the cursor into the page it answers,
+		// which the address says it does not.
+		if r.URL.Query().Get("before") == "" {
+			_, _ = io.WriteString(w, bothCards)
+			return
+		}
+		_, _ = io.WriteString(w, theBoundaryItself)
+	}))
+	defer server.Close()
+	client := New(server.URL, "minka_pat_x", "")
+
+	run, err := client.WholeArchiveOf(context.Background(), "b", "", 2)
+	var apiErr *Error
+	if !errors.As(err, &apiErr) || apiErr.Code != "unexpectedResponse" {
+		t.Fatalf("err %v", err)
+	}
+	if len(run.Cards) != 2 || run.Cards[0].ID != "a" || run.Cards[1].ID != "b" {
+		t.Errorf("a walk that ended hands back what it read: %+v", run.Cards)
+	}
+	if requests != 2 {
+		t.Fatalf("%d requests, want the page and the one that carried nothing", requests)
+	}
+}
+
 // A walk over a board that is not there ends on the answer of the server, and
 // the cards it read before are handed back with it: nothing of a walk that broke
 // off is thrown away.

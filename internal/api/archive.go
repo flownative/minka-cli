@@ -79,13 +79,19 @@ type ArchiveRun struct {
 // a time, starting behind the card named in before.
 //
 // Two things about the address shape the walk. It says the end of the list by
-// nothing but a page shorter than asked for, so a full page is always followed
-// by one more request. And its cursor holds only while the card it names lies
-// in the archive: once somebody takes that card out, the next page is refused,
-// or, where the card goes between the server's check and its read, comes back
-// empty and reads like the end. The walk therefore keeps the ids of the whole
-// page it last read and falls back through them, asks an empty answer after a
-// full page a second time, and counts what it swallowed.
+// nothing but a page shorter than asked for, which is why no page of cards ends
+// the walk and one request more is always owed. And its cursor holds only while
+// the card it names lies in the archive: once somebody takes that card out, the
+// next page is refused, or, where the card goes between the server's check and
+// its read, comes back empty and reads like the end. The walk therefore keeps
+// the ids of the whole page it last read and falls back through them, meets an
+// empty answer behind a full page with the page behind an earlier card of that
+// page, which settles either way whether the list has ended, and counts what it
+// swallowed.
+//
+// Nothing of the walk rests on the answers being what the address promises: an
+// answer that does not carry it past a cursor it has already asked with ends it
+// rather than sending the same request again for ever.
 func (c *Client) WholeArchiveOf(ctx context.Context, boardID, before string, pageSize int) (ArchiveRun, error) {
 	var run ArchiveRun
 	seen := map[string]bool{}
@@ -94,10 +100,17 @@ func (c *Client) WholeArchiveOf(ctx context.Context, boardID, before string, pag
 	// The ids of the page just read, the last one first: the first is the
 	// cursor of the next page, the rest are what it falls back through.
 	var candidates []string
+	// The cursors asked with since the walk last began, which bound it.
+	asked := map[string]bool{}
 	shortPageBehind := false
 	emptyAnswerBehind := false
+	// Set while a page is asked for to tell the end of the list from a cursor
+	// that has gone: an answer that brings no card of its own says the list had
+	// ended where the empty answer before it said.
+	settlingTheEnd := false
 
 	for {
+		asked[cursor] = true
 		page, err := c.ArchivedCards(ctx, boardID, cursor, pageSize)
 		if err != nil {
 			if !isBeforeUnknown(err) {
@@ -109,7 +122,6 @@ func (c *Client) WholeArchiveOf(ctx context.Context, boardID, before string, pag
 			// none of them is left does it start over, and it says so.
 			if len(candidates) > 0 {
 				cursor, candidates = candidates[0], candidates[1:]
-				emptyAnswerBehind = false
 				continue
 			}
 			// Beginning again is the last resort, and it is taken once: a walk
@@ -119,31 +131,49 @@ func (c *Client) WholeArchiveOf(ctx context.Context, boardID, before string, pag
 				return run, err
 			}
 			run.BeganAgain = true
-			cursor, shortPageBehind, emptyAnswerBehind = start, false, false
+			cursor, candidates, shortPageBehind, emptyAnswerBehind, settlingTheEnd = start, nil, false, false, false
+			clear(asked)
 			continue
 		}
 
 		cards := page.Value
 		if len(cards) == 0 {
 			// Nothing is read into an empty answer that could as well be the
-			// cursor's card going in the moment between the check and the read:
-			// the same cursor is asked once more, and only a second empty
-			// answer closes the list. Where no cursor was sent, or the page
-			// before was already shorter than asked for, there is nothing to
-			// doubt.
-			if cursor == "" || shortPageBehind || emptyAnswerBehind {
+			// cursor's card going in the moment between the check and the read.
+			// The page behind an earlier card of the last page settles it: where
+			// the list has really ended, it brings that page's last card and
+			// nothing beyond it. Where no cursor was sent, or the page before
+			// was already shorter than asked for, there is nothing to doubt.
+			if cursor == "" || shortPageBehind {
+				return run, nil
+			}
+			if len(candidates) > 0 {
+				settlingTheEnd = true
+				cursor, candidates = candidates[0], candidates[1:]
+				continue
+			}
+			// A page of one card leaves no other card to ask behind, so the
+			// weakest probe there is has to do: the same cursor once more, and a
+			// second empty answer closes the list.
+			if emptyAnswerBehind {
 				return run, nil
 			}
 			emptyAnswerBehind = true
 			continue
 		}
 		emptyAnswerBehind = false
-		run.Pages++
 
 		raw, err := eachCardOf(page.Raw, len(cards))
 		if err != nil {
 			return run, err
 		}
+		if settlingTheEnd {
+			if !holdsACardNotYetRead(cards, seen) {
+				return run, nil
+			}
+			settlingTheEnd = false
+		}
+		run.Pages++
 		for i, card := range cards {
 			if seen[card.ID] {
 				run.Duplicates++
@@ -155,12 +185,32 @@ func (c *Client) WholeArchiveOf(ctx context.Context, boardID, before string, pag
 		}
 
 		shortPageBehind = len(cards) < pageSize
+		if next := cards[len(cards)-1].ID; asked[next] {
+			return run, &Error{
+				Method:     http.MethodGet,
+				StatusCode: http.StatusOK,
+				Code:       "unexpectedResponse",
+				Message:    "The archive of this board answered a page that ends on the card an earlier page was asked behind, so reading on would ask the same question for ever.",
+			}
+		}
 		candidates = make([]string, 0, len(cards))
 		for i := len(cards) - 1; i >= 0; i-- {
 			candidates = append(candidates, cards[i].ID)
 		}
 		cursor, candidates = candidates[0], candidates[1:]
 	}
+}
+
+// holdsACardNotYetRead says whether a page brings anything a walk has not read.
+// It tells a page of the archive from an answer that only confirms where the
+// list ends.
+func holdsACardNotYetRead(cards []ArchivedCard, seen map[string]bool) bool {
+	for _, card := range cards {
+		if !seen[card.ID] {
+			return true
+		}
+	}
+	return false
 }
 
 // isBeforeUnknown says whether an answer refused the card a page was to start

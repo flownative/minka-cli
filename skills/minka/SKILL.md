@@ -346,9 +346,11 @@ such as `Doing`.
   it back onto the board or into the trash. That is no end of the list — read
   the archive again from the beginning.
 - `--all` walks every page to the end in one run and works around the weakness
-  above by itself: it keeps the ids of the whole last page and falls back
-  through them when the one it named is gone, it asks an empty answer after a
-  full page a second time, and it lists every card once.
+  above by itself: it keeps the ids of the whole last page and falls back through
+  them when the one it named is gone, it settles an empty answer behind a full
+  page by reading behind the card before the cursor rather than taking it for the
+  end, and it lists every card once. A page that carries the run no further ends
+  it with exit 7 (`api_error`) and what it read.
 - **What a run of `--all` promises:** every card that lay in the archive for the
   whole run appears exactly once. **What it does not promise:** the archive at
   one moment. A card put away during the run lands on the first page, which the
