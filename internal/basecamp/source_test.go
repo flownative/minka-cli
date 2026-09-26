@@ -327,39 +327,6 @@ func TestPlainTextBecomesParagraphsAndLineBreaks(t *testing.T) {
 	}
 }
 
-func TestTheShapeOfAnAddressIsCheckedPlainly(t *testing.T) {
-	for address, want := range map[string]bool{
-		"ada@example.test":                  true,
-		"ada.example+tag@mail.example.test": true,
-		"ädä@exämple.test":                  true,
-		"ada":                               false,
-		"@example.test":                     false,
-		"ada@":                              false,
-		"ada@example":                       false,
-		"ada@.test":                         false,
-		"ada@example.":                      false,
-		"ada@@example.test":                 false,
-		"ada@example@example.test":          false,
-		"ada @example.test":                 false,
-		"ada@example.test\n":                false,
-		"ada@exam\tple.test":                false,
-		"ada@example..test":                 false,
-		"ada@sub.example.test":              true,
-		"ada@my-example.test":               true,
-		"ada@example.t3st":                  true,
-		"a***@*******.****":                 false,
-		"a\u25cf\u25cf@\u25cf\u25cf\u25cf.\u25cf\u25cf": false,
-		"a\u2219\u2219@\u2219\u2219\u2219.\u2219\u2219": false,
-		"a\u2022\u2022@\u2022\u2022\u2022.\u2022\u2022": false,
-		"ada@example_.test":                             false,
-		"ada@exam/ple.test":                             false,
-	} {
-		if got := looksLikeAnAddress(address); got != want {
-			t.Errorf("looksLikeAnAddress(%q) = %v, want %v", address, got, want)
-		}
-	}
-}
-
 // goneAfterAPage answers one page and then says the list is not there, as a place
 // does that Basecamp loses between two requests.
 type goneAfterAPage struct {

@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"html"
-	"regexp"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -170,10 +169,13 @@ func (e *Extractor) extractForwards(ctx context.Context, w *bundle.Writer) error
 // would stop where the applier reads it.
 func (e *Extractor) writeForward(ctx context.Context, w *bundle.Writer, bucket int64, toolID string, found forward) error {
 	projectID := sourceID(bucket)
-	address, anAddress := anAddressAMailCanCarry(found.From)
+	address, unquoted, anAddress := anAddressMinkaTakes(found.From)
 	if !anAddress {
 		e.forwards.WithoutAnAddress = append(e.forwards.WithoutAnAddress, sourceID(found.ID))
 		return nil
+	}
+	if unquoted {
+		e.addressesUnquoted++
 	}
 	origin, err := e.record("forward", found.ID, found.recording)
 	if err != nil {
@@ -304,7 +306,10 @@ func (e *Extractor) writeForwardReplies(ctx context.Context, w *bundle.Writer, b
 // on one over, so a bundle carrying them would say more than arrives.
 func (e *Extractor) writeForwardReply(ctx context.Context, w *bundle.Writer, bucket int64, toolID, forwardID string, reply forwardReply) error {
 	projectID := sourceID(bucket)
-	address, fromOutside := theAddressOfAnOutsider(reply.Creator)
+	address, unquoted, fromOutside := theAddressOfAnOutsider(reply.Creator)
+	if unquoted {
+		e.addressesUnquoted++
+	}
 	if fromOutside {
 		// Asked before the record is made: referring to them would write them
 		// into the bundle as somebody of the organization.
@@ -364,19 +369,20 @@ func (e *Extractor) countIfItIsLongerThanMinkaTakes(body string) {
 }
 
 // theAddressOfAnOutsider is what a reply from outside the account says about
-// whoever wrote it, and whether they are one. Basecamp gives such a writer
-// their address as their name as well, so the name stands in where the field
-// for an address is empty: a writer who is nobody here is worth reading twice.
-func theAddressOfAnOutsider(writer *person) (string, bool) {
+// whoever wrote it, whether a pair of quotation marks had to come off it, and
+// whether the writer is an outsider at all. Basecamp gives such a writer their
+// address as their name as well, so the name stands in where the field for an
+// address is empty: a writer who is nobody here is worth reading twice.
+func theAddressOfAnOutsider(writer *person) (address string, unquoted, fromOutside bool) {
 	if writer == nil || writer.PersonableType != outsider {
-		return "", false
+		return "", false, false
 	}
 	for _, said := range []string{writer.EmailAddress, writer.Name} {
-		if address, anAddress := anAddressAMailCanCarry(said); anAddress {
-			return address, true
+		if taken, marksCameOff, anAddress := anAddressMinkaTakes(said); anAddress {
+			return taken, marksCameOff, true
 		}
 	}
-	return "", true
+	return "", false, true
 }
 
 const (
@@ -420,66 +426,6 @@ func aSubjectAsATitle(subject string) (title string, withoutASubject, changed bo
 	}
 	cut := []rune(folded)[:maxTitleLength-utf8.RuneCountInString(ellipsis)]
 	return strings.TrimRightFunc(string(cut), unicode.IsSpace) + ellipsis, false, true
-}
-
-var (
-	// mailboxLocalPart is what stands before the last "@" of an address Minka
-	// takes: the ordinary characters in groups separated by single dots, and
-	// never the quoted form, which another reader could take for the end of the
-	// address.
-	mailboxLocalPart = regexp.MustCompile("^[A-Za-z0-9!#$%&'*+/=?^_`{|}~-]+(?:\\.[A-Za-z0-9!#$%&'*+/=?^_`{|}~-]+)*$")
-	// mailboxLabel is one label of the domain: letters, digits and hyphens,
-	// beginning and ending with neither a hyphen nor nothing.
-	mailboxLabel = regexp.MustCompile(`^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?$`)
-	// mailboxTopLabel is the last label, which names no host of its own.
-	mailboxTopLabel = regexp.MustCompile(`^[A-Za-z]{2,}$`)
-)
-
-const (
-	// maxAddressLength is the whole of an address, maxLocalPartLength what
-	// stands before the "@" and maxLabelLength one label of the domain, in
-	// bytes, as the standards of mail draw them.
-	maxAddressLength    = 254
-	maxLocalPartLength  = 64
-	maxDomainLength     = 253
-	maxLabelLength      = 63
-	minDomainLabelCount = 2
-)
-
-// anAddressAMailCanCarry is the address a bundle writes for the sender of a
-// mail, and whether the source gave one. The whitespace around it goes, and
-// nothing else of it is touched. What it takes is ASCII throughout, because
-// every part of it is asked of characters of the first 128 and of no others.
-//
-// It is not the rule a person's address is held to (looksLikeAnAddress): that
-// one asks whether a source masked an address and lets a person through
-// without one where it did not, while this field takes nothing but an address
-// and a mail with none cannot be carried at all.
-//
-// It is asked more strictly than Minka asks: what passes here passes there, and
-// an address of a shape nobody writes is left out rather than risked. A
-// `fromAddress` Minka turns down stops the whole run, and a bundle of an
-// account of years cannot be mended once a run of hours has ended on one mail.
-func anAddressAMailCanCarry(value string) (string, bool) {
-	address := strings.TrimSpace(value)
-	at := strings.LastIndex(address, "@")
-	if at < 0 || len(address) > maxAddressLength {
-		return "", false
-	}
-	local, domain := address[:at], address[at+1:]
-	if len(local) > maxLocalPartLength || len(domain) > maxDomainLength || !mailboxLocalPart.MatchString(local) {
-		return "", false
-	}
-	labels := strings.Split(domain, ".")
-	if len(labels) < minDomainLabelCount || !mailboxTopLabel.MatchString(labels[len(labels)-1]) {
-		return "", false
-	}
-	for _, label := range labels {
-		if len(label) > maxLabelLength || !mailboxLabel.MatchString(label) {
-			return "", false
-		}
-	}
-	return address, true
 }
 
 // longestBodyMinkaTakes is how long the body of a mail or of an answer may be

@@ -156,6 +156,33 @@ func TestAMailWhoseSenderIsNoAddressIsLeftOutAndNamed(t *testing.T) {
 	}
 }
 
+// A pair of quotation marks around the whole of an address comes off before the
+// address is read, at the sender of a mail and at the sender of an answer
+// alike: Minka refuses every such address, nobody can repair a mail header
+// where it stands, and the run says how often it took a pair off. It is the one
+// place a run repairs what the source says rather than passing it on.
+func TestASenderInQuotationMarksComesOutWithoutThemAndIsCounted(t *testing.T) {
+	dir, result := extract(t, fakebasecamp.New(), forwardProject)
+
+	if got := recordWithID(t, records(t, dir, bundle.Forwards), "9321")["fromAddress"]; got != "post@supplier.test" {
+		t.Errorf("the sender of the quoted mail comes as %v", got)
+	}
+	if got := recordWithID(t, records(t, dir, bundle.ForwardReplies), "9402")["fromAddress"]; got != "anna@supplier.test" {
+		t.Errorf("the writer of the quoted answer comes as %v", got)
+	}
+	// The two the account holds that no pair of marks saves are still out, and
+	// nobody else joined them.
+	if got := result.Forwards.WithoutAnAddress; !reflect.DeepEqual(got, []string{"9307"}) {
+		t.Errorf("mails without an address: %v", got)
+	}
+	if got := result.Forwards.RepliesWithoutASender; !reflect.DeepEqual(got, []string{"9404"}) {
+		t.Errorf("answers without a sender: %v", got)
+	}
+	if result.AddressesUnquoted != 2 {
+		t.Errorf("%d addresses came out of quotation marks, want the mail and the answer", result.AddressesUnquoted)
+	}
+}
+
 // A mail whose body would reach Minka as nothing at all carries a line of the
 // run's own: written empty there, it would be remembered as finished or passed
 // over on every run, and the subject, the sender and everything hanging on it

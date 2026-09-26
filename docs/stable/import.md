@@ -138,12 +138,10 @@ character and ends in an ellipsis. The run counts what it had to change
 (`forwards.withoutASubject`, `forwards.subjectsChanged`) and a `notice` says so.
 A sender that is no e-mail address Minka takes leaves the **mail** out, named by
 its `sourceId` in `forwards.withoutAnAddress`, and nothing of it is asked for:
-`fromAddress` takes nothing else and a bundle cannot say a mail without one. An
-address is asked more strictly than Minka asks — plain local part, a domain of
-labels and a top label of letters, ASCII throughout — so that what a bundle
-carries is always taken and an address of a shape nobody writes is left out
-rather than risked. The title of a card, a post or a to-do still ends the run:
-that one somebody can repair where it stands.
+`fromAddress` takes nothing else and a bundle cannot say a mail without one.
+The rule an address is held to is the same wherever one reaches a bundle, see
+**One rule for every address** below. The title of a card, a post or a to-do
+still ends the run: that one somebody can repair where it stands.
 
 The run ends as `api_error` where going on would put something wrong into the
 bundle: a record without `created_at` or `updated_at` and a time that is none,
@@ -221,9 +219,8 @@ as well, and whoever of it comes into the bundle later:
 - One masked address, anywhere in it, ends the run as `forbidden`, exit 4, and
   the hint names what the identity lacks. The same holds for the creator of a
   record who is not in the list.
-- An address looks like one when it is something without whitespace, one `@`,
-  and a domain of at least two labels made of letters of any script, digits
-  and hyphens, none of them empty. Whitespace around it is taken away first.
+- An address is read as Minka reads it, see **One rule for every address**
+  below.
 - An address that is none without a mask is a flaw in the data of the source,
   which only its owner can repair there, and must not cost the import of an
   account. The person comes with `email: null`, which makes a person without a
@@ -239,6 +236,45 @@ as well, and whoever of it comes into the bundle later:
 
 A message counts the addresses concerned out of those given. No output ever
 names an address or whose it is, and `invalidAddresses` holds IDs, never names.
+
+## One rule for every address
+
+Three fields of a bundle carry an e-mail address: the `email` of a person, the
+`fromAddress` of a forwarded mail and the `fromAddress` of an answer by mail.
+Minka reads all three through one value object, and an address it refuses stops
+the import where it reads it, after a walk of hours. So all three are held to
+one rule here, and that rule is Minka's (C-059):
+
+- What Minka takes, this takes. The reading is PHP's `filter_var` with the
+  plain local part of `EmailAddress` on top of it, measured against that reader
+  rather than guessed: a local part of the ordinary characters in groups
+  separated by single dots and never in quotation marks, of at most 64
+  characters; a domain of at least two labels of letters, digits and hyphens,
+  each at most 63 characters and beginning and ending with a letter or a digit,
+  the last of them beginning with a letter; ASCII throughout; 254 characters in
+  all. Whitespace around it comes off first, as Minka trims before it reads.
+- Two shapes Minka takes are left out all the same: a domain written as a
+  bracketed literal address of a machine, `[192.168.1.1]` or `[IPv6:…]`.
+  Nobody's mailbox is written that way, and reading one exactly as PHP reads it
+  is a risk in the direction that stops a run.
+- **One pair of quotation marks around the whole of an address comes off**
+  before the address is read: `"ada@example.test"` becomes `ada@example.test`.
+  Minka refuses every such address, a mail header is nobody's to repair where
+  it stands, and the reading alone would turn away the addresses this saves.
+  This is the **one place** a run repairs what the source says instead of
+  passing it on, and it is that pair and nothing else: no other character is
+  trimmed, unfolded or mended. `addressesUnquoted` counts how often it
+  happened, over people and mail alike, and a `notice` says how many. The one
+  repair a run makes is a number in the report and never a silent change.
+  A pair around a whole address is never a loss: an address Minka takes ends in
+  a letter or a digit, and the quoted local part, `"ada b"@example.test`, keeps
+  its closing mark before the `@` and is left as it stands.
+
+An address the rule refuses costs its owner the login and the run nothing: a
+person comes with `email: null` and is named in `invalidAddresses`, a mail is
+left out and named in `forwards.withoutAnAddress`, an answer by mail whose
+writer is from outside and has no usable address in
+`forwards.repliesWithoutASender`.
 
 ## What a bundle holds so far
 

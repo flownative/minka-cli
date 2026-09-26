@@ -109,7 +109,7 @@ func TestImportBasecampWritesABundleAndReportsWhatItHolds(t *testing.T) {
 			map[string]any{"kind": "todoset", "enabled": false, "count": float64(1)},
 			map[string]any{"kind": "vault", "enabled": true, "count": float64(1)},
 		},
-		"missingFiles": []any{}, "invalidAddresses": []any{}, "peopleLeftOut": float64(8),
+		"missingFiles": []any{}, "invalidAddresses": []any{}, "addressesUnquoted": float64(0), "peopleLeftOut": float64(8),
 		"creatorProbesRefused": float64(0),
 		"peopleAsClients":      float64(0), "clientMemberships": float64(0),
 		"visibilityLeftToTheContainer": float64(0),
@@ -824,10 +824,9 @@ func TestMaskedAddressesAreForbiddenAndNeverShown(t *testing.T) {
 }
 
 func TestSomebodyWithAnAddressThatIsNoneComesWithoutALoginAndTheRunSucceeds(t *testing.T) {
-	const quoted = `"linus@example.test"`
 	for _, mode := range [][]string{{"--json"}, {"--quiet"}, {"--styled"}, {"--json", "--dry-run"}} {
 		e := newImportEnv(t)
-		e.account.People[3].Email = quoted                                   // 103, a member
+		e.account.People[3].Email = "linus@exämple.test"                     // 103, a member
 		e.account.People[0].Email = "grace at example"                       // 102, a member
 		e.account.Projects[0].Dock[2].Creator.Email = "former dot colleague" // 99, a creator who left
 		out := filepath.Join(t.TempDir(), "bundle")
@@ -869,6 +868,48 @@ func TestSomebodyWithAnAddressThatIsNoneComesWithoutALoginAndTheRunSucceeds(t *t
 			if strings.Contains(people, "linus@") || strings.Count(people, `"email":null`) != 3 {
 				t.Errorf("%v: people.jsonl:\n%s", mode, people)
 			}
+		}
+	}
+}
+
+// A pair of quotation marks around the whole of an address comes off, which is
+// the one thing a run repairs rather than passes on. The run says how often it
+// did, and names nobody it did it for.
+func TestAnAddressInQuotationMarksComesOutWithoutThemAndIsCounted(t *testing.T) {
+	for _, mode := range [][]string{{"--json"}, {"--styled"}} {
+		e := newImportEnv(t)
+		e.account.People[3].Email = `"linus@example.test"` // 103, a member
+		out := filepath.Join(t.TempDir(), "bundle")
+
+		r := e.run(append([]string{"import", "basecamp", "--project", "7001", "--out", out}, mode...)...)
+		expectCode(t, r, ExitOK)
+		output := r.stdout + r.stderr
+		for _, secret := range []string{"linus@", "example.test", "Linus"} {
+			if strings.Contains(output, secret) {
+				t.Errorf("%v: the output names %q:\n%s", mode, secret, output)
+			}
+		}
+		if !strings.Contains(output, "1 e-mail address stood inside a pair of quotation marks") {
+			t.Errorf("%v: no notice says how many came out of quotation marks:\n%s", mode, output)
+		}
+
+		if mode[0] == "--styled" {
+			if !strings.Contains(r.stdout, "Addresses a pair of quotation marks came off: 1") {
+				t.Errorf("the text:\n%s", r.stdout)
+			}
+			continue
+		}
+		var env envelope
+		if err := json.Unmarshal([]byte(r.stdout), &env); err != nil {
+			t.Fatalf("%v: %s (%v)", mode, r.stdout, err)
+		}
+		data := decode(t, env.Data)
+		if data["addressesUnquoted"] != float64(1) || !reflect.DeepEqual(data["invalidAddresses"], []any{}) {
+			t.Errorf("addressesUnquoted %v, invalidAddresses %v", data["addressesUnquoted"], data["invalidAddresses"])
+		}
+		people := filesUnder(t, out)["people.jsonl"]
+		if !strings.Contains(people, `"email":"linus@example.test"`) {
+			t.Errorf("people.jsonl:\n%s", people)
 		}
 	}
 }
