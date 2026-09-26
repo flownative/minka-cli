@@ -264,6 +264,41 @@ func TestTheStringsThatAreAMomentAndTheStringsThatAreNone(t *testing.T) {
 	}
 }
 
+// A value is said only while it is short. The shape of a moment takes a fraction
+// of a second of any length, and a message that floods a log is a harm of its own,
+// however little it gives away.
+func TestALongValueIsNotSaidHoweverWellShapedItIs(t *testing.T) {
+	// Forty characters of the shape of a moment, and forty-one: the run refuses
+	// both, because no calendar has the thirtieth of February.
+	fraction := func(digits int) string {
+		return "2026-02-30T17:00:00." + strings.Repeat("1", digits) + "Z"
+	}
+	for what, c := range map[string]struct{ value, said string }{
+		"as long as a message says":  {fraction(19), `"` + fraction(19) + `", which no calendar has`},
+		"one character too long":     {fraction(20), "something that is no time"},
+		"long enough to drown a log": {fraction(100000), "something that is no time"},
+	} {
+		if what == "as long as a message says" && len(c.value) != 40 {
+			t.Fatalf("the case meant to be as long as a message says is %d characters", len(c.value))
+		}
+		account := fakebasecamp.New()
+		busyCard(account).UpdatedAt = c.value
+		err := run(t, account, boardProject)
+		var failed *basecamp.Error
+		if !errors.As(err, &failed) {
+			t.Errorf("%s: got %v, want the run to end", what, err)
+			continue
+		}
+		want := "card 9201 was updated at " + c.said
+		if !strings.HasSuffix(failed.Message, want) {
+			t.Errorf("%s: got %q, want a message that ends in %q", what, failed.Message, want)
+		}
+		if len(failed.Message) > 200 {
+			t.Errorf("%s: the message is %d characters long", what, len(failed.Message))
+		}
+	}
+}
+
 // badDays are the shapes a run refuses wherever it reads a day, each with what a
 // message may say of it, by the rule that holds for a moment: Minka writes and
 // reads a day one way only, and a day read another way is somebody else's day.

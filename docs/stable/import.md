@@ -168,10 +168,14 @@ says nothing; the project then comes without a creator, see Projects. Every
 moment of every record a bundle carries ends the run.
 
 A message says what stood in the field only where it has the shape of a moment,
-or of a day: the thirtieth of February reads like a time and is none, and a
-reader who is not told the value has nothing to go on. A value of any other
-shape is not repeated, because a field that holds no time holds whatever the
-source put there, a name among it.
+or of a day, and is at most 40 characters long (`maxTimeSaid`): the thirtieth of
+February reads like a time and is none, and a reader who is not told the value
+has nothing to go on. A value of any other shape is not repeated, because a
+field that holds no time holds whatever the source put there, a name among it. A
+longer one is not repeated either: the shape of a moment takes a fraction of a
+second of any length, and a message that floods every log it reaches is a harm
+of its own, however little it gives away. A day needs no such length, its shape
+admitting ten characters and no other number.
 
 A card, a post and a comment are held to all of this where the walk first meets
 them, before anything that hangs on them is asked for, and the lines of a chat

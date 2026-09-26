@@ -634,7 +634,9 @@ func aDay(value string) (time.Time, bool) {
 }
 
 // dayShape is the shape of a day, whether or not a calendar has that day. What
-// has it may be said out loud, as a moment of the shape of one may.
+// has it may be said out loud, as a moment of the shape of one may. Nothing here
+// bounds the length the way a moment needs: this shape admits ten characters and
+// no other number.
 var dayShape = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}$`)
 
 // noDay is how a message says a value that is no day, by the rule that holds for
