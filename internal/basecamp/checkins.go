@@ -6,13 +6,10 @@ import (
 	"regexp"
 	"sort"
 	"strconv"
-	"strings"
 	"time"
 	// The zone database travels in the binary: which day a record belongs to
 	// must not depend on what a machine happens to have installed.
 	_ "time/tzdata"
-	"unicode"
-	"unicode/utf8"
 
 	"github.com/flownative/minka-cli/internal/bundle"
 )
@@ -111,10 +108,6 @@ type AskedLeftOut struct {
 
 // dayFormat is how both Basecamp and Minka write a day.
 const dayFormat = "2006-01-02"
-
-// maxName is the length of a title and of a company's name Minka takes, in
-// characters: both are held to the same rule there.
-const maxName = 200
 
 // rhythms are the frequencies of a Basecamp schedule that Minka has a rhythm
 // for, each named by the rhythm it comes to where several weekdays are chosen.
@@ -295,23 +288,6 @@ func (e *Extractor) writeAnswers(ctx context.Context, w *bundle.Writer, bucket, 
 // writes down is a number nobody can check.
 func (e *Extractor) leaveQuestionOut(id int64, field string) {
 	e.questionsLeftOut = append(e.questionsLeftOut, ImpossibleQuestion{QuestionSourceID: sourceID(id), Field: field})
-}
-
-// itemTitle is the title of a record as a bundle carries it, without the
-// whitespace around it that Minka takes off anyway. A title Minka refuses ends
-// the run instead of reaching it, as it would end the applier's. No message
-// quotes a title: it is what somebody wrote.
-func itemTitle(what string, id int64, value string) (string, error) {
-	title := strings.TrimSpace(value)
-	switch {
-	case title == "":
-		return "", &Error{Kind: API, Message: fmt.Sprintf("%s %d has no title", what, id)}
-	case utf8.RuneCountInString(title) > maxName:
-		return "", &Error{Kind: API, Message: fmt.Sprintf("the title of %s %d is longer than the %d characters a title may have", what, id, maxName)}
-	case strings.ContainsFunc(title, unicode.IsControl):
-		return "", &Error{Kind: API, Message: fmt.Sprintf("the title of %s %d holds a character nobody can see", what, id)}
-	}
-	return title, nil
 }
 
 // checkinSchedule is a Basecamp schedule in the words Minka has.

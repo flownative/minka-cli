@@ -27,28 +27,28 @@ func TestWhatASubjectBecomes(t *testing.T) {
 		"a delete":                              {"Re:" + r(0x7f) + "it", "Re: it"},
 		"bytes that are no UTF-8":               {string([]byte{0xff, 0xfe}) + "it", "it"},
 	} {
-		title, _, _ := aSubjectAsATitle(given.subject)
+		title, _, _ := aTitleMinkaTakes(given.subject, noSubject)
 		if title != given.title {
 			t.Errorf("%s: %q became %q, want %q", name, given.subject, title, given.title)
 		}
 	}
 
 	// What is said about the two the run counts.
-	if _, withoutASubject, changed := aSubjectAsATitle(""); !withoutASubject || changed {
+	if _, withoutASubject, changed := aTitleMinkaTakes("", noSubject); !withoutASubject || changed {
 		t.Errorf("a mail without a subject is said to be %v and %v", withoutASubject, changed)
 	}
-	if _, withoutASubject, changed := aSubjectAsATitle("Invoice"); withoutASubject || changed {
+	if _, withoutASubject, changed := aTitleMinkaTakes("Invoice", noSubject); withoutASubject || changed {
 		t.Errorf("a subject a title can carry is said to be %v and %v", withoutASubject, changed)
 	}
-	if _, _, changed := aSubjectAsATitle("Re:\nit"); !changed {
+	if _, _, changed := aTitleMinkaTakes("Re:\nit", noSubject); !changed {
 		t.Error("a subject folded into one line is not said to have changed")
 	}
 
 	// Longer than a title holds: cut before the last character, ending in an
 	// ellipsis and never in whitespace, and counted as changed.
-	title, _, changed := aSubjectAsATitle(long)
+	title, _, changed := aTitleMinkaTakes(long, noSubject)
 	switch {
-	case utf8.RuneCountInString(title) > maxTitleLength:
+	case utf8.RuneCountInString(title) > maxName:
 		t.Errorf("a long subject became a title of %d characters", utf8.RuneCountInString(title))
 	case !strings.HasSuffix(title, ellipsis):
 		t.Errorf("a long subject was cut without saying so: %q", title)
@@ -59,25 +59,25 @@ func TestWhatASubjectBecomes(t *testing.T) {
 	}
 
 	// A cut that lands on whitespace does not leave it before the ellipsis.
-	onABlank, _, _ := aSubjectAsATitle(strings.Repeat("a", 198) + "  " + strings.Repeat("b", 50))
+	onABlank, _, _ := aTitleMinkaTakes(strings.Repeat("a", 198)+"  "+strings.Repeat("b", 50), noSubject)
 	if want := strings.Repeat("a", 198) + ellipsis; onABlank != want {
 		t.Errorf("a subject cut on a blank became %q", onABlank)
 	}
 
 	// Counted in characters and not in bytes, or a subject of umlauts would be
 	// cut at half the length.
-	if title, _, _ := aSubjectAsATitle(strings.Repeat("ä", 200)); utf8.RuneCountInString(title) != 200 {
+	if title, _, _ := aTitleMinkaTakes(strings.Repeat("ä", 200), noSubject); utf8.RuneCountInString(title) != 200 {
 		t.Errorf("a subject of 200 umlauts became a title of %d characters", utf8.RuneCountInString(title))
 	}
 
 	// Whatever comes out is a title Minka takes.
 	for _, subject := range []string{"", "  ", r(0) + r(7), "Re:\nit", long, strings.Repeat("ä", 500),
 		string([]byte{0xff, 0xfe, 'a'}), strings.Repeat("a", 199) + " " + strings.Repeat("b", 50)} {
-		title, _, _ := aSubjectAsATitle(subject)
+		title, _, _ := aTitleMinkaTakes(subject, noSubject)
 		switch {
 		case strings.TrimSpace(title) == "":
 			t.Errorf("%q became a title of nothing", subject)
-		case utf8.RuneCountInString(title) > maxTitleLength:
+		case utf8.RuneCountInString(title) > maxName:
 			t.Errorf("%q became a title of %d characters", subject, utf8.RuneCountInString(title))
 		case strings.ContainsFunc(title, unicode.IsControl):
 			t.Errorf("%q became a title holding a character nobody can see", subject)
