@@ -116,7 +116,7 @@ func TestAMaskAnywhereInTheAccountEndsTheRun(t *testing.T) {
 func TestAnAddressThatIsNoneIsLeftOutAndNotRepaired(t *testing.T) {
 	r := newRegistry()
 	err := r.listAccount([]person{
-		{ID: 30, EmailAddress: `"quoted@example.test"`}, {ID: 4, EmailAddress: "not referred to"},
+		{ID: 30, EmailAddress: "linus@exämple.test"}, {ID: 4, EmailAddress: "not referred to"},
 		{ID: 5, EmailAddress: "ada@example.test"}, {ID: 6, EmailAddress: "grace@example.test"}, {ID: 7, EmailAddress: "linus@example.test"},
 	})
 	if err != nil {
@@ -138,6 +138,63 @@ func TestAnAddressThatIsNoneIsLeftOutAndNotRepaired(t *testing.T) {
 	// By number, not by text, and nobody the bundle does not hold.
 	if got := r.invalidAddresses(); !slices.Equal(got, []string{"9", "30", "200"}) {
 		t.Errorf("invalid addresses %v", got)
+	}
+}
+
+// The rule a person is held to is Minka's own, and the applier stops where it
+// refuses one: an address a mail server would take and Minka would not costs
+// its owner nothing but the login here, and costs the run nothing at all.
+func TestAnAddressMinkaRefusesCostsThePersonTheirLoginAndNotTheRun(t *testing.T) {
+	r := newRegistry()
+	if err := r.listAccount([]person{
+		{ID: 1, EmailAddress: "ada@example.test"},
+		{ID: 2, EmailAddress: "grace@exämple.test"},
+		{ID: 3, EmailAddress: `"ada b"@example.test`},
+		{ID: 4, EmailAddress: strings.Repeat("a", 65) + "@example.test"},
+		{ID: 5, EmailAddress: "linus@example.42"},
+		{ID: 6, EmailAddress: "edsger@example.test"},
+		{ID: 7, EmailAddress: "niklaus@example.test"},
+		{ID: 8, EmailAddress: "grace@example.test"},
+	}); err != nil {
+		t.Fatalf("four addresses of eight that Minka refuses ended the run: %v", err)
+	}
+	timed(r)
+	for id := int64(1); id <= 8; id++ {
+		mustRefer(t, r, person{ID: id}, true)
+	}
+	if got := r.invalidAddresses(); !slices.Equal(got, []string{"2", "3", "4", "5"}) {
+		t.Errorf("invalid addresses %v, want everybody but the one Minka takes", got)
+	}
+	if r.unquotedAddresses() != 0 {
+		t.Errorf("%d addresses were said to have come out of quotation marks", r.unquotedAddresses())
+	}
+}
+
+// The one repair a run makes, held at the door a person comes through.
+func TestAPairOfQuotationMarksAroundAPersonsAddressComesOffAndIsCounted(t *testing.T) {
+	r := newRegistry()
+	if err := r.listAccount([]person{
+		{ID: 1, EmailAddress: `"ada@example.test"`},
+		{ID: 2, EmailAddress: "grace@example.test"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	timed(r)
+	mustRefer(t, r, person{ID: 1}, true)
+	mustRefer(t, r, person{ID: 2}, true)
+	mustRefer(t, r, person{ID: 3, EmailAddress: `"linus@example.test"`}, false)
+
+	want := map[int64]string{1: "ada@example.test", 2: "grace@example.test", 3: "linus@example.test"}
+	for _, seen := range r.sorted() {
+		if seen.EmailAddress != want[seen.ID] {
+			t.Errorf("person %d carries the address %q, want %q", seen.ID, seen.EmailAddress, want[seen.ID])
+		}
+	}
+	if got := r.invalidAddresses(); len(got) != 0 {
+		t.Errorf("a pair of quotation marks made an address none: %v", got)
+	}
+	if got := r.unquotedAddresses(); got != 2 {
+		t.Errorf("%d addresses came out of quotation marks, want the two that stood in them", got)
 	}
 }
 

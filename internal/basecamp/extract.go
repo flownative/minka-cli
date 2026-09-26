@@ -180,6 +180,9 @@ type Result struct {
 	// InvalidAddresses are the IDs of the people who came without an e-mail
 	// address because the one the source holds is none.
 	InvalidAddresses []string
+	// AddressesUnquoted counts the addresses a run took a pair of quotation
+	// marks off before it read them, over people and mail alike.
+	AddressesUnquoted int
 	// PeopleLeftOut counts the people of the account nothing in the bundle
 	// refers to, who are therefore not in it.
 	PeopleLeftOut int
@@ -308,6 +311,9 @@ type Extractor struct {
 	// creatorProbesRefused counts the dock entries asked for the creator of a
 	// project that the identity may not see.
 	creatorProbesRefused int
+	// addressesUnquoted counts the addresses of the forwarded mail a run took a
+	// pair of quotation marks off. Those of people are counted in the registry.
+	addressesUnquoted int
 
 	peopleAsClients              int
 	clientMemberships            int
@@ -407,7 +413,7 @@ func (e *Extractor) Extract(ctx context.Context, projectIDs []string, w *bundle.
 	e.people = newRegistry()
 	e.skipped = map[skippedKey]int{}
 	e.missing = []MissingFile{}
-	e.creatorProbesRefused = 0
+	e.creatorProbesRefused, e.addressesUnquoted = 0, 0
 	e.peopleAsClients, e.clientMemberships, e.visibilityLeftToTheContainer = 0, 0, 0
 	e.account, e.apiRoot = "", ""
 	e.cardsByStatus = map[string]int{bundle.StatusActive: 0, bundle.StatusArchived: 0, bundle.StatusTrashed: 0}
@@ -493,6 +499,7 @@ func (e *Extractor) Extract(ctx context.Context, projectIDs []string, w *bundle.
 		Avatars:              avatars,
 		Missing:              e.missing,
 		InvalidAddresses:     e.people.invalidAddresses(),
+		AddressesUnquoted:    e.people.unquotedAddresses() + e.addressesUnquoted,
 		PeopleLeftOut:        e.people.leftOut(),
 		CreatorProbesRefused: e.creatorProbesRefused,
 
