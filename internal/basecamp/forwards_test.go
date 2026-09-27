@@ -623,7 +623,18 @@ func TestAFileThatOnlyFailedThisTimeGetsNoLineOfTheRun(t *testing.T) {
 		t.Errorf("%d mails carry a line of the run, want the three that are left", result.Forwards.GivenALineOfTheRun)
 	}
 
-	// A download Basecamp refuses for good is another matter: no run will bring
+	// A failure nobody could place is no more a file that will never come than one
+	// that may pass: the mail waits, and a later run brings both.
+	account = fakebasecamp.New()
+	theMail(t, account, 9308).Files[0].Gone = false
+	account.FailFileOf[fakebasecamp.FileKey(5303)] = &basecamp.Error{Kind: basecamp.API, Message: "Basecamp answered with something else"}
+	_, result = extract(t, account, forwardProject)
+	if result.Forwards.GivenALineOfTheRun != 3 {
+		t.Errorf("%d mails carry a line of the run where one failure could not be placed, want the three that are left",
+			result.Forwards.GivenALineOfTheRun)
+	}
+
+	// A download Basecamp itself refuses is another matter: no run will bring
 	// that file either, so the mail carries the line rather than waiting for
 	// ever on a run that is never coming.
 	account = fakebasecamp.New()
@@ -631,7 +642,7 @@ func TestAFileThatOnlyFailedThisTimeGetsNoLineOfTheRun(t *testing.T) {
 	account.FailFileOf[fakebasecamp.FileKey(5303)] = &basecamp.Error{Kind: basecamp.Forbidden, Message: "Basecamp forbids the download"}
 	_, result = extract(t, account, forwardProject)
 	if result.Forwards.GivenALineOfTheRun != 4 {
-		t.Errorf("%d mails carry a line of the run, want the four the one refused for good makes",
+		t.Errorf("%d mails carry a line of the run, want the four the refusal of the source makes",
 			result.Forwards.GivenALineOfTheRun)
 	}
 }

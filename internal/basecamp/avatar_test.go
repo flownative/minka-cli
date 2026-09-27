@@ -200,7 +200,10 @@ func TestWhatIsNoPictureIsNoAvatar(t *testing.T) {
 func TestTheClassOfAStatusThatIsNoTwoHundred(t *testing.T) {
 	for status, want := range map[int]Kind{
 		http.StatusNotFound: NotFound, http.StatusGone: NotFound,
-		http.StatusForbidden: Forbidden, http.StatusUnauthorized: Forbidden,
+		// A 401 is no word about the picture but about our sign-in, and it ends the
+		// run rather than writing off what nobody refused; a 403 is the source's
+		// word, and only because the host is Basecamp's own.
+		http.StatusForbidden: Forbidden, http.StatusUnauthorized: AuthRequired,
 		http.StatusTooManyRequests: RateLimited,
 		http.StatusRequestTimeout:  Unavailable, http.StatusBadGateway: Unavailable,
 		http.StatusInternalServerError: Unavailable, http.StatusServiceUnavailable: Unavailable,

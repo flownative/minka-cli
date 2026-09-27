@@ -879,7 +879,7 @@ func renderImportReport(w io.Writer, report importReport) {
 	if len(report.MissingFiles) > 0 {
 		fmt.Fprintln(w, "\nMissing files:")
 		for _, missing := range report.MissingFiles {
-			fmt.Fprintf(w, "  %-14s %s of %s %s: %s\n", missing.Why,
+			fmt.Fprintf(w, "  %-15s %s of %s %s: %s\n", missing.Why,
 				missing.AttachmentSourceID, missing.OwnerKind, missing.OwnerSourceID, missing.Reason)
 		}
 	}

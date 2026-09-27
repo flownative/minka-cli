@@ -297,31 +297,23 @@ it were whole, and a rename within one directory cannot end halfway.
 **Implemented as:** `bundle.Writer`, see [Importing](stable/import.md).
 
 <a id="c-025"></a>
-## C-025 — A file that cannot be fetched is left out, and the exit code says whose word the loss is
+## C-025 — A file that cannot be fetched is left out, and the run fails at the end
 
 *Applies to: `import`, every attachment of a bundle*
 
-The bundle is written without the file and its record, and the report names it
-under `missingFiles` with `why`: `failedThisTime`, `refusedBySource` or
-`notUnderstood`. The exit code follows the strongest of them — `api_error`,
-exit 7, where one is not understood, else `network`, exit 6 and retryable, where
-one may pass, else 0 with the loss in the `notice` and in the `summary`. **Only
-`refusedBySource` decides anything about the file**; what a guard of the run
-refused before it asked anybody is never that, whatever class the refusal
-carries.
+The bundle is written without the file and its record and the report names it;
+the command exits 6 when trying again may help, else 7, the report as `data`.
 
-**Why:** one missing picture must not cost a run of hours, and the exit code is
-there to say what to do next: run again, look at the source, or look at this
-program. A file the source itself refuses gives a repeat nothing to do, so it is
-left out, counted and named as every record a bundle cannot carry is
-([C-050](#c-050)), and an exit code that can never be cleared teaches whoever
-watches it to stop reading it. A failure nobody could place says nothing about
-the file: read as a refusal, one wrong reading of the source — a guard of ours,
-an answer nobody can read, a Basecamp CLI that changed after an upgrade — would
-write off every file of an account and call the run a success.
-**Implemented as:** `basecamp.whoseWordAMissingFileIs`,
-`basecamp.Extractor.theFileDidNotCome`, `cli.incompleteImport`, see
-[Importing from Basecamp](stable/import.md).
+**Why:** One missing picture must not cost a run of hours, and exit 0 would
+hide that the bundle is incomplete. This is no case of [C-050](#c-050): a bundle
+can express the file, the source merely does not hand it over, so the run says at
+the end that a later one has something left to bring.
+**Implemented as:** `Extractor.attach`, `incompleteImport`.
+
+**Superseded by [C-069](#c-069)**, which keeps everything above but the one
+answer: a run whose missing files the source itself refused ends 0, because no
+repeat can bring them. A report of such a run read against this entry would look
+like a run that went through with nothing missing.
 
 <a id="c-026"></a>
 ## C-026 — A mention refers only to somebody the account lists
@@ -864,7 +856,7 @@ run writes one line of its own behind the body and counts the mails that carry
 one. The tag of the file stays where it stood, and an embed gets its address as
 a link and no sentence. A file that might still come is not one that
 will never come: the mail waits for it, and only a refusal of the source is such
-a file ([C-025](#c-025)).
+a file ([C-069](#c-069)).
 
 **Why:** `body` is a field of a forward that must not be empty, so writing one
 is the only way the mail comes at all: Minka writes such a body empty and
@@ -999,7 +991,7 @@ the applier, and carrying it would cost the import rather than the one upload.
 The record and not the address decides, and only the source's own answer counts
 as a refusal, because either reading that is wrong by one shape leaves **every**
 file of a tool out of the bundle, counted and named and gone, where a file that
-cannot be fetched costs one exit code and a later run ([C-025](#c-025)).
+cannot be fetched costs one exit code and a later run ([C-069](#c-069)).
 **Implemented as:** `basecamp.fileOfAnUpload`,
 `basecamp.Extractor.theFileDidNotCome`, `theFileNeverArrives`,
 `basecamp.Extractor.writeUpload`, see
@@ -1115,3 +1107,30 @@ reports.
 **Implemented as:** `cli.markupNotice`, `cli.documentBody`,
 `cli.descriptionHTML`, see [Rich text in both directions](stable/rich-text.md)
 and [Docs & Files](stable/docs-and-files.md).
+
+<a id="c-069"></a>
+## C-069 — The exit code of a run that lost a file says whose word the loss is
+
+*Applies to: `import`, every attachment of a bundle, supersedes
+[C-025](#c-025)*
+
+The bundle is written without the file and its record, and the report names it
+under `missingFiles` with `why`: `failedThisTime`, `refusedBySource` or
+`notUnderstood`. The strongest of them decides the end — `api_error`, exit 7,
+where one could not be placed, else `network`, exit 6 and retryable, where one
+may pass, else 0 with the loss in the `notice` and in the `summary`. **Only
+`refusedBySource` decides anything about the file**, and a failure this run
+raised before it asked anybody is never that, whatever class it carries.
+
+**Why:** the exit code is a contract ([C-003](#c-003)) and says what to do next:
+run again, look at the source, or look at this program. A file the source itself
+refuses gives a repeat nothing to do, so it is left out, counted and named as
+every record a bundle cannot carry is ([C-050](#c-050)), and an exit code that
+can never be cleared teaches whoever watches it to stop reading it. A failure
+nobody could place says nothing about the file: read as a refusal, one wrong
+reading — a guard of ours, an answer nobody can read, a Basecamp CLI that
+changed after an upgrade, a sign-in that ran out — would write off every file of
+an account and call the run a success.
+**Implemented as:** `basecamp.whoseWordAMissingFileIs`,
+`basecamp.howTheDownloadEnded`, `basecamp.ourOwnRefusal`,
+`cli.incompleteImport`, see [Importing from Basecamp](stable/import.md).

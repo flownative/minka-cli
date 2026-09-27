@@ -1237,7 +1237,9 @@ this:
   A download that brings nothing for a minute is given up and counts
   as missing, `failedThisTime`. A
   Basecamp CLI that lost its sign-in while files were fetched ends the run
-  with exit 3 and nothing written, and a run that ends that way, or is
+  with exit 3 and nothing written, and an avatar answered with 401 ends it the
+  same way — a sign-in that is gone is no word about a picture, and every person
+  of the account would lose theirs. A run that ends that way, or is
   stopped, fetches its files again: only a bundle in place hands files
   over.
 - A bundle holds personal data: names, e-mail addresses, pictures. Write it

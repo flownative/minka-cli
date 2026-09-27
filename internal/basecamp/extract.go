@@ -1040,7 +1040,10 @@ func (e *Extractor) attach(ctx context.Context, w *bundle.Writer, record bundle.
 		fetched, err := fetch(ctx)
 		if err != nil {
 			var failed *Error
-			if !errors.As(err, &failed) || failed.Kind == Interrupted || ctx.Err() != nil {
+			// A sign-in that is gone ends the run, as it does for a file: no further
+			// picture would come either, and a run that noted them one by one would
+			// write off every person of an account over one thing nobody refused.
+			if !errors.As(err, &failed) || failed.Kind == Interrupted || failed.Kind == AuthRequired || ctx.Err() != nil {
 				return nil, err
 			}
 			e.missing = append(e.missing, MissingFile{

@@ -108,7 +108,7 @@ word a missing file is says which of the three it is, and `why` of its entry
 carries it: a refusal of the source leaves the upload out, while a failure that
 may pass and one this run could not place both leave it written and waiting,
 because neither says anything about the file. That word decides the exit code as
-well, and nothing else does (C-025): a run that could not place a failure ends
+well, and nothing else does (C-069): a run that could not place a failure ends
 7, one that lost a file which may still come ends 6, and one whose missing files
 Basecamp refused every one of ends 0 and names them, the count in the `summary`.
 A guard of the run refusing an address is the first of the three and never the
@@ -601,7 +601,7 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   ends the run **0**, with a notice naming it, the record that fell with it and
   the count in the `summary`. A file the source refused is a result and not a
   failure; a file that may still come ends the run 6, and a failure the run could
-  not place ends it 7 (C-025). Read `docs.onlyAFileNoRunWillBring` and the
+  not place ends it 7 (C-069). Read `docs.onlyAFileNoRunWillBring` and the
   entries of `missingFiles`, and settle at the source the ones that say
   `refusedBySource`.
   Not counted and not asked for: how many earlier copies of its file an upload
@@ -644,7 +644,9 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   failure the run cannot place — the shape that matters most, because it is what
   a Basecamp CLI that changes after an upgrade would send. For an avatar the
   class of a status that is no 200 is read in a test of its own and nothing else:
-  live, no avatar has answered with anything but 200.
+  live, no avatar has answered with anything but 200. That a 401 there ends the
+  run rather than writing the picture off is held by that test alone as well: no
+  sign-in has ever run out while avatars were being fetched.
 - Of the embeds of `import basecamp`: a frame that gets no tag, a caption in
   a figure, a frame outside a figure and broken markup. Seen live, in the
   bundle of both projects: some 500 embeds written, none left out, no raw frame

@@ -384,3 +384,75 @@ func TestABundleThatCannotTakeTheBytesIsNoFailureOfBasecamp(t *testing.T) {
 		t.Errorf("got %v, want the failure of the writer as it is", err)
 	}
 }
+
+// What became of a download, over the one thing the class alone cannot say:
+// whether this run raised the failure itself. A guard of ours speaking in a class
+// of the source must reach neither of the two readings that write a file off —
+// not the file Basecamp no longer has, and not the one it hands to nobody.
+func TestWhatBecameOfADownload(t *testing.T) {
+	ofTheSource := map[Kind]howADownloadEnded{
+		NotFound:              {gone: true},
+		Forbidden:             {why: RefusedBySource},
+		Network:               {why: FailedThisTime},
+		RateLimited:           {why: FailedThisTime},
+		Unavailable:           {why: FailedThisTime},
+		API:                   {why: NotUnderstood},
+		Kind("something new"): {why: NotUnderstood},
+		Kind(""):              {why: NotUnderstood},
+	}
+	for kind, want := range ofTheSource {
+		failed := &Error{Kind: kind, Message: "what the source said"}
+		if want.why != "" {
+			want.failed = failed
+		}
+		if got := howTheDownloadEnded(failed); got != want {
+			t.Errorf("an answer of the source of kind %q ended as %+v, want %+v", kind, got, want)
+		}
+		// The same failure raised by a guard of this run: nothing about the file is
+		// decided, whatever class the guard chose.
+		ours := &ourOwnRefusal{failed}
+		if got := howTheDownloadEnded(ours); got != (howADownloadEnded{failed: failed, why: NotUnderstood}) {
+			t.Errorf("a refusal of our own of kind %q ended as %+v", kind, got)
+		}
+	}
+
+	// A download that brought the file, one that was stopped and one over a
+	// sign-in that is gone: the first is nothing to report, the other two end the
+	// run wherever they happen.
+	if got := howTheDownloadEnded(nil); got != (howADownloadEnded{}) {
+		t.Errorf("a download that brought the file ended as %+v", got)
+	}
+	for _, ends := range []error{
+		&Error{Kind: Interrupted, Message: "interrupted"},
+		&Error{Kind: AuthRequired, Message: "the Basecamp CLI is not signed in"},
+		errors.New("something that is no failure of the source at all"),
+	} {
+		if got := howTheDownloadEnded(ends); !got.endsTheRun {
+			t.Errorf("%v ended as %+v, want the end of the run", ends, got)
+		}
+	}
+}
+
+// A refusal of this run's own is marked as its own by the one door every file
+// comes through, so that no reader has to know where it stood. The failure itself
+// stays readable behind the mark.
+func TestARefusalOfOurOwnIsMarkedByTheDoorItComesThrough(t *testing.T) {
+	extractor := &Extractor{}
+	if _, err := extractor.bringing(t.Context(), sourceFile{key: "k-one", filename: "a.png"}); err == nil {
+		t.Fatal("a key that is no key was let through")
+	} else {
+		var ours *ourOwnRefusal
+		var failed *Error
+		if !errors.As(err, &ours) {
+			t.Errorf("a refusal of our own is not marked as one: %v", err)
+		}
+		if !errors.As(err, &failed) || failed.Kind != API {
+			t.Errorf("the failure behind the mark is %v", err)
+		}
+	}
+	// The file of an upload is asked for by its identifiers, so there is nothing
+	// to refuse before the call.
+	if _, err := extractor.bringing(t.Context(), sourceFile{upload: 9260, bucket: 7011}); err != nil {
+		t.Errorf("the file of an upload was refused before it was asked for: %v", err)
+	}
+}
