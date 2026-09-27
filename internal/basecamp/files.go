@@ -539,22 +539,11 @@ func (e *Extractor) theFileDidNotCome(file sourceFile, met *fileOfTheSource, fai
 //
 // Only a record whose body is nothing else, or whose file is all it stands for,
 // asks: for every other body a file that stays outside leaves a hole and nothing
-// more.
+// more. Where such a file left a record behind — one the source no longer has,
+// one that weighs too much — that record stays in the bundle as the trace of
+// what became of it, whatever became of the record it belonged to.
 func (e *Extractor) theFileNeverArrives(ref string) bool {
 	return e.filesThatNeverArrive[ref]
-}
-
-// theFileLeftNoRecord tells that the bundle holds no record of a file at all and
-// no later run will write one. Such a reference names nothing: whatever the
-// format lets point at a file has to do without it, and a record that cannot be
-// written without one cannot be written at all.
-//
-// A download that failed for a reason that may pass leaves no record either, and
-// the run after this one writes it, so the record that names the file is written
-// and waits for it.
-func (e *Extractor) theFileLeftNoRecord(file sourceFile) bool {
-	met := e.theFile(file.ofTheSource())
-	return met.failed != nil && !met.failed.Transient()
 }
 
 // sizeDiffers is the failure of a download that ended well and brought

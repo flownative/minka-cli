@@ -99,14 +99,17 @@ a comment, a question or an answer with a status a bundle does not know, a draft
 among them, a group or a to-do the source has put on the shelf, which a
 bundle gives none, a forwarded mail of a status that is none of the three,
 an answer by mail that says anything but `active`, and a folder, a document or
-an upload of Docs & Files whose status is none of the three. An upload the
-bundle can hold no file for is left out with its comments and its boosts
-(C-063): `file` takes the identifier of a file of the bundle and nothing else,
-and no run will ever have bytes to fetch for what lies in a cloud, nor for a
-download Basecamp refuses for good. What tells such a refusal from a failure
-that may pass is the one word the reason carries about itself, `retryable`:
-a file that may still come leaves the upload written and waiting, and the run
-after this one brings both.
+an upload of Docs & Files whose status is none of the three. An upload whose
+file can never be had is left out with its comments and its boosts
+(C-063): an upload has no purpose without its file, and no run will ever have
+bytes for what lies in a cloud, for what the source no longer has, for what
+weighs more than Minka takes or for a download Basecamp refuses for good. What
+tells such a refusal from a failure that may pass is the one word the reason
+carries about itself, `retryable`: a file that may still come leaves the upload
+written and waiting, and the run after this one brings both. That word decides
+the exit code too, and nothing else does (C-025): a run whose missing files will
+all never come ends 0 and names them, and one that lost a file which may still
+come fails, because the exit code is there to say whether running again helps.
 What stood in a list, a group, a folder or a whole Docs & Files tool a bundle
 cannot carry falls
 with it, is asked for to be counted and is named with the place it fell with
@@ -573,20 +576,28 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   is in use alone.
   **A file Basecamp refuses for good** is the one shape of this whole tool that a
   full extraction of the account has met, exactly once over 10,274 files: the
-  download of one upload's file answered with a refusal that will not pass, and
-  the upload was written all the same, naming a file the bundle had no record of.
-  Such an upload is now left out, named in `docs.onlyAFileNoRunWillBring`, with
-  its comments and its boosts counted as fallen. What the run does with it rests
-  on the invented account, where the refusal is played by a stand-in; what says a
+  download of one upload's file answered with a refusal that will not pass.
+  An upload whose file no run will ever bring is left out and named in
+  `docs.onlyAFileNoRunWillBring`, with its comments and its boosts counted as
+  fallen, and that holds for all four ways of having no file: one in a cloud,
+  one the source no longer has, one above what Minka takes, and one refused for
+  good. Where the file left a record behind, that record stays as the trace of
+  what became of it. What the run does with such a file rests on the invented
+  account, where every one of the four is played by a stand-in; what says a
   refusal is one is `retryable` of the reason, and no other reading of a failure
   is anywhere in the way. The residual of the cloud branch falls under the same
   rule: **an upload that lives in a cloud and does carry a `download_url`** is
-  taken as having a file and the fetch fails, and what the failure says about
-  itself decides the rest — one that will not pass leaves the upload out and
-  named, where it used to leave it waiting in Minka for ever. The entry under
-  `missingFiles` stays on every run all the same, and with it the exit code: the
-  run did lose something, and says so. Nothing has been seen of such a record
-  either way.
+  taken as having a file and the fetch fails, and one that will not pass leaves
+  the upload out and named. Nothing has been seen of such a record either way.
+  A **dry run** counts such an upload all the same, because nothing the source
+  answers says that a file is gone or that a download will be refused: it says
+  one upload too many rather than promising a file it never asked for.
+  **What a walk of the account is to expect of the exit code**: that one file
+  ends the run **0**, with a notice naming it and the record that fell with it.
+  A file no repeat can bring is a result and not a failure, and only a missing
+  file that may still come fails the run (C-025). Read
+  `docs.onlyAFileNoRunWillBring` and the entries of `missingFiles` that say
+  `retryable: false`, and settle those at the source.
   Not counted and not asked for: how many earlier copies of its file an upload
   has. `versions` is a field Minka reads nowhere, and the upload says nothing
   of them, so a run that wanted the number would ask once per upload. That

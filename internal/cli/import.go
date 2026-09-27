@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -402,8 +403,12 @@ pauses before the run ends, and at most 100 requests of a run are; the report
 counts them as requestsRetried.
 
 A file that cannot be fetched does not end the run: the bundle is written
-without it, the report names it under missingFiles, and the command exits 6
-when trying again may help, else 7. A later run brings what is missing. A
+without it and the report names it under missingFiles. The exit code says
+whether running again helps and nothing else — 6 while one of them may still
+come, and 0 when none of them ever will, with a notice naming what was lost.
+A file with retryable false is a result, not a failure: look at what the run
+named, docs.onlyAFileNoRunWillBring for the records that lost such a file, and
+settle it in Basecamp; running again brings nothing. A
 download that brings no byte for 60 seconds, or does not end within an hour,
 is given up and counts as such a file. A Basecamp CLI that is not signed in
 ends the run, for a file as for a request. A run that ends before its bundle
@@ -742,8 +747,13 @@ it has been applied.`,
 				plural(report.Counts[bundle.Posts], "post", "posts") + ", " +
 				plural(report.Counts[bundle.Messages], "message", "messages")
 
-			if len(report.MissingFiles) > 0 {
+			if anyOfTheMissingMayComeLater(report.MissingFiles) {
 				return incompleteImport(report, notices)
+			}
+			if count := len(report.MissingFiles); count > 0 {
+				notices = append(notices, plural(count,
+					"file will never come: what Basecamp answered for it, it will answer on every run, so this one is no failure and a later one brings nothing. data.missingFiles names it with the reason and the record it belonged to; what stood on it is written without it or left out, which data.docs.onlyAFileNoRunWillBring names for the Docs & Files. Look at it at the source rather than running again",
+					"files will never come: what Basecamp answered for them, it will answer on every run, so this one is no failure and a later one brings nothing. data.missingFiles names each with the reason and the record it belonged to; what stood on them is written without them or left out, which data.docs.onlyAFileNoRunWillBring names for the Docs & Files. Look at them at the source rather than running again"))
 			}
 			return a.ok(success{
 				data:    report,
@@ -1052,26 +1062,31 @@ func renderDocs(w io.Writer, report importReport) {
 	}
 }
 
-// incompleteImport is the end of a run that wrote its bundle without some of
-// the files. The bundle is whole and can be applied, so the report comes out
-// as after any run; the failure tells a caller that a later run has something
-// left to bring. It is worth trying again when a file failed for a reason that
-// may pass by itself.
+// anyOfTheMissingMayComeLater tells whether a later run has anything to bring:
+// only a file that failed for a reason which may pass by itself has.
+func anyOfTheMissingMayComeLater(missing []basecamp.MissingFile) bool {
+	return slices.ContainsFunc(missing, func(file basecamp.MissingFile) bool { return file.Retryable })
+}
+
+// incompleteImport is the end of a run that wrote its bundle without a file a
+// later run can bring. The bundle is whole and can be applied, so the report
+// comes out as after any run; the failure tells a caller that running the same
+// command again has something to do.
+//
+// A run that lost only files no run will ever bring ends 0 instead, with a
+// notice naming them: an exit code says what to do next, and one that no repeat
+// can clear is one whoever watches it stops reading. Such a file is left out,
+// counted and named, as every record a bundle cannot carry is.
 func incompleteImport(report importReport, notices []string) *Error {
-	e := &Error{
-		Code:    CodeAPI,
-		Message: "the bundle was written, but " + plural(len(report.MissingFiles), "file could not be fetched and is left out", "files could not be fetched and are left out"),
-		Hint:    "data.missingFiles names each file with the reason. The bundle can be applied as it is; a later run brings what is missing.",
-		Data:    report,
-		Text:    func(w io.Writer) { renderImportReport(w, report) },
-		Notices: notices,
+	return &Error{
+		Code:      CodeNetwork,
+		Retryable: true,
+		Message:   "the bundle was written, but " + plural(len(report.MissingFiles), "file could not be fetched and is left out", "files could not be fetched and are left out"),
+		Hint:      "data.missingFiles names each file with the reason and whether a later run may bring it. The bundle can be applied as it is; running the same command again brings what can still come.",
+		Data:      report,
+		Text:      func(w io.Writer) { renderImportReport(w, report) },
+		Notices:   notices,
 	}
-	for _, missing := range report.MissingFiles {
-		if missing.Retryable {
-			e.Code, e.Retryable = CodeNetwork, true
-		}
-	}
-	return e
 }
 
 // basecampError classifies a failed run. Everything a run asks of Basecamp is

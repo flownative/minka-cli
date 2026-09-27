@@ -213,8 +213,10 @@ func holdsTogether(t *testing.T, dir string, missing []basecamp.MissingFile) {
 	// so it has to name a record of the index or a file this run merely missed,
 	// which the run after it writes: one that names neither is an upload nothing
 	// will ever make whole, and Minka waits for it on every run.
+	uploads := map[string]bool{}
 	for _, upload := range recordsOrNone(t, dir, bundle.Uploads) {
 		file, _ := upload["file"].(string)
+		uploads[upload["sourceId"].(string)] = true
 		if !records[file] && !comesOnALaterRun[file] {
 			t.Errorf("the upload %v stands for %s, which has no record and no run will bring", upload["sourceId"], file)
 		}
@@ -225,9 +227,12 @@ func holdsTogether(t *testing.T, dir string, missing []basecamp.MissingFile) {
 	}
 	for id := range records {
 		// A record of a file that will never come may be named by nothing: the one
-		// body that held it was written without the tag, and there are no bytes
-		// behind the record for anybody to have carried in vain.
-		if !named[id] && !gone[id] {
+		// body that held it was written without the tag, or the upload it stood
+		// for is left out, and the record stays as the trace of what became of
+		// the file.
+		owner := owners[id]
+		trace := gone[id] || (owner[0] == bundle.OwnerUpload && !uploads[owner[1]])
+		if !named[id] && !trace {
 			t.Errorf("nothing names the record %s", id)
 		}
 	}
