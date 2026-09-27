@@ -112,6 +112,7 @@ type UploadedFile struct {
 // stored file for with a comment and a boost on it, one whose file name is
 // longer than a title holds, one without a name at all, records the account
 // lists twice, an upload the source has renamed and one it calls nothing, an
+// upload the source itself titled too long, an
 // upload on the shelf, one in the trash inside a folder that is
 // in use, a document on the shelf inside a folder that is in use, one whose file
 // the source no longer has, a document embedding a file
@@ -262,9 +263,16 @@ func docsProject(ada, grace, former Person, tool func(int64, string, string, str
 		{ID: 9269, Status: "archived", Title: "last-year.pdf", Filename: "last-year.pdf", ContentType: "application/pdf", Bytes: 480,
 			Creator: &grace, CreatedAt: at(9, 15), UpdatedAt: at(10, 15)},
 		// The one file the upload stands for is one the source no longer has, so
-		// no run will ever bring it and Minka keeps nothing of the upload.
+		// no run will ever bring it and Minka keeps nothing of the upload — and
+		// its description says nothing but a file the source no longer has
+		// either, so it loses both and is named once.
 		{ID: 9276, Title: "lost.pdf", Filename: "lost.pdf", ContentType: "application/pdf", Bytes: 220, Gone: true,
-			Creator: &ada, CreatedAt: at(9, 16), UpdatedAt: at(9, 16)},
+			Creator: &ada, CreatedAt: at(9, 16), UpdatedAt: at(9, 16),
+			Description: Embed{File: shredded}.HTML(), Files: []File{shredded}},
+		// Titled at the source by somebody who wrote far more than a title holds:
+		// the fold is of what the source calls it and not of the name of a file.
+		{ID: 9277, Title: LongTitleOfAnUpload, Filename: "notes.pdf", ContentType: "application/pdf", Bytes: 130,
+			Creator: &grace, CreatedAt: at(9, 17), UpdatedAt: at(9, 17)},
 	}
 
 	// A second tool of the same kind: a project may hold several.

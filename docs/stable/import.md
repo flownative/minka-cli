@@ -865,11 +865,10 @@ its documents and its uploads, the vault at the top of the tool included — and
 project with such a tool six more for the records it has put away, one per kind
 and status, whatever the tool. A folder the bundle **cannot** carry costs three
 more, for counting what fell with it, and a folder of that folder three again.
-Comments are asked for only where a card, a post, a document or an upload says
-it has some,
-boosts only where a card, a post, a document, an upload, a comment or a line says
-so, and the answers
-of a mail only where it says it has some. A **mail** says how many comments and
+Comments are asked for only where a card, a post, a to-do list, a to-do, an
+answer, a document or an upload says it has some, and boosts only where one of
+those, a comment or a line says so; the answers
+of a mail are asked for only where it says it has some. A **mail** says how many comments and
 how many boosts it has as little as Basecamp knows, so both of its lists are
 asked for whatever they hold: two requests a mail, and one more where it has
 answers. The requests

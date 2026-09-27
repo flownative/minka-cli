@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"sort"
-	"strings"
 
 	"github.com/flownative/minka-cli/internal/bundle"
 )
@@ -477,7 +476,7 @@ func (e *Extractor) writeDocument(ctx context.Context, w *bundle.Writer, walk *d
 	if err := e.attachFiles(ctx, w, bundle.OwnerDocument, origin, files); err != nil {
 		return err
 	}
-	body = e.wordlessWhereItsOnlyFileNeverComes(body, origin.SourceID)
+	body, _ = e.wordlessWhereItsOnlyFileNeverComes(body, origin.SourceID)
 
 	record := bundle.Document{
 		Record:           origin,
@@ -530,8 +529,12 @@ func (e *Extractor) writeUpload(ctx context.Context, w *bundle.Writer, walk *doc
 	// What the source calls the upload, and the name of the file where it calls
 	// it nothing: Basecamp fills the title from the name and lets anybody rename
 	// it, so the title is the one to take and the name is what stands in.
+	// Whether the source calls it anything is asked with the folding the title
+	// goes through, not with the whitespace alone: a title of one character
+	// nobody can see is a title of nothing once it is folded, and an upload that
+	// kept it would lose a perfectly good file name and arrive as (no name).
 	called := found.Title
-	if strings.TrimSpace(called) == "" {
+	if folded, _ := foldedToOneLine(called); folded == "" {
 		called = found.Filename
 		e.docs.TitlesFromTheFileName++
 	}
@@ -556,12 +559,14 @@ func (e *Extractor) writeUpload(ctx context.Context, w *bundle.Writer, walk *doc
 	if err := e.attachFiles(ctx, w, bundle.OwnerUpload, origin, embedded); err != nil {
 		return err
 	}
-	description = e.wordlessWhereItsOnlyFileNeverComes(description, origin.SourceID)
+	description, named := e.wordlessWhereItsOnlyFileNeverComes(description, origin.SourceID)
 	// An upload whose own file will never come is the one record of the three
 	// that cannot be written without it: the field is required, so nothing but
 	// the file makes the upload, and Minka keeps nothing of it until the source
-	// hands the file back.
-	if e.theFileNeverArrives(file.ref) {
+	// hands the file back. One that lost both its description and its own file
+	// is named once: the list is read by its length, and a record standing in it
+	// twice would say there were two.
+	if !named && e.theFileNeverArrives(file.ref) {
 		e.docs.OnlyAFileNoRunWillBring = append(e.docs.OnlyAFileNoRunWillBring, origin.SourceID)
 	}
 
@@ -609,13 +614,15 @@ func (e *Extractor) writeUpload(ctx context.Context, w *bundle.Writer, walk *doc
 //
 // A file this run merely could not fetch is no file that will never come: the tag
 // stays, and the run after this one writes the document whole.
-func (e *Extractor) wordlessWhereItsOnlyFileNeverComes(text, sourceID string) string {
+// The second value says that the record was named, so that one which lost both
+// its text and its own file is named once.
+func (e *Extractor) wordlessWhereItsOnlyFileNeverComes(text, sourceID string) (string, bool) {
 	filesThatStayOut, embedded, empty := e.whatWouldArriveOf(text)
 	if !empty || filesThatStayOut == 0 || len(embedded) > 0 {
-		return text
+		return text, false
 	}
 	e.docs.OnlyAFileNoRunWillBring = append(e.docs.OnlyAFileNoRunWillBring, sourceID)
-	return ""
+	return "", true
 }
 
 // nameItIfItIsSilentAboutClients notes an entry of Docs & Files the source says

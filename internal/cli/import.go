@@ -699,10 +699,15 @@ it has been applied.`,
 					"document, or description of an upload, is longer than Minka holds and is passed over there on every run, with its comments and its boosts; data.longestBodyRecords names the longest of each kind, and the text is not cut short",
 					"documents, or descriptions of uploads, are longer than Minka holds and are passed over there on every run, with their comments and their boosts; data.longestBodyRecords names the longest of each kind, and the texts are not cut short"))
 			}
-			if count := report.Docs.NamesMadeIntoATitle + report.Docs.WithoutAName; count > 0 {
+			if count := report.Docs.TitlesFromTheFileName; count > 0 {
 				notices = append(notices, plural(count,
-					"upload carries a title the run made of the name of its file: a file without a name, or one whose name had to be folded into a single line or cut short, because a title here is one line of at most 200 characters",
-					"uploads carry titles the run made of the names of their files: files without a name, or ones whose names had to be folded into a single line or cut short, because a title here is one line of at most 200 characters"))
+					"upload is called nothing at the source, so the name of its file is its title here: Minka derives nothing from a file and refuses an upload without one. data.docs.withoutAName counts those with neither, which carry a title of the run's own",
+					"uploads are called nothing at the source, so the names of their files are their titles here: Minka derives nothing from a file and refuses an upload without one. data.docs.withoutAName counts those with neither, which carry a title of the run's own"))
+			}
+			if count := report.Docs.NamesMadeIntoATitle; count > 0 {
+				notices = append(notices, plural(count,
+					"upload carries a title the run had to fold to fit: whatever it was called — what the source calls it, or the name of its file where the source calls it nothing — held a character nobody can see or was longer than the 200 characters a title here holds, and a name too long is shortened the way Minka shortens one, the extension staying and the stem cut",
+					"uploads carry titles the run had to fold to fit: whatever they were called — what the source calls them, or the names of their files where the source calls them nothing — held a character nobody can see or were longer than the 200 characters a title here holds, and a name too long is shortened the way Minka shortens one, the extension staying and the stem cut"))
 			}
 			if count := len(report.Docs.PlacesLeftOut); count > 0 {
 				notices = append(notices, plural(count,
