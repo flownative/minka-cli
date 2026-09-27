@@ -567,6 +567,11 @@ What the two commands do:
   definitions, for example) is refused, so it cannot remove a description by
   accident. To remove a description, give `--description ""`.
 - `--description-format html` sends HTML as it is; the server sanitizes it.
+- **HTML that carries no element Minka serves is not refused.** It is escaped
+  and kept as the characters it consists of, with the same answer as any other,
+  so Markdown sent with `--description-format html` or `--format html` stands
+  there afterwards as `# Heading`. The command says so in a `notice`, and
+  nothing else will.
 - Every text comes twice: stored (`description`, `body`, `bodyHtml`) and as
   its source (`descriptionSource`, `bodySource`). Files and mentions stand in
   the source as `<action-text-attachment>` elements with fresh signatures and

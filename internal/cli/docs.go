@@ -396,7 +396,11 @@ description of one, are not here yet. Both are done in Minka on the web.`,
 			}
 			upload, err := s.client.FilesUploadOf(a.ctx, args[0])
 			if err != nil {
-				return documentRefusal(s, err)
+				e := documentRefusal(s, err)
+				if e.Code == CodeNotFound {
+					e.Hint = uploadNotFoundHint
+				}
+				return e
 			}
 
 			return a.ok(success{
