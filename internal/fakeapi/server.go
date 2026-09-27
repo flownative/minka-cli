@@ -376,14 +376,15 @@ func chatText(text string) string {
 type Server struct {
 	*httptest.Server
 
-	People   map[string]*Person
-	Tokens   map[string]string // token → person ID
-	Projects []*Project
-	Boards   []*Board
-	Chats    []*Chat
-	Uploads  []*Upload
-	Trash    []*TrashedCard
-	Archive  []*ArchivedCard
+	People     map[string]*Person
+	Tokens     map[string]string // token → person ID
+	Projects   []*Project
+	Boards     []*Board
+	Chats      []*Chat
+	FilesTools []*FilesTool
+	Uploads    []*Upload
+	Trash      []*TrashedCard
+	Archive    []*ArchivedCard
 
 	// IgnoresProjectStatus makes the server answer like a Minka from before
 	// projects could be archived: no status, and the filter goes unnoticed.
@@ -455,6 +456,22 @@ type Fixture struct {
 	Chat          *Chat // three messages by Bruno, Anke and Bruno; Bruno has read the first
 	OtherChat     *Chat
 	Conversation  *Chat // Bruno and Anke privately; her one word is unread
+
+	// The Docs & Files tool of the project: a folder with a document and an
+	// upload in it, a folder in the archive below that one with a document of
+	// its own, and at the top a published document, a draft and one in the
+	// archive.
+	Files                          *FilesTool
+	Folder                         *Folder
+	ArchivedFolder                 *Folder
+	Document                       *Document // at the top of the tool, with one comment on it
+	DocumentInFolder               *Document
+	DocumentBelowTheArchivedFolder *Document
+	DraftDocument                  *Document
+	ArchivedDocument               *Document
+	FilesUpload                    *FilesUpload // in the folder, with one comment on it
+	OtherFiles                     *FilesTool   // of the project that belongs to somebody else
+	OtherDocument                  *Document
 }
 
 // New starts a fake with a small fixture: Bruno is a member of one project
@@ -516,6 +533,37 @@ func New(t testing.TB) (*Server, *Fixture) {
 	conversation.post(anke.ID, "Hast du kurz Zeit?", "", s.now)
 	s.Chats = []*Chat{chat, otherChat, conversation}
 
+	aWholeSecond := s.now.Truncate(time.Second)
+	folder := &Folder{ID: newID(), Title: "Plans", CreatedAt: aWholeSecond, CreatorID: bruno.ID}
+	archivedFolder := &Folder{ID: newID(), Title: "Last year", ParentID: folder.ID, Archived: true, CreatedAt: aWholeSecond, CreatorID: bruno.ID}
+	document := &Document{ID: newID(), Title: "How the stage goes up", Body: "<p>Eight people on <strong>Friday</strong>.</p>",
+		CreatedAt: aWholeSecond, UpdatedAt: aWholeSecond, CreatorID: bruno.ID,
+		Comments: []*Comment{{ID: newID(), AuthorID: anke.ID, Body: "<p>I can help</p>", CreatedAt: s.now}}}
+	documentInFolder := &Document{ID: newID(), Title: "What the tent costs", Body: "<p>Four hundred.</p>",
+		FolderID: folder.ID, CreatedAt: aWholeSecond, UpdatedAt: aWholeSecond, CreatorID: anke.ID}
+	documentBelowTheArchivedFolder := &Document{ID: newID(), Title: "What the tent cost last year", Body: "<p>Three hundred.</p>",
+		FolderID: archivedFolder.ID, CreatedAt: aWholeSecond, UpdatedAt: aWholeSecond, CreatorID: anke.ID}
+	draftDocument := &Document{ID: newID(), Title: "Not finished", Body: "<p>Later.</p>", Draft: true,
+		CreatedAt: aWholeSecond, UpdatedAt: aWholeSecond, CreatorID: bruno.ID}
+	archivedDocument := &Document{ID: newID(), Title: "Put away", Body: "<p>Done with.</p>", Archived: true,
+		CreatedAt: aWholeSecond, UpdatedAt: aWholeSecond, CreatorID: bruno.ID}
+	sitePlan := &Upload{ID: newID(), Circle: project.ID, Filename: "site-plan.pdf", ContentType: "application/pdf", Content: []byte("%PDF-1.4 a plan")}
+	sitePlan.Size = len(sitePlan.Content)
+	filesUpload := &FilesUpload{ID: newID(), Title: "site-plan.pdf", BlobID: sitePlan.ID, FolderID: folder.ID,
+		Description: "<p>Where everything stands</p>", CreatedAt: aWholeSecond, UpdatedAt: aWholeSecond, CreatorID: anke.ID,
+		Comments: []*Comment{{ID: newID(), AuthorID: bruno.ID, Body: "<p>Printed</p>", CreatedAt: s.now}}}
+	s.Uploads = append(s.Uploads, sitePlan)
+	files := &FilesTool{
+		ID: newID(), ProjectID: project.ID, Title: "Documents",
+		Folders:   []*Folder{folder, archivedFolder},
+		Documents: []*Document{document, draftDocument, archivedDocument, documentInFolder, documentBelowTheArchivedFolder},
+		Uploads:   []*FilesUpload{filesUpload},
+	}
+	otherDocument := &Document{ID: newID(), Title: "Not yours either", Body: "<p>Secret.</p>",
+		CreatedAt: aWholeSecond, UpdatedAt: aWholeSecond, CreatorID: stranger.ID}
+	otherFiles := &FilesTool{ID: newID(), ProjectID: otherProject.ID, Title: "Secret documents", Documents: []*Document{otherDocument}}
+	s.FilesTools = []*FilesTool{files, otherFiles}
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v1/me", s.authenticated(s.me))
 	mux.HandleFunc("PUT /api/v1/me/work", s.authenticated(s.noteAtWork))
@@ -563,6 +611,7 @@ func New(t testing.TB) (*Server, *Fixture) {
 	mux.HandleFunc("POST /api/v1/projects/{projectId}/uploads", s.authenticated(s.upload))
 	mux.HandleFunc("GET /api/v1/uploads/{blobId}", s.authenticated(s.file))
 	mux.HandleFunc("GET /api/v1/uploads/{blobId}/{variant}", s.answeringInBytes(s.fileBytes))
+	s.registerFilesRoutes(mux)
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		// Flow answers an unknown path or a wrong method with an HTML page.
 		w.Header().Set("Content-Type", "text/html")
@@ -580,6 +629,11 @@ func New(t testing.TB) (*Server, *Fixture) {
 		CardInTriage: cardInTriage, CardInDoing: cardInDoing,
 		OtherProject: otherProject, OtherBoard: otherBoard, OtherCard: otherCard,
 		Chat: chat, OtherChat: otherChat, Conversation: conversation,
+		Files: files, Folder: folder, ArchivedFolder: archivedFolder,
+		Document: document, DocumentInFolder: documentInFolder,
+		DocumentBelowTheArchivedFolder: documentBelowTheArchivedFolder,
+		DraftDocument:                  draftDocument, ArchivedDocument: archivedDocument,
+		FilesUpload: filesUpload, OtherFiles: otherFiles, OtherDocument: otherDocument,
 	}
 }
 

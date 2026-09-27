@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -433,6 +434,37 @@ func TestCreateSendsHTMLUnchangedWhenAskedTo(t *testing.T) {
 	expectCode(t, r, ExitOK)
 	if got := e.lastWriteBody()["description"]; got != "<p>raw</p>" {
 		t.Errorf("description sent %q", got)
+	}
+}
+
+// The server refuses no text here: one that carries no element it serves is
+// escaped and kept as the characters it consists of. The notice is the only
+// word anybody gets about it, whichever text it was.
+func TestHTMLWithoutMarkupSaysWhatBecomesOfItWhereverItIsSent(t *testing.T) {
+	for name, sending := range map[string][]string{
+		"a description": {"cards", "edit", "", "--description", "# Heading", "--description-format", "html"},
+		"a comment":     {"comments", "create", "", "# Heading", "--format", "html"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			e := newTestEnv(t)
+			args := slices.Clone(sending)
+			args[2] = e.fixture.CardInTriage.ID
+			env, r := e.runJSON("", args...)
+			expectCode(t, r, ExitOK)
+			if !strings.Contains(env.Notice, "characters it consists of") {
+				t.Fatalf("notice %q does not say that the text is kept as characters", env.Notice)
+			}
+		})
+	}
+
+	// A text that is nothing but an element the server serves draws no such
+	// notice: it is kept as markup, and saying otherwise would send somebody
+	// looking for a loss that never happened.
+	e := newTestEnv(t)
+	env, r := e.runJSON("", "cards", "edit", e.fixture.CardInTriage.ID, "--description", `<minka-embed url="https://example.com/x"></minka-embed>`, "--description-format", "html")
+	expectCode(t, r, ExitOK)
+	if env.Notice != "" {
+		t.Fatalf("notice %q for a text the server keeps as markup", env.Notice)
 	}
 }
 

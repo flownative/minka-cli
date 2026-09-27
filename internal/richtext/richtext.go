@@ -11,6 +11,7 @@ package richtext
 import (
 	"fmt"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"unicode"
@@ -26,16 +27,22 @@ var (
 	entityReference   = regexp.MustCompile(`^&#?[A-Za-z0-9]+;`)
 )
 
+// carriedElements are what a stored text holds beside the elements Markdown
+// writes: the file or person hanging in it, the card an address became, and
+// the reference to another record. Each one is its attributes and nothing
+// else, and Markdown can hold none of them.
+var carriedElements = []string{"action-text-attachment", "minka-embed", "minka-ref"}
+
 // servedMarkup is the server's rule for a value that holds markup: a tag of a
 // served element written out to its closing angle bracket. "a<i und b<s" is
 // plain text, although i and s are served elements.
 var servedMarkup = func() *regexp.Regexp {
-	names := make([]string, 0, len(markdown.AllowedElements))
+	names := make([]string, 0, len(markdown.AllowedElements)+len(carriedElements))
 	for name := range markdown.AllowedElements {
 		names = append(names, name)
 	}
+	names = append(names, carriedElements...)
 	alternatives := strings.Join(names, "|")
-	alternatives += "|action-text-attachment"
 	return regexp.MustCompile(`(?i)<(?:` + alternatives + `)(?:\s[^<>]*)?/?>|</(?:` + alternatives + `)\s*>`)
 }()
 
@@ -46,10 +53,12 @@ func CarriesMarkup(value string) bool {
 	return servedMarkup.MatchString(value)
 }
 
-// HasAttachments reports whether served rich text shows a picture or a file
-// attached on the web. The server serves an attachment as a figure with the
-// class "attachment", an img or a link to download; a text sent back without
-// the attachment element it stores drops the attachment.
+// HasAttachments reports whether rich text carries something Markdown cannot
+// hold: a file, a person named in it, an address the server drew as a card, a
+// reference to another record. The stored text holds each of them as an
+// element that is its attributes and nothing else; served, an attachment has
+// become a figure with the class "attachment", an img or a link to download.
+// A text sent back without those elements drops what they stood for.
 func HasAttachments(served string) bool {
 	if strings.TrimSpace(served) == "" {
 		return false
@@ -63,7 +72,7 @@ func HasAttachments(served string) bool {
 	found = func(n *html.Node) bool {
 		if n.Type == html.ElementNode {
 			switch {
-			case n.Data == "img", n.Data == "action-text-attachment":
+			case n.Data == "img", slices.Contains(carriedElements, n.Data):
 				return true
 			case n.Data == "a" && hasAttribute(n, "download"):
 				return true

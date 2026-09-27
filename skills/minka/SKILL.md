@@ -187,6 +187,17 @@ minka conversations list --json
 minka conversations with <person> [--project <projectId>] --json
 minka uploads create <file> (--project <projectId> | --conversation <conversationId>) [--name <name>] [--content-type <type>] --json
 minka uploads download <blobId> [--variant original|display] [-o <path>|-o -] [--force] --json
+minka docs tools <projectId> --json
+minka docs list <toolId> [--folder <folderId>] --json
+minka docs show <documentId> --json
+minka docs create --tool <toolId> --title "Title" --audience everybody|chosen|nobody [--notify <personId>]... [--folder <folderId>] [--body - < body.md] --json
+minka docs edit <documentId> [--title "New"] [--body - < body.md] (--expect <updatedAt> | --force) --json
+minka docs uploads show <uploadId> --json
+minka docs comments create (--document <documentId> | --upload <uploadId>) - --json < comment.md
+minka docs comments edit (--document <documentId> | --upload <uploadId>) <commentId> - [--format html] --json < comment.md
+minka docs comments delete (--document <documentId> | --upload <uploadId>) <commentId> --json
+minka docs comments react (--document <documentId> | --upload <uploadId>) <commentId> 👍 --json
+minka docs comments unreact (--document <documentId> | --upload <uploadId>) <commentId> 👍 --json
 minka work start <card> --json
 minka work stop [<card>] [--all] --json
 minka work list --json
@@ -556,16 +567,24 @@ What the two commands do:
   definitions, for example) is refused, so it cannot remove a description by
   accident. To remove a description, give `--description ""`.
 - `--description-format html` sends HTML as it is; the server sanitizes it.
+- **HTML that carries no element Minka serves is not refused.** It is escaped
+  and kept as the characters it consists of, with the same answer as any other,
+  so Markdown sent with `--description-format html` or `--format html` stands
+  there afterwards as `# Heading`. The command says so in a `notice`, and
+  nothing else will.
 - Every text comes twice: stored (`description`, `body`, `bodyHtml`) and as
   its source (`descriptionSource`, `bodySource`). Files and mentions stand in
   the source as `<action-text-attachment>` elements with fresh signatures and
   their `url`, `filename` and `content-type`. `cards show --styled` shows a
   picture as a Markdown image, a file as a link and a mention as `@Name`.
-- Markdown cannot hold files or mentions. To change a description that has
+- Markdown cannot hold files or mentions, nor the two further elements a text
+  carries: `<minka-embed>` for an address Minka drew as a card, `<minka-ref>`
+  for a reference to another record. To change a description that has any of
   them, take `descriptionSource` from `minka cards show <cardId> --quiet`,
   change it and send it back with `cards edit --description - --description-format html`.
   A new description that would drop them is refused (exit 1) unless
-  `--drop-attachments` is given.
+  `--drop-attachments` is given — the refusal calls them all attachments,
+  after the flag.
 - `cards show --styled` prints the description as Markdown, which can be edited
   and sent back with `cards edit --description -`.
 - Comments and messages carry `reactions`: `[{content, people}]`, the same
@@ -688,6 +707,109 @@ minka cards edit <cardId> --description - --description-format html < text.html
   answer an identifier that names nothing gives: the two cannot be told apart.
 - What arrives has to weigh what the file says it weighs. Anything else exits
   7 and nothing is kept.
+
+## Docs & Files
+
+A Docs & Files tool holds folders, documents and uploads. A **document** is a
+page with a title and a body; an **upload** is a file standing on its own,
+with a description. Both take comments, and the comments take reactions.
+
+### Reading
+
+- `docs tools <projectId>` lists the tools of a project; a project can have
+  more than one.
+- `docs list <toolId>` lists what stands at the top, `--folder <folderId>`
+  what stands in a folder. It reaches **one folder deep**: to go further, call
+  it again with a folder of the answer. Nothing is paged and nothing is cut,
+  so a short list is the whole list.
+- The order is the one the web shows: not alphabetical, not by date. Every
+  document carries a `lead`, the first 240 characters of its body without
+  markup, cut where the count runs out and not at a word.
+- Drafts and entries in the archive are not listed, and neither is a folder in
+  the archive. The inside of an archived folder **can** be listed by naming it,
+  and then the answer and every line of it says `archived: true`.
+- `docs show <documentId>` gives the document with its body, its files and its
+  comments. `docs uploads show <uploadId>` gives an upload the same way. A
+  **draft is at no address**, its author included: exit 2.
+- The bytes of an upload are fetched with `uploads download <blobId>`, where
+  `<blobId>` is `file.id` of the upload — not the upload's own ID, which names
+  the entry.
+
+### Writing a document
+
+- `docs create --tool <toolId> --title "..." --audience ...` writes a
+  **published** document; there are no drafts here. `--folder` puts it in a
+  folder, and without `--body` it is a title and nothing else.
+- `--audience` is required: `everybody`, `chosen` with one `--notify <personId>`
+  per person, or `nobody`. `--notify` belongs to `chosen` alone, and `chosen`
+  without anybody is refused (exit 1) — Minka would take both and tell nobody.
+  `--notify` takes an ID or `me`; `people list <projectId>` gives the IDs.
+- `docs edit <documentId>` changes the title, the body or both. `--body ""`
+  empties the body. **`--title ""` does not empty the title:** a document needs
+  one, so it exits 9 with `documentTitleMissing`. A title can only be replaced.
+
+### The body, and the trap under it
+
+**Minka refuses no body.** A body that carries no element it serves — raw
+Markdown, plain text — is not an error: it is escaped and kept as the
+characters it consists of, and the answer is the same 201 or 200 as any other.
+`# Heading` then stands in the document as `# Heading`, and only the web ever
+shows it. The same holds for the description of an upload.
+
+So `--body` is **Markdown by default and converted here**, exactly as a card's
+description is. Send HTML yourself only with `--body-format html`, and then the
+command's `notice` is the only warning you will ever get.
+
+### Writing over a document somebody else may have written
+
+- `docs edit` needs `--expect <updatedAt>` — the `updatedAt` you read — or
+  `--force`, and the two exclude each other. A document written over since is
+  then left as it stands: exit 9, `meta.apiCode` `documentChanged`, and `data`
+  holds the document as it stands now. Merge your text into its `body` and send
+  it again with its `updatedAt`.
+- **`--expect none` is not a value here.** It belongs to the notes of a card,
+  where it means "no notes yet". On a document `expectedUpdatedAt: null` would
+  mean "no expectation at all", which is the opposite, so the CLI refuses the
+  word and sends no such field.
+- **The guard is blind for one second.** Minka keeps the moment of a document
+  and of an upload to the whole second. A change somebody else made **in the
+  same second as your read** carries the moment you read and passes the guard.
+  So after a write that matters, **read the document back** with `docs show`
+  and check that it says what you wrote. There is no flag for this and no
+  answer that mentions it.
+- Send the `updatedAt` back **exactly as you read it**. It always ends
+  `.000000Z`. A value that is no moment of that shape — one without a zone
+  among them — never leaves the CLI: it exits 1 (`usage`) before a request
+  goes out.
+
+### Comments
+
+- `docs comments create|edit|delete|react|unreact` take
+  `--document <documentId>` **or** `--upload <uploadId>`, exactly one of the
+  two. The two kinds have addresses of their own, and the identifier of one is
+  nothing at the address of the other, so the flag says which it is.
+- The text is Markdown by default, as for a card. Only the author can change or
+  remove a comment; somebody else's answers exit 2.
+- Reactions live on the comments alone. A document and an upload themselves
+  take none through the API, although the web offers it.
+
+### What does not exist
+
+There is no delete, trash, archive, unarchive or move of a document; no
+creating, renaming or deleting a folder, so the CLI writes only into folders
+that already exist; no reading of a tool's archive; no reading of a draft, by
+anybody; and no putting a file into a Docs & Files tool or changing the title
+or description of an upload. All of it is done in Minka on the web.
+
+### Codes of this part
+
+`documentTitleMissing`, `documentTitleTooLong`,
+`documentTitleHasControlCharacters`, `documentBodyTooLong`,
+`documentBodyNotReadable`, `documentAudienceMissing`, `personNotAProjectMember`,
+`folderUnknown`, `folderArchived`, `documentArchived`, `uploadArchived`,
+`documentChanged` (409, with the document in `data`), and the comment codes a
+card knows. An entry in the archive, or one in a folder in the archive, can be
+read and takes no write: exit 9 with `documentArchived` or `uploadArchived`.
 
 ## Saying which cards you are working on
 

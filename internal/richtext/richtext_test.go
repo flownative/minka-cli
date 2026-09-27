@@ -110,6 +110,10 @@ func TestCarriesMarkup(t *testing.T) {
 		"<p title=\"never closed":    false,
 		"<I>shouting</I>":            true,
 		`<action-text-attachment sgid="x" content-type="application/vnd.minka.person" content="@Anke"></action-text-attachment>`: true,
+		// The server keeps these two as well, so a text that holds nothing
+		// else is markup and is not escaped into characters.
+		`<minka-embed url="https://example.com/x"></minka-embed>`: true,
+		`<minka-ref kind="card" id="0199"></minka-ref>`:           true,
 	} {
 		if got := CarriesMarkup(value); got != want {
 			t.Errorf("CarriesMarkup(%q) = %v", value, got)
@@ -128,6 +132,10 @@ func TestHasAttachments(t *testing.T) {
 		`<p><a href="/f/4" download="plan.pdf">plan.pdf</a></p>`:     true,
 		`<action-text-attachment sgid="x"></action-text-attachment>`: true,
 		`<p><a href="https://example.com">link</a></p>`:              false,
+		// An embed and a reference are their attributes and nothing else, so
+		// a text sent back without them loses what they stood for.
+		`<p>see <minka-embed url="https://example.com/x"></minka-embed></p>`: true,
+		`<p><minka-ref kind="card" id="0199"></minka-ref></p>`:               true,
 	} {
 		if got := HasAttachments(served); got != want {
 			t.Errorf("HasAttachments(%q) = %v", served, got)
