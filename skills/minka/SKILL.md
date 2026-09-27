@@ -577,11 +577,14 @@ What the two commands do:
   the source as `<action-text-attachment>` elements with fresh signatures and
   their `url`, `filename` and `content-type`. `cards show --styled` shows a
   picture as a Markdown image, a file as a link and a mention as `@Name`.
-- Markdown cannot hold files or mentions. To change a description that has
+- Markdown cannot hold files or mentions, nor the two further elements a text
+  carries: `<minka-embed>` for an address Minka drew as a card, `<minka-ref>`
+  for a reference to another record. To change a description that has any of
   them, take `descriptionSource` from `minka cards show <cardId> --quiet`,
   change it and send it back with `cards edit --description - --description-format html`.
   A new description that would drop them is refused (exit 1) unless
-  `--drop-attachments` is given.
+  `--drop-attachments` is given — the refusal calls them all attachments,
+  after the flag.
 - `cards show --styled` prints the description as Markdown, which can be edited
   and sent back with `cards edit --description -`.
 - Comments and messages carry `reactions`: `[{content, people}]`, the same
@@ -775,7 +778,9 @@ command's `notice` is the only warning you will ever get.
   and check that it says what you wrote. There is no flag for this and no
   answer that mentions it.
 - Send the `updatedAt` back **exactly as you read it**. It always ends
-  `.000000Z`; a value without a zone exits 9 with `malformedBody`.
+  `.000000Z`. A value that is no moment of that shape — one without a zone
+  among them — never leaves the CLI: it exits 1 (`usage`) before a request
+  goes out.
 
 ### Comments
 

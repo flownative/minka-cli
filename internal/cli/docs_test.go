@@ -220,6 +220,27 @@ func TestSayingWhomADocumentReachesIsRequiredAndHoldsTogether(t *testing.T) {
 	}
 }
 
+// Whom a document tells is looked up after it is written, so a project that
+// takes no writes says so before anybody is looked for.
+func TestSomebodyOutsideTheProjectIsNamedAfterTheProjectItself(t *testing.T) {
+	e := newTestEnv(t)
+	f := e.fixture
+	create := []string{"docs", "create", "--tool", f.Files.ID, "--title", "A page", "--audience", "chosen", "--notify", f.Stranger.ID}
+
+	env, r := e.runJSON("", create...)
+	expectCode(t, r, ExitValidation)
+	if env.Meta["apiCode"] != "personNotAProjectMember" {
+		t.Fatalf("apiCode %v", env.Meta["apiCode"])
+	}
+
+	f.Project.Archived = true
+	archived, r := e.runJSON("", create...)
+	expectCode(t, r, ExitValidation)
+	if archived.Meta["apiCode"] != apiCodeProjectArchived {
+		t.Fatalf("apiCode %v, want the project before the person", archived.Meta["apiCode"])
+	}
+}
+
 func TestADocumentIsWrittenOverOnlyWhereItStandsAsItWasRead(t *testing.T) {
 	e := newTestEnv(t)
 	f := e.fixture
