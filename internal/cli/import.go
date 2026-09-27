@@ -83,7 +83,8 @@ type importReport struct {
 	FilesGone          int   `json:"filesGone"`
 	// FileNamesChanged are files whose name could not stay as it was,
 	// CaptionsDropped captions too long for a reference, FilesOfSeveralOwners
-	// the times a file turned up under another owner than its first.
+	// the records a run wrote for a file that turned up under a further owner:
+	// one record per owner, the same bytes under each of them, and one download.
 	FileNamesChanged     int `json:"fileNamesChanged"`
 	CaptionsDropped      int `json:"captionsDropped"`
 	FilesOfSeveralOwners int `json:"filesOfSeveralOwners"`
@@ -242,8 +243,8 @@ it leaves the people of a to-do as they stand in Minka (todosWithPeople), and it
 reopens nothing it once ticked off (todosNotDone).
 
 The forwarded mail of an inbox comes after every other kind but the Docs &
-Files, so that a file standing in a card and in a mail alike belongs to the
-card: a file met in two records is the first record's. A mail carries its
+Files, so that the bytes of a file standing in a card and in a mail alike are
+fetched for the card. A mail carries its
 subject as its title, the sender as an
 address that never becomes a person, and the body as the source holds it, line
 breaks and all: Minka turns those into paragraphs. What the source keeps on its
@@ -275,9 +276,9 @@ than the 1,000,000 characters Minka holds is counted
 (forwards.longerThanMinkaTakes) and comes as it is: Minka passes such a mail
 over on every run, with everything hanging on it.
 
-The Docs & Files of a project come last of all, so that a file standing in a
-card and in a document alike belongs to the card: a file met in two records is
-the first record's. A folder, a document and an
+The Docs & Files of a project come last of all, so that the bytes of a file
+standing in a card and in a document alike are fetched for the card. A folder, a
+document and an
 upload each carry the state the source left them in — active, archived or
 trashed — and never the state of the folder they stand in: what stands in a
 folder that was archived or thrown away goes along through the folder in Minka
@@ -346,7 +347,10 @@ leads to a store of its own that no run follows.
 A file that is still whole in the bundle being replaced is taken
 over from there instead of being fetched again; the report counts both as
 filesFetched and filesReused. A file Basecamp lists and no longer has gets a
-record that says so (filesGone). The name of a file is made a plain one
+record that says so (filesGone). Where one file stands under several owners,
+every one of them gets a record of its own with the same bytes and the file is
+fetched once (filesOfSeveralOwners): a file stands in one place in Minka, so a
+record naming another's file would lose it. The name of a file is made a plain one
 (fileNamesChanged), and no output ever says a name, a caption or an address.
 
 What the source says about clients comes with it: whether somebody is a client
@@ -836,7 +840,7 @@ func renderImportReport(w io.Writer, report importReport) {
 			report.FilesFetched+report.FilesReused, report.FilesExpected, report.FilesBytes, report.FilesBytesExpected,
 			report.FilesFetched, report.FilesReused, report.FilesGone)
 	}
-	fmt.Fprintf(w, "Names of files changed: %d; captions too long for a reference, left off: %d; files met under a second owner: %d\n",
+	fmt.Fprintf(w, "Names of files changed: %d; captions too long for a reference, left off: %d; records of a file under a further owner: %d\n",
 		report.FileNamesChanged, report.CaptionsDropped, report.FilesOfSeveralOwners)
 	fmt.Fprintf(w, "Longest text in characters: cards %d, comments %d, posts %d, messages %d, answers %d, to-do lists %d, to-dos %d, forwards %d, answers by mail %d, documents %d, uploads %d\n",
 		report.LongestBody[bundle.Cards], report.LongestBody[bundle.Comments], report.LongestBody[bundle.Posts], report.LongestBody[bundle.Messages],

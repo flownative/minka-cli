@@ -129,6 +129,9 @@ func (e *Extractor) rewriteBody(text, rendered string, files []bodyFile) (string
 
 	var out strings.Builder
 	var referred []sourceFile
+	// What this body has claimed of the files it names, so that a file it embeds
+	// twice stands behind one record of the bundle.
+	var claimed map[string]sourceFile
 	reader := newBodyReader(text)
 	frames := frames{counts: &e.bodies}
 	links := links{extractor: e}
@@ -218,8 +221,13 @@ func (e *Extractor) rewriteBody(text, rendered string, files []bodyFile) (string
 		default:
 			if file, listed := embeddedFile(files, token); listed {
 				e.bodies.Files++
-				source := file.source()
-				referred = append(referred, source)
+				if claimed == nil {
+					claimed = map[string]sourceFile{}
+				}
+				source, first := e.claimFile(file.source(), claimed)
+				if first {
+					referred = append(referred, source)
+				}
 				out.WriteString(e.fileReference(source.ref, renderingOf(sgid, seen)))
 			} else {
 				// The caption is all that is left of such a file.

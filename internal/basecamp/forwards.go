@@ -105,9 +105,9 @@ const outsider = "Outsider"
 // It comes last of all the kinds, which is a place and not a precondition:
 // Minka reads a bundle whole and applies the kinds in an order of its own, so
 // nothing a mail points at gains by being written first. What the place decides
-// is one thing, and it is why it is the last: a file met in two records belongs
-// to the first that named it, so a file that hangs in a card and in a mail
-// alike stays the card's.
+// is one thing, and it is why it is the last: the bytes of a file are fetched for
+// the record that met it first, so a file that hangs in a card and in a mail
+// alike is fetched for the card and the mail's record shares it.
 func (e *Extractor) extractForwards(ctx context.Context, w *bundle.Writer) error {
 	for _, t := range e.talks {
 		for _, inbox := range t.inboxes {
