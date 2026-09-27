@@ -681,7 +681,7 @@ func addEntryFlags(cmd *cobra.Command, documentID, uploadID *string) {
 
 // entryOfFlags is the document or the upload a command is aimed at. Where one
 // position would carry two kinds of identifier, a flag names which of them it
-// is instead (C-010).
+// is instead.
 func entryOfFlags(cmd *cobra.Command, documentID, uploadID string) (api.Entry, error) {
 	switch {
 	case documentID != "" && uploadID != "":
