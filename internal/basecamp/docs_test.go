@@ -2,10 +2,12 @@ package basecamp_test
 
 import (
 	"errors"
+	"path/filepath"
 	"reflect"
 	"slices"
 	"strings"
 	"testing"
+	"time"
 	"unicode"
 
 	"github.com/flownative/minka-cli/internal/basecamp"
@@ -267,7 +269,7 @@ func TestTheFoldersOfATheBundleStandParentsFirstAndEachKindFromTheBottomUp(t *te
 		t.Errorf("the documents stand in the order %v", got)
 	}
 	if got := sourceIDs(records(t, dir, bundle.Uploads)); !reflect.DeepEqual(got,
-		[]string{"9269", "9277", "9276", "9264", "9263", "9267", "9270", "9260", "9265"}) {
+		[]string{"9269", "9277", "9264", "9263", "9267", "9270", "9260", "9265"}) {
 		t.Errorf("the uploads stand in the order %v", got)
 	}
 }
@@ -316,7 +318,7 @@ func TestTheStatusOfAnEntryIsItsOwnAndNeverItsFoldersS(t *testing.T) {
 		t.Errorf("the documents by status are %v", got)
 	}
 	if got := result.Docs.UploadsByStatus; !reflect.DeepEqual(got,
-		map[string]int{bundle.StatusActive: 7, bundle.StatusArchived: 1, bundle.StatusTrashed: 1}) {
+		map[string]int{bundle.StatusActive: 6, bundle.StatusArchived: 1, bundle.StatusTrashed: 1}) {
 		t.Errorf("the uploads by status are %v", got)
 	}
 }
@@ -639,8 +641,16 @@ func TestADocumentThatSaysNothingButAFileThatNeverComesArrivesWordless(t *testin
 	if result.Docs.DocumentsWithoutWords != 1 {
 		t.Errorf("%d documents came without words, want the one", result.Docs.DocumentsWithoutWords)
 	}
-	if got := recordWithID(t, records(t, dir, bundle.Uploads), "9276")["file"]; got != "upload-9276" {
-		t.Errorf("the upload whose file is gone names %v", got)
+	// The upload whose own file is gone is left out instead: written, it would
+	// name a file the bundle has no bytes for and wait in Minka for ever. The
+	// record of the file stays as the trace of what became of it.
+	for _, record := range records(t, dir, bundle.Uploads) {
+		if record["sourceId"] == "9276" {
+			t.Errorf("the upload whose file is gone is in the bundle and names %v", record["file"])
+		}
+	}
+	if got := recordWithID(t, records(t, dir, bundle.Attachments), "upload-9276"); got["gone"] != true || got["file"] != nil {
+		t.Errorf("the trace of the file the source no longer has reads %v", got)
 	}
 	if got := result.Docs.OnlyAFileNoRunWillBring; !reflect.DeepEqual(got, []string{"9245", "9276"}) {
 		t.Errorf("the records that stand or fall with a file that never comes are %v", got)
@@ -814,10 +824,13 @@ func TestATitleOfAFolderOrADocumentMinkaRefusesEndsTheRun(t *testing.T) {
 	}
 }
 
-// A dry run walks the same way and brings no file. Two things it cannot know,
-// because all it has of a file is the size the source gives it: which record
-// stands or falls with a file the source no longer has, and therefore which
-// document arrives wordless for it.
+// A dry run walks the same way and brings no file. What it cannot know, because
+// all it has of a file is the size the source gives it, is which record stands
+// or falls with a file the source no longer has: which document arrives
+// wordless, and which upload is left out for a file no run will bring. Nothing
+// the source answers says that a file is gone — only the download says it — so
+// a dry run counts an upload a run leaves out, and says so too high rather than
+// promising a file it has not asked for.
 func TestADryRunOfDocsAndFilesWalksTheSameWay(t *testing.T) {
 	account := fakebasecamp.New()
 	_, wet := extract(t, account, docsProject)
@@ -833,8 +846,13 @@ func TestADryRunOfDocsAndFilesWalksTheSameWay(t *testing.T) {
 		t.Errorf("a dry run says %d documents came without words and a run says %d, want one fewer",
 			result.Docs.DocumentsWithoutWords, wet.Docs.DocumentsWithoutWords)
 	}
+	if result.Docs.UploadsByStatus[bundle.StatusActive] != wet.Docs.UploadsByStatus[bundle.StatusActive]+1 {
+		t.Errorf("a dry run counts %d active uploads and a run %d, want one more",
+			result.Docs.UploadsByStatus[bundle.StatusActive], wet.Docs.UploadsByStatus[bundle.StatusActive])
+	}
 	want := asADryRunKnowsIt(wet).Docs
 	want.DocumentsWithoutWords = result.Docs.DocumentsWithoutWords
+	want.UploadsByStatus = result.Docs.UploadsByStatus
 	if got := result.Docs; !reflect.DeepEqual(got, want) {
 		t.Errorf("a dry run says of the Docs & Files\n got %v\nwant %v", got, want)
 	}
@@ -895,9 +913,16 @@ func TestEveryReferenceOfDocsAndFilesLeadsToARecordOfTheBundle(t *testing.T) {
 			t.Errorf("boost %v hangs on a %v that is not in the bundle", record["sourceId"], record["targetKind"])
 		}
 	}
-	// Every file of a document or an upload belongs to one that is in the bundle.
+	// Every file of a document or an upload belongs to one that is in the
+	// bundle, with one exception: the record of a file no run will bring stays
+	// as the trace of what became of it, and the upload it stood for is left
+	// out. Such a record carries no bytes for anybody to have brought in vain.
 	for _, record := range records(t, dir, bundle.Attachments) {
-		if known, ofADocsEntry := entries[record["ownerKind"].(string)]; ofADocsEntry && !known[record["ownerSourceId"].(string)] {
+		known, ofADocsEntry := entries[record["ownerKind"].(string)]
+		switch {
+		case !ofADocsEntry || known[record["ownerSourceId"].(string)]:
+		case record["ownerKind"] == bundle.OwnerUpload && record["gone"] == true:
+		default:
 			t.Errorf("file %v belongs to a %v that is not in the bundle", record["sourceId"], record["ownerKind"])
 		}
 	}
@@ -1222,6 +1247,52 @@ func TestAnUploadWhoseFileOnlyThisRunMissedComesAndWaitsForIt(t *testing.T) {
 	}
 	if slices.Contains(result.Docs.OnlyAFileNoRunWillBring, "9260") {
 		t.Errorf("an upload whose file only this run missed is named among %v", result.Docs.OnlyAFileNoRunWillBring)
+	}
+	holdsTogether(t, dir, result.Missing)
+}
+
+// A file above what Minka takes is a file that never comes as much as one the
+// source no longer has, and the upload goes with it. The bytes were fetched, so
+// the record stays as the trace of what became of the file; nothing names it,
+// and nothing is meant to.
+func TestAnUploadWhoseFileWeighsMoreThanMinkaTakesIsLeftOutToo(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "bundle")
+	writer, err := bundle.Create(dir, basecamp.SourceName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer writer.Abort()
+	account := fakebasecamp.New()
+	// Lowered so that one upload of the fake is above it and the rest below:
+	// a hundred mebibytes belong in no fixture.
+	extractor := basecamp.Extractor{Source: account, Avatars: account, Files: account, LargestFile: 3000,
+		Now: func() time.Time { return runDay }}
+	result, err := extractor.Extract(t.Context(), []string{docsProject}, writer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := writer.Commit(bundle.Manifest{SourceInstance: result.SourceInstance}); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, record := range records(t, dir, bundle.Uploads) {
+		if record["sourceId"] == "9260" {
+			t.Errorf("the upload whose file weighs too much is in the bundle: %v", record)
+		}
+	}
+	if !slices.Contains(result.Docs.OnlyAFileNoRunWillBring, "9260") {
+		t.Errorf("the upload left out for the weight of its file is named among %v", result.Docs.OnlyAFileNoRunWillBring)
+	}
+	if result.Docs.CommentsWithoutTheirUpload != 2 || result.Docs.BoostsWithoutTheirUpload != 2 {
+		t.Errorf("%d comments and %d boosts fell with an upload, want those of the two uploads left out",
+			result.Docs.CommentsWithoutTheirUpload, result.Docs.BoostsWithoutTheirUpload)
+	}
+	// The file is in the bundle, as the run brought it, and nothing points at it.
+	if got := recordWithID(t, records(t, dir, bundle.Attachments), "upload-9260")["bytes"]; got != float64(4096) {
+		t.Errorf("the trace of the file that weighs too much says %v bytes", got)
+	}
+	if len(result.Missing) > 0 {
+		t.Errorf("a file that came and weighs too much is named among the missing: %v", result.Missing)
 	}
 	holdsTogether(t, dir, result.Missing)
 }

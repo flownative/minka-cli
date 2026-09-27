@@ -1092,12 +1092,13 @@ this:
   lost a file no run will bring is named (`data.docs.onlyAFileNoRunWillBring`),
   and the kinds end differently because a text is optional and a file is not: a
   document whose whole text was that file arrives **without words**, its title,
-  comments and boosts with it; an upload whose own file it is comes and waits in
-  Minka where the bundle holds a record of the file without its bytes, and is
-  **left out** with its comments and its boosts where Basecamp refused the
-  download for good and the bundle holds no record of it at all. A file this run
+  comments and boosts with it; an upload has no purpose without its file and is
+  **left out** with its comments and its boosts — its file gone at the source,
+  above what Minka takes, or refused for good. A file this run
   merely missed is not that: it is named under `data.missingFiles` with
-  `retryable: true`, the record waits for it, and the next run brings it whole. `data.docs.leftOut` counts per kind
+  `retryable: true`, the upload comes and waits for it, and the next run brings
+  both whole. A dry run downloads nothing and cannot know, so it counts an
+  upload a run leaves out. `data.docs.leftOut` counts per kind
   what the bundle holds none of, and `data.docs.placesLeftOut` names every
   folder and every tool that took entries with it. A folder the source has put
   away that would not say what stands in it is passed over and counted
@@ -1215,15 +1216,17 @@ this:
 - One run at a time works on an `--out`: a second one exits 1 (`config`) and
   names the lock the first holds. A run that was killed holds none. `--out`
   must not be a symbolic link.
-- A file that cannot be fetched does not end the run. The bundle is written
-  without it and can be applied, and the command fails at the end: exit 6 and
-  `retryable` when running again may bring the file, else exit 7. The report
-  is `data` of the error envelope then, and `data.missingFiles` names each
-  file with its owner, the `reason` and `retryable`. Do not treat such a run as
-  lost: run the same command again, it fetches what is missing and takes the
-  rest over. A file whose entry says `retryable: false` is one no run will
-  bring, and the records that stood on it have already been written without it
-  or left out, so running again changes nothing about them. A download that brings nothing for a minute is given up and counts
+- A file that cannot be fetched does not end the run: the bundle is written
+  without it and can be applied, and `data.missingFiles` names each file with
+  its owner, the `reason` and `retryable`. **The exit code says whether running
+  again helps and nothing else.** While one of the missing files may still come,
+  the command fails at the end with exit 6 and `retryable`, the report being
+  `data` of the error envelope: do not treat such a run as lost, run the same
+  command again and it fetches what is missing and takes the rest over. Where
+  every missing file says `retryable: false`, the run ends 0 with a notice
+  naming them: no run will bring those, the records that stood on one are
+  already written without it or left out, and running again changes nothing —
+  look at what is named and settle it at the source. A download that brings nothing for a minute is given up and counts
   as missing, retryable. A file whose `reason` speaks of its key or of an
   address that cannot be asked for safely comes with no run; leave it. A
   Basecamp CLI that lost its sign-in while files were fetched ends the run

@@ -297,18 +297,24 @@ it were whole, and a rename within one directory cannot end halfway.
 **Implemented as:** `bundle.Writer`, see [Importing](stable/import.md).
 
 <a id="c-025"></a>
-## C-025 — A file that cannot be fetched is left out, and the run fails at the end
+## C-025 — A file that cannot be fetched is left out, and only one a later run could bring fails the run
 
 *Applies to: `import`, every attachment of a bundle*
 
-The bundle is written without the file and its record and the report names it;
-the command exits 6 when trying again may help, else 7, the report as `data`.
+The bundle is written without the file and its record and the report names it
+under `missingFiles` with `retryable`. The command exits 6, retryable, while one
+of the missing files may still come, the report as `data`; where none of them
+ever will, it exits 0 with a notice naming them.
 
-**Why:** One missing picture must not cost a run of hours, and exit 0 would
-hide that the bundle is incomplete. This is no case of [C-050](#c-050): a bundle
-can express the file, the source merely does not hand it over, so the run says at
-the end that a later one has something left to bring.
-**Implemented as:** `Extractor.attach`, `incompleteImport`.
+**Why:** One missing picture must not cost a run of hours, and a failure at the
+end is what tells a caller to run the same command again. A file no repeat can
+bring gives that nothing to say: it is left out, counted and named, which is
+[C-050](#c-050) exactly, and an exit code that can never be cleared teaches
+whoever watches it to stop reading it. The distinction the code carries is the
+one the exit code promises — whether running again helps — and it is carried
+nowhere else.
+**Implemented as:** `Extractor.attachFile`, `anyOfTheMissingMayComeLater`,
+`incompleteImport`, see [Importing from Basecamp](stable/import.md).
 
 <a id="c-026"></a>
 ## C-026 — A mention refers only to somebody the account lists
@@ -959,33 +965,36 @@ in the report.
 [Importing from Basecamp](stable/import.md).
 
 <a id="c-063"></a>
-## C-063 — An upload the bundle can hold no file for is left out with everything pointing at it
+## C-063 — An upload whose file can never be had is left out with everything pointing at it
 
 *Applies to: `import basecamp`, the uploads of a Docs & Files tool*
 
-An upload the bundle can hold no file for is left out and named by its
+An upload whose file no run will ever bring is left out and named by its
 `sourceId`, and its comments and its boosts are neither asked for nor written.
-Two things leave it without one: Basecamp names **no stored file** for it, one
-that lives in a cloud (`docs.withoutAStoredFile`), and Basecamp **refused the
-download for good** (`docs.onlyAFileNoRunWillBring`). What fell with either is
-counted and a `notice` says so. **What says an upload has a file is the record
+Four things leave it without one: a file that lives in a cloud, which Basecamp
+names no stored file for (`docs.withoutAStoredFile`), one the source no longer
+has, one above what Minka takes, and a download Basecamp refused for good (all
+three `docs.onlyAFileNoRunWillBring`). What fell with either list is counted and
+a `notice` says so. Where the file left a record behind, that record stays as
+the trace of what became of it. **What says an upload has a file is the record
 and never the shape of the address**, and **what says a file will never come is
-whether the failure may pass and nothing else:** one that may pass is named
-under `missingFiles`, the run ends non-zero, the upload is written, and a later
-run brings the file.
+whether the failure may pass and nothing else:** one that may pass leaves the
+upload written and waiting, named under `missingFiles`, and a later run brings
+the file.
 
-**Why:** `file` takes the `sourceId` of a file of the bundle and nothing else,
-and an upload naming a file the bundle has none of is one Minka lets wait on
-every run, for ever, because nothing will ever answer it. What pointed at it
-falls with it ([C-052](#c-052)): a comment naming an upload the bundle does not
-carry stops the applier, and carrying it would cost the import rather than the
-one upload. The record and not the address decides, because a reading of the
-address that is wrong by one shape leaves **every** file of a tool out of the
-bundle, counted and named and gone. The reason of a failure decides the rest,
-because the two are one answer apart and the wrong way round costs either a
-record that waits for ever or one thrown away while the file was on its way.
+**Why:** an upload has no purpose without its file: `file` takes the `sourceId`
+of a file of the bundle and nothing else, and one Minka cannot store leaves the
+upload waiting there on every run, for ever, saying nothing to anybody. An
+honest gap in the report is worth more than that. What pointed at it falls with
+it ([C-052](#c-052)): a comment naming an upload the bundle does not carry stops
+the applier, and carrying it would cost the import rather than the one upload.
+The record and not the address decides, because a reading of the address that is
+wrong by one shape leaves **every** file of a tool out of the bundle, counted and
+named and gone. The reason of a failure decides the rest, because the two are one
+answer apart and the wrong way round costs either a record that waits for ever or
+one thrown away while its file was on its way.
 **Implemented as:** `basecamp.fileOfAnUpload`,
-`basecamp.Extractor.theFileDidNotCome`, `theFileLeftNoRecord`,
+`basecamp.Extractor.theFileDidNotCome`, `theFileNeverArrives`,
 `basecamp.Extractor.writeUpload`, see
 [Importing from Basecamp](stable/import.md).
 

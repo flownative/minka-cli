@@ -38,10 +38,10 @@ type DocsCounts struct {
 	// OnlyAFileNoRunWillBring are the records that lost a file no run will bring,
 	// by sourceId: a document, or the description of an upload, whose whole text
 	// was such a file, and an upload whose own file is one. A text is optional
-	// and comes out, so the document arrives without words; an upload is nothing
-	// without its file, so one whose file left no record in the bundle is left
-	// out with its comments and its boosts, and one whose record came without
-	// bytes comes and waits in Minka for a file the source has to hand back.
+	// and comes out, so the document arrives without words; an upload has no
+	// purpose without its file and is left out with its comments and its boosts,
+	// which is the honest gap — written, it would wait in Minka on every run and
+	// say nothing.
 	OnlyAFileNoRunWillBring []string `json:"onlyAFileNoRunWillBring"`
 	// FoldersThatSaidNothingOfWhatIsInThem counts the folders the source has put
 	// away that would not say what stands in them. What is in use below such a
@@ -513,14 +513,15 @@ func (e *Extractor) writeDocument(ctx context.Context, w *bundle.Writer, walk *d
 // and its boosts. The title is the name of the file, because Minka derives
 // nothing from a file and refuses an upload without a title.
 //
-// An upload the bundle can hold no file for is left out and named, and its
-// comments and its boosts go with it rather than being asked for: `file` takes
-// the identifier of a file of the bundle and nothing else, and a comment
-// pointing at an upload the bundle does not carry would stop the applier. Two
-// things leave an upload without a file for good: one whose file lies in a
-// cloud, which Basecamp names no stored file for, and one whose download was
-// refused for a reason that will not pass. An upload whose file this run merely
-// missed is neither: it comes and waits for the run that brings it.
+// An upload whose file can never be had is left out and named, and its comments
+// and its boosts go with it rather than being asked for: an upload has no
+// purpose without its file, `file` takes the identifier of a file of the bundle
+// and nothing else, and a comment pointing at an upload the bundle does not
+// carry would stop the applier. Four things leave it without one: a file that
+// lies in a cloud, which Basecamp names no stored file for, one the source no
+// longer has, one above what Minka takes, and a download refused for a reason
+// that will not pass. An upload whose file this run merely missed is none of
+// them: it comes and waits for the run that brings it.
 //
 // Only the file the source shows now comes. The earlier copies of it stay at the
 // source: the format keeps a field free for them and reads it nowhere, and the
@@ -568,10 +569,11 @@ func (e *Extractor) writeUpload(ctx context.Context, w *bundle.Writer, walk *doc
 		return err
 	}
 	// Asked before the files of the description are fetched and before anything
-	// of the upload is written: a file the bundle holds no record of is one the
-	// upload cannot name, the field being required, so the upload stays out and
-	// the bytes of its description are bytes nobody would ever read.
-	if e.theFileLeftNoRecord(file) {
+	// of the upload is written: an upload has no purpose without its file, so one
+	// that will never come takes the upload with it, and the bytes of its
+	// description would be bytes nobody ever reads. Where the file left a record
+	// behind, that record stays as the trace of what became of it.
+	if e.theFileNeverArrives(file.ref) {
 		e.docs.OnlyAFileNoRunWillBring = append(e.docs.OnlyAFileNoRunWillBring, origin.SourceID)
 		e.docs.CommentsWithoutTheirUpload += found.CommentsCount
 		e.docs.BoostsWithoutTheirUpload += found.BoostsCount
@@ -580,16 +582,7 @@ func (e *Extractor) writeUpload(ctx context.Context, w *bundle.Writer, walk *doc
 	if err := e.attachFiles(ctx, w, mine, origin, embedded); err != nil {
 		return err
 	}
-	description, named := e.wordlessWhereItsOnlyFileNeverComes(description, origin.SourceID)
-	// An upload whose file the bundle knows without holding its bytes — one the
-	// source no longer has, one above what Minka takes — names a record all the
-	// same and comes, and Minka keeps nothing of it until the source hands the
-	// file back. One that lost both its description and its own file is named
-	// once: the list is read by its length, and a record standing in it twice
-	// would say there were two.
-	if !named && e.theFileNeverArrives(file.ref) {
-		e.docs.OnlyAFileNoRunWillBring = append(e.docs.OnlyAFileNoRunWillBring, origin.SourceID)
-	}
+	description, _ = e.wordlessWhereItsOnlyFileNeverComes(description, origin.SourceID)
 
 	record := bundle.Upload{
 		Record:           origin,

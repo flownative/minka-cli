@@ -60,7 +60,7 @@ all of it: `data` is the result it would have printed, `notice` its warnings.
 Such a command fails so that a caller notices, and the result is not lost:
 the error envelope with `data` is printed with `--quiet` as well, and the text
 output prints the result before the error. `import basecamp` ends this way
-when files could not be fetched (C-025).
+when a file it could not fetch may still come on a later run (C-025).
 
 `retryable` is true only for reading requests, and for `messages create` with
 `--client-message-id`, because a second attempt then writes nothing new. A
