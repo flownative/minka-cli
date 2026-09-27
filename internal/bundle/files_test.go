@@ -482,3 +482,71 @@ func TestADiscardingWriterTakesNothingOver(t *testing.T) {
 		t.Error(err)
 	}
 }
+
+// A second record of one file carries the same bytes under its own identifier,
+// shared with the record the run brought them for: one file of the source is
+// fetched once however many records own it.
+func TestASecondRecordOfOneFileSharesItsBytes(t *testing.T) {
+	content := []byte("one picture, two owners")
+	for name, prepare := range map[string]func(t *testing.T){
+		"a file system with links": func(*testing.T) {},
+		"a file system without links": func(t *testing.T) {
+			linkFile = func(string, string) error { return errors.New("links are not supported") }
+			t.Cleanup(func() { linkFile = os.Link })
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			w := mustCreate(t, filepath.Join(t.TempDir(), "bundle"))
+			held, err := w.AddFile("attachment-1", "plan.png", content)
+			if err != nil {
+				t.Fatal(err)
+			}
+			prepare(t)
+
+			shared, err := w.ShareFile(held, "attachment-1.2", "plan.png")
+			if err != nil {
+				t.Fatalf("the bytes were not shared: %v", err)
+			}
+			if want := (StoredFile{File: "attachment-1.2/plan.png", Bytes: held.Bytes, SHA256: held.SHA256}); shared != want {
+				t.Errorf("got %+v, want %+v", shared, want)
+			}
+			again := filepath.Join(w.staging, "files", "attachment-1.2", "plan.png")
+			if got, err := os.ReadFile(again); err != nil || !bytes.Equal(got, content) {
+				t.Errorf("the second record holds %q, %v", got, err)
+			}
+			info, err := os.Stat(again)
+			if err != nil || info.Mode().Perm() != 0o600 {
+				t.Errorf("the file of the second record: %v, permissions %v", err, info.Mode().Perm())
+			}
+			// Nothing of a bundle is written into, so the two names may be one
+			// file: each lies in a directory made anew for its own record.
+			if _, err := w.AddFile("attachment-1.2", "plan.png", content); err == nil {
+				t.Error("a file went into the place of the shared one")
+			}
+		})
+	}
+}
+
+// A run may not carry a file that is not the file it says it is, so the copy is
+// held against the digest of what it came from.
+func TestACopyOfAFileUnderASecondOwnerIsWhatItSaysItIs(t *testing.T) {
+	w := mustCreate(t, filepath.Join(t.TempDir(), "bundle"))
+	held, err := w.AddFile("attachment-1", "plan.png", []byte("one picture, two owners"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	linkFile = func(old, _ string) error {
+		if err := os.WriteFile(old, []byte("something else entirely"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		return errors.New("links are not supported")
+	}
+	t.Cleanup(func() { linkFile = os.Link })
+
+	if _, err := w.ShareFile(held, "attachment-1.2", "plan.png"); err == nil {
+		t.Error("a copy of other bytes went into the bundle as the file")
+	}
+	if _, err := os.Stat(filepath.Join(w.staging, "files", "attachment-1.2")); !os.IsNotExist(err) {
+		t.Errorf("the copy that failed left something behind: %v", err)
+	}
+}

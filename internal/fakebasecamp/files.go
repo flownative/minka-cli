@@ -310,7 +310,14 @@ var LongName = strings.Repeat("ä long name ", 30) + ".jpeg"
 // fileProject is a project with every case of a file: captions and galleries,
 // a file embedded twice in one text through both storage hosts, names a path
 // cannot carry, a file without a type and one without a size, a file Basecamp
-// no longer has, a file of two owners, and files dropped into a chat.
+// no longer has, one file under three owners — the last of them a record whose
+// body is nothing else — and files dropped into a chat.
+//
+// All three owners of that one file stand in this project, which is the case
+// where nothing was ever lost: Minka shows a record none of another's file only
+// where the two stand in different projects. So the shape here is what the
+// records of a bundle are held to, and the loss is held by nothing that can be
+// invented — it needs a second project of the source with the same file in it.
 func fileProject(ada, grace Person, tool func(int64, string, string, string, bool, int, *Person) Tool) Project {
 	at := func(day, hour int) string { return fmt.Sprintf("2023-05-%02dT%02d:00:00.000Z", day, hour) }
 	file := func(id int64, name, contentType string, size int64) File {
@@ -370,7 +377,13 @@ func fileProject(ada, grace Person, tool func(int64, string, string, string, boo
 	news.CreatedAt, news.UpdatedAt = at(1, 9), at(1, 9)
 	news.Posts = []Post{
 		{ID: 9921, Subject: "Minutes", Creator: &grace, CreatedAt: at(4, 8), UpdatedAt: at(4, 9), Files: []File{minutes, sunset},
-			Content: `<div>Attached: ` + Embed{File: minutes, Presentation: "gallery"}.HTML() + ` and again ` + Embed{File: sunset}.HTML() + `</div>`},
+			Content: `<div>Attached: ` + Embed{File: minutes, Presentation: "gallery"}.HTML() + ` and again ` + Embed{File: sunset}.HTML() + `</div>`,
+			Comments: []Comment{
+				// Somebody sends the same picture on once more and writes not a
+				// word: a record whose body is that file and nothing besides.
+				{ID: 9922, Creator: &ada, CreatedAt: at(4, 10), UpdatedAt: at(4, 10), Files: []File{sunset},
+					Content: `<div>` + Embed{File: sunset}.HTML() + `</div>`},
+			}},
 	}
 
 	chat := tool(9042, "chat", "chats", "File chat", true, 3, &ada)

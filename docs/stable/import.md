@@ -330,9 +330,10 @@ inboxes, and last the Docs & Files tools. So comments and
 reactions stand in the order of what they hang on: those of cards, those of
 posts, those of lines, those of answers, those of lists and of to-dos, those of
 mails, those of documents and of uploads. Where a kind stands in that order
-decides one thing and no more: a file
-met in two records belongs to the first that named it, so a file that hangs in
-a card and in a document alike stays the card's. Nothing a record points at gains
+decides one thing and no more: which record of a file the bytes are fetched for,
+so a file that hangs in a card and in a document alike is fetched for the card
+and the document's record shares it (C-066). Every owner of a file has a record
+of its own either way. Nothing a record points at gains
 by being written earlier — the bundle is whole before Minka reads a line of it,
 and Minka applies the kinds in an order of its own.
 
@@ -1103,8 +1104,9 @@ Every `<import-attachment>` the extractor writes has a record in
 `attachments.jsonl` whose `sourceId` is exactly its `ref`, and its bytes at
 `files/<sourceId>/<filename>`: `attachment-<id>` for a file embedded in the
 text of a card, a comment or a post, `blob-<key>` for a file dropped into a
-chat, `upload-<id>` for the file an upload of Docs & Files stands for. The one
-reference without a record is a file the run could not fetch,
+chat, `upload-<id>` for the file an upload of Docs & Files stands for, and any of
+those with the owner behind it for one owner of a file beyond the first, see below.
+The one reference without a record is a file the run could not fetch,
 see Files that cannot be fetched (C-030).
 
 **A file comes by one of two routes.** A file of a text or a chat is fetched **at
@@ -1129,15 +1131,45 @@ is asked to take it.
   `createdAt` and `updatedAt` are those of its owner, and `createdBy` is
   `null`, which the format reads as the author of the owner. Avatars stay as
   they are, with their person as creator.
-- **One record and one download per `sourceId`**, however many references
-  name it: a text may embed the same file twice. Where a file turns up under
-  a second owner, the first keeps the record and the case is counted
-  (`filesOfSeveralOwners`).
+- **One record and one download per `sourceId`**, however many references of
+  **one body** name it: a text may embed the same file twice, and it owns that
+  file once.
+- **One record per owner, one download per file** (C-066). Where a file turns up
+  under a **further owner**, that owner gets a record of its own, with the same
+  bytes and a `sourceId` made of the source's own name for the file and the owner
+  it belongs to: `attachment-882798998.post-10203006109`. No name of the source
+  holds a dot — an identifier of Basecamp is digits, and the key of a stored file
+  is held to letters, digits, a hyphen and an underscore before it becomes one —
+  so no such record can carry the name of another file. The bytes are
+  fetched for the first record alone and the others are linked to it, or copied
+  where they cannot be linked, so two records never mean two downloads.
+  **The owner and not the order of the walk** names such a record, because Minka
+  takes a record over by its identifier: one that moved when another record moved
+  would leave the record an earlier run wrote standing and store the same bytes
+  again. The one identifier that still moves is the **first** owner's, which is the
+  source's plain name for the file: where the record that met a file first is gone
+  from the source, the next owner of it becomes the first and its record is called
+  what that one was called.
+  `filesOfSeveralOwners` counts the **owners beyond the first**, met and not
+  written: a file under three owners that no run can fetch counts 2 there and
+  leaves no record at all.
+  Every number about fetching counts one file of the source once —
+  `filesExpected`, `filesBytesExpected`, `filesFetched`, `filesReused`,
+  `filesGone`, `fileNamesChanged` and `filesBytes`. So the index holds
+  `avatars.count` plus `filesExpected` plus `filesOfSeveralOwners` records, less
+  the entries of `missingFiles` that name a file of a text rather than an avatar —
+  an avatar that is missing is already out of `avatars.count`. That is the whole of
+  `counts.attachments` and the form to check it in.
+  **What became of a file becomes of every owner of it at once:** one the source
+  no longer has is `gone` on every record of it, one this run could not fetch is
+  missing under every one of them with the reason the first got, and nothing of it
+  is asked for a second time.
 - **Order.** The index begins with the avatars, in the order of the people,
   and goes on with the files in the order the walk meets them: the files of
   a card, those of its comments, the next card; then the posts the same way;
   then the lines; then those of a mail, of its answers and of its comments;
-  within a text in the order of the references. A file is
+  within a text in the order of the references. A record of a further owner
+  stands where that owner's own records stand. A file is
   fetched when its owner is written, and its record is held until the people
   are written at the end of the run.
 - **Through the Basecamp CLI.** `basecamp files download <address> --out -
@@ -1234,7 +1266,9 @@ is asked to take it.
   that stands takes nothing. A file is only ever removed by its name.
   Removing the old bundle, giving a run up and tidying up after a killed one
   therefore leave the other bundle whole. `filesReused` and `filesFetched`
-  count both ways.
+  count both ways. A record of a **further owner** of one file is taken over by
+  neither route: it shares what the first record of the file got, taken over or
+  fetched, so a duplicate is never fetched because its identifier is new.
 - **What a run that ends hard loses.** Files are taken over from a bundle
   that is in place, and a bundle takes its place only at the end of a run.
   A run that fails, is stopped or is killed therefore loses the files it
@@ -1388,7 +1422,8 @@ A name and a company are personal data.
   `answersTrashed`, `longestBody`, `longestBodyRecords`, `requestsRetried` and the absolute path of
   the bundle. The lines about check-ins are shown only by a run that met a
   questionnaire, and those about to-dos only by one that met a To-dos tool.
-  `filesBytes` is what the files of the bundle weigh, fetched or taken over; it
+  `filesBytes` is what the files of the bundle weigh, fetched or taken over, each
+  file of the source once whatever number of records own it, see Files; it
   and
   `filesFetched`, `filesReused` and `filesGone` are 0 in a dry run.
   `longestBody` is the longest text per kind, `cards`, `comments`, `posts`,

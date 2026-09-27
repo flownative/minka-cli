@@ -105,9 +105,9 @@ const outsider = "Outsider"
 // It comes last of all the kinds, which is a place and not a precondition:
 // Minka reads a bundle whole and applies the kinds in an order of its own, so
 // nothing a mail points at gains by being written first. What the place decides
-// is one thing, and it is why it is the last: a file met in two records belongs
-// to the first that named it, so a file that hangs in a card and in a mail
-// alike stays the card's.
+// is one thing, and it is why it is the last: the bytes of a file are fetched for
+// the record that met it first, so a file that hangs in a card and in a mail
+// alike is fetched for the card and the mail's record shares it.
 func (e *Extractor) extractForwards(ctx context.Context, w *bundle.Writer) error {
 	for _, t := range e.talks {
 		for _, inbox := range t.inboxes {
@@ -179,13 +179,14 @@ func (e *Extractor) writeForward(ctx context.Context, w *bundle.Writer, bucket i
 		e.forwards.SubjectsChanged++
 	}
 
-	body, files, err := e.rewriteBody(found.Content, "", found.Files)
+	mine := owns(bundle.OwnerForward, found.ID)
+	body, files, err := e.rewriteBody(mine, found.Content, "", found.Files)
 	if err != nil {
 		return err
 	}
 	// Before the body is settled: only what became of the files says whether
 	// the mail reaches Minka with anything in it.
-	if err := e.attachFiles(ctx, w, bundle.OwnerForward, origin, files); err != nil {
+	if err := e.attachFiles(ctx, w, mine, origin, files); err != nil {
 		return err
 	}
 	body = e.aBodyThatSaysSomething(body)
@@ -318,11 +319,12 @@ func (e *Extractor) writeForwardReply(ctx context.Context, w *bundle.Writer, buc
 		e.forwards.RepliesFromOutside++
 	}
 
-	body, files, err := e.rewriteBody(reply.Content, "", reply.Files)
+	mine := owns(bundle.OwnerForwardReply, reply.ID)
+	body, files, err := e.rewriteBody(mine, reply.Content, "", reply.Files)
 	if err != nil {
 		return err
 	}
-	if err := e.attachFiles(ctx, w, bundle.OwnerForwardReply, origin, files); err != nil {
+	if err := e.attachFiles(ctx, w, mine, origin, files); err != nil {
 		return err
 	}
 	body = e.aBodyThatSaysSomething(body)

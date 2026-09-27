@@ -180,6 +180,31 @@ func TestARunThatLeftNoRecordOutReportsNone(t *testing.T) {
 	}
 }
 
+// The record of a file under a further owner is the file's own name and its
+// owner's, parted by a dot. A key of a stored file that held one could pass for
+// such a record, and none can: a key is held to letters, digits, a hyphen and an
+// underscore before it becomes a reference, so a file whose key holds a dot is
+// dropped like any other whose key cannot be part of a name.
+func TestAKeyThatCouldPassForTheRecordOfAFurtherOwnerIsNoKey(t *testing.T) {
+	account := fakebasecamp.New()
+	line := &campfire(account).Lines[2]
+	line.Uploads[0].Key = fakebasecamp.FileKey(6001) + ".comment-9911"
+	dir, result := extract(t, account, talkProject)
+
+	body := recordWithID(t, messages(t, dir), "9803")["body"].(string)
+	if strings.Contains(body, ".comment-9911") {
+		t.Errorf("the line names a file by a key that holds a dot: %s", body)
+	}
+	if result.Bodies.FilesDropped != 3 {
+		t.Errorf("%d files dropped, want the two of the fake and this one", result.Bodies.FilesDropped)
+	}
+	for _, record := range records(t, dir, bundle.Attachments) {
+		if strings.Contains(record["sourceId"].(string), ".comment-9911") {
+			t.Errorf("a record was written for it: %v", record["sourceId"])
+		}
+	}
+}
+
 func TestAFileOfALineIsNamedByTheKeyOfItsStoredFileOrDropped(t *testing.T) {
 	account := fakebasecamp.New()
 	// Nobody but the line that is left out names this person.

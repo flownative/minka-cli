@@ -230,7 +230,9 @@ func docsProject(ada, grace, former Person, tool func(int64, string, string, str
 		{ID: 9244, Title: "Read me first", Creator: &ada, CreatedAt: at(7, 8), UpdatedAt: at(7, 8), Twice: true,
 			Content: `<div>Start here</div>`},
 		// Nothing but a file the source no longer has: Minka keeps nothing of
-		// such a document and waits for a file that will never come.
+		// such a document and waits for a file that will never come. The
+		// description of the upload below embeds the same file, so one of the two
+		// is a further owner of it and has to learn that it is gone as well.
 		{ID: 9245, Title: "The picture", Creator: &ada, CreatedAt: at(7, 9), UpdatedAt: at(7, 9),
 			Content: Embed{File: shredded}.HTML(), Files: []File{shredded}},
 		{ID: 9246, Status: "archived", Title: "Last quarter", Creator: &grace, CreatedAt: at(7, 10), UpdatedAt: at(8, 10),

@@ -109,8 +109,10 @@ func TestTheDocsAndFilesOfAToolComeAsFoldersDocumentsAndUploads(t *testing.T) {
 		"sourceId": "9240", "createdAt": "2025-06-02T08:00:00.000Z", "updatedAt": "2025-06-02T09:00:00.000Z", "createdBy": "101",
 		"projectSourceId": docsProject, "toolSourceId": "9210", "folderSourceId": "9220",
 		"title": "Chapter one", "status": bundle.StatusActive, "visibleToClients": true,
+		// The description of an upload at the top of the tool embeds the same
+		// file and is met first, so this record is a further owner of it.
 		"body": `<div>How it works, says <import-mention ref="102">Grace Sample</import-mention></div>` +
-			`<import-attachment ref="attachment-5401"></import-attachment>`,
+			`<import-attachment ref="attachment-5401.document-9240"></import-attachment>`,
 	}
 	if got := recordWithID(t, records(t, dir, bundle.Documents), "9240"); !reflect.DeepEqual(got, want) {
 		t.Errorf("the document with everything on it:\n got %v\nwant %v", got, want)

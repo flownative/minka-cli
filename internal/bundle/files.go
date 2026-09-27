@@ -147,6 +147,40 @@ func (c *counter) Write(content []byte) (int, error) {
 	return len(content), nil
 }
 
+// ShareFile gives an attachment the file another attachment of this bundle
+// already holds, so that one file of the source is fetched once however many
+// records own it. The file it comes from is named by what its own record says
+// about it, and the copy carries the same size and digest: the bytes are this
+// run's own, counted and digested where they arrived, so nothing is read again
+// to say what they are.
+//
+// The file is linked where that can be done, which costs no space, and copied
+// otherwise, and a copy is held against the digest it should have. A link shares
+// its content, which is safe here for the same reason it is safe for a file taken
+// over from the bundle being replaced: every attachment has a directory of its
+// own, made anew for it, and nothing of a bundle is ever written into twice.
+//
+// A discarding Writer is never asked: it holds no bytes for anything to share.
+func (w *Writer) ShareFile(held StoredFile, sourceID, filename string) (StoredFile, error) {
+	dir, err := fileDir(w.staging, sourceID, filename)
+	if err != nil {
+		return StoredFile{}, err
+	}
+	if err := os.MkdirAll(filepath.Dir(dir), 0o700); err != nil {
+		return StoredFile{}, err
+	}
+	if err := os.Mkdir(dir, 0o700); err != nil {
+		return StoredFile{}, err
+	}
+	from := filepath.Join(w.staging, filesDir, held.File)
+	to := filepath.Join(dir, filename)
+	if linkFile(from, to) != nil && !copyFile(from, to, held.SHA256) {
+		_ = os.RemoveAll(dir)
+		return StoredFile{}, fmt.Errorf("the file of attachment %q cannot be stored beside the one it shares its bytes with", sourceID)
+	}
+	return StoredFile{File: sourceID + "/" + filename, Bytes: held.Bytes, SHA256: held.SHA256}, nil
+}
+
 // DropFile removes the file of an attachment that turned out to be none the
 // bundle should carry.
 func (w *Writer) DropFile(sourceID string) error {
