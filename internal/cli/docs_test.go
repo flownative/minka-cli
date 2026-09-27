@@ -362,37 +362,38 @@ func TestAFolderThatTakesNothingNewIsNamedAsSuch(t *testing.T) {
 }
 
 func TestACommentIsWrittenChangedReactedToAndTakenBackUnderBothKindsOfEntry(t *testing.T) {
-	f := newTestEnv(t).fixture
-	for name, flag := range map[string][]string{
-		"a document": {"--document", f.Document.ID},
-		"an upload":  {"--upload", f.FilesUpload.ID},
-	} {
-		t.Run(name, func(t *testing.T) {
+	for _, kind := range []string{"--document", "--upload"} {
+		t.Run(kind, func(t *testing.T) {
 			e := newTestEnv(t)
-			where := []string{flag[0], flag[1]}
-			if flag[0] == "--document" {
-				where[1] = e.fixture.Document.ID
-			} else {
-				where[1] = e.fixture.FilesUpload.ID
+			entry := e.fixture.Document.ID
+			if kind == "--upload" {
+				entry = e.fixture.FilesUpload.ID
+			}
+			run := func(action string, rest ...string) (envelope, result) {
+				return e.runJSON("", append([]string{"docs", "comments", action, kind, entry}, rest...)...)
 			}
 
-			written, r := e.runJSON("", append(append([]string{"docs", "comments", "create"}, where...), "**Yes**")...)
+			written, r := run("create", "**Yes**")
 			expectCode(t, r, ExitOK)
-			commentID := decode(t, written.Data)["id"].(string)
-			if body := decode(t, written.Data)["body"]; body != "<p><strong>Yes</strong></p>" {
-				t.Fatalf("body %v: the Markdown was not converted", body)
+			comment := decode(t, written.Data)
+			if comment["body"] != "<p><strong>Yes</strong></p>" {
+				t.Fatalf("body %v: the Markdown was not converted", comment["body"])
 			}
+			commentID, _ := comment["id"].(string)
 
-			changed, r := e.runJSON("", append(append([]string{"docs", "comments", "edit"}, where...), commentID, "No")...)
+			changed, r := run("edit", commentID, "No")
 			expectCode(t, r, ExitOK)
 			if body := decode(t, changed.Data)["body"]; body != "<p>No</p>" {
 				t.Fatalf("body %v", body)
 			}
 
-			expectCode(t, e.run("", append(append([]string{"docs", "comments", "react"}, where...), commentID, "👍", "--json")...), ExitOK)
-			expectCode(t, e.run("", append(append([]string{"docs", "comments", "unreact"}, where...), commentID, "👍", "--json")...), ExitOK)
-			expectCode(t, e.run("", append(append([]string{"docs", "comments", "delete"}, where...), commentID, "--json")...), ExitOK)
-			_, again := e.runJSON("", append(append([]string{"docs", "comments", "delete"}, where...), commentID)...)
+			_, r = run("react", commentID, "👍")
+			expectCode(t, r, ExitOK)
+			_, r = run("unreact", commentID, "👍")
+			expectCode(t, r, ExitOK)
+			_, r = run("delete", commentID)
+			expectCode(t, r, ExitOK)
+			_, again := run("delete", commentID)
 			expectCode(t, again, ExitNotFound)
 		})
 	}
