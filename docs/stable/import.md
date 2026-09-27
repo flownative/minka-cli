@@ -1105,7 +1105,7 @@ Every `<import-attachment>` the extractor writes has a record in
 `files/<sourceId>/<filename>`: `attachment-<id>` for a file embedded in the
 text of a card, a comment or a post, `blob-<key>` for a file dropped into a
 chat, `upload-<id>` for the file an upload of Docs & Files stands for, and any of
-those with a number behind it for one owner of a file beyond the first, see below.
+those with the owner behind it for one owner of a file beyond the first, see below.
 The one reference without a record is a file the run could not fetch,
 see Files that cannot be fetched (C-030).
 

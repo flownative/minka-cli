@@ -404,7 +404,7 @@ func TestAFileUnderSeveralOwnersHasARecordForEachAndIsFetchedOnce(t *testing.T) 
 		}
 	}
 	if asked != 1 || result.Files.OwnersBeyondTheFirst != 2 {
-		t.Errorf("asked for %d times, %d records beyond the first", asked, result.Files.OwnersBeyondTheFirst)
+		t.Errorf("asked for %d times, %d owners beyond the first", asked, result.Files.OwnersBeyondTheFirst)
 	}
 
 	// The card met the file first and holds the bytes; the post and the comment
@@ -899,7 +899,7 @@ func TestTheIndexNamesEveryIDOnce(t *testing.T) {
 		}
 	}
 	if result.Files.OwnersBeyondTheFirst != 3 {
-		t.Errorf("%d records beyond the first owner of a file", result.Files.OwnersBeyondTheFirst)
+		t.Errorf("%d owners beyond the first", result.Files.OwnersBeyondTheFirst)
 	}
 	// The lines of several chats come in parts, so the line is looked for by its
 	// identifier alone.
