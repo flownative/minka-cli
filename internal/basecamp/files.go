@@ -38,7 +38,9 @@ type Files interface {
 var ErrLooksLikeAFailure = &Error{Kind: API, Message: "the Basecamp CLI printed a failure in place of the file and ended as if it had brought it"}
 
 // FileCounts says what became of the files the texts and the chats of a run
-// refer to. A file counts once, however many references name it.
+// refer to. Every number about fetching counts one file of the source once,
+// however many references name it and however many records own it; SecondOwners
+// alone counts records.
 type FileCounts struct {
 	// Expected are the files a run sets out to bring, and BytesExpected is
 	// what Basecamp says they weigh together.
@@ -141,15 +143,8 @@ func (e *Extractor) claimFile(file sourceFile, within map[string]sourceFile) (so
 	if already, claimed := within[file.ref]; claimed {
 		return already, false
 	}
-	if e.filesOfTheSource == nil {
-		e.filesOfTheSource = map[string]*fileOfTheSource{}
-	}
 	ofTheSource := file.ref
-	met := e.filesOfTheSource[ofTheSource]
-	if met == nil {
-		met = &fileOfTheSource{}
-		e.filesOfTheSource[ofTheSource] = met
-	}
+	met := e.theFile(ofTheSource)
 	met.records++
 	if met.records > 1 {
 		e.files.SecondOwners++
@@ -160,6 +155,20 @@ func (e *Extractor) claimFile(file sourceFile, within map[string]sourceFile) (so
 		within[ofTheSource] = file
 	}
 	return file, true
+}
+
+// theFile is what the bundle has made of one file of the source, by the source's
+// own name for it.
+func (e *Extractor) theFile(ofTheSource string) *fileOfTheSource {
+	if e.filesOfTheSource == nil {
+		e.filesOfTheSource = map[string]*fileOfTheSource{}
+	}
+	met := e.filesOfTheSource[ofTheSource]
+	if met == nil {
+		met = &fileOfTheSource{}
+		e.filesOfTheSource[ofTheSource] = met
+	}
+	return met
 }
 
 // storageHost is the host a storage address is written with. The Basecamp CLI
@@ -329,7 +338,7 @@ func (e *Extractor) attachFile(ctx context.Context, w *bundle.Writer, ownerKind 
 			Retryable:          failed.Transient(),
 		})
 	}
-	met := e.filesOfTheSource[file.ofTheSource()]
+	met := e.theFile(file.ofTheSource())
 	// A further owner of one file takes what the bundle already holds. Where the
 	// record that claimed the file first never came to be, because the record it
 	// hung on was left out, this one brings the bytes and the next shares with it.
