@@ -785,7 +785,7 @@ func (a *app) descriptionHTML(cmd *cobra.Command, value, format string) (string,
 		return "", nil, err
 	}
 	if format == "html" {
-		return text, nil, nil
+		return text, markupNotice(text), nil
 	}
 
 	result := markdown.ToHTML(text)

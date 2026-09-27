@@ -23,6 +23,16 @@ fetches its bytes back. Every text says which files hang in it, so reading a
 card, a comment or a message gives the identifier a download takes, without
 anything being taken out of the text.
 
+The Docs & Files of a project are read with `docs tools`, `docs list`,
+`docs show` and `docs uploads show`; `docs create` and `docs edit` write a
+document, and `docs comments …` write under a document or an upload. The rule
+the commands follow is [Docs & Files](../stable/docs-and-files.md) (C-067,
+C-068). Putting a file into a tool and changing an upload wait for a card of
+their own, and everything the API does not offer — deleting, archiving and
+moving an entry, folders, the archive of a tool, drafts — is named there and
+nowhere pretended. None of it has been seen live: the whole feature is checked
+against the fake, see below.
+
 `minka import basecamp` extracts the structure, the boards, the message
 boards, the chats, the check-ins, the to-dos, the forwarded mail and the
 Docs & Files of Basecamp
@@ -211,6 +221,19 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   controller's order, the text before the guard, and reads a guard's time in
   the forms the server reads and no wider. All of it read in the Minka code.
 
+- Everything of `docs`: no request of it has gone to a real Minka. The fake
+  mirrors the contract read in Minka's own code — the order the controller
+  refuses in, the plain-text fallback of a body without served markup, the
+  moment kept to the whole second, `documentArchived` for an entry under an
+  archived folder, the inside of an archived folder listed as archived, and
+  the draft that is at no address. Two things it deliberately does not
+  mirror: a second write within the same second, because every write of the
+  fake stands a second after the one before so that a guard has something to
+  tell apart — which is the one case the guard cannot see live — and
+  `PATCH files-uploads/{id}`, which no command reaches. The fake asks
+  `richtext.CarriesMarkup` for the fallback, the same rule the CLI asks, so
+  the edges of the list of served elements are shared knowledge and not a
+  second measurement.
 - Everything a bundle says about clients: no extraction has met a client live.
   What the fields are and how Minka reads them was read in its appliers
   (`PeopleApplier`, `ProjectsApplier`, `ToolsApplier`, `WhatClientsSee`), and
