@@ -142,7 +142,7 @@ func TestAStoredTextTakesTheCaptionOfAFileFromTheRenderedOne(t *testing.T) {
 	stored := `<div><bc-attachment sgid="` + fileSGID + `" content-type="image/png" presentation="gallery"></bc-attachment></div>`
 	rendered := `<div><bc-attachment sgid="` + fileSGID + `" content-type="image/png" caption="Tea &amp; biscuits" presentation="gallery"><figure><img src="a"><figcaption>Tea &amp; biscuits</figcaption></figure></bc-attachment></div>`
 
-	got, files, err := e.rewriteBody(stored, rendered, []bodyFile{{ID: 5001, SGID: fileSGID}})
+	got, files, err := e.rewriteBody(aBody, stored, rendered, []bodyFile{{ID: 5001, SGID: fileSGID}})
 	if err != nil {
 		t.Fatal(err)
 	}
