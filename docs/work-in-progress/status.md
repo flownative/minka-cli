@@ -781,7 +781,7 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
 - Minka's `import-format.md` says of one identifier under two owners that the
   extractor writes one record with the owner of the first place it found it,
   which is what C-066 replaces. The format is Minka's and only its side can
-  change that sentence; the coordination has it.
+  change that sentence, so it is a question for the coordination.
   Two things about the loss were read in Minka's code rather than believed:
   `ownedBy` is asked only of a body that embeds no file at all, so it is not
   what loses a file of ours, and a body that names the file resolves the tag by
