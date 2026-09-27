@@ -860,6 +860,11 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   nothing else, so the next surprise is the first one nobody has met yet — read
   `recordsLeftOut` of that run as well, and whoever gives a bundle a word for
   something has to have seen what Basecamp sends under it.
+  Read `filesOfSeveralOwners` of that run too, and check the bundle the way the
+  [run guide](../guides/import-run.md) now asks: who owns a file and not only
+  whether it is found. One project showed one such file; 8,321 files over 32
+  projects will show more, and how many bytes the duplicates cost is a number
+  nothing here can guess.
 - What the check-ins still owe is only the rare shapes: the dry run over the
   whole account met no question without a `start_date`, no answer without a
   `group_on`, no frequency outside the five and none whose schedule Minka cannot
