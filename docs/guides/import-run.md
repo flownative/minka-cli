@@ -97,10 +97,42 @@ reads, so it may be run although it lies in Minka's repository.
 **Of the files, ask who owns them and not only whether they are found.** Neither
 `verify-bundle.sh` nor a closure check over the references asks whether the record
 that names a file is the record the index gives that file to, and a bundle where
-the two differ reads as whole while a file is quietly lost (C-066). So check that
-every `<import-attachment>` of a body names a record whose `ownerKind` and
-`ownerSourceId` are that body's own, and that the records sharing one file are as
-many as `filesOfSeveralOwners` says beyond the files themselves.
+the two differ reads as whole while a file is quietly lost (C-066). In the
+bundle's own directory, and writing nothing into it:
+
+```bash
+probe=$(mktemp -d)
+jq -r '.sourceId + " " + .ownerKind + " " + .ownerSourceId' attachments.jsonl |
+  sort > "$probe/owners"
+
+# Once per kind that carries a text, with the field that holds it: cards
+# (description), comments, posts, messages or messages-*.jsonl, answers,
+# forwards, forwardreplies, documents (body), todolists, uploads (description),
+# todos (notes). The kind is the singular, as ownerKind writes it.
+jq -r --arg kind post --arg field body \
+  '.sourceId as $id | (.[$field] // "")
+   | [scan("<import-attachment ref=\"([^\"]+)\"")[]]
+   | .[] + " " + $kind + " " + $id' posts.jsonl | sort -u >> "$probe/named"
+
+sort -u "$probe/named" | comm -23 - "$probe/owners"
+```
+
+Nothing there, or a body naming a file it does not own. Then how many records
+carry a file another record carries too, which is `filesOfSeveralOwners` less
+whatever the run could not fetch:
+
+```bash
+withBytes=$(jq -r 'select(.sha256) | .sha256' attachments.jsonl | wc -l)
+files=$(jq -r 'select(.sha256) | .sha256' attachments.jsonl | sort -u | wc -l)
+echo $((withBytes - files))
+find files -type f -links +1 | wc -l    # names that share their bytes on disk
+rm -r "$probe"
+```
+
+`verify-bundle.sh` counts the records that have a file and not the files
+themselves, so it says nothing about how many of them are one file. The second
+number is 0 while the first is not only where the bytes were copied instead of
+linked, which happens where the file system will not have two names for one file.
 
 ## Afterwards
 

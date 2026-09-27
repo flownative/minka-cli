@@ -1136,18 +1136,30 @@ is asked to take it.
   file once.
 - **One record per owner, one download per file** (C-066). Where a file turns up
   under a **further owner**, that owner gets a record of its own, with the same
-  bytes and a `sourceId` of the source's own name for the file and a number:
-  `attachment-882798998.2`, `.3` and on, the number being which record of the
-  file it is. No name of the source holds a dot — an identifier of Basecamp is
-  digits and the key of a stored file is letters, digits, a hyphen and an
-  underscore — so no such record can carry the name of another file. The bytes are
+  bytes and a `sourceId` made of the source's own name for the file and the owner
+  it belongs to: `attachment-882798998.post-10203006109`. No name of the source
+  holds a dot — an identifier of Basecamp is digits, and the key of a stored file
+  is held to letters, digits, a hyphen and an underscore before it becomes one —
+  so no such record can carry the name of another file. The bytes are
   fetched for the first record alone and the others are linked to it, or copied
   where they cannot be linked, so two records never mean two downloads.
-  `filesOfSeveralOwners` counts the records beyond the first.
+  **The owner and not the order of the walk** names such a record, because Minka
+  takes a record over by its identifier: one that moved when another record moved
+  would leave the record an earlier run wrote standing and store the same bytes
+  again. The one identifier that still moves is the **first** owner's, which is the
+  source's plain name for the file: where the record that met a file first is gone
+  from the source, the next owner of it becomes the first and its record is called
+  what that one was called.
+  `filesOfSeveralOwners` counts the **owners beyond the first**, met and not
+  written: a file under three owners that no run can fetch counts 2 there and
+  leaves no record at all.
   Every number about fetching counts one file of the source once —
   `filesExpected`, `filesBytesExpected`, `filesFetched`, `filesReused`,
-  `filesGone`, `fileNamesChanged` and `filesBytes` — so `counts.attachments`
-  stands above them by `filesOfSeveralOwners`.
+  `filesGone`, `fileNamesChanged` and `filesBytes`. So the index holds
+  `avatars.count` plus `filesExpected` plus `filesOfSeveralOwners` records, less
+  the entries of `missingFiles` that name a file of a text rather than an avatar —
+  an avatar that is missing is already out of `avatars.count`. That is the whole of
+  `counts.attachments` and the form to check it in.
   **What became of a file becomes of every owner of it at once:** one the source
   no longer has is `gone` on every record of it, one this run could not fetch is
   missing under every one of them with the reason the first got, and nothing of it

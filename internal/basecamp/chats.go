@@ -130,7 +130,8 @@ func (e *Extractor) extractChat(ctx context.Context, w *bundle.Writer, bucket, c
 	// and the fraction its time is written with.
 	var second int64
 	for _, found := range lines {
-		body, files, err := e.lineBody(found)
+		mine := owns(bundle.OwnerMessage, found.ID)
+		body, files, err := e.lineBody(mine, found)
 		if err != nil {
 			return err
 		}
@@ -165,7 +166,7 @@ func (e *Extractor) extractChat(ctx context.Context, w *bundle.Writer, bucket, c
 		}
 		e.measure(bundle.Messages, body, LongestBodyRecord{Record: "line", SourceID: origin.SourceID, In: "chat", InSourceID: sourceID(chat)})
 		e.messagesByType[lineTypes[found.Type]]++
-		if err := e.attachFiles(ctx, w, bundle.OwnerMessage, origin, files); err != nil {
+		if err := e.attachFiles(ctx, w, mine, origin, files); err != nil {
 			return err
 		}
 		if found.BoostsCount > 0 {
@@ -190,9 +191,9 @@ func (e *Extractor) extractChat(ctx context.Context, w *bundle.Writer, bucket, c
 // caption.
 //
 // The files the body refers to come back with it, one per reference.
-func (e *Extractor) lineBody(found line) (string, []sourceFile, error) {
+func (e *Extractor) lineBody(owner fileOwner, found line) (string, []sourceFile, error) {
 	if found.Type != uploadLine {
-		return e.rewriteBody(found.Content, "", nil)
+		return e.rewriteBody(owner, found.Content, "", nil)
 	}
 	var body strings.Builder
 	var referred []sourceFile
@@ -210,7 +211,7 @@ func (e *Extractor) lineBody(found line) (string, []sourceFile, error) {
 		source, first := e.claimFile(sourceFile{
 			ref: "blob-" + key, key: key,
 			filename: file.Filename, contentType: file.ContentType, byteSize: file.ByteSize, downloadURL: file.DownloadURL,
-		}, claimed)
+		}, claimed, owner)
 		if first {
 			referred = append(referred, source)
 		}

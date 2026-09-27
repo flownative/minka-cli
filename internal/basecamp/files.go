@@ -39,8 +39,8 @@ var ErrLooksLikeAFailure = &Error{Kind: API, Message: "the Basecamp CLI printed 
 
 // FileCounts says what became of the files the texts and the chats of a run
 // refer to. Every number about fetching counts one file of the source once,
-// however many references name it and however many records own it; SecondOwners
-// alone counts records.
+// however many references name it and however many records own it;
+// OwnersBeyondTheFirst alone counts owners.
 type FileCounts struct {
 	// Expected are the files a run sets out to bring, and BytesExpected is
 	// what Basecamp says they weigh together.
@@ -55,10 +55,11 @@ type FileCounts struct {
 	Gone    int
 	// NamesChanged are the files whose name could not stay as it was.
 	NamesChanged int
-	// SecondOwners counts the records a run wrote for a file that turned up
-	// under a further owner: one file of the source, a record per owner, and
-	// the same bytes under each of them.
-	SecondOwners int
+	// OwnersBeyondTheFirst counts the owners a file of the source turned up
+	// under after the one it was fetched for: one file, a record per owner, and
+	// the same bytes under each of them. It counts owners met and not records
+	// written, so a file no owner of which got one is counted here all the same.
+	OwnersBeyondTheFirst int
 }
 
 // fileOfTheSource is one file of the source and what the bundle has made of it.
@@ -66,8 +67,7 @@ type FileCounts struct {
 // several of them, and the first of those records is the one whose bytes the
 // others share.
 type fileOfTheSource struct {
-	// records counts the records handed out for the file, the first included,
-	// and numbers every one beyond it.
+	// records counts the records handed out for the file, the first included.
 	records int
 	// holder is the record the bytes were brought for, and stored says where
 	// they lie, once a record of the file has them.
@@ -123,6 +123,19 @@ func (f sourceFile) ofTheSource() string {
 	return f.ref
 }
 
+// fileOwner is the record a file of the bundle belongs to: the kind of record
+// and the source's identifier of it, which is what its attachment record says
+// and what names the record of a file under a further owner.
+type fileOwner struct {
+	kind     string
+	sourceID string
+}
+
+// owns names the owner of the files of one record.
+func owns(kind string, id int64) fileOwner {
+	return fileOwner{kind: kind, sourceID: sourceID(id)}
+}
+
 // claimFile hands out the identifier the record of a file carries in the bundle
 // and says where its bytes come from. A body that names one file twice names one
 // record of it: within is what this body has claimed already, by the source's
@@ -130,16 +143,21 @@ func (f sourceFile) ofTheSource() string {
 // than in one.
 //
 // A file that turns up under a **further owner** gets a record of its own, with
-// the bytes of the first and a number behind the source's name for it. One file
-// stands in one place in Minka — a blob belongs to the project of the record
-// that brought it in, and the handle that names it is good in that project
-// alone — so a record naming another's file would be offered nothing where it
-// stands elsewhere, and a record whose body is nothing but that file would wait
-// for ever. The number is separated by a dot, which no name of the source holds:
-// an identifier of Basecamp is digits and the key of a stored file is letters,
-// digits, a hyphen and an underscore, so no record of a further owner can carry
-// the name of another file.
-func (e *Extractor) claimFile(file sourceFile, within map[string]sourceFile) (sourceFile, bool) {
+// the bytes of the first. One file stands in one place in Minka — a blob belongs
+// to the project of the record that brought it in, and only a blob of that
+// project is ever attached to a place in it — so a record naming another's file
+// is shown none of it where the two stand in different projects, and one whose
+// body is nothing else shows nothing at all.
+//
+// Such a record is named after its owner and not after the order the walk met
+// it in, because Minka takes a record over by its identifier: an identifier that
+// moved when another record moved would leave the one an earlier run wrote
+// standing and store the bytes again. The two are parted by a dot, which no name
+// of the source holds — an identifier of Basecamp is digits, and the key of a
+// stored file is held to letters, digits, a hyphen and an underscore before it
+// becomes one (blobKeyPattern) — so no such record can carry the name of another
+// file.
+func (e *Extractor) claimFile(file sourceFile, within map[string]sourceFile, owner fileOwner) (sourceFile, bool) {
 	if already, claimed := within[file.ref]; claimed {
 		return already, false
 	}
@@ -147,9 +165,9 @@ func (e *Extractor) claimFile(file sourceFile, within map[string]sourceFile) (so
 	met := e.theFile(ofTheSource)
 	met.records++
 	if met.records > 1 {
-		e.files.SecondOwners++
+		e.files.OwnersBeyondTheFirst++
 		file.sharesWith = ofTheSource
-		file.ref = fmt.Sprintf("%s.%d", ofTheSource, met.records)
+		file.ref = fmt.Sprintf("%s.%s-%s", ofTheSource, owner.kind, owner.sourceID)
 	}
 	if within != nil {
 		within[ofTheSource] = file
@@ -284,10 +302,11 @@ func plainName(name string) (string, bool) {
 const largestFileMinkaTakes = 1 << 30
 
 // attachFiles brings the files a text refers to, in the order of their
-// references, as attachments of whatever carries the text.
-func (e *Extractor) attachFiles(ctx context.Context, w *bundle.Writer, ownerKind string, owner bundle.Record, files []sourceFile) error {
+// references, as attachments of whatever carries the text. times is the record
+// that carries them, whose moments a file of it takes.
+func (e *Extractor) attachFiles(ctx context.Context, w *bundle.Writer, owner fileOwner, times bundle.Record, files []sourceFile) error {
 	for _, file := range files {
-		if err := e.attachFile(ctx, w, ownerKind, owner, file); err != nil {
+		if err := e.attachFile(ctx, w, owner, times, file); err != nil {
 			return err
 		}
 	}
@@ -313,7 +332,7 @@ func (e *Extractor) attachFiles(ctx context.Context, w *bundle.Writer, ownerKind
 // CLI that is not signed in, which no further file would survive either.
 //
 // A discarding Writer fetches nothing and counts the record.
-func (e *Extractor) attachFile(ctx context.Context, w *bundle.Writer, ownerKind string, owner bundle.Record, file sourceFile) error {
+func (e *Extractor) attachFile(ctx context.Context, w *bundle.Writer, owner fileOwner, times bundle.Record, file sourceFile) error {
 	if e.attached[file.ref] {
 		return nil
 	}
@@ -321,10 +340,10 @@ func (e *Extractor) attachFile(ctx context.Context, w *bundle.Writer, ownerKind 
 
 	name, changed := plainName(file.filename)
 	record := bundle.Attachment{
-		Record:        bundle.Record{SourceID: file.ref, CreatedAt: owner.CreatedAt, UpdatedAt: owner.UpdatedAt},
+		Record:        bundle.Record{SourceID: file.ref, CreatedAt: times.CreatedAt, UpdatedAt: times.UpdatedAt},
 		Filename:      name,
-		OwnerKind:     ownerKind,
-		OwnerSourceID: owner.SourceID,
+		OwnerKind:     owner.kind,
+		OwnerSourceID: owner.sourceID,
 	}
 	if file.contentType != "" {
 		record.ContentType = &file.contentType
@@ -332,8 +351,8 @@ func (e *Extractor) attachFile(ctx context.Context, w *bundle.Writer, ownerKind 
 	missing := func(failed *Error) {
 		e.missing = append(e.missing, MissingFile{
 			AttachmentSourceID: file.ref,
-			OwnerKind:          ownerKind,
-			OwnerSourceID:      owner.SourceID,
+			OwnerKind:          owner.kind,
+			OwnerSourceID:      owner.sourceID,
 			Reason:             failed.Message,
 			Retryable:          failed.Transient(),
 		})

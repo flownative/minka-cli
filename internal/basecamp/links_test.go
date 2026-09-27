@@ -196,7 +196,7 @@ func TestAnEmbedInTheWordsOfAReferenceGivesItsWordsAndRefersToNothing(t *testing
 		`<bc-attachment content-type="image" url="` + cardAddress + `" caption="A card"></bc-attachment>, ` +
 		`<bc-attachment sgid="` + fileSGID + `" content-type="image/png" caption="A sketch"><figure><figcaption>A sketch</figcaption></figure></bc-attachment>` +
 		`<bc-attachment content-type="application/vnd.basecamp.horizontal-rule.html"><hr></bc-attachment>.</a>`
-	got, files, err := e.rewriteBody(text, "", []bodyFile{file})
+	got, files, err := e.rewriteBody(aBody, text, "", []bodyFile{file})
 	if err != nil {
 		t.Fatal(err)
 	}

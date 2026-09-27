@@ -95,7 +95,7 @@ func bodiesOf(t *testing.T, dir string) map[string]string {
 			continue
 		}
 		for _, record := range recordsIn(t, path) {
-			for _, field := range []string{"description", "body"} {
+			for _, field := range []string{"description", "body", "notes"} {
 				if text, ok := record[field].(string); ok {
 					bodies[kind+" "+record["sourceId"].(string)] = text
 				}
@@ -132,6 +132,7 @@ func holdsTogether(t *testing.T, dir string, missing []basecamp.MissingFile) {
 	t.Helper()
 	records := map[string]bool{}
 	owners := map[string][2]string{}
+	gone := map[string]bool{}
 	declared := map[string]bool{}
 	for _, record := range recordsOrNone(t, dir, bundle.Attachments) {
 		id := record["sourceId"].(string)
@@ -141,6 +142,7 @@ func holdsTogether(t *testing.T, dir string, missing []basecamp.MissingFile) {
 		records[id] = true
 		owners[id] = [2]string{record["ownerKind"].(string), record["ownerSourceId"].(string)}
 		if record["gone"] == true {
+			gone[id] = true
 			if record["file"] != nil || record["bytes"] != nil || record["sha256"] != nil {
 				t.Errorf("%s is gone and still says file %v, bytes %v, sha256 %v", id, record["file"], record["bytes"], record["sha256"])
 			}
@@ -204,9 +206,47 @@ func holdsTogether(t *testing.T, dir string, missing []basecamp.MissingFile) {
 			named[avatar] = true
 		}
 	}
+	// The file an upload stands for is named by a field and not by a tag, and it
+	// is the upload's own as a tag's file is its body's.
+	for _, upload := range recordsOrNone(t, dir, bundle.Uploads) {
+		file, _ := upload["file"].(string)
+		named[file] = true
+		if owner, has := owners[file]; has && owner != [2]string{bundle.OwnerUpload, upload["sourceId"].(string)} {
+			t.Errorf("the upload %v stands for %s, which belongs to %s %s", upload["sourceId"], file, owner[0], owner[1])
+		}
+	}
 	for id := range records {
-		if !named[id] {
+		// A record of a file that will never come may be named by nothing: the one
+		// body that held it was written without the tag, and there are no bytes
+		// behind the record for anybody to have carried in vain.
+		if !named[id] && !gone[id] {
 			t.Errorf("nothing names the record %s", id)
+		}
+	}
+}
+
+// Over every kind of record that carries a text: every reference has a record,
+// every record is named, and no body names a file the index gives to somebody
+// else. The one check that would have caught a file under two owners is worth
+// nothing on the kinds it never sees.
+func TestABundleOfEveryKindHoldsTogether(t *testing.T) {
+	account := fakebasecamp.New()
+	dir, result := extract(t, account, fileProject, boardProject, talkProject,
+		checkinProject, todoProject, forwardProject, docsProject)
+	holdsTogether(t, dir, result.Missing)
+
+	// A reference of every kind that can carry one went through the check above.
+	seen := map[string]bool{}
+	for _, record := range records(t, dir, bundle.Attachments) {
+		seen[record["ownerKind"].(string)] = true
+	}
+	for _, kind := range []string{
+		bundle.OwnerCard, bundle.OwnerComment, bundle.OwnerPost, bundle.OwnerMessage,
+		bundle.OwnerAnswer, bundle.OwnerTodoList, bundle.OwnerTodo, bundle.OwnerForward,
+		bundle.OwnerForwardReply, bundle.OwnerDocument, bundle.OwnerUpload, bundle.OwnerPerson,
+	} {
+		if !seen[kind] {
+			t.Errorf("no file of the bundle belongs to a %s, so nothing checked one", kind)
 		}
 	}
 }
@@ -259,7 +299,7 @@ func TestEveryReferenceToAFileHasARecordAndItsBytes(t *testing.T) {
 		t.Errorf("without a type: %v; without a size: %v", untyped["contentType"], unsized["bytes"])
 	}
 
-	if want := (basecamp.FileCounts{Expected: 13, BytesExpected: 15950, Bytes: 15114, Fetched: 12, Gone: 1, NamesChanged: 5, SecondOwners: 2}); result.Files != want {
+	if want := (basecamp.FileCounts{Expected: 13, BytesExpected: 15950, Bytes: 15114, Fetched: 12, Gone: 1, NamesChanged: 5, OwnersBeyondTheFirst: 2}); result.Files != want {
 		t.Errorf("counted %+v, want %+v", result.Files, want)
 	}
 }
@@ -350,9 +390,9 @@ func TestAFileNamedTwiceInOneBodyHasOneRecord(t *testing.T) {
 }
 
 // One file under several owners: a record for each, the same bytes under every
-// one of them, and one download. A record naming another's file would be offered
-// nothing where it stands in another project of Minka, and one whose body is
-// nothing but that file would wait for ever.
+// one of them, and one download. A record naming another's file is shown none of
+// it where it stands in another project of Minka, and one whose body is nothing
+// but that file shows nothing at all.
 func TestAFileUnderSeveralOwnersHasARecordForEachAndIsFetchedOnce(t *testing.T) {
 	account := fakebasecamp.New()
 	dir, result := extract(t, account, fileProject)
@@ -363,8 +403,8 @@ func TestAFileUnderSeveralOwnersHasARecordForEachAndIsFetchedOnce(t *testing.T) 
 			asked++
 		}
 	}
-	if asked != 1 || result.Files.SecondOwners != 2 {
-		t.Errorf("asked for %d times, %d records beyond the first", asked, result.Files.SecondOwners)
+	if asked != 1 || result.Files.OwnersBeyondTheFirst != 2 {
+		t.Errorf("asked for %d times, %d records beyond the first", asked, result.Files.OwnersBeyondTheFirst)
 	}
 
 	// The card met the file first and holds the bytes; the post and the comment
@@ -374,8 +414,8 @@ func TestAFileUnderSeveralOwnersHasARecordForEachAndIsFetchedOnce(t *testing.T) 
 		sourceID, ownerKind, ownerSourceID, createdAt string
 	}{
 		{"attachment-5101", "card", "9901", "2023-05-02T08:00:00.000Z"},
-		{"attachment-5101.2", "post", "9921", "2023-05-04T08:00:00.000Z"},
-		{"attachment-5101.3", "comment", "9922", "2023-05-04T10:00:00.000Z"},
+		{"attachment-5101.post-9921", "post", "9921", "2023-05-04T08:00:00.000Z"},
+		{"attachment-5101.comment-9922", "comment", "9922", "2023-05-04T10:00:00.000Z"},
 	} {
 		record := recordWithID(t, records(t, dir, bundle.Attachments), want.sourceID)
 		if record["ownerKind"] != want.ownerKind || record["ownerSourceId"] != want.ownerSourceID {
@@ -397,10 +437,10 @@ func TestAFileUnderSeveralOwnersHasARecordForEachAndIsFetchedOnce(t *testing.T) 
 
 	// Every body names the record of its own owner and no other.
 	bodies := bodiesOf(t, dir)
-	if got := bodies["posts 9921"]; !strings.Contains(got, `ref="attachment-5101.2"`) || strings.Contains(got, `ref="attachment-5101"`) {
+	if got := bodies["posts 9921"]; !strings.Contains(got, `ref="attachment-5101.post-9921"`) || strings.Contains(got, `ref="attachment-5101"`) {
 		t.Errorf("the post: %q", got)
 	}
-	if got, want := bodies["comments 9922"], `<div><import-attachment ref="attachment-5101.3"></import-attachment></div>`; got != want {
+	if got, want := bodies["comments 9922"], `<div><import-attachment ref="attachment-5101.comment-9922"></import-attachment></div>`; got != want {
 		t.Errorf("the comment that is nothing but the file:\n got %q\nwant %q", got, want)
 	}
 }
@@ -414,17 +454,17 @@ func TestTheBytesOfAFileUnderSeveralOwnersAreFetchedOnceAndShared(t *testing.T) 
 	// number about fetching counts one file of the source once, and the records
 	// beyond the first are counted on their own.
 	counted := result.Files
-	if counted.Expected != 13 || counted.Fetched+counted.Gone != counted.Expected || counted.SecondOwners != 2 {
+	if counted.Expected != 13 || counted.Fetched+counted.Gone != counted.Expected || counted.OwnersBeyondTheFirst != 2 {
 		t.Errorf("counted %+v", counted)
 	}
-	if index := records(t, dir, bundle.Attachments); len(index) != 2+counted.Expected+counted.SecondOwners {
+	if index := records(t, dir, bundle.Attachments); len(index) != 2+counted.Expected+counted.OwnersBeyondTheFirst {
 		t.Errorf("%d records for 2 avatars, %d files and %d owners beyond the first",
-			len(index), counted.Expected, counted.SecondOwners)
+			len(index), counted.Expected, counted.OwnersBeyondTheFirst)
 	}
 	// One name in the file system for the bytes of the first record, which is
 	// what keeps two records from costing two downloads.
 	first, err := os.Stat(filepath.Join(dir, "files", "attachment-5101", "holiday photo.png"))
-	again, againErr := os.Stat(filepath.Join(dir, "files", "attachment-5101.2", "holiday photo.png"))
+	again, againErr := os.Stat(filepath.Join(dir, "files", "attachment-5101.post-9921", "holiday photo.png"))
 	if err != nil || againErr != nil {
 		t.Fatalf("%v; %v", err, againErr)
 	}
@@ -437,7 +477,7 @@ func TestTheBytesOfAFileUnderSeveralOwnersAreFetchedOnceAndShared(t *testing.T) 
 // asked about it once: a further owner that asked for itself would pay twice for
 // the same answer.
 func TestWhatBecameOfAFileBecomesOfEveryOwnerOfIt(t *testing.T) {
-	everyOwnerOfTheFile := []string{"attachment-5101", "attachment-5101.2", "attachment-5101.3"}
+	everyOwnerOfTheFile := []string{"attachment-5101", "attachment-5101.post-9921", "attachment-5101.comment-9922"}
 	askedFor := func(account *fakebasecamp.Account) int {
 		asked := 0
 		for _, address := range account.Downloads {
@@ -478,12 +518,51 @@ func TestWhatBecameOfAFileBecomesOfEveryOwnerOfIt(t *testing.T) {
 			t.Errorf("%s is missing for a reason that may not pass", missed.AttachmentSourceID)
 		}
 	}
-	want := map[string]string{"attachment-5101": "card 9901", "attachment-5101.2": "post 9921", "attachment-5101.3": "comment 9922"}
+	want := map[string]string{"attachment-5101": "card 9901", "attachment-5101.post-9921": "post 9921", "attachment-5101.comment-9922": "comment 9922"}
 	if !reflect.DeepEqual(named, want) {
 		t.Errorf("missing:\n got %v\nwant %v", named, want)
 	}
 	if askedFor(account) != 1 {
 		t.Errorf("the file was asked for %d times", askedFor(account))
+	}
+	holdsTogether(t, dir, result.Missing)
+}
+
+// The record of a further owner is named after its owner and not after the order
+// the walk met it in: Minka takes a record over by its identifier, so one that
+// moved because another record moved would leave the record an earlier run wrote
+// standing and store the same bytes again.
+func TestTheRecordOfAFurtherOwnerIsNamedAfterItsOwner(t *testing.T) {
+	account := fakebasecamp.New()
+	// Somebody puts the picture of the first card into a card of its own, which
+	// the walk meets before the post and the comment that already had it.
+	board := &account.Projects[4].Dock[0]
+	triage := &board.Lists[0]
+	sunset := triage.Cards[0].Files[0]
+	triage.Cards = append(triage.Cards, fakebasecamp.Card{
+		ID: 9903, Title: "The picture again", Position: 3, Creator: triage.Cards[0].Creator,
+		CreatedAt: "2023-05-03T09:00:00.000Z", UpdatedAt: "2023-05-03T09:00:00.000Z",
+		Files:       []fakebasecamp.File{sunset},
+		Content:     `<div>` + fakebasecamp.Embed{File: sunset}.StoredHTML() + `</div>`,
+		Description: `<div>` + fakebasecamp.Embed{File: sunset}.HTML() + `</div>`,
+	})
+	dir, result := extract(t, account, fileProject)
+
+	// The card in between is the second owner met, and the two records that stood
+	// behind it are called what they were called without it.
+	if result.Files.OwnersBeyondTheFirst != 3 {
+		t.Errorf("%d owners beyond the first", result.Files.OwnersBeyondTheFirst)
+	}
+	bodies := bodiesOf(t, dir)
+	for where, want := range map[string]string{
+		"cards 9903":    "attachment-5101.card-9903",
+		"posts 9921":    "attachment-5101.post-9921",
+		"comments 9922": "attachment-5101.comment-9922",
+	} {
+		recordWithID(t, records(t, dir, bundle.Attachments), want)
+		if !strings.Contains(bodies[where], `ref="`+want+`"`) {
+			t.Errorf("%s names %q, want %s", where, bodies[where], want)
+		}
 	}
 	holdsTogether(t, dir, result.Missing)
 }
@@ -502,7 +581,7 @@ func TestALaterRunTakesOverTheFileOfAFurtherOwnerAsAnyOther(t *testing.T) {
 			t.Errorf("the file under three owners was fetched again: %v", account.Downloads)
 		}
 	}
-	if result.Files.Reused != 12 || result.Files.Fetched != 0 || result.Files.SecondOwners != 2 {
+	if result.Files.Reused != 12 || result.Files.Fetched != 0 || result.Files.OwnersBeyondTheFirst != 2 {
 		t.Errorf("counted %+v", result.Files)
 	}
 	if !reflect.DeepEqual(everyFile(t, dir), before) {
@@ -775,17 +854,17 @@ func TestTheIndexNamesEveryIDOnce(t *testing.T) {
 		// A record for each owner beyond the first: the post and the comment that
 		// name the picture of the card, and the line that drops the file of
 		// another line — once, however many times its own body names it.
-		"attachment-5101.2", "attachment-5101.3", "blob-" + scanKey + ".2"} {
+		"attachment-5101.post-9921", "attachment-5101.comment-9922", "blob-" + scanKey + ".message-9933"} {
 		if !seen[id] {
 			t.Errorf("the index has no %s: %v", id, seen)
 		}
 	}
-	if result.Files.SecondOwners != 3 {
-		t.Errorf("%d records beyond the first owner of a file", result.Files.SecondOwners)
+	if result.Files.OwnersBeyondTheFirst != 3 {
+		t.Errorf("%d records beyond the first owner of a file", result.Files.OwnersBeyondTheFirst)
 	}
 	// The lines of several chats come in parts, so the line is looked for by its
 	// identifier alone.
-	want := strings.Repeat(`<import-attachment ref="blob-`+scanKey+`.2"></import-attachment>`, 2)
+	want := strings.Repeat(`<import-attachment ref="blob-`+scanKey+`.message-9933"></import-attachment>`, 2)
 	got := ""
 	for where, body := range bodiesOf(t, dir) {
 		if strings.HasSuffix(where, " 9933") {
@@ -812,7 +891,7 @@ func TestTheIndexBeginsWithTheAvatarsAndGoesOnInTheOrderOfTheWalk(t *testing.T) 
 		"attachment-5105", "attachment-5106", "attachment-5107", "attachment-5108", "attachment-5109", "attachment-4711",
 		// A further owner of a file stands where its own record does, behind the
 		// one the bytes were fetched for: the post, then the comment on it.
-		"attachment-5011", "attachment-5110", "attachment-5101.2", "attachment-5101.3",
+		"attachment-5011", "attachment-5110", "attachment-5101.post-9921", "attachment-5101.comment-9922",
 		"blob-0a1b2c3d-0001-4000-8000-00000000000a", "blob-0a1b2c3d-0002-4000-8000-00000000000b", "blob-0a1b2c3d-0003-4000-8000-00000000000c",
 		"blob-" + scanKey, "blob-" + fakebasecamp.FileKey(6002),
 	}
@@ -847,7 +926,7 @@ func TestADiscardedRunDownloadsNoFileAndSaysWhatARunWouldFetch(t *testing.T) {
 	if len(account.Downloads) != 0 {
 		t.Errorf("a dry run downloaded %v", account.Downloads)
 	}
-	if want := (basecamp.FileCounts{Expected: 13, BytesExpected: 15950, NamesChanged: 5, SecondOwners: 2}); result.Files != want {
+	if want := (basecamp.FileCounts{Expected: 13, BytesExpected: 15950, NamesChanged: 5, OwnersBeyondTheFirst: 2}); result.Files != want {
 		t.Errorf("counted %+v, want %+v", result.Files, want)
 	}
 	// A dry run counts the record of every owner as a real one does, and holds

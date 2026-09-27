@@ -208,7 +208,8 @@ func (e *Extractor) writePost(ctx context.Context, w *bundle.Writer, bucket int6
 	if err != nil {
 		return err
 	}
-	body, files, err := e.rewriteBody(found.Content, "", found.Files)
+	mine := owns(bundle.OwnerPost, found.ID)
+	body, files, err := e.rewriteBody(mine, found.Content, "", found.Files)
 	if err != nil {
 		return err
 	}
@@ -235,7 +236,7 @@ func (e *Extractor) writePost(ctx context.Context, w *bundle.Writer, bucket int6
 	if saysNothing(body) {
 		e.postsWithEmptyBody++
 	}
-	if err := e.attachFiles(ctx, w, bundle.OwnerPost, origin, files); err != nil {
+	if err := e.attachFiles(ctx, w, mine, origin, files); err != nil {
 		return err
 	}
 

@@ -249,7 +249,8 @@ func (e *Extractor) writeQuestion(ctx context.Context, w *bundle.Writer, bucket,
 // that says nothing, and nobody answered anything there.
 func (e *Extractor) writeAnswers(ctx context.Context, w *bundle.Writer, bucket, tool, question int64, answers []answered) error {
 	for _, one := range answers {
-		body, files, err := e.rewriteBody(one.Content, "", one.Files)
+		mine := owns(bundle.OwnerAnswer, one.ID)
+		body, files, err := e.rewriteBody(mine, one.Content, "", one.Files)
 		if err != nil {
 			return err
 		}
@@ -273,7 +274,7 @@ func (e *Extractor) writeAnswers(ctx context.Context, w *bundle.Writer, bucket, 
 			return err
 		}
 		e.measure(bundle.Answers, body, LongestBodyRecord{Record: "answer", SourceID: origin.SourceID, In: "project", InSourceID: sourceID(bucket)})
-		if err := e.attachFiles(ctx, w, bundle.OwnerAnswer, origin, files); err != nil {
+		if err := e.attachFiles(ctx, w, mine, origin, files); err != nil {
 			return err
 		}
 		err = e.writeDiscussion(ctx, w, bucket, bundle.ParentAnswer, bundle.TargetAnswer, one.ID, one.CommentsCount, one.BoostsCount)

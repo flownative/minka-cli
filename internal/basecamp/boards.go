@@ -435,7 +435,8 @@ func (e *Extractor) writeCard(ctx context.Context, w *bundle.Writer, bucket int6
 	if err := requireTheDayItIsDue(found); err != nil {
 		return err
 	}
-	description, files, err := e.rewriteBody(found.Content, found.Description, found.Files)
+	mine := owns(bundle.OwnerCard, found.ID)
+	description, files, err := e.rewriteBody(mine, found.Content, found.Description, found.Files)
 	if err != nil {
 		return err
 	}
@@ -466,7 +467,7 @@ func (e *Extractor) writeCard(ctx context.Context, w *bundle.Writer, bucket int6
 	if found.onHold {
 		e.cardsOnHold++
 	}
-	if err := e.attachFiles(ctx, w, bundle.OwnerCard, origin, files); err != nil {
+	if err := e.attachFiles(ctx, w, mine, origin, files); err != nil {
 		return err
 	}
 
@@ -624,7 +625,8 @@ func (e *Extractor) askForComments(ctx context.Context, w *bundle.Writer, bucket
 		if err != nil {
 			return nil, err
 		}
-		body, files, err := e.rewriteBody(c.Content, "", c.Files)
+		mine := owns(bundle.OwnerComment, c.ID)
+		body, files, err := e.rewriteBody(mine, c.Content, "", c.Files)
 		if err != nil {
 			return nil, err
 		}
@@ -639,7 +641,7 @@ func (e *Extractor) askForComments(ctx context.Context, w *bundle.Writer, bucket
 			return nil, err
 		}
 		e.measure(bundle.Comments, body, LongestBodyRecord{Record: "comment", SourceID: origin.SourceID, In: "project", InSourceID: sourceID(bucket)})
-		if err := e.attachFiles(ctx, w, bundle.OwnerComment, origin, files); err != nil {
+		if err := e.attachFiles(ctx, w, mine, origin, files); err != nil {
 			return nil, err
 		}
 	}

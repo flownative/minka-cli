@@ -486,7 +486,8 @@ func (e *Extractor) writeTodoList(ctx context.Context, w *bundle.Writer, bucket,
 	if err != nil {
 		return err
 	}
-	description, files, err := e.rewriteBody(found.Description, "", found.Files)
+	mine := owns(bundle.OwnerTodoList, found.ID)
+	description, files, err := e.rewriteBody(mine, found.Description, "", found.Files)
 	if err != nil {
 		return err
 	}
@@ -508,7 +509,7 @@ func (e *Extractor) writeTodoList(ctx context.Context, w *bundle.Writer, bucket,
 	}
 	e.measure(bundle.TodoLists, description, LongestBodyRecord{Record: "to-do list", SourceID: origin.SourceID, In: "project", InSourceID: sourceID(bucket)})
 	e.todoListsByStatus[found.Status]++
-	if err := e.attachFiles(ctx, w, bundle.OwnerTodoList, origin, files); err != nil {
+	if err := e.attachFiles(ctx, w, mine, origin, files); err != nil {
 		return err
 	}
 	return e.writeDiscussion(ctx, w, bucket, bundle.ParentTodoList, bundle.TargetTodoList, found.ID, found.CommentsCount, found.BoostsCount)
@@ -638,7 +639,8 @@ func (e *Extractor) writeTodo(ctx context.Context, w *bundle.Writer, bucket, too
 	if err != nil {
 		return err
 	}
-	notes, files, err := e.rewriteBody(found.Description, "", found.Files)
+	mine := owns(bundle.OwnerTodo, found.ID)
+	notes, files, err := e.rewriteBody(mine, found.Description, "", found.Files)
 	if err != nil {
 		return err
 	}
@@ -683,7 +685,7 @@ func (e *Extractor) writeTodo(ctx context.Context, w *bundle.Writer, bucket, too
 		e.todosWithSubtasks++
 		e.subtasksLeftOut += found.SubtasksCount
 	}
-	if err := e.attachFiles(ctx, w, bundle.OwnerTodo, origin, files); err != nil {
+	if err := e.attachFiles(ctx, w, mine, origin, files); err != nil {
 		return err
 	}
 	return e.writeDiscussion(ctx, w, bucket, bundle.ParentTodo, bundle.TargetTodo, found.ID, found.CommentsCount, found.BoostsCount)
