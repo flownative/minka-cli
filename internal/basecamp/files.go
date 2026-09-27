@@ -15,13 +15,20 @@ import (
 	"github.com/flownative/minka-cli/internal/bundle"
 )
 
-// Files hands out the files Basecamp stores for an account.
+// Files hands out the files Basecamp stores for an account, by the two routes a
+// file of a bundle can come by.
 type Files interface {
 	// Download writes the file at a storage address into a writer, as it comes.
 	// A file Basecamp no longer has is a NotFound. What was written before a
 	// failure is no file, with one exception: ErrLooksLikeAFailure comes with
 	// everything that was to come, for whoever knows better what the file is.
 	Download(ctx context.Context, address string, into io.Writer) error
+	// DownloadUpload writes the one file of an upload of a Docs & Files tool,
+	// asked for by the identifier of the upload and the project it stands in.
+	// Such a file has no storage address anywhere: the record names no stored
+	// file, and the address it gives leads to a store of its own that no run
+	// follows. It answers the same way Download does.
+	DownloadUpload(ctx context.Context, project, upload int64, into io.Writer) error
 }
 
 // ErrLooksLikeAFailure is a download that ended well and brought nothing but
@@ -51,7 +58,10 @@ type FileCounts struct {
 	SecondOwners int
 }
 
-// sourceFile is a file a text or a line refers to, as Basecamp lists it.
+// sourceFile is a file of the source as a run brings it: one a text or a line
+// refers to, named by the key of its stored file, or the one file of an upload of
+// a Docs & Files tool, which is named by nothing and fetched by the identifiers
+// of the upload and its project.
 type sourceFile struct {
 	// ref is the ID of the attachment record, which the reference carries.
 	ref         string
@@ -61,7 +71,17 @@ type sourceFile struct {
 	// byteSize is nil where Basecamp does not say how large the file is.
 	byteSize    *int64
 	downloadURL string
+	// upload is the upload of a Docs & Files tool whose one file this is and
+	// bucket the project it stands in, both zero for every other file. Basecamp
+	// gives such a file no key and answers its own address with a redirect to a
+	// store no run follows, so the bytes are asked for by these two.
+	upload int64
+	bucket int64
 }
+
+// byTheUpload tells a file that is fetched by the identifier of its upload from
+// one that is fetched at a storage address.
+func (f sourceFile) byTheUpload() bool { return f.upload != 0 }
 
 // storageHost is the host a storage address is written with. The Basecamp CLI
 // takes a download only from an address of this kind, and sends the request
@@ -228,14 +248,6 @@ func (e *Extractor) attachFile(ctx context.Context, w *bundle.Writer, ownerKind 
 	if file.contentType != "" {
 		record.ContentType = &file.contentType
 	}
-	if w.Discards() {
-		// All a dry run knows of a file is the size the source gives it.
-		if file.byteSize != nil && *file.byteSize > e.LargestFile {
-			e.filesThatNeverArrive[file.ref] = true
-		}
-		e.fileRecords = append(e.fileRecords, record)
-		return nil
-	}
 	missing := func(failed *Error) {
 		e.missing = append(e.missing, MissingFile{
 			AttachmentSourceID: file.ref,
@@ -244,6 +256,28 @@ func (e *Extractor) attachFile(ctx context.Context, w *bundle.Writer, ownerKind 
 			Reason:             failed.Message,
 			Retryable:          failed.Transient(),
 		})
+	}
+	if w.Discards() {
+		// All a dry run knows of a file is what the source says about it — the
+		// size, and whether the address it gives can be asked for at all. The
+		// second is asked here and not left to the run, because a dry run is what
+		// somebody looks at before spending an hour, and a file no address can be
+		// built for is one no run will ever bring. The file of an upload has no
+		// address to weigh: there is nothing a dry run can ask about it.
+		if file.byteSize != nil && *file.byteSize > e.LargestFile {
+			e.filesThatNeverArrive[file.ref] = true
+		}
+		if !file.byTheUpload() {
+			if _, err := e.storageAddress(file); err != nil {
+				var failed *Error
+				if errors.As(err, &failed) {
+					missing(failed)
+				}
+				return nil
+			}
+		}
+		e.fileRecords = append(e.fileRecords, record)
+		return nil
 	}
 
 	stored, reused, err := w.ReuseFile(file.ref, name)
@@ -261,10 +295,10 @@ func (e *Extractor) attachFile(ctx context.Context, w *bundle.Writer, ownerKind 
 	if reused {
 		e.files.Reused++
 	} else {
-		address, err := e.storageAddress(file)
+		bring, err := e.bringing(ctx, file)
 		if err == nil {
 			stored, err = w.StoreFile(file.ref, name, func(into io.Writer) error {
-				err := e.Files.Download(ctx, address, into)
+				err := bring(into)
 				// A file of the size Basecamp gives it is the file, whatever it
 				// looks like: the comparison below decides, and nothing else.
 				if errors.Is(err, ErrLooksLikeAFailure) && file.byteSize != nil {
@@ -307,6 +341,23 @@ func (e *Extractor) attachFile(ctx context.Context, w *bundle.Writer, ownerKind 
 	record.Holds(stored)
 	e.fileRecords = append(e.fileRecords, record)
 	return nil
+}
+
+// bringing is what fetches the bytes of a file, by the route the file comes by,
+// or the reason no run can fetch it at all. Only a file named at a storage
+// address has such a reason: an upload is asked for by its identifiers, which
+// need no address and cannot be refused before the call.
+func (e *Extractor) bringing(ctx context.Context, file sourceFile) (func(io.Writer) error, error) {
+	if file.byTheUpload() {
+		return func(into io.Writer) error {
+			return e.Files.DownloadUpload(ctx, file.bucket, file.upload, into)
+		}, nil
+	}
+	address, err := e.storageAddress(file)
+	if err != nil {
+		return nil, err
+	}
+	return func(into io.Writer) error { return e.Files.Download(ctx, address, into) }, nil
 }
 
 // theFileNeverArrives tells that no run will ever bring the bytes of a file to

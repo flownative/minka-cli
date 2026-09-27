@@ -713,12 +713,19 @@ see why — and the later of two moments the source itself said is no guess.
 <a id="c-052"></a>
 ## C-052 — What falls with a place a bundle cannot carry is asked for and counted
 
-*Applies to: the lists, groups and to-dos of a bundle, the report of a run*
+*Applies to: the lists, groups and to-dos of a bundle, its folders, documents
+and uploads, the report of a run*
 
-The groups and to-dos of a to-do list, and the to-dos of a group, that a bundle
-does not carry are asked for although none of them is written, counted per kind
-and named with the place they fell with. Such a walk asks for what it counts and
-for nothing else, and the one failure it passes over is `not_found`.
+What stood in a place a bundle does not carry is asked for although none of it is
+written, counted per kind and named with the place it fell with: the groups and
+to-dos of a to-do list, the to-dos of a group, and the folders, documents and
+uploads of a folder of Docs & Files, whose own folders are places of their own,
+so the walk grows while it goes. Such a walk asks for what it counts and for
+nothing else, and the one failure it passes over is `not_found`. A **tool** that
+is switched off is asked nothing: one the source has switched off is a tool the
+run does not read at all, so what the project's own lists of records it has put
+away hand out of it is counted where it is met, and an entry no place ever
+claimed is counted without a place to name it against.
 
 **Why:** [C-050](#c-050) promises that what is left out is counted, and a place
 that took a subtree with it silently would make every number of a run say that a
@@ -727,7 +734,10 @@ walk is fenced to them, and a place Basecamp no longer has is passed over rather
 than ending a run over records it left out anyway — the only place where a wrong
 assumption about an answer counts too few instead of ending the run, which is why
 the [Status](work-in-progress/status.md) names it.
-**Implemented as:** `basecamp.Extractor.countWhatFellWithAPlace`, see
+**Implemented as:** `basecamp.Extractor.countWhatFellWithAPlace`,
+`basecamp.Extractor.countWhatFellWithAVault`,
+`basecamp.Extractor.countWhatStandsInAFolderLeftOut`,
+`basecamp.countWhatWasNeverPlaced`, see
 [Importing from Basecamp](stable/import.md).
 
 <a id="c-053"></a>
@@ -792,29 +802,42 @@ company and no access is one whose clients have none there.
 [Importing from Basecamp](stable/import.md).
 
 <a id="c-056"></a>
-## C-056 — A mail is made to fit where nobody can repair it at the source
+## C-056 — What nobody can repair at the source is made to fit
 
-*Applies to: `import basecamp`, the `title` and the `fromAddress` of a forward*
+*Applies to: `import basecamp`, the `title` and the `fromAddress` of a forward,
+the `title` of an upload*
 
-The subject of a forwarded mail becomes a title Minka takes: every character
-nobody can see becomes a blank, what is left is trimmed, a mail without a
-subject is called `(no subject)`, and one longer than 200 characters is cut
-before the last character and ends in an ellipsis. A sender that is no e-mail
-address Minka takes leaves the mail out, named by its `sourceId`, and the run
-goes on. Both are counted and named in a `notice`.
+Two titles a bundle carries are nobody's to put right where they stand: the
+subject of a forwarded mail, and the title of an upload of Docs & Files, which
+the source fills from the name of a file. Either is made into a title Minka
+takes: every character nobody can see becomes a blank, what is left is trimmed,
+and what is left of nothing is called `(no subject)` for a mail and `(no name)`
+for an upload. What is longer than 200 characters is cut — a subject before the
+last character, ending in an ellipsis, and an upload's title **the way Minka
+shortens the name of a file** (`ItemTitle::fromFilename`), the extension staying
+and the stem cut to make room, with no ellipsis. A
+sender that is no e-mail address Minka takes leaves the **mail** out, named by
+its `sourceId`, and the run goes on. All of it is counted and named in a
+`notice`.
 
-**Why:** A subject is whatever a mail server let through, and a sender is
-whatever stood in a header: neither is anybody's to repair at the source, so a
-run that refused one would never come to an end, however often it is started.
-The title of a card, a post or a to-do still ends the run, because that one
-somebody can put right where it stands. `fromAddress` is what a forward is
-about and the field takes nothing else, so a mail whose sender is none cannot be
+**Why:** A subject is whatever a mail server let through, and an upload's title
+is whatever a file system allowed the name of its file to be: neither is
+anybody's to repair at the source, so a run that refused one would never come to
+an end, however often it is started. The title of a card, a post, a to-do, a
+folder or a document still ends the run, because that one somebody can put right
+where it stands. An upload's own title is taken where the source gives one and
+the name of its file stands in where it does not, Minka deriving nothing from a
+file and refusing an upload without a title; the fold is what keeps either from
+ending a walk of hours over a name nobody typed. It follows Minka's own
+shortening so that one file carries the same title whether it was uploaded there
+or brought here.
+`fromAddress` is what a forward is about and the field takes nothing else, so a
+mail whose sender is none cannot be
 carried at all — and ending a walk of hours over one mail would leave a whole
 account unimported. The address is read as Minka reads it ([C-059](#c-059)), so
 that what a bundle carries is always taken.
-**Implemented as:** `basecamp.aSubjectAsATitle`,
-`basecamp.anAddressMinkaTakes`, see
-[Importing from Basecamp](stable/import.md).
+**Implemented as:** `basecamp.aTitleMinkaTakes`, `basecamp.aFileNameAsATitle`,
+`basecamp.anAddressMinkaTakes`, see [Importing from Basecamp](stable/import.md).
 
 <a id="c-057"></a>
 ## C-057 — A mail that would arrive with nothing in it carries a line of the run
@@ -829,19 +852,25 @@ one. The tag of the file stays where it stood, and an embed gets its address as
 a link and no sentence. A file this run merely could not fetch is not one that
 will never come: the mail waits for it.
 
-**Why:** Minka writes such a body empty and remembers the mail as finished, or
-passes it over before it is remembered and passes it over again on every run
-afterwards; either way the subject, the sender, the answers and the comments are
-lost, and no run can mend it from that side. The extractor is the one place that
-knows a file can never come, and a run that said so of one it could simply not
-fetch would take the mail from every run after it. An embed is Minka's own
+**Why:** `body` is a field of a forward that must not be empty, so writing one
+is the only way the mail comes at all: Minka writes such a body empty and
+remembers the mail as finished, or passes it over before it is remembered and
+passes it over again on every run afterwards; either way the subject, the
+sender, the answers and the comments are lost. The extractor is the one place
+that knows a file can never come, and a run that said so of one it could simply
+not fetch would take the mail from every run after it. An embed is Minka's own
 reading of an address, so a mail that hangs on one alone gets the address as a
-link, which every reading keeps, and no sentence: Minka usually takes the
-embed, and a run that called such a mail wordless would be putting that in
-writing under somebody's name.
+link, which every reading keeps, and no sentence.
+A **document** gets no such line, and neither does the description of an upload:
+those fields are optional and Minka writes a document without words, so the tag
+of the file that will never come is taken out instead and the record arrives
+wordless with everything on it. The difference between the two kinds is the
+field, not the loss — and nobody puts invented words into something a person
+wrote where there is a way not to.
 **Implemented as:** `basecamp.Extractor.aBodyThatSaysSomething`,
 `basecamp.Extractor.whatWouldArriveOf`,
-`basecamp.Extractor.theFileNeverArrives`, see
+`basecamp.Extractor.theFileNeverArrives`,
+`basecamp.Extractor.wordlessWhereItsOnlyFileNeverComes`, see
 [Importing from Basecamp](stable/import.md).
 
 <a id="c-058"></a>
@@ -927,4 +956,77 @@ source, and the next run carries it with everything that hangs on it. An
 identifier and a project are all it takes, so nothing of what the to-do says is
 in the report.
 **Implemented as:** `basecamp.Extractor.leaveOutTheTodosWithoutAList`, see
+[Importing from Basecamp](stable/import.md).
+
+<a id="c-063"></a>
+## C-063 — An upload without a stored file is left out with everything pointing at it
+
+*Applies to: `import basecamp`, the uploads of a Docs & Files tool*
+
+An upload Basecamp names no stored file for, one that lives in a cloud, is left
+out and named by its `sourceId`, and its comments and its boosts are neither
+asked for nor written. All three are counted and a `notice` says so. **What says
+so is the record and never the shape of the address:** an upload the source gives
+an address to fetch a file from has a file, and one whose address a run cannot
+ask for is a file it could not fetch — named under `missingFiles`, the run ending
+non-zero, and a later run brings it.
+
+**Why:** `file` takes the `sourceId` of a file of the bundle and nothing else,
+and no run will ever have bytes to fetch for a file that lies somewhere else,
+so such an upload would be counted in Minka as waiting on every run. What
+pointed at it falls with it ([C-052](#c-052)): a comment naming an upload the
+bundle does not carry stops the applier, and carrying it would cost the import
+rather than the one upload. The record and not the address decides, because a
+reading of the address that is wrong by one shape leaves **every** file of a tool
+out of the bundle, counted and named and gone, where a file that cannot be
+fetched costs one exit code and a later run.
+**Implemented as:** `basecamp.fileOfAnUpload`,
+`basecamp.Extractor.writeUpload`, see
+[Importing from Basecamp](stable/import.md).
+
+<a id="c-064"></a>
+## C-064 — Every entry of Docs & Files says for itself what clients see, at every depth
+
+*Applies to: `import basecamp`, the `visibleToClients` of a folder, a document
+and an upload*
+
+A folder, a document and an upload carry what the source says about clients
+wherever they stand, and not only at the top of their tool. This is the one
+place where a record standing inside another carries the word: everywhere else
+what hangs on something follows it and says nothing ([C-055](#c-055)).
+
+**Why:** Minka reads the word below the top as well, and there it is the one
+thing that can hide a folder at the top: where something below a top folder the
+source shows is hidden from clients, the import hides that top folder with
+everything in it and names it. An entry that left the word out would be
+imported in the open under a folder clients see, and what a client has seen
+cannot be taken back. The rule is read from
+`WhatClientsSee::followTheFolderAbove()` and from nothing else, Minka's prose
+having said the opposite of it.
+**Implemented as:** `basecamp.visibilityOfItsOwn`,
+`basecamp.Extractor.writeFolder`, `writeDocument`, `writeUpload`, see
+[Importing from Basecamp](stable/import.md).
+
+<a id="c-065"></a>
+## C-065 — The order of the file decides for what is in use and for nothing else
+
+*Applies to: `import basecamp`, the order of the lists of a To-dos tool and of
+the folders, documents and uploads of a Docs & Files tool*
+
+A record **in use** stands in its file from the bottom up, because Minka puts
+every new one on top of its kind, so the order the source shows comes out again.
+A record that has **left its place** stands before all of them, in the order the
+source lists it, and that order is not turned round.
+
+**Why:** Minka orders an archive by the moment a record was put away — `archived_at
+DESC` and then the item's own identifier for the folders, documents and uploads,
+and `archived_at DESC` then the list's position for the to-do lists — and its
+import takes that moment from the record's own `updatedAt`. So what the file says
+about the order of such records decides nothing, except that the position of a
+to-do list separates two archived in the same second, which is the position the
+file gave them in the first place. Turning them
+round would be work for nothing and a promise the code would then have to keep;
+saying nothing about them would leave the next reader of `inFileOrder` to measure
+it again.
+**Implemented as:** `basecamp.inFileOrder`, see
 [Importing from Basecamp](stable/import.md).

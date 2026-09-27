@@ -91,6 +91,20 @@ var toolKinds = map[string]string{
 	"questionnaire": bundle.ToolCheckins,
 	"todoset":       bundle.ToolTodos,
 	"inbox":         bundle.ToolForwards,
+	"vault":         bundle.ToolFiles,
+}
+
+// ToolKindsARunExtracts are the kinds of Basecamp dock entry a run brings over,
+// by the word a bundle gives the tool. It is a copy, so that nothing outside can
+// change what a run does, and it is taken from the extractor's own map, so that
+// whoever teaches the extractor a kind teaches this and nobody has to keep a
+// second list in step with it.
+func ToolKindsARunExtracts() map[string]string {
+	kinds := make(map[string]string, len(toolKinds))
+	for name, kind := range toolKinds {
+		kinds[name] = kind
+	}
+	return kinds
 }
 
 // SkippedTools counts dock entries of one kind that a run left out, either
@@ -292,8 +306,10 @@ type Result struct {
 	AnswersWithoutABody int
 	AnswersWithoutADay  int
 	AnswersTrashed      int
-	// Forwards says what became of the forwarded mail a run met.
+	// Forwards says what became of the forwarded mail a run met, and Docs what
+	// became of the Docs & Files.
 	Forwards ForwardCounts
+	Docs     DocsCounts
 	// LongestBody is the longest text of a kind, in characters, and
 	// LongestBodyRecords the record it was measured on, per kind. A kind whose
 	// longest text has no characters names no record.
@@ -373,6 +389,7 @@ type Extractor struct {
 	todosThatRepeat   int
 
 	forwards ForwardCounts
+	docs     DocsCounts
 
 	questionsLeftOut    []ImpossibleQuestion
 	anchorsInferred     []InferredAnchor
@@ -401,10 +418,16 @@ type talk struct {
 	questionnaires []int64
 	todosets       []int64
 	inboxes        []int64
+	vaults         []int64
 	// everyTodoset is every dock entry of a project that is a To-dos tool, those
 	// that are switched off included. A list names only the tool it stands in, so
 	// what hangs on none of them is no list but a group.
 	everyTodoset map[int64]bool
+	// everyVault is every dock entry of a project that is a Docs & Files tool,
+	// those that are switched off included. An entry names only the vault it
+	// stands in, so what hangs on none of them stands in a folder or in nothing a
+	// run reads.
+	everyVault map[int64]bool
 }
 
 type skippedKey struct {
@@ -425,9 +448,11 @@ func ValidProjectID(value string) bool {
 // gets the same records, except that no avatar and no file is downloaded.
 //
 // The walk goes kind by kind: the projects with their tools and boards, then
-// the message boards of all of them, then the chats, then the questionnaires.
+// the message boards of all of them, then the chats, then the questionnaires,
+// then the To-dos tools, then the inboxes and last the Docs & Files tools.
 // So the comments and the reactions of a bundle stand in the order of what they
-// hang on: those of cards, those of posts, those of lines, those of answers.
+// hang on: those of cards, those of posts, those of lines, those of answers,
+// those of lists and to-dos, those of mails, those of documents and uploads.
 func (e *Extractor) Extract(ctx context.Context, projectIDs []string, w *bundle.Writer) (Result, error) {
 	if e.LargestFile == 0 {
 		e.LargestFile = largestFileMinkaTakes
@@ -438,19 +463,19 @@ func (e *Extractor) Extract(ctx context.Context, projectIDs []string, w *bundle.
 	e.creatorProbesRefused, e.addressesUnquoted = 0, 0
 	e.peopleAsClients, e.clientMemberships, e.visibilityLeftToTheContainer = 0, 0, 0
 	e.account, e.apiRoot = "", ""
-	e.cardsByStatus = map[string]int{bundle.StatusActive: 0, bundle.StatusArchived: 0, bundle.StatusTrashed: 0}
+	e.cardsByStatus = everyStatus()
 	e.cardsOnHold, e.cardsLeftOut, e.commentsTrashed, e.bodies = 0, 0, 0, BodyCounts{}
 	e.talks, e.members = nil, map[int64]map[int64]bool{}
 	e.questionsLeftOut, e.anchorsInferred, e.nobodyAsked = []ImpossibleQuestion{}, []InferredAnchor{}, []NobodyAsked{}
 	e.askedLeftOut, e.answersWithoutABody, e.answersWithoutADay, e.answersTrashed = AskedLeftOut{}, 0, 0, 0
-	e.postsByStatus = map[string]int{bundle.StatusActive: 0, bundle.StatusArchived: 0, bundle.StatusTrashed: 0}
+	e.postsByStatus = everyStatus()
 	e.postsLeftOut, e.postsWithEmptyBody, e.uploadLinesLeftOut, e.messagesWithEmptyBody = 0, 0, 0, 0
 	e.recordsLeftOut = []LeftOutRecords{}
 	e.messagesByType = map[string]int{}
 	for _, name := range lineTypes {
 		e.messagesByType[name] = 0
 	}
-	e.todoListsByStatus = map[string]int{bundle.StatusActive: 0, bundle.StatusArchived: 0, bundle.StatusTrashed: 0}
+	e.todoListsByStatus = everyStatus()
 	e.todosByStatus = map[string]int{bundle.StatusActive: 0, bundle.StatusTrashed: 0}
 	e.todosLeftOut, e.todoPlacesLeftOut = TodosLeftOut{}, []TodoPlaceLeftOut{}
 	e.todosWithoutAList = []TodoWithoutAList{}
@@ -461,8 +486,18 @@ func (e *Extractor) Extract(ctx context.Context, projectIDs []string, w *bundle.
 		WithoutAnAddress:      []string{},
 		RepliesWithoutASender: []string{},
 	}
+	e.docs = DocsCounts{
+		FoldersByStatus:                 everyStatus(),
+		DocumentsByStatus:               everyStatus(),
+		UploadsByStatus:                 everyStatus(),
+		WithoutAStoredFile:              []string{},
+		SilentAboutClientsInsideAFolder: []EntrySilentAboutClients{},
+		OnlyAFileNoRunWillBring:         []string{},
+		PlacesLeftOut:                   []DocsPlaceLeftOut{},
+	}
 	e.longestBody = map[bundle.Kind]int{bundle.Cards: 0, bundle.Comments: 0, bundle.Posts: 0, bundle.Messages: 0, bundle.Answers: 0,
-		bundle.TodoLists: 0, bundle.Todos: 0, bundle.Forwards: 0, bundle.ForwardReplies: 0}
+		bundle.TodoLists: 0, bundle.Todos: 0, bundle.Forwards: 0, bundle.ForwardReplies: 0,
+		bundle.Documents: 0, bundle.Uploads: 0}
 	e.longestBodyRecords = map[bundle.Kind]LongestBodyRecord{}
 	e.fileOwners, e.filesThatNeverArrive, e.fileRecords, e.files = map[string]string{}, map[string]bool{}, nil, FileCounts{}
 
@@ -499,9 +534,12 @@ func (e *Extractor) Extract(ctx context.Context, projectIDs []string, w *bundle.
 	if err := e.extractTodos(ctx, w); err != nil {
 		return Result{}, err
 	}
-	// Last of all, so that a file standing in a card and in a mail alike belongs
-	// to the card: a file met twice keeps the record that named it first.
 	if err := e.extractForwards(ctx, w); err != nil {
+		return Result{}, err
+	}
+	// Last of all, so that a file standing in a card and in a document alike
+	// belongs to the card: a file met twice keeps the record that named it first.
+	if err := e.extractDocs(ctx, w); err != nil {
 		return Result{}, err
 	}
 
@@ -562,6 +600,7 @@ func (e *Extractor) Extract(ctx context.Context, projectIDs []string, w *bundle.
 		AnswersTrashed:      e.answersTrashed,
 
 		Forwards: e.forwards,
+		Docs:     e.docs,
 
 		MessagesWithEmptyBody: e.messagesWithEmptyBody,
 		LongestBody:           e.longestBody,
@@ -643,14 +682,19 @@ func (e *Extractor) extractProject(ctx context.Context, id int64, w *bundle.Writ
 	var tools []extractedTool
 	var made []recording
 	var others []dockEntry
-	// Every To-dos tool of the project, those that are switched off included: a
-	// list of one that is not extracted still has to be told from a group.
+	// Every To-dos tool and every Docs & Files tool of the project, those that
+	// are switched off included: a list or an entry of one that is not extracted
+	// still has to be told from one that stands somewhere else.
 	everyTodoset := map[int64]bool{}
+	everyVault := map[int64]bool{}
 	dock := append([]dockEntry(nil), p.Dock...)
 	sort.SliceStable(dock, func(i, j int) bool { return dock[i].ID < dock[j].ID })
 	for _, entry := range dock {
-		if toolKinds[entry.Name] == bundle.ToolTodos {
+		switch toolKinds[entry.Name] {
+		case bundle.ToolTodos:
 			everyTodoset[entry.ID] = true
+		case bundle.ToolFiles:
+			everyVault[entry.ID] = true
 		}
 		if _, known := toolKinds[entry.Name]; !known || !entry.Enabled {
 			e.skipped[skippedKey{kind: entry.Name, enabled: entry.Enabled}]++
@@ -692,7 +736,7 @@ func (e *Extractor) extractProject(ctx context.Context, id int64, w *bundle.Writ
 	}
 
 	var boards []*board
-	talks := talk{bucket: id, everyTodoset: everyTodoset}
+	talks := talk{bucket: id, everyTodoset: everyTodoset, everyVault: everyVault}
 	for _, tool := range tools {
 		record, err := e.record("tool", tool.entry.ID, tool.details.recording)
 		if err != nil {
@@ -723,6 +767,8 @@ func (e *Extractor) extractProject(ctx context.Context, id int64, w *bundle.Writ
 			talks.todosets = append(talks.todosets, tool.entry.ID)
 		case bundle.ToolForwards:
 			talks.inboxes = append(talks.inboxes, tool.entry.ID)
+		case bundle.ToolFiles:
+			talks.vaults = append(talks.vaults, tool.entry.ID)
 		}
 	}
 	e.talks = append(e.talks, talks)
@@ -1043,6 +1089,51 @@ func (e *Extractor) measure(kind bundle.Kind, text string, of LongestBodyRecord)
 
 func sourceID(id int64) string {
 	return strconv.FormatInt(id, 10)
+}
+
+// everyStatus counts nothing of each status a bundle has a word for, so that a
+// report names all three even where a run met one of them.
+func everyStatus() map[string]int {
+	return map[string]int{bundle.StatusActive: 0, bundle.StatusArchived: 0, bundle.StatusTrashed: 0}
+}
+
+// statusOrInUse is what became of a record of Basecamp: a record that says
+// nothing of it is in use, as the format reads an absent status. Reading silence
+// as a word nobody knows would lose every record of an account the day Basecamp
+// stopped saying it.
+func statusOrInUse(said string) string {
+	if said == "" {
+		return bundle.StatusActive
+	}
+	return said
+}
+
+// inFileOrder are the records of one kind in one place in the order a bundle
+// writes them.
+//
+// For a record **in use** the order decides: Minka puts every new one on top of
+// its kind, so the file carries them the other way round from the way the source
+// shows them and the source's order comes out again. For one that has **left its
+// place** it decides nothing, so it goes first, in the order the source lists it,
+// where it cannot push the rest about: Minka orders an archive by the moment a
+// record was put away and its import takes that moment from the record itself, so
+// what the file says about those is never read.
+func inFileOrder[T any](gone, shown []T) []T {
+	all := make([]T, 0, len(gone)+len(shown))
+	all = append(all, gone...)
+	for i := len(shown) - 1; i >= 0; i-- {
+		all = append(all, shown[i])
+	}
+	return all
+}
+
+// longerThanMinkaTakes tells that a text the run wrote is longer than Minka
+// holds, so that Minka passes the record over on every run with everything
+// hanging on it. What is measured is the text as the run writes it; Minka counts
+// what it stores, which is that text with the markup of its line breaks and of
+// its files in it, so a text below the number can still be one too many.
+func longerThanMinkaTakes(text string) bool {
+	return utf8.RuneCountInString(text) > longestBodyMinkaTakes
 }
 
 var paragraphBreak = regexp.MustCompile(`\n{2,}`)

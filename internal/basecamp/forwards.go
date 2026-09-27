@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"html"
 	"strings"
-	"unicode"
-	"unicode/utf8"
 
 	"github.com/flownative/minka-cli/internal/bundle"
 	nethtml "golang.org/x/net/html"
@@ -83,19 +81,8 @@ type forwardReply struct {
 }
 
 // A record of Basecamp that says nothing of what became of it is in use.
-func (f forward) status() string {
-	if f.Status == "" {
-		return bundle.StatusActive
-	}
-	return f.Status
-}
-
-func (r forwardReply) status() string {
-	if r.Status == "" {
-		return bundle.StatusActive
-	}
-	return r.Status
-}
+func (f forward) status() string      { return statusOrInUse(f.Status) }
+func (r forwardReply) status() string { return statusOrInUse(r.Status) }
 
 // replyStatuses are the words a bundle has for what became of a reply, which
 // are none: the record has no such field, so only one the source says is in
@@ -184,7 +171,7 @@ func (e *Extractor) writeForward(ctx context.Context, w *bundle.Writer, bucket i
 	if origin.CreatedBy == nil {
 		e.forwards.WithoutAForwarder++
 	}
-	title, withoutASubject, changed := aSubjectAsATitle(found.Subject)
+	title, withoutASubject, changed := aTitleMinkaTakes(found.Subject, noSubject)
 	if withoutASubject {
 		e.forwards.WithoutASubject++
 	}
@@ -363,7 +350,7 @@ func (e *Extractor) writeForwardReply(ctx context.Context, w *bundle.Writer, buc
 // Minka with the number nobody looked at. Which record it was stands in
 // longestBodyRecords.
 func (e *Extractor) countIfItIsLongerThanMinkaTakes(body string) {
-	if utf8.RuneCountInString(body) > longestBodyMinkaTakes {
+	if longerThanMinkaTakes(body) {
 		e.forwards.LongerThanMinkaTakes++
 	}
 }
@@ -385,54 +372,13 @@ func theAddressOfAnOutsider(writer *person) (address string, unquoted, fromOutsi
 	return "", false, true
 }
 
-const (
-	// noSubject is the title a mail gets that came without one. A title cannot
-	// be empty here, and a mail without a subject is a mail all the same.
-	noSubject = "(no subject)"
-	// maxTitleLength is how long a title Minka takes, in characters, and
-	// ellipsis what says that the rest of a subject is not there.
-	maxTitleLength = 200
-	ellipsis       = "…"
-)
+// noSubject is the title a mail gets that came without one. A title cannot be
+// empty here, and a mail without a subject is a mail all the same.
+const noSubject = "(no subject)"
 
-// aSubjectAsATitle makes the subject of a mail into a title Minka takes, and
-// says whether the mail came without one and whether the subject had to be
-// changed.
-//
-// A title is one line, not empty, of at most 200 characters and free of
-// characters nobody can see, and a subject is none of that: it is whatever a
-// mail server let through. The applier stops at a title it cannot take, and
-// nobody can repair a subject at the source, so it is made into a title here
-// rather than costing the mail or the run: every character nobody can see
-// becomes a blank, what is left is trimmed, and what is longer than a title
-// holds is cut before the last character and ends in an ellipsis.
-func aSubjectAsATitle(subject string) (title string, withoutASubject, changed bool) {
-	// A subject that is not UTF-8 is a title Minka reads as one long control
-	// character, whatever else is in it.
-	folded := strings.ToValidUTF8(subject, " ")
-	folded = strings.Map(func(r rune) rune {
-		if unicode.IsControl(r) {
-			return ' '
-		}
-		return r
-	}, folded)
-	changed = folded != subject
-	folded = strings.TrimSpace(folded)
-	if folded == "" {
-		return noSubject, true, false
-	}
-	if utf8.RuneCountInString(folded) <= maxTitleLength {
-		return folded, false, changed
-	}
-	cut := []rune(folded)[:maxTitleLength-utf8.RuneCountInString(ellipsis)]
-	return strings.TrimRightFunc(string(cut), unicode.IsSpace) + ellipsis, false, true
-}
-
-// longestBodyMinkaTakes is how long the body of a mail or of an answer may be
-// for Minka to hold it, in characters. What is measured here is the body the run
-// writes; Minka counts what it stores, which is that body with the markup of its
-// line breaks and of its files in it, so a body below the number can still be
-// one too many.
+// longestBodyMinkaTakes is how long a text may be for Minka to hold it, in
+// characters: the body of a mail or of an answer, a document, the description of
+// an upload.
 const longestBodyMinkaTakes = 1000000
 
 // The lines a run writes into a mail that would arrive with nothing in it. One

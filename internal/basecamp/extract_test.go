@@ -57,9 +57,11 @@ func extractInParts(t *testing.T, account *fakebasecamp.Account, perPart int, pr
 
 // asADryRunKnowsIt is the result of a real run without what only a download
 // shows: a dry run knows which files a run would bring, not what became of
-// them.
+// them. All it knows of a file that will never come is the size the source gives
+// it, so it names no record that waits for a file the source no longer has.
 func asADryRunKnowsIt(result basecamp.Result) basecamp.Result {
 	result.Files.Bytes, result.Files.Fetched, result.Files.Reused, result.Files.Gone = 0, 0, 0, 0
+	result.Docs.OnlyAFileNoRunWillBring = []string{}
 	return result
 }
 
@@ -199,7 +201,7 @@ func TestOfADockTheToolsMinkaKnowsComeOverAndTheRestIsCounted(t *testing.T) {
 		{Kind: "kanban_board", Enabled: false, Count: 1},
 		{Kind: "schedule", Enabled: false, Count: 1},
 		{Kind: "todoset", Enabled: false, Count: 1},
-		{Kind: "vault", Enabled: true, Count: 1},
+		{Kind: "vault", Enabled: false, Count: 1},
 	}
 	if !slices.Equal(result.Skipped, skipped) {
 		t.Errorf("skipped:\n got %v\nwant %v", result.Skipped, skipped)

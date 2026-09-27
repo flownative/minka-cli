@@ -334,18 +334,45 @@ func TestAQuestionAskedOfClientsAloneComesAskingNobody(t *testing.T) {
 	}
 }
 
-// A kind of tool is either extracted or silent about clients, never both: what a
-// run extracts is asked first, so the day Docs & Files is extracted this test
-// fails and the gap in the report goes with it, as it went with the forwards.
-func TestAKindOfToolIsEitherExtractedOrSilentAboutClients(t *testing.T) {
-	silent := map[string]bool{
-		"vault":        true,
-		"kanban_board": false, "chat": false, "message_board": false, "questionnaire": false, "todoset": false,
-		"inbox": false, "schedule": false,
+// Every kind of tool a run says it extracts comes out of a dock as a tool of the
+// bundle, and none of them is ever counted as skipped while it is switched on: a
+// kind a run merely claims would leave a bundle silent about whether clients see
+// such a tool, which is the gap the report used to name.
+//
+// The kinds are the extractor's own map and not a list copied beside it, so a
+// kind somebody adds there without walking it turns this red on the day it is
+// added.
+func TestEveryKindOfToolARunSaysItExtractsIsExtracted(t *testing.T) {
+	account := fakebasecamp.New()
+	dir, result := extract(t, account, everyKindOfTool...)
+
+	inTheBundle := map[string]bool{}
+	for _, record := range records(t, dir, bundle.Tools) {
+		inTheBundle[record["kind"].(string)] = true
 	}
-	for kind, want := range silent {
-		if got := basecamp.SaysNothingAboutClients(kind); got != want {
-			t.Errorf("%s says nothing about clients: %v, want %v", kind, got, want)
+	claimed := basecamp.ToolKindsARunExtracts()
+	if len(claimed) == 0 {
+		t.Fatal("the extractor says it extracts no kind of tool at all")
+	}
+	for name, kind := range claimed {
+		if !inTheBundle[kind] {
+			t.Errorf("a dock entry called %s is said to come over as a tool of the kind %s, and no such tool is in the bundle", name, kind)
 		}
 	}
+	// What is left out of a dock is a kind Minka has nothing for, or a tool the
+	// source has switched off, and never a kind a run says it extracts.
+	for _, skipped := range result.Skipped {
+		if _, extracted := claimed[skipped.Kind]; skipped.Enabled && extracted {
+			t.Errorf("%d tools of the kind %s are skipped although a run says it extracts them", skipped.Count, skipped.Kind)
+		}
+	}
+	// The map a test is given is a copy: nothing here can change what a run does.
+	claimed["schedule"] = "nonsense"
+	if _, changed := basecamp.ToolKindsARunExtracts()["schedule"]; changed {
+		t.Error("the kinds a run extracts can be changed from outside")
+	}
 }
+
+// everyKindOfTool are the projects of the fake that hold every kind of tool
+// between them.
+var everyKindOfTool = []string{"7001", boardProject, talkProject, checkinProject, todoProject, forwardProject, docsProject}
