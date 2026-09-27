@@ -307,12 +307,15 @@ upload Basecamp names no stored file for, one that lives in a cloud, is left out
 and named by ID with its comments and its boosts
 (docs.withoutAStoredFile): a comment pointing at an upload the bundle does not
 carry would stop the applier. A record that lost a file no run will bring is
-named (docs.onlyAFileNoRunWillBring), and the two kinds end differently because
-the one field is optional and the other is not: a document whose whole text was
-that file arrives without words, its title, comments and boosts with it,
-while an upload cannot be written without its file at all and Minka asks for the
-file again on every run. A file this run merely could not fetch is not that, and
-the record waits for it. A document, or the description of an
+named (docs.onlyAFileNoRunWillBring), and the kinds end differently because a
+text is optional and a file is not: a document whose whole text was that file
+arrives without words, its title, comments and boosts with it; an upload whose
+own file it is comes and waits in Minka where the bundle holds a record of the
+file without its bytes, and is left out with its comments and its boosts where
+Basecamp refused the download for good and the bundle holds no record of it at
+all. A file this run merely could not fetch is not one of those: it is named
+under missingFiles, the run ends non-zero, and the record waits for the run that
+brings it. A document, or the description of an
 upload, longer than the 1,000,000 characters Minka holds is counted
 (docs.longerThanMinkaTakes) and comes as it is, as a mail does. A folder takes
 neither comments nor boosts, here as in Basecamp, so neither is asked for.
@@ -696,8 +699,8 @@ it has been applied.`,
 			}
 			if count := len(report.Docs.OnlyAFileNoRunWillBring); count > 0 {
 				notices = append(notices, plural(count,
-					"record of a Docs & Files tool lost a file no run will bring; data.docs.onlyAFileNoRunWillBring names it by ID. A document whose whole text was that file arrives without words, its title, comments and boosts with it; an upload whose own file it is cannot be written at all and Minka asks for the file again on every run",
-					"records of Docs & Files tools lost a file no run will bring; data.docs.onlyAFileNoRunWillBring names them by ID. A document whose whole text was that file arrives without words, its title, comments and boosts with it; an upload whose own file it is cannot be written at all and Minka asks for the file again on every run"))
+					"record of a Docs & Files tool lost a file no run will bring; data.docs.onlyAFileNoRunWillBring names it by ID. A document whose whole text was that file arrives without words, its title, comments and boosts with it; an upload is nothing without its file, so one whose file the bundle holds no record of is left out with its comments and its boosts, and one whose record came without bytes waits in Minka until the source hands the file back",
+					"records of Docs & Files tools lost a file no run will bring; data.docs.onlyAFileNoRunWillBring names them by ID. A document whose whole text was that file arrives without words, its title, comments and boosts with it; an upload is nothing without its file, so one whose file the bundle holds no record of is left out with its comments and its boosts, and one whose record came without bytes waits in Minka until the source hands the file back"))
 			}
 			if count := report.Docs.LongerThanMinkaTakes; count > 0 {
 				notices = append(notices, plural(count,
@@ -1017,13 +1020,16 @@ func renderDocs(w io.Writer, report importReport) {
 		fmt.Fprintf(w, "Titles of uploads folded into one line or cut short to fit: %d\n", docs.NamesMadeIntoATitle)
 	}
 	if len(docs.WithoutAStoredFile) > 0 {
-		fmt.Fprintf(w, "Uploads Basecamp names no stored file for, left out: %d (upload %s), with %d comments and %d boosts\n",
-			len(docs.WithoutAStoredFile), strings.Join(docs.WithoutAStoredFile, ", "),
-			docs.CommentsWithoutTheirUpload, docs.BoostsWithoutTheirUpload)
+		fmt.Fprintf(w, "Uploads Basecamp names no stored file for, left out: %d (upload %s)\n",
+			len(docs.WithoutAStoredFile), strings.Join(docs.WithoutAStoredFile, ", "))
 	}
 	if len(docs.OnlyAFileNoRunWillBring) > 0 {
 		fmt.Fprintf(w, "Records that lost a file no run will bring, the documents among them wordless: %d (record %s)\n",
 			len(docs.OnlyAFileNoRunWillBring), strings.Join(docs.OnlyAFileNoRunWillBring, ", "))
+	}
+	if docs.CommentsWithoutTheirUpload > 0 || docs.BoostsWithoutTheirUpload > 0 {
+		fmt.Fprintf(w, "Comments and boosts that fell with an upload left out: %d and %d\n",
+			docs.CommentsWithoutTheirUpload, docs.BoostsWithoutTheirUpload)
 	}
 	if docs.LongerThanMinkaTakes > 0 {
 		fmt.Fprintf(w, "Documents and descriptions longer than Minka holds, which it passes over on every run: %d\n", docs.LongerThanMinkaTakes)

@@ -141,10 +141,11 @@ off** is asked nothing at all: a tool the source has switched off is one the run
 does not read, as an inbox is, and what the project's own lists of records it
 has put away hand out of it is counted where it is met.
 
-**An upload Basecamp names no stored file for** is left out with its comments
+**An upload the bundle can hold no file for** is left out with its comments
 and its boosts, named by its `sourceId` (C-063), because `file` takes the
-`sourceId` of a file of the bundle and nothing else, and no run will ever have
-bytes to fetch for what lies in a cloud.
+`sourceId` of a file of the bundle and nothing else: no run will ever have
+bytes to fetch for what lies in a cloud, and none for a download Basecamp
+refuses for good.
 **A to-do that hangs on a To-dos tool itself** is left out although the source
 says no word a bundle has none for (C-060): it stands in no list and no group,
 and a bundle holds a to-do in a list alone. It is counted in `todosLeftOut` and
@@ -777,9 +778,11 @@ and Minka applies the kinds in an order of its own.
   `status` is its own as a document's is. Only the file the source shows now
   comes; the format keeps `versions` free for the earlier copies and reads it
   nowhere, so a bundle writes none, and the upload says neither how many there
-  are nor which. An upload Basecamp names no stored file for is left out with
-  everything pointing at it (C-063), named in `docs.withoutAStoredFile` and
-  counted with what fell in `docs.commentsWithoutTheirUpload` and
+  are nor which. An upload the bundle can hold no file for is left out with
+  everything pointing at it (C-063): one Basecamp names no stored file for,
+  named in `docs.withoutAStoredFile`, and one whose download Basecamp refused
+  for good, named in `docs.onlyAFileNoRunWillBring`; what fell with either is
+  counted in `docs.commentsWithoutTheirUpload` and
   `docs.boostsWithoutTheirUpload`. **What says so is the record and never the
   shape of the address:** an upload the source gives an address to fetch a file
   from has a file, and nothing looks at what that address is made of, because
@@ -804,15 +807,21 @@ and Minka applies the kinds in an order of its own.
     field that must not be empty, so an invented sentence was the only way the
     mail came at all, and here it is not; a document is read as something a
     person wrote.
-  - An **upload** whose own file it is cannot be written: `file` is required and
-    takes the identifier of a file of the bundle and nothing else. Minka keeps
-    nothing of it and asks for the file again on every run.
+  - An **upload** is nothing without its file: `file` is required and takes the
+    identifier of a file of the bundle and nothing else. Where the bundle holds
+    a record of the file without its bytes — one the source no longer has, one
+    above what Minka takes — the upload comes and Minka asks for the file again
+    on every run. Where the bundle holds **no record of it at all**, because
+    Basecamp refused the download for good, the upload is **left out** with its
+    comments and its boosts (C-063), which are neither asked for nor written,
+    and the files of its description are not fetched either.
 
-  A file this run merely could not fetch is not one that will never come:
-  the tag stays, the record waits for it, and the run after this one writes it
-  whole. It gets no line of the run's own as a mail does (C-057), because such a
-  record is not remembered as finished and the run after the one that finds the
-  file writes it whole.
+  A file this run merely missed is not one that will never come:
+  the tag stays, the upload is written and waits for its file, and the run after
+  this one writes both whole. What tells the two apart is the one thing the
+  reason of a failure says about itself — whether trying again is worth it —
+  and nothing else; a refusal that will not pass, read as one that might, leaves
+  a record waiting for ever on a file no run brings.
 - **Comments** are those of cards, of posts, of answers, of to-do lists, of
   to-dos, of forwarded mail, of documents and of uploads, `parentKind`
   `card`, `post`, `answer`, `todolist`, `todo`, `forward`, `document` or
@@ -989,10 +998,11 @@ there as well.
 the run** (C-057), written behind the body and counted in
 `forwards.givenALineOfTheRun`, with a `notice`. That happens where the mail says
 nothing, where what it says is a file that will **never** come — one the source
-no longer has, one above the gibibyte a run of Minka takes — where the body is
+no longer has, one above the gibibyte a run of Minka takes, one whose download
+Basecamp refused for good — where the body is
 nothing but an embed, and where the body
 holds nothing but what Minka takes off the edges of a text, a NUL among them,
-which Go does not. A file this run merely could not fetch is none of those: it
+which Go does not. A file this run merely missed is none of those: it
 leaves no record at all, the run says so and ends non-zero, and the run after it
 brings the file, so the mail waits with it rather than being told that its file
 is lost — which no later run could take back. Minka writes
@@ -1458,7 +1468,15 @@ and can be applied. A person whose avatar is missing comes with
 the applier passes over until a later bundle answers it. What was written of
 such a file is removed. `missingFiles` names each file with
 `attachmentSourceId`, `ownerKind`, `ownerSourceId`, `reason` and `retryable`.
-The rule holds for every file of a bundle. What ends the run is an
+The rule holds for every file of a bundle.
+
+**`retryable` says whether any run will ever bring the file**, and the run reads
+it at every place that asks whether a record can do without one: a failure that
+may pass leaves a hole this run reports and the next one fills, while one that
+will not pass — a refusal, an answer that is no file — leaves a hole for ever.
+A text that was nothing but such a file is written without it as for a file the
+source no longer has, and an upload standing for one is left out (C-063),
+because a record that waited for it would wait on every run to the end of time. What ends the run is an
 interruption, a bundle that cannot be written, and a Basecamp CLI that is
 not signed in when a file is asked for. A failure of the file system comes
 without the path it happened at, which ends in the name of the file. A file
