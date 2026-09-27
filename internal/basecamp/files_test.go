@@ -105,14 +105,33 @@ func bodiesOf(t *testing.T, dir string) map[string]string {
 	return bodies
 }
 
+// ownerOfABodysFiles is the ownerKind the files of a body carry, by the kind of
+// record the body stands in. A kind of record that carries a text belongs here,
+// because a body naming a file the index gives to somebody else is the one thing
+// no check on a bundle used to ask about.
+var ownerOfABodysFiles = map[string]string{
+	string(bundle.Cards): bundle.OwnerCard, string(bundle.Comments): bundle.OwnerComment,
+	string(bundle.Posts): bundle.OwnerPost, string(bundle.Messages): bundle.OwnerMessage,
+	string(bundle.Answers): bundle.OwnerAnswer, string(bundle.TodoLists): bundle.OwnerTodoList,
+	string(bundle.Todos): bundle.OwnerTodo, string(bundle.Forwards): bundle.OwnerForward,
+	string(bundle.ForwardReplies): bundle.OwnerForwardReply,
+	string(bundle.Documents):      bundle.OwnerDocument, string(bundle.Uploads): bundle.OwnerUpload,
+}
+
+// aPartOfAKind is the number a kind written in parts carries in the name of a
+// file, which says nothing about who owns what stands in it.
+var aPartOfAKind = regexp.MustCompile(`-[0-9]+$`)
+
 // holdsTogether checks a bundle the way the format asks: every record of the
 // index finds its file with the size and the digest it declares, a file that
 // is gone has none of the three, no file lies under files/ that no record
-// names, every reference of a text has a record unless the run named it as
-// missing, and every record is named by a reference or by a person's avatar.
+// names, every reference of a text has a record of its own body's and unless the
+// run named it as missing, and every record is named by a reference or by a
+// person's avatar.
 func holdsTogether(t *testing.T, dir string, missing []basecamp.MissingFile) {
 	t.Helper()
 	records := map[string]bool{}
+	owners := map[string][2]string{}
 	declared := map[string]bool{}
 	for _, record := range recordsOrNone(t, dir, bundle.Attachments) {
 		id := record["sourceId"].(string)
@@ -120,6 +139,7 @@ func holdsTogether(t *testing.T, dir string, missing []basecamp.MissingFile) {
 			t.Errorf("%s has two records", id)
 		}
 		records[id] = true
+		owners[id] = [2]string{record["ownerKind"].(string), record["ownerSourceId"].(string)}
 		if record["gone"] == true {
 			if record["file"] != nil || record["bytes"] != nil || record["sha256"] != nil {
 				t.Errorf("%s is gone and still says file %v, bytes %v, sha256 %v", id, record["file"], record["bytes"], record["sha256"])
@@ -159,10 +179,22 @@ func holdsTogether(t *testing.T, dir string, missing []basecamp.MissingFile) {
 		}
 		named[missed.AttachmentSourceID] = true
 	}
-	for owner, body := range bodiesOf(t, dir) {
-		for _, match := range attachmentRef.FindAllStringSubmatch(body, -1) {
+	for where, body := range bodiesOf(t, dir) {
+		kind, id, _ := strings.Cut(where, " ")
+		refs := attachmentRef.FindAllStringSubmatch(body, -1)
+		mine, known := ownerOfABodysFiles[aPartOfAKind.ReplaceAllString(kind, "")]
+		if len(refs) > 0 && !known {
+			t.Fatalf("%s names a file and nothing here says what owns the files of a %s", where, kind)
+		}
+		for _, match := range refs {
 			if !records[match[1]] && !named[match[1]] {
-				t.Errorf("%s refers to %s, which has no record and is not missing", owner, match[1])
+				t.Errorf("%s refers to %s, which has no record and is not missing", where, match[1])
+			}
+			// The one thing a closure check does not ask: Minka offers the bytes
+			// of a file to the record that owns them, so a body naming a file of
+			// another record loses it.
+			if owner, has := owners[match[1]]; has && owner != [2]string{mine, id} {
+				t.Errorf("%s refers to %s, which belongs to %s %s", where, match[1], owner[0], owner[1])
 			}
 			named[match[1]] = true
 		}

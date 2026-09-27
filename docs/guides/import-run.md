@@ -94,6 +94,14 @@ Minka brings `Build/verify-bundle.sh <bundle>`, which checks the files of a
 bundle against its index and prints identifiers and counts only. It only
 reads, so it may be run although it lies in Minka's repository.
 
+**Of the files, ask who owns them and not only whether they are found.** Neither
+`verify-bundle.sh` nor a closure check over the references asks whether the record
+that names a file is the record the index gives that file to, and a bundle where
+the two differ reads as whole while a file is quietly lost (C-066). So check that
+every `<import-attachment>` of a body names a record whose `ownerKind` and
+`ownerSourceId` are that body's own, and that the records sharing one file are as
+many as `filesOfSeveralOwners` says beyond the files themselves.
+
 ## Afterwards
 
 What the run showed goes into the status, what it uncovered gets fixed at
