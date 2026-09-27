@@ -179,13 +179,14 @@ func (e *Extractor) writeForward(ctx context.Context, w *bundle.Writer, bucket i
 		e.forwards.SubjectsChanged++
 	}
 
-	body, files, err := e.rewriteBody(found.Content, "", found.Files)
+	mine := owns(bundle.OwnerForward, found.ID)
+	body, files, err := e.rewriteBody(mine, found.Content, "", found.Files)
 	if err != nil {
 		return err
 	}
 	// Before the body is settled: only what became of the files says whether
 	// the mail reaches Minka with anything in it.
-	if err := e.attachFiles(ctx, w, bundle.OwnerForward, origin, files); err != nil {
+	if err := e.attachFiles(ctx, w, mine, origin, files); err != nil {
 		return err
 	}
 	body = e.aBodyThatSaysSomething(body)
@@ -318,11 +319,12 @@ func (e *Extractor) writeForwardReply(ctx context.Context, w *bundle.Writer, buc
 		e.forwards.RepliesFromOutside++
 	}
 
-	body, files, err := e.rewriteBody(reply.Content, "", reply.Files)
+	mine := owns(bundle.OwnerForwardReply, reply.ID)
+	body, files, err := e.rewriteBody(mine, reply.Content, "", reply.Files)
 	if err != nil {
 		return err
 	}
-	if err := e.attachFiles(ctx, w, bundle.OwnerForwardReply, origin, files); err != nil {
+	if err := e.attachFiles(ctx, w, mine, origin, files); err != nil {
 		return err
 	}
 	body = e.aBodyThatSaysSomething(body)

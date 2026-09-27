@@ -467,13 +467,14 @@ func (e *Extractor) writeDocument(ctx context.Context, w *bundle.Writer, walk *d
 	if err != nil {
 		return err
 	}
-	body, files, err := e.rewriteBody(found.Content, "", found.Files)
+	mine := owns(bundle.OwnerDocument, found.ID)
+	body, files, err := e.rewriteBody(mine, found.Content, "", found.Files)
 	if err != nil {
 		return err
 	}
 	// Before the body is weighed: only what became of the files says whether
 	// what is left of the document reaches Minka at all.
-	if err := e.attachFiles(ctx, w, bundle.OwnerDocument, origin, files); err != nil {
+	if err := e.attachFiles(ctx, w, mine, origin, files); err != nil {
 		return err
 	}
 	body, _ = e.wordlessWhereItsOnlyFileNeverComes(body, origin.SourceID)
@@ -549,17 +550,18 @@ func (e *Extractor) writeUpload(ctx context.Context, w *bundle.Writer, walk *doc
 	if err != nil {
 		return err
 	}
-	description, embedded, err := e.rewriteBody(found.Description, "", found.Files)
+	mine := owns(bundle.OwnerUpload, found.ID)
+	description, embedded, err := e.rewriteBody(mine, found.Description, "", found.Files)
 	if err != nil {
 		return err
 	}
 	// The file an upload stands for is named after the upload and stands in no
 	// text, so it belongs to one record and shares its bytes with none.
-	file, _ = e.claimFile(file, nil)
-	if err := e.attachFile(ctx, w, bundle.OwnerUpload, origin, file); err != nil {
+	file, _ = e.claimFile(file, nil, mine)
+	if err := e.attachFile(ctx, w, mine, origin, file); err != nil {
 		return err
 	}
-	if err := e.attachFiles(ctx, w, bundle.OwnerUpload, origin, embedded); err != nil {
+	if err := e.attachFiles(ctx, w, mine, origin, embedded); err != nil {
 		return err
 	}
 	description, named := e.wordlessWhereItsOnlyFileNeverComes(description, origin.SourceID)

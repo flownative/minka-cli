@@ -1037,18 +1037,20 @@ it again.
 *Applies to: `import basecamp`, `attachments.jsonl` and the files of a bundle*
 
 Where one file of the source turns up under a **second owner**, the bundle writes
-a record for that owner too: the same bytes, and a `sourceId` of the source's own
-name for the file with the number of the record behind it. The bytes are fetched
+a record for that owner too: the same bytes, and a `sourceId` made of the
+source's own name for the file and the owner it belongs to. The bytes are fetched
 for the first record and linked to from the others. `filesOfSeveralOwners` counts
-the records beyond the first.
+the owners beyond the first, met and not written.
 
 **Why:** a file stands in one place in Minka. Its blob belongs to the project of
-the record that brought it in and the handle naming it is good in that project's
-circle alone, so a record that named another's file would lose it where the two
-stand in different projects — and a record whose body is nothing but that file
-would arrive on no run at all. One record for the first owner alone loses such a
-file silently, because every check on a bundle asks whether a reference finds a
-record and none asks whether the referring record may own it. Two blobs for one
-file is what Minka would rather pay, and its `ownedBy` stays as strict as it is.
+the record that brought it in, and only a blob of that project is ever attached
+to a place in it, so a record that named another's file is shown none of it where
+the two stand in different projects. One record for the first owner alone loses
+such a file silently, because every check on a bundle asks whether a reference
+finds a record and none asks whether the referring record may own it. Two blobs
+for one file is what Minka would rather pay, and its `ownedBy` stays as strict as
+it is. The owner and not the order of the walk names the record, because Minka
+takes a record over by its identifier and one that moved when another record
+moved would store the same bytes again.
 **Implemented as:** `basecamp.Extractor.claimFile` and `shareTheFile`,
 `bundle.Writer.ShareFile`, see [Importing from Basecamp](stable/import.md).

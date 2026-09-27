@@ -1062,12 +1062,15 @@ this:
   done about one that stays gone. `data.fileNamesChanged` counts the names
   that had to be made plain, `data.captionsDropped` the captions over 1000
   characters that are left off their reference,
-  `data.filesOfSeveralOwners` the records a run wrote for a file that turned up
-  under a further owner: every owner of a file gets a record of its own, with the
-  same bytes and one download, because a file stands in one place in Minka and a
-  record naming another's file would lose it. So a bundle can hold the same bytes
-  twice, and `counts.attachments` stands above the number of files by that
-  many. None of them fails a run. No output says the name of a file, a
+  `data.filesOfSeveralOwners` the owners a file turned up under after the one it
+  was fetched for: every owner of a file gets a record of its own, named
+  `<the file>.<kind>-<owner>`, with the same bytes and one download, because a
+  file stands in one place in Minka and a record naming another's file would lose
+  it where the two stand in different projects. So a bundle can hold the same
+  bytes twice. It counts owners met and not records written, and
+  `counts.attachments` is `data.avatars.count` plus `data.filesExpected` plus
+  `data.filesOfSeveralOwners`, less the entries of `data.missingFiles` whose
+  `ownerKind` is not `person`. None of them fails a run. No output says the name of a file, a
   caption or an address; do not quote them either.
 - A request that fails for a reason that may pass (network, rate limit, a
   5xx, 408 or 429 of Basecamp or of a gateway in front of it) is asked again

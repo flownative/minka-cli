@@ -106,8 +106,9 @@ type BodyCounts struct {
 // the stored one and shows neither the name nor the avatar of a mention.
 //
 // The files the text refers to come back in the order of their references,
-// one per reference: whoever writes the text brings them.
-func (e *Extractor) rewriteBody(text, rendered string, files []bodyFile) (string, []sourceFile, error) {
+// one per reference: whoever writes the text brings them. owner is the record
+// the text stands in, which is what a file of it belongs to.
+func (e *Extractor) rewriteBody(owner fileOwner, text, rendered string, files []bodyFile) (string, []sourceFile, error) {
 	lowered := strings.ToLower(text)
 	framed := strings.Contains(lowered, "<"+frameTag)
 	if !framed && !strings.Contains(lowered, embedTag) && !linkTag.MatchString(lowered) {
@@ -224,7 +225,7 @@ func (e *Extractor) rewriteBody(text, rendered string, files []bodyFile) (string
 				if claimed == nil {
 					claimed = map[string]sourceFile{}
 				}
-				source, first := e.claimFile(file.source(), claimed)
+				source, first := e.claimFile(file.source(), claimed, owner)
 				if first {
 					referred = append(referred, source)
 				}

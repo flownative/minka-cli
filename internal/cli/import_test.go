@@ -1450,7 +1450,7 @@ func TestImportBasecampBringsTheFilesOfTextsAndChats(t *testing.T) {
 	expectCode(t, r, ExitOK)
 	for _, line := range []string{
 		"Files: 12 of 13 brought, 15114 bytes of 15950 expected; 0 fetched, 12 taken over from the bundle before, 1 gone at Basecamp",
-		"Names of files changed: 5; captions too long for a reference, left off: 1; records of a file under a further owner: 2",
+		"Names of files changed: 5; captions too long for a reference, left off: 1; owners of a file beyond the first: 2",
 	} {
 		if !strings.Contains(r.stdout, line) {
 			t.Errorf("the text lacks %q:\n%s", line, r.stdout)

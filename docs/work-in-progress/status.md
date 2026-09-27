@@ -44,12 +44,12 @@ tool its folders, documents and uploads with the comments, the boosts and the
 files of each.
 The Docs & Files tools come last of all, so that the bytes of a file standing in
 a card and in a document alike are fetched for the card, and the inboxes before
-them. Every owner of a file has a record of its own in `attachments.jsonl`, with
-the same bytes and one download (C-066): a file stands in one place in Minka, so
-a record naming another's file would lose it where the two stand in different
-projects, and one whose body was nothing but that file would arrive on no run at
-all. `filesOfSeveralOwners` counts the records beyond the first: what it names
-costs a duplicate and loses nothing.
+them. Every owner of a file has a record of its own in `attachments.jsonl`, named
+after the file and its owner, with the same bytes and one download (C-066): a file
+stands in one place in Minka, so a record naming another's file is shown none of
+it where the two stand in different projects.
+`filesOfSeveralOwners` counts the owners beyond the first, met and not written:
+what it names costs a duplicate and loses nothing.
 Three things of such a mail are the extractor's own
 doing, each
 written down as a rule: a subject Minka would refuse becomes a title rather than
@@ -782,14 +782,21 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   extractor writes one record with the owner of the first place it found it,
   which is what C-066 replaces. The format is Minka's and only its side can
   change that sentence, so it is a question for the coordination.
-  Two things about the loss were read in Minka's code rather than believed:
-  `ownedBy` is asked only of a body that embeds no file at all, so it is not
-  what loses a file of ours, and a body that names the file resolves the tag by
-  the reference alone. What loses the file is the circle: the blob belongs to the
-  project of the record that brought it in, the handle is good in that project
-  alone, and a body carrying another circle's handle is stripped of it. So the
-  loss is a record standing in **another project** than the first owner, and
-  within one project a bundle of ours was losing nothing.
+  Three things about the loss were read in Minka's code rather than believed.
+  `ownedBy` is asked only of a body that embeds no file at all, so it is not what
+  loses a file of ours, and a body that names the file resolves the tag by the
+  reference alone. What loses it is the **circle**: `Attachments::attachTo` asks
+  `DbalAttachmentRepository::attachableBlobs`, which reads the blob rows of the
+  circle alone (`project_id = :circle`), so a blob of one project is never
+  attached to a place in another and the renderer drops an attachment that hangs
+  in no text. `onlyWhatThisCircleHas` does **not** do it: it runs on the text
+  while the handles of the run are still held back as plain tokens, by design.
+  So the loss is a record standing in **another project** than the first owner,
+  and within one project a bundle of ours was losing nothing.
+  Nor does such a record **wait**: `blobOf` answers a known reference without
+  asking about the circle, so the tag becomes markup, the body does not read as
+  empty, and the record is written and shows nothing. Waiting is what a file that
+  never comes at all causes.
 
 ## Open in the API
 

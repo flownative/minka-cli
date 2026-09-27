@@ -37,6 +37,11 @@ func figure(personID, name string) string {
 }
 
 // bodyExtractor knows Grace and Niklaus from the list of the account.
+// aBody stands for the record a text under test stands in: which one it is
+// decides nothing about how the text is rewritten, only what a file under a
+// further owner is called.
+var aBody = owns("card", 9001)
+
 func bodyExtractor(t *testing.T) *Extractor {
 	t.Helper()
 	e := &Extractor{people: newRegistry()}
@@ -53,7 +58,7 @@ func bodyExtractor(t *testing.T) *Extractor {
 
 func rewritten(t *testing.T, e *Extractor, text, rendered string, files ...bodyFile) string {
 	t.Helper()
-	out, _, err := e.rewriteBody(text, rendered, files)
+	out, _, err := e.rewriteBody(aBody, text, rendered, files)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -81,7 +86,7 @@ func TestATextWithoutEmbedsStaysAsItIs(t *testing.T) {
 			t.Errorf("got %q, want %q", got, text)
 		}
 		// A plain line of a chat goes the same way.
-		got, _, err := e.lineBody(line{Type: "Chat::Lines::Text", Content: text})
+		got, _, err := e.lineBody(aBody, line{Type: "Chat::Lines::Text", Content: text})
 		if err != nil || got != text {
 			t.Errorf("line: got %q (%v), want %q", got, err, text)
 		}
@@ -397,7 +402,7 @@ func TestABrokenEmbedCostsNoMoreThanItself(t *testing.T) {
 		"a " + mentionOpen + ` sgid="` + base64.StdEncoding.EncodeToString([]byte(`{"_rails":17}`)) + `--x"> tail`:                "a  tail",
 	} {
 		e := bodyExtractor(t)
-		got, _, err := e.rewriteBody(text, "", nil)
+		got, _, err := e.rewriteBody(aBody, text, "", nil)
 		if err != nil || got != want {
 			t.Errorf("%q:\n got %q (%v)\nwant %q", text, got, err, want)
 		}
@@ -735,7 +740,7 @@ func TestABrokenFrameCostsNoMoreThanItself(t *testing.T) {
 		`a </iframe></figure> tail ` + frame: `a </iframe></figure> tail ` + embed,
 	} {
 		e := bodyExtractor(t)
-		got, _, err := e.rewriteBody(text, "", nil)
+		got, _, err := e.rewriteBody(aBody, text, "", nil)
 		if err != nil || got != want {
 			t.Errorf("%q:\n got %q (%v)\nwant %q", text, got, err, want)
 		}

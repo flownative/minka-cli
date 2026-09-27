@@ -83,8 +83,8 @@ type importReport struct {
 	FilesGone          int   `json:"filesGone"`
 	// FileNamesChanged are files whose name could not stay as it was,
 	// CaptionsDropped captions too long for a reference, FilesOfSeveralOwners
-	// the records a run wrote for a file that turned up under a further owner:
-	// one record per owner, the same bytes under each of them, and one download.
+	// the owners a file turned up under after the one it was fetched for: every
+	// owner gets a record of its own, with the same bytes and one download.
 	FileNamesChanged     int `json:"fileNamesChanged"`
 	CaptionsDropped      int `json:"captionsDropped"`
 	FilesOfSeveralOwners int `json:"filesOfSeveralOwners"`
@@ -493,7 +493,7 @@ it has been applied.`,
 				FilesGone:            result.Files.Gone,
 				FileNamesChanged:     result.Files.NamesChanged,
 				CaptionsDropped:      result.Bodies.CaptionsDropped,
-				FilesOfSeveralOwners: result.Files.SecondOwners,
+				FilesOfSeveralOwners: result.Files.OwnersBeyondTheFirst,
 				LinkPreviews:         result.Bodies.LinkPreviews,
 				PicturesLinked:       result.Bodies.PicturesLinked,
 				Embeds:               result.Bodies.Embeds,
@@ -840,7 +840,7 @@ func renderImportReport(w io.Writer, report importReport) {
 			report.FilesFetched+report.FilesReused, report.FilesExpected, report.FilesBytes, report.FilesBytesExpected,
 			report.FilesFetched, report.FilesReused, report.FilesGone)
 	}
-	fmt.Fprintf(w, "Names of files changed: %d; captions too long for a reference, left off: %d; records of a file under a further owner: %d\n",
+	fmt.Fprintf(w, "Names of files changed: %d; captions too long for a reference, left off: %d; owners of a file beyond the first: %d\n",
 		report.FileNamesChanged, report.CaptionsDropped, report.FilesOfSeveralOwners)
 	fmt.Fprintf(w, "Longest text in characters: cards %d, comments %d, posts %d, messages %d, answers %d, to-do lists %d, to-dos %d, forwards %d, answers by mail %d, documents %d, uploads %d\n",
 		report.LongestBody[bundle.Cards], report.LongestBody[bundle.Comments], report.LongestBody[bundle.Posts], report.LongestBody[bundle.Messages],
