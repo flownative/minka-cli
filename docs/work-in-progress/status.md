@@ -54,7 +54,7 @@ account stays an address and becomes nobody.
 Of the Docs & Files, three things are the extractor's own doing. A folder
 stands in the bundle after the folder it is in; for an entry in use the order of
 the file decides, bottom up, because Minka puts every new one on top of its kind,
-and for one that has left its place it decides nothing (C-062), so those stand
+and for one that has left its place it decides nothing (C-065), so those stand
 first as the source lists them. The status of an entry is its own and never that of
 its folder, so what stands in a folder the source put away comes in as it is
 and goes along through the folder there. And the title of an upload is what the
@@ -84,12 +84,16 @@ bundle gives none, a forwarded mail of a status that is none of the three,
 an answer by mail that says anything but `active`, and a folder, a document or
 an upload of Docs & Files whose status is none of the three. An upload
 Basecamp names no stored file for is left out with its comments and its boosts
-(C-060): `file` takes the identifier of a file of the bundle and nothing else,
+(C-063): `file` takes the identifier of a file of the bundle and nothing else,
 and no run will ever have bytes to fetch for what lies in a cloud.
 What stood in a list, a group, a folder or a whole Docs & Files tool a bundle
 cannot carry falls
 with it, is asked for to be counted and is named with the place it fell with
-(C-052), so that no run says a bundle holds more of the source than it does.
+(C-052), so that no run says a bundle holds more of the source than it does. A
+to-do that hangs on a To-dos tool itself stands in no list a bundle can name, so
+it is left out, counted and named with its project (C-060), and the to-dos of
+every tool that is switched on are asked for under the tool's own identifier for
+that reason.
 `recordsLeftOut` names each with the kind of record, the word and where it
 stood, so one exotic record does not cost the account. What still ends
 a run is what would be written wrongly: times that are missing or are none, a
@@ -103,7 +107,7 @@ company on a person, `clientAccess` and the client company on a project, and
 every folder, document and upload of Docs & Files, read
 from each record and never from the tool it stands in. A record that follows what
 it hangs on carries no word of its own and is counted where the source offers
-one. **An entry of Docs & Files is the one exception** (C-061): it carries the
+one. **An entry of Docs & Files is the one exception** (C-064): it carries the
 word at every depth, because Minka reads it below the top of a tool as well and
 something hidden there hides the folder at the top with everything in it.
 A client is no member of a project in Minka, so the run counts the
@@ -304,6 +308,29 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   be asked for at all, which is what a run does for a list of any status. A to-do
   whose completion is newer than the moment the source says it was touched
   (C-051) is a shape the invented account holds and no real one has shown.
+  Two shapes of the real account were measured all the same, read-only and
+  **without a run of the CLI**, and the extractor rests on that measurement: a
+  to-do whose `parent` says `Todoset` instead of `Todolist`, of which the whole
+  account holds six in use, in three projects and across four to-do sets, none of
+  them archived or trashed, the parent being the tool's own identifier, and which
+  Basecamp hands out at `buckets/{b}/todolists/{todoset}/todos.json` although no
+  `todolists.json` of the tool names that identifier; and `repetition_schedule`,
+  which twelve to-dos of the account carry and the other 3,244 leave out
+  altogether rather than sending an empty one, with the same ten fields every
+  time. How Basecamp answers that path is measured as well: a to-do set that holds
+  no to-do of its own answers 200 with an empty array and no error, one that holds
+  lists with to-dos in them answers the same, and `?completed=true` does too,
+  which is why a failure of that request ends the run where a place the bundle
+  does not carry is passed over when it is gone. The path hands out the to-dos
+  hanging on the tool alone and never those of its lists, so the run's reading of
+  `parent.type` is a second hold on the same thing and not what carries it.
+  An **active** to-do hanging on the to-do set of a tool that is switched off
+  stays invisible, as an active list of such a tool already is: the walk never
+  learns that tool's identifier, so the same gap holds for both. One on the shelf
+  or in the trash is named all the same, because the records of a project name
+  every to-do set of it, switched off or not. Where **every** To-dos tool of a
+  project is switched off, the project is passed over whole and not even those
+  are counted.
 - Of the forwarded mail of `import basecamp`: no extraction has met an inbox
   live, and the shape of the source is measured all the same, read-only and
   without a run. Measured: that a dock entry of an inbox is
@@ -785,6 +812,9 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   done, the recordings of the archived and the trashed ones, whether a list on
   the shelf or in the trash answers for its groups and its to-dos, and what a
   place the account no longer has answers when it is asked for what fell with it.
+  Two shapes were measured at the account and have still never come through a
+  run: how the six to-dos that stand in no list read in `todosWithoutAList`, and
+  the twelve schedules in `todosThatRepeat`.
   Then check the bundle record by record, as the boards and the chats were
   checked.
 - Write the bundle of the whole account, once Robert or Shaun has allowed its

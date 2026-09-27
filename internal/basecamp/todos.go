@@ -2,6 +2,7 @@ package basecamp
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
@@ -25,13 +26,20 @@ type todoList struct {
 	BoostsCount   int        `json:"boosts_count"`
 }
 
-// hangsOn is what a record of Basecamp stands in.
+// hangsOn is what a record of Basecamp stands in: which record, and of what
+// kind. The kind is how a to-do says that it hangs on a To-dos tool itself
+// rather than in a list of one, which a bundle has no place for.
 type hangsOn struct {
-	ID int64 `json:"id"`
+	ID   int64  `json:"id"`
+	Type string `json:"type"`
 }
 
+// aTodoset is what a record says it hangs on where that is a To-dos tool itself.
+const aTodoset = "Todoset"
+
 // todo is a to-do of a list, standing in the list itself or in one of its
-// groups.
+// groups — or, in a shape a bundle has no place for, hanging on the To-dos tool
+// itself.
 type todo struct {
 	recording
 	ID     int64  `json:"id"`
@@ -51,8 +59,12 @@ type todo struct {
 	// SubtasksCount is how many subtasks the to-do has. A bundle carries none,
 	// so the number is all that is left of them.
 	SubtasksCount int `json:"subtasks_count"`
-	CommentsCount int `json:"comments_count"`
-	BoostsCount   int `json:"boosts_count"`
+	// Repetition is the schedule of a to-do that repeats, which a bundle has no
+	// word for: nothing of it is read, and that the source sent it at all is all
+	// a run does with it.
+	Repetition    json.RawMessage `json:"repetition_schedule"`
+	CommentsCount int             `json:"comments_count"`
+	BoostsCount   int             `json:"boosts_count"`
 }
 
 // todoStatuses are the statuses a bundle has a word for in a group and in a
@@ -202,6 +214,9 @@ func (e *Extractor) extractTodosOfProject(ctx context.Context, w *bundle.Writer,
 	if err != nil {
 		return err
 	}
+	if err := e.leaveOutTheTodosWithoutAList(ctx, t, shelvedTodos, placed); err != nil {
+		return err
+	}
 
 	for _, tool := range tools {
 		for _, found := range tool.inFileOrder() {
@@ -231,6 +246,62 @@ func (e *Extractor) extractTodosOfProject(ctx context.Context, w *bundle.Writer,
 		}
 	}
 	return nil
+}
+
+// leaveOutTheTodosWithoutAList counts and names the to-dos that hang on a To-dos
+// tool itself and stand in no list and no group of it. Basecamp lets one stand
+// there and hands it out under the tool's own identifier, but it stands under no
+// list of the tool, so a walk of the lists never has that identifier to ask for
+// and would lose such a to-do without a number.
+//
+// A bundle has no place for one: the identifier is the tool's own, so a
+// listSourceId taken from it would answer for two kinds of record at once, and a
+// list nobody created is a record nobody can explain at the source. So it is left
+// out, counted and named with its project — the identifier is what somebody needs
+// to find it and move it into a list, after which a later run carries it.
+//
+// The requests are the price of the number, as they are for a place the bundle
+// does not carry, and they are asked of a tool the dock has just named: a failure
+// of one ends the run, because a to-do known to stand there must not be lost to a
+// request that was passed over.
+func (e *Extractor) leaveOutTheTodosWithoutAList(ctx context.Context, t talk, shelved []todo, placed map[int64]bool) error {
+	for _, tool := range t.todosets {
+		for _, path := range todosOfAPlace(t.bucket, tool) {
+			inIt, err := getList[todo](ctx, e.Source, path)
+			if err != nil {
+				return err
+			}
+			for _, one := range inIt {
+				if one.Parent.Type != aTodoset || aSecondTime(placed, one.ID) {
+					continue
+				}
+				e.noteATodoWithoutAList(one.ID, t.bucket)
+			}
+		}
+	}
+	// One on the shelf or in the trash comes with the records of the project,
+	// where it matches no list of the walk either.
+	for _, one := range shelved {
+		if one.Parent.Type != aTodoset || !t.everyTodoset[one.Parent.ID] || aSecondTime(placed, one.ID) {
+			continue
+		}
+		e.noteATodoWithoutAList(one.ID, t.bucket)
+	}
+	return nil
+}
+
+func (e *Extractor) noteATodoWithoutAList(id, bucket int64) {
+	e.todosLeftOut.Todos++
+	e.todosWithoutAList = append(e.todosWithoutAList,
+		TodoWithoutAList{SourceID: sourceID(id), ProjectSourceID: sourceID(bucket)})
+}
+
+// repeats tells whether the source says the to-do comes again. Basecamp leaves
+// the key out where nothing repeats rather than sending an empty one, so the key
+// being there is the whole test; nothing of what it holds is read.
+func repeats(schedule json.RawMessage) bool {
+	said := strings.TrimSpace(string(schedule))
+	return said != "" && said != "null"
 }
 
 // aSecondTime tells a record the walk has met before from a new one, and
@@ -537,6 +608,8 @@ func (e *Extractor) todosIn(ctx context.Context, bucket, in int64, shelved []tod
 // Subtasks are not carried: the format has no word for them, so all that is left
 // of them is how many there were. A to-do that had them is poorer in Minka than
 // at the source, which is what the report says.
+// A schedule is not carried either: one that comes again at the source comes here
+// as a to-do that comes once, and how many there were is all that is left of it.
 func (e *Extractor) writeTodo(ctx context.Context, w *bundle.Writer, bucket, tool, list int64, group *int64, found todo) error {
 	title, err := itemTitle("to-do", found.ID, found.Title)
 	if err != nil {
@@ -597,6 +670,9 @@ func (e *Extractor) writeTodo(ctx context.Context, w *bundle.Writer, bucket, too
 	}
 	e.measure(bundle.Todos, notes, LongestBodyRecord{Record: "to-do", SourceID: origin.SourceID, In: "project", InSourceID: sourceID(bucket)})
 	e.todosByStatus[found.Status]++
+	if repeats(found.Repetition) {
+		e.todosThatRepeat++
+	}
 	if completedAt == nil {
 		e.todosNotDone++
 	}

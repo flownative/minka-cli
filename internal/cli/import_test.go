@@ -118,9 +118,9 @@ func TestImportBasecampWritesABundleAndReportsWhatItHolds(t *testing.T) {
 		"todoListsByStatus": map[string]any{"active": float64(0), "archived": float64(0), "trashed": float64(0)},
 		"todosByStatus":     map[string]any{"active": float64(0), "trashed": float64(0)},
 		"todosNotDone":      float64(0), "todosWithPeople": float64(0),
-		"todosWithSubtasks": float64(0), "subtasksLeftOut": float64(0),
-		"todosLeftOut":       map[string]any{"lists": float64(0), "groups": float64(0), "todos": float64(0)},
-		"todoPlacesLeftOut":  []any{},
+		"todosWithSubtasks": float64(0), "subtasksLeftOut": float64(0), "todosThatRepeat": float64(0),
+		"todosLeftOut":      map[string]any{"lists": float64(0), "groups": float64(0), "todos": float64(0)},
+		"todoPlacesLeftOut": []any{}, "todosWithoutAList": []any{},
 		"mentionsUnresolved": float64(0), "filesInBodies": float64(0), "filesDropped": float64(0), "linkPreviews": float64(0), "picturesLinked": float64(0), "embeds": float64(0), "embedsLeftOut": float64(0),
 		"filesExpected": float64(0), "filesBytesExpected": float64(0), "filesBytes": float64(0), "filesFetched": float64(0), "filesReused": float64(0),
 		"filesGone": float64(0), "fileNamesChanged": float64(0), "captionsDropped": float64(0), "filesOfSeveralOwners": float64(0),
@@ -1810,13 +1810,17 @@ func TestImportBasecampReportsTheToDosOfAProject(t *testing.T) {
 	want := map[string]any{
 		"todoListsByStatus": map[string]any{"active": float64(3), "archived": float64(1), "trashed": float64(1)},
 		"todosByStatus":     map[string]any{"active": float64(7), "trashed": float64(1)},
-		"todosLeftOut":      map[string]any{"lists": float64(1), "groups": float64(2), "todos": float64(2)},
+		"todosLeftOut":      map[string]any{"lists": float64(1), "groups": float64(2), "todos": float64(4)},
 		"todoPlacesLeftOut": []any{
 			map[string]any{"record": "to-do list", "sourceId": "9406", "groups": float64(1), "todos": float64(1)},
 			map[string]any{"record": "group", "sourceId": "9414", "groups": float64(0), "todos": float64(1)},
 		},
+		"todosWithoutAList": []any{
+			map[string]any{"sourceId": "9431", "projectSourceId": "7008"},
+			map[string]any{"sourceId": "9432", "projectSourceId": "7008"},
+		},
 		"todosNotDone": float64(6), "todosWithPeople": float64(2),
-		"todosWithSubtasks": float64(1), "subtasksLeftOut": float64(2),
+		"todosWithSubtasks": float64(1), "subtasksLeftOut": float64(2), "todosThatRepeat": float64(2),
 		"recordsLeftOut": []any{map[string]any{"record": "group", "field": "status", "value": "archived",
 			"in": "project", "inSourceId": "7008", "leftOut": float64(1)}},
 	}
@@ -1830,6 +1834,8 @@ func TestImportBasecampReportsTheToDosOfAProject(t *testing.T) {
 		"2 to-dos name somebody as an assignee or as somebody to tell when they are done",
 		"6 to-dos are open at the source, and a later run reopens nothing",
 		"2 lists or groups of To-dos tools are left out with what stood in them",
+		"2 to-dos hang on To-dos tools themselves and stand in no list of them",
+		"2 to-dos come again at the source and are carried as ordinary ones",
 		"1 record is left out, because the source describes it with a word a bundle has none for",
 	} {
 		if !strings.Contains(env.Notice, notice) {
@@ -1841,7 +1847,8 @@ func TestImportBasecampReportsTheToDosOfAProject(t *testing.T) {
 	// no questionnaire says nothing of check-ins.
 	r = e.run("import", "basecamp", "--project", "7003", "--out", filepath.Join(t.TempDir(), "boards"), "--styled")
 	expectCode(t, r, ExitOK)
-	for _, quiet := range []string{"To-do lists:", "To-dos:", "To-dos that had subtasks", "Left out of the To-dos tools"} {
+	for _, quiet := range []string{"To-do lists:", "To-dos:", "To-dos that had subtasks", "Left out of the To-dos tools",
+		"To-dos that come again", "in no list of it"} {
 		if strings.Contains(r.stdout, quiet) {
 			t.Errorf("a run over a project without a To-dos tool says %q:\n%s", quiet, r.stdout)
 		}
@@ -1854,9 +1861,11 @@ func TestImportBasecampReportsTheToDosOfAProject(t *testing.T) {
 		"To-do lists: 3 active, 1 archived, 1 trashed",
 		"To-dos: 7 active, 1 trashed; 6 of them still open, 2 carrying people",
 		"To-dos that had subtasks: 1, with 2 subtasks a bundle has no word for",
-		"Left out of the To-dos tools: 1 lists, 2 groups, 2 to-dos",
+		"To-dos that come again at the source, carried as ordinary ones: 2",
+		"Left out of the To-dos tools: 1 lists, 2 groups, 4 to-dos",
 		"  with to-do list 9406 fell: 1 groups, 1 to-dos",
 		"  with group 9414 fell: 0 groups, 1 to-dos",
+		"To-dos hanging on a To-dos tool itself and in no list of it, left out: 2 — 9431 of project 7008, 9432 of project 7008",
 		"to-do list 9401     in project 7008: 159",
 		"to-do    9421     in project 7008: 151",
 	} {

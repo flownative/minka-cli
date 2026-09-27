@@ -142,9 +142,15 @@ does not read, as an inbox is, and what the project's own lists of records it
 has put away hand out of it is counted where it is met.
 
 **An upload Basecamp names no stored file for** is left out with its comments
-and its boosts, named by its `sourceId` (C-060), because `file` takes the
+and its boosts, named by its `sourceId` (C-063), because `file` takes the
 `sourceId` of a file of the bundle and nothing else, and no run will ever have
 bytes to fetch for what lies in a cloud.
+**A to-do that hangs on a To-dos tool itself** is left out although the source
+says no word a bundle has none for (C-060): it stands in no list and no group,
+and a bundle holds a to-do in a list alone. It is counted in `todosLeftOut` and
+named in `todosWithoutAList` with its identifier and its project, which is what
+somebody needs to find it at the source and move it into a list, after which a
+later run carries it. Nothing of it is asked for and nothing hangs on it.
 
 **Two things of a forwarded mail are neither** (C-056): what a mail calls
 itself and whom it says it came from are nobody's to repair at the source, so a
@@ -576,7 +582,7 @@ and Minka applies the kinds in an order of its own.
   stand in the file **from the bottom up**: the last line of a tool is the list on
   top. What has left the tool, the archived and the trashed ones, goes first and
   in the order the source lists it, where it cannot push the rest about; their
-  order there decides nothing (C-062). No `position` is written for a list, a
+  order there decides nothing (C-065). No `position` is written for a list, a
   group or a to-do: Minka reads none, and a `todogroups` record that carried
   one would earn a warning. A list comes with its groups and its to-dos
   whatever its status, as a card comes with its steps. `status` is `active`,
@@ -605,8 +611,14 @@ and Minka applies the kinds in an order of its own.
   every list and group that took records with it, with how many groups and
   to-dos those were. Such a request is made for the counting alone, so a place
   Basecamp no longer has takes nothing with it and does not end the run; every
-  other failure of it ends the run as everywhere. A to-do goes to the end of
-  its list or its group, so the order of the file is the order of the list:
+  other failure of it ends the run as everywhere.
+  **A to-do can hang on a To-dos tool itself** and stand in no list and no group
+  of it. A bundle holds a to-do in a list alone, so such a to-do is left out,
+  counted in `todosLeftOut` and named in `todosWithoutAList` with its identifier
+  and its project (C-060); the walk of the lists never meets it, so the to-dos
+  of every tool that is switched on are asked for under the tool's own
+  identifier, and a failure of that request ends the run. A to-do goes to the
+  end of its list or its group, so the order of the file is the order of the list:
   what is open as Basecamp lists it, then what is done, then what it has
   thrown away. `groupSourceId` names a group of the to-do's own list and is
   `null` for a to-do standing in the list itself; both it and a `listSourceId`
@@ -620,6 +632,11 @@ and Minka applies the kinds in an order of its own.
   the format has no word for them, so all that is left of them is how many
   there were, counted in `todosWithSubtasks` and `subtasksLeftOut` and asked
   for never.
+  **A schedule is not carried either:** a to-do that comes again at the source
+  comes here as an ordinary to-do, because Minka has no repeating one, and
+  `todosThatRepeat` counts the ones a bundle carries. Basecamp leaves the key of
+  a schedule out altogether where nothing repeats, so that the key is there is
+  the whole test, and nothing in it is read.
 - **Forwards** are the mails somebody forwarded into a project, one record per
   mail of every inbox that is switched on. Basecamp lists the mails of an
   inbox itself and hands out **no** list of the archived and the trashed ones
@@ -706,7 +723,7 @@ and Minka applies the kinds in an order of its own.
   parent it has not seen. For an entry **in use** the order of the file decides:
   it stands **from the bottom up**, because Minka puts every new one on top of its
   kind, so the order the source shows comes out again. For one that has **left its
-  place** it decides nothing (C-062): those come first, in the order the source
+  place** it decides nothing (C-065): those come first, in the order the source
   lists them, and Minka reads that order nowhere, ordering an archive by the moment
   a record was put away and taking that moment from the record itself. There is no
   `position` in the format, and a record that carried one would earn a warning.
@@ -760,7 +777,7 @@ and Minka applies the kinds in an order of its own.
   comes; the format keeps `versions` free for the earlier copies and reads it
   nowhere, so a bundle writes none, and the upload says neither how many there
   are nor which. An upload Basecamp names no stored file for is left out with
-  everything pointing at it (C-060), named in `docs.withoutAStoredFile` and
+  everything pointing at it (C-063), named in `docs.withoutAStoredFile` and
   counted with what fell in `docs.commentsWithoutTheirUpload` and
   `docs.boostsWithoutTheirUpload`. **What says so is the record and never the
   shape of the address:** an upload the source gives an address to fetch a file
@@ -1264,7 +1281,7 @@ therefore read from the source and never guessed (C-055).
   the recording of the record itself — a dock entry says nothing about clients,
   so a tool is read where the tool is read. Where the source says nothing,
   nothing is written: in doubt, private.
-- **An entry of Docs & Files carries it at every depth** (C-061), which is the
+- **An entry of Docs & Files carries it at every depth** (C-064), which is the
   one place a record standing inside another says anything about clients. Minka
   reads the word below the top of a tool as well, and there it is the one thing
   that can hide a folder at the top: where a folder, a document or an upload
@@ -1363,7 +1380,9 @@ A name and a company are personal data.
   `picturesLinked`, `embeds`, `embedsLeftOut`, `references`,
   `todoListsByStatus`, `todosByStatus`, `todosLeftOut` (`lists`, `groups`,
   `todos`), `todoPlacesLeftOut` (`record`, `sourceId`, `groups`, `todos`),
+  `todosWithoutAList` (`sourceId`, `projectSourceId`),
   `todosNotDone`, `todosWithPeople`, `todosWithSubtasks`, `subtasksLeftOut`,
+  `todosThatRepeat`,
   `questionsLeftOut`, `anchorsInferred`, `nobodyAsked`, `askedLeftOut`
   (`notInTheProject`,
   `retired`, `withoutAnAddress`), `answersWithoutABody`, `answersWithoutADay`,

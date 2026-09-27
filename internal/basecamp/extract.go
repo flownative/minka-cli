@@ -148,6 +148,16 @@ type TodoPlaceLeftOut struct {
 	Todos    int    `json:"todos"`
 }
 
+// TodoWithoutAList is a to-do that hangs on a To-dos tool itself and stands in
+// no list and no group of it. A bundle has no place for such a to-do, so it is
+// left out and named: whoever reads the report can move it into a list at the
+// source, and a later run carries it. It says nothing of what is in the to-do,
+// an identifier and its project are what it takes to find it.
+type TodoWithoutAList struct {
+	SourceID        string `json:"sourceId"`
+	ProjectSourceID string `json:"projectSourceId"`
+}
+
 // LeftOutRecords counts the records of one kind that a bundle cannot carry
 // because the source said a word a bundle has none for. Such records are left
 // out and the run goes on; what is lost stays nameable here.
@@ -257,6 +267,10 @@ type Result struct {
 	// records with them.
 	TodosLeftOut      TodosLeftOut
 	TodoPlacesLeftOut []TodoPlaceLeftOut
+	// TodosWithoutAList names the to-dos that hang on a To-dos tool itself and
+	// stand in no list of it, each with its project. They are counted in
+	// TodosLeftOut.Todos as well.
+	TodosWithoutAList []TodoWithoutAList
 	// TodosNotDone counts the to-dos the source has open. A later run reopens
 	// nothing, so one that is done in Minka stays done.
 	TodosNotDone int
@@ -268,6 +282,11 @@ type Result struct {
 	// how many there were: a bundle carries none.
 	TodosWithSubtasks int
 	SubtasksLeftOut   int
+	// TodosThatRepeat counts the to-dos of the bundle that come again at the
+	// source. A bundle has no word for a schedule, so such a to-do is carried as
+	// any other and its schedule stays behind; the number is all that is left of
+	// it.
+	TodosThatRepeat int
 	// QuestionsLeftOut are the questions left out because Minka has no words
 	// for their schedule, each with the field that made it impossible.
 	QuestionsLeftOut []ImpossibleQuestion
@@ -362,10 +381,12 @@ type Extractor struct {
 	todosByStatus     map[string]int
 	todosLeftOut      TodosLeftOut
 	todoPlacesLeftOut []TodoPlaceLeftOut
+	todosWithoutAList []TodoWithoutAList
 	todosNotDone      int
 	todosWithPeople   int
 	todosWithSubtasks int
 	subtasksLeftOut   int
+	todosThatRepeat   int
 
 	forwards ForwardCounts
 	docs     DocsCounts
@@ -457,8 +478,9 @@ func (e *Extractor) Extract(ctx context.Context, projectIDs []string, w *bundle.
 	e.todoListsByStatus = everyStatus()
 	e.todosByStatus = map[string]int{bundle.StatusActive: 0, bundle.StatusTrashed: 0}
 	e.todosLeftOut, e.todoPlacesLeftOut = TodosLeftOut{}, []TodoPlaceLeftOut{}
+	e.todosWithoutAList = []TodoWithoutAList{}
 	e.todosNotDone, e.todosWithPeople = 0, 0
-	e.todosWithSubtasks, e.subtasksLeftOut = 0, 0
+	e.todosWithSubtasks, e.subtasksLeftOut, e.todosThatRepeat = 0, 0, 0
 	e.forwards = ForwardCounts{
 		ByStatus:              map[string]int{bundle.StatusActive: 0, bundle.StatusTrashed: 0},
 		WithoutAnAddress:      []string{},
@@ -562,10 +584,12 @@ func (e *Extractor) Extract(ctx context.Context, projectIDs []string, w *bundle.
 		TodosByStatus:     e.todosByStatus,
 		TodosLeftOut:      e.todosLeftOut,
 		TodoPlacesLeftOut: e.todoPlacesLeftOut,
+		TodosWithoutAList: e.todosWithoutAList,
 		TodosNotDone:      e.todosNotDone,
 		TodosWithPeople:   e.todosWithPeople,
 		TodosWithSubtasks: e.todosWithSubtasks,
 		SubtasksLeftOut:   e.subtasksLeftOut,
+		TodosThatRepeat:   e.todosThatRepeat,
 
 		QuestionsLeftOut:    e.questionsLeftOut,
 		AnchorsInferred:     e.anchorsInferred,
