@@ -1030,3 +1030,25 @@ saying nothing about them would leave the next reader of `inFileOrder` to measur
 it again.
 **Implemented as:** `basecamp.inFileOrder`, see
 [Importing from Basecamp](stable/import.md).
+
+<a id="c-066"></a>
+## C-066 — Every owner of a file gets a record of its own
+
+*Applies to: `import basecamp`, `attachments.jsonl` and the files of a bundle*
+
+Where one file of the source turns up under a **second owner**, the bundle writes
+a record for that owner too: the same bytes, and a `sourceId` of the source's own
+name for the file with the number of the record behind it. The bytes are fetched
+for the first record and linked to from the others. `filesOfSeveralOwners` counts
+the records beyond the first.
+
+**Why:** a file stands in one place in Minka. Its blob belongs to the project of
+the record that brought it in and the handle naming it is good in that project's
+circle alone, so a record that named another's file would lose it where the two
+stand in different projects — and a record whose body was nothing but that file
+would arrive on no run at all. One record for the first owner alone was silently
+losing files: the checks on a bundle ask whether a reference finds a record, never
+whether the referring record may own it. Two blobs for one file is what Minka
+would rather pay, and its `ownedBy` stays as strict as it is.
+**Implemented as:** `basecamp.Extractor.claimFile` and `shareTheFile`,
+`bundle.Writer.ShareFile`, see [Importing from Basecamp](stable/import.md).

@@ -399,9 +399,12 @@ type Extractor struct {
 	answersWithoutADay  int
 	answersTrashed      int
 
-	// fileOwners names the first owner of every file the walk has met, and
-	// fileRecords are the records of those files in the order they were met.
-	fileOwners map[string]string
+	// filesOfTheSource says, per file of the source, what the bundle has made of
+	// it: how many records name it and which of them holds its bytes.
+	filesOfTheSource map[string]*fileOfTheSource
+	// attached are the records of files that have been written, by their own
+	// identifier, so that the index names none of them twice.
+	attached map[string]bool
 	// filesThatNeverArrive holds the files no run will ever bring in, for the
 	// one kind of record that is lost without them.
 	filesThatNeverArrive map[string]bool
@@ -499,7 +502,8 @@ func (e *Extractor) Extract(ctx context.Context, projectIDs []string, w *bundle.
 		bundle.TodoLists: 0, bundle.Todos: 0, bundle.Forwards: 0, bundle.ForwardReplies: 0,
 		bundle.Documents: 0, bundle.Uploads: 0}
 	e.longestBodyRecords = map[bundle.Kind]LongestBodyRecord{}
-	e.fileOwners, e.filesThatNeverArrive, e.fileRecords, e.files = map[string]string{}, map[string]bool{}, nil, FileCounts{}
+	e.filesOfTheSource, e.attached = map[string]*fileOfTheSource{}, map[string]bool{}
+	e.filesThatNeverArrive, e.fileRecords, e.files = map[string]bool{}, nil, FileCounts{}
 
 	ids, err := sortedIDs(projectIDs)
 	if err != nil {
@@ -537,8 +541,8 @@ func (e *Extractor) Extract(ctx context.Context, projectIDs []string, w *bundle.
 	if err := e.extractForwards(ctx, w); err != nil {
 		return Result{}, err
 	}
-	// Last of all, so that a file standing in a card and in a document alike
-	// belongs to the card: a file met twice keeps the record that named it first.
+	// Last of all: a file standing in a card and in a document alike has its
+	// bytes fetched for the card, and the document's record shares them.
 	if err := e.extractDocs(ctx, w); err != nil {
 		return Result{}, err
 	}

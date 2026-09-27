@@ -429,8 +429,9 @@ func TestTheFilesOfAMailAndOfAnAnswerNameTheirOwnRecord(t *testing.T) {
 }
 
 // The forwarded mail of a run is read after every other kind. Where a kind
-// stands decides one thing: a file met in two records belongs to the first that
-// named it, so a file that hangs in a card and in a mail alike stays the card's.
+// stands decides one thing: the bytes of a file are fetched for the record that
+// met it first, so a file that hangs in a card and in a mail alike is fetched for
+// the card.
 // Nothing a mail points at gains by being written later — Minka reads the whole
 // bundle before it applies a line of it.
 func TestTheForwardedMailOfARunIsReadAfterEveryOtherKind(t *testing.T) {

@@ -1407,16 +1407,18 @@ func TestImportBasecampBringsTheFilesOfTextsAndChats(t *testing.T) {
 	expectCode(t, r, ExitOK)
 	data := decode(t, env.Data)
 	want := map[string]any{
-		"filesInBodies": float64(15), "filesDropped": float64(0), "filesExpected": float64(13), "filesBytesExpected": float64(15950),
+		"filesInBodies": float64(16), "filesDropped": float64(0), "filesExpected": float64(13), "filesBytesExpected": float64(15950),
 		"filesBytes": float64(15114), "filesFetched": float64(12), "filesReused": float64(0), "filesGone": float64(1),
-		"fileNamesChanged": float64(5), "captionsDropped": float64(1), "filesOfSeveralOwners": float64(1), "missingFiles": []any{},
+		"fileNamesChanged": float64(5), "captionsDropped": float64(1), "filesOfSeveralOwners": float64(2), "missingFiles": []any{},
 	}
 	for field, value := range want {
 		if !reflect.DeepEqual(data[field], value) {
 			t.Errorf("%s: got %v, want %v", field, data[field], value)
 		}
 	}
-	if counts := data["counts"].(map[string]any); counts["attachments"] != float64(15) {
+	// The 13 files, 2 avatars, and a record for each of the two further owners
+	// of one file.
+	if counts := data["counts"].(map[string]any); counts["attachments"] != float64(17) {
 		t.Errorf("counts %v", counts)
 	}
 	for _, notice := range []string{"1 file of a text or a chat is gone", "1 caption of a file is left off its reference"} {
@@ -1448,7 +1450,7 @@ func TestImportBasecampBringsTheFilesOfTextsAndChats(t *testing.T) {
 	expectCode(t, r, ExitOK)
 	for _, line := range []string{
 		"Files: 12 of 13 brought, 15114 bytes of 15950 expected; 0 fetched, 12 taken over from the bundle before, 1 gone at Basecamp",
-		"Names of files changed: 5; captions too long for a reference, left off: 1; files met under a second owner: 1",
+		"Names of files changed: 5; captions too long for a reference, left off: 1; records of a file under a further owner: 2",
 	} {
 		if !strings.Contains(r.stdout, line) {
 			t.Errorf("the text lacks %q:\n%s", line, r.stdout)

@@ -196,6 +196,7 @@ func (e *Extractor) lineBody(found line) (string, []sourceFile, error) {
 	}
 	var body strings.Builder
 	var referred []sourceFile
+	claimed := map[string]sourceFile{}
 	for _, file := range found.Attachments {
 		key := blobKey(file.DownloadURL)
 		if key == "" {
@@ -206,11 +207,13 @@ func (e *Extractor) lineBody(found line) (string, []sourceFile, error) {
 			continue
 		}
 		e.bodies.Files++
-		source := sourceFile{
+		source, first := e.claimFile(sourceFile{
 			ref: "blob-" + key, key: key,
 			filename: file.Filename, contentType: file.ContentType, byteSize: file.ByteSize, downloadURL: file.DownloadURL,
+		}, claimed)
+		if first {
+			referred = append(referred, source)
 		}
-		referred = append(referred, source)
 		fmt.Fprintf(&body, `<import-attachment ref="%s"></import-attachment>`, source.ref)
 	}
 	return body.String(), referred, nil

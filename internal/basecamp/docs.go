@@ -553,6 +553,9 @@ func (e *Extractor) writeUpload(ctx context.Context, w *bundle.Writer, walk *doc
 	if err != nil {
 		return err
 	}
+	// The file an upload stands for is named after the upload and stands in no
+	// text, so it belongs to one record and shares its bytes with none.
+	file, _ = e.claimFile(file, nil)
 	if err := e.attachFile(ctx, w, bundle.OwnerUpload, origin, file); err != nil {
 		return err
 	}

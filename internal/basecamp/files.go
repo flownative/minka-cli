@@ -53,9 +53,33 @@ type FileCounts struct {
 	Gone    int
 	// NamesChanged are the files whose name could not stay as it was.
 	NamesChanged int
-	// SecondOwners counts the times a file turned up under another owner than
-	// its first, who keeps it.
+	// SecondOwners counts the records a run wrote for a file that turned up
+	// under a further owner: one file of the source, a record per owner, and
+	// the same bytes under each of them.
 	SecondOwners int
+}
+
+// fileOfTheSource is one file of the source and what the bundle has made of it.
+// Every owner of a file gets a record of its own, so one file can stand behind
+// several of them, and the first of those records is the one whose bytes the
+// others share.
+type fileOfTheSource struct {
+	// records counts the records handed out for the file, the first included,
+	// and numbers every one beyond it.
+	records int
+	// holder is the record the bytes were brought for, and stored says where
+	// they lie, once a record of the file has them.
+	holder string
+	stored bundle.StoredFile
+	held   bool
+	// gone tells that Basecamp no longer has the file and failed why this run
+	// could not fetch it: either way no owner of it gets bytes, and asking a
+	// second time would pay for the same answer twice.
+	gone   bool
+	failed *Error
+	// decided says that a record of the file has been through all of that, so
+	// that a further owner knows whether there is anything to share.
+	decided bool
 }
 
 // sourceFile is a file of the source as a run brings it: one a text or a line
@@ -77,11 +101,66 @@ type sourceFile struct {
 	// store no run follows, so the bytes are asked for by these two.
 	upload int64
 	bucket int64
+	// sharesWith names the file of the source, as the source names it, where
+	// this record is a further owner of one file and takes the bytes another
+	// record of the bundle already holds. Empty for the first owner, whose ref
+	// is the source's own name for the file.
+	sharesWith string
 }
 
 // byTheUpload tells a file that is fetched by the identifier of its upload from
 // one that is fetched at a storage address.
 func (f sourceFile) byTheUpload() bool { return f.upload != 0 }
+
+// ofTheSource is the file as the source names it, which is the same name for
+// every owner of it, where ref is the record's own.
+func (f sourceFile) ofTheSource() string {
+	if f.sharesWith != "" {
+		return f.sharesWith
+	}
+	return f.ref
+}
+
+// claimFile hands out the identifier the record of a file carries in the bundle
+// and says where its bytes come from. A body that names one file twice names one
+// record of it: within is what this body has claimed already, by the source's
+// own name for the file, and nothing for a file that stands beside a text rather
+// than in one.
+//
+// A file that turns up under a **further owner** gets a record of its own, with
+// the bytes of the first and a number behind the source's name for it. One file
+// stands in one place in Minka — a blob belongs to the project of the record
+// that brought it in, and the handle that names it is good in that project
+// alone — so a record naming another's file would be offered nothing where it
+// stands elsewhere, and a record whose body is nothing but that file would wait
+// for ever. The number is separated by a dot, which no name of the source holds:
+// an identifier of Basecamp is digits and the key of a stored file is letters,
+// digits, a hyphen and an underscore, so no record of a further owner can carry
+// the name of another file.
+func (e *Extractor) claimFile(file sourceFile, within map[string]sourceFile) (sourceFile, bool) {
+	if already, claimed := within[file.ref]; claimed {
+		return already, false
+	}
+	if e.filesOfTheSource == nil {
+		e.filesOfTheSource = map[string]*fileOfTheSource{}
+	}
+	ofTheSource := file.ref
+	met := e.filesOfTheSource[ofTheSource]
+	if met == nil {
+		met = &fileOfTheSource{}
+		e.filesOfTheSource[ofTheSource] = met
+	}
+	met.records++
+	if met.records > 1 {
+		e.files.SecondOwners++
+		file.sharesWith = ofTheSource
+		file.ref = fmt.Sprintf("%s.%d", ofTheSource, met.records)
+	}
+	if within != nil {
+		within[ofTheSource] = file
+	}
+	return file, true
+}
 
 // storageHost is the host a storage address is written with. The Basecamp CLI
 // takes a download only from an address of this kind, and sends the request
@@ -206,13 +285,16 @@ func (e *Extractor) attachFiles(ctx context.Context, w *bundle.Writer, ownerKind
 	return nil
 }
 
-// attachFile brings one file: taken over from the bundle the run replaces, or
-// else downloaded, straight into the bundle. Its record waits for the end of
-// the run, because the index begins with the avatars, which come last.
+// attachFile brings one file: shared with a record of the bundle that holds it
+// already, taken over from the bundle the run replaces, or else downloaded,
+// straight into the bundle. Its record waits for the end of the run, because
+// the index begins with the avatars, which come last.
 //
-// A file has one record and is fetched once, however many references name it;
-// the first owner keeps it. It takes the times of its owner, because Basecamp
-// gives a file none, and names nobody: whoever wrote the text brought it.
+// One file of the source is fetched once and weighs once in the report, however
+// many records own it; every owner of it gets a record, and one beyond the first
+// adds nothing but itself. A record takes the times of its owner, because
+// Basecamp gives a file none, and names nobody: whoever wrote the text brought
+// it.
 //
 // Every file is fetched, whatever its size and its type: what a Minka takes
 // is the applier's to decide. A file Basecamp no longer has gets a record that
@@ -223,22 +305,12 @@ func (e *Extractor) attachFiles(ctx context.Context, w *bundle.Writer, ownerKind
 //
 // A discarding Writer fetches nothing and counts the record.
 func (e *Extractor) attachFile(ctx context.Context, w *bundle.Writer, ownerKind string, owner bundle.Record, file sourceFile) error {
-	if first, met := e.fileOwners[file.ref]; met {
-		if first != ownerKind+" "+owner.SourceID {
-			e.files.SecondOwners++
-		}
+	if e.attached[file.ref] {
 		return nil
 	}
-	e.fileOwners[file.ref] = ownerKind + " " + owner.SourceID
-	e.files.Expected++
-	if file.byteSize != nil {
-		e.files.BytesExpected += *file.byteSize
-	}
+	e.attached[file.ref] = true
 
 	name, changed := plainName(file.filename)
-	if changed {
-		e.files.NamesChanged++
-	}
 	record := bundle.Attachment{
 		Record:        bundle.Record{SourceID: file.ref, CreatedAt: owner.CreatedAt, UpdatedAt: owner.UpdatedAt},
 		Filename:      name,
@@ -257,6 +329,23 @@ func (e *Extractor) attachFile(ctx context.Context, w *bundle.Writer, ownerKind 
 			Retryable:          failed.Transient(),
 		})
 	}
+	met := e.filesOfTheSource[file.ofTheSource()]
+	// A further owner of one file takes what the bundle already holds. Where the
+	// record that claimed the file first never came to be, because the record it
+	// hung on was left out, this one brings the bytes and the next shares with it.
+	if file.sharesWith != "" && met.decided {
+		return e.shareTheFile(w, record, met, missing)
+	}
+	met.holder = file.ref
+	defer func() { met.decided = true }()
+
+	e.files.Expected++
+	if file.byteSize != nil {
+		e.files.BytesExpected += *file.byteSize
+	}
+	if changed {
+		e.files.NamesChanged++
+	}
 	if w.Discards() {
 		// All a dry run knows of a file is what the source says about it — the
 		// size, and whether the address it gives can be asked for at all. The
@@ -271,6 +360,7 @@ func (e *Extractor) attachFile(ctx context.Context, w *bundle.Writer, ownerKind 
 			if _, err := e.storageAddress(file); err != nil {
 				var failed *Error
 				if errors.As(err, &failed) {
+					met.failed = failed
 					missing(failed)
 				}
 				return nil
@@ -316,11 +406,13 @@ func (e *Extractor) attachFile(ctx context.Context, w *bundle.Writer, ownerKind 
 			return err
 		case failed.Kind == NotFound:
 			record.Gone = true
+			met.gone = true
 			e.files.Gone++
 			e.filesThatNeverArrive[file.ref] = true
 			e.fileRecords = append(e.fileRecords, record)
 			return nil
 		default:
+			met.failed = failed
 			missing(failed)
 			return nil
 		}
@@ -328,7 +420,9 @@ func (e *Extractor) attachFile(ctx context.Context, w *bundle.Writer, ownerKind 
 			if err := w.DropFile(file.ref); err != nil {
 				return err
 			}
-			missing(sizeDiffers(stored.Bytes, *file.byteSize))
+			differs := sizeDiffers(stored.Bytes, *file.byteSize)
+			met.failed = differs
+			missing(differs)
 			return nil
 		}
 		e.files.Fetched++
@@ -337,6 +431,42 @@ func (e *Extractor) attachFile(ctx context.Context, w *bundle.Writer, ownerKind 
 	e.files.Bytes += stored.Bytes
 	if stored.Bytes > e.LargestFile {
 		e.filesThatNeverArrive[file.ref] = true
+	}
+	met.stored, met.held = stored, true
+	record.Holds(stored)
+	e.fileRecords = append(e.fileRecords, record)
+	return nil
+}
+
+// shareTheFile writes the record of a further owner of one file: the same bytes
+// under the identifier that owner's body names, linked from what the run brought
+// for the record that holds them, because two records must never mean two
+// downloads.
+//
+// What became of the file becomes of every owner of it at once: one the source no
+// longer has is gone for all of them, and one this run could not fetch is missing
+// for all of them, with the reason the first got.
+func (e *Extractor) shareTheFile(w *bundle.Writer, record bundle.Attachment, met *fileOfTheSource, missing func(*Error)) error {
+	if e.filesThatNeverArrive[met.holder] {
+		e.filesThatNeverArrive[record.SourceID] = true
+	}
+	switch {
+	case met.gone:
+		record.Gone = true
+		e.fileRecords = append(e.fileRecords, record)
+		return nil
+	case met.failed != nil:
+		missing(met.failed)
+		return nil
+	case !met.held:
+		// A dry run holds no bytes of anything and counts the record all the same.
+		e.fileRecords = append(e.fileRecords, record)
+		return nil
+	}
+
+	stored, err := w.ShareFile(met.stored, record.SourceID, record.Filename)
+	if err != nil {
+		return err
 	}
 	record.Holds(stored)
 	e.fileRecords = append(e.fileRecords, record)
