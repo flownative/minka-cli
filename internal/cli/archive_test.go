@@ -20,10 +20,14 @@ func everyWrite(e *testEnv) map[string][]string {
 	card, chat := f.CardInDoing.ID, f.Chat.ID
 	message := f.Chat.Messages[0].ID
 
+	document, upload := f.Document.ID, f.FilesUpload.ID
+
 	expectCode(e.t, e.run("", "comments", "create", card, "A comment", "--json"), ExitOK)
 	expectCode(e.t, e.run("", "steps", "create", card, "A step", "--json"), ExitOK)
 	expectCode(e.t, e.run("", "cards", "delete", f.CardInTriage.ID, "--json"), ExitOK)
+	expectCode(e.t, e.run("", "docs", "comments", "create", "--document", document, "A comment", "--json"), ExitOK)
 	comment := f.CardInDoing.Comments[len(f.CardInDoing.Comments)-1].ID
+	entryComment := f.Document.Comments[len(f.Document.Comments)-1].ID
 
 	return map[string][]string{
 		"cards create":      {"cards", "create", "--board", f.Board.ID, "--title", "New"},
@@ -54,6 +58,14 @@ func everyWrite(e *testEnv) map[string][]string {
 		"messages delete":   {"messages", "delete", chat, message},
 		"messages react":    {"messages", "react", chat, message, "👍"},
 		"messages unreact":  {"messages", "unreact", chat, message, "👍"},
+
+		"docs create":           {"docs", "create", "--tool", f.Files.ID, "--title", "A new page", "--audience", "nobody"},
+		"docs edit":             {"docs", "edit", document, "--title", "Renamed", "--force"},
+		"docs comments create":  {"docs", "comments", "create", "--document", document, "Another comment"},
+		"docs comments edit":    {"docs", "comments", "edit", "--document", document, entryComment, "Other words"},
+		"docs comments delete":  {"docs", "comments", "delete", "--document", document, entryComment},
+		"docs comments react":   {"docs", "comments", "react", "--upload", upload, f.FilesUpload.Comments[0].ID, "👍"},
+		"docs comments unreact": {"docs", "comments", "unreact", "--upload", upload, f.FilesUpload.Comments[0].ID, "👍"},
 	}
 }
 
@@ -66,6 +78,7 @@ var notAWriteIntoAProject = []string{
 	"skill show", "skill install", "skill status",
 	"projects list", "boards list", "boards show", "boards archive", "people list", "trash list",
 	"cards mine", "cards show", "cards notes show", "steps list", "chats list", "messages list",
+	"docs tools", "docs list", "docs show", "docs uploads show",
 	"chats mark-read", "conversations list", "conversations with", "conversations people",
 	"uploads create", "uploads download", "import basecamp",
 	"work start", "work stop", "work list", "heartbeat", "hooks install", "hooks status",

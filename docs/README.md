@@ -43,6 +43,10 @@ the documentation says what holds; how it came about is in git.
   cursor that has left the archive is worked around, the refusals of the two
   writes — before any work on `boards archive`, `cards archive` or `cards
   unarchive`.
+- [Docs & Files](stable/docs-and-files.md): What a document and an upload are,
+  the body that is never refused, the guard that cannot see one second, whom a
+  new document reaches, the flag that names the kind of entry, the archive of a
+  folder, the refusals — before any work on `docs`.
 - [Testing](stable/testing.md): Fake API, sabotage proofs, what a test pins
   down, what it may demand of time — read before your first test.
 

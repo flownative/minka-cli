@@ -1054,3 +1054,41 @@ takes a record over by its identifier and one that moved when another record
 moved would store the same bytes again.
 **Implemented as:** `basecamp.Extractor.claimFile` and `shareTheFile`,
 `bundle.Writer.ShareFile`, see [Importing from Basecamp](stable/import.md).
+
+<a id="c-067"></a>
+## C-067 — Three guards, three mappings, and never a null expectation
+
+*Applies to: `docs edit`, `cards notes set`*
+
+`--expect <updatedAt>` on a document sends the string **verbatim**;
+`--force` leaves `expectedUpdatedAt` **out of the body** rather than sending
+`null`; `--expect none` is refused as a usage error. The notes of a card keep
+their own mapping, where `none` sends `null`.
+
+**Why:** `null` means "no expectation, last write wins" on a document and an
+upload, and "no notes have been written yet" on the back of a card, so one
+helper over both would invert the meaning on one of them — and a document,
+whose moment is kept to the whole second, cannot see a change made in the same
+second as the read, which is why every guarded write says so rather than
+promising more than it holds.
+**Implemented as:** `cli.documentGuard`, `api.UpdateDocumentInput`, see
+[Docs & Files](stable/docs-and-files.md).
+
+<a id="c-068"></a>
+## C-068 — A text the server finds no markup in is not refused but said out loud
+
+*Applies to: `docs create`, `docs edit`, `comments create`, `comments edit`,
+every `--format html` and `--body-format html`*
+
+Markdown is converted here, and where a caller sends HTML itself a text that
+carries no element the server serves draws a `notice` naming what becomes of
+it. It is not refused.
+
+**Why:** the server asks whether a value carries served markup before it cleans
+anything, and keeps one that does not as the characters it consists of, with
+the same 201 or 200 as any other answer — so `# Heading` lands as `# Heading`
+and only the web ever shows it; refusing what the server accepts would be
+wrong about it, and saying nothing would leave the one loss nothing else
+reports.
+**Implemented as:** `cli.markupNotice`, `cli.documentBody`, see
+[Docs & Files](stable/docs-and-files.md).

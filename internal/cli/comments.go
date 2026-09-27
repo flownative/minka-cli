@@ -31,7 +31,7 @@ func (a *app) newCommentsCmd() *cobra.Command {
 func commentBody(cmd *cobra.Command, text, format string) (string, []string, error) {
 	switch format {
 	case "html":
-		return text, nil, nil
+		return text, markupNotice(text), nil
 	case "markdown":
 		result := markdown.ToHTML(text, markdown.KeepLineBreaks())
 		if result.HTML == "" && strings.TrimSpace(text) != "" {
@@ -41,6 +41,17 @@ func commentBody(cmd *cobra.Command, text, format string) (string, []string, err
 	default:
 		return "", nil, usageErrorf(cmd, "--format is markdown or html, not %q", format)
 	}
+}
+
+// markupNotice says what becomes of a text the server finds no markup in: it
+// is kept as the characters it consists of, escaped, and the answer says
+// nothing about it. Markdown sent as HTML therefore stands there afterwards as
+// the characters somebody typed.
+func markupNotice(text string) []string {
+	if strings.TrimSpace(text) == "" || richtext.CarriesMarkup(text) {
+		return nil
+	}
+	return []string{"the text carries no element Minka serves, so it is kept as the characters it consists of, not as markup"}
 }
 
 func (a *app) newCommentsCreateCmd() *cobra.Command {
