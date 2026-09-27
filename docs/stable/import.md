@@ -820,7 +820,11 @@ and Minka applies the kinds in an order of its own.
     honest gap in the report is worth more than that. Where the file left a
     record behind — one the source no longer has, one above what Minka takes —
     that record stays as the trace of what became of it, so nothing dangles and
-    nothing names it.
+    nothing names it. **Such an upload is in no other number of the run**: its
+    title, its description and the files of that description are not read at all,
+    so nothing of it is counted among the titles taken from a file name, the
+    captions, the owners of a file beyond the first or the longest text of its
+    kind. What is counted is what fell with it, and that it fell.
 
   A file that **might still come** is not one that will never come: the tag
   stays, the upload is written and waits for its file, and a later run writes
@@ -1480,7 +1484,7 @@ A name and a company are personal data.
 
 ## Files that cannot be fetched
 
-One file that is not to be had does not cost a run (C-025). Its attachment
+One file that is not to be had does not cost a run (C-069). Its attachment
 record is left out, and the bundle is written and put in place: it is whole
 and can be applied. A person whose avatar is missing comes with
 `avatar: null`; a text keeps the reference to a file that is missing, which
@@ -1505,7 +1509,7 @@ and each is acted on differently:
 | `refusedBySource` | Basecamp's own no: it has no such file, or it hands this one to nobody | exit 0, named in the notice and counted in the summary |
 | `notUnderstood` | a guard of this run refused, an answer nobody can read, a Basecamp CLI that says something new | `api_error`, exit 7 — look at this program, not at the file |
 
-**Only `refusedBySource` decides anything about the file** (C-025). A text that
+**Only `refusedBySource` decides anything about the file** (C-069). A text that
 was nothing but such a file is written without it as for a file the source no
 longer has, and an upload standing for one is left out (C-063), because a record
 that waited for it would wait on every run to the end of time. For the other two
@@ -1519,9 +1523,14 @@ the download is an answer about the file. A reading of the source that is wrong
 by one shape therefore costs one exit code and a later run, not every file of an
 account counted and named and gone, and a dry run says so before anybody spends
 an hour. The same holds for an avatar: the class of a status that is no 200 is
-read, so a 404 is Basecamp's word and a status nobody knows is ours.
+read, so a 404 is Basecamp's word about the picture and a status nobody knows is
+ours. **A 401 is neither**: it says this run is not signed in, so it ends the run
+as it does for a file, rather than writing off every picture of an account over
+one thing nobody refused. A 403 counts as Basecamp's word only because the host
+is Basecamp's own — an address signed by somebody else that had run out would
+answer the same.
 
-**The exit code says what to do next, and nothing else** (C-025). A failure
+**The exit code says what to do next, and nothing else** (C-069). A failure
 nobody could place decides it wherever one is among the missing files, because
 running again does not answer it; else one that may pass does; else every file
 was refused by the source and the run ends well, with a `notice` naming them and

@@ -386,10 +386,12 @@ func (e *Extractor) attachFile(ctx context.Context, w *bundle.Writer, owner file
 			e.filesThatNeverArrive[file.ref] = true
 		}
 		if !file.byTheUpload() {
-			if _, err := e.storageAddress(file); err != nil {
-				var failed *Error
-				if errors.As(err, &failed) {
-					e.theFileDidNotCome(file, met, failed, whoseWordAMissingFileIs(true, failed), missing)
+			// Through the same door as a run, so that both read a refusal of this
+			// run's own the same way. Nothing is fetched here: what the door hands
+			// back is called by nobody.
+			if _, err := e.bringing(ctx, file); err != nil {
+				if ended := howTheDownloadEnded(err); ended.failed != nil {
+					e.theFileDidNotCome(file, met, ended.failed, ended.why, missing)
 				}
 				return nil
 			}
@@ -414,11 +416,6 @@ func (e *Extractor) attachFile(ctx context.Context, w *bundle.Writer, owner file
 		e.files.Reused++
 	} else {
 		bring, err := e.bringing(ctx, file)
-		// Where the failure came from, which is half of whose word it is: what a
-		// guard of this run refuses before anything is asked for is its own doing,
-		// and only what comes back from the download is Basecamp's answer about
-		// the file.
-		ofOurOwn := err != nil
 		if err == nil {
 			stored, err = w.StoreFile(file.ref, name, func(into io.Writer) error {
 				err := bring(into)
@@ -430,14 +427,14 @@ func (e *Extractor) attachFile(ctx context.Context, w *bundle.Writer, owner file
 				return err
 			})
 		}
-		var failed *Error
+		ended := howTheDownloadEnded(err)
 		switch {
 		case err == nil:
 		case ctx.Err() != nil:
 			return &Error{Kind: Interrupted, Message: "interrupted"}
-		case !errors.As(err, &failed) || failed.Kind == Interrupted || failed.Kind == AuthRequired:
+		case ended.endsTheRun:
 			return err
-		case failed.Kind == NotFound:
+		case ended.gone:
 			record.Gone = true
 			met.gone = true
 			e.files.Gone++
@@ -445,7 +442,7 @@ func (e *Extractor) attachFile(ctx context.Context, w *bundle.Writer, owner file
 			e.fileRecords = append(e.fileRecords, record)
 			return nil
 		default:
-			e.theFileDidNotCome(file, met, failed, whoseWordAMissingFileIs(ofOurOwn, failed), missing)
+			e.theFileDidNotCome(file, met, ended.failed, ended.why, missing)
 			return nil
 		}
 		if file.byteSize != nil && stored.Bytes != *file.byteSize {
@@ -453,7 +450,7 @@ func (e *Extractor) attachFile(ctx context.Context, w *bundle.Writer, owner file
 				return err
 			}
 			differs := sizeDiffers(stored.Bytes, *file.byteSize)
-			e.theFileDidNotCome(file, met, differs, whoseWordAMissingFileIs(false, differs), missing)
+			e.theFileDidNotCome(file, met, differs, whyTheSourceGaveNoFile(differs), missing)
 			return nil
 		}
 		e.files.Fetched++
@@ -506,9 +503,14 @@ func (e *Extractor) shareTheFile(w *bundle.Writer, record bundle.Attachment, met
 }
 
 // bringing is what fetches the bytes of a file, by the route the file comes by,
-// or the reason no run can fetch it at all. Only a file named at a storage
-// address has such a reason: an upload is asked for by its identifiers, which
-// need no address and cannot be refused before the call.
+// or the refusal of this run's own that no file gets past. Only a file named at a
+// storage address can be refused here: an upload is asked for by its identifiers,
+// which need no address.
+//
+// **Whatever it refuses, it refuses as its own**, marked as such: what became of
+// a download turns on the difference between a word of this run and an answer of
+// the source, and that difference travels with the failure rather than with
+// whoever reads it.
 func (e *Extractor) bringing(ctx context.Context, file sourceFile) (func(io.Writer) error, error) {
 	if file.byTheUpload() {
 		return func(into io.Writer) error {
@@ -517,9 +519,55 @@ func (e *Extractor) bringing(ctx context.Context, file sourceFile) (func(io.Writ
 	}
 	address, err := e.storageAddress(file)
 	if err != nil {
-		return nil, err
+		return nil, &ourOwnRefusal{err}
 	}
 	return func(into io.Writer) error { return e.Files.Download(ctx, address, into) }, nil
+}
+
+// ourOwnRefusal is a failure this run raised **before it asked anybody**: a key
+// it will build no address from, an address it will not hand to the Basecamp
+// CLI. Such a failure says nothing about the file, whatever class it carries, so
+// nothing standing on the file is written off over it and the run says out loud
+// that it did not understand. It is carried by the failure because a guard that
+// one day spoke in a class of the source would otherwise be taken for the source.
+type ourOwnRefusal struct{ err error }
+
+func (r *ourOwnRefusal) Error() string { return r.err.Error() }
+func (r *ourOwnRefusal) Unwrap() error { return r.err }
+
+// howADownloadEnded is what became of a download: nothing of it where the file
+// came, the end of the run, a file the source no longer has, or one that is
+// missing with the word whose the failure was.
+type howADownloadEnded struct {
+	endsTheRun bool
+	gone       bool
+	failed     *Error
+	why        WhyAFileIsMissing
+}
+
+// howTheDownloadEnded reads a failure of a download, or the want of one. It is
+// the one place where both halves of the answer are known — the class, and
+// whether this run raised the failure itself — and it takes a class for the
+// source's word only where the source gave it: a "not found" of our own would
+// otherwise write the file off as one Basecamp no longer has, and a refusal of
+// our own as one it hands to nobody.
+//
+// A sign-in that is gone and an interruption end the run: no further file would
+// come either way.
+func howTheDownloadEnded(err error) howADownloadEnded {
+	if err == nil {
+		return howADownloadEnded{}
+	}
+	var failed *Error
+	if !errors.As(err, &failed) || failed.Kind == Interrupted || failed.Kind == AuthRequired {
+		return howADownloadEnded{endsTheRun: true}
+	}
+	var ours *ourOwnRefusal
+	why := whoseWordAMissingFileIs(errors.As(err, &ours), failed)
+	if why == RefusedBySource && failed.Kind == NotFound {
+		return howADownloadEnded{gone: true}
+	}
+	return howADownloadEnded{failed: failed, why: why}
 }
 
 // theFileDidNotCome notes a download that brought no file, names it among the

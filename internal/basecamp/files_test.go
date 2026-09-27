@@ -595,6 +595,11 @@ func TestTheIndexHoldsWhatTheReportSaysItHolds(t *testing.T) {
 		}
 		return of
 	}
+	// Over the project of the files and over the Docs & Files, whose uploads are
+	// the one place where a record of the bundle is left out **after** its text
+	// has been read: an owner counted for an upload that is left out would be an
+	// owner of nothing, and the form the report gives for checking a bundle would
+	// stop adding up.
 	for name, prepare := range map[string]func(*fakebasecamp.Account){
 		"a run that brings everything": func(*fakebasecamp.Account) {},
 		"a file no owner of it can have": func(account *fakebasecamp.Account) {
@@ -603,11 +608,19 @@ func TestTheIndexHoldsWhatTheReportSaysItHolds(t *testing.T) {
 		"an avatar that could not be fetched": func(account *fakebasecamp.Account) {
 			account.FailAvatarOf[101] = &basecamp.Error{Kind: basecamp.Network, Message: "connection reset"}
 		},
+		"an upload left out whose description shared a file": func(account *fakebasecamp.Account) {
+			account.FailFileOf[fakebasecamp.StoredKeyOfUpload(9267)] = &basecamp.Error{
+				Kind: basecamp.Forbidden, Message: "Basecamp forbids the download"}
+		},
+		"an upload left out that shared nothing": func(account *fakebasecamp.Account) {
+			account.FailFileOf[fakebasecamp.StoredKeyOfUpload(9260)] = &basecamp.Error{
+				Kind: basecamp.Forbidden, Message: "Basecamp forbids the download"}
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			account := fakebasecamp.New()
 			prepare(account)
-			dir, result := extract(t, account, fileProject)
+			dir, result := extract(t, account, fileProject, docsProject)
 
 			want := result.Avatars + result.Files.Expected + result.Files.OwnersBeyondTheFirst -
 				filesOfATextThatAreMissing(result.Missing)

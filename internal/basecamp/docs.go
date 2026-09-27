@@ -535,6 +535,29 @@ func (e *Extractor) writeUpload(ctx context.Context, w *bundle.Writer, walk *doc
 		e.docs.BoostsWithoutTheirUpload += found.BoostsCount
 		return nil
 	}
+	origin, err := e.record("upload", found.ID, found.recording)
+	if err != nil {
+		return err
+	}
+	mine := owns(bundle.OwnerUpload, found.ID)
+	// The file an upload stands for is named after the upload and stands in no
+	// text, so it belongs to one record and shares its bytes with none.
+	file, _ = e.claimFile(file, nil, mine)
+	if err := e.attachFile(ctx, w, mine, origin, file); err != nil {
+		return err
+	}
+	// Asked before anything of the upload is read or written, because **an upload
+	// that is left out is in no number of the run**: an upload has no purpose
+	// without its file, so one that will never come takes the upload with it, and
+	// its title, its description, the files of that description and their captions
+	// are then nothing a bundle or a report has a place for. Where the file left a
+	// record behind, that record stays as the trace of what became of it.
+	if e.theFileNeverArrives(file.ref) {
+		e.docs.OnlyAFileNoRunWillBring = append(e.docs.OnlyAFileNoRunWillBring, origin.SourceID)
+		e.docs.CommentsWithoutTheirUpload += found.CommentsCount
+		e.docs.BoostsWithoutTheirUpload += found.BoostsCount
+		return nil
+	}
 	// What the source calls the upload, and the name of the file where it calls
 	// it nothing: Basecamp fills the title from the name and lets anybody rename
 	// it, so the title is the one to take and the name is what stands in.
@@ -554,31 +577,9 @@ func (e *Extractor) writeUpload(ctx context.Context, w *bundle.Writer, walk *doc
 	if changed {
 		e.docs.NamesMadeIntoATitle++
 	}
-	origin, err := e.record("upload", found.ID, found.recording)
-	if err != nil {
-		return err
-	}
-	mine := owns(bundle.OwnerUpload, found.ID)
 	description, embedded, err := e.rewriteBody(mine, found.Description, "", found.Files)
 	if err != nil {
 		return err
-	}
-	// The file an upload stands for is named after the upload and stands in no
-	// text, so it belongs to one record and shares its bytes with none.
-	file, _ = e.claimFile(file, nil, mine)
-	if err := e.attachFile(ctx, w, mine, origin, file); err != nil {
-		return err
-	}
-	// Asked before the files of the description are fetched and before anything
-	// of the upload is written: an upload has no purpose without its file, so one
-	// that will never come takes the upload with it, and the bytes of its
-	// description would be bytes nobody ever reads. Where the file left a record
-	// behind, that record stays as the trace of what became of it.
-	if e.theFileNeverArrives(file.ref) {
-		e.docs.OnlyAFileNoRunWillBring = append(e.docs.OnlyAFileNoRunWillBring, origin.SourceID)
-		e.docs.CommentsWithoutTheirUpload += found.CommentsCount
-		e.docs.BoostsWithoutTheirUpload += found.BoostsCount
-		return nil
 	}
 	if err := e.attachFiles(ctx, w, mine, origin, embedded); err != nil {
 		return err

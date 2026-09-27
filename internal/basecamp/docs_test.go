@@ -696,8 +696,12 @@ func TestADocumentThatSaysNothingButAFileThatNeverComesArrivesWordless(t *testin
 	// failed this time keeps its tag and waits for the run that brings it: the
 	// document would otherwise lose its text to a file that is coming.
 	for what, failure := range map[string]*basecamp.Error{
-		"refused for good": {Kind: basecamp.Forbidden, Message: "Basecamp forbids the download"},
-		"missed this run":  {Kind: basecamp.Network, Message: "the network failed"},
+		"refused by the source": {Kind: basecamp.Forbidden, Message: "Basecamp forbids the download"},
+		"missed this run":       {Kind: basecamp.Network, Message: "the network failed"},
+		// A failure nobody could place takes the text as little as it takes the
+		// upload: nothing about the file is decided, so nothing of the document is
+		// given up over it.
+		"nobody could place it": {Kind: basecamp.API, Message: "Basecamp answered with something else"},
 	} {
 		forGood := failure.Kind == basecamp.Forbidden
 		account := fakebasecamp.New()
@@ -1378,10 +1382,12 @@ func TestAnUploadWhoseFileIsRefusedForGoodIsLeftOutWithWhatHangsOnIt(t *testing.
 			t.Errorf("a file of the description of the upload left out has a record: %v", record)
 		}
 	}
-	// And the document embedding the same file keeps it: an upload that stays out
-	// takes nothing with it that another record of the bundle stands on.
-	if got := recordWithID(t, records(t, dir, bundle.Attachments), "attachment-5401.document-9240")["bytes"]; got != float64(2048) {
-		t.Errorf("the file of a document that the upload left out embedded too weighs %v", got)
+	// And the document embedding the same file keeps it, under the file's own name
+	// and not as a further owner's: an upload that stays out takes nothing with it
+	// that another record stands on, and it is no owner of anything either.
+	chart := recordWithID(t, records(t, dir, bundle.Attachments), "attachment-5401")
+	if chart["bytes"] != float64(2048) || chart["ownerKind"] != bundle.OwnerDocument || chart["ownerSourceId"] != "9240" {
+		t.Errorf("the file of a document that the upload left out embedded too reads %v", chart)
 	}
 	// And it is no upload the source names no file for: that one is left out for
 	// a reason of its own and counted apart.
