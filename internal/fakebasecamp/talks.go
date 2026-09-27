@@ -327,6 +327,26 @@ func (a *Account) commentsOf(p *Project, id string) ([]Comment, bool) {
 			comments, found = forward.Comments, true
 		}
 	})
+	// A folder is there to be asked, as it is at Basecamp, and answers with
+	// nothing: no folder of Basecamp takes a comment. That no run asks at all is
+	// the run's own doing.
+	a.eachVault(p, func(in vault) {
+		for _, folder := range in.folders {
+			if strconv.FormatInt(folder.ID, 10) == id {
+				comments, found = nil, true
+			}
+		}
+		for _, document := range in.documents {
+			if strconv.FormatInt(document.ID, 10) == id {
+				comments, found = document.Comments, true
+			}
+		}
+		for _, upload := range in.uploads {
+			if strconv.FormatInt(upload.ID, 10) == id {
+				comments, found = upload.Comments, true
+			}
+		}
+	})
 	return comments, found
 }
 
@@ -386,6 +406,23 @@ func (a *Account) boostsOf(p *Project, id string) ([]Boost, bool) {
 		}
 		for _, reply := range forward.Replies {
 			is(reply.ID, reply.Boosts)
+		}
+	})
+	a.eachVault(p, func(in vault) {
+		for _, folder := range in.folders {
+			is(folder.ID, nil)
+		}
+		for _, document := range in.documents {
+			is(document.ID, document.Boosts)
+			for _, comment := range document.Comments {
+				is(comment.ID, comment.Boosts)
+			}
+		}
+		for _, upload := range in.uploads {
+			is(upload.ID, upload.Boosts)
+			for _, comment := range upload.Comments {
+				is(comment.ID, comment.Boosts)
+			}
 		}
 	})
 	return boosts, found

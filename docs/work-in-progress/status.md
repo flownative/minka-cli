@@ -24,22 +24,27 @@ card, a comment or a message gives the identifier a download takes, without
 anything being taken out of the text.
 
 `minka import basecamp` extracts the structure, the boards, the message
-boards, the chats, the check-ins, the to-dos and the forwarded mail of Basecamp
+boards, the chats, the check-ins, the to-dos, the forwarded mail and the
+Docs & Files of Basecamp
 projects into an
 import bundle for Minka's applier: people with avatars, projects with members,
-the boards, chats, message boards, questionnaires, to-do sets and inboxes as
-tools, of
+the boards, chats, message boards, questionnaires, to-do sets, inboxes and
+Docs & Files tools as tools, of
 each board the columns, cards, steps, comments and boosts, of each message
 board the posts of every status with their categories, comments and boosts, of
 each chat its lines as messages with their boosts, written in parts of one
 chat and some 10,000 lines each, of each questionnaire its questions with the
 schedule Minka has words for and their answers with what hangs on them, of
-each to-do set its lists from the bottom up, because Minka puts every new list
-on top, with their groups and their to-dos in the order of the list and what
-hangs on a list and a to-do, and of each inbox its forwarded mail with the
-answers by mail, the comments and the boosts of each.
-The inboxes come last of all, so that a file standing in a card and in a mail
-alike belongs to the card. Three things of such a mail are the extractor's own
+each to-do set its lists, the ones in use from the bottom up because Minka puts
+every new list on top, with their groups and their to-dos in the order of the
+list and what
+hangs on a list and a to-do, of each inbox its forwarded mail with the
+answers by mail, the comments and the boosts of each, and of each Docs & Files
+tool its folders, documents and uploads with the comments, the boosts and the
+files of each.
+The Docs & Files tools come last of all, so that a file standing in a card and
+in a document alike belongs to the card, and the inboxes before them.
+Three things of such a mail are the extractor's own
 doing, each
 written down as a rule: a subject Minka would refuse becomes a title rather than
 costing the mail or the run and a sender that is no address leaves the mail out
@@ -47,6 +52,17 @@ costing the mail or the run and a sender that is no address leaves the mail out
 run (C-057), and what the source keeps on its shelf comes into the trash, where
 it can be brought back (C-058). Somebody who wrote to a project from outside the
 account stays an address and becomes nobody.
+Of the Docs & Files, three things are the extractor's own doing. A folder
+stands in the bundle after the folder it is in; for an entry in use the order of
+the file decides, bottom up, because Minka puts every new one on top of its kind,
+and for one that has left its place it decides nothing (C-065), so those stand
+first as the source lists them. The status of an entry is its own and never that of
+its folder, so what stands in a folder the source put away comes in as it is
+and goes along through the folder there. And the title of an upload is what the
+source calls it, the name of its file standing in and folded to fit where the
+source calls it nothing and the name is one Minka would refuse (C-056),
+because Minka derives nothing from a file and refuses an upload without a
+title.
 Every address a bundle carries — a person's, a mail's sender, an answer's —
 is read the way Minka reads it and no wider (C-059), so that none of them
 stops the applier after hours of walking, and one pair of quotation marks
@@ -65,9 +81,14 @@ has a word for `Chat::Lines::Text`, `Chat::Lines::RichText`,
 than `active`, a column of a kind a bundle has no role for, a card, a post,
 a comment, a question or an answer with a status a bundle does not know, a draft
 among them, a group or a to-do the source has put on the shelf, which a
-bundle gives none, a forwarded mail of a status that is none of the three, and
-an answer by mail that says anything but `active`. What stood in a list or a
-group a bundle cannot carry falls
+bundle gives none, a forwarded mail of a status that is none of the three,
+an answer by mail that says anything but `active`, and a folder, a document or
+an upload of Docs & Files whose status is none of the three. An upload
+Basecamp names no stored file for is left out with its comments and its boosts
+(C-063): `file` takes the identifier of a file of the bundle and nothing else,
+and no run will ever have bytes to fetch for what lies in a cloud.
+What stood in a list, a group, a folder or a whole Docs & Files tool a bundle
+cannot carry falls
 with it, is asked for to be counted and is named with the place it fell with
 (C-052), so that no run says a bundle holds more of the source than it does. A
 to-do that hangs on a To-dos tool itself stands in no list a bundle can name, so
@@ -83,16 +104,20 @@ carries the same second, the order of the two can turn round, which is a known
 limit and written down with the rule.
 What the source says about clients comes with a bundle (C-055): `client` and the
 company on a person, `clientAccess` and the client company on a project, and
-`visibleToClients` on a tool, a post, a to-do list and a check-in question, read
+`visibleToClients` on a tool, a post, a to-do list, a check-in question and
+every folder, document and upload of Docs & Files, read
 from each record and never from the tool it stands in. A record that follows what
 it hangs on carries no word of its own and is counted where the source offers
-one. A client is no member of a project in Minka, so the run counts the
+one. **An entry of Docs & Files is the one exception** (C-064): it carries the
+word at every depth, because Minka reads it below the top of a tool as well and
+something hidden there hides the folder at the top with everything in it.
+A client is no member of a project in Minka, so the run counts the
 memberships that fall away and says no question is asked of a client. A company
 the source names without an identifier, or with a name Minka refuses, ends the
 run where the record that names it comes in: written away as none, it would tell
 Minka to drop the company it holds.
-Docs & Files is not extracted, so a bundle says nothing of whether clients see
-it, which the report names as a gap; an Email forwards tool carries its word like
+Every kind of tool Minka has a counterpart for is extracted, so no report names
+a gap about clients; an Email forwards tool carries its word like
 every other tool, and a mail and an answer by mail follow it.
 Mentions in the texts are references, the preview of a link is the link, a
 video or a player embedded in a text is an `<import-embed>` with its address,
@@ -366,6 +391,171 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   counted in `visibilityLeftToTheContainer`, where the fake offers one. Of the
   answers only one list was read, and what it says about clients was not among
   what was measured.
+- Of the Docs & Files of `import basecamp`. What the bundle has to carry was
+  read in Minka's own code — `FoldersApplier`, `DocumentsApplier`,
+  `UploadsApplier`, `EntriesOfDocsAndFiles` and `WhatClientsSee` — and `E-195`,
+  and read there rather than in Minka's prose, which said the opposite of the
+  client rule until the code was read against it.
+  **Measured live**, read-only, by dry runs over three projects that went
+  through and by reading two upload records raw: that a dock entry of a Docs &
+  Files tool is called `vault` and **is itself the vault at the top**, so what
+  stands directly in the tool names the dock entry as its parent; that a vault
+  answers for what stands in it at `buckets/{b}/vaults/{v}/vaults.json`,
+  `documents.json` and `uploads.json`; that `projects/recordings.json` takes the
+  types `Vault`, `Document` and `Upload`, which the Basecamp CLI offers for
+  neither and its own list of types does not name; and that an upload carries
+  `id, status, title, description, description_attachments, filename,
+  content_type, byte_size, download_url, app_download_url, parent, position,
+  visible_to_clients, inherits_status, comments_count, boosts_count, creator,
+  created_at, updated_at, bucket, url, app_url, bookmark_url, subscription_url,
+  height, width` — the whole key list, which the fake now answers with. Two of
+  those uploads were ordinary stored files of up to 3.3 MB, and both carried
+  `visible_to_clients` **below the top of their tool**, which is the field the
+  whole client rule hangs on.
+  Measured over the account besides: 18 archived folders over 3 buckets, 151
+  active and 115 archived documents, and
+  **nothing in the trash of any of the three kinds**; every one of the 28
+  projects has a `vault` dock entry, 8 of them switched off, so "no Docs & Files"
+  is a tool that is switched off and never a missing entry; a folder's own list
+  hands out what is in use alone, so every record the source has put away comes
+  from `projects/recordings.json`; an **archived folder answers not-found** for
+  its three lists, which is the branch a run passes over and the normal case,
+  not an exception; and Basecamp grows its page from 15 to 30, 50 and 100, which
+  a walk that asks until a page comes back empty does not care about.
+  **What that measurement caught**, and what it changed: the shape of an
+  upload's `download_url` had been taken from the wrong record. It is
+  `…/buckets/{b}/uploads/{id}/download/{name}` — the API's own address, no
+  `blobs` segment and no key of a stored file anywhere — **one shape without
+  exception over every upload of the account that was read**, and the
+  `…/blobs/{key}/download/{name}` shape read off it belongs to a file inside a
+  text, which carries a `key` of its own. So every upload took the branch for one
+  that names no stored file, and a bundle of the account would have arrived with
+  **no uploads at all** — the card's own measurement of the account puts that at
+  some 278 files and 0.4 GB — counted and named and gone.
+  What says an upload has a file is now the record's own word, an address to
+  fetch one from, and the bytes are asked for **by the identifier of the upload
+  and of its project** (`basecamp files download <id> --in <project> --out -`):
+  the record names no stored file and its address answers with a redirect to a
+  store of its own, which `checkStorageAddress` refuses and which no run follows
+  — the query of that redirect carries the name of the file, so nothing of it is
+  ever logged. The title is the source's own `title`, the name of the file
+  standing in only where the source calls the upload nothing.
+  **That route is proven live and by more than a run's own word.** Two
+  extractions into bundles outside the repository ended 0, every upload's bytes
+  arrived with the size and the digest they were expected to have, computed anew
+  rather than taken from the run, and one file was fetched again by hand and came
+  back byte for byte the same; the second bundle holds 214 files and 496 MB, with
+  none missing, none gone and no request asked twice. `--agent` is taken by
+  `files download` although its own help does not list it, which is written down
+  where the call is built so that nobody removes it as a mistake. Every reference
+  of both bundles resolves, Minka's own `verify-bundle.sh` ends 0 on both, and the
+  status of every entry is its own with not one inheriting its folder's. The two
+  archived folders of those projects really did answer not-found for their
+  contents and their archived documents came out of the recordings list, so the
+  path the walk was built for is the path the source takes.
+  **The client rule is a live measurement and no longer a rule we believe.** A
+  third extraction went over the one project of the account that can answer the
+  question — four of its projects work with clients and only that one carries a
+  `visibleToClients: true` at all, entries below the top of a tool, and a tree
+  with both words in it. Exit 0, 437 seconds, 202 files, nothing left out. Of its
+  20 records of the three kinds — 1 folder, 9 documents, 10 uploads — **every one
+  carries the field and not one lacks it**, at both depths, the four that stand
+  inside a folder included: 4 `true` and 12 `false` at the top of a tool and 4
+  `false` below it, each compared one by one against the source's own
+  `visible_to_clients` with **no difference at all**. Nothing the source shows is
+  written as hidden and nothing it hides is written as shown.
+  And the shape the whole card exists for is one the account holds: both Docs &
+  Files tools of that project are shown to clients at the source, and one of them
+  holds sixteen entries of which **every single one is hidden** — the folder and
+  its four uploads among them. So a tool the source shows, holding entries the
+  source hides, is no fixture: the run took the record's own word every time and
+  the tool's never once.
+  Measured with it: `clientAccess` and the client company on the project, exactly
+  two people with `client: true` and exactly those two carrying a company, all 211
+  digests matching, every reference resolving, and `verify-bundle.sh` green.
+  The naming of an entry inside a folder that says nothing about clients found
+  **nothing to say** on that project, every record below the top carrying the
+  field at the source: a safeguard that has met the real world and come back
+  empty, which is what it is for.
+  **Minka has applied both.** On a worktree instance, exit 0, everything created —
+  one folder with two documents and four uploads, and four folders including the
+  two archived with sixteen documents and one upload — and on a second and a third
+  run everything is passed over, so the import is idempotent against what a bundle
+  of ours says. The blob storage grew by 23 and 359 files. Both bundles are
+  deleted, as the rule for a bundle holding personal data asks.
+  **Still taken on trust of Basecamp** and held by nothing but the invented
+  account: that a vault lists what stands in it topmost first, which is what the
+  order of a bundle turns on; that an upload in a cloud names no file at all,
+  which **no record of the account has ever exercised** — the branch stands, and
+  nothing has disproved or proved it; that a folder takes neither comments nor
+  boosts; and the flags of the call that streams an upload's file, which are read
+  off the Basecamp CLI's own documentation and not off a run.
+  **What no live run has met yet**, and so still rests on the invented account:
+  a **folder inside a folder** — none of the three projects has one, so a parent
+  standing before its child is only trivially exercised live; an **entry in use
+  inside a folder the source has put away**, the client project holding nothing
+  archived or trashed of the three kinds at all; and a hidden entry below a
+  **shown folder**, the only folder there being hidden itself, so the case of a
+  container that is shown holding something hidden was met one level up, at the
+  tool, and not at a folder.
+  **Which commit the live measurements rest on.** The three bundles were made
+  from this branch while it was being worked on, the third from a dirty tree whose
+  manifest names the extractor `v0.15.0-41-g69630d5-dirty`; that binary did not
+  carry the naming of an entry that says nothing about clients. So what is
+  measured above is the behaviour of the branch and not of its last commit, and
+  one confirming extraction over that one project on the final commit is owed
+  before the account is walked.
+  **Which fixtures still encode a guess rather than a reading**, which is the
+  list to read before the next run: a folder, a document or an upload whose
+  status is none of the three; **anything in the trash** of the three kinds, the
+  account holding none; an upload in a cloud, with a comment and a boost on it;
+  a title longer than one Minka takes and an upload with neither a title nor a
+  name — the titles of both live bundles were put through Minka's rule again and
+  none would be refused, and neither project exercised the folding at all,
+  `namesMadeIntoATitle` and `titlesFromTheFileName` both coming out zero;
+  a document whose whole text is a file the source no longer has, and an
+  upload whose own file is one; a description with a file embedded in it, every
+  upload of the account that was read carrying an empty
+  `description_attachments`; a
+  document and a description longer than Minka holds; an entry the source
+  lists twice; a folder the bundle cannot carry with a folder, a document and
+  an upload standing in it; a Docs & Files tool that is switched off with an
+  archived folder and an archived document behind it; a folder in use behind
+  such a tool, which is the only way to reach the count of an entry no place
+  ever claimed; and a vault the source lists **without a parent**, which is how
+  it lists the vault at the top of a tool and which no record it has put away is
+  in, no whole tool of the account being put away; and **a record that says
+  nothing about clients**, which is the shape the naming of a silent entry and
+  three of the fixtures stand on — the one project that could answer it carries
+  the field on every record at both depths, and no other project's Docs & Files
+  records were read, so an absent `visible_to_clients` has never been seen and
+  the fake invents it. A document or a description longer than Minka holds is
+  made by a test rather than standing in the fake, which is the same want of a
+  reading by another road. What the fake answers with otherwise is the shape that
+  was read: the key list of an upload, the address it
+  gives, the not-found of an archived folder, and a folder's own list holding what
+  is in use alone.
+  One residual of the cloud branch, unmeasured and worth naming: **if an upload
+  that lives in a cloud does carry a `download_url`**, it is taken as having a
+  file, the fetch fails with something that is no not-found, and the run ends
+  non-zero with an entry under `missingFiles` that **no later run can clear**.
+  Nothing has been seen of such a record either way.
+  Not counted and not asked for: how many earlier copies of its file an upload
+  has. `versions` is a field Minka reads nowhere, and the upload says nothing
+  of them, so a run that wanted the number would ask once per upload. That
+  **eight** files of the account have older versions is a number of the card's
+  own read-only measurement of the account and of no run of the CLI; nothing
+  here measured it and nothing here can.
+- The titles of the Docs & Files are held against Minka's own reading rather
+  than against a test here, as the addresses and the titles of the mail were:
+  every folder name, document title, upload title and upload file name of the
+  account — 1,040 values over 753 records — was put through `IsName`, and **not
+  one is refused**, the longest of any kind being 99 characters against the bound
+  of 200 and the shortest 2, so nothing sits near either edge. The title of a
+  folder or a document ends a run where Minka would refuse it, which is right and
+  which nothing in the account will meet; a title a **file** carries is folded
+  and ends no run (C-056). The trashed half of all three kinds is not unasked but
+  empty at the source.
 - Of the files of `import basecamp`: a download that breaks off, a file
   whose size differs from what Basecamp says, a file that is gone, a name that
   has to be changed, a caption too long, and one file under two owners.
@@ -619,6 +809,18 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   as well, so a larger number is no sign of anything wrong. Whether a mail on the
   shelf exists at all is a question for Basecamp and not for a run: nothing the
   API offers hands one out.
+- **One confirming extraction of the Docs & Files on the final commit**, over the
+  one project that works with clients and carries both words, before the account
+  is walked for MNK-53. Three bundles are checked record by record already, the
+  client rule among them, but they were made from the branch while it was being
+  worked on and the third from a dirty tree, so what is measured is the branch's
+  behaviour and not this commit's. Seven minutes turns the one into the other.
+  Open besides, and none of it settled by that run: whether the account holds an
+  upload in a cloud at all and what such a record looks like; whether a vault
+  really lists what stands in it topmost first, which the order of a bundle turns
+  on; and the three shapes no project walked so far holds — a folder inside a
+  folder, an entry in use inside a folder that was put away, and a hidden entry
+  below a folder that is shown.
 - Extract the to-dos of a project live: whether `todoset` is the dock entry, the
   fields of a list, a group and a to-do, the two lists of what is open and what is
   done, the recordings of the archived and the trashed ones, whether a list on

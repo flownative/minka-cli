@@ -150,6 +150,9 @@ type importReport struct {
 	// is beside counts.forwards and counts.forwardreplies, which are what a
 	// bundle carries.
 	Forwards basecamp.ForwardCounts `json:"forwards"`
+	// Docs says what became of the Docs & Files a run met, beside counts.folders,
+	// counts.documents and counts.uploads.
+	Docs basecamp.DocsCounts `json:"docs"`
 	// MessagesByType splits counts.messages by what a line was in its chat.
 	// MessagesWithEmptyBody are lines somebody wrote that say nothing,
 	// UploadLinesLeftOut lines that were files alone, none of which can be
@@ -196,22 +199,29 @@ the run ends with exit 4. Nothing is written to Basecamp, and no Minka
 host or token is needed.
 
 So far a bundle holds the structure, the boards, the message boards, the
-chats, the check-ins, the to-dos and the forwarded mail: the people the named
+chats, the check-ins, the to-dos, the forwarded mail and the Docs & Files: the
+people the named
 projects refer to with their avatars (their members and whoever a record names,
 not the rest of the account), the projects with their members, of each project
-the card tables, chats, message boards, questionnaires, to-do sets and inboxes
+the card tables, chats, message boards, questionnaires, to-do sets, inboxes and
+Docs & Files tools
 that are switched
 on, of each card table the columns, the cards with the archived and the
 trashed ones, their steps, comments and boosts, of each message board the
 messages with the archived and the trashed ones as posts, their categories,
 comments and boosts, of each chat its lines with their boosts as messages, of
 each questionnaire its questions with their answers, comments and boosts, of
-each to-do set its lists with their groups and to-dos, and of each inbox its
-forwarded mail with the answers by mail, the comments and the boosts of each.
+each to-do set its lists with their groups and to-dos, of each inbox its
+forwarded mail with the answers by mail, the comments and the boosts of each,
+and of each Docs & Files tool its folders, documents and uploads with the
+comments, the boosts and the files of each.
 
-The lists of a to-do set stand in the bundle from the bottom up, because Minka
-puts every new list on top of its tool, and the groups and the to-dos of a list
-in the order of the list. A list comes with the state the source left it in, a
+The lists of a to-do set that are in use stand in the bundle from the bottom up,
+because Minka puts every new list on top of its tool; the ones the source has put
+away stand before them in the order it lists them, which decides nothing, Minka
+ordering an archive by the moment a record was put away. The groups and the
+to-dos of a list come in the order of the list. A list comes with the state the
+source left it in, a
 group and a to-do with the trash alone, because Minka gives neither of the two a
 shelf: one the source has put on the shelf is left out and counted, and so is
 whatever stood in a list or a group the bundle does not carry — todosLeftOut
@@ -231,11 +241,13 @@ Two things a later run cannot repair, which the report says with a notice each:
 it leaves the people of a to-do as they stand in Minka (todosWithPeople), and it
 reopens nothing it once ticked off (todosNotDone).
 
-The forwarded mail of an inbox comes last of all, so that a file standing in a
-card and in a mail alike belongs to the card: a file met in two records is the
-first record's. A mail carries its subject as its title, the sender as an
+The forwarded mail of an inbox comes after every other kind but the Docs &
+Files, so that a file standing in a card and in a mail alike belongs to the
+card: a file met in two records is the first record's. A mail carries its
+subject as its title, the sender as an
 address that never becomes a person, and the body as the source holds it, line
-breaks and all: Minka turns those into paragraphs. What the source keeps on its shelf comes into the trash, where it
+breaks and all: Minka turns those into paragraphs. What the source keeps on its
+shelf comes into the trash, where it
 can be brought back, and the report says how many (forwards.fromTheShelf); a
 mail of an inbox that is switched off is not in the bundle at all and counts as
 a skipped tool. A subject nobody wrote becomes "(no subject)", and one that is
@@ -263,6 +275,48 @@ than the 1,000,000 characters Minka holds is counted
 (forwards.longerThanMinkaTakes) and comes as it is: Minka passes such a mail
 over on every run, with everything hanging on it.
 
+The Docs & Files of a project come last of all, so that a file standing in a
+card and in a document alike belongs to the card: a file met in two records is
+the first record's. A folder, a document and an
+upload each carry the state the source left them in — active, archived or
+trashed — and never the state of the folder they stand in: what stands in a
+folder that was archived or thrown away goes along through the folder in Minka
+and comes back with it. For an entry that is in use the order of the file
+decides: Minka puts each new one on top of its kind, so the bundle carries them
+from the bottom up and the source's order comes out again. For one that has left
+its place it decides nothing — Minka orders an archive by the moment a record was
+put away and takes that moment from the record itself — so those stand first and
+in the order the source lists them. A folder stands after the folder it is in.
+A folder whose status a bundle has no
+word for is left out with everything below it, which is left out with it
+(docs.leftOut counts the folders, documents and uploads, docs.placesLeftOut
+names every place that took entries with it); so are the entries of a Docs &
+Files tool that is switched off, which counts as a skipped tool. A folder the
+source has put away that hands out no list of what stands in it is passed over
+and counted (docs.foldersThatSaidNothingOfWhatIsInThem): what is in use below
+such a folder reaches no bundle, and nothing can count it.
+
+A document carries its title, its text, its files, its comments and its boosts.
+An upload is one stored file beside a text: its title is what the source calls
+it, and the name of its file stands in where the source calls it nothing
+(docs.titlesFromTheFileName), because Minka derives nothing from a file. A title
+Minka would refuse is folded to fit (docs.namesMadeIntoATitle), and a name too
+long the way Minka shortens one: the extension stays and the stem is cut. Only the
+file the source shows now comes; earlier copies of it stay at the source. An
+upload Basecamp names no stored file for, one that lives in a cloud, is left out
+and named by ID with its comments and its boosts
+(docs.withoutAStoredFile): a comment pointing at an upload the bundle does not
+carry would stop the applier. A record that lost a file no run will bring is
+named (docs.onlyAFileNoRunWillBring), and the two kinds end differently because
+the one field is optional and the other is not: a document whose whole text was
+that file arrives without words, its title, comments and boosts with it,
+while an upload cannot be written without its file at all and Minka asks for the
+file again on every run. A file this run merely could not fetch is not that, and
+the record waits for it. A document, or the description of an
+upload, longer than the 1,000,000 characters Minka holds is counted
+(docs.longerThanMinkaTakes) and comes as it is, as a mail does. A folder takes
+neither comments nor boosts, here as in Basecamp, so neither is asked for.
+
 A question comes with the schedule Minka has words for: the weekdays counted
 from Monday, the time of day, the day the rhythm is counted from, and whom it is
 asked of, which are the subscribers of the question and not whoever answered it.
@@ -285,7 +339,11 @@ bundle or not (references, by kind).
 
 Every file a reference names comes with a record and its bytes under files/,
 whatever its size and type, streamed from the Basecamp CLI (basecamp files
-download). A file that is still whole in the bundle being replaced is taken
+download). A file of a text or a chat is fetched at a storage address, the one
+file of an upload of Docs & Files by the identifier of the upload and its
+project: Basecamp names no stored file on such a record, and the address it gives
+leads to a store of its own that no run follows.
+A file that is still whole in the bundle being replaced is taken
 over from there instead of being fetched again; the report counts both as
 filesFetched and filesReused. A file Basecamp lists and no longer has gets a
 record that says so (filesGone). The name of a file is made a plain one
@@ -302,8 +360,11 @@ to-do, a group, a card, an answer, a comment — carries no word of its own, and
 where the source offers one it is counted (visibilityLeftToTheContainer). A
 client is no member of a project in Minka, so clientMemberships says how many
 memberships the import leaves out and no question is ever said to be asked of
-one. Docs & Files is not extracted at all, so a bundle says nothing about
-whether clients see it. A company the source names without an
+one. A folder, a document and an upload of Docs & Files carry the word at every
+depth, and not only at the top of their tool: Minka reads it below the top as
+well, and something hidden from clients below a folder the source shows makes
+Minka hide that folder with everything in it. A company the source names
+without an
 identifier, or with a name Minka refuses, ends the run where the record that
 names it comes in: writing the record without it would tell Minka to drop the
 company it holds.
@@ -462,6 +523,7 @@ it has been applied.`,
 				AnswersTrashed:      result.AnswersTrashed,
 
 				Forwards: result.Forwards,
+				Docs:     result.Docs,
 
 				MessagesWithEmptyBody: result.MessagesWithEmptyBody,
 				LongestBody:           result.LongestBody,
@@ -486,11 +548,6 @@ it has been applied.`,
 				notices = append(notices, plural(count,
 					"membership of a project belongs to a client, and Minka leaves a client out of the members of every project: the bundle says it, the import does not carry it over",
 					"memberships of projects belong to clients, and Minka leaves a client out of the members of every project: the bundle says them, the import does not carry them over"))
-			}
-			if count := toolsSilentAboutClients(report); count > 0 {
-				notices = append(notices, plural(count,
-					"tool of a project is a Docs & Files, which a run does not extract: the bundle says nothing of whether clients see it or what stands in it, and a later run brings it",
-					"tools of projects are Docs & Files, which a run does not extract: the bundle says nothing of whether clients see them or what stands in them, and a later run brings them"))
 			}
 			if count := report.FilesDropped; count > 0 {
 				notices = append(notices, plural(count,
@@ -617,6 +674,46 @@ it has been applied.`,
 					"boost on an answer by mail is left out, because Minka takes no reaction on one; the answer comes",
 					"boosts on answers by mail are left out, because Minka takes no reaction on one; the answers come"))
 			}
+			if count := len(report.Docs.SilentAboutClientsInsideAFolder); count > 0 {
+				notices = append(notices, plural(count,
+					"folder, document or upload standing inside a folder says nothing about whether clients see it, so nothing is written for it and Minka reads it as one that changes nothing above it. Where the folder at the top of its tool is shown to clients, that word is the one thing which would have hidden it, so compare that entry against the source before the bundle is applied — data.docs.silentAboutClientsInsideAFolder names it — and where the top is hidden or says nothing itself, nothing is lost",
+					"folders, documents or uploads standing inside folders say nothing about whether clients see them, so nothing is written for them and Minka reads them as entries that change nothing above them. Where the folder at the top of their tool is shown to clients, that word is the one thing which would have hidden it, so compare those entries against the source before the bundle is applied — data.docs.silentAboutClientsInsideAFolder names each — and where the top is hidden or says nothing itself, nothing is lost"))
+			}
+			if count := report.Docs.FoldersThatSaidNothingOfWhatIsInThem; count > 0 {
+				notices = append(notices, plural(count,
+					"folder of a Docs & Files tool would not say what stands in it, so what is in use below it is in no bundle and no later run finds it either; nothing can count it, and the folder itself comes",
+					"folders of Docs & Files tools would not say what stands in them, so what is in use below them is in no bundle and no later run finds it either; nothing can count it, and the folders themselves come"))
+			}
+			if count := len(report.Docs.WithoutAStoredFile); count > 0 {
+				notices = append(notices, plural(count,
+					"upload of a Docs & Files tool is left out, because Basecamp names no stored file for it: what lies in a cloud is no file a run can fetch, so its comments and its boosts go with it. data.docs.withoutAStoredFile names it by ID",
+					"uploads of Docs & Files tools are left out, because Basecamp names no stored file for them: what lies in a cloud is no file a run can fetch, so their comments and their boosts go with them. data.docs.withoutAStoredFile names them by ID"))
+			}
+			if count := len(report.Docs.OnlyAFileNoRunWillBring); count > 0 {
+				notices = append(notices, plural(count,
+					"record of a Docs & Files tool lost a file no run will bring; data.docs.onlyAFileNoRunWillBring names it by ID. A document whose whole text was that file arrives without words, its title, comments and boosts with it; an upload whose own file it is cannot be written at all and Minka asks for the file again on every run",
+					"records of Docs & Files tools lost a file no run will bring; data.docs.onlyAFileNoRunWillBring names them by ID. A document whose whole text was that file arrives without words, its title, comments and boosts with it; an upload whose own file it is cannot be written at all and Minka asks for the file again on every run"))
+			}
+			if count := report.Docs.LongerThanMinkaTakes; count > 0 {
+				notices = append(notices, plural(count,
+					"document, or description of an upload, is longer than Minka holds and is passed over there on every run, with its comments and its boosts; data.longestBodyRecords names the longest of each kind, and the text is not cut short",
+					"documents, or descriptions of uploads, are longer than Minka holds and are passed over there on every run, with their comments and their boosts; data.longestBodyRecords names the longest of each kind, and the texts are not cut short"))
+			}
+			if count := report.Docs.TitlesFromTheFileName; count > 0 {
+				notices = append(notices, plural(count,
+					"upload is called nothing at the source, so the name of its file is its title here: Minka derives nothing from a file and refuses an upload without one. data.docs.withoutAName counts those with neither, which carry a title of the run's own",
+					"uploads are called nothing at the source, so the names of their files are their titles here: Minka derives nothing from a file and refuses an upload without one. data.docs.withoutAName counts those with neither, which carry a title of the run's own"))
+			}
+			if count := report.Docs.NamesMadeIntoATitle; count > 0 {
+				notices = append(notices, plural(count,
+					"upload carries a title the run had to fold to fit: whatever it was called — what the source calls it, or the name of its file where the source calls it nothing — held a character nobody can see or was longer than the 200 characters a title here holds, and a name too long is shortened the way Minka shortens one, the extension staying and the stem cut",
+					"uploads carry titles the run had to fold to fit: whatever they were called — what the source calls them, or the names of their files where the source calls them nothing — held a character nobody can see or were longer than the 200 characters a title here holds, and a name too long is shortened the way Minka shortens one, the extension staying and the stem cut"))
+			}
+			if count := len(report.Docs.PlacesLeftOut); count > 0 {
+				notices = append(notices, plural(count,
+					"folder or Docs & Files tool is left out with what stood in it, which is left out with it; data.docs.placesLeftOut names it with how many folders, documents and uploads fell with it",
+					"folders or Docs & Files tools are left out with what stood in them, which is left out with them; data.docs.placesLeftOut names each with how many folders, documents and uploads fell with it"))
+			}
 			if count := recordsLeftOut(report); count > 0 {
 				notices = append(notices, plural(count,
 					"record is left out, because the source describes it with a word a bundle has none for; data.recordsLeftOut names the kind of record, the word and where it stood, and a later run brings it once a bundle has a word for it",
@@ -657,7 +754,7 @@ it has been applied.`,
 // measuredKinds are the kinds whose longest text a run measures, in the order
 // the report names them.
 var measuredKinds = []bundle.Kind{bundle.Cards, bundle.Comments, bundle.Posts, bundle.Messages, bundle.Answers, bundle.TodoLists, bundle.Todos,
-	bundle.Forwards, bundle.ForwardReplies}
+	bundle.Forwards, bundle.ForwardReplies, bundle.Documents, bundle.Uploads}
 
 func renderImportReport(w io.Writer, report importReport) {
 	if report.DryRun {
@@ -693,9 +790,6 @@ func renderImportReport(w io.Writer, report importReport) {
 	if report.VisibilityLeftToTheContainer > 0 {
 		fmt.Fprintf(w, "Words about clients on a record that follows what it hangs on, left out: %d\n", report.VisibilityLeftToTheContainer)
 	}
-	if count := toolsSilentAboutClients(report); count > 0 {
-		fmt.Fprintf(w, "Docs & Files tools a run does not extract, whose word about clients no bundle carries: %d\n", count)
-	}
 
 	fmt.Fprintf(w, "\nCards: %d active, %d archived, %d trashed; %d of them on hold\n",
 		report.CardsByStatus[bundle.StatusActive], report.CardsByStatus[bundle.StatusArchived], report.CardsByStatus[bundle.StatusTrashed], report.CardsOnHold)
@@ -720,6 +814,7 @@ func renderImportReport(w io.Writer, report importReport) {
 	renderCheckins(w, report)
 	renderTodos(w, report)
 	renderForwards(w, report)
+	renderDocs(w, report)
 	fmt.Fprintf(w, "In the texts: %s referred to, %s Basecamp lists nothing for dropped, %s, %s, %s\n",
 		plural(report.FilesInBodies, "file", "files"), plural(report.FilesDropped, "file", "files"),
 		plural(report.MentionsUnresolved, "mention left as a name", "mentions left as names"),
@@ -743,10 +838,11 @@ func renderImportReport(w io.Writer, report importReport) {
 	}
 	fmt.Fprintf(w, "Names of files changed: %d; captions too long for a reference, left off: %d; files met under a second owner: %d\n",
 		report.FileNamesChanged, report.CaptionsDropped, report.FilesOfSeveralOwners)
-	fmt.Fprintf(w, "Longest text in characters: cards %d, comments %d, posts %d, messages %d, answers %d, to-do lists %d, to-dos %d, forwards %d, answers by mail %d\n",
+	fmt.Fprintf(w, "Longest text in characters: cards %d, comments %d, posts %d, messages %d, answers %d, to-do lists %d, to-dos %d, forwards %d, answers by mail %d, documents %d, uploads %d\n",
 		report.LongestBody[bundle.Cards], report.LongestBody[bundle.Comments], report.LongestBody[bundle.Posts], report.LongestBody[bundle.Messages],
 		report.LongestBody[bundle.Answers], report.LongestBody[bundle.TodoLists], report.LongestBody[bundle.Todos],
-		report.LongestBody[bundle.Forwards], report.LongestBody[bundle.ForwardReplies])
+		report.LongestBody[bundle.Forwards], report.LongestBody[bundle.ForwardReplies],
+		report.LongestBody[bundle.Documents], report.LongestBody[bundle.Uploads])
 	for _, kind := range measuredKinds {
 		if one, has := report.LongestBodyRecords[kind]; has {
 			fmt.Fprintf(w, "  %-8s %-8s in %s %s: %d\n", one.Record, one.SourceID, one.In, one.InSourceID, one.Characters)
@@ -774,20 +870,6 @@ func renderImportReport(w io.Writer, report importReport) {
 			fmt.Fprintf(w, "  %-16s %-18s %d\n", skipped.Kind, state, skipped.Count)
 		}
 	}
-}
-
-// toolsSilentAboutClients counts the tools of a run whose word about clients no
-// bundle carries, because a run does not extract that kind of tool at all: the
-// extractor says which kinds those are. Only the ones that are switched on
-// count, because a tool the source has switched off shows nobody anything.
-func toolsSilentAboutClients(report importReport) int {
-	count := 0
-	for _, skipped := range report.SkippedTools {
-		if skipped.Enabled && basecamp.SaysNothingAboutClients(skipped.Kind) {
-			count += skipped.Count
-		}
-	}
-	return count
 }
 
 // askedLeftOut is how many people a run could not say a question asks, over
@@ -902,6 +984,60 @@ func renderForwards(w io.Writer, report importReport) {
 	fmt.Fprintf(w, "Boosts on an answer by mail, which Minka takes none of, left out: %d\n", forwards.ReactionsOnRepliesLeftOut)
 	if forwards.LongerThanMinkaTakes > 0 {
 		fmt.Fprintf(w, "Mails and answers longer than Minka holds, which it passes over on every run: %d\n", forwards.LongerThanMinkaTakes)
+	}
+}
+
+// renderDocs says what became of the Docs & Files a run met. A run that met no
+// Docs & Files tool says nothing about them, and one that met a tool whose
+// entries are all left out says what became of them: a report that fell silent
+// there would be the one place a whole tool goes missing without a word.
+func renderDocs(w io.Writer, report importReport) {
+	docs := report.Docs
+	metNothing := report.Counts[bundle.Folders] == 0 && report.Counts[bundle.Documents] == 0 && report.Counts[bundle.Uploads] == 0 &&
+		docs.LeftOut == (basecamp.DocsLeftOut{}) && len(docs.WithoutAStoredFile) == 0 &&
+		len(docs.OnlyAFileNoRunWillBring) == 0 && docs.FoldersThatSaidNothingOfWhatIsInThem == 0 &&
+		len(docs.SilentAboutClientsInsideAFolder) == 0
+	if metNothing {
+		return
+	}
+	fmt.Fprintf(w, "Folders: %d active, %d archived, %d trashed\n",
+		docs.FoldersByStatus[bundle.StatusActive], docs.FoldersByStatus[bundle.StatusArchived], docs.FoldersByStatus[bundle.StatusTrashed])
+	fmt.Fprintf(w, "Documents: %d active, %d archived, %d trashed; %d of them without words\n",
+		docs.DocumentsByStatus[bundle.StatusActive], docs.DocumentsByStatus[bundle.StatusArchived], docs.DocumentsByStatus[bundle.StatusTrashed],
+		docs.DocumentsWithoutWords)
+	fmt.Fprintf(w, "Uploads: %d active, %d archived, %d trashed; %d titled by the name of their file, %d of them with neither\n",
+		docs.UploadsByStatus[bundle.StatusActive], docs.UploadsByStatus[bundle.StatusArchived], docs.UploadsByStatus[bundle.StatusTrashed],
+		docs.TitlesFromTheFileName, docs.WithoutAName)
+	if docs.NamesMadeIntoATitle > 0 {
+		fmt.Fprintf(w, "Titles of uploads folded into one line or cut short to fit: %d\n", docs.NamesMadeIntoATitle)
+	}
+	if len(docs.WithoutAStoredFile) > 0 {
+		fmt.Fprintf(w, "Uploads Basecamp names no stored file for, left out: %d (upload %s), with %d comments and %d boosts\n",
+			len(docs.WithoutAStoredFile), strings.Join(docs.WithoutAStoredFile, ", "),
+			docs.CommentsWithoutTheirUpload, docs.BoostsWithoutTheirUpload)
+	}
+	if len(docs.OnlyAFileNoRunWillBring) > 0 {
+		fmt.Fprintf(w, "Records that lost a file no run will bring, the documents among them wordless: %d (record %s)\n",
+			len(docs.OnlyAFileNoRunWillBring), strings.Join(docs.OnlyAFileNoRunWillBring, ", "))
+	}
+	if docs.LongerThanMinkaTakes > 0 {
+		fmt.Fprintf(w, "Documents and descriptions longer than Minka holds, which it passes over on every run: %d\n", docs.LongerThanMinkaTakes)
+	}
+	if len(docs.SilentAboutClientsInsideAFolder) > 0 {
+		fmt.Fprintf(w, "Entries inside a folder that say nothing about whether clients see them, which cannot hide the folder above them: %d\n",
+			len(docs.SilentAboutClientsInsideAFolder))
+		for _, entry := range docs.SilentAboutClientsInsideAFolder {
+			fmt.Fprintf(w, "  %-8s %-8s in project %s\n", entry.Record, entry.SourceID, entry.ProjectSourceID)
+		}
+	}
+	if docs.FoldersThatSaidNothingOfWhatIsInThem > 0 {
+		fmt.Fprintf(w, "Folders that would not say what stands in them, so that what is in use below them is in no bundle: %d\n",
+			docs.FoldersThatSaidNothingOfWhatIsInThem)
+	}
+	left := docs.LeftOut
+	fmt.Fprintf(w, "Left out of the Docs & Files tools: %d folders, %d documents, %d uploads\n", left.Folders, left.Documents, left.Uploads)
+	for _, place := range docs.PlacesLeftOut {
+		fmt.Fprintf(w, "  with %s %s fell: %d folders, %d documents, %d uploads\n", place.Record, place.SourceID, place.Folders, place.Documents, place.Uploads)
 	}
 }
 
