@@ -1045,10 +1045,10 @@ the records beyond the first.
 **Why:** a file stands in one place in Minka. Its blob belongs to the project of
 the record that brought it in and the handle naming it is good in that project's
 circle alone, so a record that named another's file would lose it where the two
-stand in different projects — and a record whose body was nothing but that file
-would arrive on no run at all. One record for the first owner alone was silently
-losing files: the checks on a bundle ask whether a reference finds a record, never
-whether the referring record may own it. Two blobs for one file is what Minka
-would rather pay, and its `ownedBy` stays as strict as it is.
+stand in different projects — and a record whose body is nothing but that file
+would arrive on no run at all. One record for the first owner alone loses such a
+file silently, because every check on a bundle asks whether a reference finds a
+record and none asks whether the referring record may own it. Two blobs for one
+file is what Minka would rather pay, and its `ownedBy` stays as strict as it is.
 **Implemented as:** `basecamp.Extractor.claimFile` and `shareTheFile`,
 `bundle.Writer.ShareFile`, see [Importing from Basecamp](stable/import.md).
