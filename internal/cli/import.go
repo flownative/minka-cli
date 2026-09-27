@@ -310,13 +310,14 @@ and named by ID with its comments and its boosts
 carry would stop the applier. A record that lost a file no run will bring is
 named (docs.onlyAFileNoRunWillBring), and the kinds end differently because a
 text is optional and a file is not: a document whose whole text was that file
-arrives without words, its title, comments and boosts with it; an upload whose
-own file it is comes and waits in Minka where the bundle holds a record of the
-file without its bytes, and is left out with its comments and its boosts where
-Basecamp refused the download for good and the bundle holds no record of it at
-all. A file this run merely could not fetch is not one of those: it is named
-under missingFiles, the run ends non-zero, and the record waits for the run that
-brings it. A document, or the description of an
+arrives without words, its title, comments and boosts with it, while an upload
+has no purpose without its file and is left out with its comments and its
+boosts, its file gone at the source, above what Minka takes or refused for
+good. Where the file left a record behind, that record stays as the trace of
+what became of it. A file this run merely missed is none of that: it is named
+under missingFiles, and the upload comes and waits for the run that
+brings it. A dry run downloads nothing and cannot know, so it counts an upload
+a run leaves out. A document, or the description of an
 upload, longer than the 1,000,000 characters Minka holds is counted
 (docs.longerThanMinkaTakes) and comes as it is, as a mail does. A folder takes
 neither comments nor boosts, here as in Basecamp, so neither is asked for.
@@ -704,8 +705,8 @@ it has been applied.`,
 			}
 			if count := len(report.Docs.OnlyAFileNoRunWillBring); count > 0 {
 				notices = append(notices, plural(count,
-					"record of a Docs & Files tool lost a file no run will bring; data.docs.onlyAFileNoRunWillBring names it by ID. A document whose whole text was that file arrives without words, its title, comments and boosts with it; an upload is nothing without its file, so one whose file the bundle holds no record of is left out with its comments and its boosts, and one whose record came without bytes waits in Minka until the source hands the file back",
-					"records of Docs & Files tools lost a file no run will bring; data.docs.onlyAFileNoRunWillBring names them by ID. A document whose whole text was that file arrives without words, its title, comments and boosts with it; an upload is nothing without its file, so one whose file the bundle holds no record of is left out with its comments and its boosts, and one whose record came without bytes waits in Minka until the source hands the file back"))
+					"record of a Docs & Files tool lost a file no run will bring; data.docs.onlyAFileNoRunWillBring names it by ID. A document whose whole text was that file arrives without words, its title, comments and boosts with it; an upload has no purpose without its file and is left out with its comments and its boosts, which are counted where what fell with an upload is",
+					"records of Docs & Files tools lost a file no run will bring; data.docs.onlyAFileNoRunWillBring names them by ID. A document whose whole text was that file arrives without words, its title, comments and boosts with it; an upload has no purpose without its file and is left out with its comments and its boosts, which are counted where what fell with an upload is"))
 			}
 			if count := report.Docs.LongerThanMinkaTakes; count > 0 {
 				notices = append(notices, plural(count,
