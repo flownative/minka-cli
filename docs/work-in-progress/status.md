@@ -645,8 +645,9 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   a Basecamp CLI that changes after an upgrade would send. For an avatar the
   class of a status that is no 200 is read in a test of its own and nothing else:
   live, no avatar has answered with anything but 200. That a 401 there ends the
-  run rather than writing the picture off is held by that test alone as well: no
-  sign-in has ever run out while avatars were being fetched.
+  run rather than writing the picture off is held against the fake, by a run whose
+  avatar answers without a sign-in; no sign-in has ever run out while avatars were
+  being fetched live.
 - Of the embeds of `import basecamp`: a frame that gets no tag, a caption in
   a figure, a frame outside a figure and broken markup. Seen live, in the
   bundle of both projects: some 500 embeds written, none left out, no raw frame

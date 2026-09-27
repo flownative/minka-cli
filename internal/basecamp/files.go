@@ -386,11 +386,15 @@ func (e *Extractor) attachFile(ctx context.Context, w *bundle.Writer, owner file
 			e.filesThatNeverArrive[file.ref] = true
 		}
 		if !file.byTheUpload() {
-			// Through the same door as a run, so that both read a refusal of this
-			// run's own the same way. Nothing is fetched here: what the door hands
-			// back is called by nobody.
+			// Through the same door as a run, and read by the same answer, so that
+			// no class of failure means one thing here and another there. Nothing is
+			// fetched: what the door hands back is called by nobody.
 			if _, err := e.bringing(ctx, file); err != nil {
-				if ended := howTheDownloadEnded(err); ended.failed != nil {
+				ended := howTheDownloadEnded(err)
+				switch {
+				case ended.endsTheRun:
+					return err
+				case ended.failed != nil:
 					e.theFileDidNotCome(file, met, ended.failed, ended.why, missing)
 				}
 				return nil

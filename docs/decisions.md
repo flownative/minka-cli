@@ -299,6 +299,11 @@ it were whole, and a rename within one directory cannot end halfway.
 <a id="c-025"></a>
 ## C-025 — A file that cannot be fetched is left out, and the run fails at the end
 
+**Superseded by [C-069](#c-069)**, which keeps everything below but the one
+answer: a run whose missing files the source itself refused ends 0, because no
+repeat can bring them. A report of such a run read against this entry would look
+like a run that went through with nothing missing.
+
 *Applies to: `import`, every attachment of a bundle*
 
 The bundle is written without the file and its record and the report names it;
@@ -309,11 +314,6 @@ hide that the bundle is incomplete. This is no case of [C-050](#c-050): a bundle
 can express the file, the source merely does not hand it over, so the run says at
 the end that a later one has something left to bring.
 **Implemented as:** `Extractor.attach`, `incompleteImport`.
-
-**Superseded by [C-069](#c-069)**, which keeps everything above but the one
-answer: a run whose missing files the source itself refused ends 0, because no
-repeat can bring them. A report of such a run read against this entry would look
-like a run that went through with nothing missing.
 
 <a id="c-026"></a>
 ## C-026 — A mention refers only to somebody the account lists

@@ -1619,6 +1619,25 @@ func TestADownloadWithoutASignInEndsTheRunTheWayARequestDoes(t *testing.T) {
 	}
 }
 
+// An avatar answered without a sign-in ends the run the same way, and that is
+// the whole point of reading a 401 as a word about the sign-in: noted file by
+// file it would write off the picture of **every person of the account** and
+// call it an answer about their pictures.
+func TestAnAvatarWithoutASignInEndsTheRunAsAFileDoes(t *testing.T) {
+	e := newImportEnv(t)
+	parent := t.TempDir()
+	e.account.FailAvatarOf[101] = &basecamp.Error{Kind: basecamp.AuthRequired, Message: "downloading an avatar from a host: HTTP 401"}
+
+	env, r := e.runJSON("import", "basecamp", "--project", "7001", "--out", filepath.Join(parent, "bundle"))
+	expectCode(t, r, ExitAuth)
+	if env.OK || env.Code != CodeAuth || env.Data != nil {
+		t.Errorf("ok %v, code %q, data %s", env.OK, env.Code, env.Data)
+	}
+	if entries, _ := os.ReadDir(parent); len(entries) != 0 {
+		t.Errorf("the run left %v", entries)
+	}
+}
+
 func TestNoOutputSaysWhatAFileIsCalledOrWhereItLies(t *testing.T) {
 	written := []string{
 		"holiday", "photo.png", "beach", "reports", "q1.pdf", "break", "shredded", "waiting", "wordy", "unsized", "minutes", "scan",
