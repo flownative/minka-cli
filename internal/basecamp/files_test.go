@@ -175,11 +175,13 @@ func holdsTogether(t *testing.T, dir string, missing []basecamp.MissingFile) {
 	}
 
 	named := map[string]bool{}
+	comesOnALaterRun := map[string]bool{}
 	for _, missed := range missing {
 		if records[missed.AttachmentSourceID] {
 			t.Errorf("%s is missing and has a record", missed.AttachmentSourceID)
 		}
 		named[missed.AttachmentSourceID] = true
+		comesOnALaterRun[missed.AttachmentSourceID] = missed.Retryable
 	}
 	for where, body := range bodiesOf(t, dir) {
 		kind, id, _ := strings.Cut(where, " ")
@@ -207,9 +209,15 @@ func holdsTogether(t *testing.T, dir string, missing []basecamp.MissingFile) {
 		}
 	}
 	// The file an upload stands for is named by a field and not by a tag, and it
-	// is the upload's own as a tag's file is its body's.
+	// is the upload's own as a tag's file is its body's. The field is required,
+	// so it has to name a record of the index or a file this run merely missed,
+	// which the run after it writes: one that names neither is an upload nothing
+	// will ever make whole, and Minka waits for it on every run.
 	for _, upload := range recordsOrNone(t, dir, bundle.Uploads) {
 		file, _ := upload["file"].(string)
+		if !records[file] && !comesOnALaterRun[file] {
+			t.Errorf("the upload %v stands for %s, which has no record and no run will bring", upload["sourceId"], file)
+		}
 		named[file] = true
 		if owner, has := owners[file]; has && owner != [2]string{bundle.OwnerUpload, upload["sourceId"].(string)} {
 			t.Errorf("the upload %v stands for %s, which belongs to %s %s", upload["sourceId"], file, owner[0], owner[1])
