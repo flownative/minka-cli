@@ -186,11 +186,13 @@ func (s *Server) addDocument(w http.ResponseWriter, r *http.Request, person *Per
 	if !ok {
 		return
 	}
-	if deref(audience) == "chosen" && !s.everybodyIsAMemberOf(tool.ProjectID, notifyIDs) {
-		unprocessable(w, "personNotAProjectMember", "Only a member of the project can be told about a document.")
+	// The people a document tells are enrolled after it is written, so an
+	// archived project refuses the write before anybody is looked up.
+	if s.refusedAsArchived(w, s.projectWithID(tool.ProjectID)) {
 		return
 	}
-	if s.refusedAsArchived(w, s.projectWithID(tool.ProjectID)) {
+	if deref(audience) == "chosen" && !s.everybodyIsAMemberOf(tool.ProjectID, notifyIDs) {
+		unprocessable(w, "personNotAProjectMember", "Only a member of the project can be told about a document.")
 		return
 	}
 

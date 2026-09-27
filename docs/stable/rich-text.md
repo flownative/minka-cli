@@ -49,7 +49,23 @@ hard break, and the way back yields the same HTML.
 
 `CarriesMarkup` decides whether a text carries markup, by the rule of the
 server: markup is only a tag of a served element that is written out up to its
-closing angle bracket. `a<i und b<s` stays plain text.
+closing angle bracket. `a<i und b<s` stays plain text. Beside the elements
+Markdown writes, the server keeps three that a text carries rather than
+writes: `action-text-attachment`, `minka-embed` and `minka-ref`.
+
+## HTML that carries no markup is kept as characters, not refused
+
+`RichText::fromUntrustedValue` asks that question **before** it cleans
+anything, and a value that answers no is escaped, its line breaks turned into
+`<br>`, and kept inside one `<div>`. The answer is the ordinary 200 or 201, so
+Markdown sent with `--description-format html`, `--format html` or
+`--body-format html` stands there afterwards as the characters somebody typed.
+
+Nothing else reports that, so every one of those flags draws a `notice` naming
+what becomes of the text ([C-068](../decisions.md#c-068)). It is not refused:
+the server accepts it, and refusing what the server takes would be wrong about
+it. The Markdown path cannot meet the case at all, because the conversion
+happens here.
 
 ## Sources, files and mentions
 
@@ -59,9 +75,12 @@ are `action-text-attachment` elements with a freshly signed handle.
 
 - What is shown is always the source: an image as a Markdown image, a file as
   a link, a mention as `@Name`. The plain text next to a message has neither.
-- Markdown can hold neither. A new text that would lose attachments or
-  mentions is refused; `--drop-attachments` allows it explicitly. Sending the
-  source back as HTML keeps them.
+- Markdown can hold none of it: not a file, not a mention, and not the two
+  further elements a text carries — `minka-embed` for an address the server
+  drew as a card, `minka-ref` for a reference to another record. A new text
+  that would lose any of them is refused; `--drop-attachments` allows it
+  explicitly, and the refusal calls them all attachments, after the flag.
+  Sending the source back as HTML keeps them.
 - A handle is valid only within its circle — project or conversation. In a
   text elsewhere the server silently removes it on saving, which is why the
   help and the SKILL.md advise reading the text back afterwards.

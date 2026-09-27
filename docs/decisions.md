@@ -1077,8 +1077,9 @@ promising more than it holds.
 <a id="c-068"></a>
 ## C-068 — A text the server finds no markup in is not refused but said out loud
 
-*Applies to: `docs create`, `docs edit`, `comments create`, `comments edit`,
-every `--format html` and `--body-format html`*
+*Applies to: every text sent as HTML — `cards create`, `cards edit`,
+`comments create`, `comments edit`, `docs create`, `docs edit`, and so
+`--description-format html`, `--format html` and `--body-format html`*
 
 Markdown is converted here, and where a caller sends HTML itself a text that
 carries no element the server serves draws a `notice` naming what becomes of
@@ -1090,5 +1091,6 @@ the same 201 or 200 as any other answer — so `# Heading` lands as `# Heading`
 and only the web ever shows it; refusing what the server accepts would be
 wrong about it, and saying nothing would leave the one loss nothing else
 reports.
-**Implemented as:** `cli.markupNotice`, `cli.documentBody`, see
-[Docs & Files](stable/docs-and-files.md).
+**Implemented as:** `cli.markupNotice`, `cli.documentBody`,
+`cli.descriptionHTML`, see [Rich text in both directions](stable/rich-text.md)
+and [Docs & Files](stable/docs-and-files.md).

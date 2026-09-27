@@ -55,7 +55,9 @@ invert the meaning on one of them, so there are three mappings and no shared
 helper ([C-067](../decisions.md#c-067)):
 
 - `docs edit --expect <updatedAt>` sends the string **verbatim as it was read**.
-  It always ends `.000000Z`; a value with no zone is 400 `malformedBody`.
+  It always ends `.000000Z`. The shape is held here first, so a value with no
+  zone exits 1 as a usage error rather than travelling to be answered with 400
+  `malformedBody`.
 - `docs edit --force` leaves the field **out of the body**, and never sends
   `null`.
 - `--expect none` is refused as a usage error: it is the word of `cards notes
@@ -92,6 +94,12 @@ other than the writer meant, so the CLI refuses `--notify` without `chosen` and
 project a tool hangs in is not known before the document exists, and a name can
 only be matched against the members of a project.
 
+A **client** of the project is a member, so `--notify` naming one is accepted
+and enrols them; E-199 then keeps them out of the notification and out of the
+read. The CLI cannot tell a client apart here and does not try — it does not
+know the project before the document exists — and whether a client then sees
+the document is Minka's to decide.
+
 ## Two kinds of entry, one flag
 
 A document and an upload have addresses of their own, and the identifier of one
@@ -111,11 +119,17 @@ it.
 
 ## The refusals
 
+`docs create` says what is wrong with the request before it meets the project:
+the title, the body, the folder and the audience are read first, so an archived
+project with an unknown folder answers `folderUnknown`. Everywhere else
+`projectArchived` comes first, because there the statement refuses before
+anything else can.
+
 | Answer | Command | Exit |
 |---|---|---|
 | 404 | every read and write, for what is unknown, foreign, hidden from a client, in the trash, or a draft | 2 |
 | 415 `unsupportedMediaType` | unreachable: every write of this CLI sends JSON | — |
-| 400 `malformedBody` | `docs edit --expect` with a moment the server cannot read | 9 |
+| 400 `malformedBody` | unreachable: a moment `--expect` lets through is one the server reads | — |
 | 409 `documentChanged` | `docs edit --expect` against a document written over since | 9 |
 | 422 `documentTitleMissing`, `documentTitleTooLong`, `documentTitleHasControlCharacters` | `docs create`, `docs edit` | 9 |
 | 422 `documentBodyTooLong`, `documentBodyNotReadable` | `docs create`, `docs edit` | 9 |
@@ -123,7 +137,7 @@ it.
 | 422 `personNotAProjectMember` | `docs create --notify` naming somebody outside the project | 9 |
 | 422 `folderUnknown`, `folderArchived` | `docs create --folder` | 9 |
 | 422 `documentArchived`, `uploadArchived` | every write on an archived entry, or under one, comments included | 9 |
-| 422 `projectArchived` | every write, before the codes above | 9 |
+| 422 `projectArchived` | every write; on `docs edit` and the comments before the codes above, on `docs create` after the title, the body and the folder | 9 |
 | 404 `variantNotAvailable` | `uploads download --variant` of the file of an upload, as for any file | 2 |
 | 422 the comment codes | `docs comments …`, as under a card | 9 |
 
