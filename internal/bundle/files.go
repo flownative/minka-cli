@@ -159,11 +159,9 @@ func (c *counter) Write(content []byte) (int, error) {
 // its content, which is safe here for the same reason it is safe for a file taken
 // over from the bundle being replaced: every attachment has a directory of its
 // own, made anew for it, and nothing of a bundle is ever written into twice.
+//
+// A discarding Writer is never asked: it holds no bytes for anything to share.
 func (w *Writer) ShareFile(held StoredFile, sourceID, filename string) (StoredFile, error) {
-	shared := StoredFile{File: sourceID + "/" + filename, Bytes: held.Bytes, SHA256: held.SHA256}
-	if w.Discards() {
-		return shared, nil
-	}
 	dir, err := fileDir(w.staging, sourceID, filename)
 	if err != nil {
 		return StoredFile{}, err
@@ -180,7 +178,7 @@ func (w *Writer) ShareFile(held StoredFile, sourceID, filename string) (StoredFi
 		_ = os.RemoveAll(dir)
 		return StoredFile{}, fmt.Errorf("the file of attachment %q cannot be stored beside the one it shares its bytes with", sourceID)
 	}
-	return shared, nil
+	return StoredFile{File: sourceID + "/" + filename, Bytes: held.Bytes, SHA256: held.SHA256}, nil
 }
 
 // DropFile removes the file of an attachment that turned out to be none the

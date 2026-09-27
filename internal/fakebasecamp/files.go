@@ -312,6 +312,12 @@ var LongName = strings.Repeat("ä long name ", 30) + ".jpeg"
 // cannot carry, a file without a type and one without a size, a file Basecamp
 // no longer has, one file under three owners — the last of them a record whose
 // body is nothing else — and files dropped into a chat.
+//
+// All three owners of that one file stand in this project, which is the case
+// where nothing was ever lost: Minka shows a record none of another's file only
+// where the two stand in different projects. So the shape here is what the
+// records of a bundle are held to, and the loss is held by nothing that can be
+// invented — it needs a second project of the source with the same file in it.
 func fileProject(ada, grace Person, tool func(int64, string, string, string, bool, int, *Person) Tool) Project {
 	at := func(day, hour int) string { return fmt.Sprintf("2023-05-%02dT%02d:00:00.000Z", day, hour) }
 	file := func(id int64, name, contentType string, size int64) File {

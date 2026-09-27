@@ -487,7 +487,8 @@ func (e *Extractor) shareTheFile(w *bundle.Writer, record bundle.Attachment, met
 		missing(met.failed)
 		return nil
 	case !met.held:
-		// A dry run holds no bytes of anything and counts the record all the same.
+		// A dry run fetches nothing, so there are no bytes to share, and it counts
+		// the record as a real run writes it.
 		e.fileRecords = append(e.fileRecords, record)
 		return nil
 	}

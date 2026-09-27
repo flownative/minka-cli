@@ -244,8 +244,7 @@ reopens nothing it once ticked off (todosNotDone).
 
 The forwarded mail of an inbox comes after every other kind but the Docs &
 Files, so that the bytes of a file standing in a card and in a mail alike are
-fetched for the card. A mail carries its
-subject as its title, the sender as an
+fetched for the card. A mail carries its subject as its title, the sender as an
 address that never becomes a person, and the body as the source holds it, line
 breaks and all: Minka turns those into paragraphs. What the source keeps on its
 shelf comes into the trash, where it
@@ -278,9 +277,9 @@ over on every run, with everything hanging on it.
 
 The Docs & Files of a project come last of all, so that the bytes of a file
 standing in a card and in a document alike are fetched for the card. A folder, a
-document and an
-upload each carry the state the source left them in — active, archived or
-trashed — and never the state of the folder they stand in: what stands in a
+document and an upload each carry the state the source left them in — active,
+archived or trashed — and never the state of the folder they stand in: what
+stands in a
 folder that was archived or thrown away goes along through the folder in Minka
 and comes back with it. For an entry that is in use the order of the file
 decides: Minka puts each new one on top of its kind, so the bundle carries them
@@ -344,14 +343,16 @@ download). A file of a text or a chat is fetched at a storage address, the one
 file of an upload of Docs & Files by the identifier of the upload and its
 project: Basecamp names no stored file on such a record, and the address it gives
 leads to a store of its own that no run follows.
-A file that is still whole in the bundle being replaced is taken
-over from there instead of being fetched again; the report counts both as
-filesFetched and filesReused. A file Basecamp lists and no longer has gets a
-record that says so (filesGone). Where one file stands under several owners,
-every one of them gets a record of its own with the same bytes and the file is
-fetched once (filesOfSeveralOwners): a file stands in one place in Minka, so a
-record naming another's file would lose it. The name of a file is made a plain one
-(fileNamesChanged), and no output ever says a name, a caption or an address.
+A file that is still whole in the bundle being replaced is taken over from
+there instead of being fetched again; the report counts both as filesFetched
+and filesReused. A file Basecamp lists and no longer has gets a record that
+says so (filesGone). Where one file stands under several owners, every one of
+them gets a record of its own, named after the file and its owner, with the
+same bytes and one download; filesOfSeveralOwners counts the owners beyond the
+first. A file stands in one place in Minka, so a record naming another's file
+is shown none of it where the two stand in different projects. The name of a
+file is made a plain one (fileNamesChanged), and no output ever says a name, a
+caption or an address.
 
 What the source says about clients comes with it: whether somebody is a client
 and which company they belong to, whether a project works with clients and with
