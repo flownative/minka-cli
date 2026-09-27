@@ -567,6 +567,45 @@ func TestTheRecordOfAFurtherOwnerIsNamedAfterItsOwner(t *testing.T) {
 	holdsTogether(t, dir, result.Missing)
 }
 
+// The whole of the index, in the form the report gives to check it in: the
+// avatars that came, plus one record per file, plus one per owner beyond the
+// first, less the files no owner of which got a record. An avatar that is
+// missing is out of avatars.count already and must not be taken off twice.
+func TestTheIndexHoldsWhatTheReportSaysItHolds(t *testing.T) {
+	filesOfATextThatAreMissing := func(missing []basecamp.MissingFile) int {
+		of := 0
+		for _, one := range missing {
+			if one.OwnerKind != bundle.OwnerPerson {
+				of++
+			}
+		}
+		return of
+	}
+	for name, prepare := range map[string]func(*fakebasecamp.Account){
+		"a run that brings everything": func(*fakebasecamp.Account) {},
+		"a file no owner of it can have": func(account *fakebasecamp.Account) {
+			account.FailFileOf[sunsetKey] = &basecamp.Error{Kind: basecamp.Network, Message: "connection reset"}
+		},
+		"an avatar that could not be fetched": func(account *fakebasecamp.Account) {
+			account.FailAvatarOf[101] = &basecamp.Error{Kind: basecamp.Network, Message: "connection reset"}
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			account := fakebasecamp.New()
+			prepare(account)
+			dir, result := extract(t, account, fileProject)
+
+			want := result.Avatars + result.Files.Expected + result.Files.OwnersBeyondTheFirst -
+				filesOfATextThatAreMissing(result.Missing)
+			if got := len(records(t, dir, bundle.Attachments)); got != want {
+				t.Errorf("the index holds %d records, the report says %d: %d avatars, %d files, %d owners beyond the first, %d missing",
+					got, want, result.Avatars, result.Files.Expected, result.Files.OwnersBeyondTheFirst, len(result.Missing))
+			}
+			holdsTogether(t, dir, result.Missing)
+		})
+	}
+}
+
 // A file under a further owner is taken over from the bundle a run replaces like
 // any other, rather than being fetched again because its identifier is new.
 func TestALaterRunTakesOverTheFileOfAFurtherOwnerAsAnyOther(t *testing.T) {
