@@ -265,7 +265,7 @@ func TestTheFoldersOfATheBundleStandParentsFirstAndEachKindFromTheBottomUp(t *te
 		t.Errorf("the documents stand in the order %v", got)
 	}
 	if got := sourceIDs(records(t, dir, bundle.Uploads)); !reflect.DeepEqual(got,
-		[]string{"9269", "9276", "9264", "9263", "9267", "9270", "9260", "9265"}) {
+		[]string{"9269", "9277", "9276", "9264", "9263", "9267", "9270", "9260", "9265"}) {
 		t.Errorf("the uploads stand in the order %v", got)
 	}
 }
@@ -314,7 +314,7 @@ func TestTheStatusOfAnEntryIsItsOwnAndNeverItsFoldersS(t *testing.T) {
 		t.Errorf("the documents by status are %v", got)
 	}
 	if got := result.Docs.UploadsByStatus; !reflect.DeepEqual(got,
-		map[string]int{bundle.StatusActive: 6, bundle.StatusArchived: 1, bundle.StatusTrashed: 1}) {
+		map[string]int{bundle.StatusActive: 7, bundle.StatusArchived: 1, bundle.StatusTrashed: 1}) {
 		t.Errorf("the uploads by status are %v", got)
 	}
 }
@@ -340,8 +340,14 @@ func TestAnUploadCarriesTheTitleTheSourceGivesItAndElseTheNameOfItsFile(t *testi
 	if got := recordWithID(t, uploads, "9264")["title"]; got != "(no name)" {
 		t.Errorf("an upload with neither a title nor a name carries the title %v", got)
 	}
-	if result.Docs.NamesMadeIntoATitle != 1 || result.Docs.WithoutAName != 1 {
-		t.Errorf("%d titles made to fit and %d with neither a title nor a name, want one of each",
+	// One folded because the source's own title was too long and one because the
+	// name of the file standing in for it was.
+	if got := recordWithID(t, uploads, "9277")["title"].(string); len([]rune(got)) != 200 ||
+		!strings.HasPrefix(got, "What we agreed") {
+		t.Errorf("an upload the source titled too long carries a title of %d characters: %.30q", len([]rune(got)), got)
+	}
+	if result.Docs.NamesMadeIntoATitle != 2 || result.Docs.WithoutAName != 1 {
+		t.Errorf("%d titles made to fit and %d with neither a title nor a name, want two and one",
 			result.Docs.NamesMadeIntoATitle, result.Docs.WithoutAName)
 	}
 	if result.Docs.TitlesFromTheFileName != 2 {
@@ -668,8 +674,23 @@ func TestADocumentThatSaysNothingButAFileThatNeverComesArrivesWordless(t *testin
 	theUpload(t, account, 9276).Gone = false
 	account.FailFileOf[fakebasecamp.StoredKeyOfUpload(9276)] = &basecamp.Error{Kind: basecamp.Network, Message: "the network failed"}
 	_, result = extract(t, account, docsProject)
-	if got := result.Docs.OnlyAFileNoRunWillBring; !reflect.DeepEqual(got, []string{"9245"}) {
+	if got := result.Docs.OnlyAFileNoRunWillBring; !reflect.DeepEqual(got, []string{"9245", "9276"}) {
 		t.Errorf("an upload whose file only failed this time is named among %v", got)
+	}
+
+	// An upload that loses both its description and its own file is named
+	// **once**: the list is read by its length, and a record standing in it twice
+	// would say there were two.
+	_, result = extract(t, fakebasecamp.New(), docsProject)
+	seen := 0
+	for _, id := range result.Docs.OnlyAFileNoRunWillBring {
+		if id == "9276" {
+			seen++
+		}
+	}
+	if seen != 1 {
+		t.Errorf("the upload that lost both its description and its file is named %d times: %v",
+			seen, result.Docs.OnlyAFileNoRunWillBring)
 	}
 }
 
@@ -1079,5 +1100,99 @@ func TestAnEntryInsideAFolderThatSaysNothingAboutClientsIsNamed(t *testing.T) {
 	if len(result.Docs.SilentAboutClientsInsideAFolder) != len(before.Docs.SilentAboutClientsInsideAFolder) {
 		t.Errorf("%d entries are counted where only the top of a tool fell silent, want the %d there were",
 			len(result.Docs.SilentAboutClientsInsideAFolder), len(before.Docs.SilentAboutClientsInsideAFolder))
+	}
+}
+
+// A title of nothing but characters nobody can see is a title of nothing: the
+// name of the file stands in, as it does for a title the source leaves empty.
+// Asking with the whitespace alone would keep such a title, lose a perfectly good
+// file name, and hand the upload the title a run gives one that has neither.
+func TestATitleOfNothingButTheInvisibleFallsBackToTheNameOfTheFile(t *testing.T) {
+	for what, title := range map[string]string{
+		"a title of one character nobody can see": "\x01",
+		"a title of a line break and a tab":       "\n\t",
+		"a title of nothing at all":               "",
+		"a title of whitespace":                   "   ",
+	} {
+		// Bytes that are no UTF-8 are not among them: the source answers in JSON,
+		// which carries none, and what reaches a run of such a title is already
+		// the character that stands for what was lost.
+		account := fakebasecamp.New()
+		theUpload(t, account, 9267).Title = title
+		dir, result := extract(t, account, docsProject)
+
+		if got := recordWithID(t, records(t, dir, bundle.Uploads), "9267")["title"]; got != "minutes.pdf" {
+			t.Errorf("%s: the upload carries %v, want the name of its file", what, got)
+		}
+		// And it is counted for what happened: the file's name stood in, and the
+		// upload is not one that had neither a title nor a name.
+		if result.Docs.TitlesFromTheFileName != 2 {
+			t.Errorf("%s: %d uploads take the name of their file, want the two the source calls nothing",
+				what, result.Docs.TitlesFromTheFileName)
+		}
+		if result.Docs.WithoutAName != 1 {
+			t.Errorf("%s: %d uploads have neither a title nor a name, want the one that really has neither",
+				what, result.Docs.WithoutAName)
+		}
+	}
+}
+
+// A file of an upload that genuinely cannot be fetched is the good answer and not
+// the bad one: no attachment record, so Minka makes the upload wait, the file
+// named under the missing ones with the upload as its owner and a reason that
+// says whether trying again is worth it, and the run ending non-zero so nobody
+// takes the bundle for whole. A later run brings it.
+//
+// It is **not** an upload the source names no file for: that one is left out
+// altogether, and telling the two apart is the whole of what the shipped-broken
+// case got wrong.
+func TestAFileOfAnUploadThatCannotBeFetchedIsNamedAmongTheMissing(t *testing.T) {
+	for what, failure := range map[string]*basecamp.Error{
+		"the network":   {Kind: basecamp.Network, Message: "the network failed during the download"},
+		"a refusal":     {Kind: basecamp.Forbidden, Message: "Basecamp forbids the download"},
+		"an API answer": {Kind: basecamp.API, Message: "Basecamp answered with something else"},
+	} {
+		account := fakebasecamp.New()
+		account.FailFileOf[fakebasecamp.StoredKeyOfUpload(9267)] = failure
+		dir, result := extract(t, account, docsProject)
+
+		// The upload comes and keeps its file, which Minka then waits for.
+		if got := recordWithID(t, records(t, dir, bundle.Uploads), "9267")["file"]; got != "upload-9267" {
+			t.Errorf("%s: the upload names %v, want its file", what, got)
+		}
+		for _, record := range records(t, dir, bundle.Attachments) {
+			if record["sourceId"] == "upload-9267" {
+				t.Errorf("%s: the file has a record although it could not be fetched: %v", what, record)
+			}
+		}
+		// Named among the missing, with its owner and a reason that says whether
+		// a later run is worth starting.
+		var named *basecamp.MissingFile
+		for i, missing := range result.Missing {
+			if missing.AttachmentSourceID == "upload-9267" {
+				named = &result.Missing[i]
+			}
+		}
+		switch {
+		case named == nil:
+			t.Errorf("%s: the file is in neither the bundle nor the missing ones: %v", what, result.Missing)
+		case named.OwnerKind != bundle.OwnerUpload || named.OwnerSourceID != "9267":
+			t.Errorf("%s: the missing file belongs to %s %s", what, named.OwnerKind, named.OwnerSourceID)
+		case named.Reason == "":
+			t.Error(what + ": the missing file says no reason")
+		case named.Retryable != (failure.Kind == basecamp.Network):
+			t.Errorf("%s: trying again is said to be worth it: %v", what, named.Retryable)
+		}
+		// And it is no upload the source names no file for: that one is left out.
+		if !reflect.DeepEqual(result.Docs.WithoutAStoredFile, []string{"9262"}) {
+			t.Errorf("%s: the uploads said to name no stored file are %v, want the one in the cloud alone",
+				what, result.Docs.WithoutAStoredFile)
+		}
+		// No message says what the file is called or where it lies.
+		for _, missing := range result.Missing {
+			if strings.Contains(missing.Reason, "minutes") || strings.Contains(missing.Reason, "storage") {
+				t.Errorf("%s: a reason says what a file is called or where it lies: %q", what, missing.Reason)
+			}
+		}
 	}
 }

@@ -95,10 +95,10 @@ var toolKinds = map[string]string{
 }
 
 // ToolKindsARunExtracts are the kinds of Basecamp dock entry a run brings over,
-// by the word a bundle gives the tool. It is the map itself and not a copy of
-// it: whoever teaches the extractor a kind teaches this, so that a test can hold
-// every one of them against what a bundle carries and nobody has to keep a
-// second list in step.
+// by the word a bundle gives the tool. It is a copy, so that nothing outside can
+// change what a run does, and it is taken from the extractor's own map, so that
+// whoever teaches the extractor a kind teaches this and nobody has to keep a
+// second list in step with it.
 func ToolKindsARunExtracts() map[string]string {
 	kinds := make(map[string]string, len(toolKinds))
 	for name, kind := range toolKinds {

@@ -294,7 +294,8 @@ type Answer struct {
 // TodoList is a list of a To-dos tool. Minka puts every new list on top of its
 // tool, so the lists that are in use stand in the file from the bottom up: the
 // last line of a tool is the list on top. The ones the source has put away stand
-// before them in the order it lists them, which decides nothing there. Status is active, archived or trashed.
+// before them in the order it lists them, which decides nothing there.
+// Status is active, archived or trashed.
 // VisibleToClients is whether the source shows this list to clients, whatever it
 // shows of the tool it stands in.
 type TodoList struct {

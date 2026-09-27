@@ -735,8 +735,10 @@ than ending a run over records it left out anyway — the only place where a wro
 assumption about an answer counts too few instead of ending the run, which is why
 the [Status](work-in-progress/status.md) names it.
 **Implemented as:** `basecamp.Extractor.countWhatFellWithAPlace`,
-`basecamp.Extractor.countWhatFellWithAVault`, `basecamp.countWhatWasNeverPlaced`,
-see [Importing from Basecamp](stable/import.md).
+`basecamp.Extractor.countWhatFellWithAVault`,
+`basecamp.Extractor.countWhatStandsInAFolderLeftOut`,
+`basecamp.countWhatWasNeverPlaced`, see
+[Importing from Basecamp](stable/import.md).
 
 <a id="c-053"></a>
 ## C-053 — A card the host will not have leaves the list, and an unknown word takes nothing
@@ -1017,8 +1019,12 @@ A record that has **left its place** stands before all of them, in the order the
 source lists it, and that order is not turned round.
 
 **Why:** Minka orders an archive by the moment a record was put away — `archived_at
-DESC, id` — and its import takes that moment from the record's own `updatedAt`, so
-what the file says about the order of such records is never read. Turning them
+DESC` and then the item's own identifier for the folders, documents and uploads,
+and `archived_at DESC` then the list's position for the to-do lists — and its
+import takes that moment from the record's own `updatedAt`. So what the file says
+about the order of such records decides nothing, except that the position of a
+to-do list separates two archived in the same second, which is the position the
+file gave them in the first place. Turning them
 round would be work for nothing and a promise the code would then have to keep;
 saying nothing about them would leave the next reader of `inFileOrder` to measure
 it again.

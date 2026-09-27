@@ -300,6 +300,10 @@ func FileKey(number int64) string {
 // LongCaption is a caption of more characters than a reference may carry.
 var LongCaption = strings.Repeat("A caption that goes on. ", 50)
 
+// LongTitleOfAnUpload is a title somebody typed that is longer than a title
+// Minka takes, with no extension at its end to keep.
+var LongTitleOfAnUpload = strings.Repeat("What we agreed in the meeting about ", 8)
+
 // LongName is a name of more characters than a file of a bundle may have.
 var LongName = strings.Repeat("ä long name ", 30) + ".jpeg"
 

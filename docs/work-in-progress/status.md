@@ -36,7 +36,8 @@ each chat its lines as messages with their boosts, written in parts of one
 chat and some 10,000 lines each, of each questionnaire its questions with the
 schedule Minka has words for and their answers with what hangs on them, of
 each to-do set its lists, the ones in use from the bottom up because Minka puts
-every new list on top, with their groups and their to-dos in the order of the list and what
+every new list on top, with their groups and their to-dos in the order of the
+list and what
 hangs on a list and a to-do, of each inbox its forwarded mail with the
 answers by mail, the comments and the boosts of each, and of each Docs & Files
 tool its folders, documents and uploads with the comments, the boosts and the
@@ -511,7 +512,8 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   a title longer than one Minka takes and an upload with neither a title nor a
   name — the titles of both live bundles were put through Minka's rule again and
   none would be refused, and neither project exercised the folding at all,
-  `namesMadeIntoATitle` and `titlesFromTheFileName` both coming out zero; a document whose whole text is a file the source no longer has, and an
+  `namesMadeIntoATitle` and `titlesFromTheFileName` both coming out zero;
+  a document whose whole text is a file the source no longer has, and an
   upload whose own file is one; a description with a file embedded in it, every
   upload of the account that was read carrying an empty
   `description_attachments`; a
@@ -522,10 +524,22 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   such a tool, which is the only way to reach the count of an entry no place
   ever claimed; and a vault the source lists **without a parent**, which is how
   it lists the vault at the top of a tool and which no record it has put away is
-  in, no whole tool of the account being put away. What the fake answers with
-  otherwise is the shape that was read: the key list of an upload, the address it
+  in, no whole tool of the account being put away; and **a record that says
+  nothing about clients**, which is the shape the naming of a silent entry and
+  three of the fixtures stand on — the one project that could answer it carries
+  the field on every record at both depths, and no other project's Docs & Files
+  records were read, so an absent `visible_to_clients` has never been seen and
+  the fake invents it. A document or a description longer than Minka holds is
+  made by a test rather than standing in the fake, which is the same want of a
+  reading by another road. What the fake answers with otherwise is the shape that
+  was read: the key list of an upload, the address it
   gives, the not-found of an archived folder, and a folder's own list holding what
   is in use alone.
+  One residual of the cloud branch, unmeasured and worth naming: **if an upload
+  that lives in a cloud does carry a `download_url`**, it is taken as having a
+  file, the fetch fails with something that is no not-found, and the run ends
+  non-zero with an entry under `missingFiles` that **no later run can clear**.
+  Nothing has been seen of such a record either way.
   Not counted and not asked for: how many earlier copies of its file an upload
   has. `versions` is a field Minka reads nowhere, and the upload says nothing
   of them, so a run that wanted the number would ask once per upload. That
