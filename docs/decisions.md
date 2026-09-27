@@ -959,28 +959,33 @@ in the report.
 [Importing from Basecamp](stable/import.md).
 
 <a id="c-063"></a>
-## C-063 — An upload without a stored file is left out with everything pointing at it
+## C-063 — An upload the bundle can hold no file for is left out with everything pointing at it
 
 *Applies to: `import basecamp`, the uploads of a Docs & Files tool*
 
-An upload Basecamp names no stored file for, one that lives in a cloud, is left
-out and named by its `sourceId`, and its comments and its boosts are neither
-asked for nor written. All three are counted and a `notice` says so. **What says
-so is the record and never the shape of the address:** an upload the source gives
-an address to fetch a file from has a file, and one whose address a run cannot
-ask for is a file it could not fetch — named under `missingFiles`, the run ending
-non-zero, and a later run brings it.
+An upload the bundle can hold no file for is left out and named by its
+`sourceId`, and its comments and its boosts are neither asked for nor written.
+Two things leave it without one: Basecamp names **no stored file** for it, one
+that lives in a cloud (`docs.withoutAStoredFile`), and Basecamp **refused the
+download for good** (`docs.onlyAFileNoRunWillBring`). What fell with either is
+counted and a `notice` says so. **What says an upload has a file is the record
+and never the shape of the address**, and **what says a file will never come is
+whether the failure may pass and nothing else:** one that may pass is named
+under `missingFiles`, the run ends non-zero, the upload is written, and a later
+run brings the file.
 
 **Why:** `file` takes the `sourceId` of a file of the bundle and nothing else,
-and no run will ever have bytes to fetch for a file that lies somewhere else,
-so such an upload would be counted in Minka as waiting on every run. What
-pointed at it falls with it ([C-052](#c-052)): a comment naming an upload the
-bundle does not carry stops the applier, and carrying it would cost the import
-rather than the one upload. The record and not the address decides, because a
-reading of the address that is wrong by one shape leaves **every** file of a tool
-out of the bundle, counted and named and gone, where a file that cannot be
-fetched costs one exit code and a later run.
+and an upload naming a file the bundle has none of is one Minka lets wait on
+every run, for ever, because nothing will ever answer it. What pointed at it
+falls with it ([C-052](#c-052)): a comment naming an upload the bundle does not
+carry stops the applier, and carrying it would cost the import rather than the
+one upload. The record and not the address decides, because a reading of the
+address that is wrong by one shape leaves **every** file of a tool out of the
+bundle, counted and named and gone. The reason of a failure decides the rest,
+because the two are one answer apart and the wrong way round costs either a
+record that waits for ever or one thrown away while the file was on its way.
 **Implemented as:** `basecamp.fileOfAnUpload`,
+`basecamp.Extractor.theFileDidNotCome`, `theFileLeftNoRecord`,
 `basecamp.Extractor.writeUpload`, see
 [Importing from Basecamp](stable/import.md).
 

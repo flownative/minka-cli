@@ -388,8 +388,7 @@ func (e *Extractor) attachFile(ctx context.Context, w *bundle.Writer, owner file
 			if _, err := e.storageAddress(file); err != nil {
 				var failed *Error
 				if errors.As(err, &failed) {
-					met.failed = failed
-					missing(failed)
+					e.theFileDidNotCome(file, met, failed, missing)
 				}
 				return nil
 			}
@@ -440,17 +439,14 @@ func (e *Extractor) attachFile(ctx context.Context, w *bundle.Writer, owner file
 			e.fileRecords = append(e.fileRecords, record)
 			return nil
 		default:
-			met.failed = failed
-			missing(failed)
+			e.theFileDidNotCome(file, met, failed, missing)
 			return nil
 		}
 		if file.byteSize != nil && stored.Bytes != *file.byteSize {
 			if err := w.DropFile(file.ref); err != nil {
 				return err
 			}
-			differs := sizeDiffers(stored.Bytes, *file.byteSize)
-			met.failed = differs
-			missing(differs)
+			e.theFileDidNotCome(file, met, sizeDiffers(stored.Bytes, *file.byteSize), missing)
 			return nil
 		}
 		e.files.Fetched++
@@ -519,16 +515,46 @@ func (e *Extractor) bringing(ctx context.Context, file sourceFile) (func(io.Writ
 	return func(into io.Writer) error { return e.Files.Download(ctx, address, into) }, nil
 }
 
-// theFileNeverArrives tells that no run will ever bring the bytes of a file to
-// Minka: the source no longer has it, or it weighs more than a run takes there.
-// A file this run merely could not fetch is not one of them — it leaves no
-// record at all, the run ends non-zero, and the run after it brings the file —
-// and neither is one the walk has not met yet.
+// theFileDidNotCome notes a download that brought no file, names it among the
+// missing with the reason, and says whether any run will ever bring it.
 //
-// Only a record whose body is nothing else asks: for every other body a file
-// that stays outside leaves a hole and nothing more.
+// **What the reason says about trying again decides that**, and the two must not
+// be run together: a failure that may pass leaves a hole this run reports and the
+// next one fills, while one that will not pass leaves a hole for ever, and
+// whatever waits for such a file waits on every run to the end of time.
+func (e *Extractor) theFileDidNotCome(file sourceFile, met *fileOfTheSource, failed *Error, missing func(*Error)) {
+	met.failed = failed
+	if !failed.Transient() {
+		e.filesThatNeverArrive[file.ref] = true
+	}
+	missing(failed)
+}
+
+// theFileNeverArrives tells that no run will ever bring the bytes of a file to
+// Minka: the source no longer has it, it weighs more than a run takes there, or
+// the download failed for a reason that will not pass. A file this run merely
+// missed is not one of them — it leaves no record at all, the run ends
+// non-zero, and the run after it brings the file — and neither is one the walk
+// has not met yet.
+//
+// Only a record whose body is nothing else, or whose file is all it stands for,
+// asks: for every other body a file that stays outside leaves a hole and nothing
+// more.
 func (e *Extractor) theFileNeverArrives(ref string) bool {
 	return e.filesThatNeverArrive[ref]
+}
+
+// theFileLeftNoRecord tells that the bundle holds no record of a file at all and
+// no later run will write one. Such a reference names nothing: whatever the
+// format lets point at a file has to do without it, and a record that cannot be
+// written without one cannot be written at all.
+//
+// A download that failed for a reason that may pass leaves no record either, and
+// the run after this one writes it, so the record that names the file is written
+// and waits for it.
+func (e *Extractor) theFileLeftNoRecord(file sourceFile) bool {
+	met := e.theFile(file.ofTheSource())
+	return met.failed != nil && !met.failed.Transient()
 }
 
 // sizeDiffers is the failure of a download that ended well and brought

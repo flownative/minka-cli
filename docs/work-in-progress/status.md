@@ -99,10 +99,14 @@ a comment, a question or an answer with a status a bundle does not know, a draft
 among them, a group or a to-do the source has put on the shelf, which a
 bundle gives none, a forwarded mail of a status that is none of the three,
 an answer by mail that says anything but `active`, and a folder, a document or
-an upload of Docs & Files whose status is none of the three. An upload
-Basecamp names no stored file for is left out with its comments and its boosts
+an upload of Docs & Files whose status is none of the three. An upload the
+bundle can hold no file for is left out with its comments and its boosts
 (C-063): `file` takes the identifier of a file of the bundle and nothing else,
-and no run will ever have bytes to fetch for what lies in a cloud.
+and no run will ever have bytes to fetch for what lies in a cloud, nor for a
+download Basecamp refuses for good. What tells such a refusal from a failure
+that may pass is the one word the reason carries about itself, `retryable`:
+a file that may still come leaves the upload written and waiting, and the run
+after this one brings both.
 What stood in a list, a group, a folder or a whole Docs & Files tool a bundle
 cannot carry falls
 with it, is asked for to be counted and is named with the place it fell with
@@ -543,7 +547,10 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   none would be refused, and neither project exercised the folding at all,
   `namesMadeIntoATitle` and `titlesFromTheFileName` both coming out zero;
   a document whose whole text is a file the source no longer has, and an
-  upload whose own file is one; a description with a file embedded in it, every
+  upload whose own file is one; a document and an upload whose file Basecamp
+  refuses the download of, which is a shape the account holds although no
+  fixture is a reading of it: the refusal is played by a stand-in, and what a
+  run makes of it is held by tests alone; a description with a file embedded in it, every
   upload of the account that was read carrying an empty
   `description_attachments`; a
   document and a description longer than Minka holds; an entry the source
@@ -564,11 +571,22 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   was read: the key list of an upload, the address it
   gives, the not-found of an archived folder, and a folder's own list holding what
   is in use alone.
-  One residual of the cloud branch, unmeasured and worth naming: **if an upload
-  that lives in a cloud does carry a `download_url`**, it is taken as having a
-  file, the fetch fails with something that is no not-found, and the run ends
-  non-zero with an entry under `missingFiles` that **no later run can clear**.
-  Nothing has been seen of such a record either way.
+  **A file Basecamp refuses for good** is the one shape of this whole tool that a
+  full extraction of the account has met, exactly once over 10,274 files: the
+  download of one upload's file answered with a refusal that will not pass, and
+  the upload was written all the same, naming a file the bundle had no record of.
+  Such an upload is now left out, named in `docs.onlyAFileNoRunWillBring`, with
+  its comments and its boosts counted as fallen. What the run does with it rests
+  on the invented account, where the refusal is played by a stand-in; what says a
+  refusal is one is `retryable` of the reason, and no other reading of a failure
+  is anywhere in the way. The residual of the cloud branch falls under the same
+  rule: **an upload that lives in a cloud and does carry a `download_url`** is
+  taken as having a file and the fetch fails, and what the failure says about
+  itself decides the rest — one that will not pass leaves the upload out and
+  named, where it used to leave it waiting in Minka for ever. The entry under
+  `missingFiles` stays on every run all the same, and with it the exit code: the
+  run did lose something, and says so. Nothing has been seen of such a record
+  either way.
   Not counted and not asked for: how many earlier copies of its file an upload
   has. `versions` is a field Minka reads nowhere, and the upload says nothing
   of them, so a run that wanted the number would ask once per upload. That
