@@ -112,6 +112,10 @@ type importReport struct {
 	TodosByStatus     map[string]int              `json:"todosByStatus"`
 	TodosLeftOut      basecamp.TodosLeftOut       `json:"todosLeftOut"`
 	TodoPlacesLeftOut []basecamp.TodoPlaceLeftOut `json:"todoPlacesLeftOut"`
+	// TodosWithoutAList names the to-dos that hang on a To-dos tool itself and
+	// stand in no list of it, which a bundle has no place for; they count in
+	// TodosLeftOut as well.
+	TodosWithoutAList []basecamp.TodoWithoutAList `json:"todosWithoutAList"`
 	// TodosNotDone are the to-dos the source has open, and TodosWithPeople those
 	// that name somebody: the two differences a later run cannot carry, because
 	// it reopens nothing and leaves the people of a to-do as they stand.
@@ -121,6 +125,9 @@ type importReport struct {
 	// many there were: a bundle carries none.
 	TodosWithSubtasks int `json:"todosWithSubtasks"`
 	SubtasksLeftOut   int `json:"subtasksLeftOut"`
+	// TodosThatRepeat are the to-dos that come again at the source and are
+	// carried as ordinary ones: a bundle has no word for a schedule.
+	TodosThatRepeat int `json:"todosThatRepeat"`
 	// QuestionsLeftOut are the questions left out because Minka has no words
 	// for their schedule, each with the field that made it impossible.
 	// AnchorsInferred are the questions asked every other week whose startsOn
@@ -219,11 +226,17 @@ group and a to-do with the trash alone, because Minka gives neither of the two a
 shelf: one the source has put on the shelf is left out and counted, and so is
 whatever stood in a list or a group the bundle does not carry — todosLeftOut
 counts the lists, groups and to-dos it holds none of, and todoPlacesLeftOut names
-every place that took records with it. Nothing
+every place that took records with it. A to-do that hangs on a To-dos tool itself
+and stands in no list of it has nowhere to go either: it is left out, and
+todosWithoutAList names it with its project, so that somebody can move it into a
+list at the source and a later run carries it. Nothing
 hangs on a group, which the format has no word for. A to-do carries its notes,
 its days, whom it is assigned to, who is told when it is done and the tick the
 source put on it, and it is never said to be older than that tick. Subtasks are
 not carried at all: todosWithSubtasks and subtasksLeftOut count what fell away.
+A to-do that comes again at the source comes here as an ordinary to-do, because
+Minka has no repeating one: the schedule stays behind and todosThatRepeat says how
+many there were.
 Two things a later run cannot repair, which the report says with a notice each:
 it leaves the people of a to-do as they stand in Minka (todosWithPeople), and it
 reopens nothing it once ticked off (todosNotDone).
@@ -494,10 +507,12 @@ it has been applied.`,
 				TodosByStatus:     result.TodosByStatus,
 				TodosLeftOut:      result.TodosLeftOut,
 				TodoPlacesLeftOut: result.TodoPlacesLeftOut,
+				TodosWithoutAList: result.TodosWithoutAList,
 				TodosNotDone:      result.TodosNotDone,
 				TodosWithPeople:   result.TodosWithPeople,
 				TodosWithSubtasks: result.TodosWithSubtasks,
 				SubtasksLeftOut:   result.SubtasksLeftOut,
+				TodosThatRepeat:   result.TodosThatRepeat,
 
 				QuestionsLeftOut:    result.QuestionsLeftOut,
 				AnchorsInferred:     result.AnchorsInferred,
@@ -593,6 +608,16 @@ it has been applied.`,
 				notices = append(notices, plural(count,
 					"list or group of a To-dos tool is left out with what stood in it, which is left out with it; data.todoPlacesLeftOut names it with how many groups and to-dos fell with it",
 					"lists or groups of To-dos tools are left out with what stood in them, which is left out with them; data.todoPlacesLeftOut names each with how many groups and to-dos fell with it"))
+			}
+			if count := len(report.TodosWithoutAList); count > 0 {
+				notices = append(notices, plural(count,
+					"to-do hangs on a To-dos tool itself and stands in no list of it, which a bundle has no place for: it is left out, and data.todosWithoutAList names it with its project, so that somebody can move it into a list at the source and a later run carries it",
+					"to-dos hang on To-dos tools themselves and stand in no list of them, which a bundle has no place for: they are left out, and data.todosWithoutAList names each with its project, so that somebody can move them into lists at the source and a later run carries them"))
+			}
+			if count := report.TodosThatRepeat; count > 0 {
+				notices = append(notices, plural(count,
+					"to-do comes again at the source and is carried as an ordinary one, because Minka has no repeating to-do: the schedule stays behind, and the to-do keeps the days it has",
+					"to-dos come again at the source and are carried as ordinary ones, because Minka has no repeating to-do: their schedules stay behind, and the to-dos keep the days they have"))
 			}
 			if count := report.SubtasksLeftOut; count > 0 {
 				notices = append(notices, plural(count,
@@ -912,10 +937,19 @@ func renderTodos(w io.Writer, report importReport) {
 	fmt.Fprintf(w, "To-dos: %d active, %d trashed; %d of them still open, %d carrying people\n",
 		report.TodosByStatus[bundle.StatusActive], report.TodosByStatus[bundle.StatusTrashed], report.TodosNotDone, report.TodosWithPeople)
 	fmt.Fprintf(w, "To-dos that had subtasks: %d, with %d subtasks a bundle has no word for\n", report.TodosWithSubtasks, report.SubtasksLeftOut)
+	fmt.Fprintf(w, "To-dos that come again at the source, carried as ordinary ones: %d\n", report.TodosThatRepeat)
 	left := report.TodosLeftOut
 	fmt.Fprintf(w, "Left out of the To-dos tools: %d lists, %d groups, %d to-dos\n", left.Lists, left.Groups, left.Todos)
 	for _, place := range report.TodoPlacesLeftOut {
 		fmt.Fprintf(w, "  with %s %s fell: %d groups, %d to-dos\n", place.Record, place.SourceID, place.Groups, place.Todos)
+	}
+	if len(report.TodosWithoutAList) > 0 {
+		named := make([]string, 0, len(report.TodosWithoutAList))
+		for _, one := range report.TodosWithoutAList {
+			named = append(named, one.SourceID+" of project "+one.ProjectSourceID)
+		}
+		fmt.Fprintf(w, "To-dos hanging on a To-dos tool itself and in no list of it, left out: %d — %s\n",
+			len(named), strings.Join(named, ", "))
 	}
 }
 

@@ -91,6 +91,10 @@ type Tool struct {
 	// TodoLists are the lists of a To-dos tool, in the order the account shows
 	// them.
 	TodoLists []TodoList
+	// Todos are the to-dos hanging on a To-dos tool itself, in no list of it.
+	// Basecamp lets one stand there and hands it out under the tool's own
+	// identifier, where it hands out the to-dos of a list.
+	Todos []Todo
 	// Forwards are the mails of an Email forwards tool, in the order the account
 	// lists them.
 	Forwards []Forward
