@@ -123,8 +123,9 @@ type MissingFile struct {
 	OwnerKind          string `json:"ownerKind"`
 	OwnerSourceID      string `json:"ownerSourceId"`
 	Reason             string `json:"reason"`
-	// Retryable tells that the failure may pass by itself.
-	Retryable bool `json:"retryable"`
+	// Why says whose word the failure is and therefore what to do about it: run
+	// again, look at the source, or look at this program.
+	Why WhyAFileIsMissing `json:"why"`
 }
 
 // TodosLeftOut counts what a bundle does not carry of the To-dos tools of a run,
@@ -1047,7 +1048,7 @@ func (e *Extractor) attach(ctx context.Context, w *bundle.Writer, record bundle.
 				OwnerKind:          record.OwnerKind,
 				OwnerSourceID:      record.OwnerSourceID,
 				Reason:             failed.Message,
-				Retryable:          failed.Transient(),
+				Why:                whyTheSourceGaveNoFile(failed),
 			})
 			return nil, nil
 		}
