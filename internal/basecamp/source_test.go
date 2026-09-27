@@ -378,3 +378,37 @@ func TestCountingKeepsWhatCameBeforeAPlaceWasGone(t *testing.T) {
 		t.Errorf("a list of a place in use that is not there came back as %v, want not found", err)
 	}
 }
+
+// Whose word a missing file is, over every class a failure can carry and over
+// both sides of the one boundary that matters. What comes back from the source
+// is read by its class; what a guard of this run refused before it asked anybody
+// is never a word about the file, whatever class that guard chose. The reading
+// no case falls into by accident is the one that writes a file off.
+func TestWhoseWordAMissingFileIs(t *testing.T) {
+	ofTheSource := map[Kind]WhyAFileIsMissing{
+		Network: FailedThisTime, RateLimited: FailedThisTime, Unavailable: FailedThisTime,
+		NotFound: RefusedBySource, Forbidden: RefusedBySource,
+		API: NotUnderstood, NotInstalled: NotUnderstood, AuthRequired: NotUnderstood,
+		Interrupted: NotUnderstood, Kind("something new"): NotUnderstood, Kind(""): NotUnderstood,
+	}
+	for kind, want := range ofTheSource {
+		if got := whoseWordAMissingFileIs(false, &Error{Kind: kind}); got != want {
+			t.Errorf("an answer of the source of kind %q is %q, want %q", kind, got, want)
+		}
+		if got := whoseWordAMissingFileIs(true, &Error{Kind: kind}); got != NotUnderstood {
+			t.Errorf("a refusal of our own of kind %q is %q", kind, got)
+		}
+	}
+	// And the two answers anything acts on are the two that are named.
+	if !FailedThisTime.MayPass() || FailedThisTime.NoRunWillBring() {
+		t.Error("a failure that may pass is read wrongly")
+	}
+	if !RefusedBySource.NoRunWillBring() || RefusedBySource.MayPass() {
+		t.Error("a refusal of the source is read wrongly")
+	}
+	for _, unplaced := range []WhyAFileIsMissing{NotUnderstood, ""} {
+		if unplaced.MayPass() || unplaced.NoRunWillBring() {
+			t.Errorf("%q is taken for an answer", unplaced)
+		}
+	}
+}

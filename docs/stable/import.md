@@ -145,7 +145,9 @@ has put away hand out of it is counted where it is met.
 and its boosts, named by its `sourceId` (C-063): an upload has no purpose
 without its file, and no run will ever have bytes for what lies in a cloud,
 for what the source no longer has, for what weighs more than Minka takes or
-for a download Basecamp refuses for good.
+for a download Basecamp itself refuses. A download that failed for any other
+reason is no such thing: the upload comes and waits for the run that brings the
+file.
 **A to-do that hangs on a To-dos tool itself** is left out although the source
 says no word a bundle has none for (C-060): it stands in no list and no group,
 and a bundle holds a to-do in a list alone. It is counted in `todosLeftOut` and
@@ -781,10 +783,12 @@ and Minka applies the kinds in an order of its own.
   are nor which. An upload whose file can never be had is left out with
   everything pointing at it (C-063): one Basecamp names no stored file for,
   named in `docs.withoutAStoredFile`, and one whose file the source no longer
-  has, weighs more than Minka takes or was refused for good, named in
+  has, weighs more than Minka takes or was refused by Basecamp itself, named in
   `docs.onlyAFileNoRunWillBring`; what fell with either is
   counted in `docs.commentsWithoutTheirUpload` and
-  `docs.boostsWithoutTheirUpload`. **What says so is the record and never the
+  `docs.boostsWithoutTheirUpload`. A file that might still come leaves the upload
+  standing, whether a later run may bring it or the failure is one this run could
+  not place, see Files that cannot be fetched. **What says so is the record and never the
   shape of the address:** an upload the source gives an address to fetch a file
   from has a file, and nothing looks at what that address is made of, because
   nothing asks for it. Reading it for the key of a stored file, as a file inside a
@@ -818,18 +822,21 @@ and Minka applies the kinds in an order of its own.
     that record stays as the trace of what became of it, so nothing dangles and
     nothing names it.
 
-  A file this run merely missed is not one that will never come:
-  the tag stays, the upload is written and waits for its file, and the run after
-  this one writes both whole. What tells the two apart is the one thing the
-  reason of a failure says about itself — whether trying again is worth it —
-  and nothing else; a refusal that will not pass, read as one that might, leaves
-  a record waiting for ever on a file no run brings, and the reading the other
-  way round throws away a record whose file was on its way.
+  A file that **might still come** is not one that will never come: the tag
+  stays, the upload is written and waits for its file, and a later run writes
+  both whole. What tells the two apart is whose word the failure is — `why` of
+  the entry in `missingFiles`, and nothing else. Only Basecamp's own refusal
+  leaves the upload out; a failure that may pass and one this run could not place
+  both leave it standing, and the second fails the run so that nobody takes the
+  bundle for whole. A refusal read as a failure we do not understand costs an
+  exit code; a failure we do not understand read as a refusal throws away
+  whatever it touched, which over one wrong reading of the source is an account.
 
-  A **dry run** cannot know it: nothing the source answers says that a file is
-  gone or that a download will be refused, only the download itself does. Such a
-  run counts an upload a real run leaves out, which is the way round that
-  promises nothing.
+  A **dry run** cannot know a refusal: nothing the source answers says that a
+  file is gone or that a download will be refused, only the download itself does.
+  Such a run counts an upload a real run leaves out, which is the way round that
+  promises nothing. What it does see is what a guard of the run itself refuses,
+  and it says so before anybody spends an hour.
 - **Comments** are those of cards, of posts, of answers, of to-do lists, of
   to-dos, of forwarded mail, of documents and of uploads, `parentKind`
   `card`, `post`, `answer`, `todolist`, `todo`, `forward`, `document` or
@@ -1007,11 +1014,12 @@ the run** (C-057), written behind the body and counted in
 `forwards.givenALineOfTheRun`, with a `notice`. That happens where the mail says
 nothing, where what it says is a file that will **never** come — one the source
 no longer has, one above the gibibyte a run of Minka takes, one whose download
-Basecamp refused for good — where the body is
+Basecamp refuses — where the body is
 nothing but an embed, and where the body
 holds nothing but what Minka takes off the edges of a text, a NUL among them,
-which Go does not. A file this run merely missed is none of those: it
-leaves no record at all, the run says so and ends non-zero, and the run after it
+which Go does not. A file that might still come is none of those, a failure this
+run could not place as little as one that may pass: it
+leaves no record at all, the run says so and ends non-zero, and a later run
 brings the file, so the mail waits with it rather than being told that its file
 is lost — which no later run could take back. Minka writes
 such a body empty and remembers the mail as finished, or passes it over before it
@@ -1225,9 +1233,11 @@ is asked to take it.
   neither `/` nor `\` nor a NUL: the Basecamp CLI asks for the path without its
   escapes, so such a name would be a path of its own, as far as into another
   account, asked for with the sign-in. A file whose key or name does not
-  pass is missing, not retryable, never `gone`, and is never asked for; the
-  reason says whether the key has no form that can be asked for or the
-  address Basecamp gives cannot be asked for safely.
+  pass is missing as `notUnderstood`, never `gone`, and is never asked for: the
+  refusal is this run's own and says nothing about the file, so nothing that
+  stood on it is written off and the run ends 7. The reason says whether the key
+  has no form that can be asked for or the address Basecamp gives cannot be asked
+  for safely.
 - **Streaming.** The bytes go from the Basecamp CLI into the staged file
   while they are counted and digested (`bundle.Writer.StoreFile`); a file is
   never held in memory, and there is no limit of size and no check of the
@@ -1245,8 +1255,9 @@ is asked to take it.
   failure object in place of the file, or behind the part of a file that
   broke off. Exit 0 and as many bytes as Basecamp says the file has
   (`byte_size`, where it says one) is a file. Another number of bytes is a
-  failure, retryable when fewer came; the size alone decides, whatever the
-  bytes look like. Only where Basecamp gives no size does the look count:
+  failure: fewer came, and the transfer broke off, which may pass; more came, and
+  nothing here can say what arrived, which is `notUnderstood`. The size alone
+  decides, whatever the bytes look like. Only where Basecamp gives no size does the look count:
   exit 0 with nothing but a failure object (`ok: false`) of a few kilobytes
   is then a failure and no file (`ErrLooksLikeAFailure`). Exit 2 with the
   failure object `not_found` alone on standard output is a file Basecamp no
@@ -1475,7 +1486,7 @@ and can be applied. A person whose avatar is missing comes with
 `avatar: null`; a text keeps the reference to a file that is missing, which
 the applier passes over until a later bundle answers it. What was written of
 such a file is removed. `missingFiles` names each file with
-`attachmentSourceId`, `ownerKind`, `ownerSourceId`, `reason` and `retryable`.
+`attachmentSourceId`, `ownerKind`, `ownerSourceId`, `reason` and `why`.
 The rule holds for every file of a bundle. What ends the run is an
 interruption, a bundle that cannot be written, and a Basecamp CLI that is
 not signed in when a file is asked for. A failure of the file system comes
@@ -1483,27 +1494,46 @@ without the path it happened at, which ends in the name of the file. A file
 Basecamp no longer has is not missing: it has a record that says so, see
 Files.
 
-**`retryable` says whether any run will ever bring the file**, and the run reads
-it at every place that asks whether a record can do without one: a failure that
-may pass leaves a hole this run reports and the next one fills, while one that
-will not pass — a refusal, an answer that is no file — leaves a hole for ever.
-A text that was nothing but such a file is written without it as for a file the
-source no longer has, and an upload standing for one is left out (C-063),
-because a record that waited for it would wait on every run to the end of time.
+**`why` says whose word a missing file is**, which is another question than the
+`retryable` of a request: that one asks whether the same call is worth making
+again, and this one asks who is to do something about the file. Three answers,
+and each is acted on differently:
 
-**The exit code says whether running again helps, and nothing else** (C-025). A
-run that lost a file which may still come fails, so that a caller notices:
-`network`, exit 6 and retryable. A run whose missing files will **all** never
-come ends 0 with a notice naming them: what no repeat can bring is a result and
-not a failure, left out and counted and named as any record a bundle cannot
-carry is (C-050), and an exit code nobody can clear is one whoever watches it
-stops reading. The thing to do about such a file is to look at what the run
-named — the entries of `missingFiles` with `retryable: false`, and
-`docs.onlyAFileNoRunWillBring` for the records that stood on one — and settle it
-at the source. The report is in the output either way: as `data` of the error
-envelope with `--json` and `--quiet` where the run fails, as the report itself
-where it does not. A later run replaces the bundle and brings what it can get
-then.
+| `why` | what it is | the run |
+|---|---|---|
+| `failedThisTime` | network, rate limit, a gateway: it may pass by itself | `network`, exit 6, retryable — run the same command again |
+| `refusedBySource` | Basecamp's own no: it has no such file, or it hands this one to nobody | exit 0, named in the notice and counted in the summary |
+| `notUnderstood` | a guard of this run refused, an answer nobody can read, a Basecamp CLI that says something new | `api_error`, exit 7 — look at this program, not at the file |
+
+**Only `refusedBySource` decides anything about the file** (C-025). A text that
+was nothing but such a file is written without it as for a file the source no
+longer has, and an upload standing for one is left out (C-063), because a record
+that waited for it would wait on every run to the end of time. For the other two
+the record is written and waits: a later run may bring the file, and nothing of
+the source is written off over a failure this run could not place.
+
+**Where the line runs.** Everything a run refuses **before it asks** — a key that
+is no key, an address that cannot be asked for safely — is its own doing and
+`notUnderstood`, whatever class that refusal carries; only what comes back from
+the download is an answer about the file. A reading of the source that is wrong
+by one shape therefore costs one exit code and a later run, not every file of an
+account counted and named and gone, and a dry run says so before anybody spends
+an hour. The same holds for an avatar: the class of a status that is no 200 is
+read, so a 404 is Basecamp's word and a status nobody knows is ours.
+
+**The exit code says what to do next, and nothing else** (C-025). A failure
+nobody could place decides it wherever one is among the missing files, because
+running again does not answer it; else one that may pass does; else every file
+was refused by the source and the run ends well, with a `notice` naming them and
+the count in the `summary`. What no repeat can bring is a result and not a
+failure, left out and counted and named as any record a bundle cannot carry is
+(C-050), and an exit code nobody can clear is one whoever watches it stops
+reading. The thing to do about such a file is to look at what the run named — the
+entries of `missingFiles` and `docs.onlyAFileNoRunWillBring` for the records that
+stood on one — and settle it at the source. The report is in the output either
+way: as `data` of the error envelope with `--json` and `--quiet` where the run
+fails, as the report itself where it does not. A later run replaces the bundle
+and brings what it can get then.
 
 An avatar is fetched over https only, redirects included and at most five of
 them, with a timeout of 30 seconds and at most 5 MiB, which is enforced while

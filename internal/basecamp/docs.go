@@ -517,11 +517,12 @@ func (e *Extractor) writeDocument(ctx context.Context, w *bundle.Writer, walk *d
 // and its boosts go with it rather than being asked for: an upload has no
 // purpose without its file, `file` takes the identifier of a file of the bundle
 // and nothing else, and a comment pointing at an upload the bundle does not
-// carry would stop the applier. Four things leave it without one: a file that
-// lies in a cloud, which Basecamp names no stored file for, one the source no
-// longer has, one above what Minka takes, and a download refused for a reason
-// that will not pass. An upload whose file this run merely missed is none of
-// them: it comes and waits for the run that brings it.
+// carry would stop the applier. Four things leave it without one, all of them
+// Basecamp's own word: a file that lies in a cloud, which it names no stored file
+// for, one the source no longer has, one above what Minka takes, and a download
+// Basecamp refuses. An upload whose file might still come is none of them — a
+// failure that may pass, one this run could not place — and it comes and waits
+// for the run that brings the file.
 //
 // Only the file the source shows now comes. The earlier copies of it stay at the
 // source: the format keeps a field free for them and reads it nowhere, and the
@@ -626,8 +627,10 @@ func (e *Extractor) writeUpload(ctx context.Context, w *bundle.Writer, walk *doc
 // that must not be empty, so an invented sentence was the only way the mail came
 // at all. Here it is not, and a document is read as something a person wrote.
 //
-// A file this run merely could not fetch is no file that will never come: the tag
-// stays, and the run after this one writes the document whole.
+// A file that might still come is no file that will never come: the tag stays,
+// and a later run writes the document whole. Only Basecamp's own refusal of a
+// file counts here — a failure this run could not place decides nothing, least of
+// all that a text is to be written without what it said.
 // The second value says that the record was named, so that one which lost both
 // its text and its own file is named once.
 func (e *Extractor) wordlessWhereItsOnlyFileNeverComes(text, sourceID string) (string, bool) {

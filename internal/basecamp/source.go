@@ -60,6 +60,65 @@ func (e *Error) Transient() bool {
 	return e.Kind == Network || e.Kind == RateLimited || e.Kind == Unavailable
 }
 
+// WhyAFileIsMissing says **whose word** a file the bundle has none of is, which
+// is another question than Transient: a refusal somebody lifts at the source is
+// no request worth asking again, and a file no run will ever bring is none
+// either. Three answers, because they ask three different things of whoever
+// reads the report — run again, look at the source, or look at us.
+type WhyAFileIsMissing string
+
+const (
+	// FailedThisTime may pass by itself, so the run after this one brings the
+	// file and the records that wait for it.
+	FailedThisTime WhyAFileIsMissing = "failedThisTime"
+	// RefusedBySource is Basecamp's own word about the file: it has none, or it
+	// hands this one to nobody. No run brings what the source refuses, so what
+	// stood on such a file comes without it or not at all.
+	RefusedBySource WhyAFileIsMissing = "refusedBySource"
+	// NotUnderstood is a failure this run cannot place: a guard of its own
+	// refused before anything was asked for, an answer nobody can read, a
+	// Basecamp CLI that says something new after an upgrade. Such a failure is a
+	// word about this program and not about the file, so nothing is decided about
+	// the file and the run says out loud that it does not know. It is what
+	// anything unnamed counts as, so that the one reading which could hide a
+	// wholesale breakage is never the one a forgotten case falls into.
+	NotUnderstood WhyAFileIsMissing = "notUnderstood"
+)
+
+// MayPass and NoRunWillBring are the two answers anything may act on. Every
+// other value, the empty one included, is a failure nobody placed: it decides
+// nothing about the file and ends the run.
+func (w WhyAFileIsMissing) MayPass() bool        { return w == FailedThisTime }
+func (w WhyAFileIsMissing) NoRunWillBring() bool { return w == RefusedBySource }
+
+// whoseWordAMissingFileIs is where the three answers are decided, and the one
+// thing it asks besides the class is **where the failure came from**: a guard of
+// this run refusing before anything was asked for says nothing about the file,
+// whatever class it carries, and only an answer of the source can be a refusal
+// of the source. Without that, a guard of ours that spoke in the source's class
+// would write off every file of an account.
+func whoseWordAMissingFileIs(ofOurOwn bool, failed *Error) WhyAFileIsMissing {
+	if ofOurOwn {
+		return NotUnderstood
+	}
+	return whyTheSourceGaveNoFile(failed)
+}
+
+// whyTheSourceGaveNoFile reads a failure that came back from Basecamp. Only
+// what it says about the file itself is a refusal of the source; every other
+// class is an answer this run cannot place, and so is one that carries no class
+// at all.
+func whyTheSourceGaveNoFile(failed *Error) WhyAFileIsMissing {
+	switch failed.Kind {
+	case Network, RateLimited, Unavailable:
+		return FailedThisTime
+	case NotFound, Forbidden:
+		return RefusedBySource
+	default:
+		return NotUnderstood
+	}
+}
+
 // CLI is the Source that runs the Basecamp CLI. The Basecamp CLI brings the
 // sign-in, the refreshing of the token, rate limiting and retries.
 type CLI struct {

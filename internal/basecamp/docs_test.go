@@ -914,14 +914,16 @@ func TestEveryReferenceOfDocsAndFilesLeadsToARecordOfTheBundle(t *testing.T) {
 		}
 	}
 	// Every file of a document or an upload belongs to one that is in the
-	// bundle, with one exception: the record of a file no run will bring stays
-	// as the trace of what became of it, and the upload it stood for is left
-	// out. Such a record carries no bytes for anybody to have brought in vain.
+	// bundle, with one exception, and it is the same one the check on every
+	// bundle makes: the **own file** of an upload left out stays as the trace of
+	// what became of it. A file of such an upload's description is no trace of
+	// anything and may not stay.
 	for _, record := range records(t, dir, bundle.Attachments) {
+		owner, _ := record["ownerSourceId"].(string)
 		known, ofADocsEntry := entries[record["ownerKind"].(string)]
 		switch {
-		case !ofADocsEntry || known[record["ownerSourceId"].(string)]:
-		case record["ownerKind"] == bundle.OwnerUpload && record["gone"] == true:
+		case !ofADocsEntry || known[owner]:
+		case record["ownerKind"] == bundle.OwnerUpload && record["sourceId"] == "upload-"+owner:
 		default:
 			t.Errorf("file %v belongs to a %v that is not in the bundle", record["sourceId"], record["ownerKind"])
 		}
@@ -1206,49 +1208,60 @@ func theMissingFile(missing []basecamp.MissingFile, ref string) *basecamp.Missin
 	return nil
 }
 
-// A file of an upload that failed for a reason which may pass is the good answer
-// and not the bad one: no attachment record, so Minka makes the upload wait, the
-// file named under the missing ones with the upload as its owner and a reason
-// that says trying again is worth it, and the run ending non-zero so nobody
-// takes the bundle for whole. The upload comes **whole**, with its comments and
-// its boosts, because the run after this one brings the file and everything is
-// then where it belongs.
-func TestAnUploadWhoseFileOnlyThisRunMissedComesAndWaitsForIt(t *testing.T) {
-	account := fakebasecamp.New()
-	account.FailFileOf[fakebasecamp.StoredKeyOfUpload(9260)] = &basecamp.Error{
-		Kind: basecamp.Network, Message: "the network failed during the download"}
-	dir, result := extract(t, account, docsProject)
+// A file of an upload that **might still come** is the good answer and not the
+// bad one: no attachment record, so Minka makes the upload wait, the file named
+// under the missing ones with the upload as its owner, and the run ending
+// non-zero so nobody takes the bundle for whole. The upload comes **whole**,
+// with its comments and its boosts, because a later run may bring the file and
+// everything is then where it belongs.
+//
+// Two failures mean that, and the difference between them is what a caller does
+// and never what becomes of the upload: one that may pass by itself, where the
+// thing to do is to run again, and one this run could not place at all, where
+// the thing to look at is this program. Only Basecamp's own refusal decides
+// anything about the file.
+func TestAnUploadWhoseFileMightStillComeIsWrittenAndWaitsForIt(t *testing.T) {
+	for what, failure := range map[string]*basecamp.Error{
+		"it may pass":           {Kind: basecamp.Network, Message: "the network failed during the download"},
+		"nobody could place it": {Kind: basecamp.API, Message: "Basecamp answered with something else"},
+		"it carries no class":   {Message: "something nobody wrote a class for"},
+	} {
+		mayPass := failure.Kind == basecamp.Network
+		account := fakebasecamp.New()
+		account.FailFileOf[fakebasecamp.StoredKeyOfUpload(9260)] = failure
+		dir, result := extract(t, account, docsProject)
 
-	if got := recordWithID(t, records(t, dir, bundle.Uploads), "9260")["file"]; got != "upload-9260" {
-		t.Errorf("the upload names %v, want the file Minka is to wait for", got)
-	}
-	for _, record := range records(t, dir, bundle.Attachments) {
-		if record["sourceId"] == "upload-9260" {
-			t.Errorf("the file has a record although it could not be fetched: %v", record)
+		if got := recordWithID(t, records(t, dir, bundle.Uploads), "9260")["file"]; got != "upload-9260" {
+			t.Errorf("%s: the upload names %v, want the file Minka is to wait for", what, got)
 		}
+		for _, record := range records(t, dir, bundle.Attachments) {
+			if record["sourceId"] == "upload-9260" {
+				t.Errorf("%s: the file has a record although it could not be fetched: %v", what, record)
+			}
+		}
+		// Named among the missing, with its owner and the word that says what to do
+		// about it.
+		switch named := theMissingFile(result.Missing, "upload-9260"); {
+		case named == nil:
+			t.Errorf("%s: the file is in neither the bundle nor the missing ones: %v", what, result.Missing)
+		case named.OwnerKind != bundle.OwnerUpload || named.OwnerSourceID != "9260":
+			t.Errorf("%s: the missing file belongs to %s %s", what, named.OwnerKind, named.OwnerSourceID)
+		case named.Reason == "" || named.Why.MayPass() != mayPass || named.Why.NoRunWillBring():
+			t.Errorf("%s: the file says %q and %q", what, named.Reason, named.Why)
+		}
+		// What hangs on it comes with it, and nothing is counted as fallen: only the
+		// upload in the cloud lost anything.
+		recordWithID(t, records(t, dir, bundle.Comments), "9273")
+		recordWithID(t, records(t, dir, bundle.Reactions), "9283")
+		if result.Docs.CommentsWithoutTheirUpload != 1 || result.Docs.BoostsWithoutTheirUpload != 1 {
+			t.Errorf("%s: %d comments and %d boosts fell with an upload, want the one comment and the one boost of the upload in the cloud",
+				what, result.Docs.CommentsWithoutTheirUpload, result.Docs.BoostsWithoutTheirUpload)
+		}
+		if slices.Contains(result.Docs.OnlyAFileNoRunWillBring, "9260") {
+			t.Errorf("%s: an upload whose file may still come is named among %v", what, result.Docs.OnlyAFileNoRunWillBring)
+		}
+		holdsTogether(t, dir, result.Missing)
 	}
-	// Named among the missing, with its owner and the word that a later run is
-	// worth starting.
-	switch named := theMissingFile(result.Missing, "upload-9260"); {
-	case named == nil:
-		t.Errorf("the file is in neither the bundle nor the missing ones: %v", result.Missing)
-	case named.OwnerKind != bundle.OwnerUpload || named.OwnerSourceID != "9260":
-		t.Errorf("the missing file belongs to %s %s", named.OwnerKind, named.OwnerSourceID)
-	case !named.Retryable || named.Reason == "":
-		t.Errorf("the file says %q and trying again is worth it: %v", named.Reason, named.Retryable)
-	}
-	// What hangs on it comes with it, and nothing is counted as fallen: only the
-	// upload in the cloud lost anything.
-	recordWithID(t, records(t, dir, bundle.Comments), "9273")
-	recordWithID(t, records(t, dir, bundle.Reactions), "9283")
-	if result.Docs.CommentsWithoutTheirUpload != 1 || result.Docs.BoostsWithoutTheirUpload != 1 {
-		t.Errorf("%d comments and %d boosts fell with an upload, want the one comment and the one boost of the upload in the cloud",
-			result.Docs.CommentsWithoutTheirUpload, result.Docs.BoostsWithoutTheirUpload)
-	}
-	if slices.Contains(result.Docs.OnlyAFileNoRunWillBring, "9260") {
-		t.Errorf("an upload whose file only this run missed is named among %v", result.Docs.OnlyAFileNoRunWillBring)
-	}
-	holdsTogether(t, dir, result.Missing)
 }
 
 // A file above what Minka takes is a file that never comes as much as one the
@@ -1297,68 +1310,69 @@ func TestAnUploadWhoseFileWeighsMoreThanMinkaTakesIsLeftOutToo(t *testing.T) {
 	holdsTogether(t, dir, result.Missing)
 }
 
-// A download Basecamp refuses for a reason that will not pass brings a file no
-// run will ever bring, and an upload is nothing without its file: it is left out
-// and named, and its comments and its boosts fall with it rather than being
-// asked for. Written, it would name a file the bundle has no record of, and
-// Minka would let it wait on every run for ever.
+// **Basecamp's own refusal** of a download is the one failure that says something
+// about the file, and an upload is nothing without its file: it is left out and
+// named, and its comments and its boosts fall with it rather than being asked
+// for. Written, it would name a file the bundle has no record of, and Minka would
+// let it wait on every run for ever.
+//
+// It takes a word of the source and not merely a failure that will not pass by
+// itself: an answer nobody here could read is no refusal, and reading it as one
+// would leave a whole account out of a bundle over a shape this program does not
+// know.
 func TestAnUploadWhoseFileIsRefusedForGoodIsLeftOutWithWhatHangsOnIt(t *testing.T) {
-	for what, failure := range map[string]*basecamp.Error{
-		"a refusal":     {Kind: basecamp.Forbidden, Message: "Basecamp forbids the download"},
-		"an API answer": {Kind: basecamp.API, Message: "Basecamp answered with something else"},
-	} {
-		account := fakebasecamp.New()
-		account.FailFileOf[fakebasecamp.StoredKeyOfUpload(9260)] = failure
-		dir, result := extract(t, account, docsProject)
+	account := fakebasecamp.New()
+	account.FailFileOf[fakebasecamp.StoredKeyOfUpload(9260)] = &basecamp.Error{
+		Kind: basecamp.Forbidden, Message: "Basecamp forbids the download"}
+	dir, result := extract(t, account, docsProject)
 
-		for _, record := range records(t, dir, bundle.Uploads) {
-			if record["sourceId"] == "9260" {
-				t.Errorf("%s: the upload is in the bundle and names %v", what, record["file"])
-			}
+	for _, record := range records(t, dir, bundle.Uploads) {
+		if record["sourceId"] == "9260" {
+			t.Errorf("the upload is in the bundle and names %v", record["file"])
 		}
-		if !slices.Contains(result.Docs.OnlyAFileNoRunWillBring, "9260") {
-			t.Errorf("%s: the upload left out is named among %v", what, result.Docs.OnlyAFileNoRunWillBring)
-		}
-		// The file is named among the missing all the same, with the word that no
-		// later run will bring it: that word is what leaves the upload out.
-		switch named := theMissingFile(result.Missing, "upload-9260"); {
-		case named == nil:
-			t.Errorf("%s: the file is in neither the bundle nor the missing ones: %v", what, result.Missing)
-		case named.Retryable:
-			t.Errorf("%s: the file that will never come says trying again is worth it", what)
-		}
-		// Its comment and its boost fall with it, counted beside those of the
-		// upload in the cloud, and neither is asked for.
-		for _, record := range records(t, dir, bundle.Comments) {
-			if record["sourceId"] == "9273" {
-				t.Errorf("%s: the comment of the upload left out is in the bundle", what)
-			}
-		}
-		for _, record := range records(t, dir, bundle.Reactions) {
-			if record["sourceId"] == "9283" {
-				t.Errorf("%s: the boost of the upload left out is in the bundle", what)
-			}
-		}
-		if result.Docs.CommentsWithoutTheirUpload != 2 || result.Docs.BoostsWithoutTheirUpload != 2 {
-			t.Errorf("%s: %d comments and %d boosts fell with an upload, want those of the two uploads left out",
-				what, result.Docs.CommentsWithoutTheirUpload, result.Docs.BoostsWithoutTheirUpload)
-		}
-		for _, asked := range account.Requests {
-			if strings.Contains(asked, "/recordings/9260/") {
-				t.Errorf("%s: the run asked for %s of an upload it leaves out", what, asked)
-			}
-		}
-		// And the bundle holds together: nothing points at the upload, and
-		// nothing points at the file it stood for.
-		holdsTogether(t, dir, result.Missing)
 	}
+	if !slices.Contains(result.Docs.OnlyAFileNoRunWillBring, "9260") {
+		t.Errorf("the upload left out is named among %v", result.Docs.OnlyAFileNoRunWillBring)
+	}
+	// The file is named among the missing all the same, with the word that no
+	// later run will bring it: that word is what leaves the upload out.
+	switch named := theMissingFile(result.Missing, "upload-9260"); {
+	case named == nil:
+		t.Errorf("the file is in neither the bundle nor the missing ones: %v", result.Missing)
+	case named.Why != basecamp.RefusedBySource:
+		t.Errorf("the file the source refused says %q", named.Why)
+	}
+	// Its comment and its boost fall with it, counted beside those of the
+	// upload in the cloud, and neither is asked for.
+	for _, record := range records(t, dir, bundle.Comments) {
+		if record["sourceId"] == "9273" {
+			t.Error("the comment of the upload left out is in the bundle")
+		}
+	}
+	for _, record := range records(t, dir, bundle.Reactions) {
+		if record["sourceId"] == "9283" {
+			t.Error("the boost of the upload left out is in the bundle")
+		}
+	}
+	if result.Docs.CommentsWithoutTheirUpload != 2 || result.Docs.BoostsWithoutTheirUpload != 2 {
+		t.Errorf("%d comments and %d boosts fell with an upload, want those of the two uploads left out",
+			result.Docs.CommentsWithoutTheirUpload, result.Docs.BoostsWithoutTheirUpload)
+	}
+	for _, asked := range account.Requests {
+		if strings.Contains(asked, "/recordings/9260/") {
+			t.Errorf("the run asked for %s of an upload it leaves out", asked)
+		}
+	}
+	// And the bundle holds together: nothing points at the upload, and
+	// nothing points at the file it stood for.
+	holdsTogether(t, dir, result.Missing)
 
 	// The files of its description are not fetched either: an upload that stays
 	// out takes the bytes of its own text with it, which nobody would ever read.
-	account := fakebasecamp.New()
+	account = fakebasecamp.New()
 	account.FailFileOf[fakebasecamp.StoredKeyOfUpload(9267)] = &basecamp.Error{
 		Kind: basecamp.Forbidden, Message: "Basecamp forbids the download"}
-	dir, result := extract(t, account, docsProject)
+	dir, result = extract(t, account, docsProject)
 	for _, record := range records(t, dir, bundle.Attachments) {
 		if record["ownerKind"] == bundle.OwnerUpload && record["ownerSourceId"] == "9267" {
 			t.Errorf("a file of the description of the upload left out has a record: %v", record)

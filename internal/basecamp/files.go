@@ -74,11 +74,12 @@ type fileOfTheSource struct {
 	holder string
 	stored bundle.StoredFile
 	held   bool
-	// gone tells that Basecamp no longer has the file and failed why this run
-	// could not fetch it: either way no owner of it gets bytes, and asking a
-	// second time would pay for the same answer twice.
+	// gone tells that Basecamp no longer has the file, and failed why this run
+	// could not fetch it, with why whose word that was: either way no owner of it
+	// gets bytes, and asking a second time would pay for the same answer twice.
 	gone   bool
 	failed *Error
+	why    WhyAFileIsMissing
 	// decided says that a record of the file has been through all of that, so
 	// that a further owner knows whether there is anything to share.
 	decided bool
@@ -348,13 +349,13 @@ func (e *Extractor) attachFile(ctx context.Context, w *bundle.Writer, owner file
 	if file.contentType != "" {
 		record.ContentType = &file.contentType
 	}
-	missing := func(failed *Error) {
+	missing := func(failed *Error, why WhyAFileIsMissing) {
 		e.missing = append(e.missing, MissingFile{
 			AttachmentSourceID: file.ref,
 			OwnerKind:          owner.kind,
 			OwnerSourceID:      owner.sourceID,
 			Reason:             failed.Message,
-			Retryable:          failed.Transient(),
+			Why:                why,
 		})
 	}
 	met := e.theFile(file.ofTheSource())
@@ -388,7 +389,7 @@ func (e *Extractor) attachFile(ctx context.Context, w *bundle.Writer, owner file
 			if _, err := e.storageAddress(file); err != nil {
 				var failed *Error
 				if errors.As(err, &failed) {
-					e.theFileDidNotCome(file, met, failed, missing)
+					e.theFileDidNotCome(file, met, failed, whoseWordAMissingFileIs(true, failed), missing)
 				}
 				return nil
 			}
@@ -413,6 +414,11 @@ func (e *Extractor) attachFile(ctx context.Context, w *bundle.Writer, owner file
 		e.files.Reused++
 	} else {
 		bring, err := e.bringing(ctx, file)
+		// Where the failure came from, which is half of whose word it is: what a
+		// guard of this run refuses before anything is asked for is its own doing,
+		// and only what comes back from the download is Basecamp's answer about
+		// the file.
+		ofOurOwn := err != nil
 		if err == nil {
 			stored, err = w.StoreFile(file.ref, name, func(into io.Writer) error {
 				err := bring(into)
@@ -439,14 +445,15 @@ func (e *Extractor) attachFile(ctx context.Context, w *bundle.Writer, owner file
 			e.fileRecords = append(e.fileRecords, record)
 			return nil
 		default:
-			e.theFileDidNotCome(file, met, failed, missing)
+			e.theFileDidNotCome(file, met, failed, whoseWordAMissingFileIs(ofOurOwn, failed), missing)
 			return nil
 		}
 		if file.byteSize != nil && stored.Bytes != *file.byteSize {
 			if err := w.DropFile(file.ref); err != nil {
 				return err
 			}
-			e.theFileDidNotCome(file, met, sizeDiffers(stored.Bytes, *file.byteSize), missing)
+			differs := sizeDiffers(stored.Bytes, *file.byteSize)
+			e.theFileDidNotCome(file, met, differs, whoseWordAMissingFileIs(false, differs), missing)
 			return nil
 		}
 		e.files.Fetched++
@@ -470,7 +477,7 @@ func (e *Extractor) attachFile(ctx context.Context, w *bundle.Writer, owner file
 // What became of the file becomes of every owner of it at once: one the source no
 // longer has is gone for all of them, and one this run could not fetch is missing
 // for all of them, with the reason the first got.
-func (e *Extractor) shareTheFile(w *bundle.Writer, record bundle.Attachment, met *fileOfTheSource, missing func(*Error)) error {
+func (e *Extractor) shareTheFile(w *bundle.Writer, record bundle.Attachment, met *fileOfTheSource, missing func(*Error, WhyAFileIsMissing)) error {
 	if e.filesThatNeverArrive[met.holder] {
 		e.filesThatNeverArrive[record.SourceID] = true
 	}
@@ -480,7 +487,7 @@ func (e *Extractor) shareTheFile(w *bundle.Writer, record bundle.Attachment, met
 		e.fileRecords = append(e.fileRecords, record)
 		return nil
 	case met.failed != nil:
-		missing(met.failed)
+		missing(met.failed, met.why)
 		return nil
 	case !met.held:
 		// A dry run fetches nothing, so there are no bytes to share, and it counts
@@ -516,24 +523,28 @@ func (e *Extractor) bringing(ctx context.Context, file sourceFile) (func(io.Writ
 }
 
 // theFileDidNotCome notes a download that brought no file, names it among the
-// missing with the reason, and says whether any run will ever bring it.
+// missing with the reason and whose word it was, and says whether any run will
+// ever bring it.
 //
-// **What the reason says about trying again decides that**, and the two must not
-// be run together: a failure that may pass leaves a hole this run reports and the
-// next one fills, while one that will not pass leaves a hole for ever, and
-// whatever waits for such a file waits on every run to the end of time.
-func (e *Extractor) theFileDidNotCome(file sourceFile, met *fileOfTheSource, failed *Error, missing func(*Error)) {
-	met.failed = failed
-	if !failed.Transient() {
+// **Only a refusal of the source decides anything about the file**, and the
+// three answers must not be run together: a failure that may pass leaves a hole
+// this run reports and the next one fills, a refusal leaves a hole for ever, and
+// one nobody could place says nothing about the file at all — the run fails over
+// it, and the records that stood on it keep waiting rather than being thrown
+// away over an answer this program did not understand.
+func (e *Extractor) theFileDidNotCome(file sourceFile, met *fileOfTheSource, failed *Error, why WhyAFileIsMissing, missing func(*Error, WhyAFileIsMissing)) {
+	met.failed, met.why = failed, why
+	if why.NoRunWillBring() {
 		e.filesThatNeverArrive[file.ref] = true
 	}
-	missing(failed)
+	missing(failed, why)
 }
 
 // theFileNeverArrives tells that no run will ever bring the bytes of a file to
 // Minka: the source no longer has it, it weighs more than a run takes there, or
-// the download failed for a reason that will not pass. A file this run merely
-// missed is not one of them — it leaves no record at all, the run ends
+// Basecamp itself refused the download. A file this run merely
+// missed is not one of them, and neither is one whose failure this run could not
+// place: nothing about such a file is decided at all — it leaves no record at all, the run ends
 // non-zero, and the run after it brings the file — and neither is one the walk
 // has not met yet.
 //

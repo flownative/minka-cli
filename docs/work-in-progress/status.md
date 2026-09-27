@@ -103,13 +103,17 @@ an upload of Docs & Files whose status is none of the three. An upload whose
 file can never be had is left out with its comments and its boosts
 (C-063): an upload has no purpose without its file, and no run will ever have
 bytes for what lies in a cloud, for what the source no longer has, for what
-weighs more than Minka takes or for a download Basecamp refuses for good. What
-tells such a refusal from a failure that may pass is the one word the reason
-carries about itself, `retryable`: a file that may still come leaves the upload
-written and waiting, and the run after this one brings both. That word decides
-the exit code too, and nothing else does (C-025): a run whose missing files will
-all never come ends 0 and names them, and one that lost a file which may still
-come fails, because the exit code is there to say whether running again helps.
+weighs more than Minka takes or for a download Basecamp itself refuses. Whose
+word a missing file is says which of the three it is, and `why` of its entry
+carries it: a refusal of the source leaves the upload out, while a failure that
+may pass and one this run could not place both leave it written and waiting,
+because neither says anything about the file. That word decides the exit code as
+well, and nothing else does (C-025): a run that could not place a failure ends
+7, one that lost a file which may still come ends 6, and one whose missing files
+Basecamp refused every one of ends 0 and names them, the count in the `summary`.
+A guard of the run refusing an address is the first of the three and never the
+last: a reading of the source that is wrong by one shape costs an exit code and
+a later run, and never an account written off as lost.
 What stood in a list, a group, a folder or a whole Docs & Files tool a bundle
 cannot carry falls
 with it, is asked for to be counted and is named with the place it fell with
@@ -574,30 +578,32 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   was read: the key list of an upload, the address it
   gives, the not-found of an archived folder, and a folder's own list holding what
   is in use alone.
-  **A file Basecamp refuses for good** is the one shape of this whole tool that a
+  **A file Basecamp refuses** is the one shape of this whole tool that a
   full extraction of the account has met, exactly once over 10,274 files: the
-  download of one upload's file answered with a refusal that will not pass.
+  download of one upload's file was refused, and no run will ever bring it.
   An upload whose file no run will ever bring is left out and named in
   `docs.onlyAFileNoRunWillBring`, with its comments and its boosts counted as
   fallen, and that holds for all four ways of having no file: one in a cloud,
-  one the source no longer has, one above what Minka takes, and one refused for
-  good. Where the file left a record behind, that record stays as the trace of
+  one the source no longer has, one above what Minka takes, and one Basecamp
+  refuses. Where the file left a record behind, that record stays as the trace of
   what became of it. What the run does with such a file rests on the invented
-  account, where every one of the four is played by a stand-in; what says a
-  refusal is one is `retryable` of the reason, and no other reading of a failure
-  is anywhere in the way. The residual of the cloud branch falls under the same
-  rule: **an upload that lives in a cloud and does carry a `download_url`** is
-  taken as having a file and the fetch fails, and one that will not pass leaves
-  the upload out and named. Nothing has been seen of such a record either way.
+  account, where every one of the four is played by a stand-in. The residual of
+  the cloud branch falls under the same rule: **an upload that lives in a cloud
+  and does carry a `download_url`** is taken as having a file and the fetch
+  fails, and where Basecamp refuses it the upload is left out and named.
+  Nothing has been seen of such a record either way.
   A **dry run** counts such an upload all the same, because nothing the source
   answers says that a file is gone or that a download will be refused: it says
-  one upload too many rather than promising a file it never asked for.
+  one upload too many rather than promising a file it never asked for. What a dry
+  run does see is an address it cannot build, which is the early warning it
+  exists for.
   **What a walk of the account is to expect of the exit code**: that one file
-  ends the run **0**, with a notice naming it and the record that fell with it.
-  A file no repeat can bring is a result and not a failure, and only a missing
-  file that may still come fails the run (C-025). Read
-  `docs.onlyAFileNoRunWillBring` and the entries of `missingFiles` that say
-  `retryable: false`, and settle those at the source.
+  ends the run **0**, with a notice naming it, the record that fell with it and
+  the count in the `summary`. A file the source refused is a result and not a
+  failure; a file that may still come ends the run 6, and a failure the run could
+  not place ends it 7 (C-025). Read `docs.onlyAFileNoRunWillBring` and the
+  entries of `missingFiles`, and settle at the source the ones that say
+  `refusedBySource`.
   Not counted and not asked for: how many earlier copies of its file an upload
   has. `versions` is a field Minka reads nowhere, and the upload says nothing
   of them, so a run that wanted the number would ask once per upload. That
@@ -630,6 +636,15 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   which took 2,687 of its 2,688 files over and fetched the one that was new,
   twenty minutes instead of an hour. That the Basecamp CLI asks for the path of
   an address without its escapes was read in its SDK, not seen.
+  Whose word a missing file is, which decides both the exit code and whether
+  anything is written off, is held by a table over every class a failure can
+  carry, the empty one included, and by the fixtures of the fake. Live, only
+  three of the classes have been seen: the refusal of a download, a network that
+  failed, and a gateway in front of Basecamp. What no live run has produced is a
+  failure the run cannot place — the shape that matters most, because it is what
+  a Basecamp CLI that changes after an upgrade would send. For an avatar the
+  class of a status that is no 200 is read in a test of its own and nothing else:
+  live, no avatar has answered with anything but 200.
 - Of the embeds of `import basecamp`: a frame that gets no tag, a caption in
   a figure, a frame outside a figure and broken markup. Seen live, in the
   bundle of both projects: some 500 embeds written, none left out, no raw frame

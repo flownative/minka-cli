@@ -295,7 +295,7 @@ func TestARunThatFailsLeavesNoHalfBundle(t *testing.T) {
 func TestARunWithFilesMissingWritesTheBundleAndSaysSoInEveryMode(t *testing.T) {
 	e := newImportEnv(t)
 	out := filepath.Join(t.TempDir(), "bundle")
-	e.account.FailAvatarOf[103] = &basecamp.Error{Kind: basecamp.API, Message: "downloading an avatar: HTTP 404"}
+	e.account.FailAvatarOf[103] = &basecamp.Error{Kind: basecamp.NotFound, Message: "downloading an avatar: HTTP 404"}
 
 	env, r := e.runJSON("import", "basecamp", "--project", "7001", "--out", out)
 	expectCode(t, r, ExitOK)
@@ -305,10 +305,16 @@ func TestARunWithFilesMissingWritesTheBundleAndSaysSoInEveryMode(t *testing.T) {
 	if !strings.Contains(env.Notice, "1 file will never come") || !strings.Contains(env.Notice, "rather than running again") {
 		t.Errorf("the notice says nothing about the file that will never come: %q", env.Notice)
 	}
+	// And the summary says it, because that and `ok` are all a caller may read:
+	// a run that says nothing but what it wrote is a run that lost something
+	// quietly.
+	if !strings.Contains(env.Summary, "1 file lost that no run will bring") {
+		t.Errorf("the summary of a run that lost a file says only %q", env.Summary)
+	}
 	data := decode(t, env.Data)
 	wantMissing := []any{map[string]any{
 		"attachmentSourceId": "avatar-103", "ownerKind": "person", "ownerSourceId": "103",
-		"reason": "downloading an avatar: HTTP 404", "retryable": false,
+		"reason": "downloading an avatar: HTTP 404", "why": "refusedBySource",
 	}}
 	if !reflect.DeepEqual(data["missingFiles"], wantMissing) {
 		t.Errorf("missingFiles %v, want %v", data["missingFiles"], wantMissing)
@@ -317,7 +323,7 @@ func TestARunWithFilesMissingWritesTheBundleAndSaysSoInEveryMode(t *testing.T) {
 	// is the report, and the exit code says only whether to run again.
 	styled := e.run("import", "basecamp", "--project", "7001", "--out", out, "--styled")
 	expectCode(t, styled, ExitOK)
-	for _, want := range []string{"Missing files:", "avatar-103 of person 103", "1 file will never come"} {
+	for _, want := range []string{"Missing files:", "refusedBySource avatar-103 of person 103", "1 file will never come"} {
 		if !strings.Contains(styled.stdout+styled.stderr, want) {
 			t.Errorf("a run that lost a file nothing can bring says nothing of %q:\n%s%s", want, styled.stdout, styled.stderr)
 		}
@@ -361,10 +367,29 @@ func TestARunWithFilesMissingWritesTheBundleAndSaysSoInEveryMode(t *testing.T) {
 		t.Errorf("stderr: %s", r.stderr)
 	}
 
-	// With the one that may pass gone, the file that will never come no longer
-	// fails the run on its own: the exit code turns on whether a repeat helps,
-	// never on whether anything is missing at all.
+	// A failure this run cannot place is a word about **this program**: exit 7,
+	// nothing to repeat, and the hint names the word to look for. It says so
+	// beside a file that may still come as well, because running again answers
+	// the one and not the other — and reading such a failure as a refusal of the
+	// source is what would end a wholesale breakage with exit 0.
+	e.account.FailAvatarOf[102] = &basecamp.Error{Kind: basecamp.API,
+		Message: "a host answered for an avatar with something that is no picture the bundle takes"}
+	env, r = e.runJSON("import", "basecamp", "--project", "7001", "--out", out)
+	expectCode(t, r, ExitAPI)
+	if env.Retryable || !strings.Contains(env.Hint, "notUnderstood") {
+		t.Errorf("retryable %v, hint %q", env.Retryable, env.Hint)
+	}
 	delete(e.account.FailAvatarOf, 101)
+	env, r = e.runJSON("import", "basecamp", "--project", "7001", "--out", out)
+	expectCode(t, r, ExitAPI)
+	if env.Retryable {
+		t.Error("a failure nobody could place makes the run worth repeating")
+	}
+	delete(e.account.FailAvatarOf, 102)
+
+	// With both of them gone, the file the source itself refused no longer fails
+	// the run: the exit code turns on what the failure is a word about, never on
+	// whether anything is missing at all.
 	env, r = e.runJSON("import", "basecamp", "--project", "7001", "--out", out)
 	expectCode(t, r, ExitOK)
 	if missing := decode(t, env.Data)["missingFiles"].([]any); !env.OK || len(missing) != 1 {
@@ -1527,7 +1552,7 @@ func TestAFileOfATextThatCannotBeFetchedFailsTheRunAndTheNextOneBringsIt(t *test
 	data := decode(t, env.Data)
 	wantMissing := []any{map[string]any{
 		"attachmentSourceId": "attachment-4711", "ownerKind": "card", "ownerSourceId": "9902",
-		"reason": "the network failed during the download", "retryable": true,
+		"reason": "the network failed during the download", "why": "failedThisTime",
 	}}
 	if !reflect.DeepEqual(data["missingFiles"], wantMissing) || data["filesFetched"] != float64(11) {
 		t.Errorf("missingFiles %v, fetched %v", data["missingFiles"], data["filesFetched"])
@@ -1611,16 +1636,17 @@ func TestNoOutputSaysWhatAFileIsCalledOrWhereItLies(t *testing.T) {
 		},
 	}
 	// A dry run downloads nothing, so nothing a download alone can show fails it.
-	// A file whose address cannot be asked for is not that: the source itself
-	// says it, in a dry run as in a run, and it is a file no run will ever bring
-	// — named, counted, and no reason to run again or to fail.
-	willNeverCome := map[string]bool{"a key that is none": true}
+	// A file whose address cannot be asked for is not that: this run refuses it
+	// before it asks anybody, in a dry run as in a run, and a refusal of its own
+	// is a word about itself — the run fails over it and a dry run keeps the
+	// early warning it exists for.
+	seenWithoutADownload := map[string]bool{"a key that is none": true}
 	for name, change := range failures {
 		for _, mode := range [][]string{{"--json"}, {"--quiet"}, {"--styled"}, {"--json", "--dry-run"}} {
 			e := newImportEnv(t)
 			change(e.account)
 			r := e.run(append([]string{"import", "basecamp", "--project", "7005", "--out", filepath.Join(t.TempDir(), "bundle")}, mode...)...)
-			wantOK := name == "nothing fails" || willNeverCome[name] || slices.Contains(mode, "--dry-run")
+			wantOK := name == "nothing fails" || (slices.Contains(mode, "--dry-run") && !seenWithoutADownload[name])
 			if (r.code == ExitOK) != wantOK {
 				t.Errorf("%s %v: exit %d", name, mode, r.code)
 			}
