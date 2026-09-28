@@ -1081,7 +1081,8 @@ reminders` lists what you were asked and have not answered.
   needs one `--weekday`. **Every other week is counted from the first day of
   its weekday on or after `startsOn`**, so a new weekday can move the question
   into the other set of weeks; an edit of the rhythm or the weekday of such a
-  question names its next dates in the `notice`.
+  question names the first three of its dates, counted from `startsOn`, in the
+  `notice`; for an older question those lie in the past.
 - An edit that names nobody writes back the people Minka shows as asked, so a
   client it does not show is asked no longer, and neither is a member who left
   the project, who is not asked again on coming back. A question that shows

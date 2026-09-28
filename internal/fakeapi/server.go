@@ -3270,6 +3270,13 @@ func readBody(w http.ResponseWriter, r *http.Request) (map[string]any, bool) {
 	return readBodyWith(w, r, false)
 }
 
+// endsAfterOneValue says whether nothing but white space follows the value a
+// decoder read, the way the server refuses anything behind a body.
+func endsAfterOneValue(decoder *json.Decoder) bool {
+	_, err := decoder.Token()
+	return err == io.EOF
+}
+
 // readBodyWith reads a body, keeping every number as it was written where
 // asked to, so that 1 and 1.0 can be told apart as the server tells them.
 func readBodyWith(w http.ResponseWriter, r *http.Request, keepNumbers bool) (map[string]any, bool) {
@@ -3284,7 +3291,7 @@ func readBodyWith(w http.ResponseWriter, r *http.Request, keepNumbers bool) (map
 	if keepNumbers {
 		decoder.UseNumber()
 	}
-	if err != nil || decoder.Decode(&value) != nil || decoder.More() {
+	if err != nil || decoder.Decode(&value) != nil || !endsAfterOneValue(decoder) {
 		malformed(w, "The body is not valid JSON.")
 		return nil, false
 	}
