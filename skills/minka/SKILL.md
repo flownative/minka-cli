@@ -210,6 +210,22 @@ minka todogroups create --list <listId> --title "Title" --json
 minka todogroups edit <groupId> --title "New" --json
 minka todogroups move <groupId> (--top | --after <groupId> | --before <groupId>) --json
 minka todogroups delete <groupId> --json
+minka todos mine [--limit <1-100>] [--after <todoId>] --json
+minka todos show <todoId> --json
+minka todos completed <listId> [--limit <n>] [--before <next>] --json
+minka todos create --list <listId> --title "Title" [--group <groupId>] [--notes - < notes.md] [--starts-on <day>] [--due <day>] [--assignee <person>]... [--notify-when-done <person>]... --json
+minka todos edit <todoId> [--title "New"] [--notes - < notes.md] [--starts-on <day>|""] [--due <day>|""] [--assignee <person>]... [--no-assignees] [--notify-when-done <person>]... [--no-notify-when-done] --json
+minka todos complete <todoId> --json
+minka todos reopen <todoId> --json
+minka todos move <todoId> (--top | --after <todoId> | --before <todoId>) [--list <listId>] [--group <groupId> | --no-group] --json
+minka todos delete <todoId> --json
+minka todos subtasks list <todoId> --json
+minka todos subtasks create <todoId> "Text" [--assignee <person>] [--due <day>] --json
+minka todos subtasks edit <todoId> <subtask> [--title "New"] [--assignee <person>|""] [--due <day>|""] --json
+minka todos subtasks complete <todoId> <subtask> --json
+minka todos subtasks reopen <todoId> <subtask> --json
+minka todos subtasks move <todoId> <subtask> (--top | --after <subtask> | --before <subtask>) --json
+minka todos subtasks delete <todoId> <subtask> --json
 minka work start <card> --json
 minka work stop [<card>] [--all] --json
 minka work list --json
@@ -847,8 +863,8 @@ read and takes no write: exit 9 with `documentArchived` or `uploadArchived`.
 
 A To-dos tool holds **lists**, the newest on top. A list has a title, an
 optional description and **groups**: named headings in an order of their own.
-A to-do stands in its list directly or in one of its groups. Commands for the
-to-dos themselves are not here yet; `todolists show` lists the open ones.
+A to-do stands in its list directly or in one of its groups. The to-dos
+themselves and their subtasks are `todos …`, see the next part.
 
 ### Reading
 
@@ -906,8 +922,7 @@ is not there is exit 2.
 ### What does not exist here
 
 Moving or copying a list into another tool or project, restoring from the
-trash, reading the done to-dos, and comments on a list are not offered by this
-CLI. The to-dos themselves come with their own commands.
+trash, and comments on a list are not offered by this CLI.
 
 ### Codes of this part
 
@@ -918,6 +933,91 @@ CLI. The to-dos themselves come with their own commands.
 `todoListArchived`, `todoListNotArchived`, `todoPlaceUnknown` (a neighbour
 that is no other group of the same list), all exit 9; `projectArchived`
 before any of the archive codes.
+
+## To-dos and subtasks
+
+A **to-do** has a title, notes, a start and a due day, **assignees**, people
+**told when it is done**, and **subtasks**: lines of work under it, each with
+one optional assignee and one optional due day.
+
+### Reading
+
+- `todos show <todoId>` gives the to-do with `list`, `group`, `notes`,
+  `startsOn`, `dueOn`, `isOverdue`, `assignees`, `notified`, `subtasks`,
+  `listArchived` and the comments. A to-do of an archived list is read too.
+- `todos completed <listId>` reads the **done** to-dos of a list, the one done
+  last first, a page at a time: `data` is `{todos, next}`. Hand `next` to
+  `--before` exactly as it came (it is no ID); it is `null` on the last page.
+- `todos mine` lists your **open** to-dos across all projects: those you are
+  assigned to and those you hold an open subtask of (`isAssigned: false`, and
+  `subtasks` holds only your own open ones). Done ones, those of an archived
+  list and of an archived project are not among them. A bare array, a page at
+  a time: **Minka marks the end by nothing but a page shorter than asked for**,
+  so a full page says in the `notice` where the next one starts
+  (`--after <the last todoId>`). `--limit` is 1 to 100, 50 unless given.
+
+### Writing
+
+- `todos create --list <listId> --title "..."` adds a to-do **at the end** of
+  the list, or of the group given with `--group`. `--notes` is Markdown by
+  default, as for a card.
+- Days are `YYYY-MM-DD`. **A start is kept only on a day before the due day**:
+  a start alone, or one on the due day, becomes the due day. Taking the due day
+  off (`--due ""`) while a start is left makes the start the due day; give
+  `--starts-on ""` as well to take both off. A due day moved onto the start
+  takes the start away. The `notice` says when Minka kept a day otherwise than
+  you meant it; the exit code does not.
+- `--assignee` and `--notify-when-done` take an ID, `me`, an e-mail address or a
+  name, repeatable; Minka takes a person named twice once. **On `todos edit`
+  they are the whole set**: whoever is not named again is taken off. `--no-assignees` and `--no-notify-when-done` take
+  everybody off. Somebody who is no member of the project is exit 9
+  `personNotAProjectMember`, and nothing is written.
+- `todos edit` changes only what you give. `--title ""` is exit 9
+  `todoTitleMissing`; `--notes ""` empties the notes. Notes with files or
+  mentions are not replaced unless `--drop-attachments` is given.
+- `todos complete` and `todos reopen` succeed twice as well. They leave the
+  subtasks as they are.
+- `todos move <todoId>` needs **exactly one** of `--top`, `--after <todoId>`
+  and `--before <todoId>`. `--list` takes it into another list of the **same**
+  To-dos tool. Without `--group` or `--no-group` a to-do **keeps its group
+  within its own list**, and stands in no group in another list. The to-do
+  named as neighbour has to stand in the list **and the group** the to-do goes
+  to, so to go next to a to-do of another group, name that group with
+  `--group`. Anything else is exit 9 `todoPlaceUnknown`; another tool or
+  project is done on the web.
+- `todos delete` puts a to-do into the trash with its subtasks.
+- `todos subtasks …` name a subtask as `steps` do: by ID, by position from 1
+  or by its text. `create` adds one at the end; `edit` changes the text,
+  `--assignee` (one person, `""` for nobody) or `--due` (`""` takes it off);
+  `complete` and `reopen` succeed twice; `move` needs exactly one of `--top`,
+  `--after` and `--before`; `delete` succeeds for one that is gone already.
+  A subtask has no trash.
+
+### The archive, and the order of the refusals
+
+A to-do of a list in the archive is read and takes **no write** at all — no
+change, no move, no subtask, not even a tick: exit 9 `todoListArchived`, and
+the `hint` names `todolists unarchive`. No to-do moves into an archived list
+either. What Minka says, in this order: what is wrong with the request itself
+(a title, a line of a subtask, the days of a new to-do; the days of an edit
+only after the to-do is found), then exit 2 for a list or a to-do that is not
+there, then `projectArchived`, then `todoListArchived`, then the place
+(`todoPlaceUnknown`) or the people (`personNotAProjectMember`). Where the CLI
+reads first, a list or to-do that is not there is exit 2 before anything else:
+`todos create` and `todos subtasks create` naming a person by name, address or
+`me`, every other subtask command, and a `todos edit` that changes the notes,
+names a person that way, or gives a due day without a start.
+
+### Codes of this part
+
+`todoTitleMissing`, `todoTitleTooLong`, `todoTitleHasControlCharacters`,
+`todoNotesTooLong`, `todoNotesNotReadable`, `todoDatesNotADate`,
+`todoDatesOutOfOrder` (a start after the due day), `subtaskMissing`,
+`subtaskTooLong`, `subtaskHasControlCharacters`, `subtaskDueNotADate`,
+`personNotAProjectMember`, `todoPlaceUnknown`, `todoListArchived`,
+`todosLimitNotANumber`, `completedTodosBeforeUnknown` (a `--before` that is
+no `next`), `todosAfterUnknown` (an `--after` of none of your projects), all
+exit 9.
 
 ## Saying which cards you are working on
 

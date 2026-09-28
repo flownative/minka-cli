@@ -7,8 +7,9 @@ stands in its list directly or in one group of it.
 `todolists tools`, `todolists list` and `todolists show` read; `todolists
 create`, `edit`, `archive`, `unarchive` and `delete` write a list; `todogroups
 create`, `edit`, `move` and `delete` write a group. The to-dos themselves and
-their subtasks get commands of their own, under `todos`, which is why the lists
-and the groups are not called that ([C-071](../decisions.md#c-071)).
+their subtasks have commands of their own, under `todos`, which is why the lists
+and the groups are not called that ([C-071](../decisions.md#c-071)); they follow
+[To-dos and subtasks](todos.md).
 
 ## What a read hands over
 
@@ -26,7 +27,7 @@ the place it had.
 order, each with its `listId` and its open `todos`. A to-do of a group in the
 trash is in neither and in no count. **Done to-dos are counted and never
 listed**: Minka reads them a page at a time at an address of their own, which
-belongs to the to-dos and not to this part.
+`todos completed` asks.
 
 `GET projects/{projectId}/todos` names the tools that are **in use**. A tool
 that is no longer in use is not named there and is still read, and written, at

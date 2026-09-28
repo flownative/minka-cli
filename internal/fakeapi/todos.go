@@ -26,6 +26,10 @@ type TodosTool struct {
 	// written as before.
 	Archived bool
 
+	// Trashed is a tool in the trash of its project: it, its lists and its
+	// to-dos are at no address, and nobody's to-dos come from it.
+	Trashed bool
+
 	Lists []*TodoList // in the order of the page, the top first
 }
 
@@ -56,11 +60,31 @@ type TodoGroup struct {
 // Todo is one to-do of a list, standing in the list itself or in one of its
 // groups. A done one is counted by its list and shown nowhere in it.
 type Todo struct {
-	ID          string
-	Title       string
-	GroupID     string // empty for a to-do standing in its list directly
-	CompletedAt *time.Time
-	Trashed     bool
+	ID            string
+	Title         string
+	GroupID       string // empty for a to-do standing in its list directly
+	Notes         string // the HTML as stored
+	StartsOn      *string
+	DueOn         *string
+	AssigneeIDs   []string // in the order they were put on
+	NotifiedIDs   []string // the people told when it is done, in the same order
+	Subtasks      []*Subtask
+	CompletedAt   *time.Time
+	CompletedByID string
+	CreatedAt     time.Time
+	CreatorID     string
+	Comments      []*Comment
+	Trashed       bool
+}
+
+// Subtask is one line of work under a to-do. It is no item of its own: it has
+// no trash, and taking it off is the end of it.
+type Subtask struct {
+	ID         string
+	Title      string
+	Completed  bool
+	AssigneeID string // empty for nobody
+	DueOn      *string
 }
 
 func (s *Server) registerTodosRoutes(mux *http.ServeMux) {
@@ -77,6 +101,7 @@ func (s *Server) registerTodosRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("PATCH /api/v1/todo-groups/{groupId}", s.authenticated(s.renameTodoGroup))
 	mux.HandleFunc("DELETE /api/v1/todo-groups/{groupId}", s.authenticated(s.removeTodoGroup))
 	mux.HandleFunc("POST /api/v1/todo-groups/{groupId}/moves", s.authenticated(s.moveTodoGroup))
+	s.registerTodoItemRoutes(mux)
 }
 
 // todosTools lists the To-dos tools of a project that are in use, in the
@@ -90,7 +115,7 @@ func (s *Server) todosTools(w http.ResponseWriter, r *http.Request, person *Pers
 
 	tools := []any{}
 	for _, tool := range s.TodosTools {
-		if tool.ProjectID == project.ID && !tool.Archived {
+		if tool.ProjectID == project.ID && !tool.Archived && !tool.Trashed {
 			tools = append(tools, map[string]any{"id": tool.ID, "title": tool.Title, "appUrl": s.todosToolURL(tool)})
 		}
 	}
@@ -471,7 +496,7 @@ func (s *Server) visibleTodosTool(toolID string, person *Person) *TodosTool {
 	if !uuidPattern.MatchString(toolID) {
 		return nil
 	}
-	for _, tool := range s.TodosTools {
+	for _, tool := range s.readableTodosTools() {
 		if tool.ID == toolID && s.visibleProject(tool.ProjectID, person) != nil {
 			return tool
 		}
@@ -485,7 +510,7 @@ func (s *Server) visibleTodoList(listID string, person *Person) (*TodosTool, *To
 	if !uuidPattern.MatchString(listID) {
 		return nil, nil
 	}
-	for _, tool := range s.TodosTools {
+	for _, tool := range s.readableTodosTools() {
 		for _, list := range tool.Lists {
 			if list.ID != listID || list.Trashed {
 				continue
@@ -505,7 +530,7 @@ func (s *Server) visibleTodoGroup(groupID string, person *Person) (*TodosTool, *
 	if !uuidPattern.MatchString(groupID) {
 		return nil, nil, nil
 	}
-	for _, tool := range s.TodosTools {
+	for _, tool := range s.readableTodosTools() {
 		for _, list := range tool.Lists {
 			group := groupOf(list, groupID)
 			if group == nil || list.Trashed || list.Archived {
@@ -602,16 +627,22 @@ func (s *Server) todoGroupResource(tool *TodosTool, list *TodoList, group *TodoG
 	return map[string]any{"id": group.ID, "listId": list.ID, "title": group.Title, "todos": s.openTodoLines(tool, list, group.ID)}
 }
 
-// todoLineResource is a to-do as a list names it. The fake keeps no people,
-// days, comments or subtasks on a to-do, so those fields say that there are
-// none.
+// todoLineResource is a to-do as a list names it: enough to tick it off or to
+// open it.
 func (s *Server) todoLineResource(tool *TodosTool, todo *Todo) map[string]any {
+	done := 0
+	for _, subtask := range todo.Subtasks {
+		if subtask.Completed {
+			done++
+		}
+	}
 	return map[string]any{
 		"id": todo.ID, "title": todo.Title, "completed": todo.CompletedAt != nil,
 		"completedAt": timestampOrNil(todo.CompletedAt), "groupId": nullable(todo.GroupID),
-		"assignees": []any{}, "startsOn": nil, "dueOn": nil, "isOverdue": false,
-		"commentCount": 0, "subtaskCount": 0, "completedSubtaskCount": 0,
-		"appUrl": s.todosToolURL(tool) + "/todos/" + todo.ID,
+		"assignees": s.peopleOnTodo(tool, todo.AssigneeIDs), "startsOn": todo.StartsOn, "dueOn": todo.DueOn,
+		"isOverdue":    s.isOverdue(todo.DueOn, todo.CompletedAt != nil),
+		"commentCount": len(todo.Comments), "subtaskCount": len(todo.Subtasks), "completedSubtaskCount": done,
+		"appUrl": s.todoURL(tool, todo),
 	}
 }
 
@@ -621,4 +652,15 @@ func (s *Server) todosToolURL(tool *TodosTool) string {
 
 func (s *Server) todoListURL(tool *TodosTool, list *TodoList) string {
 	return s.todosToolURL(tool) + "/lists/" + list.ID
+}
+
+// readableTodosTools are the To-dos tools out of the trash, in use or not.
+func (s *Server) readableTodosTools() []*TodosTool {
+	var tools []*TodosTool
+	for _, tool := range s.TodosTools {
+		if !tool.Trashed {
+			tools = append(tools, tool)
+		}
+	}
+	return tools
 }
