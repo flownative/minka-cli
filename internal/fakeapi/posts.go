@@ -658,10 +658,9 @@ func (s *Server) editCommentOnPost(w http.ResponseWriter, r *http.Request, perso
 		}
 		return
 	}
-	if comment.Body != text {
-		now := s.now
-		comment.Body, comment.EditedAt = text, &now
-	}
+	// The same text again is a write as well: the moment moves on.
+	now := s.now
+	comment.Body, comment.EditedAt = text, &now
 	writeJSON(w, http.StatusOK, s.commentResource(tool.ProjectID, comment))
 }
 

@@ -79,14 +79,18 @@ type Post struct {
 	CategoryID  *string      `json:"categoryId"`
 	// Archived says the post lies in the archive of its tool: readable, and
 	// closed to every write but going into the trash.
-	Archived     bool            `json:"archived"`
-	Pinned       bool            `json:"pinned"`
-	CommentCount int             `json:"commentCount"`
-	CreatedAt    string          `json:"createdAt"`
-	EditedAt     *string         `json:"editedAt"` // nil while nobody has written over it
-	Creator      PersonReference `json:"creator"`
-	Comments     []Comment       `json:"comments"` // oldest first
-	AppURL       string          `json:"appUrl"`
+	Archived     bool   `json:"archived"`
+	Pinned       bool   `json:"pinned"`
+	CommentCount int    `json:"commentCount"`
+	CreatedAt    string `json:"createdAt"`
+	// EditedAt is the moment the post was last written to, and nil while it
+	// stands as it was made. Going into the trash and coming back out of it
+	// count as a write, so a post restored on the web carries one although
+	// nobody changed it.
+	EditedAt *string         `json:"editedAt"`
+	Creator  PersonReference `json:"creator"`
+	Comments []Comment       `json:"comments"` // oldest first
+	AppURL   string          `json:"appUrl"`
 }
 
 // CreatePostInput sends a post out. Body is HTML and has to say something.

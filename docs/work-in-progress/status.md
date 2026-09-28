@@ -368,8 +368,13 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   a cursor — the fake takes UTC and the cursor stays opaque to the CLI; the
   plain text a `lead` is cut from, which the fake takes as the body without its
   tags; the cleaning of a body against the files of its project; and the trash
-  of a project, which lists cards alone in the fake. `postAudienceMissing` and
-  a `notifyIds` entry that is no identifier are mirrored and unreachable.
+  of a project, which lists cards alone in the fake; and what a **client** is
+  shown — the fake's clients sign in nowhere, so a post or a tool hidden from a
+  client is never read as one. `postAudienceMissing` and a `notifyIds` entry
+  that is no identifier are mirrored and unreachable. A comment on a post
+  written again with the same text moves its `editedAt` in Minka
+  (`DbalCommentRepository::change`) and in the fake; the comments under a card
+  and a document in the fake still keep it.
 - Everything a bundle says about clients: no extraction has met a client live.
   What the fields are and how Minka reads them was read in its appliers
   (`PeopleApplier`, `ProjectsApplier`, `ToolsApplier`, `WhatClientsSee`), and
@@ -993,6 +998,15 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   empty, and the record is written and shows nothing. Waiting is what a file that
   never comes at all causes.
 
+- The guard over files stands aside where Minka refuses the write anyway on
+  posts alone (C-082). `docs comments edit` still runs it before Minka's
+  refusal of somebody else's comment and of an entry in the archive, and
+  `checkins answers edit` answers somebody else's answer with exit 2 of its
+  own. Aligning the two is carded by the coordination.
+- `editedAt` of a post is set by going into the trash and coming back out of
+  it, so a post restored on the web says it was edited although nobody changed
+  it (`DbalPostRepository::throwAway`, `restoreFromTrash`). Reported to Minka
+  by the coordination.
 - An edit of a check-in question that names no people makes Minka write back
   only the people it shows as asked: a client the question is not shown to and
   a member who left are asked no longer, and one who comes back is not asked

@@ -54,10 +54,16 @@ nothing there.
 
 `GET posts/{postId}` gives `id`, `projectId`, `toolId`, `project`, `tool`,
 `title`, `body`, `bodySource`, `attachments`, `category`, `categoryId`,
-`archived`, `pinned`, `commentCount`, `createdAt`, `editedAt` (null while
-nobody wrote over it), `creator`, `comments` (oldest first) and `appUrl`. A
+`archived`, `pinned`, `commentCount`, `createdAt`, `editedAt`, `creator`, `comments` (oldest first) and `appUrl`. A
 post of the archive is read here and says `archived: true`. **The post carries
 no word about clients and no audience.**
+
+`editedAt` is null while the post stands as it was made, and otherwise the
+moment it was last written to. That is not only a change of its text: going
+into the trash and coming back out of it write the same moment
+(`DbalPostRepository::throwAway` and `restoreFromTrash`), so a post restored on
+the web says it was edited although nobody changed it. Pinning and archiving
+leave it as it is.
 
 ## Sending a post out
 
@@ -87,8 +93,9 @@ post's: only an import does. So a client of the project, or an agent working
 for one, named with `--notify` is always `personCannotSeeIt`, nothing is
 written, and repeating it changes nothing — the hint says to name somebody
 else and names no place to change it, because there is none. `everybody`
-refuses nobody: it puts the clients on the post's list, and they can open
-nothing.
+refuses nobody: it puts the clients on the post's list, and they are not
+notified of it (`NotificationRecipients` keeps out whom a place is not shown
+to) and cannot open it.
 
 The people are met one at a time in the order given, each asked first whether
 they belong to the project and then whether the post is shown to them, so the
@@ -117,8 +124,11 @@ exclude each other. An edit without a flag is a usage error.
 
 `posts edit --body` reads the post first, for the one thing the new body has to
 be held against: whether the old one carries files or mentions that Markdown
-cannot hold. A post of the archive takes no body at all, so there the guard
-stands aside and Minka's `postArchived` is the answer ([C-082](../decisions.md#c-082)).
+cannot hold. The guard stands aside where Minka refuses the body whatever it
+is: on a post of the archive, which the post says, and in an archived project,
+which it does not say. That one is asked only where the guard is about to
+refuse, with one read of the archived projects, and then the request goes out
+and Minka's `projectArchived` is the answer ([C-082](../decisions.md#c-082)).
 
 ## Pinning
 
@@ -155,10 +165,16 @@ argument, as `comments` names a card, since one kind of item hangs there.
 `api.Commented` carries the post as it carries a document and an upload.
 
 `posts comments edit` reads the post first, for the files and mentions a
-comment of one's own may carry. The guard asks only where the write could land:
-a comment of somebody else, and any comment under a post of the archive, are
-refused by Minka whatever is sent, so there the request goes out and Minka's
-answer comes ([C-082](../decisions.md#c-082)).
+comment of one's own may carry, and where the comment carries them it reads the
+person of the token to know whose it is. The guard asks only where the write
+could land: a comment of somebody else, any comment under a post of the
+archive and any comment in an archived project are refused by Minka whatever is
+sent, so there the request goes out and Minka's answer comes
+([C-082](../decisions.md#c-082)).
+
+Minka writes a comment and its `editedAt` again whatever the text
+(`DbalCommentRepository::change`), so the same text sent again answers 200 and
+says it was edited now.
 
 ## Silent rewrites
 
@@ -171,8 +187,10 @@ Minka keeps some things otherwise than they were sent, with the same success:
   ([C-080](../decisions.md#c-080));
 - a file of another project in the body, dropped by the cleaning — no notice,
   as for every text of this CLI;
-- `everybody` putting clients on the list of a post they cannot open — said in
-  the help, since nothing in the answer shows the list.
+- `everybody` putting clients on the list of a post they are not notified of
+  and cannot open — said in the help, since nothing in the answer shows the
+  list;
+- the same text of a comment again, which moves its `editedAt`.
 
 ## The order of the refusals
 
@@ -205,9 +223,12 @@ The CLI changes this order where it reads or refuses before it writes. An ID
 that is no UUID — of a post, a tool, a kind, a comment, a person — is exit 1
 without a request ([C-013](../decisions.md#c-013)). `--notify me` reads the
 person of the token. `posts edit --body` and `posts comments edit` read the
-post, which is 404 first as Minka's own order has it; after the read their
-guard over files comes before `projectArchived` in an archived project, and
-before the title and the body on an edit.
+post, which is 404 first as Minka's own order has it; `posts comments edit`
+reads the person of the token as well where the comment carries files or
+mentions, and both read the archived projects where their guard is about to
+refuse. After the reads the guard comes before the title and the body on an
+edit, and before the text of a comment; it never comes before
+`projectArchived` or `postArchived`.
 
 | Answer | Command | Exit |
 |---|---|---|

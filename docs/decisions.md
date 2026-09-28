@@ -1361,19 +1361,22 @@ the same tool, which `todolists list --archived` already reads that way
 `cli.newPostCommentsCmd`, `api.Commented`, see [Posts](stable/posts.md).
 
 <a id="c-082"></a>
-## C-082 — A guard over files stands only where the write could land
+## C-082 — The guard over the files of a post stands only where the write could land
 
-*Applies to: `posts edit --body`, `posts comments edit`*
+*Applies to: `posts edit --body`, `posts comments edit`; not (yet) to `docs
+edit`, `docs comments edit` or `checkins answers edit`*
 
 The guard that refuses a text dropping the files and mentions of the one it
 replaces asks only where Minka would take the write: not for a post of the
-archive, and not for a comment of somebody else or under a post of the archive.
-There the request goes out and Minka's refusal is the answer.
+archive, not in an archived project, and not for a comment of somebody else or
+under a post of the archive. There the request goes out and Minka's refusal is
+the answer.
 
 **Why:** Where Minka refuses whatever is sent, nothing can be lost, and a guard
 that answered first would put a usage error with a `--drop-attachments` hint
-in front of the one refusal that says what is really wrong. Both states are in
-the post the command reads anyway; whether the project is archived is not, so
-there the guard still comes first and the order says so. **Implemented as:**
-`cli.newPostsEditCmd`, `cli.keepsTheAttachmentsOfAComment`, see
+in front of the one refusal that says what is really wrong. The post the
+command reads says whether it is archived; whether its project is, it does not,
+so the archived projects are read only where the guard is about to refuse.
+**Implemented as:** `cli.guardOverFiles`, `cli.newPostsEditCmd`,
+`cli.keepsTheAttachmentsOfAComment`, see
 [Posts](stable/posts.md).

@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"fmt"
 	"net/url"
 	"slices"
 	"strings"
@@ -723,4 +724,154 @@ func (e *testEnv) lastRequestQuery() string {
 	requests := e.server.Requests()
 	query, _ := url.QueryUnescape(requests[len(requests)-1].Query)
 	return query
+}
+
+// Markdown that converts to nothing would send a body that says nothing, which
+// is this side's conversion losing the text and not a refusal of Minka.
+func TestABodyTheConversionLosesWhollyStopsBeforeARequest(t *testing.T) {
+	e := newTestEnv(t)
+	for _, args := range [][]string{
+		newPost(e, "--audience", "nobody", "--body", "[a]: http://example.com"),
+		{"posts", "edit", e.fixture.Post.ID, "--body", "[a]: http://example.com"},
+	} {
+		env, r := e.runJSON("", args...)
+		expectCode(t, r, ExitUsage)
+		if !strings.Contains(env.Error, "nothing Minka keeps") || len(e.server.Requests()) != 0 {
+			t.Fatalf("%v: error %q, %d requests", args[1], env.Error, len(e.server.Requests()))
+		}
+	}
+}
+
+// Only the place a page ends at is stable: the last post of a page pinned
+// between two pages is not handed out again, because the next page starts
+// behind the values it had and not behind the post.
+func TestTheNextPageStartsBehindThePlaceAndNotBehindThePost(t *testing.T) {
+	e := newTestEnv(t)
+	f := e.fixture
+
+	page := decode(t, runOK(t, e, "posts", "list", f.Posts.ID, "--limit", "2").Data)
+	next := page["next"].(string)
+	runOK(t, e, "posts", "pin", f.Post.ID)
+	second := decode(t, runOK(t, e, "posts", "list", f.Posts.ID, "--limit", "2", "--before", next).Data)
+	if ids := idsOf(t, second, "posts"); !slices.Equal(ids, []string{f.OlderPost.ID}) {
+		t.Fatalf("second page %v, want the older post alone", ids)
+	}
+}
+
+func TestANewPostInAToolThatIsNotThereNamesTheTools(t *testing.T) {
+	e := newTestEnv(t)
+	env, r := e.runJSON("", "posts", "create", "--tool", "0192f3a4-5b6c-4d7e-8f90-a1b2c3d4e5f6", "--title", "A post", "--body", "Words", "--audience", "nobody")
+	expectCode(t, r, ExitNotFound)
+	if env.Hint != postsToolNotFoundHint {
+		t.Fatalf("hint %q, want the one of a tool", env.Hint)
+	}
+}
+
+// Where the project is archived Minka refuses whatever is sent, so the guard
+// over files stands aside and projectArchived is the answer.
+func TestInAnArchivedProjectTheGuardOverFilesStandsAside(t *testing.T) {
+	e := newTestEnv(t)
+	f := e.fixture
+	f.Post.Body = "<div>See " + aMention + "</div>"
+	mine := &fakeapi.Comment{ID: "0192f3a4-5b6c-4d7e-8f90-a1b2c3d4e512", AuthorID: f.Bruno.ID, Body: "<div>" + aMention + "</div>", CreatedAt: time.Now()}
+	f.Post.Comments = append(f.Post.Comments, mine)
+	f.Project.Archived = true
+
+	for _, args := range [][]string{
+		{"posts", "edit", f.Post.ID, "--body", "Plain"},
+		{"posts", "comments", "edit", f.Post.ID, mine.ID, "Plain"},
+	} {
+		env, r := e.runJSON("", args...)
+		expectCode(t, r, ExitValidation)
+		if env.Meta["apiCode"] != apiCodeProjectArchived {
+			t.Fatalf("%v: apiCode %v, want the project before the guard", args[1:3], env.Meta["apiCode"])
+		}
+	}
+}
+
+// An archived post in an archived project is refused as the project.
+func TestTheProjectComesBeforeThePostOfTheArchive(t *testing.T) {
+	for name, args := range map[string]func(f *fakeapi.Fixture) []string{
+		"edit": func(f *fakeapi.Fixture) []string {
+			return []string{"posts", "edit", f.ArchivedPost.ID, "--title", "Again"}
+		},
+		"pin":     func(f *fakeapi.Fixture) []string { return []string{"posts", "pin", f.ArchivedPost.ID} },
+		"unpin":   func(f *fakeapi.Fixture) []string { return []string{"posts", "unpin", f.ArchivedPost.ID} },
+		"archive": func(f *fakeapi.Fixture) []string { return []string{"posts", "archive", f.ArchivedPost.ID} },
+		"comment": func(f *fakeapi.Fixture) []string {
+			return []string{"posts", "comments", "create", f.ArchivedPost.ID, "More"}
+		},
+		"comment edit": func(f *fakeapi.Fixture) []string {
+			return []string{"posts", "comments", "edit", f.ArchivedPost.ID, f.ArchivedPost.Comments[0].ID, "Other"}
+		},
+		"comment delete": func(f *fakeapi.Fixture) []string {
+			return []string{"posts", "comments", "delete", f.ArchivedPost.ID, f.ArchivedPost.Comments[0].ID}
+		},
+		"react": func(f *fakeapi.Fixture) []string {
+			return []string{"posts", "comments", "react", f.ArchivedPost.ID, f.ArchivedPost.Comments[0].ID, "👍"}
+		},
+		"unreact": func(f *fakeapi.Fixture) []string {
+			return []string{"posts", "comments", "unreact", f.ArchivedPost.ID, f.ArchivedPost.Comments[0].ID, "👍"}
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			e := newTestEnv(t)
+			e.fixture.Project.Archived = true
+			env, r := e.runJSON("", args(e.fixture)...)
+			expectCode(t, r, ExitValidation)
+			if env.Meta["apiCode"] != apiCodeProjectArchived {
+				t.Fatalf("apiCode %v, want the project before the post", env.Meta["apiCode"])
+			}
+		})
+	}
+}
+
+// Of a new post, a kind the project does not offer is answered before any
+// person named is looked at.
+func TestTheKindOfANewPostComesBeforeThePeople(t *testing.T) {
+	e := newTestEnv(t)
+	f := e.fixture
+	env, r := e.runJSON("", newPost(e, "--audience", "chosen", "--notify", f.Stranger.ID, "--category", f.OtherCategory.ID)...)
+	expectCode(t, r, ExitValidation)
+	if env.Meta["apiCode"] != apiCodePostCategoryUnknown {
+		t.Fatalf("apiCode %v, want the kind before the stranger", env.Meta["apiCode"])
+	}
+}
+
+// Minka cuts a page above 100 without a word, and next says that there is more.
+func TestAPageAbove100IsCutAndSaysThereIsMore(t *testing.T) {
+	e := newTestEnv(t)
+	f := e.fixture
+	for i := range 105 {
+		moment := time.Date(2026, 8, 1, 0, i, 0, 0, time.UTC)
+		f.Posts.Posts = append(f.Posts.Posts, &fakeapi.Post{
+			ID: fmt.Sprintf("0192f3a4-5b6c-4d7e-8f90-%012d", i), Title: "Filler", Body: "<div>More</div>",
+			CreatedAt: moment, UpdatedAt: moment, CreatorID: f.Bruno.ID,
+		})
+	}
+	page := decode(t, runOK(t, e, "posts", "list", f.Posts.ID, "--limit", "500").Data)
+	if ids := idsOf(t, page, "posts"); len(ids) != 100 || page["next"] == nil {
+		t.Fatalf("%d posts, next %v: want 100 and a next page", len(ids), page["next"])
+	}
+}
+
+// Minka writes a comment and its moment again whatever the text, so the same
+// text again says that it was edited.
+func TestTheSameCommentAgainIsAnEdit(t *testing.T) {
+	e := newTestEnv(t)
+	f := e.fixture
+	id := decode(t, runOK(t, e, "posts", "comments", "create", f.Post.ID, "Same").Data)["id"].(string)
+	env := runOK(t, e, "posts", "comments", "edit", f.Post.ID, id, "Same")
+	if decode(t, env.Data)["editedAt"] == nil {
+		t.Fatal("the same text again leaves no moment of an edit")
+	}
+}
+
+func TestAReactionOnACommentThatIsNotThereNamesNoAuthor(t *testing.T) {
+	e := newTestEnv(t)
+	env, r := e.runJSON("", "posts", "comments", "react", e.fixture.Post.ID, "0192f3a4-5b6c-4d7e-8f90-a1b2c3d4e5f6", "👍")
+	expectCode(t, r, ExitNotFound)
+	if strings.Contains(env.Hint, "somebody else") || !strings.Contains(env.Hint, "posts comments list") {
+		t.Fatalf("hint %q", env.Hint)
+	}
 }

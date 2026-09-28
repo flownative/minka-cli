@@ -1188,8 +1188,8 @@ it may be filed under, and comments. `posts …` reads and writes them;
 - **A post written here is shown to no client of the project.** Naming a client,
   or an agent working for one, is always exit 9 `personCannotSeeIt`: nothing
   was written, the same request is refused again, and the only way on is to
-  name somebody else. `everybody` refuses nobody; it tells the clients nothing
-  they can open.
+  name somebody else. `everybody` refuses nobody; it puts the clients on the
+  post's list, but they are not notified and cannot open it.
 - `posts edit <postId>` changes the title, the body, the kind or several;
   what is not given stays, and the change tells nobody. Anybody in the project
   may change any post. `--title ""` is exit 9 `postTitleMissing` and `--body ""`
@@ -1217,8 +1217,8 @@ title and the body, then `projectArchived`, `postArchived` and
 `postCategoryUnknown`. For pin, unpin, a comment and archiving:
 `projectArchived` before `postArchived` — except that archiving a post in the
 trash says `postInTrash` first. `posts edit --body` and `posts comments edit`
-read the post first; in an archived project their guard over files comes before
-`projectArchived`.
+read the post first, and their guard over files never comes before
+`projectArchived` or `postArchived`.
 
 ### Codes of this part
 

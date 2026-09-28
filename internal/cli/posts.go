@@ -50,8 +50,8 @@ Somebody named has to be able to see the post. A post written through the API
 or on the web is shown to no client of the project, so naming a client, or an
 agent working for one, is always refused with personCannotSeeIt. Nothing is
 written then, and sending it again changes nothing: name somebody else.
-"everybody" refuses nobody: it tells the clients of the project nothing they
-can open.
+"everybody" refuses nobody: it puts the clients of the project on the list of
+the post, and they are not notified of it and cannot open it.
 
 ` + namedTwiceHelp
 
@@ -157,9 +157,12 @@ next}. Drafts are not listed, the author's own included, and neither is a post
 in the archive or in the trash.
 
 next is where the page after this one starts, and null on the last page. Hand
-it to --before exactly as it came; it is no ID. Pinning, archiving or removing
-a post between two pages moves nothing: the next page starts behind the values
-of the last post, not behind the post.
+it to --before exactly as it came; it is no ID. The next page starts behind
+the place the last post stood at — pinned or not, and when it was written —
+and not behind the post, so only that place is stable. A post you have not
+read yet that gets pinned between two pages jumps above the place and is on no
+later page: it can be missed. A post that was last on a page and gets unpinned
+comes back on a later one.
 
 --limit is the size of the page, 50 unless given. Minka serves at most 100 and
 cuts a larger page down to that, which next then says.
@@ -318,7 +321,11 @@ posts categories <projectId> lists them.`,
 
 			post, err := s.client.CreatePost(a.ctx, toolID, input)
 			if err != nil {
-				return postRefusal(s, err)
+				e := postRefusal(s, err)
+				if e.Code == CodeNotFound {
+					e.Hint = postsToolNotFoundHint
+				}
+				return e
 			}
 
 			summary := "Sent post " + post.Value.Title + " out in " + post.Value.Tool.Title
@@ -414,7 +421,7 @@ first to know.`,
 				// A post in the archive takes no body at all, so Minka's refusal
 				// is the answer and nothing can be lost.
 				if !current.Value.Archived {
-					dropped, err := keepsTheAttachments(firstNonEmpty(current.Value.BodySource, current.Value.Body), *input.Body, dropAttachments,
+					dropped, err := a.guardOverFiles(s, current.Value.ProjectID, firstNonEmpty(current.Value.BodySource, current.Value.Body), *input.Body, dropAttachments,
 						"the post has attachments or mentions, and the new body would drop them",
 						"Change the bodySource from posts show --json and send it back with --body-format html, or give --drop-attachments.")
 					if err != nil {
@@ -715,11 +722,32 @@ func (a *app) keepsTheAttachmentsOfAComment(s *session, post api.Post, commentID
 		if current.Author.ID != me {
 			return nil, nil
 		}
-		return keepsTheAttachments(firstNonEmpty(current.BodySource, current.Body), body, allowed,
+		return a.guardOverFiles(s, post.ProjectID, firstNonEmpty(current.BodySource, current.Body), body, allowed,
 			"the comment has attachments or mentions, and the new text would drop them",
 			"Change the bodySource of the comment from posts show --json and send it back with --format html, or give --drop-attachments.")
 	}
 	return nil, nil
+}
+
+// guardOverFiles holds a new text against the one it replaces, and stands
+// aside where Minka refuses the write whatever is sent. The post does not say
+// whether its project is archived, so that is asked only where the guard is
+// about to refuse.
+func (a *app) guardOverFiles(s *session, projectID, current, replacement string, allowed bool, message, hint string) ([]string, error) {
+	dropped, refusal := keepsTheAttachments(current, replacement, allowed, message, hint)
+	if refusal == nil {
+		return dropped, nil
+	}
+	archived, err := s.client.Projects(a.ctx, true)
+	if err != nil {
+		return nil, s.fail(err)
+	}
+	for _, project := range archived.Value {
+		if project.ID == projectID && project.Status == "archived" {
+			return nil, nil
+		}
+	}
+	return nil, refusal
 }
 
 func (a *app) newPostCommentsDeleteCmd() *cobra.Command {
@@ -766,7 +794,7 @@ although the web offers it.`,
 			}
 			comment, err := s.client.ReactToCommentOn(a.ctx, postItem(args[0]), args[1], args[2])
 			if err != nil {
-				return reactionError(postCommentRefusal(s, err))
+				return reactionError(postReactionRefusal(s, err))
 			}
 
 			summary := fmt.Sprintf("Reacted %s to comment %s", args[2], args[1])
@@ -795,7 +823,7 @@ func (a *app) newPostCommentsUnreactCmd() *cobra.Command {
 				return err
 			}
 			if err := s.client.UnreactFromCommentOn(a.ctx, postItem(args[0]), args[1], args[2]); err != nil {
-				return reactionError(postCommentRefusal(s, err))
+				return reactionError(postReactionRefusal(s, err))
 			}
 
 			summary := fmt.Sprintf("Took %s off comment %s", args[2], args[1])
@@ -880,6 +908,16 @@ func postCommentRefusal(s *session, err error) *Error {
 	e := postRefusal(s, err)
 	if e.Code == CodeNotFound {
 		e.Hint = "The post does not exist or is not visible to you, the comment was removed or hangs under another post, or somebody else wrote it: only the author can change or remove a comment."
+	}
+	return e
+}
+
+// postReactionRefusal is a refusal of a reaction on a comment, which anybody
+// may leave: an address that has nothing is the post or the comment.
+func postReactionRefusal(s *session, err error) *Error {
+	e := postRefusal(s, err)
+	if e.Code == CodeNotFound {
+		e.Hint = "The post does not exist or is not visible to you, or the comment was removed or hangs under another post. The comments of a post: minka posts comments list <postId>"
 	}
 	return e
 }
