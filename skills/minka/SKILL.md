@@ -888,7 +888,8 @@ to-dos themselves are not here yet; `todolists show` lists the open ones.
   then leave the list and its counts.
 - `todogroups move <groupId>` needs **exactly one** of `--top`, `--after
   <groupId>` and `--before <groupId>`; the neighbour has to be another group of
-  the same list. A group never leaves its list.
+  the same list, and the group itself or any other is exit 9
+  `todoPlaceUnknown`. A group never leaves its list.
 
 ### The archive of a list
 
@@ -897,7 +898,10 @@ group — until it is back: exit 9 `todoListArchived`, and the `hint` names the
 `todolists unarchive` to run. Its **groups are at no address at all**: every
 `todogroups` command on one exits 2, as if it did not exist. Archiving a list
 twice is `todoListArchived`, bringing back one in use `todoListNotArchived`. In
-an archived project every write answers `projectArchived` first.
+an archived project `projectArchived` comes before those three and before
+`todoPlaceUnknown`, but after what is wrong with the request itself: a title
+or a description Minka refuses is answered as such, and a list or a group that
+is not there is exit 2.
 
 ### What does not exist here
 

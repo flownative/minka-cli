@@ -3,7 +3,6 @@ package cli
 import (
 	"fmt"
 	"io"
-	"strings"
 
 	"github.com/flownative/minka-cli/internal/api"
 	"github.com/spf13/cobra"
@@ -123,8 +122,8 @@ func (a *app) newTodoGroupsMoveCmd() *cobra.Command {
 required. A group never leaves its list.
 
 The group named with --after or --before has to be another group of the same
-list, out of the trash; any other is refused with exit 9 (validation) and
-meta.apiCode todoPlaceUnknown, and nothing moves.
+list, out of the trash; any other, the group itself included, is refused with
+exit 9 (validation) and meta.apiCode todoPlaceUnknown, and nothing moves.
 
 ` + todoGroupsReadHelp,
 		Example: `  minka todogroups move 0199... --top
@@ -147,9 +146,6 @@ meta.apiCode todoPlaceUnknown, and nothing moves.
 			if neighbour != "" {
 				if err := requireID(cmd, flag, neighbour); err != nil {
 					return err
-				}
-				if strings.EqualFold(neighbour, args[0]) {
-					return usageErrorf(cmd, "a group cannot be placed next to itself")
 				}
 			}
 
@@ -218,7 +214,7 @@ func todoGroupRefusal(s *session, err error) *Error {
 	e := s.fail(err)
 	switch {
 	case e.APICode == apiCodeTodoPlaceUnknown:
-		e.Hint = "The group named with --after or --before is no other group of the same list, or it is in the trash. The groups of a list, in their order: minka todolists show <listId>"
+		e.Hint = "The group named with --after or --before is the group itself, no group of the same list, or in the trash. The groups of a list, in their order: minka todolists show <listId>"
 	case e.APICode == apiCodeTodoListArchived:
 		e.Hint = "The list of the group lies in the archive of its tool, and nothing in it changes until it is back: minka todolists unarchive <listId>"
 	case e.Code == CodeNotFound:

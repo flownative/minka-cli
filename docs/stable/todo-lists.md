@@ -76,13 +76,15 @@ second, and **at the top of the list where neither is named**. So a body
 without a neighbour is a move to the top, and the CLI asks for that in words:
 exactly one of `--top`, `--after <groupId>` and `--before <groupId>`, and none
 or two are a usage error before a request goes out
-([C-072](../decisions.md#c-072)). There is no `--bottom`: the address offers
+([C-072](../decisions.md#c-072)). Given both neighbours, Minka checks both and
+places the group by the previous one alone, so a second placement would say
+something that is not done. There is no `--bottom`: the address offers
 none, and finding the last group would need the list, which the ID of a group
 does not name.
 
 A neighbour has to be **another** group of the **same** list, out of the trash.
-The group itself as its own neighbour is refused here; any other stranger is
-422 `todoPlaceUnknown`, and nothing moves. A neighbour that is no identifier at
+Anything else, the group itself included, is 422 `todoPlaceUnknown` from Minka,
+and nothing moves; in an archived project it is `projectArchived` instead. A neighbour that is no identifier at
 all is `todoPlaceUnknown` before the group is even looked up, which the CLI
 never sends: `--after` and `--before` take an ID.
 

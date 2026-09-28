@@ -456,7 +456,7 @@ func TestAGroupMovesWhereItsPlacementSays(t *testing.T) {
 	}
 }
 
-func TestAGroupMoveNamesExactlyOnePlaceAndNotItself(t *testing.T) {
+func TestAGroupMoveNamesExactlyOnePlace(t *testing.T) {
 	e := newTestEnv(t)
 	f := e.fixture
 	stage, kitchen := f.StageGroup.ID, f.KitchenGroup.ID
@@ -464,8 +464,6 @@ func TestAGroupMoveNamesExactlyOnePlaceAndNotItself(t *testing.T) {
 	for name, args := range map[string][]string{
 		"no placement":      {"todogroups", "move", stage},
 		"two placements":    {"todogroups", "move", stage, "--top", "--after", kitchen},
-		"after itself":      {"todogroups", "move", stage, "--after", stage},
-		"before itself":     {"todogroups", "move", stage, "--before", strings.ToUpper(stage)},
 		"a neighbour no ID": {"todogroups", "move", stage, "--after", "Kitchen"},
 	} {
 		_, r := e.runJSON("", args...)
@@ -473,6 +471,66 @@ func TestAGroupMoveNamesExactlyOnePlaceAndNotItself(t *testing.T) {
 		if n := len(e.server.WritingRequests()); n != 0 {
 			t.Fatalf("%s: %d writes sent", name, n)
 		}
+	}
+}
+
+// A group named as its own neighbour is Minka's to refuse, so what it says
+// reaches the caller: todoPlaceUnknown, and in an archived project that it is
+// archived.
+func TestAGroupIsNotMovedNextToItself(t *testing.T) {
+	e := newTestEnv(t)
+	f := e.fixture
+
+	for _, flag := range []string{"--after", "--before"} {
+		env, r := e.runJSON("", "todogroups", "move", f.StageGroup.ID, flag, f.StageGroup.ID)
+		expectCode(t, r, ExitValidation)
+		if env.Meta["apiCode"] != apiCodeTodoPlaceUnknown || !strings.Contains(env.Hint, "the group itself") {
+			t.Fatalf("%s: apiCode %v, hint %q", flag, env.Meta["apiCode"], env.Hint)
+		}
+	}
+	if ids := groupsOfTheList(t, e); !slices.Equal(ids, []string{f.StageGroup.ID, f.KitchenGroup.ID}) {
+		t.Fatalf("a refused move moved something: %v", ids)
+	}
+
+	f.Project.Archived = true
+	env, r := e.runJSON("", "todogroups", "move", f.StageGroup.ID, "--after", f.StageGroup.ID)
+	expectCode(t, r, ExitValidation)
+	if env.Meta["apiCode"] != apiCodeProjectArchived {
+		t.Fatalf("apiCode %v", env.Meta["apiCode"])
+	}
+}
+
+// The title is held before the list or the group is looked up, so an empty one
+// is refused as empty wherever it is aimed.
+func TestATitleIsRefusedBeforeWhatItIsFor(t *testing.T) {
+	e := newTestEnv(t)
+	unknown := "01990000-0000-4000-8000-000000000000"
+
+	for name, c := range map[string]struct {
+		args []string
+		code string
+	}{
+		"a list changed":  {[]string{"todolists", "edit", unknown, "--title", ""}, "todoListTitleMissing"},
+		"a group added":   {[]string{"todogroups", "create", "--list", unknown, "--title", ""}, "todoGroupTitleMissing"},
+		"a group renamed": {[]string{"todogroups", "edit", unknown, "--title", ""}, "todoGroupTitleMissing"},
+	} {
+		env, r := e.runJSON("", c.args...)
+		expectCode(t, r, ExitValidation)
+		if env.Meta["apiCode"] != c.code {
+			t.Fatalf("%s: apiCode %v, want %s", name, env.Meta["apiCode"], c.code)
+		}
+	}
+}
+
+// Escaping makes a plain text longer, and the server holds the length of what
+// it would store as well as of what was sent.
+func TestADescriptionThatGrowsBeyondTheLimitWhenStoredIsRefused(t *testing.T) {
+	e := newTestEnv(t)
+
+	env, r := e.runJSON(strings.Repeat("&", 30000), "todolists", "create", "--tool", e.fixture.Todos.ID, "--title", "Ampersands", "--description", "-", "--description-format", "html")
+	expectCode(t, r, ExitValidation)
+	if env.Meta["apiCode"] != "todoListDescriptionTooLong" {
+		t.Fatalf("apiCode %v", env.Meta["apiCode"])
 	}
 }
 

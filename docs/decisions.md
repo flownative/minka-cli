@@ -1181,13 +1181,19 @@ the same position of one command tree. Minka's own addresses split the same way:
 *Applies to: `todogroups move`*
 
 Exactly one of `--top`, `--after <groupId>` and `--before <groupId>` is
-required; none, two, a neighbour that is no ID, and the group as its own
-neighbour are usage errors before a request goes out. There is no `--bottom`.
+required; none, two and a neighbour that is no ID are usage errors before a
+request goes out. There is no `--bottom`. The group named as its own
+neighbour goes to Minka, which answers `todoPlaceUnknown`, or `projectArchived`
+in an archived project.
 
 **Why:** Minka moves a group without a neighbour to the top of its list, with
 the same 200 as any move, so a forgotten flag would reorder a list without a
-word. The group itself as its neighbour is a refusal the server is sure to give
-([C-013](#c-013)). The address has no bottom, and the CLI cannot find the last
-group without the list, which the ID of a group does not name.
+word. Given both neighbours, Minka checks that both are groups of the list and
+places the group behind the previous one alone, so the next one would be a
+place asked for and ignored. A neighbour that is no ID is refused here for the
+reason of [C-013](#c-013); whether a group may stand next to another is
+Minka's rule and stays there, as in [C-070](#c-070). The address has no
+bottom, and the CLI cannot find the last group without the list, which the ID
+of a group does not name.
 **Implemented as:** `cli.newTodoGroupsMoveCmd`, see
 [To-do lists and groups](stable/todo-lists.md).

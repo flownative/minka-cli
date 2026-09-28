@@ -10,8 +10,8 @@ import (
 )
 
 // maxTodoListDescriptionLength is what the description of a list takes: as
-// much as the description of a card does on the server, counted on what is
-// stored.
+// much as the description of a card does on the server, counted on what was
+// sent and again on what would be stored.
 const maxTodoListDescriptionLength = 100000
 
 // TodosTool is a To-dos tool of a project: lists, the newest on top, each with
@@ -160,7 +160,7 @@ func (s *Server) addTodoList(w http.ResponseWriter, r *http.Request, person *Per
 		notFound(w)
 		return
 	}
-	stored, ok := storedRichText(w, "todoListDescriptionTooLong", "The description of a list is too long.", maxTodoListDescriptionLength, deref(description))
+	stored, ok := storedTodoListDescription(w, deref(description))
 	if !ok {
 		return
 	}
@@ -212,7 +212,7 @@ func (s *Server) updateTodoList(w http.ResponseWriter, r *http.Request, person *
 	}
 	stored := list.Description
 	if description != nil {
-		if stored, ok = storedRichText(w, "todoListDescriptionTooLong", "The description of a list is too long.", maxTodoListDescriptionLength, *description); !ok {
+		if stored, ok = storedTodoListDescription(w, *description); !ok {
 			return
 		}
 	}
@@ -413,6 +413,22 @@ func (s *Server) refusedAsNothingWritten(w http.ResponseWriter, tool *TodosTool,
 		return true
 	}
 	return false
+}
+
+// storedTodoListDescription is a description as the server keeps it. The
+// length is held twice: against the text that was sent, and against the HTML
+// it becomes, which escaping makes longer than plain text was.
+func storedTodoListDescription(w http.ResponseWriter, value string) (string, bool) {
+	const tooLong, message = "todoListDescriptionTooLong", "The description of a list is too long."
+	stored, ok := storedRichText(w, tooLong, message, maxTodoListDescriptionLength, value)
+	if !ok {
+		return "", false
+	}
+	if utf8.RuneCountInString(stored) > maxTodoListDescriptionLength {
+		unprocessable(w, tooLong, message)
+		return "", false
+	}
+	return stored, true
 }
 
 func todoPlaceUnknown(w http.ResponseWriter) {
