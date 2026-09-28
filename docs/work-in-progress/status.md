@@ -960,6 +960,14 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   `group_on`, no frequency outside the five and none whose schedule Minka cannot
   express, so those four wait for an account that holds them rather than for a
   run.
+- See the three refusals over whom a document reaches answered by a running
+  instance: `notifyIdsMissing`, `notifyIdsWithoutChosenAudience` and
+  `personCannotSeeIt`. Two of them the CLI's own guard holds back, so they need
+  a request built outside it. Until the third is seen, the sentence in
+  [Docs & Files](../stable/docs-and-files.md) which says that `--notify` naming
+  a client of the project is accepted and enrols them stands beside the refusal
+  in the same document, and only a live answer settles which of the two is the
+  practice. Whether the guard then stays is Robert's and Shaun's to say.
 - React to messages from `minka-ca`: check against the code, fake first,
   then the CLI, test and sabotage proof, check live, documentation in the
   same commit.
