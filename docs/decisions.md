@@ -1324,17 +1324,17 @@ cut.
 
 Where somebody named with `--ask` is not among `asked` in the answer, a
 `notice` names them. Where an edit gives the rhythm or the weekdays and the
-question is asked every other week afterwards, a `notice` names the day the
-weeks are counted from. Weekdays Minka sorts and takes once, and a time it
-writes with two digits, draw nothing.
+question is asked every other week afterwards, a `notice` names the first day
+of its weeks and the two after it. Weekdays Minka sorts and takes once, and a
+time it writes with two digits, draw nothing.
 
 **Why:** Minka lists as asked only the members who may see the question and
 answers a write naming a client it is not shown to with the same success, so
 the notice is the only word about somebody asked and shown nothing — as the
-notice of [C-075](#c-075) is about a day. The start of a question is the
-writer's today and no edit moves it, so a question made fortnightly months
-later counts its weeks from a day nobody gave in that edit. A sorted list and
-`09:00` for `9:00` lose nothing, and a notice about them would teach whoever
-reads the notices to stop.
-**Implemented as:** `cli.askedNotices`, `cli.newCheckinsEditCmd`, see
+notice of [C-075](#c-075) is about a day. Every other week counts from the
+first of the weekday on or after the start, which no edit moves, so the weekday
+of an edit decides which of the two sets of weeks is asked, and nothing in the
+answer says which. A sorted list and `09:00` for `9:00` lose nothing, and a
+notice about them would teach whoever reads the notices to stop.
+**Implemented as:** `cli.askedNotices`, `cli.fortnightNotice`, see
 [Check-ins](stable/checkins.md).

@@ -337,10 +337,9 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   answer on that day or later, at most 100. What it does not mirror: the time
   zone of the person asked and of the writer, in which Minka decides the start
   day, the latest asking and so the day of an answer — the fake takes UTC;
-  a weekday sent as `1.0`, which Minka refuses as malformed and the fake takes;
-  `answerNotReadable`; the cleaning of a body against the files of its circle;
-  and which of the people asked a retired agent is, whom the fake leaves out of
-  `asked` on a guess. That a question set up through the API is shown to no
+  `answerNotReadable`; and the cleaning of a body against the files of its
+  circle. An agent that stepped down is listed in `asked` wherever it is still a
+  member, which Minka leaves it only in the projects archived then. That a question set up through the API is shown to no
   client was read, not measured: the insert names no `visible_to_clients`, and
   the column defaults to false.
 - Everything a bundle says about clients: no extraction has met a client live.
@@ -965,6 +964,12 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   asking about the circle, so the tag becomes markup, the body does not read as
   empty, and the record is written and shows nothing. Waiting is what a file that
   never comes at all causes.
+
+- An edit of a check-in question that names no people makes Minka write back
+  only the people it shows as asked: a client the question is not shown to and
+  a member who left are asked no longer, and one who comes back is not asked
+  again. It was read in `updateQuestionAction` and is reported to Minka; the CLI
+  says so in its help and its docs.
 
 ## Open in the API
 

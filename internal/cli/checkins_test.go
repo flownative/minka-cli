@@ -279,20 +279,33 @@ func TestAnEditOfAQuestionThatShowsNobodyAskedSaysWhy(t *testing.T) {
 	}
 }
 
-// Every other week is counted from the day a question started, which no edit
-// moves. An edit of its rhythm or its weekday says so, also where the question
-// was asked every other week before.
-func TestAnEditOfEveryOtherWeekSaysWhatItIsCountedFrom(t *testing.T) {
+// Every other week is counted from the first of the question's weekday on or
+// after the day it started, which no edit moves, so the weekday decides which
+// weeks are asked. An edit of its rhythm or its weekday names them, also where
+// the question was asked every other week before, and the dates it names are
+// the ones Minka answers in.
+func TestAnEditOfEveryOtherWeekSaysWhichWeeksItAsksIn(t *testing.T) {
 	e := newTestEnv(t)
 	f := e.fixture
 
+	// The question started on Tuesday, 2026-09-01.
 	env := runOK(t, e, "checkins", "edit", f.WeeklyQuestion.ID, "--rhythm", "everyOtherWeek")
-	if !strings.Contains(env.Notice, "counted from 2026-09-01") {
+	if !strings.Contains(env.Notice, "counted from 2026-09-07, the first Mon on or after 2026-09-01") || !strings.Contains(env.Notice, "2026-09-07, 2026-09-21, 2026-10-05") {
 		t.Fatalf("notice %q", env.Notice)
 	}
+	if !strings.Contains(env.Summary, "first on 2026-09-07") {
+		t.Fatalf("summary %q", env.Summary)
+	}
+	if day := decode(t, runOK(t, e, "checkins", "answers", "create", f.WeeklyQuestion.ID, "Monday").Data)["groupOn"]; day != "2026-09-07" {
+		t.Fatalf("an answer on Monday's weeks belongs to %v", day)
+	}
+
 	env = runOK(t, e, "checkins", "edit", f.WeeklyQuestion.ID, "--weekday", "wed")
-	if !strings.Contains(env.Notice, "counted from 2026-09-01") {
+	if !strings.Contains(env.Notice, "counted from 2026-09-02, the first Wed on or after 2026-09-01") || !strings.Contains(env.Notice, "2026-09-02, 2026-09-16, 2026-09-30") {
 		t.Fatalf("notice %q", env.Notice)
+	}
+	if day := decode(t, runOK(t, e, "checkins", "answers", "create", f.WeeklyQuestion.ID, "Wednesday").Data)["groupOn"]; day != "2026-09-02" {
+		t.Fatalf("an answer on Wednesday's weeks belongs to %v", day)
 	}
 	if env := runOK(t, e, "checkins", "edit", f.WeeklyQuestion.ID, "--title", "Renamed"); env.Notice != "" {
 		t.Fatalf("notice %q on an edit that leaves the schedule", env.Notice)
@@ -811,7 +824,7 @@ func TestAFullListOfRemindersSaysThereMayBeMore(t *testing.T) {
 		if n := len(listOfObjects(t, env.Data)); n != min(c.questions, 100) {
 			t.Fatalf("%d questions: %d reminders", c.questions, n)
 		}
-		if got := strings.Contains(env.Notice, "at most 100"); got != c.notice {
+		if got := strings.Contains(env.Notice, "at most 100") && strings.Contains(env.Notice, "asked earlier"); got != c.notice {
 			t.Fatalf("%d questions: notice %q", c.questions, env.Notice)
 		}
 	}
@@ -856,4 +869,102 @@ func answerIDs(t *testing.T, raw json.RawMessage) []string {
 func lastQuery(e *testEnv) string {
 	requests := e.server.Requests()
 	return requests[len(requests)-1].Query
+}
+
+// Somebody else's answer is not there to Minka, and that comes before the guard
+// over files this side keeps: exit 2, and nothing is written.
+func TestSomebodyElsesAnswerWithFilesIsNotFoundBeforeTheGuard(t *testing.T) {
+	e := newTestEnv(t)
+	f := e.fixture
+	f.AnkesAnswer.Body = `<p>See <action-text-attachment sgid="x" content-type="application/vnd.minka.person" content="@Bruno"></action-text-attachment></p>`
+
+	for _, args := range [][]string{
+		{"checkins", "answers", "edit", f.AnkesAnswer.ID, "Mine now"},
+		{"checkins", "answers", "edit", f.AnkesAnswer.ID, "Mine now", "--drop-attachments"},
+	} {
+		env, r := e.runJSON("", args...)
+		expectCode(t, r, ExitNotFound)
+		if env.Hint != answerWriterHint || !strings.Contains(env.Error, "Anke") {
+			t.Fatalf("error %q, hint %q", env.Error, env.Hint)
+		}
+	}
+	for _, write := range e.server.WritingRequests() {
+		if write.Method == http.MethodPatch {
+			t.Fatal("somebody else's answer was sent")
+		}
+	}
+}
+
+// Nobody asked and a body that says nothing come before the archived project,
+// on an edit as on a new question and a new answer.
+func TestWhatIsWrongWithAnEditComesBeforeTheArchivedProject(t *testing.T) {
+	e := newTestEnv(t)
+	f := e.fixture
+	f.WeeklyQuestion.AskedIDs = []string{f.Client.ID}
+	f.Project.Archived = true
+
+	for name, c := range map[string]struct {
+		args []string
+		code string
+	}{
+		"an edit of a question that shows nobody": {[]string{"checkins", "edit", f.WeeklyQuestion.ID, "--title", "Renamed"}, apiCodeQuestionNobodyAsked},
+		"an answer changed to nothing":            {[]string{"checkins", "answers", "edit", f.BrunosAnswer.ID, "<p> </p>", "--format", "html"}, apiCodeAnswerMissing},
+	} {
+		env, r := e.runJSON("", c.args...)
+		expectCode(t, r, ExitValidation)
+		if env.Meta["apiCode"] != c.code {
+			t.Fatalf("%s: apiCode %v", name, env.Meta["apiCode"])
+		}
+	}
+}
+
+// Somebody named twice and not shown is named once.
+func TestSomebodyNamedTwiceAndNotShownIsNamedOnce(t *testing.T) {
+	e := newTestEnv(t)
+	f := e.fixture
+
+	env := runOK(t, e, "checkins", "edit", f.DailyQuestion.ID, "--ask", f.Client.ID, "--ask", "me", "--ask", f.Client.ID)
+	if n := strings.Count(env.Notice, f.Client.ID); n != 1 {
+		t.Fatalf("the client is named %d times: %q", n, env.Notice)
+	}
+}
+
+// An agent that stepped down stays a member of the projects archived then, and
+// Minka lists it among the people asked there.
+func TestAnAgentThatSteppedDownIsListedWhereItIsStillAMember(t *testing.T) {
+	e := newTestEnv(t)
+	f := e.fixture
+	f.DailyQuestion.AskedIDs = append(f.DailyQuestion.AskedIDs, f.RetiredAgent.ID)
+	f.Project.Archived = true
+
+	if asked := idsOf(t, decode(t, runOK(t, e, "checkins", "show", f.DailyQuestion.ID).Data), "asked"); !slices.Contains(asked, f.RetiredAgent.ID) {
+		t.Fatalf("asked %v", asked)
+	}
+}
+
+// Minka reads a weekday written with a fraction as no whole number, whatever
+// its value. The CLI never sends one; the fake has to answer it as Minka does.
+func TestTheFakeRefusesAWeekdayWrittenWithAFraction(t *testing.T) {
+	e := newTestEnv(t)
+	f := e.fixture
+
+	for body, want := range map[string]int{
+		`{"title":"Q","rhythm":"weekly","weekdays":[1.0],"timeOfDay":"09:00","askedIds":["` + f.Bruno.ID + `"]}`: http.StatusBadRequest,
+		`{"title":"Q","rhythm":"weekly","weekdays":[1],"timeOfDay":"09:00","askedIds":["` + f.Bruno.ID + `"]}`:   http.StatusCreated,
+	} {
+		request, err := http.NewRequest(http.MethodPost, e.server.URL+"/api/v1/checkins/"+f.CheckinsTool.ID+"/questions", strings.NewReader(body))
+		if err != nil {
+			t.Fatal(err)
+		}
+		request.Header.Set("Authorization", "Bearer "+f.Token)
+		request.Header.Set("Content-Type", "application/json")
+		response, err := http.DefaultClient.Do(request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = response.Body.Close()
+		if response.StatusCode != want {
+			t.Fatalf("%s: %d, want %d", body, response.StatusCode, want)
+		}
+	}
 }

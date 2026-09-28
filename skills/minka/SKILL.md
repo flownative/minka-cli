@@ -1059,7 +1059,8 @@ reminders` lists what you were asked and have not answered.
   asked last first: per question only the latest day it asked you for, open
   until an answer of yours belongs to that day or a later one. Paused
   questions and archived projects are not among them. **At most 100, and no
-  page beyond**: a list that long says in the `notice` there may be more.
+  page beyond**: a list that long says in the `notice` there may be more; those
+  are the ones asked earlier, and answering some brings them into view.
 
 ### Writing a question
 
@@ -1077,12 +1078,14 @@ reminders` lists what you were asked and have not answered.
 - `checkins edit` changes only what you give; the start day never changes.
   **`--weekday` and `--ask` are the whole set.** The weekdays not given are the
   question's own, so `--rhythm weekly` on a question asked Monday to Friday
-  needs one `--weekday`. **Every other week is counted from `startsOn`**, and
-  an edit of the rhythm or the weekday of such a question says so in the
-  `notice`.
+  needs one `--weekday`. **Every other week is counted from the first day of
+  its weekday on or after `startsOn`**, so a new weekday can move the question
+  into the other set of weeks; an edit of the rhythm or the weekday of such a
+  question names its next dates in the `notice`.
 - An edit that names nobody writes back the people Minka shows as asked, so a
-  client it does not show is asked no longer, and a question that shows nobody
-  is exit 9 `questionNobodyAsked` until `--ask` names somebody.
+  client it does not show is asked no longer, and neither is a member who left
+  the project, who is not asked again on coming back. A question that shows
+  nobody is exit 9 `questionNobodyAsked` until `--ask` names somebody.
 - A person named but not shown among `asked` afterwards is named in the
   `notice`; the exit code does not say it.
 - `checkins pause` and `checkins resume` succeed twice as well. The days a
@@ -1095,13 +1098,14 @@ reminders` lists what you were asked and have not answered.
   Anybody in the project may answer, as often as they like, the same day too.
 - `--asked-for <day>` ties the answer to a reminder: give `askedFor` of
   `checkins reminders`. A day the question was not put to you for is exit 9
-  `answerDayNotAsked`. Without it the answer belongs to the latest day the
-  question was asked (or today, before the first asking); `groupOn` says which,
-  and it never changes.
+  `answerDayNotAsked`. Without it the answer belongs to the day of the latest
+  asking by the question's schedule, in your time zone, whether the question
+  was paused then or asks you at all (or today, before the first asking);
+  `groupOn` says which, and it never changes.
 - `checkins answers edit <answerId> -` changes your own answer; somebody
-  else's is exit 2, as if it were not there. The same text again succeeds. An
-  answer with files or mentions is not replaced unless `--drop-attachments` is
-  given.
+  else's is exit 2, as if it were not there, also where it carries files. The
+  same text again succeeds. Your own answer with files or mentions is not
+  replaced unless `--drop-attachments` is given.
 
 ### The order of the refusals
 

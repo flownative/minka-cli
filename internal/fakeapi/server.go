@@ -3267,6 +3267,12 @@ func columnTitle(c *Column) string {
 }
 
 func readBody(w http.ResponseWriter, r *http.Request) (map[string]any, bool) {
+	return readBodyWith(w, r, false)
+}
+
+// readBodyWith reads a body, keeping every number as it was written where
+// asked to, so that 1 and 1.0 can be told apart as the server tells them.
+func readBodyWith(w http.ResponseWriter, r *http.Request, keepNumbers bool) (map[string]any, bool) {
 	mediaType := strings.ToLower(strings.TrimSpace(strings.SplitN(r.Header.Get("Content-Type"), ";", 2)[0]))
 	if mediaType != "application/json" {
 		writeJSON(w, http.StatusUnsupportedMediaType, errorBody("unsupportedMediaType", "This address takes a body of the type application/json."))
@@ -3274,7 +3280,11 @@ func readBody(w http.ResponseWriter, r *http.Request) (map[string]any, bool) {
 	}
 	content, err := io.ReadAll(r.Body)
 	var value any
-	if err != nil || json.Unmarshal(content, &value) != nil {
+	decoder := json.NewDecoder(bytes.NewReader(content))
+	if keepNumbers {
+		decoder.UseNumber()
+	}
+	if err != nil || decoder.Decode(&value) != nil || decoder.More() {
 		malformed(w, "The body is not valid JSON.")
 		return nil, false
 	}

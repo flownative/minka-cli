@@ -23,9 +23,11 @@ shape: `projectId`, `toolId`, `project` and `tool` as references, `title`,
 
 **`asked` is not the set of the people asked.** It names only those who are
 still members of the project and may see the question, in the order of their
-names. A person who left stays asked unseen; a client of the project the
-question is not shown to can be asked and is named nowhere. The API cannot
-show a question to clients: that is set on the web.
+names. A person who left stays asked unseen until the next edit that names no
+people, which takes them off for good; a client of the project the question is
+not shown to can be asked and is named nowhere. An agent that stepped down
+stays a member of the projects that were archived then, and is listed there.
+The API cannot show a question to clients: that is set on the web.
 
 ## The schedule
 
@@ -36,8 +38,11 @@ seven). `weekdays` are ISO numbers, Monday 1 to Sunday 7, and every rhythm but
 `daily` takes exactly one. `timeOfDay` is `HH:MM` on the 24-hour clock and
 holds in the time zone of **each person asked**: the schedule names no zone.
 `startsOn` is the writer's today in the writer's zone when the question was
-set up, and **no edit moves it**: every other week is counted from the first
-matching day on or after it.
+set up, and **no edit moves it**. Every other week is counted from the first
+day on or after it that is the question's weekday, so **the weekday decides
+which weeks are asked**: with `startsOn` 2026-09-01, a Tuesday, Monday asks on
+2026-09-07 and 2026-09-21, Wednesday on 2026-09-02 and 2026-09-16. A new
+weekday can therefore move a question into the other set of weeks.
 
 Minka keeps what it is sent in a form of its own, with the same success as any
 write: the weekdays each once and in the order of the week, and the time with
@@ -70,9 +75,10 @@ asked no longer (and stays subscribed), and a person named twice is asked once.
 `[]` is `questionNobodyAsked`, and so is a body that leaves the people out on a
 new question. **An edit that leaves the people out does not keep them**: Minka
 writes back the people it shows in `asked`, so a client the question is not
-shown to is asked no longer, and a question that shows nobody — everybody asked
-left, or cannot see it — refuses every edit with `questionNobodyAsked` until
-the people are named. The hint says so.
+shown to is asked no longer, and neither is a member who left the project, who
+is not asked again on coming back. A question that shows nobody — everybody
+asked left, or cannot see it — refuses every edit with `questionNobodyAsked`
+until the people are named. The hint says so. This is reported to Minka.
 
 `checkins create --ask` takes an ID or `me`: the ID of a tool names no project,
 so no name or address can be looked up, as for the people a new document
@@ -84,8 +90,10 @@ somebody. A person named twice goes out twice.
 Where somebody named is not among `asked` in the answer, a `notice` names them:
 it is the only word about a client who is asked and shown nothing. Where an
 edit gives the rhythm or the weekdays and the question is asked every other
-week afterwards, a `notice` names the day the weeks are counted from — also
-where it was asked every other week before ([C-080](../decisions.md#c-080)).
+week afterwards, a `notice` names the first day of its weeks and the two after
+it — also where it was asked every other week before — and says that another
+weekday can move it into the other weeks ([C-080](../decisions.md#c-080)). The
+text output names that first day as well.
 
 `POST questions/{questionId}/pause` and `…/resume` read no body and answer the
 question; pausing a paused one and resuming a running one succeed and change
@@ -121,8 +129,9 @@ question is in the trash is at no address.
 the same day too, a paused question as well. **`askedFor`** names the day of a
 reminder, and the answer belongs to it; a day the question was not put to the
 writer for is `answerDayNotAsked`, never quietly replaced. Without it the answer
-belongs to the latest day the question was asked by its schedule, in the
-writer's zone, or to the writer's today before the first asking. `groupOn` says
+belongs to the day of the latest asking by the question's schedule, in the
+writer's zone — whether the question was paused then or asks the writer at
+all — or to the writer's today before the first asking. `groupOn` says
 which, and no write changes it. The body is cleaned like the body of a post:
 Markdown is converted here with every line break kept, as for a comment, and
 `--format html` draws the notice of [C-068](../decisions.md#c-068).
@@ -131,7 +140,8 @@ Markdown is converted here with every line break kept, as for a comment, and
 else's is 404, as if it were not there; the same body again is 200 and changes
 nothing. `checkins answers edit` reads the answer first, so that a text with
 files or mentions is not replaced by one without unless `--drop-attachments` is
-given.
+given. Where it carries them and somebody else wrote it, the command says so
+with exit 2 before that guard and writes nothing, as Minka would answer.
 
 ## Reminders
 
@@ -144,8 +154,9 @@ paused question, one in the trash, one of a tool in the trash, one that no
 longer asks the person and one of an archived project are not among them.
 
 Minka hands out **at most 100 and nothing beyond**, and takes no parameter. A
-list of 100 therefore says in the `notice` that there may be more, which
-nothing here can read ([C-079](../decisions.md#c-079)).
+list of 100 therefore says in the `notice` that there may be more: those left
+out are the ones asked earlier, and answering some of the list brings them
+into view ([C-079](../decisions.md#c-079)).
 
 ## Archived and trashed
 

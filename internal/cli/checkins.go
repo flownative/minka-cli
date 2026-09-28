@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 	"text/tabwriter"
+	"time"
 
 	"github.com/flownative/minka-cli/internal/api"
 	"github.com/flownative/minka-cli/internal/markdown"
@@ -243,8 +244,10 @@ func (a *app) newCheckinsEditCmd() *cobra.Command {
 		Use:   "edit <questionId>",
 		Short: "Change the wording, the schedule or the people of a question",
 		Long: `Changes any of wording, rhythm, weekdays, time and people in one write. What
-is not given stays as it is, and so does the day the question started, which
-every other week is counted from.
+is not given stays as it is, and so does the day the question started. A
+question asked every other week is asked on the first of its weekday on or
+after that day and every second week from there, so a new weekday can move it
+into the other set of weeks; the command names the first of them in a notice.
 
 ` + scheduleHelp + ` The weekdays not given are the question's own, so a
 daily question asked on several days needs one --weekday to become weekly.
@@ -254,9 +257,10 @@ again are taken off. ` + personHelp + ` Nobody can be taken off without
 somebody else being named: a question asks at least one person.
 
 An edit that names nobody writes back the people Minka shows as asked, so
-whoever it does not show — a client the question is not shown to — is asked no
-longer, and a question that shows nobody at all takes no change until --ask
-names somebody: exit 9 with questionNobodyAsked.`,
+whoever it does not show is asked no longer: a client the question is not
+shown to, and a member who left the project, who is not asked again on coming
+back. A question that shows nobody at all takes no change until --ask names
+somebody: exit 9 with questionNobodyAsked.`,
 		Example: `  minka checkins edit 0199... --title "What did you get done today?"
   minka checkins edit 0199... --rhythm weekly --weekday fri --time 16:00
   minka checkins edit 0199... --ask me --ask anke@example.com`,
@@ -310,7 +314,7 @@ names somebody: exit 9 with questionNobodyAsked.`,
 
 			notices := askedNotices(askedIDs, question.Value)
 			if (input.Rhythm != nil || input.Weekdays != nil) && question.Value.Schedule.Rhythm == "everyOtherWeek" {
-				notices = append(notices, "every other week is counted from "+question.Value.Schedule.StartsOn+", the day the question started, and no edit moves that day")
+				notices = append(notices, fortnightNotice(question.Value.Schedule))
 			}
 			summary := "Changed question " + question.Value.Title + ", " + describeSchedule(question.Value.Schedule)
 			return a.ok(questionSuccess(question, summary, notices, false))
@@ -395,7 +399,7 @@ that long, a notice says there may be more.`,
 
 			var notices []string
 			if len(reminders.Value) >= api.CheckinRemindersMax {
-				notices = append(notices, fmt.Sprintf("Minka hands over at most %d open reminders and none beyond them, so there may be more than these", api.CheckinRemindersMax))
+				notices = append(notices, fmt.Sprintf("Minka hands over at most %d open reminders and none beyond them, so there may be more: the ones left out are those asked earlier, and answering some of these brings them into view", api.CheckinRemindersMax))
 			}
 			return a.ok(success{
 				data:    reminders.Raw,
@@ -563,9 +567,10 @@ answer, as often as they like, the same day as well.
 --asked-for names the day of a reminder, YYYY-MM-DD, as askedFor of "checkins
 reminders" gives it, and the answer belongs to that day. Minka takes only a
 day the question was put to you for: any other is exit 9 with
-answerDayNotAsked. Without it the answer belongs to the latest day the
-question was asked, or to today before the first asking; the day comes back
-as groupOn and stays with the answer for good.
+answerDayNotAsked. Without it the answer belongs to the day of the latest
+asking by the question's schedule, in your time zone, whether the question
+was paused then or asks you at all, or to your today before its first asking;
+the day comes back as groupOn and stays with the answer for good.
 
 ` + answerFormatHelp,
 		Example: `  minka checkins answers create 0199... "Counted the tents."
@@ -645,6 +650,17 @@ command reads the answer first to know.`,
 			current, err := s.client.CheckinAnswer(a.ctx, args[0])
 			if err != nil {
 				return answerRefusal(s, err)
+			}
+			// Minka answers somebody else's answer as if it were not there, and
+			// that answer comes before any guard of this side.
+			if richtext.HasAttachments(firstNonEmpty(current.Value.BodySource, current.Value.Body)) {
+				me, err := a.meID(s)()
+				if err != nil {
+					return err
+				}
+				if current.Value.Author.ID != me {
+					return &Error{Code: CodeNotFound, Message: "answer " + args[0] + " was written by " + current.Value.Author.Name + ", not by you", Hint: answerWriterHint}
+				}
 			}
 			dropped, err := keepsTheAttachments(firstNonEmpty(current.Value.BodySource, current.Value.Body), body, dropAttachments,
 				"the answer has attachments or mentions, and the new text would drop them",
@@ -780,7 +796,7 @@ func questionRefusal(s *session, err error, namedNobody bool) *Error {
 	case e.APICode == apiCodeAnswerDayNotADate:
 		e.Hint = "--asked-for is a day written as YYYY-MM-DD."
 	case e.APICode == apiCodeAnswerDayNotAsked:
-		e.Hint = "Minka takes only a day the question was put to you for: askedFor of minka checkins reminders. Without --asked-for the answer belongs to the latest day the question was asked."
+		e.Hint = "Minka takes only a day the question was put to you for: askedFor of minka checkins reminders. Without --asked-for the answer belongs to the day of the latest asking by the schedule."
 	case e.APICode == apiCodeAnswerMissing:
 		e.Hint = "An answer needs text or a file."
 	}
@@ -866,11 +882,39 @@ func describeSchedule(schedule api.CheckinSchedule) string {
 	case "weekly":
 		return fmt.Sprintf("weekly on %s at %s", on, schedule.TimeOfDay)
 	case "everyOtherWeek":
+		if first := firstFortnightlyDay(schedule); first != "" {
+			return fmt.Sprintf("every other week on %s at %s, first on %s", on, schedule.TimeOfDay, first)
+		}
 		return fmt.Sprintf("every other week on %s at %s, counted from %s", on, schedule.TimeOfDay, schedule.StartsOn)
 	case "monthly":
 		return fmt.Sprintf("monthly on the first %s at %s", on, schedule.TimeOfDay)
 	}
 	return fmt.Sprintf("%s on %s at %s", schedule.Rhythm, on, schedule.TimeOfDay)
+}
+
+// firstFortnightlyDay is the day the weeks of a question asked every other
+// week are counted from: the first of its weekday on or after its start. It
+// is empty where the schedule names no day the CLI can read.
+func firstFortnightlyDay(schedule api.CheckinSchedule) string {
+	start, err := time.Parse("2006-01-02", schedule.StartsOn)
+	if err != nil || len(schedule.Weekdays) == 0 || schedule.Weekdays[0] < 1 || schedule.Weekdays[0] > 7 {
+		return ""
+	}
+	weekday := (int(start.Weekday())+6)%7 + 1
+	return start.AddDate(0, 0, (schedule.Weekdays[0]-weekday+7)%7).Format("2006-01-02")
+}
+
+// fortnightNotice says which weeks a question asked every other week asks in.
+// The start of a question stays where it was, and its weekday decides which of
+// the two sets of weeks follows from it.
+func fortnightNotice(schedule api.CheckinSchedule) string {
+	first := firstFortnightlyDay(schedule)
+	if first == "" {
+		return "every other week is counted from the first of its weekday on or after " + schedule.StartsOn + ", the day the question started, and no edit moves that day"
+	}
+	day, _ := time.Parse("2006-01-02", first)
+	return fmt.Sprintf("every other week is counted from %s, the first %s on or after %s, the day the question started: the question asks in the weeks of %s, %s, %s and so on, and another weekday can move it into the other weeks",
+		first, weekdayAbbreviations[schedule.Weekdays[0]-1], schedule.StartsOn, first, day.AddDate(0, 0, 14).Format("2006-01-02"), day.AddDate(0, 0, 28).Format("2006-01-02"))
 }
 
 func renderQuestion(w io.Writer, question api.CheckinQuestion) {

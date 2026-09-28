@@ -2,6 +2,7 @@ package fakeapi
 
 import (
 	"cmp"
+	"encoding/json"
 	"html"
 	"net/http"
 	"regexp"
@@ -155,7 +156,7 @@ func (s *Server) checkinQuestions(w http.ResponseWriter, r *http.Request, person
 // the tool is looked up, and nobody asked, the archived project and a stranger
 // among the people only after it, in that order.
 func (s *Server) addCheckinQuestion(w http.ResponseWriter, r *http.Request, person *Person) {
-	fields, ok := readBody(w, r)
+	fields, ok := readBodyWith(w, r, true)
 	if !ok {
 		return
 	}
@@ -214,7 +215,7 @@ func (s *Server) checkinQuestion(w http.ResponseWriter, r *http.Request, person 
 // people it shows as asked back as the whole set: whoever it does not show is
 // no longer asked, and a question that shows nobody takes no change at all.
 func (s *Server) updateCheckinQuestion(w http.ResponseWriter, r *http.Request, person *Person) {
-	fields, ok := readBody(w, r)
+	fields, ok := readBodyWith(w, r, true)
 	if !ok {
 		return
 	}
@@ -511,12 +512,15 @@ func readQuestionFields(w http.ResponseWriter, fields map[string]any) (questionF
 		}
 		body.weekdays = make([]int, 0, len(list))
 		for _, entry := range list {
-			number, isNumber := entry.(float64)
-			if !isNumber || number != float64(int(number)) {
+			// A number written with a fraction or an exponent is no whole
+			// number to the server, whatever its value.
+			written, isNumber := entry.(json.Number)
+			number, err := strconv.Atoi(string(written))
+			if !isNumber || err != nil {
 				malformed(w, `The field "weekdays" has to be a list of whole numbers.`)
 				return body, false
 			}
-			body.weekdays = append(body.weekdays, int(number))
+			body.weekdays = append(body.weekdays, number)
 		}
 	}
 	if body.timeOfDay, ok = stringField(w, fields, "timeOfDay"); !ok {
@@ -620,14 +624,15 @@ func nobodyAsked(w http.ResponseWriter) {
 	unprocessable(w, "questionNobodyAsked", "A question asks at least one person.")
 }
 
-// shownAsAsked are the people asked who are still members, who may see the
-// question and who did not step down, in the order of the members' names.
+// shownAsAsked are the people asked who are still members and who may see the
+// question, in the order of the members' names. An agent that stepped down is
+// a member only where its project was archived then, and is listed there.
 func (s *Server) shownAsAsked(tool *CheckinsTool, question *CheckinQuestion) []string {
 	project := s.projectWithID(tool.ProjectID)
 	var asked []string
 	for _, id := range project.MemberIDs {
 		member := s.People[id]
-		if member.Retired || !slices.Contains(question.AskedIDs, id) || !s.seesQuestion(member, question) {
+		if !slices.Contains(question.AskedIDs, id) || !s.seesQuestion(member, question) {
 			continue
 		}
 		asked = append(asked, id)
