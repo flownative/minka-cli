@@ -780,7 +780,13 @@ func checkDescriptionFormat(cmd *cobra.Command, format string) error {
 // but nothing Minka keeps is refused, because sending the empty result would
 // remove the description.
 func (a *app) descriptionHTML(cmd *cobra.Command, value, format string) (string, []string, error) {
-	text, err := a.readValue("the description", value)
+	return a.richTextHTML("the description", "--description", value, format)
+}
+
+// richTextHTML reads and converts a text written with the editor, named by
+// what it is and the flag that carries it.
+func (a *app) richTextHTML(what, flag, value, format string) (string, []string, error) {
+	text, err := a.readValue(what, value)
 	if err != nil {
 		return "", nil, err
 	}
@@ -792,8 +798,8 @@ func (a *app) descriptionHTML(cmd *cobra.Command, value, format string) (string,
 	if result.HTML == "" && strings.TrimSpace(text) != "" {
 		return "", nil, &Error{
 			Code:    CodeUsage,
-			Message: "the description has nothing Minka keeps and would remove the current description",
-			Hint:    `To remove the description on purpose, give --description "".`,
+			Message: fmt.Sprintf("%s has nothing Minka keeps and would remove the current one", what),
+			Hint:    fmt.Sprintf(`To remove %s on purpose, give %s "".`, what, flag),
 		}
 	}
 	return result.HTML, result.Warnings, nil
