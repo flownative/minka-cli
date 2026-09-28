@@ -281,6 +281,7 @@ func TestAClientIsToldOnlyAboutADocumentInAFolderShownToThem(t *testing.T) {
 	e := newTestEnv(t)
 	f := e.fixture
 	create := newDocument(e, "--audience", "chosen", "--notify", f.Client.ID)
+	before := len(f.Files.Documents)
 
 	// At the top of a tool, where no client is ever let in, and in a folder the
 	// project does not show them.
@@ -297,6 +298,12 @@ func TestAClientIsToldOnlyAboutADocumentInAFolderShownToThem(t *testing.T) {
 		if !strings.Contains(env.Hint, "refused again") || !strings.Contains(env.Hint, "Name somebody else") {
 			t.Errorf("the hint does not say that repeating is no use: %q", env.Hint)
 		}
+		if env.Retryable {
+			t.Error("the refusal reads as one a repeat could get past")
+		}
+	}
+	if len(f.Files.Documents) != before {
+		t.Fatalf("%d documents after the refusals, want the %d of before", len(f.Files.Documents), before)
 	}
 
 	// The same person, told about a document standing where the project lets
@@ -311,6 +318,19 @@ func TestAClientIsToldOnlyAboutADocumentInAFolderShownToThem(t *testing.T) {
 	expectCode(t, r, ExitValidation)
 	if outside.Meta["apiCode"] != "personNotAProjectMember" {
 		t.Fatalf("apiCode %v, want the membership before the visibility", outside.Meta["apiCode"])
+	}
+
+	// Of a list, the first name that is refused decides.
+	for want, names := range map[string][]string{
+		apiCodePersonCannotSeeIt:  {f.Client.ID, f.Stranger.ID},
+		"personNotAProjectMember": {f.Stranger.ID, f.Client.ID},
+	} {
+		args := newDocument(e, "--audience", "chosen", "--notify", names[0], "--notify", names[1])
+		env, r := e.runJSON("", args...)
+		expectCode(t, r, ExitValidation)
+		if env.Meta["apiCode"] != want {
+			t.Errorf("apiCode %v, want %s for the name given first", env.Meta["apiCode"], want)
+		}
 	}
 }
 
