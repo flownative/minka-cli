@@ -37,10 +37,17 @@ The to-do lists of a project are read with `todolists tools`, `todolists list`
 and `todolists show`, and written with `todolists create`, `edit`, `archive`,
 `unarchive` and `delete`; the groups of a list with `todogroups create`, `edit`,
 `move` and `delete`. The rule the commands follow is
-[To-do lists and groups](../stable/todo-lists.md) (C-071, C-072). The to-dos
-themselves, their subtasks, the done to-dos of a list and the comments under a
-list wait for commands of their own. None of it has been seen live: the whole
-feature is checked against the fake, see below.
+[To-do lists and groups](../stable/todo-lists.md) (C-071, C-072). The comments
+under a list and under a to-do wait for commands of their own. None of it has
+been seen live: the whole feature is checked against the fake, see below.
+
+The to-dos are read with `todos show`, `todos completed` for the done ones of a
+list and `todos mine` for one's own across all projects, and written with
+`todos create`, `edit`, `complete`, `reopen`, `move` and `delete`; their
+subtasks with `todos subtasks list`, `create`, `edit`, `complete`, `reopen`,
+`move` and `delete`. The rule the commands follow is
+[To-dos and subtasks](../stable/todos.md) (C-073 to C-076). None of it has been
+seen live: the whole feature is checked against the fake, see below.
 
 `minka import basecamp` extracts the structure, the boards, the message
 boards, the chats, the check-ins, the to-dos, the forwarded mail and the
@@ -287,8 +294,25 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   which needs markup nested deeper than a cleaner reads; and the race in which
   a group write meets a list archived after the group was found, which is the
   one way to `todoListArchived` on a group and which no command can steer
-  into. A to-do of the fake has a title, a group, a moment it was done and
-  nothing else: its line says there are no people, days, comments or subtasks.
+  into.
+- Everything of `todos`: no request of it has gone to a real Minka. The fake
+  mirrors what was read in `TodosApiController`, the `TodoQueryService`, the
+  `AssignedTodoQueryService`, the to-do and subtask handlers,
+  `DbalTodoRepository`, `DbalTodoSubtaskRepository` and `ApiTodosTest`: the
+  order the controller refuses in, the days of a new to-do before its list and
+  those of an edit after the to-do, a day alone as the due day, the people as a
+  whole set with who stays keeping their place, the moves by place and
+  neighbour, a done to-do ticked off again answered like one ticked off now,
+  the cursor of the done to-dos behind a moment and not a to-do, and one's own
+  to-dos in the order of the page. What it does not mirror: the time zone of
+  the person asking, in which Minka decides `isOverdue` and writes the moment
+  into the cursor — the fake takes UTC for both, and the cursor stays opaque to
+  the CLI; which to-dos a **client** is shown; a tool in the trash, which the
+  fake has no word for; `todoNotesNotReadable`; and somebody who left the
+  project and is not named again in a new set, whom Minka leaves on the to-do
+  unseen and the fake takes off. Ticking off gives every to-do of the fake a moment a
+  second after the one before, so that the done to-dos have an order to read
+  while its clock stands still.
 - Everything a bundle says about clients: no extraction has met a client live.
   What the fields are and how Minka reads them was read in its appliers
   (`PeopleApplier`, `ProjectsApplier`, `ToolsApplier`, `WhatClientsSee`), and
@@ -936,16 +960,13 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   tile that stays alight through a tool call of five minutes, the word in
   `heartbeat --json`, the tile going out with `work stop`, no keepalive left
   behind afterwards — and, at some point, a machine that really slept.
-- Commands for the to-dos of a project and their subtasks: the addresses are
-  released, the contract stands in Minka's `authorization.md` and E-190. The
-  lists and groups have commands now, and `todos` is the name left for these
-  (C-071). The done to-dos of a list (`GET todo-lists/{listId}/completed`) and
-  the comments under a list (`…/todo-lists/{listId}/comments`) have none yet.
+- Commands for the comments under a to-do and under a list
+  (`…/todos/{todoId}/comments`, `…/todo-lists/{listId}/comments`): released,
+  with the shapes of the comments of a card (E-190).
 - Commands for the check-ins of a project: released as well, the contract in
   `authorization.md` and E-191.
 - Of the ninety-odd addresses the API offers, a good part have no command.
-  Three cards say which: the to-dos and their subtasks, the check-ins, and the
-  archive of cards and posts.
+  Two cards say which: the check-ins, and the archive of cards and posts.
 - Extract the forwarded mail of a project live, and check the bundle record by
   record as the boards and the chats were checked. What is still open there is
   what no reading of the source answers: what a body looks like that the run has
@@ -998,6 +1019,15 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   says: a list started, changed, archived, written to in the archive, brought
   back and trashed, a group added, renamed, moved next to a group of another
   list and trashed, and a group of an archived list answering 404.
+- Check the to-dos live, as the [live check](../guides/live-check.md) says: a
+  to-do added into a group with days and people, a start alone coming back as
+  the due day with its notice, the people replaced as a whole set and taken off
+  with an empty list, a tick twice, a move into another group and into another
+  list, a neighbour of another group refused, every write on a to-do of an
+  archived list refused, the done to-dos read over two pages, `todos mine` with
+  a subtask of one's own, and the subtasks added, named by position, moved and
+  taken off twice. Look at `isOverdue` and at the cursor near midnight in a time
+  zone that is not UTC, which the fake cannot show.
 - See the three refusals over whom a document reaches answered by a running
   instance: `notifyIdsMissing`, `notifyIdsWithoutChosenAudience` and
   `personCannotSeeIt`. All three are reachable with `docs create` now that the

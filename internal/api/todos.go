@@ -2,8 +2,11 @@ package api
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"net/http"
 	"net/url"
+	"strconv"
 )
 
 // The To-dos tool of a project: its lists, the groups in a list and the
@@ -182,4 +185,316 @@ func todoListPath(listID string) string {
 
 func todoGroupPath(groupID string) string {
 	return "/todo-groups/" + url.PathEscape(groupID)
+}
+
+// TodoListReference names the list a to-do stands in.
+type TodoListReference struct {
+	ID    string `json:"id"`
+	Title string `json:"title"`
+}
+
+// TodoGroupReference names the group a to-do stands in.
+type TodoGroupReference struct {
+	ID    string `json:"id"`
+	Title string `json:"title"`
+}
+
+// Todo is one to-do with everything said under it.
+type Todo struct {
+	ID              string              `json:"id"`
+	ProjectID       string              `json:"projectId"`
+	ToolID          string              `json:"toolId"`
+	ListID          string              `json:"listId"`
+	GroupID         *string             `json:"groupId"` // nil for a to-do standing in its list directly
+	Project         ProjectReference    `json:"project"`
+	Tool            TodosToolReference  `json:"tool"`
+	List            TodoListReference   `json:"list"`
+	Group           *TodoGroupReference `json:"group"`
+	Title           string              `json:"title"`
+	Completed       bool                `json:"completed"`
+	CompletedAt     *string             `json:"completedAt"`
+	CompletedByName *string             `json:"completedByName"`
+	Notes           string              `json:"notes"`       // the stored HTML, empty where the to-do has none
+	NotesSource     string              `json:"notesSource"` // the notes as the editor opens them
+	Attachments     []Attachment        `json:"attachments"`
+	StartsOn        *string             `json:"startsOn"`
+	DueOn           *string             `json:"dueOn"`
+	IsOverdue       bool                `json:"isOverdue"`
+	Assignees       []PersonReference   `json:"assignees"`
+	Notified        []PersonReference   `json:"notified"` // the people told when it is done
+	Subtasks        []TodoSubtask       `json:"subtasks"`
+	// ListArchived says the list of the to-do lies in the archive of its tool:
+	// the to-do is read, and nothing about it changes until the list is back.
+	ListArchived bool            `json:"listArchived"`
+	CommentCount int             `json:"commentCount"`
+	CreatedAt    string          `json:"createdAt"`
+	Creator      PersonReference `json:"creator"`
+	Comments     []Comment       `json:"comments"` // oldest first
+	AppURL       string          `json:"appUrl"`
+}
+
+// TodoSubtask is one line of work under a to-do. Assignee is nil for nobody,
+// and for somebody who has left the project.
+type TodoSubtask struct {
+	ID        string           `json:"id"`
+	Title     string           `json:"title"`
+	Completed bool             `json:"completed"`
+	Assignee  *PersonReference `json:"assignee"`
+	DueOn     *string          `json:"dueOn"`
+	IsOverdue bool             `json:"isOverdue"`
+}
+
+// CompletedTodos is one page of the done to-dos of a list. Next is where the
+// page after it starts, and nil on the last page.
+type CompletedTodos struct {
+	Todos []TodoLine `json:"todos"`
+	Next  *string    `json:"next"`
+}
+
+// AssignedTodo is an open to-do somebody is assigned to or holds an open
+// subtask of, with where it stands. Subtasks are only the open ones of the
+// person asking.
+type AssignedTodo struct {
+	ID           string             `json:"id"`
+	Title        string             `json:"title"`
+	Project      ProjectReference   `json:"project"`
+	Tool         TodosToolReference `json:"tool"`
+	List         TodoListReference  `json:"list"`
+	DueOn        *string            `json:"dueOn"`
+	IsOverdue    bool               `json:"isOverdue"`
+	IsAssigned   bool               `json:"isAssigned"` // false where only a subtask of it is
+	Assignees    []PersonReference  `json:"assignees"`
+	Subtasks     []TodoSubtask      `json:"subtasks"`
+	CommentCount int                `json:"commentCount"`
+	AppURL       string             `json:"appUrl"`
+}
+
+// CreateTodoInput adds a to-do. Notes are HTML. One day alone is the due day,
+// whichever field it is written in.
+type CreateTodoInput struct {
+	Title       string   `json:"title"`
+	GroupID     string   `json:"groupId,omitempty"`
+	Notes       *string  `json:"notes,omitempty"`
+	StartsOn    *string  `json:"startsOn,omitempty"`
+	DueOn       *string  `json:"dueOn,omitempty"`
+	AssigneeIDs []string `json:"assigneeIds,omitempty"`
+	NotifiedIDs []string `json:"notifiedIds,omitempty"`
+}
+
+// UpdateTodoInput changes a to-do. A nil field is left out and stays as it is.
+// An empty day is sent as null, which takes the day off. A list of people is
+// the whole set the to-do is to carry, so an empty one takes everybody off:
+// it is sent as [] and never as null, which would change nothing.
+type UpdateTodoInput struct {
+	Title       *string
+	Notes       *string
+	StartsOn    *string
+	DueOn       *string
+	AssigneeIDs *[]string
+	NotifiedIDs *[]string
+}
+
+func (in UpdateTodoInput) MarshalJSON() ([]byte, error) {
+	fields := map[string]any{}
+	if in.Title != nil {
+		fields["title"] = *in.Title
+	}
+	if in.Notes != nil {
+		fields["notes"] = *in.Notes
+	}
+	if in.StartsOn != nil {
+		fields["startsOn"] = nullIfEmpty(*in.StartsOn)
+	}
+	if in.DueOn != nil {
+		fields["dueOn"] = nullIfEmpty(*in.DueOn)
+	}
+	if in.AssigneeIDs != nil {
+		fields["assigneeIds"] = append([]string{}, *in.AssigneeIDs...)
+	}
+	if in.NotifiedIDs != nil {
+		fields["notifiedIds"] = append([]string{}, *in.NotifiedIDs...)
+	}
+	return json.Marshal(fields)
+}
+
+// MoveTodoInput says where a to-do goes: into ListID of the same tool, or its
+// own list where that is empty; into GroupID, or into no group with NoGroup,
+// and where neither is given into its own group within its own list and into
+// none in another. It goes behind PreviousTodoID, or in front of NextTodoID,
+// and with neither to the top of its place.
+type MoveTodoInput struct {
+	ListID         string
+	GroupID        string
+	NoGroup        bool
+	PreviousTodoID string
+	NextTodoID     string
+}
+
+func (in MoveTodoInput) MarshalJSON() ([]byte, error) {
+	fields := map[string]any{}
+	if in.ListID != "" {
+		fields["listId"] = in.ListID
+	}
+	if in.GroupID != "" {
+		fields["groupId"] = in.GroupID
+	}
+	if in.NoGroup {
+		fields["groupId"] = nil
+	}
+	if in.PreviousTodoID != "" {
+		fields["previousTodoId"] = in.PreviousTodoID
+	}
+	if in.NextTodoID != "" {
+		fields["nextTodoId"] = in.NextTodoID
+	}
+	return json.Marshal(fields)
+}
+
+// CreateSubtaskInput adds a subtask at the end of a to-do.
+type CreateSubtaskInput struct {
+	Title      string `json:"title"`
+	AssigneeID string `json:"assigneeId,omitempty"`
+	DueOn      string `json:"dueOn,omitempty"`
+}
+
+// UpdateSubtaskInput changes a subtask. A nil field stays as it is; an empty
+// assignee or day is sent as null, which takes it off.
+type UpdateSubtaskInput struct {
+	Title      *string
+	AssigneeID *string
+	DueOn      *string
+	Completed  *bool
+}
+
+func (in UpdateSubtaskInput) MarshalJSON() ([]byte, error) {
+	fields := map[string]any{}
+	if in.Title != nil {
+		fields["title"] = *in.Title
+	}
+	if in.AssigneeID != nil {
+		fields["assigneeId"] = nullIfEmpty(*in.AssigneeID)
+	}
+	if in.DueOn != nil {
+		fields["dueOn"] = nullIfEmpty(*in.DueOn)
+	}
+	if in.Completed != nil {
+		fields["completed"] = *in.Completed
+	}
+	return json.Marshal(fields)
+}
+
+// MoveSubtaskInput names where a subtask goes among the subtasks of its
+// to-do: behind PreviousSubtaskID, or in front of NextSubtaskID. With neither
+// it goes to the top.
+type MoveSubtaskInput struct {
+	PreviousSubtaskID string `json:"previousSubtaskId,omitempty"`
+	NextSubtaskID     string `json:"nextSubtaskId,omitempty"`
+}
+
+// Todo reads one to-do, in a list in use or in the archive.
+func (c *Client) Todo(ctx context.Context, todoID string) (Result[Todo], error) {
+	return request[Todo](ctx, c, http.MethodGet, todoPath(todoID), nil)
+}
+
+// CreateTodo adds a to-do at the end of a list, or of a group of it.
+func (c *Client) CreateTodo(ctx context.Context, listID string, input CreateTodoInput) (Result[Todo], error) {
+	return request[Todo](ctx, c, http.MethodPost, todoListPath(listID)+"/todos", input)
+}
+
+func (c *Client) UpdateTodo(ctx context.Context, todoID string, input UpdateTodoInput) (Result[Todo], error) {
+	return request[Todo](ctx, c, http.MethodPatch, todoPath(todoID), input)
+}
+
+// CompleteTodo ticks a to-do off; one done already stays as it is.
+func (c *Client) CompleteTodo(ctx context.Context, todoID string) (Result[Todo], error) {
+	return request[Todo](ctx, c, http.MethodPost, todoPath(todoID)+"/complete", nil)
+}
+
+// ReopenTodo opens a done to-do again; one open already stays as it is.
+func (c *Client) ReopenTodo(ctx context.Context, todoID string) (Result[Todo], error) {
+	return request[Todo](ctx, c, http.MethodPost, todoPath(todoID)+"/reopen", nil)
+}
+
+func (c *Client) MoveTodo(ctx context.Context, todoID string, input MoveTodoInput) (Result[Todo], error) {
+	return request[Todo](ctx, c, http.MethodPost, todoPath(todoID)+"/moves", input)
+}
+
+// DeleteTodo puts a to-do into the trash of its project.
+func (c *Client) DeleteTodo(ctx context.Context, todoID string) error {
+	_, err := request[struct{}](ctx, c, http.MethodDelete, todoPath(todoID), nil)
+	return err
+}
+
+// CompletedTodos reads one page of the done to-dos of a list, the one done
+// last first. A page after the first starts at the Next of the page before.
+func (c *Client) CompletedTodos(ctx context.Context, listID string, limit int, before string) (Result[CompletedTodos], error) {
+	values := url.Values{}
+	values.Set("limit", strconv.Itoa(limit))
+	if before != "" {
+		values.Set("before", before)
+	}
+	return request[CompletedTodos](ctx, c, http.MethodGet, todoListPath(listID)+"/completed?"+values.Encode(), nil)
+}
+
+// MyTodosPageMax is the largest page of one's own to-dos the server serves. It
+// cuts a larger one down to this without a word, and the answer carries no
+// sign of its end but being shorter than asked for.
+const MyTodosPageMax = 100
+
+// ErrMyTodosPageOutOfBounds is a page size the server would refuse or cut.
+var ErrMyTodosPageOutOfBounds = errors.New("a page of one's own to-dos holds 1 to 100 to-dos")
+
+// MyTodos reads one page of the open to-dos of the person of the token across
+// all projects. A page after the first starts after the to-do named in after.
+// The limit is always sent and always within the bounds, so the server's
+// silent cut is unreachable from here.
+func (c *Client) MyTodos(ctx context.Context, limit int, after string) (Result[[]AssignedTodo], error) {
+	if limit < 1 || limit > MyTodosPageMax {
+		return Result[[]AssignedTodo]{}, ErrMyTodosPageOutOfBounds
+	}
+	values := url.Values{}
+	values.Set("limit", strconv.Itoa(limit))
+	if after != "" {
+		values.Set("after", after)
+	}
+	return request[[]AssignedTodo](ctx, c, http.MethodGet, "/me/todos?"+values.Encode(), nil)
+}
+
+// CreateSubtask adds a subtask at the end of a to-do and answers the to-do.
+func (c *Client) CreateSubtask(ctx context.Context, todoID string, input CreateSubtaskInput) (Result[Todo], error) {
+	return request[Todo](ctx, c, http.MethodPost, todoPath(todoID)+"/subtasks", input)
+}
+
+// UpdateSubtask changes a subtask and answers the to-do.
+func (c *Client) UpdateSubtask(ctx context.Context, todoID, subtaskID string, input UpdateSubtaskInput) (Result[Todo], error) {
+	return request[Todo](ctx, c, http.MethodPatch, subtaskPath(todoID, subtaskID), input)
+}
+
+// MoveSubtask puts a subtask elsewhere among those of its to-do and answers
+// the to-do.
+func (c *Client) MoveSubtask(ctx context.Context, todoID, subtaskID string, input MoveSubtaskInput) (Result[Todo], error) {
+	return request[Todo](ctx, c, http.MethodPost, subtaskPath(todoID, subtaskID)+"/moves", input)
+}
+
+// DeleteSubtask takes a subtask off, and succeeds for one that is gone
+// already.
+func (c *Client) DeleteSubtask(ctx context.Context, todoID, subtaskID string) error {
+	_, err := request[struct{}](ctx, c, http.MethodDelete, subtaskPath(todoID, subtaskID), nil)
+	return err
+}
+
+func todoPath(todoID string) string {
+	return "/todos/" + url.PathEscape(todoID)
+}
+
+func subtaskPath(todoID, subtaskID string) string {
+	return todoPath(todoID) + "/subtasks/" + url.PathEscape(subtaskID)
+}
+
+// nullIfEmpty is how a value that takes something off goes out: as null.
+func nullIfEmpty(value string) any {
+	if value == "" {
+		return nil
+	}
+	return value
 }

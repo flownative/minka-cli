@@ -56,11 +56,31 @@ type TodoGroup struct {
 // Todo is one to-do of a list, standing in the list itself or in one of its
 // groups. A done one is counted by its list and shown nowhere in it.
 type Todo struct {
-	ID          string
-	Title       string
-	GroupID     string // empty for a to-do standing in its list directly
-	CompletedAt *time.Time
-	Trashed     bool
+	ID            string
+	Title         string
+	GroupID       string // empty for a to-do standing in its list directly
+	Notes         string // the HTML as stored
+	StartsOn      *string
+	DueOn         *string
+	AssigneeIDs   []string // in the order they were put on
+	NotifiedIDs   []string // the people told when it is done, in the same order
+	Subtasks      []*Subtask
+	CompletedAt   *time.Time
+	CompletedByID string
+	CreatedAt     time.Time
+	CreatorID     string
+	Comments      []*Comment
+	Trashed       bool
+}
+
+// Subtask is one line of work under a to-do. It is no item of its own: it has
+// no trash, and taking it off is the end of it.
+type Subtask struct {
+	ID         string
+	Title      string
+	Completed  bool
+	AssigneeID string // empty for nobody
+	DueOn      *string
 }
 
 func (s *Server) registerTodosRoutes(mux *http.ServeMux) {
@@ -77,6 +97,7 @@ func (s *Server) registerTodosRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("PATCH /api/v1/todo-groups/{groupId}", s.authenticated(s.renameTodoGroup))
 	mux.HandleFunc("DELETE /api/v1/todo-groups/{groupId}", s.authenticated(s.removeTodoGroup))
 	mux.HandleFunc("POST /api/v1/todo-groups/{groupId}/moves", s.authenticated(s.moveTodoGroup))
+	s.registerTodoItemRoutes(mux)
 }
 
 // todosTools lists the To-dos tools of a project that are in use, in the
@@ -602,16 +623,22 @@ func (s *Server) todoGroupResource(tool *TodosTool, list *TodoList, group *TodoG
 	return map[string]any{"id": group.ID, "listId": list.ID, "title": group.Title, "todos": s.openTodoLines(tool, list, group.ID)}
 }
 
-// todoLineResource is a to-do as a list names it. The fake keeps no people,
-// days, comments or subtasks on a to-do, so those fields say that there are
-// none.
+// todoLineResource is a to-do as a list names it: enough to tick it off or to
+// open it.
 func (s *Server) todoLineResource(tool *TodosTool, todo *Todo) map[string]any {
+	done := 0
+	for _, subtask := range todo.Subtasks {
+		if subtask.Completed {
+			done++
+		}
+	}
 	return map[string]any{
 		"id": todo.ID, "title": todo.Title, "completed": todo.CompletedAt != nil,
 		"completedAt": timestampOrNil(todo.CompletedAt), "groupId": nullable(todo.GroupID),
-		"assignees": []any{}, "startsOn": nil, "dueOn": nil, "isOverdue": false,
-		"commentCount": 0, "subtaskCount": 0, "completedSubtaskCount": 0,
-		"appUrl": s.todosToolURL(tool) + "/todos/" + todo.ID,
+		"assignees": s.peopleOnTodo(tool, todo.AssigneeIDs), "startsOn": todo.StartsOn, "dueOn": todo.DueOn,
+		"isOverdue":    s.isOverdue(todo.DueOn, todo.CompletedAt != nil),
+		"commentCount": len(todo.Comments), "subtaskCount": len(todo.Subtasks), "completedSubtaskCount": done,
+		"appUrl": s.todoURL(tool, todo),
 	}
 }
 

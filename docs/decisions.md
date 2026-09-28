@@ -1197,3 +1197,61 @@ bottom, and the CLI cannot find the last group without the list, which the ID
 of a group does not name.
 **Implemented as:** `cli.newTodoGroupsMoveCmd`, see
 [To-do lists and groups](stable/todo-lists.md).
+
+<a id="c-073"></a>
+## C-073 — The people of a to-do are given as the whole set
+
+*Applies to: `todos create`, `todos edit`*
+
+`--assignee` and `--notify-when-done` name the whole set a to-do is to carry,
+`--no-assignees` and `--no-notify-when-done` send an empty list, never null, and
+no command adds or takes off one person.
+
+**Why:** Minka's address takes the whole set and reads null as no change, so an
+empty set sent as null would do nothing, and one person added by a read before
+the write would take off whoever somebody else put on in between.
+**Implemented as:** `cli.newTodosEditCmd`, `api.UpdateTodoInput`, see
+[To-dos and subtasks](stable/todos.md).
+
+<a id="c-074"></a>
+## C-074 — A to-do is moved to a place that is named
+
+*Applies to: `todos move`, `todos subtasks move`*
+
+Exactly one of `--top`, `--after` and `--before`, as for a group
+([C-072](#c-072)); `--group` and `--no-group` exclude each other, and a
+neighbour of another place goes to Minka, which answers `todoPlaceUnknown`.
+
+**Why:** Minka moves a to-do or a subtask without a neighbour to the top of its
+place with the same 200 as any move, and where a to-do may stand is Minka's rule
+([C-070](#c-070)). **Implemented as:** `cli.newTodosMoveCmd`,
+`cli.newSubtasksMoveCmd`, `api.MoveTodoInput`, see
+[To-dos and subtasks](stable/todos.md).
+
+<a id="c-075"></a>
+## C-075 — A day Minka keeps otherwise than it was sent is said out loud
+
+*Applies to: `todos create`, `todos edit`*
+
+The CLI sends the days it is given, and where the answer carries no start
+although one was sent, or a due day although it was taken off, a `notice` says
+so and names the day Minka kept.
+
+**Why:** Minka makes a start alone the due day and keeps no start without one,
+with the same success as any write, so the notice is the only word about it;
+judging the days before sending would be a second copy of Minka's rule.
+**Implemented as:** `cli.dayNotices`, see [To-dos and subtasks](stable/todos.md).
+
+<a id="c-076"></a>
+## C-076 — A page of one's own to-dos is bounded here, a page of done ones is not
+
+*Applies to: `todos mine`, `todos completed`, `api.Client.MyTodos`*
+
+`todos mine --limit` outside 1 to 100 is a usage error, and a full page names
+the next one in a `notice`. `todos completed --limit` goes to Minka as given.
+
+**Why:** a page of one's own to-dos ends in nothing but being short, so a page
+cut down in silence would read as the whole list ([C-054](#c-054)); a page of
+done to-dos carries `next`, which says there is more whatever Minka cut.
+**Implemented as:** `api.MyTodosPageMax`, `cli.newTodosMineCmd`, see
+[To-dos and subtasks](stable/todos.md).

@@ -76,6 +76,19 @@ func everyWrite(e *testEnv) map[string][]string {
 		"todogroups edit":     {"todogroups", "edit", f.StageGroup.ID, "--title", "Renamed"},
 		"todogroups move":     {"todogroups", "move", f.KitchenGroup.ID, "--top"},
 		"todogroups delete":   {"todogroups", "delete", f.StageGroup.ID},
+
+		"todos create":            {"todos", "create", "--list", f.TodoList.ID, "--title", "A new to-do"},
+		"todos edit":              {"todos", "edit", f.LooseTodo.ID, "--title", "Renamed"},
+		"todos complete":          {"todos", "complete", f.LooseTodo.ID},
+		"todos reopen":            {"todos", "reopen", f.DoneTodo.ID},
+		"todos move":              {"todos", "move", f.LooseTodo.ID, "--top"},
+		"todos delete":            {"todos", "delete", f.LooseTodo.ID},
+		"todos subtasks create":   {"todos", "subtasks", "create", f.GroupedTodo.ID, "A subtask"},
+		"todos subtasks edit":     {"todos", "subtasks", "edit", f.GroupedTodo.ID, "1", "--title", "Renamed"},
+		"todos subtasks complete": {"todos", "subtasks", "complete", f.GroupedTodo.ID, "1"},
+		"todos subtasks reopen":   {"todos", "subtasks", "reopen", f.GroupedTodo.ID, "2"},
+		"todos subtasks move":     {"todos", "subtasks", "move", f.GroupedTodo.ID, "2", "--top"},
+		"todos subtasks delete":   {"todos", "subtasks", "delete", f.GroupedTodo.ID, "1"},
 	}
 }
 
@@ -90,6 +103,7 @@ var notAWriteIntoAProject = []string{
 	"cards mine", "cards show", "cards notes show", "steps list", "chats list", "messages list",
 	"docs tools", "docs list", "docs show", "docs uploads show",
 	"todolists tools", "todolists list", "todolists show",
+	"todos mine", "todos show", "todos completed", "todos subtasks list",
 	"chats mark-read", "conversations list", "conversations with", "conversations people",
 	"uploads create", "uploads download", "import basecamp",
 	"work start", "work stop", "work list", "heartbeat", "hooks install", "hooks status",

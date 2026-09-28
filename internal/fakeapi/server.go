@@ -485,22 +485,26 @@ type Fixture struct {
 
 	// The To-dos tool of the project: on top a list with two groups, a to-do
 	// standing in the list, one in the first group and one that is done, below
-	// it an empty list, and in the archive a list with a group of its own. A
-	// second tool of the project is no longer in use, and the project that
-	// belongs to somebody else has a tool with a list.
-	Todos         *TodosTool
-	TodoList      *TodoList
-	StageGroup    *TodoGroup // the first group of the list, with an open to-do in it
-	KitchenGroup  *TodoGroup // the second group, empty
-	LooseTodo     *Todo      // open, standing in the list itself
-	GroupedTodo   *Todo      // open, in the stage group
-	DoneTodo      *Todo
-	EmptyTodoList *TodoList
-	ArchivedList  *TodoList
-	ArchivedGroup *TodoGroup // a group of the list in the archive
-	TodosOutOfUse *TodosTool
-	OtherTodos    *TodosTool
-	OtherTodoList *TodoList
+	// it an empty list, and in the archive a list with a group of its own and a
+	// to-do in that group. A second tool of the project is no longer in use, and
+	// the project that belongs to somebody else has a tool with a list and a
+	// to-do. The grouped to-do is Bruno's, due on a day before the fake's today,
+	// with an open subtask of Anke's and a done one of nobody's.
+	Todos            *TodosTool
+	TodoList         *TodoList
+	StageGroup       *TodoGroup // the first group of the list, with an open to-do in it
+	KitchenGroup     *TodoGroup // the second group, empty
+	LooseTodo        *Todo      // open, standing in the list itself
+	GroupedTodo      *Todo      // open, in the stage group
+	DoneTodo         *Todo
+	EmptyTodoList    *TodoList
+	ArchivedList     *TodoList
+	ArchivedGroup    *TodoGroup // a group of the list in the archive
+	TodosOutOfUse    *TodosTool
+	OtherTodos       *TodosTool
+	OtherTodoList    *TodoList
+	ArchivedListTodo *Todo // in the group of the list in the archive, with one subtask
+	OtherTodo        *Todo
 }
 
 // New starts a fake with a small fixture: Bruno is a member of one project
@@ -598,20 +602,26 @@ func New(t testing.TB) (*Server, *Fixture) {
 
 	stageGroup := &TodoGroup{ID: newID(), Title: "Stage"}
 	kitchenGroup := &TodoGroup{ID: newID(), Title: "Kitchen"}
-	looseTodo := &Todo{ID: newID(), Title: "Count the tents"}
-	groupedTodo := &Todo{ID: newID(), Title: "Fetch the speakers", GroupID: stageGroup.ID}
+	looseTodo := &Todo{ID: newID(), Title: "Count the tents", CreatedAt: s.now, CreatorID: bruno.ID}
+	speakersDue := "2026-09-10"
+	groupedTodo := &Todo{ID: newID(), Title: "Fetch the speakers", GroupID: stageGroup.ID, DueOn: &speakersDue,
+		AssigneeIDs: []string{bruno.ID}, CreatedAt: s.now, CreatorID: anke.ID,
+		Subtasks: []*Subtask{{ID: newID(), Title: "Find the cables", AssigneeID: anke.ID}, {ID: newID(), Title: "Book the van", Completed: true}}}
 	doneAt := s.now
-	doneTodo := &Todo{ID: newID(), Title: "Order the beer", CompletedAt: &doneAt}
+	doneTodo := &Todo{ID: newID(), Title: "Order the beer", CompletedAt: &doneAt, CompletedByID: anke.ID, CreatedAt: s.now, CreatorID: bruno.ID}
 	todoList := &TodoList{ID: newID(), Title: "Setting up", Description: "<p>Everything for <strong>Saturday</strong>.</p>", CreatorID: bruno.ID,
 		Groups: []*TodoGroup{stageGroup, kitchenGroup}, Todos: []*Todo{looseTodo, groupedTodo, doneTodo},
 		Comments: []*Comment{{ID: newID(), AuthorID: anke.ID, Body: "<p>I bring the van</p>", CreatedAt: s.now}}}
 	emptyTodoList := &TodoList{ID: newID(), Title: "Tearing down", CreatorID: anke.ID}
 	archivedGroup := &TodoGroup{ID: newID(), Title: "Leftovers"}
+	archivedListTodo := &Todo{ID: newID(), Title: "Return the chairs", GroupID: archivedGroup.ID, CreatedAt: s.now, CreatorID: bruno.ID,
+		Subtasks: []*Subtask{{ID: newID(), Title: "Count them"}}}
 	archivedList := &TodoList{ID: newID(), Title: "Last year", Archived: true, ArchivedAt: s.now.Add(-time.Hour), CreatorID: bruno.ID,
-		Groups: []*TodoGroup{archivedGroup}, Todos: []*Todo{{ID: newID(), Title: "Return the chairs", GroupID: archivedGroup.ID}}}
+		Groups: []*TodoGroup{archivedGroup}, Todos: []*Todo{archivedListTodo}}
 	todos := &TodosTool{ID: newID(), ProjectID: project.ID, Title: "To-dos", Lists: []*TodoList{todoList, emptyTodoList, archivedList}}
 	todosOutOfUse := &TodosTool{ID: newID(), ProjectID: project.ID, Title: "Old to-dos", Archived: true}
-	otherTodoList := &TodoList{ID: newID(), Title: "Not yours", CreatorID: stranger.ID}
+	otherTodo := &Todo{ID: newID(), Title: "Not yours either", CreatedAt: s.now, CreatorID: stranger.ID}
+	otherTodoList := &TodoList{ID: newID(), Title: "Not yours", CreatorID: stranger.ID, Todos: []*Todo{otherTodo}}
 	otherTodos := &TodosTool{ID: newID(), ProjectID: otherProject.ID, Title: "Secret to-dos", Lists: []*TodoList{otherTodoList}}
 	s.TodosTools = []*TodosTool{todos, todosOutOfUse, otherTodos}
 
@@ -690,6 +700,7 @@ func New(t testing.TB) (*Server, *Fixture) {
 		LooseTodo: looseTodo, GroupedTodo: groupedTodo, DoneTodo: doneTodo,
 		EmptyTodoList: emptyTodoList, ArchivedList: archivedList, ArchivedGroup: archivedGroup,
 		TodosOutOfUse: todosOutOfUse, OtherTodos: otherTodos, OtherTodoList: otherTodoList,
+		ArchivedListTodo: archivedListTodo, OtherTodo: otherTodo,
 	}
 }
 

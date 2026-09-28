@@ -51,6 +51,10 @@ the documentation says what holds; how it came about is in git.
   over and what it only counts, the archive a list goes quiet in and the group
   that is then at no address, why a group move names its place, the refusals —
   before any work on `todolists` or `todogroups`.
+- [To-dos and subtasks](stable/todos.md): What a to-do carries, the days Minka
+  keeps otherwise than they were sent, the people given as a whole set, where a
+  to-do may move, the two pages and the one that has no end, the order of the
+  refusals — before any work on `todos`.
 - [Testing](stable/testing.md): Fake API, sabotage proofs, what a test pins
   down, what it may demand of time — read before your first test.
 
