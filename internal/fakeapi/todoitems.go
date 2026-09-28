@@ -550,7 +550,7 @@ func (s *Server) myTodos(w http.ResponseWriter, r *http.Request, person *Person)
 	}
 
 	var mine []assignedTodo
-	for _, tool := range s.TodosTools {
+	for _, tool := range s.readableTodosTools() {
 		project := s.visibleProject(tool.ProjectID, person)
 		if project == nil || project.Archived {
 			continue
@@ -749,7 +749,7 @@ func (s *Server) visibleTodo(todoID string, person *Person) (*TodosTool, *TodoLi
 	if !uuidPattern.MatchString(todoID) {
 		return nil, nil, nil
 	}
-	for _, tool := range s.TodosTools {
+	for _, tool := range s.readableTodosTools() {
 		for _, list := range tool.Lists {
 			for _, todo := range list.Todos {
 				if todo.ID != todoID {

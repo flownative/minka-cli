@@ -3,7 +3,6 @@ package cli
 import (
 	"fmt"
 	"io"
-	"slices"
 	"strings"
 	"text/tabwriter"
 
@@ -174,7 +173,7 @@ meta.apiCode todoListArchived.`,
 			return a.ok(success{
 				data:        todo.Raw,
 				summary:     summary,
-				notices:     append(notices, dayNotices(input.StartsOn, input.DueOn, todo.Value)...),
+				notices:     append(notices, dayNotices(false, nil, input.StartsOn, input.DueOn, todo.Value)...),
 				breadcrumbs: todoBreadcrumbs(todo.Value),
 				text: func(w io.Writer) {
 					fmt.Fprintf(w, "%s.\nTo-do: %s\n%s\n", summary, todo.Value.ID, todo.Value.AppURL)
@@ -321,6 +320,13 @@ todoListArchived.`,
 				}
 				notices = append(notices, dropped...)
 			}
+			// A due day alone is held against the start the to-do carries, so
+			// what Minka does to that start can only be told from a read.
+			if input.DueOn != nil && strings.TrimSpace(*input.DueOn) != "" && input.StartsOn == nil {
+				if _, err := read(); err != nil {
+					return err
+				}
+			}
 
 			todo, err := s.client.UpdateTodo(a.ctx, args[0], input)
 			if err != nil {
@@ -331,7 +337,7 @@ todoListArchived.`,
 			return a.ok(success{
 				data:        todo.Raw,
 				summary:     summary,
-				notices:     append(notices, dayNotices(input.StartsOn, input.DueOn, todo.Value)...),
+				notices:     append(notices, dayNotices(true, current, input.StartsOn, input.DueOn, todo.Value)...),
 				breadcrumbs: todoBreadcrumbs(todo.Value),
 				text:        func(w io.Writer) { fmt.Fprintf(w, "%s.\n%s\n", summary, todo.Value.AppURL) },
 			})
@@ -675,19 +681,26 @@ func todoRefusal(s *session, err error, hints todoHints) *Error {
 }
 
 // dayNotices say where Minka kept the days of a to-do otherwise than they were
-// sent: a start alone or on the due day is the due day, and a due day taken off
-// under a start makes the start the due day. The server answers both with the
-// same success as any write, so this is the only word about it.
-func dayNotices(sentStart, sentDue *string, todo api.Todo) []string {
-	var notices []string
-	if sentStart != nil && strings.TrimSpace(*sentStart) != "" && todo.StartsOn == nil {
-		notices = append(notices, fmt.Sprintf("the start %s was not kept as a start: Minka keeps a start only on a day before the due day, and a day alone is the due day, which is now %s",
-			strings.TrimSpace(*sentStart), deref(todo.DueOn)))
+// meant: a start alone or on the due day is the due day, and a due day taken off
+// under a start makes the start the due day. The server answers all of it with
+// the same success as any write, so this is the only word about it. The start
+// meant is the one sent, or on an edit that sends none the one the to-do
+// carried before.
+func dayNotices(edit bool, before *api.Todo, sentStart, sentDue *string, after api.Todo) []string {
+	if edit && sentStart == nil && sentDue != nil && strings.TrimSpace(*sentDue) == "" && after.DueOn != nil {
+		return []string{fmt.Sprintf(`the due day was not taken off: Minka keeps no start without a due day, so the start became the due day, %s. Give --starts-on "" as well to take both off`, *after.DueOn)}
 	}
-	if sentDue != nil && strings.TrimSpace(*sentDue) == "" && todo.DueOn != nil {
-		notices = append(notices, fmt.Sprintf(`the due day was not taken off: Minka keeps no start without a due day, so the start became the due day, %s. Give --starts-on "" as well to take both off`, *todo.DueOn))
+	start := ""
+	switch {
+	case sentStart != nil:
+		start = strings.TrimSpace(*sentStart)
+	case before != nil:
+		start = deref(before.StartsOn)
 	}
-	return notices
+	if start != "" && after.StartsOn == nil {
+		return []string{fmt.Sprintf("the start %s was not kept as a start: Minka keeps a start only on a day before the due day, and a day alone is the due day, which is now %s", start, deref(after.DueOn))}
+	}
+	return nil
 }
 
 func checkNotesFormat(cmd *cobra.Command, format string) error {
@@ -700,7 +713,8 @@ func checkNotesFormat(cmd *cobra.Command, format string) error {
 // projectPeople turns the people given for a to-do or a subtask into IDs. The
 // members of the project are read only where a name, an e-mail address or
 // "me" asks for them, and at most once; an ID goes out as it is, so that Minka
-// says what it thinks of it.
+// says what it thinks of it. A person named twice goes out twice, and Minka
+// takes them once.
 type projectPeople struct {
 	a         *app
 	s         *session
@@ -727,9 +741,7 @@ func (p *projectPeople) resolve(values []string) ([]string, error) {
 			}
 			id = person.ID
 		}
-		if !slices.Contains(ids, id) {
-			ids = append(ids, id)
-		}
+		ids = append(ids, id)
 	}
 	return ids, nil
 }

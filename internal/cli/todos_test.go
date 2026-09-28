@@ -107,8 +107,9 @@ func TestATodoIsAddedAtTheEndOfItsGroupWithEverythingGiven(t *testing.T) {
 			t.Fatalf("sent %s = %v, want %v", key, body[key], value)
 		}
 	}
-	if people := stringsIn(body["assigneeIds"]); !slices.Equal(people, []string{f.Bruno.ID, f.Anke.ID}) {
-		t.Fatalf("sent assignees %v: a person named twice goes twice, or the order is lost", people)
+	// A person named twice goes out twice: taking them once is Minka's rule.
+	if people := stringsIn(body["assigneeIds"]); !slices.Equal(people, []string{f.Bruno.ID, f.Anke.ID, f.Bruno.ID}) {
+		t.Fatalf("sent assignees %v", people)
 	}
 	if people := stringsIn(body["notifiedIds"]); !slices.Equal(people, []string{f.Anke.ID}) {
 		t.Fatalf("sent the people told when done as %v", people)
@@ -117,6 +118,9 @@ func TestATodoIsAddedAtTheEndOfItsGroupWithEverythingGiven(t *testing.T) {
 	created := decode(t, env.Data)
 	if created["title"] != "Hang the lights" || created["groupId"] != f.StageGroup.ID || env.Notice != "" {
 		t.Fatalf("created %v, notice %q", created, env.Notice)
+	}
+	if ids := idsOf(t, created, "assignees"); !slices.Equal(ids, []string{f.Bruno.ID, f.Anke.ID}) {
+		t.Fatalf("assignees %v: Minka takes a person named twice once, in the order first named", ids)
 	}
 	writes := e.server.WritingRequests()
 	if last := writes[len(writes)-1]; last.Method != http.MethodPost || !strings.HasSuffix(last.Path, "/todo-lists/"+f.TodoList.ID+"/todos") {
@@ -174,6 +178,46 @@ func TestADayMinkaKeepsOtherwiseIsSaidOutLoud(t *testing.T) {
 	}
 	if todo := decode(t, env.Data); todo["dueOn"] != "2026-10-01" || !strings.Contains(env.Notice, `--starts-on ""`) {
 		t.Fatalf("dueOn %v, notice %q", todo["dueOn"], env.Notice)
+	}
+}
+
+// A due day moved onto the start the to-do carries takes that start away,
+// although no start was sent at all.
+func TestAStartLostToANewDueDayIsSaidOutLoud(t *testing.T) {
+	e := newTestEnv(t)
+	f := e.fixture
+	start, due := "2026-10-01", "2026-10-03"
+	f.LooseTodo.StartsOn, f.LooseTodo.DueOn = &start, &due
+
+	env, r := e.runJSON("", "todos", "edit", f.LooseTodo.ID, "--due", "2026-10-01")
+	expectCode(t, r, ExitOK)
+	if todo := decode(t, env.Data); todo["startsOn"] != nil || !strings.Contains(env.Notice, "the start 2026-10-01 was not kept") {
+		t.Fatalf("startsOn %v, notice %q", todo["startsOn"], env.Notice)
+	}
+
+	f.LooseTodo.StartsOn = &start
+	env, r = e.runJSON("", "todos", "edit", f.LooseTodo.ID, "--due", "2026-10-05")
+	expectCode(t, r, ExitOK)
+	if env.Notice != "" {
+		t.Fatalf("a start that stayed drew the notice %q", env.Notice)
+	}
+}
+
+// A start given together with an empty due day is meant: the one notice says
+// what became of it, and nothing tells the caller to take off what they sent.
+func TestAStartSentWithAnEmptyDueDayDrawsOneNotice(t *testing.T) {
+	e := newTestEnv(t)
+	f := e.fixture
+
+	for _, args := range [][]string{
+		{"todos", "create", "--list", f.TodoList.ID, "--title", "Soon", "--starts-on", "2026-10-01", "--due", ""},
+		{"todos", "edit", f.LooseTodo.ID, "--starts-on", "2026-10-01", "--due", ""},
+	} {
+		env, r := e.runJSON("", args...)
+		expectCode(t, r, ExitOK)
+		if !strings.Contains(env.Notice, "not kept as a start") || strings.Contains(env.Notice, `--starts-on ""`) {
+			t.Fatalf("%v: notice %q", args[:2], env.Notice)
+		}
 	}
 }
 
@@ -531,6 +575,20 @@ func TestMyTodosAreThoseLeftToDoInTheOrderOfMyPage(t *testing.T) {
 	}
 }
 
+func TestNoTodoComesFromAToolInTheTrash(t *testing.T) {
+	e := newTestEnv(t)
+	f := e.fixture
+	f.Todos.Trashed = true
+
+	env, r := e.runJSON("", "todos", "mine")
+	expectCode(t, r, ExitOK)
+	if n := len(listOfObjects(t, env.Data)); n != 0 {
+		t.Fatalf("%d to-dos of a tool in the trash", n)
+	}
+	_, r = e.runJSON("", "todos", "show", f.GroupedTodo.ID)
+	expectCode(t, r, ExitNotFound)
+}
+
 // Minka marks the end of my to-dos by nothing but a short page, and cuts a
 // page above its largest without a word, so the CLI serves no such page.
 func TestAPageOfMyTodosIsBoundedAndAFullOneSaysSo(t *testing.T) {
@@ -639,6 +697,36 @@ func TestWhatIsWrongWithTheRequestIsSaidBeforeWhatItIsFor(t *testing.T) {
 	env, r := e.runJSON("", "todos", "edit", e.fixture.LooseTodo.ID, "--starts-on", "2026-10-05", "--due", "2026-10-01")
 	expectCode(t, r, ExitValidation)
 	if env.Meta["apiCode"] != "todoDatesOutOfOrder" {
+		t.Fatalf("apiCode %v", env.Meta["apiCode"])
+	}
+}
+
+// Where the CLI reads before it writes — the list or the to-do, for the project
+// a person named by name, address or "me" is looked for in, or the start a due
+// day is held against — something that is not there answers before what is
+// wrong with the request.
+func TestAReadBeforeTheWriteFindsNothingFirst(t *testing.T) {
+	e := newTestEnv(t)
+
+	for name, args := range map[string][]string{
+		"create for me":     {"todos", "create", "--list", unknownID, "--title", " ", "--assignee", "me"},
+		"create, me told":   {"todos", "create", "--list", unknownID, "--title", " ", "--notify-when-done", "anke@example.com"},
+		"a subtask for me":  {"todos", "subtasks", "create", unknownID, " ", "--assignee", "me"},
+		"edit for me":       {"todos", "edit", unknownID, "--title", "", "--assignee", "me"},
+		"edit of the notes": {"todos", "edit", unknownID, "--title", "", "--notes", "More"},
+		"edit of a due day": {"todos", "edit", unknownID, "--title", "", "--due", "2026-10-01"},
+	} {
+		_, r := e.runJSON("", args...)
+		expectCode(t, r, ExitNotFound)
+		if n := len(e.server.WritingRequests()); n != 0 {
+			t.Fatalf("%s: %d writes", name, n)
+		}
+	}
+
+	// Named by ID, nobody is looked for, and Minka's order holds.
+	env, r := e.runJSON("", "todos", "create", "--list", unknownID, "--title", " ", "--assignee", e.fixture.Anke.ID)
+	expectCode(t, r, ExitValidation)
+	if env.Meta["apiCode"] != "todoTitleMissing" {
 		t.Fatalf("apiCode %v", env.Meta["apiCode"])
 	}
 }

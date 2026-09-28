@@ -79,11 +79,15 @@ replaced by ones that do not, unless `--drop-attachments` is given.
 is the due day, whichever field it was written in, and a start on the due day is
 no start. A start after the due day is `todoDatesOutOfOrder`. On an edit, a day
 left out stays, and a day sent as null or `""` is taken off, so taking the due
-day off under a start makes the start the due day. Minka answers all of it with
-the same success as any write; the CLI compares what came back with what it
-sent and says in a `notice` where a start was not kept or a due day was not
-taken off ([C-075](../decisions.md#c-075)). Whether a day is a day is Minka's to
-say: the CLI sends what it is given.
+day off under a start makes the start the due day, and a due day moved onto the
+start takes the start away. Minka answers all of it with the same success as
+any write. The CLI compares what came back with the start that was meant — the
+one sent, or on an edit that sends none the one the to-do carried, for which an
+edit with a due day and no start reads the to-do first — and says in a `notice`
+where that start was not kept. Where an edit took the due day off and sent no
+start, the notice says instead that the due day was not taken off
+([C-075](../decisions.md#c-075)). Whether a day is a day is Minka's to say: the
+CLI sends what it is given.
 
 **The people.** `assigneeIds` and `notifiedIds` are **the whole set** the
 to-do is to carry: whoever stays keeps their place, whoever is new comes behind
@@ -92,8 +96,9 @@ in the order named, and whoever is not named again is taken off. So `todos edit
 send an empty list — never null, which Minka reads as no change — and there is
 no command that adds or takes off one person ([C-073](../decisions.md#c-073)). A
 person is an ID, `me`, an e-mail address or a name; the members of the project
-are read only where a name, an address or `me` asks for them, and a person named
-twice goes out once. Somebody who is no member refuses the whole write with
+are read only where a name, an address or `me` asks for them. A person named
+twice goes out twice, and Minka takes them once, in the place first named.
+Somebody who is no member refuses the whole write with
 `personNotAProjectMember`, and nothing is written.
 
 `POST todos/{todoId}/complete` and `…/reopen` answer the to-do, twice as well.
@@ -148,11 +153,13 @@ unarchive`.
 Minka checks in this order, and each step comes only where the one before it
 passed:
 
-1. What is wrong with the body: a field of the wrong type (400, unreachable
-   from here), an identifier of a person that is none (`personNotAProjectMember`)
-   or of a place that is none (`todoPlaceUnknown`), which the CLI never sends,
-   then `nothingToChange`, the title of a to-do, the line of a subtask, the day of
-   a subtask, and the days of a **new** to-do.
+1. What is wrong with the body. For a to-do: a field of the wrong type (400,
+   unreachable from here), an identifier of a person or of a place that is
+   none (`personNotAProjectMember`, `todoPlaceUnknown`, which the CLI never
+   sends), then `nothingToChange`, the title, and the days of a **new** to-do.
+   For a subtask: `nothingToChange`, the line, then an identifier of a person
+   that is none, then the day. A neighbour of a move that is no identifier comes
+   before everything else.
 2. The list or the to-do, and the subtask: 404.
 3. The days of an **edit**, which are read against the to-do found, then the
    notes.
@@ -161,15 +168,19 @@ passed:
    `todoPlaceUnknown` for a group, a list or a neighbour, and
    `personNotAProjectMember` for a person who is no member.
 
-The CLI changes this order in one place: where it reads the to-do before it
-writes — every subtask command but `create`, and `todos edit` where it changes
-the notes or names a person by name, address or `me` — a to-do that is not there
-is exit 2 before anything else.
+The CLI changes this order where it reads before it writes: a list or a to-do
+that is not there is then exit 2 before anything else. It reads the list for
+`todos create`, and the to-do for `todos subtasks create`, where a person is
+named by name, address or `me`; the to-do for every other subtask command; and
+the to-do for `todos edit` where it changes the notes, names a person that way,
+or gives a due day without a start. So `todos create --list <unknown> --title
+" " --assignee me` is exit 2, where the same with an ID for the person is
+`todoTitleMissing`.
 
 | Answer | Command | Exit |
 |---|---|---|
-| 404 | every read and write, for a list or to-do that is unknown, foreign, in the trash or in a group or list in the trash; `subtasks edit`, `complete`, `reopen` and `move` for a subtask that is not on the to-do | 2 |
-| 422 `todoTitleMissing`, `todoTitleTooLong`, `todoTitleHasControlCharacters` | `todos create`, `todos edit` | 9 |
+| 404 | every read and write, for a list or to-do that is unknown, foreign, in the trash or in a group, list or tool in the trash; `subtasks edit`, `complete`, `reopen` and `move` for a subtask that is not on the to-do; before every 422 where the CLI reads first | 2 |
+| 422 `todoTitleMissing`, `todoTitleTooLong`, `todoTitleHasControlCharacters` | `todos create`, `todos edit`; before an unknown list or to-do unless the CLI reads first | 9 |
 | 422 `todoNotesTooLong`, `todoNotesNotReadable` | `todos create`, `todos edit` | 9 |
 | 422 `todoDatesNotADate`, `todoDatesOutOfOrder` | `todos create` (before the list), `todos edit` (after the to-do) | 9 |
 | 422 `subtaskMissing`, `subtaskTooLong`, `subtaskHasControlCharacters`, `subtaskDueNotADate` | `todos subtasks create`, `todos subtasks edit` | 9 |

@@ -964,11 +964,12 @@ one optional assignee and one optional due day.
 - Days are `YYYY-MM-DD`. **A start is kept only on a day before the due day**:
   a start alone, or one on the due day, becomes the due day. Taking the due day
   off (`--due ""`) while a start is left makes the start the due day; give
-  `--starts-on ""` as well to take both off. The `notice` says when Minka kept a
-  day otherwise than you sent it; the exit code does not.
+  `--starts-on ""` as well to take both off. A due day moved onto the start
+  takes the start away. The `notice` says when Minka kept a day otherwise than
+  you meant it; the exit code does not.
 - `--assignee` and `--notify-when-done` take an ID, `me`, an e-mail address or a
-  name, repeatable. **On `todos edit` they are the whole set**: whoever is not
-  named again is taken off. `--no-assignees` and `--no-notify-when-done` take
+  name, repeatable; Minka takes a person named twice once. **On `todos edit`
+  they are the whole set**: whoever is not named again is taken off. `--no-assignees` and `--no-notify-when-done` take
   everybody off. Somebody who is no member of the project is exit 9
   `personNotAProjectMember`, and nothing is written.
 - `todos edit` changes only what you give. `--title ""` is exit 9
@@ -1001,10 +1002,11 @@ either. What Minka says, in this order: what is wrong with the request itself
 (a title, a line of a subtask, the days of a new to-do; the days of an edit
 only after the to-do is found), then exit 2 for a list or a to-do that is not
 there, then `projectArchived`, then `todoListArchived`, then the place
-(`todoPlaceUnknown`) or the people (`personNotAProjectMember`). A subtask
-command other than `create`, and a `todos edit` that changes the notes or names
-a person by name, address or `me`, reads the to-do first, so there a to-do
-that is not there is exit 2 before anything else.
+(`todoPlaceUnknown`) or the people (`personNotAProjectMember`). Where the CLI
+reads first, a list or to-do that is not there is exit 2 before anything else:
+`todos create` and `todos subtasks create` naming a person by name, address or
+`me`, every other subtask command, and a `todos edit` that changes the notes,
+names a person that way, or gives a due day without a start.
 
 ### Codes of this part
 

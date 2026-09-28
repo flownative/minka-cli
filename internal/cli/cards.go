@@ -798,8 +798,8 @@ func (a *app) richTextHTML(what, flag, value, format string) (string, []string, 
 	if result.HTML == "" && strings.TrimSpace(text) != "" {
 		return "", nil, &Error{
 			Code:    CodeUsage,
-			Message: fmt.Sprintf("%s has nothing Minka keeps and would remove the current one", what),
-			Hint:    fmt.Sprintf(`To remove %s on purpose, give %s "".`, what, flag),
+			Message: fmt.Sprintf("Minka keeps nothing of %s, which would go out empty", what),
+			Hint:    fmt.Sprintf(`To send %s empty on purpose, give %s "".`, what, flag),
 		}
 	}
 	return result.HTML, result.Warnings, nil

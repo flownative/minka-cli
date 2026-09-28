@@ -1234,8 +1234,9 @@ place with the same 200 as any move, and where a to-do may stand is Minka's rule
 *Applies to: `todos create`, `todos edit`*
 
 The CLI sends the days it is given, and where the answer carries no start
-although one was sent, or a due day although it was taken off, a `notice` says
-so and names the day Minka kept.
+although one was sent, or carried before an edit that sent none, or a due day
+although an edit without a start took it off, a `notice` says so and names the
+day Minka kept.
 
 **Why:** Minka makes a start alone the due day and keeps no start without one,
 with the same success as any write, so the notice is the only word about it;

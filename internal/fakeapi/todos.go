@@ -26,6 +26,10 @@ type TodosTool struct {
 	// written as before.
 	Archived bool
 
+	// Trashed is a tool in the trash of its project: it, its lists and its
+	// to-dos are at no address, and nobody's to-dos come from it.
+	Trashed bool
+
 	Lists []*TodoList // in the order of the page, the top first
 }
 
@@ -111,7 +115,7 @@ func (s *Server) todosTools(w http.ResponseWriter, r *http.Request, person *Pers
 
 	tools := []any{}
 	for _, tool := range s.TodosTools {
-		if tool.ProjectID == project.ID && !tool.Archived {
+		if tool.ProjectID == project.ID && !tool.Archived && !tool.Trashed {
 			tools = append(tools, map[string]any{"id": tool.ID, "title": tool.Title, "appUrl": s.todosToolURL(tool)})
 		}
 	}
@@ -492,7 +496,7 @@ func (s *Server) visibleTodosTool(toolID string, person *Person) *TodosTool {
 	if !uuidPattern.MatchString(toolID) {
 		return nil
 	}
-	for _, tool := range s.TodosTools {
+	for _, tool := range s.readableTodosTools() {
 		if tool.ID == toolID && s.visibleProject(tool.ProjectID, person) != nil {
 			return tool
 		}
@@ -506,7 +510,7 @@ func (s *Server) visibleTodoList(listID string, person *Person) (*TodosTool, *To
 	if !uuidPattern.MatchString(listID) {
 		return nil, nil
 	}
-	for _, tool := range s.TodosTools {
+	for _, tool := range s.readableTodosTools() {
 		for _, list := range tool.Lists {
 			if list.ID != listID || list.Trashed {
 				continue
@@ -526,7 +530,7 @@ func (s *Server) visibleTodoGroup(groupID string, person *Person) (*TodosTool, *
 	if !uuidPattern.MatchString(groupID) {
 		return nil, nil, nil
 	}
-	for _, tool := range s.TodosTools {
+	for _, tool := range s.readableTodosTools() {
 		for _, list := range tool.Lists {
 			group := groupOf(list, groupID)
 			if group == nil || list.Trashed || list.Archived {
@@ -648,4 +652,15 @@ func (s *Server) todosToolURL(tool *TodosTool) string {
 
 func (s *Server) todoListURL(tool *TodosTool, list *TodoList) string {
 	return s.todosToolURL(tool) + "/lists/" + list.ID
+}
+
+// readableTodosTools are the To-dos tools out of the trash, in use or not.
+func (s *Server) readableTodosTools() []*TodosTool {
+	var tools []*TodosTool
+	for _, tool := range s.TodosTools {
+		if !tool.Trashed {
+			tools = append(tools, tool)
+		}
+	}
+	return tools
 }

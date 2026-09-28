@@ -307,8 +307,7 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   to-dos in the order of the page. What it does not mirror: the time zone of
   the person asking, in which Minka decides `isOverdue` and writes the moment
   into the cursor — the fake takes UTC for both, and the cursor stays opaque to
-  the CLI; which to-dos a **client** is shown; a tool in the trash, which the
-  fake has no word for; `todoNotesNotReadable`; and somebody who left the
+  the CLI; which to-dos a **client** is shown; `todoNotesNotReadable`; and somebody who left the
   project and is not named again in a new set, whom Minka leaves on the to-do
   unseen and the fake takes off. Ticking off gives every to-do of the fake a moment a
   second after the one before, so that the done to-dos have an order to read
