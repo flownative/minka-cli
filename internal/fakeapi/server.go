@@ -382,16 +382,17 @@ func chatText(text string) string {
 type Server struct {
 	*httptest.Server
 
-	People     map[string]*Person
-	Tokens     map[string]string // token → person ID
-	Projects   []*Project
-	Boards     []*Board
-	Chats      []*Chat
-	FilesTools []*FilesTool
-	TodosTools []*TodosTool
-	Uploads    []*Upload
-	Trash      []*TrashedCard
-	Archive    []*ArchivedCard
+	People        map[string]*Person
+	Tokens        map[string]string // token → person ID
+	Projects      []*Project
+	Boards        []*Board
+	Chats         []*Chat
+	FilesTools    []*FilesTool
+	TodosTools    []*TodosTool
+	CheckinsTools []*CheckinsTool
+	Uploads       []*Upload
+	Trash         []*TrashedCard
+	Archive       []*ArchivedCard
 
 	// IgnoresProjectStatus makes the server answer like a Minka from before
 	// projects could be archived: no status, and the filter goes unnoticed.
@@ -505,6 +506,22 @@ type Fixture struct {
 	OtherTodoList    *TodoList
 	ArchivedListTodo *Todo // in the group of the list in the archive, with one subtask
 	OtherTodo        *Todo
+
+	// The Check-ins tool of the project, on the fake's today, a Sunday. A
+	// daily question asks Anke, Bruno and the client, who is not shown it;
+	// Bruno was asked it for Thursday and Friday and answered Friday, Anke
+	// answered Thursday and Friday. A weekly question asks Bruno, who has not
+	// answered Monday's asking yet, and a monthly one asks him and is paused.
+	// The project that belongs to somebody else has a question of its own.
+	CheckinsTool       *CheckinsTool
+	DailyQuestion      *CheckinQuestion
+	WeeklyQuestion     *CheckinQuestion
+	PausedQuestion     *CheckinQuestion
+	BrunosAnswer       *CheckinAnswer // for Friday, with a comment of Anke's
+	AnkesAnswer        *CheckinAnswer // for Friday, written after Bruno's
+	AnkesEarlierAnswer *CheckinAnswer // for Thursday
+	OtherCheckinsTool  *CheckinsTool
+	OtherQuestion      *CheckinQuestion
 }
 
 // New starts a fake with a small fixture: Bruno is a member of one project
@@ -625,6 +642,34 @@ func New(t testing.TB) (*Server, *Fixture) {
 	otherTodos := &TodosTool{ID: newID(), ProjectID: otherProject.ID, Title: "Secret to-dos", Lists: []*TodoList{otherTodoList}}
 	s.TodosTools = []*TodosTool{todos, todosOutOfUse, otherTodos}
 
+	at := func(day, clock string) time.Time {
+		moment, _ := time.Parse("2006-01-02 15:04", day+" "+clock)
+		return moment
+	}
+	ankesEarlierAnswer := &CheckinAnswer{ID: newID(), AuthorID: anke.ID, GroupOn: "2026-09-10", Body: "<p>Built the stage.</p>", CreatedAt: at("2026-09-10", "17:30")}
+	brunosAnswer := &CheckinAnswer{ID: newID(), AuthorID: bruno.ID, GroupOn: "2026-09-11", Body: "<p>Counted the tents.</p>", CreatedAt: at("2026-09-11", "17:10"),
+		Comments: []*Comment{{ID: newID(), AuthorID: anke.ID, Body: "<p>Thank you!</p>", CreatedAt: at("2026-09-11", "18:30")}}}
+	ankesAnswer := &CheckinAnswer{ID: newID(), AuthorID: anke.ID, GroupOn: "2026-09-11", Body: "<p>Fetched the speakers.</p>", CreatedAt: at("2026-09-11", "18:00")}
+	dailyQuestion := &CheckinQuestion{ID: newID(), Title: "What did you do today?", Rhythm: RhythmDaily, Weekdays: []int{1, 2, 3, 4, 5}, TimeOfDay: "17:00",
+		StartsOn: "2026-09-01", AskedIDs: []string{anke.ID, bruno.ID, client.ID}, CreatorID: anke.ID, CreatedAt: at("2026-09-01", "08:00"),
+		Answers: []*CheckinAnswer{ankesEarlierAnswer, brunosAnswer, ankesAnswer},
+		Reminders: []*CheckinReminder{
+			{PersonID: bruno.ID, AskedFor: "2026-09-10", AskedAt: at("2026-09-10", "17:00")},
+			{PersonID: bruno.ID, AskedFor: "2026-09-11", AskedAt: at("2026-09-11", "17:00")},
+		}}
+	weeklyQuestion := &CheckinQuestion{ID: newID(), Title: "What are you working on this week?", Rhythm: RhythmWeekly, Weekdays: []int{1}, TimeOfDay: "09:00",
+		StartsOn: "2026-09-01", AskedIDs: []string{bruno.ID}, CreatorID: bruno.ID, CreatedAt: at("2026-09-01", "08:10"),
+		Reminders: []*CheckinReminder{{PersonID: bruno.ID, AskedFor: "2026-09-07", AskedAt: at("2026-09-07", "09:00")}}}
+	pausedQuestion := &CheckinQuestion{ID: newID(), Title: "How was the month?", Rhythm: RhythmMonthly, Weekdays: []int{5}, TimeOfDay: "16:00",
+		StartsOn: "2026-09-01", Paused: true, AskedIDs: []string{bruno.ID}, CreatorID: bruno.ID, CreatedAt: at("2026-09-01", "08:20"),
+		Reminders: []*CheckinReminder{{PersonID: bruno.ID, AskedFor: "2026-09-04", AskedAt: at("2026-09-04", "16:00")}}}
+	checkinsTool := &CheckinsTool{ID: newID(), ProjectID: project.ID, Title: "Check-ins", Questions: []*CheckinQuestion{dailyQuestion, weeklyQuestion, pausedQuestion}}
+	otherQuestion := &CheckinQuestion{ID: newID(), Title: "Not yours to answer", Rhythm: RhythmDaily, Weekdays: []int{1}, TimeOfDay: "09:00",
+		StartsOn: "2026-09-01", AskedIDs: []string{stranger.ID}, CreatorID: stranger.ID, CreatedAt: at("2026-09-01", "08:00"),
+		Answers: []*CheckinAnswer{{ID: newID(), AuthorID: stranger.ID, GroupOn: "2026-09-07", Body: "<p>Secret.</p>", CreatedAt: at("2026-09-07", "10:00")}}}
+	otherCheckinsTool := &CheckinsTool{ID: newID(), ProjectID: otherProject.ID, Title: "Secret check-ins", Questions: []*CheckinQuestion{otherQuestion}}
+	s.CheckinsTools = []*CheckinsTool{checkinsTool, otherCheckinsTool}
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v1/me", s.authenticated(s.me))
 	mux.HandleFunc("PUT /api/v1/me/work", s.authenticated(s.noteAtWork))
@@ -674,6 +719,7 @@ func New(t testing.TB) (*Server, *Fixture) {
 	mux.HandleFunc("GET /api/v1/uploads/{blobId}/{variant}", s.answeringInBytes(s.fileBytes))
 	s.registerFilesRoutes(mux)
 	s.registerTodosRoutes(mux)
+	s.registerCheckinsRoutes(mux)
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		// Flow answers an unknown path or a wrong method with an HTML page.
 		w.Header().Set("Content-Type", "text/html")
@@ -701,6 +747,9 @@ func New(t testing.TB) (*Server, *Fixture) {
 		EmptyTodoList: emptyTodoList, ArchivedList: archivedList, ArchivedGroup: archivedGroup,
 		TodosOutOfUse: todosOutOfUse, OtherTodos: otherTodos, OtherTodoList: otherTodoList,
 		ArchivedListTodo: archivedListTodo, OtherTodo: otherTodo,
+		CheckinsTool: checkinsTool, DailyQuestion: dailyQuestion, WeeklyQuestion: weeklyQuestion, PausedQuestion: pausedQuestion,
+		BrunosAnswer: brunosAnswer, AnkesAnswer: ankesAnswer, AnkesEarlierAnswer: ankesEarlierAnswer,
+		OtherCheckinsTool: otherCheckinsTool, OtherQuestion: otherQuestion,
 	}
 }
 
