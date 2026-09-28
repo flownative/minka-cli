@@ -49,6 +49,15 @@ subtasks with `todos subtasks list`, `create`, `edit`, `complete`, `reopen`,
 [To-dos and subtasks](../stable/todos.md) (C-073 to C-076). None of it has been
 seen live: the whole feature is checked against the fake, see below.
 
+The check-ins are read with `checkins tools`, `checkins list`, `checkins show`
+and `checkins reminders`, and written with `checkins create`, `edit`, `pause`
+and `resume`; their answers with `checkins answers list`, `show`, `create` and
+`edit`. The rule the commands follow is [Check-ins](../stable/checkins.md)
+(C-077 to C-080). Putting a question into the trash, stopping to be asked,
+removing an answer and the comments under an answer have no address in the
+API. None of it has been seen live: the whole feature is checked against the
+fake, see below.
+
 `minka import basecamp` extracts the structure, the boards, the message
 boards, the chats, the check-ins, the to-dos, the forwarded mail and the
 Docs & Files of Basecamp
@@ -312,6 +321,28 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   unseen and the fake takes off. Ticking off gives every to-do of the fake a moment a
   second after the one before, so that the done to-dos have an order to read
   while its clock stands still.
+- Everything of `checkins`: no request of it has gone to a real Minka. The fake
+  mirrors what was read in `CheckinsApiController`, its resources, the
+  `CheckinQueryService`, the question and answer handlers,
+  `DbalCheckinQuestionRepository`, `DbalCheckinAnswerRepository`,
+  `CheckinSchedule`, `TimeOfDay` and `ApiCheckinsTest`: the order the
+  controller refuses in, the schedule kept with its weekdays sorted and taken
+  once and its time with two digits, `asked` naming only the members who may
+  see the question in the order of their names, the edit that names nobody
+  writing back whom Minka shows, pausing and resuming twice, an archived
+  project refusing both whatever the state, the page of answers without an
+  end and cut at 100, a boundary in the trash still marking where a page ends,
+  the day of an answer without `askedFor` as the latest asking by the
+  schedule, and the reminders as the latest day per question, open until an
+  answer on that day or later, at most 100. What it does not mirror: the time
+  zone of the person asked and of the writer, in which Minka decides the start
+  day, the latest asking and so the day of an answer — the fake takes UTC;
+  a weekday sent as `1.0`, which Minka refuses as malformed and the fake takes;
+  `answerNotReadable`; the cleaning of a body against the files of its circle;
+  and which of the people asked a retired agent is, whom the fake leaves out of
+  `asked` on a guess. That a question set up through the API is shown to no
+  client was read, not measured: the insert names no `visible_to_clients`, and
+  the column defaults to false.
 - Everything a bundle says about clients: no extraction has met a client live.
   What the fields are and how Minka reads them was read in its appliers
   (`PeopleApplier`, `ProjectsApplier`, `ToolsApplier`, `WhatClientsSee`), and
@@ -962,10 +993,15 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
 - Commands for the comments under a to-do and under a list
   (`…/todos/{todoId}/comments`, `…/todo-lists/{listId}/comments`): released,
   with the shapes of the comments of a card (E-190).
-- Commands for the check-ins of a project: released as well, the contract in
-  `authorization.md` and E-191.
 - Of the ninety-odd addresses the API offers, a good part have no command.
-  Two cards say which: the check-ins, and the archive of cards and posts.
+  A card says which: the archive of cards and posts.
+- Check the check-ins live, as the [live check](../guides/live-check.md) says:
+  a question set up with `--ask me` and a client, the notice about the client,
+  `asked` in the order of the names, `startsOn` in a time zone that is not UTC
+  near midnight, an edit to every other week and its notice, pause and resume
+  twice, an answer without `--asked-for` and the day it lands on, one for a
+  reminder's day and one for a day not asked, somebody else's answer refused as
+  404, a page of answers over two pages, and a reminder closing once answered.
 - Extract the forwarded mail of a project live, and check the bundle record by
   record as the boards and the chats were checked. What is still open there is
   what no reading of the source answers: what a body looks like that the run has

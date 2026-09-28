@@ -1256,3 +1256,85 @@ cut down in silence would read as the whole list ([C-054](#c-054)); a page of
 done to-dos carries `next`, which says there is more whatever Minka cut.
 **Implemented as:** `api.MyTodosPageMax`, `cli.newTodosMineCmd`, see
 [To-dos and subtasks](stable/todos.md).
+
+<a id="c-077"></a>
+## C-077 — The questions are `checkins`, their answers `checkins answers`
+
+*Applies to: every command on a Check-ins tool*
+
+The tools and their questions are `checkins …` (`checkins tools <projectId>`
+beside `checkins list <toolId>`), the answers `checkins answers …`, and the
+reminders of the person of the token `checkins reminders`.
+
+**Why:** a Check-ins tool is one thing to its users, and its questions are what
+the web lists under that name, so they take the noun as the lists of a To-dos
+tool take `todolists` ([C-071](#c-071)). The answers are a second kind of ID
+and get a group of their own, nested as `todos subtasks` is, so that no position
+of the tree takes a question in one command and an answer in the next.
+Minka's own addresses split the same way: `checkins/…`, `questions/…`,
+`answers/…`.
+**Implemented as:** `cli.newCheckinsCmd`, `cli.newCheckinAnswersCmd`, see
+[Check-ins](stable/checkins.md).
+
+<a id="c-078"></a>
+## C-078 — A schedule goes out as given, and only a word that is no weekday stops here
+
+*Applies to: `checkins create`, `checkins edit`*
+
+`--rhythm` is sent as the word given, `--weekday` as a number or as the number
+of a weekday's name, `--time` as written; a number outside the week and a
+weekday named twice go out as well. Only a `--weekday` that is neither a number
+nor a name is a usage error. `--weekday` and `--ask` are the whole set on an
+edit, and there is no `--no-ask`. `checkins create --ask` takes an ID or `me`.
+
+**Why:** which schedules exist is Minka's rule, and a second copy of it would
+be a second thing to keep in step ([C-070](#c-070)); a word that names no
+weekday cannot be put into the list of numbers the address takes. Minka takes
+the people and the weekdays as whole sets, and an empty set of people is always
+refused, so a flag for it would be a flag that never works. The ID of a tool
+names no project, so a new question cannot look up a name, as a new document
+cannot ([C-070](#c-070)).
+**Implemented as:** `cli.weekdayNumbers`, `cli.peopleByIDOrMe`,
+`api.UpdateCheckinQuestionInput`, see [Check-ins](stable/checkins.md).
+
+<a id="c-079"></a>
+## C-079 — A page of answers is bounded here, and a full list of reminders says so
+
+*Applies to: `checkins answers list`, `checkins reminders`,
+`api.Client.CheckinAnswers`*
+
+`checkins answers list --limit` outside 1 to 100 is a usage error, the size
+always goes out, and a full page names the next one in a `notice`, keeping
+`--person` and `--on`. `checkins reminders` says in a `notice` that there may be
+more where Minka hands over 100.
+
+**Why:** a page of answers is a bare array that ends in nothing but being
+short, and Minka cuts a larger page down in silence, so a page cut that way
+would read as the whole list ([C-054](#c-054), [C-076](#c-076)). The reminders
+take no page at all, so the one thing left to do is to say that the list may be
+cut.
+**Implemented as:** `api.CheckinAnswersPageMax`, `api.CheckinRemindersMax`,
+`cli.newCheckinAnswersListCmd`, `cli.newCheckinsRemindersCmd`, see
+[Check-ins](stable/checkins.md).
+
+<a id="c-080"></a>
+## C-080 — What a question shows otherwise than it was written is said out loud, and what only changes its form is not
+
+*Applies to: `checkins create`, `checkins edit`*
+
+Where somebody named with `--ask` is not among `asked` in the answer, a
+`notice` names them. Where an edit gives the rhythm or the weekdays and the
+question is asked every other week afterwards, a `notice` names the day the
+weeks are counted from. Weekdays Minka sorts and takes once, and a time it
+writes with two digits, draw nothing.
+
+**Why:** Minka lists as asked only the members who may see the question and
+answers a write naming a client it is not shown to with the same success, so
+the notice is the only word about somebody asked and shown nothing — as the
+notice of [C-075](#c-075) is about a day. The start of a question is the
+writer's today and no edit moves it, so a question made fortnightly months
+later counts its weeks from a day nobody gave in that edit. A sorted list and
+`09:00` for `9:00` lose nothing, and a notice about them would teach whoever
+reads the notices to stop.
+**Implemented as:** `cli.askedNotices`, `cli.newCheckinsEditCmd`, see
+[Check-ins](stable/checkins.md).
