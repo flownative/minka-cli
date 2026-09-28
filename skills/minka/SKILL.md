@@ -741,13 +741,13 @@ with a description. Both take comments, and the comments take reactions.
   **published** document; there are no drafts here. `--folder` puts it in a
   folder, and without `--body` it is a title and nothing else.
 - `--audience` is required: `everybody`, `chosen` with one `--notify <personId>`
-  per person, or `nobody`. `--notify` belongs to `chosen` alone, and `chosen`
-  without anybody is refused (exit 1) before a request goes out. Minka refuses
-  the same two itself, with `notifyIdsWithoutChosenAudience` and
-  `notifyIdsMissing`: both are **your input to change** — name people, or choose
-  the audience that takes them. You meet them only in a call you built without
-  this CLI. `--notify` takes an ID or `me`; `people list <projectId>` gives the
-  IDs.
+  per person, or `nobody`. A word that is none of the three exits 1 before a
+  request goes out; which people go with which audience is Minka's rule and the
+  CLI keeps none of its own. `--notify` under any audience but `chosen` is exit 9
+  `notifyIdsWithoutChosenAudience`, and `chosen` naming nobody is exit 9
+  `notifyIdsMissing`. Both are **your input to change** — name people, or choose
+  the audience that takes them — and the `hint` says which flag. `--notify`
+  takes an ID or `me`; `people list <projectId>` gives the IDs.
 - **`personCannotSeeIt` is not your input to fix.** The person you named exists,
   is a member of the project, and simply may not be told: they work with the
   project as a client, and a client is told only about a document standing in a

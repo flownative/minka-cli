@@ -214,7 +214,9 @@ conversations in both directions. What is checked against the fake only is
 listed below.
 
 Coordination of the API: the Minka session `minka-ca`. It reports changes,
-which are checked against the Minka code; deviations go back to it.
+which are checked against the Minka code; deviations go back to it. Minka
+v0.37.0 runs on `minka.flownative.com` and on `dev.minka.flownative.com`, as
+Shaun confirmed on 2026-09-28.
 
 Versions are released by publishing a release in GitHub and installed through
 the Homebrew tap; `setup`, `doctor` and the skill inside the binary cover the
@@ -247,17 +249,17 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   second measurement.
   Of the three refusals over whom a document reaches — `notifyIdsMissing`,
   `notifyIdsWithoutChosenAudience` and `personCannotSeeIt` — **no live instance
-  has been seen to answer any one of them.** All three are read in
+  has been seen to answer any one of them**, although the v0.37.0 that carries
+  them runs on both instances. All three are read in
   `FilesApiController::addDocumentAction`, `PeopleAPostTells::enrolEachOf` and
   the functions `minka_item_shown_to_clients` and `minka_tool_shown_to_clients`,
-  and mirrored in the fake from that reading alone. The first two are held
-  against the fake by a request the CLI never sends, its own guard refusing them
-  first, and their hints by the answers themselves; only `personCannotSeeIt` is
-  reached by a command. For it the fake carries a person who works with the
-  project as a client and a folder whose contents its clients are shown — that
-  client signs in nowhere, so the fake never has to answer as one, and it knows
-  no word for whether a whole tool is shown, the folder at the top of a chain
-  deciding alone.
+  and mirrored in the fake from that reading alone. Every one of the three is
+  reached by a command, so all three are held by a run of `docs create` against
+  the fake, hint and order included. For `personCannotSeeIt` the fake carries a
+  person who works with the project as a client and a folder whose contents its
+  clients are shown — that client signs in nowhere, so the fake never has to
+  answer as one, and it knows no word for whether a whole tool is shown, the
+  folder at the top of a chain deciding alone.
 - Everything a bundle says about clients: no extraction has met a client live.
   What the fields are and how Minka reads them was read in its appliers
   (`PeopleApplier`, `ProjectsApplier`, `ToolsApplier`, `WhatClientsSee`), and
@@ -962,12 +964,11 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   run.
 - See the three refusals over whom a document reaches answered by a running
   instance: `notifyIdsMissing`, `notifyIdsWithoutChosenAudience` and
-  `personCannotSeeIt`. Two of them the CLI's own guard holds back, so they need
-  a request built outside it. Until the third is seen, the sentence in
-  [Docs & Files](../stable/docs-and-files.md) which says that `--notify` naming
-  a client of the project is accepted and enrols them stands beside the refusal
-  in the same document, and only a live answer settles which of the two is the
-  practice. Whether the guard then stays is Robert's and Shaun's to say.
+  `personCannotSeeIt`. All three are reachable with `docs create` now that the
+  CLI judges the combination no longer, and the first two need nothing of a
+  project but a Docs & Files tool. `personCannotSeeIt` needs a project that
+  works with a client and a folder its clients are shown, which is the one of
+  the three a live check has to be set up for.
 - React to messages from `minka-ca`: check against the code, fake first,
   then the CLI, test and sabotage proof, check live, documentation in the
   same commit.

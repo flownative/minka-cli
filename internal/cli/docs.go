@@ -46,8 +46,11 @@ Markdown sent that way stands in the document afterwards as "# Heading". The
 command says so in a notice, and nothing else ever will.`
 
 const documentAudienceHelp = `--audience says whom a new document reaches: "everybody" in the project,
-"chosen" with one --notify per person, or "nobody". It is required, and
---notify belongs to "chosen" alone; Minka refuses either mismatch as well.
+"chosen" with one --notify per person, or "nobody". It is required. --notify
+belongs to "chosen" alone: Minka refuses names under any other audience with
+notifyIdsWithoutChosenAudience and "chosen" without a name with
+notifyIdsMissing; this command sends what it is given and leaves the rule
+to Minka.
 A person is given by ID, or as "me"; minka people list <projectId> gives the
 IDs.
 
@@ -217,7 +220,7 @@ func (a *app) newDocsCreateCmd() *cobra.Command {
 			if err := checkBodyFormat(cmd, bodyFormat); err != nil {
 				return err
 			}
-			if err := checkAudience(cmd, audience, notify); err != nil {
+			if err := checkAudience(cmd, audience); err != nil {
 				return err
 			}
 
@@ -748,20 +751,15 @@ func checkBodyFormat(cmd *cobra.Command, format string) error {
 	return nil
 }
 
-// checkAudience holds the two flags that decide whom a new document reaches
-// against each other. Minka passes over notifyIds for every audience but
-// "chosen" and takes "chosen" without anybody, and both of those write a
-// document that reaches somebody other than the writer meant.
-func checkAudience(cmd *cobra.Command, audience string, notify []string) error {
+// checkAudience holds the one word a document cannot be written without. Which
+// people go with which audience is the server's rule and is left to it, so that
+// there is one place where it stands.
+func checkAudience(cmd *cobra.Command, audience string) error {
 	switch {
 	case audience == "":
 		return usageErrorf(cmd, "say whom the document reaches: --audience everybody, chosen or nobody")
 	case audience != "everybody" && audience != "chosen" && audience != "nobody":
 		return usageErrorf(cmd, "--audience is everybody, chosen or nobody, not %q", audience)
-	case audience == "chosen" && len(notify) == 0:
-		return usageErrorf(cmd, "--audience chosen needs at least one --notify; --audience nobody tells nobody")
-	case audience != "chosen" && len(notify) > 0:
-		return usageErrorf(cmd, "--notify belongs to --audience chosen; %q tells nobody it names", audience)
 	}
 	return nil
 }

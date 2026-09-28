@@ -84,26 +84,27 @@ names the `--expect` to send next. An upload refuses with `uploadChanged` and
 
 ## Whom a new document reaches
 
-`--audience` is required: `everybody`, `chosen` with one `--notify` per person,
-or `nobody`. Minka refuses `notifyIds` under any audience but `chosen` with
-`notifyIdsWithoutChosenAudience`, and `chosen` with nobody named with
-`notifyIdsMissing`. The CLI refuses both itself, before a request goes out: the
-answer then names the flag to change instead of the field of a body nobody
-wrote by hand, and a document that reaches somebody other than the writer meant
-is worth the round trip it saves. Both are mapped here all the same, each with
-a hint naming the flag to change: the guard is this CLI's own, and a code it can
-meet the moment the guard is not there is worth a sentence rather than a bare
-422.
+`--audience` is required, and the CLI holds that word alone: `everybody`,
+`chosen` or `nobody`, and anything else is a usage error before a request goes
+out. Which people go with which audience is Minka's rule and stays there —
+`notifyIds` under any audience but `chosen` is `notifyIdsWithoutChosenAudience`,
+and `chosen` with nobody named is `notifyIdsMissing`. Both come back as exit 9
+with a hint naming the flag to change. One rule in one place: a second copy here
+would be a second thing to keep in step with a server that already answers it
+([C-070](../decisions.md#c-070)).
 
 `--notify` takes the ID of a person, or `me`. A name is not looked up: which
 project a tool hangs in is not known before the document exists, and a name can
 only be matched against the members of a project.
 
-A **client** of the project is a member, so `--notify` naming one is accepted
-and enrols them; E-199 then keeps them out of the notification and out of the
-read. The CLI cannot tell a client apart here and does not try — it does not
-know the project before the document exists — and whether a client then sees
-the document is Minka's to decide.
+A **client** of the project is a member, and being a member is not enough to be
+told: `--notify` naming a client is refused with `personCannotSeeIt` wherever
+the document is not shown to clients, which is everywhere but inside a folder
+that is (E-199). Nothing is written then, and nothing about the request can be
+mended — the person is real, belongs to the project and may simply not hear of
+it, so the answer is to name somebody else. The CLI cannot tell a client apart
+and does not try: it does not know the project before the document exists, and
+which folder a project shows its clients is decided in Minka on the web.
 
 ## Two kinds of entry, one flag
 
@@ -145,7 +146,7 @@ first name that is refused decides which of the two the answer is.
 | 422 `documentTitleMissing`, `documentTitleTooLong`, `documentTitleHasControlCharacters` | `docs create`, `docs edit` | 9 |
 | 422 `documentBodyTooLong`, `documentBodyNotReadable` | `docs create`, `docs edit` | 9 |
 | 422 `documentAudienceMissing` | unreachable: the audience is held here | — |
-| 422 `notifyIdsMissing`, `notifyIdsWithoutChosenAudience` | unreachable: the audience and the people named are held against each other here | — |
+| 422 `notifyIdsMissing`, `notifyIdsWithoutChosenAudience` | `docs create --audience` and `--notify` that do not go together | 9 |
 | 422 `personNotAProjectMember` | `docs create --notify` naming somebody outside the project | 9 |
 | 422 `personCannotSeeIt` | `docs create --notify` naming a client of the project, for a document the clients of it are not shown | 9 |
 | 422 `folderUnknown`, `folderArchived` | `docs create --folder` | 9 |
