@@ -1045,8 +1045,9 @@ this:
   a mail says would reach Minka as nothing at all, the run writes a line of its
   own into the body
   (`data.forwards.givenALineOfTheRun`), because such a mail would be lost on
-  every run. A file this run merely could not fetch is not that: the mail waits
-  for it, and the next run brings both. A mail nobody is named for goes to the
+  every run. A file that might still come is not that: the mail waits
+  for it, and a later run brings both, while one Basecamp itself refuses is a
+  file that never comes. A mail nobody is named for goes to the
   owner of the organization
   (`data.forwards.withoutAForwarder`). An answer by mail is a record of its own
   and no comment: it belongs to somebody of the account or, for one from outside
@@ -1089,12 +1090,15 @@ this:
   document or a description longer than the 1,000,000 characters Minka holds is
   counted (`data.docs.longerThanMinkaTakes`) and comes as it is. A record that
   lost a file no run will bring is named (`data.docs.onlyAFileNoRunWillBring`),
-  and the two kinds end differently because the one field is optional and the
-  other is not: a document whose whole text was that file arrives **without
-  words**, its title, comments and boosts with it, while an upload cannot be
-  written without its file at all and Minka asks for the file again on every
-  run. A file this run merely could not fetch is not that: the record waits for
-  it, and the next run brings it whole. `data.docs.leftOut` counts per kind
+  and the kinds end differently because a text is optional and a file is not: a
+  document whose whole text was that file arrives **without words**, its title,
+  comments and boosts with it; an upload has no purpose without its file and is
+  **left out** with its comments and its boosts — its file gone at the source,
+  above what Minka takes, in a cloud, or refused by Basecamp itself. A file that
+  might still come is not that: `why` of its entry in `data.missingFiles` says
+  `failedThisTime` or `notUnderstood`, the upload comes and waits for it, and a
+  later run brings both whole. A dry run downloads nothing and cannot know a
+  refusal, so it counts an upload a run leaves out. `data.docs.leftOut` counts per kind
   what the bundle holds none of, and `data.docs.placesLeftOut` names every
   folder and every tool that took entries with it. A folder the source has put
   away that would not say what stands in it is passed over and counted
@@ -1212,17 +1216,30 @@ this:
 - One run at a time works on an `--out`: a second one exits 1 (`config`) and
   names the lock the first holds. A run that was killed holds none. `--out`
   must not be a symbolic link.
-- A file that cannot be fetched does not end the run. The bundle is written
-  without it and can be applied, and the command fails at the end: exit 6 and
-  `retryable` when running again may bring the file, else exit 7. The report
-  is `data` of the error envelope then, and `data.missingFiles` names each
-  file with its owner and the `reason`. Do not treat such a run as lost: run
-  the same command again, it fetches what is missing and takes the rest
-  over. A download that brings nothing for a minute is given up and counts
-  as missing, retryable. A file whose `reason` speaks of its key or of an
-  address that cannot be asked for safely comes with no run; leave it. A
+- A file that cannot be fetched does not end the run: the bundle is written
+  without it and can be applied, and `data.missingFiles` names each file with
+  its owner, the `reason` and **`why`**, which says whose word the loss is and
+  is the field to read:
+  - `failedThisTime` — it may pass. Exit 6 and `retryable`, the report as `data`
+    of the error envelope. Do not treat such a run as lost: run the same command
+    again and it fetches what is missing and takes the rest over.
+  - `refusedBySource` — Basecamp itself has no such file or hands it to nobody.
+    Where **every** missing file says this, the run ends 0, with a notice naming
+    them and the count in the `summary`. No run will bring those, the records
+    that stood on one are already written without it or left out, and running
+    again changes nothing: look at what is named and settle it at the source.
+  - `notUnderstood` — a guard of the CLI refused, or an answer nobody could
+    read. Exit 7, not retryable, wherever one of them is among the files.
+    **Nothing is written off**: the records that stood on such a file keep
+    waiting, and a later run brings it once the reason is gone. A few of them are
+    a shape nobody has met; many at once mean this CLI or the Basecamp CLI it
+    reads through has changed, which is the thing to look at — not the files.
+  A download that brings nothing for a minute is given up and counts
+  as missing, `failedThisTime`. A
   Basecamp CLI that lost its sign-in while files were fetched ends the run
-  with exit 3 and nothing written, and a run that ends that way, or is
+  with exit 3 and nothing written, and an avatar answered with 401 ends it the
+  same way — a sign-in that is gone is no word about a picture, and every person
+  of the account would lose theirs. A run that ends that way, or is
   stopped, fetches its files again: only a bundle in place hands files
   over.
 - A bundle holds personal data: names, e-mail addresses, pictures. Write it

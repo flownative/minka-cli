@@ -175,11 +175,13 @@ func holdsTogether(t *testing.T, dir string, missing []basecamp.MissingFile) {
 	}
 
 	named := map[string]bool{}
+	comesOnALaterRun := map[string]bool{}
 	for _, missed := range missing {
 		if records[missed.AttachmentSourceID] {
 			t.Errorf("%s is missing and has a record", missed.AttachmentSourceID)
 		}
 		named[missed.AttachmentSourceID] = true
+		comesOnALaterRun[missed.AttachmentSourceID] = !missed.Why.NoRunWillBring()
 	}
 	for where, body := range bodiesOf(t, dir) {
 		kind, id, _ := strings.Cut(where, " ")
@@ -207,9 +209,17 @@ func holdsTogether(t *testing.T, dir string, missing []basecamp.MissingFile) {
 		}
 	}
 	// The file an upload stands for is named by a field and not by a tag, and it
-	// is the upload's own as a tag's file is its body's.
+	// is the upload's own as a tag's file is its body's. The field is required,
+	// so it has to name a record of the index or a file this run merely missed,
+	// which the run after it writes: one that names neither is an upload nothing
+	// will ever make whole, and Minka waits for it on every run.
+	uploads := map[string]bool{}
 	for _, upload := range recordsOrNone(t, dir, bundle.Uploads) {
 		file, _ := upload["file"].(string)
+		uploads[upload["sourceId"].(string)] = true
+		if !records[file] && !comesOnALaterRun[file] {
+			t.Errorf("the upload %v stands for %s, which has no record and no run will bring", upload["sourceId"], file)
+		}
 		named[file] = true
 		if owner, has := owners[file]; has && owner != [2]string{bundle.OwnerUpload, upload["sourceId"].(string)} {
 			t.Errorf("the upload %v stands for %s, which belongs to %s %s", upload["sourceId"], file, owner[0], owner[1])
@@ -217,9 +227,13 @@ func holdsTogether(t *testing.T, dir string, missing []basecamp.MissingFile) {
 	}
 	for id := range records {
 		// A record of a file that will never come may be named by nothing: the one
-		// body that held it was written without the tag, and there are no bytes
-		// behind the record for anybody to have carried in vain.
-		if !named[id] && !gone[id] {
+		// body that held it was written without the tag, or it is the **own file**
+		// of an upload that is left out and stays as the trace of what became of
+		// it. A file of such an upload's description is no trace of anything: it
+		// is bytes brought in vain, and nothing brings them any more.
+		owner := owners[id]
+		trace := gone[id] || (owner[0] == bundle.OwnerUpload && !uploads[owner[1]] && id == "upload-"+owner[1])
+		if !named[id] && !trace {
 			t.Errorf("nothing names the record %s", id)
 		}
 	}
@@ -514,8 +528,8 @@ func TestWhatBecameOfAFileBecomesOfEveryOwnerOfIt(t *testing.T) {
 	named := map[string]string{}
 	for _, missed := range result.Missing {
 		named[missed.AttachmentSourceID] = missed.OwnerKind + " " + missed.OwnerSourceID
-		if !missed.Retryable {
-			t.Errorf("%s is missing for a reason that may not pass", missed.AttachmentSourceID)
+		if !missed.Why.MayPass() {
+			t.Errorf("%s is missing for a reason that may not pass: %s", missed.AttachmentSourceID, missed.Why)
 		}
 	}
 	want := map[string]string{"attachment-5101": "card 9901", "attachment-5101.post-9921": "post 9921", "attachment-5101.comment-9922": "comment 9922"}
@@ -581,6 +595,11 @@ func TestTheIndexHoldsWhatTheReportSaysItHolds(t *testing.T) {
 		}
 		return of
 	}
+	// Over the project of the files and over the Docs & Files, whose uploads are
+	// the one place where a record of the bundle is left out **after** its text
+	// has been read: an owner counted for an upload that is left out would be an
+	// owner of nothing, and the form the report gives for checking a bundle would
+	// stop adding up.
 	for name, prepare := range map[string]func(*fakebasecamp.Account){
 		"a run that brings everything": func(*fakebasecamp.Account) {},
 		"a file no owner of it can have": func(account *fakebasecamp.Account) {
@@ -589,11 +608,19 @@ func TestTheIndexHoldsWhatTheReportSaysItHolds(t *testing.T) {
 		"an avatar that could not be fetched": func(account *fakebasecamp.Account) {
 			account.FailAvatarOf[101] = &basecamp.Error{Kind: basecamp.Network, Message: "connection reset"}
 		},
+		"an upload left out whose description shared a file": func(account *fakebasecamp.Account) {
+			account.FailFileOf[fakebasecamp.StoredKeyOfUpload(9267)] = &basecamp.Error{
+				Kind: basecamp.Forbidden, Message: "Basecamp forbids the download"}
+		},
+		"an upload left out that shared nothing": func(account *fakebasecamp.Account) {
+			account.FailFileOf[fakebasecamp.StoredKeyOfUpload(9260)] = &basecamp.Error{
+				Kind: basecamp.Forbidden, Message: "Basecamp forbids the download"}
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			account := fakebasecamp.New()
 			prepare(account)
-			dir, result := extract(t, account, fileProject)
+			dir, result := extract(t, account, fileProject, docsProject)
 
 			want := result.Avatars + result.Files.Expected + result.Files.OwnersBeyondTheFirst -
 				filesOfATextThatAreMissing(result.Missing)
@@ -686,10 +713,12 @@ func TestAFileThatCannotBeFetchedIsLeftOutAndTheRunGoesOn(t *testing.T) {
 	dir, result := extract(t, account, fileProject)
 
 	want := []basecamp.MissingFile{
-		{AttachmentSourceID: "attachment-5102", OwnerKind: "card", OwnerSourceID: "9901", Reason: "Basecamp forbids the download"},
-		{AttachmentSourceID: "attachment-4711", OwnerKind: "card", OwnerSourceID: "9902", Reason: "the network failed during the download", Retryable: true},
-		{AttachmentSourceID: "blob-" + scanKey, OwnerKind: "message", OwnerSourceID: "9931", Reason: "the download brought 4999 bytes of a file of 5000", Retryable: true},
-		{AttachmentSourceID: "blob-" + fakebasecamp.FileKey(6002), OwnerKind: "message", OwnerSourceID: "9931", Reason: "the download brought 251 bytes of a file of 250"},
+		{AttachmentSourceID: "attachment-5102", OwnerKind: "card", OwnerSourceID: "9901", Reason: "Basecamp forbids the download", Why: basecamp.RefusedBySource},
+		{AttachmentSourceID: "attachment-4711", OwnerKind: "card", OwnerSourceID: "9902", Reason: "the network failed during the download", Why: basecamp.FailedThisTime},
+		{AttachmentSourceID: "blob-" + scanKey, OwnerKind: "message", OwnerSourceID: "9931", Reason: "the download brought 4999 bytes of a file of 5000", Why: basecamp.FailedThisTime},
+		// More bytes than Basecamp says the file has is no answer about the file:
+		// nothing here can say what came, so nothing is decided about it.
+		{AttachmentSourceID: "blob-" + fakebasecamp.FileKey(6002), OwnerKind: "message", OwnerSourceID: "9931", Reason: "the download brought 251 bytes of a file of 250", Why: basecamp.NotUnderstood},
 	}
 	if !reflect.DeepEqual(result.Missing, want) {
 		t.Errorf("missing:\n got %+v\nwant %+v", result.Missing, want)
@@ -780,6 +809,11 @@ func TestAFileTheBundleCannotStoreEndsTheRun(t *testing.T) {
 	}
 }
 
+// A guard of this run refusing an address is a word about **this run** and never
+// about the file: nothing is decided about the file, nothing that stood on it is
+// written off, and the run says out loud that it did not understand. A reading of
+// the source that is wrong by one shape costs one exit code and a later run,
+// which is what it would cost the whole of an account if it counted as a refusal.
 func TestAFileWithoutAnAddressItCanBeFetchedFromIsMissingAndNeverAskedFor(t *testing.T) {
 	account := fakebasecamp.New()
 	card := &account.Projects[4].Dock[0].Lists[0].Cards[0]
@@ -791,9 +825,9 @@ func TestAFileWithoutAnAddressItCanBeFetchedFromIsMissingAndNeverAskedFor(t *tes
 	dir, result := extract(t, account, fileProject)
 
 	want := []basecamp.MissingFile{
-		{AttachmentSourceID: "attachment-5102", OwnerKind: "card", OwnerSourceID: "9901", Reason: "the key of the stored file has no form that can be asked for"},
-		{AttachmentSourceID: "attachment-5103", OwnerKind: "comment", OwnerSourceID: "9911", Reason: "the address Basecamp gives the file cannot be asked for safely"},
-		{AttachmentSourceID: "blob-" + fakebasecamp.FileKey(6002), OwnerKind: "message", OwnerSourceID: "9931", Reason: "the address Basecamp gives the file cannot be asked for safely"},
+		{AttachmentSourceID: "attachment-5102", OwnerKind: "card", OwnerSourceID: "9901", Reason: "the key of the stored file has no form that can be asked for", Why: basecamp.NotUnderstood},
+		{AttachmentSourceID: "attachment-5103", OwnerKind: "comment", OwnerSourceID: "9911", Reason: "the address Basecamp gives the file cannot be asked for safely", Why: basecamp.NotUnderstood},
+		{AttachmentSourceID: "blob-" + fakebasecamp.FileKey(6002), OwnerKind: "message", OwnerSourceID: "9931", Reason: "the address Basecamp gives the file cannot be asked for safely", Why: basecamp.NotUnderstood},
 	}
 	if !reflect.DeepEqual(result.Missing, want) {
 		t.Fatalf("missing:\n got %+v\nwant %+v", result.Missing, want)
@@ -829,8 +863,8 @@ func TestWhatLooksLikeAFailureIsTheFileWhenItHasTheSizeBasecampGives(t *testing.
 		t.Errorf("the file of the size Basecamp gives: %v", got)
 	}
 	want := []basecamp.MissingFile{
-		{AttachmentSourceID: "attachment-5109", OwnerKind: "card", OwnerSourceID: "9902", Reason: basecamp.ErrLooksLikeAFailure.Message},
-		{AttachmentSourceID: "attachment-4711", OwnerKind: "card", OwnerSourceID: "9902", Reason: "the download brought 170 bytes of a file of 600", Retryable: true},
+		{AttachmentSourceID: "attachment-5109", OwnerKind: "card", OwnerSourceID: "9902", Reason: basecamp.ErrLooksLikeAFailure.Message, Why: basecamp.NotUnderstood},
+		{AttachmentSourceID: "attachment-4711", OwnerKind: "card", OwnerSourceID: "9902", Reason: "the download brought 170 bytes of a file of 600", Why: basecamp.FailedThisTime},
 	}
 	if !reflect.DeepEqual(result.Missing, want) {
 		t.Errorf("missing:\n got %+v\nwant %+v", result.Missing, want)

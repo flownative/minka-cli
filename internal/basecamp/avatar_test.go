@@ -186,8 +186,33 @@ func TestWhatIsNoPictureIsNoAvatar(t *testing.T) {
 	})
 	_, err := client.Fetch(t.Context(), server.URL+"/page")
 	expectKind(t, err, API)
+	// A picture Basecamp no longer has is no avatar either, and that one is the
+	// source's own word: the class says so, because what the class is decides
+	// whether a run that lost the avatar has anything to do about it.
 	_, err = client.Fetch(t.Context(), server.URL+"/gone")
-	expectKind(t, err, API)
+	expectKind(t, err, NotFound)
+}
+
+// The class of a status that is no 200: what the picture is not there for
+// anybody is Basecamp's own word, what may pass says so, and a status nobody
+// knows is an answer this run cannot place — which fails a run rather than
+// counting as a picture nothing will ever bring.
+func TestTheClassOfAStatusThatIsNoTwoHundred(t *testing.T) {
+	for status, want := range map[int]Kind{
+		http.StatusNotFound: NotFound, http.StatusGone: NotFound,
+		// A 401 is no word about the picture but about our sign-in, and it ends the
+		// run rather than writing off what nobody refused; a 403 is the source's
+		// word, and only because the host is Basecamp's own.
+		http.StatusForbidden: Forbidden, http.StatusUnauthorized: AuthRequired,
+		http.StatusTooManyRequests: RateLimited,
+		http.StatusRequestTimeout:  Unavailable, http.StatusBadGateway: Unavailable,
+		http.StatusInternalServerError: Unavailable, http.StatusServiceUnavailable: Unavailable,
+		http.StatusTeapot: API, http.StatusBadRequest: API, 599: Unavailable,
+	} {
+		if got := kindOfAnAvatarStatus(status); got != want {
+			t.Errorf("HTTP %d is %q, want %q", status, got, want)
+		}
+	}
 }
 
 // A server that never stops sending must not fill the memory: reading ends

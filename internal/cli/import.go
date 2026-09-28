@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -307,12 +308,16 @@ upload Basecamp names no stored file for, one that lives in a cloud, is left out
 and named by ID with its comments and its boosts
 (docs.withoutAStoredFile): a comment pointing at an upload the bundle does not
 carry would stop the applier. A record that lost a file no run will bring is
-named (docs.onlyAFileNoRunWillBring), and the two kinds end differently because
-the one field is optional and the other is not: a document whose whole text was
-that file arrives without words, its title, comments and boosts with it,
-while an upload cannot be written without its file at all and Minka asks for the
-file again on every run. A file this run merely could not fetch is not that, and
-the record waits for it. A document, or the description of an
+named (docs.onlyAFileNoRunWillBring), and the kinds end differently because a
+text is optional and a file is not: a document whose whole text was that file
+arrives without words, its title, comments and boosts with it, while an upload
+has no purpose without its file and is left out with its comments and its
+boosts, its file gone at the source, above what Minka takes or refused for
+good. Where the file left a record behind, that record stays as the trace of
+what became of it. A file this run merely missed is none of that: it is named
+under missingFiles, and the upload comes and waits for the run that
+brings it. A dry run downloads nothing and cannot know, so it counts an upload
+a run leaves out. A document, or the description of an
 upload, longer than the 1,000,000 characters Minka holds is counted
 (docs.longerThanMinkaTakes) and comes as it is, as a mail does. A folder takes
 neither comments nor boosts, here as in Basecamp, so neither is asked for.
@@ -399,8 +404,15 @@ pauses before the run ends, and at most 100 requests of a run are; the report
 counts them as requestsRetried.
 
 A file that cannot be fetched does not end the run: the bundle is written
-without it, the report names it under missingFiles, and the command exits 6
-when trying again may help, else 7. A later run brings what is missing. A
+without it and the report names it under missingFiles, with why saying whose
+word the loss is. The exit code says what to do next and nothing else: 7 where
+one of them is notUnderstood, because a guard of this run refused or an answer
+was one nobody here can read and neither is about the file; 6 where one may
+pass, so run the same command again; and 0 where Basecamp itself refused every
+one of them, with a notice naming them and the count in the summary. Only such
+a refusal of the source is a loss for good, and the thing to do is to look at what
+the run named — docs.onlyAFileNoRunWillBring for the records that lost such a
+file — and settle it in Basecamp. A
 download that brings no byte for 60 seconds, or does not end within an hour,
 is given up and counts as such a file. A Basecamp CLI that is not signed in
 ends the run, for a file as for a request. A run that ends before its bundle
@@ -696,8 +708,8 @@ it has been applied.`,
 			}
 			if count := len(report.Docs.OnlyAFileNoRunWillBring); count > 0 {
 				notices = append(notices, plural(count,
-					"record of a Docs & Files tool lost a file no run will bring; data.docs.onlyAFileNoRunWillBring names it by ID. A document whose whole text was that file arrives without words, its title, comments and boosts with it; an upload whose own file it is cannot be written at all and Minka asks for the file again on every run",
-					"records of Docs & Files tools lost a file no run will bring; data.docs.onlyAFileNoRunWillBring names them by ID. A document whose whole text was that file arrives without words, its title, comments and boosts with it; an upload whose own file it is cannot be written at all and Minka asks for the file again on every run"))
+					"record of a Docs & Files tool lost a file no run will bring; data.docs.onlyAFileNoRunWillBring names it by ID. A document whose whole text was that file arrives without words, its title, comments and boosts with it; an upload has no purpose without its file and is left out with its comments and its boosts, which are counted where what fell with an upload is",
+					"records of Docs & Files tools lost a file no run will bring; data.docs.onlyAFileNoRunWillBring names them by ID. A document whose whole text was that file arrives without words, its title, comments and boosts with it; an upload has no purpose without its file and is left out with its comments and its boosts, which are counted where what fell with an upload is"))
 			}
 			if count := report.Docs.LongerThanMinkaTakes; count > 0 {
 				notices = append(notices, plural(count,
@@ -739,8 +751,14 @@ it has been applied.`,
 				plural(report.Counts[bundle.Posts], "post", "posts") + ", " +
 				plural(report.Counts[bundle.Messages], "message", "messages")
 
-			if len(report.MissingFiles) > 0 {
+			if !theMissingFilesAreAnsweredFor(report.MissingFiles) {
 				return incompleteImport(report, notices)
+			}
+			if count := len(report.MissingFiles); count > 0 {
+				summary += "; " + plural(count, "file lost that no run will bring", "files lost that no run will bring")
+				notices = append(notices, plural(count,
+					"file will never come: what Basecamp answered for it, it will answer on every run, so this one is no failure and a later one brings nothing. data.missingFiles names it with the reason and the record it belonged to; what stood on it is written without it or left out, which data.docs.onlyAFileNoRunWillBring names for the Docs & Files. Look at it at the source rather than running again",
+					"files will never come: what Basecamp answered for them, it will answer on every run, so this one is no failure and a later one brings nothing. data.missingFiles names each with the reason and the record it belonged to; what stood on them is written without them or left out, which data.docs.onlyAFileNoRunWillBring names for the Docs & Files. Look at them at the source rather than running again"))
 			}
 			return a.ok(success{
 				data:    report,
@@ -861,7 +879,8 @@ func renderImportReport(w io.Writer, report importReport) {
 	if len(report.MissingFiles) > 0 {
 		fmt.Fprintln(w, "\nMissing files:")
 		for _, missing := range report.MissingFiles {
-			fmt.Fprintf(w, "  %s of %s %s: %s\n", missing.AttachmentSourceID, missing.OwnerKind, missing.OwnerSourceID, missing.Reason)
+			fmt.Fprintf(w, "  %-15s %s of %s %s: %s\n", missing.Why,
+				missing.AttachmentSourceID, missing.OwnerKind, missing.OwnerSourceID, missing.Reason)
 		}
 	}
 
@@ -1017,13 +1036,16 @@ func renderDocs(w io.Writer, report importReport) {
 		fmt.Fprintf(w, "Titles of uploads folded into one line or cut short to fit: %d\n", docs.NamesMadeIntoATitle)
 	}
 	if len(docs.WithoutAStoredFile) > 0 {
-		fmt.Fprintf(w, "Uploads Basecamp names no stored file for, left out: %d (upload %s), with %d comments and %d boosts\n",
-			len(docs.WithoutAStoredFile), strings.Join(docs.WithoutAStoredFile, ", "),
-			docs.CommentsWithoutTheirUpload, docs.BoostsWithoutTheirUpload)
+		fmt.Fprintf(w, "Uploads Basecamp names no stored file for, left out: %d (upload %s)\n",
+			len(docs.WithoutAStoredFile), strings.Join(docs.WithoutAStoredFile, ", "))
 	}
 	if len(docs.OnlyAFileNoRunWillBring) > 0 {
 		fmt.Fprintf(w, "Records that lost a file no run will bring, the documents among them wordless: %d (record %s)\n",
 			len(docs.OnlyAFileNoRunWillBring), strings.Join(docs.OnlyAFileNoRunWillBring, ", "))
+	}
+	if docs.CommentsWithoutTheirUpload > 0 || docs.BoostsWithoutTheirUpload > 0 {
+		fmt.Fprintf(w, "Comments and boosts that fell with an upload left out: %d and %d\n",
+			docs.CommentsWithoutTheirUpload, docs.BoostsWithoutTheirUpload)
 	}
 	if docs.LongerThanMinkaTakes > 0 {
 		fmt.Fprintf(w, "Documents and descriptions longer than Minka holds, which it passes over on every run: %d\n", docs.LongerThanMinkaTakes)
@@ -1046,26 +1068,57 @@ func renderDocs(w io.Writer, report importReport) {
 	}
 }
 
-// incompleteImport is the end of a run that wrote its bundle without some of
-// the files. The bundle is whole and can be applied, so the report comes out
-// as after any run; the failure tells a caller that a later run has something
-// left to bring. It is worth trying again when a file failed for a reason that
-// may pass by itself.
+// incompleteImport is the end of a run that lost a file it cannot answer for.
+// The bundle is whole and can be applied, so the report comes out as after any
+// run; the failure says what a caller is to do about it, and there are two
+// answers.
+//
+// A failure **this run could not place** — a guard of its own refused, an answer
+// nobody can read, a Basecamp CLI that says something new — is a statement about
+// this program and not about the file, so it ends the run as an API failure
+// whatever else was lost with it: exactly the shape which, read as a refusal of
+// the source, would leave every file of an account out of a bundle and say the
+// run went well. A file that **may still come** ends it as a network failure,
+// retryable, because running the same command again is the thing to do.
+//
+// A run that lost only files the source itself refused ends 0 instead, with a
+// notice naming them and the summary counting them: an exit code says what to do
+// next, and one that no repeat can clear is one whoever watches it stops
+// reading. Such a file is left out, counted and named, as every record a bundle
+// cannot carry is.
 func incompleteImport(report importReport, notices []string) *Error {
 	e := &Error{
-		Code:    CodeAPI,
-		Message: "the bundle was written, but " + plural(len(report.MissingFiles), "file could not be fetched and is left out", "files could not be fetched and are left out"),
-		Hint:    "data.missingFiles names each file with the reason. The bundle can be applied as it is; a later run brings what is missing.",
-		Data:    report,
-		Text:    func(w io.Writer) { renderImportReport(w, report) },
-		Notices: notices,
+		Code:      CodeNetwork,
+		Retryable: true,
+		Message:   "the bundle was written, but " + plural(len(report.MissingFiles), "file could not be fetched and is left out", "files could not be fetched and are left out"),
+		Hint:      "data.missingFiles says of each file why it is not there. The bundle can be applied as it is; running the same command again brings what can still come.",
+		Data:      report,
+		Text:      func(w io.Writer) { renderImportReport(w, report) },
+		Notices:   notices,
 	}
-	for _, missing := range report.MissingFiles {
-		if missing.Retryable {
-			e.Code, e.Retryable = CodeNetwork, true
-		}
+	if aMissingFileNobodyCouldPlace(report.MissingFiles) {
+		e.Code, e.Retryable = CodeAPI, false
+		e.Hint = "data.missingFiles says of each file why it is not there; the ones with why notUnderstood are the reason for this failure. They say nothing about the files and everything about this program or the Basecamp CLI it reads through: nothing of them is written off, and a run that ends this way is not to be taken for a bundle that is short of them for good."
 	}
 	return e
+}
+
+// aMissingFileNobodyCouldPlace tells whether a run met a failure it cannot
+// answer for. Anything that is neither of the two answers counts, the empty word
+// included: a failure nobody named is one nobody understood.
+func aMissingFileNobodyCouldPlace(missing []basecamp.MissingFile) bool {
+	return slices.ContainsFunc(missing, func(file basecamp.MissingFile) bool {
+		return !file.Why.MayPass() && !file.Why.NoRunWillBring()
+	})
+}
+
+// theMissingFilesAreAnsweredFor tells that every file a run lost is one the
+// source itself refused, so that nothing is left to do about them and the run
+// ends well.
+func theMissingFilesAreAnsweredFor(missing []basecamp.MissingFile) bool {
+	return !slices.ContainsFunc(missing, func(file basecamp.MissingFile) bool {
+		return !file.Why.NoRunWillBring()
+	})
 }
 
 // basecampError classifies a failed run. Everything a run asks of Basecamp is

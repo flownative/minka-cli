@@ -299,6 +299,11 @@ it were whole, and a rename within one directory cannot end halfway.
 <a id="c-025"></a>
 ## C-025 — A file that cannot be fetched is left out, and the run fails at the end
 
+**Superseded by [C-069](#c-069)**, which keeps everything below but the one
+answer: a run whose missing files the source itself refused ends 0, because no
+repeat can bring them. A report of such a run read against this entry would look
+like a run that went through with nothing missing.
+
 *Applies to: `import`, every attachment of a bundle*
 
 The bundle is written without the file and its record and the report names it;
@@ -849,8 +854,9 @@ nothing, what it says is a file that will **never** come, it is nothing but an
 embed, or it holds nothing but what Minka takes off the edges of a text — the
 run writes one line of its own behind the body and counts the mails that carry
 one. The tag of the file stays where it stood, and an embed gets its address as
-a link and no sentence. A file this run merely could not fetch is not one that
-will never come: the mail waits for it.
+a link and no sentence. A file that might still come is not one that
+will never come: the mail waits for it, and only a refusal of the source is such
+a file ([C-069](#c-069)).
 
 **Why:** `body` is a field of a forward that must not be empty, so writing one
 is the only way the mail comes at all: Minka writes such a body empty and
@@ -959,28 +965,35 @@ in the report.
 [Importing from Basecamp](stable/import.md).
 
 <a id="c-063"></a>
-## C-063 — An upload without a stored file is left out with everything pointing at it
+## C-063 — An upload whose file the source refuses is left out with everything pointing at it
 
 *Applies to: `import basecamp`, the uploads of a Docs & Files tool*
 
-An upload Basecamp names no stored file for, one that lives in a cloud, is left
-out and named by its `sourceId`, and its comments and its boosts are neither
-asked for nor written. All three are counted and a `notice` says so. **What says
-so is the record and never the shape of the address:** an upload the source gives
-an address to fetch a file from has a file, and one whose address a run cannot
-ask for is a file it could not fetch — named under `missingFiles`, the run ending
-non-zero, and a later run brings it.
+An upload whose file no run will ever bring is left out and named by its
+`sourceId`, and its comments and its boosts are neither asked for nor written.
+Four things leave it without one, all of them the source's own word: a file that
+lives in a cloud, which Basecamp names no stored file for
+(`docs.withoutAStoredFile`), one the source no longer has, one above what Minka
+takes, and a download Basecamp refuses (all three
+`docs.onlyAFileNoRunWillBring`). What fell with either list is counted and a
+`notice` says so. Where the file left a record behind, that record stays as the
+trace of what became of it. **What says an upload has a file is the record and
+never the shape of the address**, and **what says no run will bring it is
+Basecamp's own answer and nothing else:** a failure that may pass and one this
+run could not place both leave the upload written and waiting.
 
-**Why:** `file` takes the `sourceId` of a file of the bundle and nothing else,
-and no run will ever have bytes to fetch for a file that lies somewhere else,
-so such an upload would be counted in Minka as waiting on every run. What
-pointed at it falls with it ([C-052](#c-052)): a comment naming an upload the
-bundle does not carry stops the applier, and carrying it would cost the import
-rather than the one upload. The record and not the address decides, because a
-reading of the address that is wrong by one shape leaves **every** file of a tool
-out of the bundle, counted and named and gone, where a file that cannot be
-fetched costs one exit code and a later run.
+**Why:** an upload has no purpose without its file: `file` takes the `sourceId`
+of a file of the bundle and nothing else, and one Minka cannot store leaves the
+upload waiting there on every run, for ever, saying nothing to anybody. An
+honest gap in the report is worth more than that. What pointed at it falls with
+it ([C-052](#c-052)): a comment naming an upload the bundle does not carry stops
+the applier, and carrying it would cost the import rather than the one upload.
+The record and not the address decides, and only the source's own answer counts
+as a refusal, because either reading that is wrong by one shape leaves **every**
+file of a tool out of the bundle, counted and named and gone, where a file that
+cannot be fetched costs one exit code and a later run ([C-069](#c-069)).
 **Implemented as:** `basecamp.fileOfAnUpload`,
+`basecamp.Extractor.theFileDidNotCome`, `theFileNeverArrives`,
 `basecamp.Extractor.writeUpload`, see
 [Importing from Basecamp](stable/import.md).
 
@@ -1094,3 +1107,30 @@ reports.
 **Implemented as:** `cli.markupNotice`, `cli.documentBody`,
 `cli.descriptionHTML`, see [Rich text in both directions](stable/rich-text.md)
 and [Docs & Files](stable/docs-and-files.md).
+
+<a id="c-069"></a>
+## C-069 — The exit code of a run that lost a file says whose word the loss is
+
+*Applies to: `import`, every attachment of a bundle, supersedes
+[C-025](#c-025)*
+
+The bundle is written without the file and its record, and the report names it
+under `missingFiles` with `why`: `failedThisTime`, `refusedBySource` or
+`notUnderstood`. The strongest of them decides the end — `api_error`, exit 7,
+where one could not be placed, else `network`, exit 6 and retryable, where one
+may pass, else 0 with the loss in the `notice` and in the `summary`. **Only
+`refusedBySource` decides anything about the file**, and a failure this run
+raised before it asked anybody is never that, whatever class it carries.
+
+**Why:** the exit code is a contract ([C-003](#c-003)) and says what to do next:
+run again, look at the source, or look at this program. A file the source itself
+refuses gives a repeat nothing to do, so it is left out, counted and named as
+every record a bundle cannot carry is ([C-050](#c-050)), and an exit code that
+can never be cleared teaches whoever watches it to stop reading it. A failure
+nobody could place says nothing about the file: read as a refusal, one wrong
+reading — a guard of ours, an answer nobody can read, a Basecamp CLI that
+changed after an upgrade, a sign-in that ran out — would write off every file of
+an account and call the run a success.
+**Implemented as:** `basecamp.whoseWordAMissingFileIs`,
+`basecamp.howTheDownloadEnded`, `basecamp.ourOwnRefusal`,
+`cli.incompleteImport`, see [Importing from Basecamp](stable/import.md).

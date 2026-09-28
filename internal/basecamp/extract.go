@@ -123,8 +123,9 @@ type MissingFile struct {
 	OwnerKind          string `json:"ownerKind"`
 	OwnerSourceID      string `json:"ownerSourceId"`
 	Reason             string `json:"reason"`
-	// Retryable tells that the failure may pass by itself.
-	Retryable bool `json:"retryable"`
+	// Why says whose word the failure is and therefore what to do about it: run
+	// again, look at the source, or look at this program.
+	Why WhyAFileIsMissing `json:"why"`
 }
 
 // TodosLeftOut counts what a bundle does not carry of the To-dos tools of a run,
@@ -1039,7 +1040,10 @@ func (e *Extractor) attach(ctx context.Context, w *bundle.Writer, record bundle.
 		fetched, err := fetch(ctx)
 		if err != nil {
 			var failed *Error
-			if !errors.As(err, &failed) || failed.Kind == Interrupted || ctx.Err() != nil {
+			// A sign-in that is gone ends the run, as it does for a file: no further
+			// picture would come either, and a run that noted them one by one would
+			// write off every person of an account over one thing nobody refused.
+			if !errors.As(err, &failed) || failed.Kind == Interrupted || failed.Kind == AuthRequired || ctx.Err() != nil {
 				return nil, err
 			}
 			e.missing = append(e.missing, MissingFile{
@@ -1047,7 +1051,7 @@ func (e *Extractor) attach(ctx context.Context, w *bundle.Writer, record bundle.
 				OwnerKind:          record.OwnerKind,
 				OwnerSourceID:      record.OwnerSourceID,
 				Reason:             failed.Message,
-				Retryable:          failed.Transient(),
+				Why:                whyTheSourceGaveNoFile(failed),
 			})
 			return nil, nil
 		}

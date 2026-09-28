@@ -288,23 +288,45 @@ func TestARunThatFailsLeavesNoHalfBundle(t *testing.T) {
 	}
 }
 
+// A file no run will bring is a result and not a failure: the run says what was
+// lost, names it, and ends 0, because an exit code that no repeat can clear is
+// one whoever watches it stops reading. One file that may come next time is the
+// other thing, and it is the exit code that has to tell them apart.
 func TestARunWithFilesMissingWritesTheBundleAndSaysSoInEveryMode(t *testing.T) {
 	e := newImportEnv(t)
 	out := filepath.Join(t.TempDir(), "bundle")
-	e.account.FailAvatarOf[103] = &basecamp.Error{Kind: basecamp.API, Message: "downloading an avatar: HTTP 404"}
+	e.account.FailAvatarOf[103] = &basecamp.Error{Kind: basecamp.NotFound, Message: "downloading an avatar: HTTP 404"}
 
 	env, r := e.runJSON("import", "basecamp", "--project", "7001", "--out", out)
-	expectCode(t, r, ExitAPI)
-	if env.OK || env.Code != CodeAPI || env.Retryable || !strings.Contains(env.Error, "1 file could not be fetched and is left out") || !strings.Contains(env.Hint, "missingFiles") {
-		t.Errorf("ok %v, code %q, retryable %v, error %q, hint %q", env.OK, env.Code, env.Retryable, env.Error, env.Hint)
+	expectCode(t, r, ExitOK)
+	if !env.OK || env.Code != "" {
+		t.Errorf("ok %v, code %q: a file no run will bring failed the run", env.OK, env.Code)
+	}
+	if !strings.Contains(env.Notice, "1 file will never come") || !strings.Contains(env.Notice, "rather than running again") {
+		t.Errorf("the notice says nothing about the file that will never come: %q", env.Notice)
+	}
+	// And the summary says it, because that and `ok` are all a caller may read:
+	// a run that says nothing but what it wrote is a run that lost something
+	// quietly.
+	if !strings.Contains(env.Summary, "1 file lost that no run will bring") {
+		t.Errorf("the summary of a run that lost a file says only %q", env.Summary)
 	}
 	data := decode(t, env.Data)
 	wantMissing := []any{map[string]any{
 		"attachmentSourceId": "avatar-103", "ownerKind": "person", "ownerSourceId": "103",
-		"reason": "downloading an avatar: HTTP 404", "retryable": false,
+		"reason": "downloading an avatar: HTTP 404", "why": "refusedBySource",
 	}}
 	if !reflect.DeepEqual(data["missingFiles"], wantMissing) {
 		t.Errorf("missingFiles %v, want %v", data["missingFiles"], wantMissing)
+	}
+	// A run that ends well still shows what it lost, in every mode: the report
+	// is the report, and the exit code says only whether to run again.
+	styled := e.run("import", "basecamp", "--project", "7001", "--out", out, "--styled")
+	expectCode(t, styled, ExitOK)
+	for _, want := range []string{"Missing files:", "refusedBySource avatar-103 of person 103", "1 file will never come"} {
+		if !strings.Contains(styled.stdout+styled.stderr, want) {
+			t.Errorf("a run that lost a file nothing can bring says nothing of %q:\n%s%s", want, styled.stdout, styled.stderr)
+		}
 	}
 	wantCounts := map[string]any{"people": float64(5), "projects": float64(1), "tools": float64(5), "columns": float64(3), "attachments": float64(3)}
 	if !reflect.DeepEqual(data["counts"], wantCounts) || data["bundle"] != out {
@@ -343,6 +365,35 @@ func TestARunWithFilesMissingWritesTheBundleAndSaysSoInEveryMode(t *testing.T) {
 	}
 	if !strings.Contains(r.stderr, "Error: the bundle was written, but 2 files") {
 		t.Errorf("stderr: %s", r.stderr)
+	}
+
+	// A failure this run cannot place is a word about **this program**: exit 7,
+	// nothing to repeat, and the hint names the word to look for. It says so
+	// beside a file that may still come as well, because running again answers
+	// the one and not the other — and reading such a failure as a refusal of the
+	// source is what would end a wholesale breakage with exit 0.
+	e.account.FailAvatarOf[102] = &basecamp.Error{Kind: basecamp.API,
+		Message: "a host answered for an avatar with something that is no picture the bundle takes"}
+	env, r = e.runJSON("import", "basecamp", "--project", "7001", "--out", out)
+	expectCode(t, r, ExitAPI)
+	if env.Retryable || !strings.Contains(env.Hint, "notUnderstood") {
+		t.Errorf("retryable %v, hint %q", env.Retryable, env.Hint)
+	}
+	delete(e.account.FailAvatarOf, 101)
+	env, r = e.runJSON("import", "basecamp", "--project", "7001", "--out", out)
+	expectCode(t, r, ExitAPI)
+	if env.Retryable {
+		t.Error("a failure nobody could place makes the run worth repeating")
+	}
+	delete(e.account.FailAvatarOf, 102)
+
+	// With both of them gone, the file the source itself refused no longer fails
+	// the run: the exit code turns on what the failure is a word about, never on
+	// whether anything is missing at all.
+	env, r = e.runJSON("import", "basecamp", "--project", "7001", "--out", out)
+	expectCode(t, r, ExitOK)
+	if missing := decode(t, env.Data)["missingFiles"].([]any); !env.OK || len(missing) != 1 {
+		t.Errorf("ok %v with %v missing, want the one nothing can bring and exit 0", env.OK, missing)
 	}
 
 	// The next run brings what was missing.
@@ -1501,7 +1552,7 @@ func TestAFileOfATextThatCannotBeFetchedFailsTheRunAndTheNextOneBringsIt(t *test
 	data := decode(t, env.Data)
 	wantMissing := []any{map[string]any{
 		"attachmentSourceId": "attachment-4711", "ownerKind": "card", "ownerSourceId": "9902",
-		"reason": "the network failed during the download", "retryable": true,
+		"reason": "the network failed during the download", "why": "failedThisTime",
 	}}
 	if !reflect.DeepEqual(data["missingFiles"], wantMissing) || data["filesFetched"] != float64(11) {
 		t.Errorf("missingFiles %v, fetched %v", data["missingFiles"], data["filesFetched"])
@@ -1516,12 +1567,17 @@ func TestAFileOfATextThatCannotBeFetchedFailsTheRunAndTheNextOneBringsIt(t *test
 		}
 	}
 
-	// A failure that does not pass is no reason to try again.
+	// A failure that does not pass is no reason to try again, so it is no reason
+	// to fail the run either: the text keeps its reference, the file is named,
+	// and the run ends 0 saying what will never come.
 	e.account.FailFileOf[waiting] = &basecamp.Error{Kind: basecamp.Forbidden, Message: "Basecamp forbids the download"}
 	env, r = e.runJSON("import", "basecamp", "--project", "7005", "--out", out)
-	expectCode(t, r, ExitAPI)
-	if env.Retryable {
-		t.Error("a file Basecamp forbids makes the run worth repeating")
+	expectCode(t, r, ExitOK)
+	if !env.OK || !strings.Contains(env.Notice, "1 file will never come") {
+		t.Errorf("ok %v, notice %q: a file Basecamp forbids makes the run worth repeating", env.OK, env.Notice)
+	}
+	if missing := decode(t, env.Data)["missingFiles"].([]any); len(missing) != 1 {
+		t.Errorf("%v named as missing, want the one nothing can bring", missing)
 	}
 
 	delete(e.account.FailFileOf, waiting)
@@ -1563,6 +1619,25 @@ func TestADownloadWithoutASignInEndsTheRunTheWayARequestDoes(t *testing.T) {
 	}
 }
 
+// An avatar answered without a sign-in ends the run the same way, and that is
+// the whole point of reading a 401 as a word about the sign-in: noted file by
+// file it would write off the picture of **every person of the account** and
+// call it an answer about their pictures.
+func TestAnAvatarWithoutASignInEndsTheRunAsAFileDoes(t *testing.T) {
+	e := newImportEnv(t)
+	parent := t.TempDir()
+	e.account.FailAvatarOf[101] = &basecamp.Error{Kind: basecamp.AuthRequired, Message: "downloading an avatar from a host: HTTP 401"}
+
+	env, r := e.runJSON("import", "basecamp", "--project", "7001", "--out", filepath.Join(parent, "bundle"))
+	expectCode(t, r, ExitAuth)
+	if env.OK || env.Code != CodeAuth || env.Data != nil {
+		t.Errorf("ok %v, code %q, data %s", env.OK, env.Code, env.Data)
+	}
+	if entries, _ := os.ReadDir(parent); len(entries) != 0 {
+		t.Errorf("the run left %v", entries)
+	}
+}
+
 func TestNoOutputSaysWhatAFileIsCalledOrWhereItLies(t *testing.T) {
 	written := []string{
 		"holiday", "photo.png", "beach", "reports", "q1.pdf", "break", "shredded", "waiting", "wordy", "unsized", "minutes", "scan",
@@ -1579,10 +1654,11 @@ func TestNoOutputSaysWhatAFileIsCalledOrWhereItLies(t *testing.T) {
 			a.FailFileOf[fakebasecamp.FileKey(5103)] = errors.New("no space left on device")
 		},
 	}
-	// A dry run ends well for what only a download can show, and badly for what
-	// the source itself already says: a file whose address cannot be asked for is
-	// one no run will ever bring, and a dry run is what somebody reads before
-	// spending an hour on the files.
+	// A dry run downloads nothing, so nothing a download alone can show fails it.
+	// A file whose address cannot be asked for is not that: this run refuses it
+	// before it asks anybody, in a dry run as in a run, and a refusal of its own
+	// is a word about itself — the run fails over it and a dry run keeps the
+	// early warning it exists for.
 	seenWithoutADownload := map[string]bool{"a key that is none": true}
 	for name, change := range failures {
 		for _, mode := range [][]string{{"--json"}, {"--quiet"}, {"--styled"}, {"--json", "--dry-run"}} {
@@ -1954,7 +2030,7 @@ func TestImportBasecampReportsTheDocsAndFilesOfAProject(t *testing.T) {
 	want := map[string]any{
 		"foldersByStatus":       map[string]any{"active": float64(3), "archived": float64(1), "trashed": float64(1)},
 		"documentsByStatus":     map[string]any{"active": float64(6), "archived": float64(2), "trashed": float64(1)},
-		"uploadsByStatus":       map[string]any{"active": float64(7), "archived": float64(1), "trashed": float64(1)},
+		"uploadsByStatus":       map[string]any{"active": float64(6), "archived": float64(1), "trashed": float64(1)},
 		"documentsWithoutWords": float64(1), "titlesFromTheFileName": float64(2),
 		"namesMadeIntoATitle": float64(2), "withoutAName": float64(1),
 		"withoutAStoredFile": []any{"9262"}, "commentsWithoutTheirUpload": float64(1), "boostsWithoutTheirUpload": float64(1),
@@ -1990,12 +2066,13 @@ func TestImportBasecampReportsTheDocsAndFilesOfAProject(t *testing.T) {
 	r = e.run("import", "basecamp", "--project", "7011", "--out", out, "--styled")
 	expectCode(t, r, ExitOK)
 	for _, line := range []string{
-		"folders      5", "documents    9", "uploads      9",
+		"folders      5", "documents    9", "uploads      8",
 		"Folders: 3 active, 1 archived, 1 trashed",
 		"Documents: 6 active, 2 archived, 1 trashed; 1 of them without words",
-		"Uploads: 7 active, 1 archived, 1 trashed; 2 titled by the name of their file, 1 of them with neither",
-		"Uploads Basecamp names no stored file for, left out: 1 (upload 9262), with 1 comments and 1 boosts",
+		"Uploads: 6 active, 1 archived, 1 trashed; 2 titled by the name of their file, 1 of them with neither",
+		"Uploads Basecamp names no stored file for, left out: 1 (upload 9262)",
 		"Records that lost a file no run will bring, the documents among them wordless: 2 (record 9245, 9276)",
+		"Comments and boosts that fell with an upload left out: 1 and 1",
 		"Left out of the Docs & Files tools: 3 folders, 5 documents, 2 uploads",
 		"  with folder 9224 fell: 1 folders, 1 documents, 1 uploads",
 		"  with Docs & Files tool 9212 fell: 1 folders, 1 documents, 0 uploads",

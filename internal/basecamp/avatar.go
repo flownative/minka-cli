@@ -102,7 +102,8 @@ func (c *AvatarClient) Fetch(ctx context.Context, address string) (Avatar, error
 	defer response.Body.Close()
 
 	if response.StatusCode != http.StatusOK {
-		return Avatar{}, &Error{Kind: API, Message: fmt.Sprintf("downloading an avatar from %s: HTTP %d", parsed.Host, response.StatusCode)}
+		return Avatar{}, &Error{Kind: kindOfAnAvatarStatus(response.StatusCode),
+			Message: fmt.Sprintf("downloading an avatar from %s: HTTP %d", parsed.Host, response.StatusCode)}
 	}
 	contentType, _, _ := mime.ParseMediaType(response.Header.Get("Content-Type"))
 	if _, ok := avatarFilenames[contentType]; !ok {
@@ -120,4 +121,35 @@ func (c *AvatarClient) Fetch(ctx context.Context, address string) (Avatar, error
 		return Avatar{}, &Error{Kind: API, Message: fmt.Sprintf("an avatar from %s is larger than %d bytes", parsed.Host, maxAvatarBytes)}
 	}
 	return Avatar{Content: content, ContentType: contentType}, nil
+}
+
+// kindOfAnAvatarStatus is the class of a status that is no 200. What the class
+// decides is what becomes of the person and of the run, so a status that says
+// the picture is not there for anybody is Basecamp's own word about it, one of a
+// server or a limit may pass, and anything else is an answer this run cannot
+// place. The statuses that may pass are the ones a request of the API takes for
+// the same, so that a file and a request are not read by two rules.
+//
+// **A 401 is no word about the picture**: it says this run is not signed in, and
+// a sign-in that is gone would lose every avatar of an account the same way. It
+// ends the run, as it does for a file, rather than writing off what nobody
+// refused. A 403 **is** the source's word, and only because the host is
+// Basecamp's own: were avatars ever served from somewhere else against a signed
+// address, one that has run out would answer 403 and reach the reading that
+// writes off.
+func kindOfAnAvatarStatus(status int) Kind {
+	switch {
+	case status == http.StatusNotFound || status == http.StatusGone:
+		return NotFound
+	case status == http.StatusUnauthorized:
+		return AuthRequired
+	case status == http.StatusForbidden:
+		return Forbidden
+	case status == http.StatusTooManyRequests:
+		return RateLimited
+	case status >= 500 || status == http.StatusRequestTimeout:
+		return Unavailable
+	default:
+		return API
+	}
 }

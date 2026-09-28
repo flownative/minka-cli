@@ -74,11 +74,12 @@ type fileOfTheSource struct {
 	holder string
 	stored bundle.StoredFile
 	held   bool
-	// gone tells that Basecamp no longer has the file and failed why this run
-	// could not fetch it: either way no owner of it gets bytes, and asking a
-	// second time would pay for the same answer twice.
+	// gone tells that Basecamp no longer has the file, and failed why this run
+	// could not fetch it, with why whose word that was: either way no owner of it
+	// gets bytes, and asking a second time would pay for the same answer twice.
 	gone   bool
 	failed *Error
+	why    WhyAFileIsMissing
 	// decided says that a record of the file has been through all of that, so
 	// that a further owner knows whether there is anything to share.
 	decided bool
@@ -348,13 +349,13 @@ func (e *Extractor) attachFile(ctx context.Context, w *bundle.Writer, owner file
 	if file.contentType != "" {
 		record.ContentType = &file.contentType
 	}
-	missing := func(failed *Error) {
+	missing := func(failed *Error, why WhyAFileIsMissing) {
 		e.missing = append(e.missing, MissingFile{
 			AttachmentSourceID: file.ref,
 			OwnerKind:          owner.kind,
 			OwnerSourceID:      owner.sourceID,
 			Reason:             failed.Message,
-			Retryable:          failed.Transient(),
+			Why:                why,
 		})
 	}
 	met := e.theFile(file.ofTheSource())
@@ -385,11 +386,16 @@ func (e *Extractor) attachFile(ctx context.Context, w *bundle.Writer, owner file
 			e.filesThatNeverArrive[file.ref] = true
 		}
 		if !file.byTheUpload() {
-			if _, err := e.storageAddress(file); err != nil {
-				var failed *Error
-				if errors.As(err, &failed) {
-					met.failed = failed
-					missing(failed)
+			// Through the same door as a run, and read by the same answer, so that
+			// no class of failure means one thing here and another there. Nothing is
+			// fetched: what the door hands back is called by nobody.
+			if _, err := e.bringing(ctx, file); err != nil {
+				ended := howTheDownloadEnded(err)
+				switch {
+				case ended.endsTheRun:
+					return err
+				case ended.failed != nil:
+					e.theFileDidNotCome(file, met, ended.failed, ended.why, missing)
 				}
 				return nil
 			}
@@ -425,14 +431,14 @@ func (e *Extractor) attachFile(ctx context.Context, w *bundle.Writer, owner file
 				return err
 			})
 		}
-		var failed *Error
+		ended := howTheDownloadEnded(err)
 		switch {
 		case err == nil:
 		case ctx.Err() != nil:
 			return &Error{Kind: Interrupted, Message: "interrupted"}
-		case !errors.As(err, &failed) || failed.Kind == Interrupted || failed.Kind == AuthRequired:
+		case ended.endsTheRun:
 			return err
-		case failed.Kind == NotFound:
+		case ended.gone:
 			record.Gone = true
 			met.gone = true
 			e.files.Gone++
@@ -440,8 +446,7 @@ func (e *Extractor) attachFile(ctx context.Context, w *bundle.Writer, owner file
 			e.fileRecords = append(e.fileRecords, record)
 			return nil
 		default:
-			met.failed = failed
-			missing(failed)
+			e.theFileDidNotCome(file, met, ended.failed, ended.why, missing)
 			return nil
 		}
 		if file.byteSize != nil && stored.Bytes != *file.byteSize {
@@ -449,8 +454,7 @@ func (e *Extractor) attachFile(ctx context.Context, w *bundle.Writer, owner file
 				return err
 			}
 			differs := sizeDiffers(stored.Bytes, *file.byteSize)
-			met.failed = differs
-			missing(differs)
+			e.theFileDidNotCome(file, met, differs, whyTheSourceGaveNoFile(differs), missing)
 			return nil
 		}
 		e.files.Fetched++
@@ -474,7 +478,7 @@ func (e *Extractor) attachFile(ctx context.Context, w *bundle.Writer, owner file
 // What became of the file becomes of every owner of it at once: one the source no
 // longer has is gone for all of them, and one this run could not fetch is missing
 // for all of them, with the reason the first got.
-func (e *Extractor) shareTheFile(w *bundle.Writer, record bundle.Attachment, met *fileOfTheSource, missing func(*Error)) error {
+func (e *Extractor) shareTheFile(w *bundle.Writer, record bundle.Attachment, met *fileOfTheSource, missing func(*Error, WhyAFileIsMissing)) error {
 	if e.filesThatNeverArrive[met.holder] {
 		e.filesThatNeverArrive[record.SourceID] = true
 	}
@@ -484,7 +488,7 @@ func (e *Extractor) shareTheFile(w *bundle.Writer, record bundle.Attachment, met
 		e.fileRecords = append(e.fileRecords, record)
 		return nil
 	case met.failed != nil:
-		missing(met.failed)
+		missing(met.failed, met.why)
 		return nil
 	case !met.held:
 		// A dry run fetches nothing, so there are no bytes to share, and it counts
@@ -503,9 +507,14 @@ func (e *Extractor) shareTheFile(w *bundle.Writer, record bundle.Attachment, met
 }
 
 // bringing is what fetches the bytes of a file, by the route the file comes by,
-// or the reason no run can fetch it at all. Only a file named at a storage
-// address has such a reason: an upload is asked for by its identifiers, which
-// need no address and cannot be refused before the call.
+// or the refusal of this run's own that no file gets past. Only a file named at a
+// storage address can be refused here: an upload is asked for by its identifiers,
+// which need no address.
+//
+// **Whatever it refuses, it refuses as its own**, marked as such: what became of
+// a download turns on the difference between a word of this run and an answer of
+// the source, and that difference travels with the failure rather than with
+// whoever reads it.
 func (e *Extractor) bringing(ctx context.Context, file sourceFile) (func(io.Writer) error, error) {
 	if file.byTheUpload() {
 		return func(into io.Writer) error {
@@ -514,19 +523,88 @@ func (e *Extractor) bringing(ctx context.Context, file sourceFile) (func(io.Writ
 	}
 	address, err := e.storageAddress(file)
 	if err != nil {
-		return nil, err
+		return nil, &ourOwnRefusal{err}
 	}
 	return func(into io.Writer) error { return e.Files.Download(ctx, address, into) }, nil
 }
 
-// theFileNeverArrives tells that no run will ever bring the bytes of a file to
-// Minka: the source no longer has it, or it weighs more than a run takes there.
-// A file this run merely could not fetch is not one of them — it leaves no
-// record at all, the run ends non-zero, and the run after it brings the file —
-// and neither is one the walk has not met yet.
+// ourOwnRefusal is a failure this run raised **before it asked anybody**: a key
+// it will build no address from, an address it will not hand to the Basecamp
+// CLI. Such a failure says nothing about the file, whatever class it carries, so
+// nothing standing on the file is written off over it and the run says out loud
+// that it did not understand. It is carried by the failure because a guard that
+// one day spoke in a class of the source would otherwise be taken for the source.
+type ourOwnRefusal struct{ err error }
+
+func (r *ourOwnRefusal) Error() string { return r.err.Error() }
+func (r *ourOwnRefusal) Unwrap() error { return r.err }
+
+// howADownloadEnded is what became of a download: nothing of it where the file
+// came, the end of the run, a file the source no longer has, or one that is
+// missing with the word whose the failure was.
+type howADownloadEnded struct {
+	endsTheRun bool
+	gone       bool
+	failed     *Error
+	why        WhyAFileIsMissing
+}
+
+// howTheDownloadEnded reads a failure of a download, or the want of one. It is
+// the one place where both halves of the answer are known — the class, and
+// whether this run raised the failure itself — and it takes a class for the
+// source's word only where the source gave it: a "not found" of our own would
+// otherwise write the file off as one Basecamp no longer has, and a refusal of
+// our own as one it hands to nobody.
 //
-// Only a record whose body is nothing else asks: for every other body a file
-// that stays outside leaves a hole and nothing more.
+// A sign-in that is gone and an interruption end the run: no further file would
+// come either way.
+func howTheDownloadEnded(err error) howADownloadEnded {
+	if err == nil {
+		return howADownloadEnded{}
+	}
+	var failed *Error
+	if !errors.As(err, &failed) || failed.Kind == Interrupted || failed.Kind == AuthRequired {
+		return howADownloadEnded{endsTheRun: true}
+	}
+	var ours *ourOwnRefusal
+	why := whoseWordAMissingFileIs(errors.As(err, &ours), failed)
+	if why == RefusedBySource && failed.Kind == NotFound {
+		return howADownloadEnded{gone: true}
+	}
+	return howADownloadEnded{failed: failed, why: why}
+}
+
+// theFileDidNotCome notes a download that brought no file, names it among the
+// missing with the reason and whose word it was, and says whether any run will
+// ever bring it.
+//
+// **Only a refusal of the source decides anything about the file**, and the
+// three answers must not be run together: a failure that may pass leaves a hole
+// this run reports and the next one fills, a refusal leaves a hole for ever, and
+// one nobody could place says nothing about the file at all — the run fails over
+// it, and the records that stood on it keep waiting rather than being thrown
+// away over an answer this program did not understand.
+func (e *Extractor) theFileDidNotCome(file sourceFile, met *fileOfTheSource, failed *Error, why WhyAFileIsMissing, missing func(*Error, WhyAFileIsMissing)) {
+	met.failed, met.why = failed, why
+	if why.NoRunWillBring() {
+		e.filesThatNeverArrive[file.ref] = true
+	}
+	missing(failed, why)
+}
+
+// theFileNeverArrives tells that no run will ever bring the bytes of a file to
+// Minka: the source no longer has it, it weighs more than a run takes there, or
+// Basecamp itself refused the download. A file this run merely
+// missed is not one of them, and neither is one whose failure this run could not
+// place: nothing about such a file is decided at all — it leaves no record at all, the run ends
+// non-zero, and the run after it brings the file — and neither is one the walk
+// has not met yet.
+//
+// Only a record whose body is nothing else, or whose file is all it stands for,
+// asks: for every other body a file that stays outside leaves a hole and nothing
+// more. Where such a file left a record behind — one the source no longer has,
+// one that weighs too much — that record stays in the bundle as the trace of
+// what became of it, whatever became of the record it belonged to.
 func (e *Extractor) theFileNeverArrives(ref string) bool {
 	return e.filesThatNeverArrive[ref]
 }

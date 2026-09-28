@@ -459,12 +459,12 @@ func TestWhatABundleCannotSayEndsTheRun(t *testing.T) {
 func TestAFileThatCannotBeFetchedIsLeftOutAndNamed(t *testing.T) {
 	account := fakebasecamp.New()
 	account.FailAvatarOf[102] = &basecamp.Error{Kind: basecamp.Network, Message: "downloading an avatar: connection reset"}
-	account.FailAvatarOf[103] = &basecamp.Error{Kind: basecamp.API, Message: "downloading an avatar: HTTP 404"}
+	account.FailAvatarOf[103] = &basecamp.Error{Kind: basecamp.NotFound, Message: "downloading an avatar: HTTP 404"}
 	dir, result := extract(t, account, "7001")
 
 	want := []basecamp.MissingFile{
-		{AttachmentSourceID: "avatar-102", OwnerKind: "person", OwnerSourceID: "102", Reason: "downloading an avatar: connection reset", Retryable: true},
-		{AttachmentSourceID: "avatar-103", OwnerKind: "person", OwnerSourceID: "103", Reason: "downloading an avatar: HTTP 404", Retryable: false},
+		{AttachmentSourceID: "avatar-102", OwnerKind: "person", OwnerSourceID: "102", Reason: "downloading an avatar: connection reset", Why: basecamp.FailedThisTime},
+		{AttachmentSourceID: "avatar-103", OwnerKind: "person", OwnerSourceID: "103", Reason: "downloading an avatar: HTTP 404", Why: basecamp.RefusedBySource},
 	}
 	if !slices.Equal(result.Missing, want) {
 		t.Errorf("missing:\n got %v\nwant %v", result.Missing, want)
