@@ -519,9 +519,16 @@ func validEntryTitle(w http.ResponseWriter, kind, title string) bool {
 // consists of, escaped into one div, so that Markdown sent as HTML stands
 // there afterwards as the characters somebody typed.
 func storedBody(w http.ResponseWriter, kind, value string) (string, bool) {
+	return storedRichText(w, kind+"BodyTooLong", "The body of a "+kind+" is too long.", maxDocumentBodyLength, value)
+}
+
+// storedRichText is a text written with the editor as the server keeps it:
+// trimmed, refused where it is longer than the place takes, and escaped into
+// one div where it carries no element the server serves.
+func storedRichText(w http.ResponseWriter, tooLong, message string, maxLength int, value string) (string, bool) {
 	value = phpTrim(value)
-	if utf8.RuneCountInString(value) > maxDocumentBodyLength {
-		unprocessable(w, kind+"BodyTooLong", "The body of a "+kind+" is too long.")
+	if utf8.RuneCountInString(value) > maxLength {
+		unprocessable(w, tooLong, message)
 		return "", false
 	}
 	if value == "" {
