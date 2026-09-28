@@ -3,6 +3,7 @@ package fakeapi
 import (
 	"html"
 	"net/http"
+	"regexp"
 	"slices"
 	"strings"
 	"time"
@@ -535,10 +536,18 @@ func storedRichText(w http.ResponseWriter, tooLong, message string, maxLength in
 		return "", true
 	}
 	if !richtext.CarriesMarkup(value) {
-		return "<div>" + strings.ReplaceAll(html.EscapeString(value), "\n", "<br>") + "</div>", true
+		return "<div>" + plainTextLineBreaks.ReplaceAllString(plainTextEscaper.Replace(value), "<br>$0") + "</div>", true
 	}
 	return value, true
 }
+
+// plainTextEscaper escapes what the server escapes in a text it keeps as
+// characters, and nothing more: quotes stay as they are.
+var plainTextEscaper = strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;")
+
+// plainTextLineBreaks are the line breaks the server puts a <br> in front of,
+// keeping the break itself. A pair of the two characters is one break.
+var plainTextLineBreaks = regexp.MustCompile("\r\n|\n\r|\r|\n")
 
 // expectedUpdatedAt reads the moment a guarded write names. A moment that is
 // no moment refuses the request; a field left out and one set to null both

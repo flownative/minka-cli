@@ -534,6 +534,20 @@ func TestADescriptionThatGrowsBeyondTheLimitWhenStoredIsRefused(t *testing.T) {
 	}
 }
 
+// The server escapes a text it keeps as characters without touching quotes and
+// keeps each line break behind the <br> it adds, so a text full of quotes
+// stays within the limit and is stored.
+func TestAPlainDescriptionIsEscapedAsTheServerEscapesIt(t *testing.T) {
+	e := newTestEnv(t)
+
+	env, r := e.runJSON(strings.Repeat(`"'`, 20000)+"\n<b> & more", "todolists", "create", "--tool", e.fixture.Todos.ID, "--title", "Quotes", "--description", "-", "--description-format", "html")
+	expectCode(t, r, ExitOK)
+	want := "<div>" + strings.Repeat(`"'`, 20000) + "<br>\n&lt;b&gt; &amp; more</div>"
+	if description := decode(t, env.Data)["description"]; description != want {
+		t.Fatalf("the server kept a description of %d characters that differs from what Minka keeps", len(description.(string)))
+	}
+}
+
 func TestAGroupIsNotMovedNextToAGroupOfAnotherList(t *testing.T) {
 	e := newTestEnv(t)
 	f := e.fixture

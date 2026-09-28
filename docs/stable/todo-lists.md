@@ -84,9 +84,10 @@ does not name.
 
 A neighbour has to be **another** group of the **same** list, out of the trash.
 Anything else, the group itself included, is 422 `todoPlaceUnknown` from Minka,
-and nothing moves; in an archived project it is `projectArchived` instead. A neighbour that is no identifier at
-all is `todoPlaceUnknown` before the group is even looked up, which the CLI
-never sends: `--after` and `--before` take an ID.
+and nothing moves; in an archived project it is `projectArchived` instead. A
+neighbour that is no identifier at all is `todoPlaceUnknown` before the group
+is even looked up, which the CLI never sends: `--after` and `--before` take an
+ID.
 
 ## The refusals
 
