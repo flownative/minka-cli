@@ -1157,3 +1157,37 @@ here at all: the CLI does not know the project before the document exists, nor
 which folder its clients are shown.
 **Implemented as:** `cli.checkAudience`, `cli.documentRefusal`, see
 [Docs & Files](stable/docs-and-files.md).
+
+<a id="c-071"></a>
+## C-071 — The lists are `todolists`, the groups `todogroups`, and `todos` waits for the to-dos
+
+*Applies to: every command on a To-dos tool*
+
+The lists of a To-dos tool and the tools themselves are `todolists …`
+(`todolists tools <projectId>` beside `todolists list <toolId>`), the groups of
+a list `todogroups …`. `todos …` is left free for the to-dos and their subtasks.
+
+**Why:** basecamp-cli names the same three things `todolists`, its groups a
+group of their own and `todos` the to-dos ([C-001](#c-001)), and a group
+`todos` holding lists, groups and to-dos alike would put three kinds of ID into
+the same position of one command tree. Minka's own addresses split the same way:
+`todo-lists/…`, `todo-groups/…`, `todos/…`.
+**Implemented as:** `cli.newTodoListsCmd`, `cli.newTodoGroupsCmd`, see
+[To-do lists and groups](stable/todo-lists.md).
+
+<a id="c-072"></a>
+## C-072 — A group is moved to a place that is named
+
+*Applies to: `todogroups move`*
+
+Exactly one of `--top`, `--after <groupId>` and `--before <groupId>` is
+required; none, two, a neighbour that is no ID, and the group as its own
+neighbour are usage errors before a request goes out. There is no `--bottom`.
+
+**Why:** Minka moves a group without a neighbour to the top of its list, with
+the same 200 as any move, so a forgotten flag would reorder a list without a
+word. The group itself as its neighbour is a refusal the server is sure to give
+([C-013](#c-013)). The address has no bottom, and the CLI cannot find the last
+group without the list, which the ID of a group does not name.
+**Implemented as:** `cli.newTodoGroupsMoveCmd`, see
+[To-do lists and groups](stable/todo-lists.md).

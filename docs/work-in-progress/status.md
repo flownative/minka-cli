@@ -33,6 +33,15 @@ moving an entry, folders, the archive of a tool, drafts — is named there and
 nowhere pretended. None of it has been seen live: the whole feature is checked
 against the fake, see below.
 
+The to-do lists of a project are read with `todolists tools`, `todolists list`
+and `todolists show`, and written with `todolists create`, `edit`, `archive`,
+`unarchive` and `delete`; the groups of a list with `todogroups create`, `edit`,
+`move` and `delete`. The rule the commands follow is
+[To-do lists and groups](../stable/todo-lists.md) (C-071, C-072). The to-dos
+themselves, their subtasks, the done to-dos of a list and the comments under a
+list wait for commands of their own. None of it has been seen live: the whole
+feature is checked against the fake, see below.
+
 `minka import basecamp` extracts the structure, the boards, the message
 boards, the chats, the check-ins, the to-dos, the forwarded mail and the
 Docs & Files of Basecamp
@@ -263,6 +272,23 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   client, and that a person named twice is refused as no member. The last is
   read from `DbalItemSubscriptionRepository::enrol` and has not been seen
   anywhere, and it is a quirk the coordination passes on to Minka.
+- Everything of `todolists` and `todogroups`: no request of it has gone to a
+  real Minka. The fake mirrors what was read in `TodosApiController`, the
+  `TodoQueryService`, the handlers and `DbalTodoRepository`: the order the
+  controller refuses in — the title of a new list before its tool, the
+  description after it, `nothingToChange` before the list is looked up, a
+  neighbour that is no identifier before the group is — the project before the
+  archive of the list, the group of an archived list at no address, the
+  archive ordered by the moment of archiving, a list coming back to its place,
+  a trashed group taking its to-dos out of every count, and a tool no longer in
+  use that the project does not name and that is read at its own address. What
+  it does not mirror: which lists and groups a **client** is shown, which the
+  fake has no word for on a To-dos tool; `todoListDescriptionNotReadable`,
+  which needs markup nested deeper than a cleaner reads; and the race in which
+  a group write meets a list archived after the group was found, which is the
+  one way to `todoListArchived` on a group and which no command can steer
+  into. A to-do of the fake has a title, a group, a moment it was done and
+  nothing else: its line says there are no people, days, comments or subtasks.
 - Everything a bundle says about clients: no extraction has met a client live.
   What the fields are and how Minka reads them was read in its appliers
   (`PeopleApplier`, `ProjectsApplier`, `ToolsApplier`, `WhatClientsSee`), and
@@ -910,13 +936,16 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   tile that stays alight through a tool call of five minutes, the word in
   `heartbeat --json`, the tile going out with `work stop`, no keepalive left
   behind afterwards — and, at some point, a machine that really slept.
-- Commands for the to-dos of a project: the addresses are released, the
-  contract stands in Minka's `authorization.md` and E-190.
+- Commands for the to-dos of a project and their subtasks: the addresses are
+  released, the contract stands in Minka's `authorization.md` and E-190. The
+  lists and groups have commands now, and `todos` is the name left for these
+  (C-071). The done to-dos of a list (`GET todo-lists/{listId}/completed`) and
+  the comments under a list (`…/todo-lists/{listId}/comments`) have none yet.
 - Commands for the check-ins of a project: released as well, the contract in
   `authorization.md` and E-191.
-- Of the ninety-odd addresses the API offers, about half have no command. Four
-  cards say which: the lists and groups of to-dos, the to-dos and their
-  subtasks, the check-ins, and the archive of cards and posts.
+- Of the ninety-odd addresses the API offers, a good part have no command.
+  Three cards say which: the to-dos and their subtasks, the check-ins, and the
+  archive of cards and posts.
 - Extract the forwarded mail of a project live, and check the bundle record by
   record as the boards and the chats were checked. What is still open there is
   what no reading of the source answers: what a body looks like that the run has
@@ -965,6 +994,10 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   `group_on`, no frequency outside the five and none whose schedule Minka cannot
   express, so those four wait for an account that holds them rather than for a
   run.
+- Check the to-do lists and groups live, as the [live check](../guides/live-check.md)
+  says: a list started, changed, archived, written to in the archive, brought
+  back and trashed, a group added, renamed, moved next to a group of another
+  list and trashed, and a group of an archived list answering 404.
 - See the three refusals over whom a document reaches answered by a running
   instance: `notifyIdsMissing`, `notifyIdsWithoutChosenAudience` and
   `personCannotSeeIt`. All three are reachable with `docs create` now that the

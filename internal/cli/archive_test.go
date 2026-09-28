@@ -66,6 +66,16 @@ func everyWrite(e *testEnv) map[string][]string {
 		"docs comments delete":  {"docs", "comments", "delete", "--document", document, entryComment},
 		"docs comments react":   {"docs", "comments", "react", "--upload", upload, f.FilesUpload.Comments[0].ID, "👍"},
 		"docs comments unreact": {"docs", "comments", "unreact", "--upload", upload, f.FilesUpload.Comments[0].ID, "👍"},
+
+		"todolists create":    {"todolists", "create", "--tool", f.Todos.ID, "--title", "A new list"},
+		"todolists edit":      {"todolists", "edit", f.TodoList.ID, "--title", "Renamed"},
+		"todolists archive":   {"todolists", "archive", f.TodoList.ID},
+		"todolists unarchive": {"todolists", "unarchive", f.ArchivedList.ID},
+		"todolists delete":    {"todolists", "delete", f.TodoList.ID},
+		"todogroups create":   {"todogroups", "create", "--list", f.TodoList.ID, "--title", "A new group"},
+		"todogroups edit":     {"todogroups", "edit", f.StageGroup.ID, "--title", "Renamed"},
+		"todogroups move":     {"todogroups", "move", f.KitchenGroup.ID, "--top"},
+		"todogroups delete":   {"todogroups", "delete", f.StageGroup.ID},
 	}
 }
 
@@ -79,6 +89,7 @@ var notAWriteIntoAProject = []string{
 	"projects list", "boards list", "boards show", "boards archive", "people list", "trash list",
 	"cards mine", "cards show", "cards notes show", "steps list", "chats list", "messages list",
 	"docs tools", "docs list", "docs show", "docs uploads show",
+	"todolists tools", "todolists list", "todolists show",
 	"chats mark-read", "conversations list", "conversations with", "conversations people",
 	"uploads create", "uploads download", "import basecamp",
 	"work start", "work stop", "work list", "heartbeat", "hooks install", "hooks status",
