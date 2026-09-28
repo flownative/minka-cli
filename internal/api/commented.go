@@ -14,20 +14,29 @@ type CommentedKind string
 const (
 	CommentedDocument CommentedKind = "document"
 	CommentedUpload   CommentedKind = "upload"
+	CommentedPost     CommentedKind = "post"
 )
 
 // Commented names one item the comments hang on: a document or an upload of a
-// Docs & Files tool.
+// Docs & Files tool, or a post.
 type Commented struct {
 	Kind CommentedKind
 	ID   string
 }
 
 func (c Commented) path() string {
-	if c.Kind == CommentedUpload {
+	switch c.Kind {
+	case CommentedUpload:
 		return "/files-uploads/" + url.PathEscape(c.ID)
+	case CommentedPost:
+		return "/posts/" + url.PathEscape(c.ID)
 	}
 	return "/documents/" + url.PathEscape(c.ID)
+}
+
+// CommentsOn lists the comments under an item, the oldest first.
+func (c *Client) CommentsOn(ctx context.Context, item Commented) (Result[[]Comment], error) {
+	return request[[]Comment](ctx, c, http.MethodGet, item.path()+"/comments", nil)
 }
 
 func (c *Client) WriteCommentOn(ctx context.Context, item Commented, body string) (Result[Comment], error) {

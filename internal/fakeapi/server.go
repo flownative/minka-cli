@@ -390,9 +390,14 @@ type Server struct {
 	FilesTools    []*FilesTool
 	TodosTools    []*TodosTool
 	CheckinsTools []*CheckinsTool
+	PostsTools    []*PostsTool
 	Uploads       []*Upload
 	Trash         []*TrashedCard
 	Archive       []*ArchivedCard
+
+	// PostCategories are the kinds of post of every project, each in the
+	// order its project lists them.
+	PostCategories []*PostCategory
 
 	// IgnoresProjectStatus makes the server answer like a Minka from before
 	// projects could be archived: no status, and the filter goes unnoticed.
@@ -522,6 +527,26 @@ type Fixture struct {
 	AnkesEarlierAnswer *CheckinAnswer // for Thursday
 	OtherCheckinsTool  *CheckinsTool
 	OtherQuestion      *CheckinQuestion
+
+	// The Posts tool of the project, which lets its clients in: a post pinned
+	// on top although it is the oldest, the newest post filed under a kind with
+	// a comment of Anke's, an older one, Bruno's draft, one in the archive that
+	// is pinned and carries a comment, and one in the trash. The project offers
+	// two kinds; a second tool is no longer in use, and the project that belongs
+	// to somebody else has a tool with a post and a kind of its own.
+	Posts         *PostsTool
+	PinnedPost    *Post
+	Post          *Post // with one comment of Anke's
+	OlderPost     *Post
+	DraftPost     *Post
+	ArchivedPost  *Post // pinned, with one comment of Bruno's
+	TrashedPost   *Post
+	Announcement  *PostCategory
+	Heartbeat     *PostCategory
+	PostsOutOfUse *PostsTool
+	OtherPosts    *PostsTool
+	OtherPost     *Post
+	OtherCategory *PostCategory
 }
 
 // New starts a fake with a small fixture: Bruno is a member of one project
@@ -670,6 +695,37 @@ func New(t testing.TB) (*Server, *Fixture) {
 	otherCheckinsTool := &CheckinsTool{ID: newID(), ProjectID: otherProject.ID, Title: "Secret check-ins", Questions: []*CheckinQuestion{otherQuestion}}
 	s.CheckinsTools = []*CheckinsTool{checkinsTool, otherCheckinsTool}
 
+	announcement := &PostCategory{ID: newID(), ProjectID: project.ID, Emoji: "📢", Name: "Announcement"}
+	heartbeat := &PostCategory{ID: newID(), ProjectID: project.ID, Emoji: "❤️", Name: "Heartbeat"}
+	pinnedAt := at("2026-09-02", "09:00")
+	pinnedPost := &Post{ID: newID(), Title: "Where the tent stands", Body: "<div>Behind the barn.</div>",
+		PinnedAt: &pinnedAt, CreatedAt: at("2026-09-01", "09:00"), UpdatedAt: at("2026-09-01", "09:00"), CreatorID: anke.ID,
+		SubscriberIDs: []string{anke.ID}}
+	post := &Post{ID: newID(), Title: "The tent is ordered", Body: "<div>It comes on <strong>Friday</strong>.</div>", CategoryID: announcement.ID,
+		CreatedAt: at("2026-09-12", "10:00"), UpdatedAt: at("2026-09-12", "10:00"), CreatorID: bruno.ID,
+		SubscriberIDs: []string{bruno.ID, anke.ID},
+		Comments:      []*Comment{{ID: newID(), AuthorID: anke.ID, Body: "<div>Great</div>", CreatedAt: at("2026-09-12", "11:00")}}}
+	olderPost := &Post{ID: newID(), Title: "Who brings benches?", Body: "<div>We need twenty.</div>",
+		CreatedAt: at("2026-09-10", "09:00"), UpdatedAt: at("2026-09-10", "09:00"), CreatorID: anke.ID, SubscriberIDs: []string{anke.ID}}
+	draftPost := &Post{ID: newID(), Title: "Not sent yet", Body: "<div>Later.</div>", Draft: true,
+		CreatedAt: at("2026-09-11", "09:00"), UpdatedAt: at("2026-09-11", "09:00"), CreatorID: bruno.ID, SubscriberIDs: []string{bruno.ID}}
+	archivedPinnedAt := at("2026-09-03", "09:00")
+	archivedPost := &Post{ID: newID(), Title: "Last year's plan", Body: "<div>Done with.</div>", CategoryID: heartbeat.ID,
+		PinnedAt: &archivedPinnedAt, Archived: true, ArchivedAt: at("2026-09-11", "16:00"), ArchivedByID: anke.ID,
+		CreatedAt: at("2026-09-05", "09:00"), UpdatedAt: at("2026-09-05", "09:00"), CreatorID: bruno.ID, SubscriberIDs: []string{bruno.ID},
+		Comments: []*Comment{{ID: newID(), AuthorID: bruno.ID, Body: "<div>Keep it for later</div>", CreatedAt: at("2026-09-05", "10:00")}}}
+	trashedPost := &Post{ID: newID(), Title: "Wrong date", Body: "<div>Sorry.</div>", Trashed: true,
+		CreatedAt: at("2026-09-08", "09:00"), UpdatedAt: at("2026-09-08", "09:00"), CreatorID: bruno.ID, SubscriberIDs: []string{bruno.ID}}
+	posts := &PostsTool{ID: newID(), ProjectID: project.ID, Title: "Message Board", ShownToClients: true,
+		Posts: []*Post{olderPost, pinnedPost, archivedPost, post, draftPost, trashedPost}}
+	postsOutOfUse := &PostsTool{ID: newID(), ProjectID: project.ID, Title: "Old announcements", Archived: true}
+	otherCategory := &PostCategory{ID: newID(), ProjectID: otherProject.ID, Emoji: "🔒", Name: "Secret"}
+	otherPost := &Post{ID: newID(), Title: "Not yours to read", Body: "<div>Secret.</div>",
+		CreatedAt: at("2026-09-07", "09:00"), UpdatedAt: at("2026-09-07", "09:00"), CreatorID: stranger.ID, SubscriberIDs: []string{stranger.ID}}
+	otherPosts := &PostsTool{ID: newID(), ProjectID: otherProject.ID, Title: "Secret board", Posts: []*Post{otherPost}}
+	s.PostsTools = []*PostsTool{posts, postsOutOfUse, otherPosts}
+	s.PostCategories = []*PostCategory{announcement, heartbeat, otherCategory}
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v1/me", s.authenticated(s.me))
 	mux.HandleFunc("PUT /api/v1/me/work", s.authenticated(s.noteAtWork))
@@ -720,6 +776,7 @@ func New(t testing.TB) (*Server, *Fixture) {
 	s.registerFilesRoutes(mux)
 	s.registerTodosRoutes(mux)
 	s.registerCheckinsRoutes(mux)
+	s.registerPostsRoutes(mux)
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		// Flow answers an unknown path or a wrong method with an HTML page.
 		w.Header().Set("Content-Type", "text/html")
@@ -750,6 +807,9 @@ func New(t testing.TB) (*Server, *Fixture) {
 		CheckinsTool: checkinsTool, DailyQuestion: dailyQuestion, WeeklyQuestion: weeklyQuestion, PausedQuestion: pausedQuestion,
 		BrunosAnswer: brunosAnswer, AnkesAnswer: ankesAnswer, AnkesEarlierAnswer: ankesEarlierAnswer,
 		OtherCheckinsTool: otherCheckinsTool, OtherQuestion: otherQuestion,
+		Posts: posts, PinnedPost: pinnedPost, Post: post, OlderPost: olderPost, DraftPost: draftPost,
+		ArchivedPost: archivedPost, TrashedPost: trashedPost, Announcement: announcement, Heartbeat: heartbeat,
+		PostsOutOfUse: postsOutOfUse, OtherPosts: otherPosts, OtherPost: otherPost, OtherCategory: otherCategory,
 	}
 }
 
@@ -2484,7 +2544,12 @@ func reactionContent(w http.ResponseWriter, r *http.Request) (string, bool) {
 	if !ok {
 		return "", false
 	}
-	content := phpTrim(deref(value))
+	return validReaction(w, deref(value))
+}
+
+// validReaction is a reaction as the server keeps it, or the refusal it draws.
+func validReaction(w http.ResponseWriter, value string) (string, bool) {
+	content := phpTrim(value)
 	switch {
 	case content == "":
 		unprocessable(w, "reactionMissing", "A reaction needs a content.")

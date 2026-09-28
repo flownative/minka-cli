@@ -60,6 +60,10 @@ the documentation says what holds; how it came about is in git.
   that names nobody, the day an answer belongs to, the page of answers without
   an end and the reminders without a page, the order of the refusals — before
   any work on `checkins`.
+- [Posts](stable/posts.md): What a page of posts hands over and where it
+  ends, the post that is shown to no client, whom a new post reaches, pinning,
+  the archive and the trash, the guard that stands aside where Minka refuses,
+  the order of the refusals — before any work on `posts`.
 - [Testing](stable/testing.md): Fake API, sabotage proofs, what a test pins
   down, what it may demand of time — read before your first test.
 

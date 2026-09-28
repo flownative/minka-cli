@@ -58,6 +58,15 @@ removing an answer and the comments under an answer have no address in the
 API. None of it has been seen live: the whole feature is checked against the
 fake, see below.
 
+The posts are read with `posts tools`, `posts categories`, `posts list` (and
+`--archived` for the archive of a tool) and `posts show`, and written with
+`posts create`, `edit`, `pin`, `unpin`, `archive`, `unarchive` and `delete`;
+their comments with `posts comments list`, `create`, `edit`, `delete`, `react`
+and `unreact`. The rule the commands follow is [Posts](../stable/posts.md)
+(C-081, C-082). Drafts, taking a post out of the trash, reacting to a post
+itself and showing one to clients have no address in the API. None of it has
+been seen live: the whole feature is checked against the fake, see below.
+
 `minka import basecamp` extracts the structure, the boards, the message
 boards, the chats, the check-ins, the to-dos, the forwarded mail and the
 Docs & Files of Basecamp
@@ -342,6 +351,25 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   member, which Minka leaves it only in the projects archived then. That a question set up through the API is shown to no
   client was read, not measured: the insert names no `visible_to_clients`, and
   the column defaults to false.
+- Everything of `posts`: no request of it has gone to a real Minka. The fake
+  mirrors what was read in `PostsApiController`, its resources,
+  `PostQueryService`, `PostsCursor`, the post handlers, `PeopleAPostTells`,
+  `DbalPostRepository`, `DbalItemSubscriptionRepository` and `ApiPostsTest`:
+  the order the controller refuses in — the tool before the title of a new
+  post, the request before the project, the project before the kind and the
+  kind before the people, the trash before the project when a post is
+  archived — the page with the pinned first and `next` null on the last page,
+  behind the values of a post and not the post, the silent cut above 100, the
+  archive ordered by its moment, a pin that keeps its place and survives the
+  archive, the trash from the list and from the archive, a new post shown to no
+  client, and a person named twice refused as no member. That last one is the
+  code path of documents and has not been seen anywhere either. What it does
+  not mirror: the time zone of the reader, in which Minka writes the moments of
+  a cursor — the fake takes UTC and the cursor stays opaque to the CLI; the
+  plain text a `lead` is cut from, which the fake takes as the body without its
+  tags; the cleaning of a body against the files of its project; and the trash
+  of a project, which lists cards alone in the fake. `postAudienceMissing` and
+  a `notifyIds` entry that is no identifier are mirrored and unreachable.
 - Everything a bundle says about clients: no extraction has met a client live.
   What the fields are and how Minka reads them was read in its appliers
   (`PeopleApplier`, `ProjectsApplier`, `ToolsApplier`, `WhatClientsSee`), and
@@ -973,7 +1001,6 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
 
 ## Open in the API
 
-- Posts have `attachments` too, and the CLI has no commands for posts at all.
 - Renaming and reordering steps does not exist.
 - Paging Done beyond 25 cards does not exist; needed once dogfooding needs it.
 - Flow answers a wrong HTTP method with HTML instead of JSON.
@@ -999,7 +1026,13 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   (`…/todos/{todoId}/comments`, `…/todo-lists/{listId}/comments`): released,
   with the shapes of the comments of a card (E-190).
 - Of the ninety-odd addresses the API offers, a good part have no command.
-  A card says which: the archive of cards and posts.
+- Check the posts live, as the [live check](../guides/live-check.md) says: a
+  post sent out to `chosen` with `--notify me` and the same person twice, a
+  client named and refused, a page of two with `next` and the page behind it,
+  a pin twice and an unpin twice, an edit taking the kind off, a post archived,
+  written to in the archive, brought back pinned, trashed from the archive and
+  archived from the trash, and a comment under it written, reacted to and
+  refused in the archive.
 - Check the check-ins live, as the [live check](../guides/live-check.md) says:
   a question set up with `--ask me` and a client, the notice about the client,
   `asked` in the order of the names, `startsOn` in a time zone that is not UTC
