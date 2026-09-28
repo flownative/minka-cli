@@ -89,6 +89,14 @@ func everyWrite(e *testEnv) map[string][]string {
 		"todos subtasks reopen":   {"todos", "subtasks", "reopen", f.GroupedTodo.ID, "2"},
 		"todos subtasks move":     {"todos", "subtasks", "move", f.GroupedTodo.ID, "2", "--top"},
 		"todos subtasks delete":   {"todos", "subtasks", "delete", f.GroupedTodo.ID, "1"},
+
+		"checkins create": {"checkins", "create", "--tool", f.CheckinsTool.ID, "--title", "New", "--rhythm", "daily",
+			"--weekday", "mon", "--time", "09:00", "--ask", f.Anke.ID},
+		"checkins edit":           {"checkins", "edit", f.DailyQuestion.ID, "--title", "Renamed"},
+		"checkins pause":          {"checkins", "pause", f.DailyQuestion.ID},
+		"checkins resume":         {"checkins", "resume", f.PausedQuestion.ID},
+		"checkins answers create": {"checkins", "answers", "create", f.DailyQuestion.ID, "An answer"},
+		"checkins answers edit":   {"checkins", "answers", "edit", f.BrunosAnswer.ID, "Other words"},
 	}
 }
 
@@ -104,6 +112,8 @@ var notAWriteIntoAProject = []string{
 	"docs tools", "docs list", "docs show", "docs uploads show",
 	"todolists tools", "todolists list", "todolists show",
 	"todos mine", "todos show", "todos completed", "todos subtasks list",
+	"checkins tools", "checkins list", "checkins show", "checkins reminders",
+	"checkins answers list", "checkins answers show",
 	"chats mark-read", "conversations list", "conversations with", "conversations people",
 	"uploads create", "uploads download", "import basecamp",
 	"work start", "work stop", "work list", "heartbeat", "hooks install", "hooks status",

@@ -55,6 +55,11 @@ the documentation says what holds; how it came about is in git.
   keeps otherwise than they were sent, the people given as a whole set, where a
   to-do may move, the two pages and the one that has no end, the order of the
   refusals — before any work on `todos`.
+- [Check-ins](stable/checkins.md): What a question carries and whom `asked`
+  leaves out, the schedule and the day every other week counts from, the edit
+  that names nobody, the day an answer belongs to, the page of answers without
+  an end and the reminders without a page, the order of the refusals — before
+  any work on `checkins`.
 - [Testing](stable/testing.md): Fake API, sabotage proofs, what a test pins
   down, what it may demand of time — read before your first test.
 
