@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -225,48 +226,71 @@ card succeeds as well.
 // no step of the card is passed on, so the server gives its answer; the
 // returned step then has no title.
 func resolveStep(steps []api.Step, value string) (api.Step, error) {
+	ids, titles := make([]string, len(steps)), make([]string, len(steps))
+	for i, step := range steps {
+		ids[i], titles[i] = step.ID, step.Title
+	}
+	at, id, err := findLine(namedLines{noun: "step", owner: "the card", ids: ids, titles: titles, described: describeSteps(steps)}, value)
+	if err != nil || at < 0 {
+		return api.Step{ID: id}, err
+	}
+	return steps[at], nil
+}
+
+// namedLines are the lines of a list somebody names by ID, by position or by
+// text, such as the steps of a card: what a line is called, what the list
+// hangs on, and the list as a hint describes it.
+type namedLines struct {
+	noun, owner string
+	ids, titles []string
+	described   string
+}
+
+// findLine finds a line by ID, position or text and answers its index. A
+// number always means a position, and a text has to match exactly one line,
+// ignoring case. An ID that is on no line is answered with the index -1, so
+// that the server gives its answer about it.
+func findLine(lines namedLines, value string) (int, string, error) {
 	wanted := strings.TrimSpace(value)
-	for _, step := range steps {
-		if step.ID == wanted {
-			return step, nil
-		}
+	if at := slices.Index(lines.ids, wanted); at >= 0 {
+		return at, wanted, nil
 	}
 
 	if position, err := strconv.Atoi(wanted); err == nil {
-		if position < 1 || position > len(steps) {
-			return api.Step{}, &Error{
+		if position < 1 || position > len(lines.ids) {
+			return -1, "", &Error{
 				Code:    CodeUsage,
-				Message: fmt.Sprintf("there is no step %d, the card has %s", position, plural(len(steps), "step", "steps")),
-				Hint:    describeSteps(steps),
+				Message: fmt.Sprintf("there is no %s %d, %s has %s", lines.noun, position, lines.owner, plural(len(lines.ids), lines.noun, lines.noun+"s")),
+				Hint:    lines.described,
 			}
 		}
-		return steps[position-1], nil
+		return position - 1, lines.ids[position-1], nil
 	}
 
-	var matches []api.Step
+	var matches []int
 	var positions []string
-	for i, step := range steps {
-		if strings.EqualFold(step.Title, wanted) {
-			matches = append(matches, step)
+	for i, title := range lines.titles {
+		if strings.EqualFold(title, wanted) {
+			matches = append(matches, i)
 			positions = append(positions, strconv.Itoa(i+1))
 		}
 	}
 	switch {
 	case len(matches) == 1:
-		return matches[0], nil
+		return matches[0], lines.ids[matches[0]], nil
 	case len(matches) > 1:
-		return api.Step{}, &Error{
+		return -1, "", &Error{
 			Code:    CodeAmbiguous,
-			Message: fmt.Sprintf("%q matches steps %s", value, strings.Join(positions, " and ")),
-			Hint:    "Give the position or the ID. " + describeSteps(steps),
+			Message: fmt.Sprintf("%q matches %ss %s", value, lines.noun, strings.Join(positions, " and ")),
+			Hint:    "Give the position or the ID. " + lines.described,
 		}
 	case uuidPattern.MatchString(wanted):
-		return api.Step{ID: wanted}, nil
+		return -1, wanted, nil
 	default:
-		return api.Step{}, &Error{
+		return -1, "", &Error{
 			Code:    CodeUsage,
-			Message: fmt.Sprintf("no step of the card matches %q", value),
-			Hint:    describeSteps(steps),
+			Message: fmt.Sprintf("no %s of %s matches %q", lines.noun, lines.owner, value),
+			Hint:    lines.described,
 		}
 	}
 }
