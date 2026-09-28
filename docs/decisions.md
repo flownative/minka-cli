@@ -1155,7 +1155,7 @@ thing to keep in step with the server, and the round trip it saved is the only
 cost of leaving it out. Whether a named person may be told cannot be judged
 here at all: the CLI does not know the project before the document exists, nor
 which folder its clients are shown.
-**Implemented as:** `cli.checkAudience`, `cli.documentRefusal`, see
+**Implemented as:** `cli.checkAudience`, `cli.audienceHint`, `cli.documentRefusal`, see
 [Docs & Files](stable/docs-and-files.md).
 
 <a id="c-071"></a>
