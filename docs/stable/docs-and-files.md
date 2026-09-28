@@ -154,7 +154,7 @@ first name that is refused decides which of the two the answer is.
 | 422 `personCannotSeeIt` | `docs create --notify` naming a client of the project or an agent of one, for a document the clients of it are not shown | 9 |
 | 422 `folderUnknown`, `folderArchived` | `docs create --folder` | 9 |
 | 422 `documentArchived`, `uploadArchived` | every write on an archived entry, or under one, comments included | 9 |
-| 422 `projectArchived` | every write; on `docs edit` and the comments before the codes above, on `docs create` after the title, the body and the folder | 9 |
+| 422 `projectArchived` | every write; on `docs edit` and the comments before the codes above, on `docs create` after the title, the body, the folder, the audience and `notifyIdsMissing` / `notifyIdsWithoutChosenAudience`, and before `personNotAProjectMember` and `personCannotSeeIt` | 9 |
 | 404 `variantNotAvailable` | `uploads download --variant` of the file of an upload, as for any file | 2 |
 | 422 the comment codes | `docs comments …`, as under a card | 9 |
 
