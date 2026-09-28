@@ -31,6 +31,11 @@ type FilesTool struct {
 	Folders   []*Folder
 	Documents []*Document
 	Uploads   []*FilesUpload
+
+	// ShownToClients lets the clients of the project into the tool at all.
+	// Without it no entry of the tool is shown to them, whatever its folder
+	// says.
+	ShownToClients bool
 }
 
 // Folder holds entries of a tool. A folder in the archive is in no list, and
@@ -42,9 +47,9 @@ type Folder struct {
 	Archived bool
 
 	// ShownToClients decides for everything below this folder, and only the
-	// topmost folder of a chain is asked. What stands at the top of a tool is
-	// shown to no client, a folder of its own being the only place a client is
-	// let into.
+	// topmost folder of a chain is asked. An entry at the top of a tool decides
+	// for itself, and a new document there is shown to no client, so a folder
+	// is the only place a new one reaches a client.
 	ShownToClients bool
 
 	CreatedAt time.Time
@@ -590,7 +595,7 @@ func (s *Server) refusedAsSomebodyWhoCannotBeTold(w http.ResponseWriter, tool *F
 			unprocessable(w, "personNotAProjectMember", "Only a member of the project can be told about a document.")
 			return true
 		}
-		if person := s.People[personID]; person != nil && person.Client && !folderShownToClients(tool, folderIDOf(folder)) {
+		if s.isAClient(personID) && !shownToClients(tool, folderIDOf(folder)) {
 			unprocessable(w, "personCannotSeeIt", "Somebody chosen is a client of the project, and this document is not shown to clients.")
 			return true
 		}
@@ -598,9 +603,31 @@ func (s *Server) refusedAsSomebodyWhoCannotBeTold(w http.ResponseWriter, tool *F
 	return false
 }
 
+// isAClient says whether a person is told only what the clients are shown: a
+// client, or an agent working for one.
+func (s *Server) isAClient(personID string) bool {
+	person := s.People[personID]
+	if person == nil {
+		return false
+	}
+	if principal := s.People[person.PrincipalID]; principal != nil && principal.Client {
+		return true
+	}
+	return person.Client
+}
+
+// shownToClients says whether the clients of the project are shown a new
+// document written in this folder of the tool: the tool has to let them in,
+// and the topmost folder of the chain decides for everything below it. A new
+// document at the top of a tool is shown to no client.
+func shownToClients(tool *FilesTool, folderID string) bool {
+	return tool.ShownToClients && folderShownToClients(tool, folderID)
+}
+
 // folderShownToClients says whether the clients of the project are shown what
 // stands in this folder. The topmost folder of the chain decides for
-// everything below it, and the top of a tool is shown to no client.
+// everything below it; at the top of the tool there is no folder to ask, and
+// what a new document there would say is no.
 func folderShownToClients(tool *FilesTool, folderID string) bool {
 	for seen := 0; folderID != "" && seen <= len(tool.Folders); seen++ {
 		folder := folderIn(tool, folderID)

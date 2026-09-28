@@ -258,8 +258,9 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   the fake, hint and order included. For `personCannotSeeIt` the fake carries a
   person who works with the project as a client and a folder whose contents its
   clients are shown — that client signs in nowhere, so the fake never has to
-  answer as one, and it knows no word for whether a whole tool is shown, the
-  folder at the top of a chain deciding alone.
+  answer as one. The fake also carries whether the tool is shown to clients,
+  that the topmost folder decides, and that an agent of a client counts as a
+  client.
 - Everything a bundle says about clients: no extraction has met a client live.
   What the fields are and how Minka reads them was read in its appliers
   (`PeopleApplier`, `ProjectsApplier`, `ToolsApplier`, `WhatClientsSee`), and

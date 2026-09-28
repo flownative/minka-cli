@@ -98,13 +98,16 @@ project a tool hangs in is not known before the document exists, and a name can
 only be matched against the members of a project.
 
 A **client** of the project is a member, and being a member is not enough to be
-told: `--notify` naming a client is refused with `personCannotSeeIt` wherever
-the document is not shown to clients, which is everywhere but inside a folder
-that is (E-199). Nothing is written then, and nothing about the request can be
-mended — the person is real, belongs to the project and may simply not hear of
-it, so the answer is to name somebody else. The CLI cannot tell a client apart
-and does not try: it does not know the project before the document exists, and
-which folder a project shows its clients is decided in Minka on the web.
+told. An agent whose principal is a client counts as a client. `--notify`
+naming either is refused with `personCannotSeeIt` wherever the document is not
+shown to clients (E-199): it is shown only where the tool is shown to clients
+**and** the topmost folder above the document is. A folder further down has no
+say, and a new document at the top of the tool is shown to no client. Nothing
+is written then, and nothing about the request can be mended — the person is
+real, belongs to the project and may simply not hear of it, so the answer is to
+name somebody else. The CLI cannot tell a client apart and does not try: it
+does not know the project before the document exists, and which tools and
+folders a project shows its clients is decided in Minka on the web.
 
 ## Two kinds of entry, one flag
 
@@ -148,7 +151,7 @@ first name that is refused decides which of the two the answer is.
 | 422 `documentAudienceMissing` | unreachable: the audience is held here | — |
 | 422 `notifyIdsMissing`, `notifyIdsWithoutChosenAudience` | `docs create --audience` and `--notify` that do not go together | 9 |
 | 422 `personNotAProjectMember` | `docs create --notify` naming somebody outside the project | 9 |
-| 422 `personCannotSeeIt` | `docs create --notify` naming a client of the project, for a document the clients of it are not shown | 9 |
+| 422 `personCannotSeeIt` | `docs create --notify` naming a client of the project or an agent of one, for a document the clients of it are not shown | 9 |
 | 422 `folderUnknown`, `folderArchived` | `docs create --folder` | 9 |
 | 422 `documentArchived`, `uploadArchived` | every write on an archived entry, or under one, comments included | 9 |
 | 422 `projectArchived` | every write; on `docs edit` and the comments before the codes above, on `docs create` after the title, the body and the folder | 9 |

@@ -566,7 +566,7 @@ func New(t testing.TB) (*Server, *Fixture) {
 		Comments: []*Comment{{ID: newID(), AuthorID: bruno.ID, Body: "<p>Printed</p>", CreatedAt: s.now}}}
 	s.Uploads = append(s.Uploads, sitePlan)
 	files := &FilesTool{
-		ID: newID(), ProjectID: project.ID, Title: "Documents",
+		ID: newID(), ProjectID: project.ID, Title: "Documents", ShownToClients: true,
 		Folders:   []*Folder{folder, archivedFolder, folderShownToClients},
 		Documents: []*Document{document, draftDocument, archivedDocument, documentInFolder, documentBelowTheArchivedFolder},
 		Uploads:   []*FilesUpload{filesUpload},

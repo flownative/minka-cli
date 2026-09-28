@@ -750,14 +750,15 @@ with a description. Both take comments, and the comments take reactions.
   takes an ID or `me`; `people list <projectId>` gives the IDs.
 - **`personCannotSeeIt` is not your input to fix.** The person you named exists,
   is a member of the project, and simply may not be told: they work with the
-  project as a client, and a client is told only about a document standing in a
-  folder that is shown to clients. Nothing was written, and **sending the same
-  request again will be refused again, however often you try**. The only thing
-  that gets the document written is to **name somebody else** — or to write it in
-  a folder that is shown to clients, which is decided in Minka on the web. The
-  people are met one at a time in the order you gave them, and of one person
-  `personNotAProjectMember` is answered before this, so a list holding both is
-  answered for whichever name comes first.
+  project as a client, or are an agent working for a client. Such a person is
+  told only about a document in a folder shown to clients, in a tool shown to
+  clients, and only the topmost folder above the document counts. Nothing was
+  written, and **sending the same request again will be refused again, however
+  often you try**. The only thing that gets the document written is to **name
+  somebody else**; which tools and folders clients are shown is decided in
+  Minka on the web. The people are met one at a time in the order you gave them,
+  and of one person `personNotAProjectMember` is answered before this, so a list
+  holding both is answered for whichever name comes first.
 - `docs edit <documentId>` changes the title, the body or both. `--body ""`
   empties the body. **`--title ""` does not empty the title:** a document needs
   one, so it exits 9 with `documentTitleMissing`. A title can only be replaced.

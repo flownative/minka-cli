@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+
+	"github.com/flownative/minka-cli/internal/fakeapi"
 )
 
 func TestTheToolsOfAProjectAreListed(t *testing.T) {
@@ -283,8 +285,8 @@ func TestAClientIsToldOnlyAboutADocumentInAFolderShownToThem(t *testing.T) {
 	create := newDocument(e, "--audience", "chosen", "--notify", f.Client.ID)
 	before := len(f.Files.Documents)
 
-	// At the top of a tool, where no client is ever let in, and in a folder the
-	// project does not show them.
+	// At the top of the tool, where a new document is shown to no client, and
+	// in a folder the project does not show them.
 	for _, folder := range []string{"", f.Folder.ID} {
 		args := create
 		if folder != "" {
@@ -332,6 +334,58 @@ func TestAClientIsToldOnlyAboutADocumentInAFolderShownToThem(t *testing.T) {
 			t.Errorf("apiCode %v, want %s for the name given first", env.Meta["apiCode"], want)
 		}
 	}
+}
+
+// A folder shown to clients lets them in only where the tool does too.
+func TestAClientIsToldNothingInAToolNotShownToThem(t *testing.T) {
+	e := newTestEnv(t)
+	f := e.fixture
+	f.Files.ShownToClients = false
+
+	env, r := e.runJSON("", newDocument(e, "--audience", "chosen", "--notify", f.Client.ID, "--folder", f.FolderShownToClients.ID)...)
+	expectCode(t, r, ExitValidation)
+	if env.Meta["apiCode"] != apiCodePersonCannotSeeIt {
+		t.Fatalf("apiCode %v, want the tool to keep the client out of a folder shown to them", env.Meta["apiCode"])
+	}
+}
+
+// Only the topmost folder of a chain says whether the clients are shown what
+// stands below it; a folder further down has no say.
+func TestTheTopmostFolderDecidesWhatAClientIsToldAbout(t *testing.T) {
+	e := newTestEnv(t)
+	f := e.fixture
+	hiddenBelowShown := &fakeapi.Folder{ID: "0192f3a4-5b6c-4d7e-8f90-a1b2c3d4e501", Title: "Inside", ParentID: f.FolderShownToClients.ID}
+	shownBelowHidden := &fakeapi.Folder{ID: "0192f3a4-5b6c-4d7e-8f90-a1b2c3d4e502", Title: "Outside", ParentID: f.Folder.ID, ShownToClients: true}
+	f.Files.Folders = append(f.Files.Folders, hiddenBelowShown, shownBelowHidden)
+	create := newDocument(e, "--audience", "chosen", "--notify", f.Client.ID)
+
+	_, r := e.runJSON("", append(create, "--folder", hiddenBelowShown.ID)...)
+	expectCode(t, r, ExitOK)
+
+	env, r := e.runJSON("", append(create, "--folder", shownBelowHidden.ID)...)
+	expectCode(t, r, ExitValidation)
+	if env.Meta["apiCode"] != apiCodePersonCannotSeeIt {
+		t.Fatalf("apiCode %v, want the hidden folder at the top to decide", env.Meta["apiCode"])
+	}
+}
+
+// An agent works with what its principal is shown, so the agent of a client is
+// told only what a client is.
+func TestTheAgentOfAClientIsToldAsAClientIs(t *testing.T) {
+	e := newTestEnv(t)
+	f := e.fixture
+	agent := &fakeapi.Person{ID: "0192f3a4-5b6c-4d7e-8f90-a1b2c3d4e503", Name: "Claude (Nele)", Email: "claude-nele@agents.invalid", PrincipalID: f.Client.ID}
+	e.server.People[agent.ID] = agent
+	f.Project.MemberIDs = append(f.Project.MemberIDs, agent.ID)
+	create := newDocument(e, "--audience", "chosen", "--notify", agent.ID)
+
+	env, r := e.runJSON("", create...)
+	expectCode(t, r, ExitValidation)
+	if env.Meta["apiCode"] != apiCodePersonCannotSeeIt {
+		t.Fatalf("apiCode %v, want the agent kept out as its client is", env.Meta["apiCode"])
+	}
+	_, r = e.runJSON("", append(create, "--folder", f.FolderShownToClients.ID)...)
+	expectCode(t, r, ExitOK)
 }
 
 // Whom a document tells is looked up after it is written, so a project that
