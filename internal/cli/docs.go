@@ -18,15 +18,11 @@ import (
 // What Minka answers a write on a Docs & Files tool that it will not carry
 // out.
 const (
-	apiCodeDocumentChanged                = "documentChanged"
-	apiCodeDocumentArchived               = "documentArchived"
-	apiCodeUploadArchived                 = "uploadArchived"
-	apiCodeFolderUnknown                  = "folderUnknown"
-	apiCodeFolderArchived                 = "folderArchived"
-	apiCodeNotifyIDsMissing               = "notifyIdsMissing"
-	apiCodeNotifyIDsWithoutChosenAudience = "notifyIdsWithoutChosenAudience"
-	apiCodePersonCannotSeeIt              = "personCannotSeeIt"
-	apiCodePersonNotAProjectMember        = "personNotAProjectMember"
+	apiCodeDocumentChanged  = "documentChanged"
+	apiCodeDocumentArchived = "documentArchived"
+	apiCodeUploadArchived   = "uploadArchived"
+	apiCodeFolderUnknown    = "folderUnknown"
+	apiCodeFolderArchived   = "folderArchived"
 )
 
 // theGuardIsKeptToTheSecond is what a guard on an entry cannot do. Minka keeps
@@ -46,14 +42,7 @@ carries no element it serves is kept as the characters it consists of, so
 Markdown sent that way stands in the document afterwards as "# Heading". The
 command says so in a notice, and nothing else ever will.`
 
-const documentAudienceHelp = `--audience says whom a new document reaches: "everybody" in the project,
-"chosen" with one --notify per person, or "nobody". It is required. --notify
-belongs to "chosen" alone: Minka refuses names under any other audience with
-notifyIdsWithoutChosenAudience and "chosen" without a name with
-notifyIdsMissing; this command sends what it is given and leaves the rule
-to Minka.
-A person is given by ID, or as "me"; minka people list <projectId> gives the
-IDs.
+const documentAudienceHelp = audienceHelp + `
 
 Somebody named has to be able to see the document. A client of the project,
 or an agent working for one, is told only about a document in a folder shown to
@@ -61,8 +50,7 @@ clients, in a tool shown to clients; the topmost folder decides for everything
 below it. Naming them anywhere else is refused with personCannotSeeIt. Nothing
 is written then, and sending it again changes nothing: name somebody else.
 
-Minka refuses a person named twice as one who is not a member of the project
-(personNotAProjectMember); you yourself may be named as often as you like.`
+` + namedTwiceHelp
 
 const documentNotFoundHint = "There is no such document, it is a draft, it belongs to a project you are not a member of, or you are a client of the project and it is not shown to you."
 
@@ -225,7 +213,7 @@ func (a *app) newDocsCreateCmd() *cobra.Command {
 			if err := checkBodyFormat(cmd, bodyFormat); err != nil {
 				return err
 			}
-			if err := checkAudience(cmd, audience); err != nil {
+			if err := checkAudience(cmd, "document", audience); err != nil {
 				return err
 			}
 
@@ -478,7 +466,7 @@ func (a *app) newDocsCommentsCreateCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			comment, err := s.client.WriteEntryComment(a.ctx, entry, body)
+			comment, err := s.client.WriteCommentOn(a.ctx, entry, body)
 			if err != nil {
 				return documentRefusal(s, err)
 			}
@@ -552,7 +540,7 @@ that would drop them is refused unless --drop-attachments is given.`,
 				notices = append(notices, dropped...)
 			}
 
-			comment, err := s.client.EditEntryComment(a.ctx, entry, args[0], body)
+			comment, err := s.client.EditCommentOn(a.ctx, entry, args[0], body)
 			if err != nil {
 				return commentRefusal(s, err)
 			}
@@ -594,7 +582,7 @@ func (a *app) newDocsCommentsDeleteCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if err := s.client.DeleteEntryComment(a.ctx, entry, args[0]); err != nil {
+			if err := s.client.DeleteCommentOn(a.ctx, entry, args[0]); err != nil {
 				return commentRefusal(s, err)
 			}
 
@@ -634,7 +622,7 @@ although the web offers it.`,
 			if err != nil {
 				return err
 			}
-			comment, err := s.client.ReactToEntryComment(a.ctx, entry, args[0], args[1])
+			comment, err := s.client.ReactToCommentOn(a.ctx, entry, args[0], args[1])
 			if err != nil {
 				return commentRefusal(s, err)
 			}
@@ -673,7 +661,7 @@ func (a *app) newDocsCommentsUnreactCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if err := s.client.UnreactFromEntryComment(a.ctx, entry, args[0], args[1]); err != nil {
+			if err := s.client.UnreactFromCommentOn(a.ctx, entry, args[0], args[1]); err != nil {
 				return commentRefusal(s, err)
 			}
 
@@ -699,30 +687,30 @@ func addEntryFlags(cmd *cobra.Command, documentID, uploadID *string) {
 // entryOfFlags is the document or the upload a command is aimed at. Where one
 // position would carry two kinds of identifier, a flag names which of them it
 // is instead.
-func entryOfFlags(cmd *cobra.Command, documentID, uploadID string) (api.Entry, error) {
+func entryOfFlags(cmd *cobra.Command, documentID, uploadID string) (api.Commented, error) {
 	switch {
 	case documentID != "" && uploadID != "":
-		return api.Entry{}, usageErrorf(cmd, "--document and --upload exclude each other")
+		return api.Commented{}, usageErrorf(cmd, "--document and --upload exclude each other")
 	case documentID != "":
 		if err := requireID(cmd, "--document", documentID); err != nil {
-			return api.Entry{}, err
+			return api.Commented{}, err
 		}
-		return api.Entry{Kind: api.EntryDocument, ID: documentID}, nil
+		return api.Commented{Kind: api.CommentedDocument, ID: documentID}, nil
 	case uploadID != "":
 		if err := requireID(cmd, "--upload", uploadID); err != nil {
-			return api.Entry{}, err
+			return api.Commented{}, err
 		}
-		return api.Entry{Kind: api.EntryUpload, ID: uploadID}, nil
+		return api.Commented{Kind: api.CommentedUpload, ID: uploadID}, nil
 	default:
-		return api.Entry{}, usageErrorf(cmd, "say what the comment hangs on: --document <documentId> or --upload <uploadId>")
+		return api.Commented{}, usageErrorf(cmd, "say what the comment hangs on: --document <documentId> or --upload <uploadId>")
 	}
 }
 
 // commentsUnder reads the entry a comment hangs on, for the one thing a write
 // has to know beforehand: whether the text it replaces carries files or
 // mentions that Markdown cannot hold.
-func (a *app) commentsUnder(s *session, entry api.Entry) ([]api.Comment, error) {
-	if entry.Kind == api.EntryUpload {
+func (a *app) commentsUnder(s *session, entry api.Commented) ([]api.Comment, error) {
+	if entry.Kind == api.CommentedUpload {
 		upload, err := s.client.FilesUploadOf(a.ctx, entry.ID)
 		if err != nil {
 			return nil, documentRefusal(s, err)
@@ -754,46 +742,6 @@ func checkBodyFormat(cmd *cobra.Command, format string) error {
 		return usageErrorf(cmd, "--body-format is markdown or html, not %q", format)
 	}
 	return nil
-}
-
-// checkAudience holds the one word a document cannot be written without. Which
-// people go with which audience is the server's rule and is left to it, so that
-// there is one place where it stands.
-func checkAudience(cmd *cobra.Command, audience string) error {
-	switch {
-	case audience == "":
-		return usageErrorf(cmd, "say whom the document reaches: --audience everybody, chosen or nobody")
-	case audience != "everybody" && audience != "chosen" && audience != "nobody":
-		return usageErrorf(cmd, "--audience is everybody, chosen or nobody, not %q", audience)
-	}
-	return nil
-}
-
-// notifiedPeople is the people a new document tells about itself. Only the
-// identifier and "me" are read here: which project the tool hangs in is not
-// known before the document exists, and a name can only be looked up among
-// the members of a project.
-func (a *app) notifiedPeople(cmd *cobra.Command, s *session, notify []string) ([]string, error) {
-	var people []string
-	for _, value := range notify {
-		if strings.EqualFold(strings.TrimSpace(value), "me") {
-			id, err := a.meID(s)()
-			if err != nil {
-				return nil, err
-			}
-			people = append(people, id)
-			continue
-		}
-		if err := requireID(cmd, "--notify", value); err != nil {
-			return nil, &Error{
-				Code:    CodeUsage,
-				Message: fmt.Sprintf("--notify takes the ID of a person, or me; %q is neither", value),
-				Hint:    "minka people list <projectId> gives the ID of every member of the project.",
-			}
-		}
-		people = append(people, value)
-	}
-	return people, nil
 }
 
 // documentBody reads and converts the body of a document.
@@ -863,15 +811,13 @@ func documentGuard(cmd *cobra.Command, expect string, force bool) (*string, erro
 // the hint says what can be done about it — including where that is nothing.
 func documentRefusal(s *session, err error) *Error {
 	e := s.fail(err)
+	if hint, ok := audienceHint(e.APICode); ok {
+		e.Hint = hint
+		return e
+	}
 	switch {
-	case e.APICode == apiCodeNotifyIDsMissing:
-		e.Hint = "An audience of \"chosen\" tells the people it names, and this request named none. Give one --notify per person, or reach everybody or nobody with --audience."
-	case e.APICode == apiCodeNotifyIDsWithoutChosenAudience:
-		e.Hint = "Only --audience chosen tells the people a request names. Leave the named people out, or say --audience chosen to tell them."
 	case e.APICode == apiCodePersonCannotSeeIt:
 		e.Hint = "Nothing was written, and the same request will be refused again: somebody named with --notify is a client of the project, or an agent working for one, and is told only about a document in a folder shown to clients, in a tool shown to clients. Name somebody else. Which tools and folders the clients are shown is decided in Minka on the web."
-	case e.APICode == apiCodePersonNotAProjectMember:
-		e.Hint = "Somebody named with --notify is not a member of the project, or somebody other than you is named twice, which Minka refuses the same way. minka people list <projectId> gives the members."
 	case e.APICode == apiCodeDocumentArchived:
 		e.Hint = "The document, or a folder above it, lies in the archive. It can be read; nothing is written on it until it is brought back, which is done in Minka on the web."
 	case e.APICode == apiCodeUploadArchived:
@@ -1162,8 +1108,8 @@ func uploadBreadcrumbs(upload api.FilesUpload) []Breadcrumb {
 
 // entryBreadcrumbs name what follows a write on a comment: reading the entry
 // it hangs under, whichever kind it is.
-func entryBreadcrumbs(entry api.Entry) []Breadcrumb {
-	if entry.Kind == api.EntryUpload {
+func entryBreadcrumbs(entry api.Commented) []Breadcrumb {
+	if entry.Kind == api.CommentedUpload {
 		return []Breadcrumb{
 			{Action: "show", Cmd: "minka docs uploads show " + entry.ID, Description: "Read the upload with its comments"},
 		}

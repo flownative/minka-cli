@@ -136,30 +136,6 @@ type FilesUpload struct {
 	AppURL            string             `json:"appUrl"`
 }
 
-// EntryKind says which kind of entry of a Docs & Files tool an identifier
-// names. The two have addresses of their own, and the identifier of one is
-// nothing at the address of the other.
-type EntryKind string
-
-const (
-	EntryDocument EntryKind = "document"
-	EntryUpload   EntryKind = "upload"
-)
-
-// Entry names one entry of a Docs & Files tool, which is what the comments
-// under it hang on.
-type Entry struct {
-	Kind EntryKind
-	ID   string
-}
-
-func (e Entry) path() string {
-	if e.Kind == EntryUpload {
-		return "/files-uploads/" + url.PathEscape(e.ID)
-	}
-	return "/documents/" + url.PathEscape(e.ID)
-}
-
 // CreateDocumentInput writes a published document. Body is HTML and may be
 // empty; a body that carries no element the server serves is stored as the
 // characters it consists of, without a word about it. Audience is required:
@@ -223,35 +199,4 @@ func (c *Client) UpdateDocument(ctx context.Context, documentID string, input Up
 // FilesUploadOf reads one upload of a Docs & Files tool.
 func (c *Client) FilesUploadOf(ctx context.Context, uploadID string) (Result[FilesUpload], error) {
 	return request[FilesUpload](ctx, c, http.MethodGet, "/files-uploads/"+url.PathEscape(uploadID), nil)
-}
-
-func (c *Client) WriteEntryComment(ctx context.Context, entry Entry, body string) (Result[Comment], error) {
-	return request[Comment](ctx, c, http.MethodPost, entry.path()+"/comments", map[string]string{"body": body})
-}
-
-// EditEntryComment changes a comment of the person of the token.
-func (c *Client) EditEntryComment(ctx context.Context, entry Entry, commentID, body string) (Result[Comment], error) {
-	return request[Comment](ctx, c, http.MethodPatch, entry.path()+"/comments/"+url.PathEscape(commentID), map[string]string{"body": body})
-}
-
-// DeleteEntryComment removes a comment of the person of the token. A removed
-// comment leaves nothing behind, so removing it again answers 404.
-func (c *Client) DeleteEntryComment(ctx context.Context, entry Entry, commentID string) error {
-	_, err := request[struct{}](ctx, c, http.MethodDelete, entry.path()+"/comments/"+url.PathEscape(commentID), nil)
-	return err
-}
-
-// ReactToEntryComment leaves a reaction on a comment, 201 for a new one and
-// 200 where the same one of yours stood already.
-func (c *Client) ReactToEntryComment(ctx context.Context, entry Entry, commentID, content string) (Result[Comment], error) {
-	return request[Comment](ctx, c, http.MethodPost,
-		entry.path()+"/comments/"+url.PathEscape(commentID)+"/reactions", map[string]string{"content": content})
-}
-
-// UnreactFromEntryComment takes a reaction off a comment, the way it comes off
-// a comment on a card.
-func (c *Client) UnreactFromEntryComment(ctx context.Context, entry Entry, commentID, content string) error {
-	_, err := request[struct{}](ctx, c, http.MethodDelete,
-		entry.path()+"/comments/"+url.PathEscape(commentID)+"/reactions?content="+url.QueryEscape(content), nil)
-	return err
 }

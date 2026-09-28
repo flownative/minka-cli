@@ -26,7 +26,9 @@ func everyWrite(e *testEnv) map[string][]string {
 	expectCode(e.t, e.run("", "steps", "create", card, "A step", "--json"), ExitOK)
 	expectCode(e.t, e.run("", "cards", "delete", f.CardInTriage.ID, "--json"), ExitOK)
 	expectCode(e.t, e.run("", "docs", "comments", "create", "--document", document, "A comment", "--json"), ExitOK)
+	expectCode(e.t, e.run("", "posts", "comments", "create", f.Post.ID, "A comment", "--json"), ExitOK)
 	comment := f.CardInDoing.Comments[len(f.CardInDoing.Comments)-1].ID
+	postComment := f.Post.Comments[len(f.Post.Comments)-1].ID
 	entryComment := f.Document.Comments[len(f.Document.Comments)-1].ID
 
 	return map[string][]string{
@@ -97,6 +99,19 @@ func everyWrite(e *testEnv) map[string][]string {
 		"checkins resume":         {"checkins", "resume", f.PausedQuestion.ID},
 		"checkins answers create": {"checkins", "answers", "create", f.DailyQuestion.ID, "An answer"},
 		"checkins answers edit":   {"checkins", "answers", "edit", f.BrunosAnswer.ID, "Other words"},
+
+		"posts create":           {"posts", "create", "--tool", f.Posts.ID, "--title", "New", "--body", "Words", "--audience", "nobody"},
+		"posts edit":             {"posts", "edit", f.Post.ID, "--title", "Renamed"},
+		"posts pin":              {"posts", "pin", f.Post.ID},
+		"posts unpin":            {"posts", "unpin", f.PinnedPost.ID},
+		"posts archive":          {"posts", "archive", f.Post.ID},
+		"posts unarchive":        {"posts", "unarchive", f.ArchivedPost.ID},
+		"posts delete":           {"posts", "delete", f.Post.ID},
+		"posts comments create":  {"posts", "comments", "create", f.Post.ID, "Another comment"},
+		"posts comments edit":    {"posts", "comments", "edit", f.Post.ID, postComment, "Other words"},
+		"posts comments delete":  {"posts", "comments", "delete", f.Post.ID, postComment},
+		"posts comments react":   {"posts", "comments", "react", f.Post.ID, postComment, "👍"},
+		"posts comments unreact": {"posts", "comments", "unreact", f.Post.ID, postComment, "👍"},
 	}
 }
 
@@ -114,6 +129,7 @@ var notAWriteIntoAProject = []string{
 	"todos mine", "todos show", "todos completed", "todos subtasks list",
 	"checkins tools", "checkins list", "checkins show", "checkins reminders",
 	"checkins answers list", "checkins answers show",
+	"posts tools", "posts categories", "posts list", "posts show", "posts comments list",
 	"chats mark-read", "conversations list", "conversations with", "conversations people",
 	"uploads create", "uploads download", "import basecamp",
 	"work start", "work stop", "work list", "heartbeat", "hooks install", "hooks status",
@@ -201,6 +217,12 @@ func TestAnArchivedProjectCanStillBeRead(t *testing.T) {
 		{"chats", "list", e.fixture.Project.ID},
 		{"messages", "list", e.fixture.Chat.ID},
 		{"chats", "mark-read", e.fixture.Chat.ID},
+		{"posts", "tools", e.fixture.Project.ID},
+		{"posts", "categories", e.fixture.Project.ID},
+		{"posts", "list", e.fixture.Posts.ID},
+		{"posts", "list", e.fixture.Posts.ID, "--archived"},
+		{"posts", "show", e.fixture.Post.ID},
+		{"posts", "comments", "list", e.fixture.Post.ID},
 	} {
 		if _, r := e.runJSON("", args...); r.code != ExitOK {
 			t.Errorf("%v exits %d: %s", args, r.code, r.stdout)

@@ -1155,7 +1155,7 @@ thing to keep in step with the server, and the round trip it saved is the only
 cost of leaving it out. Whether a named person may be told cannot be judged
 here at all: the CLI does not know the project before the document exists, nor
 which folder its clients are shown.
-**Implemented as:** `cli.checkAudience`, `cli.documentRefusal`, see
+**Implemented as:** `cli.checkAudience`, `cli.audienceHint`, `cli.documentRefusal`, see
 [Docs & Files](stable/docs-and-files.md).
 
 <a id="c-071"></a>
@@ -1246,14 +1246,15 @@ judging the days before sending would be a second copy of Minka's rule.
 <a id="c-076"></a>
 ## C-076 — A page of one's own to-dos is bounded here, a page of done ones is not
 
-*Applies to: `todos mine`, `todos completed`, `api.Client.MyTodos`*
+*Applies to: `todos mine`, `todos completed`, `posts list`, `api.Client.MyTodos`*
 
 `todos mine --limit` outside 1 to 100 is a usage error, and a full page names
 the next one in a `notice`. `todos completed --limit` goes to Minka as given.
 
 **Why:** a page of one's own to-dos ends in nothing but being short, so a page
 cut down in silence would read as the whole list ([C-054](#c-054)); a page of
-done to-dos carries `next`, which says there is more whatever Minka cut.
+done to-dos carries `next`, which says there is more whatever Minka cut. A page of
+posts carries `next` as well, so `posts list --limit` goes out as given.
 **Implemented as:** `api.MyTodosPageMax`, `cli.newTodosMineCmd`, see
 [To-dos and subtasks](stable/todos.md).
 
@@ -1338,3 +1339,44 @@ answer says which. A sorted list and `09:00` for `9:00` lose nothing, and a
 notice about them would teach whoever reads the notices to stop.
 **Implemented as:** `cli.askedNotices`, `cli.fortnightNotice`, see
 [Check-ins](stable/checkins.md).
+
+<a id="c-081"></a>
+## C-081 — The posts are `posts`, their comments `posts comments`, their archive `posts list --archived`
+
+*Applies to: every command on a Posts tool*
+
+The tools, the kinds and the posts are `posts …` (`posts tools <projectId>`
+and `posts categories <projectId>` beside `posts list <toolId>`), the comments
+`posts comments …` with the post as the first argument, and the archive of a
+tool `posts list <toolId> --archived`, as for a to-do list. Moving a post in and
+out of the archive is `posts archive` and `posts unarchive`, and the trash
+`posts delete`, as for a card.
+
+**Why:** A post is what the web and Minka's addresses name (`posts/…`,
+`posts-tools/…`), and one kind of item hangs under `posts comments`, so the
+post takes the first position there as the card does under `comments` and no
+flag has to say which kind it is ([C-010](#c-010)). The archive is a list of
+the same tool, which `todolists list --archived` already reads that way
+([C-071](#c-071)). **Implemented as:** `cli.newPostsCmd`,
+`cli.newPostCommentsCmd`, `api.Commented`, see [Posts](stable/posts.md).
+
+<a id="c-082"></a>
+## C-082 — The guard over the files of a post stands only where the write could land
+
+*Applies to: `posts edit --body`, `posts comments edit`; not (yet) to `docs
+edit`, `docs comments edit` or `checkins answers edit`*
+
+The guard that refuses a text dropping the files and mentions of the one it
+replaces asks only where Minka would take the write: not for a post of the
+archive, not in an archived project, and not for a comment of somebody else or
+under a post of the archive. There the request goes out and Minka's refusal is
+the answer.
+
+**Why:** Where Minka refuses whatever is sent, nothing can be lost, and a guard
+that answered first would put a usage error with a `--drop-attachments` hint
+in front of the one refusal that says what is really wrong. The post the
+command reads says whether it is archived; whether its project is, it does not,
+so the archived projects are read only where the guard is about to refuse.
+**Implemented as:** `cli.guardOverFiles`, `cli.newPostsEditCmd`,
+`cli.keepsTheAttachmentsOfAComment`, see
+[Posts](stable/posts.md).
