@@ -85,10 +85,15 @@ names the `--expect` to send next. An upload refuses with `uploadChanged` and
 ## Whom a new document reaches
 
 `--audience` is required: `everybody`, `chosen` with one `--notify` per person,
-or `nobody`. Minka passes over `notifyIds` for every audience but `chosen`, and
-takes `chosen` with nobody named. Both write a document that reaches somebody
-other than the writer meant, so the CLI refuses `--notify` without `chosen` and
-`chosen` without `--notify`, before a request goes out.
+or `nobody`. Minka refuses `notifyIds` under any audience but `chosen` with
+`notifyIdsWithoutChosenAudience`, and `chosen` with nobody named with
+`notifyIdsMissing`. The CLI refuses both itself, before a request goes out: the
+answer then names the flag to change instead of the field of a body nobody
+wrote by hand, and a document that reaches somebody other than the writer meant
+is worth the round trip it saves. Both are mapped here all the same, each with
+a hint naming the flag to change: the guard is this CLI's own, and a code it can
+meet the moment the guard is not there is worth a sentence rather than a bare
+422.
 
 `--notify` takes the ID of a person, or `me`. A name is not looked up: which
 project a tool hangs in is not known before the document exists, and a name can
@@ -120,10 +125,16 @@ it.
 ## The refusals
 
 `docs create` says what is wrong with the request before it meets the project:
-the title, the body, the folder and the audience are read first, so an archived
-project with an unknown folder answers `folderUnknown`. Everywhere else
-`projectArchived` comes first, because there the statement refuses before
-anything else can.
+the title, the body, the folder, the audience and the people named under it are
+read first, so an archived project with an unknown folder answers
+`folderUnknown`. Everywhere else `projectArchived` comes first, because there
+the statement refuses before anything else can.
+
+The people `--notify` names are met one at a time, in the order they were
+given, and each is asked two things in turn: whether they belong to the project
+at all, and whether the document is shown to them. So of one person
+`personNotAProjectMember` comes before `personCannotSeeIt`, and of a list the
+first name that is refused decides which of the two the answer is.
 
 | Answer | Command | Exit |
 |---|---|---|
@@ -134,7 +145,9 @@ anything else can.
 | 422 `documentTitleMissing`, `documentTitleTooLong`, `documentTitleHasControlCharacters` | `docs create`, `docs edit` | 9 |
 | 422 `documentBodyTooLong`, `documentBodyNotReadable` | `docs create`, `docs edit` | 9 |
 | 422 `documentAudienceMissing` | unreachable: the audience is held here | — |
+| 422 `notifyIdsMissing`, `notifyIdsWithoutChosenAudience` | unreachable: the audience and the people named are held against each other here | — |
 | 422 `personNotAProjectMember` | `docs create --notify` naming somebody outside the project | 9 |
+| 422 `personCannotSeeIt` | `docs create --notify` naming a client of the project, for a document the clients of it are not shown | 9 |
 | 422 `folderUnknown`, `folderArchived` | `docs create --folder` | 9 |
 | 422 `documentArchived`, `uploadArchived` | every write on an archived entry, or under one, comments included | 9 |
 | 422 `projectArchived` | every write; on `docs edit` and the comments before the codes above, on `docs create` after the title, the body and the folder | 9 |

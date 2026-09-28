@@ -2,8 +2,11 @@ package cli
 
 import (
 	"encoding/json"
+	"net/http"
 	"strings"
 	"testing"
+
+	"github.com/flownative/minka-cli/internal/api"
 )
 
 func TestTheToolsOfAProjectAreListed(t *testing.T) {
@@ -33,8 +36,8 @@ func TestAFolderListsWhatStandsInItAndNothingElse(t *testing.T) {
 	if ids := idsOf(t, top, "documents"); len(ids) != 1 || ids[0] != f.Document.ID {
 		t.Fatalf("the documents at the top are %v: a draft or one in the archive is among them", ids)
 	}
-	if ids := idsOf(t, top, "folders"); len(ids) != 1 || ids[0] != f.Folder.ID {
-		t.Fatalf("the folders at the top are %v", ids)
+	if ids := idsOf(t, top, "folders"); len(ids) != 2 || ids[0] != f.Folder.ID || ids[1] != f.FolderShownToClients.ID {
+		t.Fatalf("the folders at the top are %v: one in the archive is among them, or one is missing", ids)
 	}
 	if top["folder"] != nil || top["archived"] != false {
 		t.Fatalf("the top of a tool stands in no folder and in no archive: %v, %v", top["folder"], top["archived"])
@@ -217,6 +220,104 @@ func TestSayingWhomADocumentReachesIsRequiredAndHoldsTogether(t *testing.T) {
 				t.Fatal("the command wrote all the same")
 			}
 		})
+	}
+}
+
+// Minka refuses an audience and a list of people that do not go together
+// rather than dropping the list, and it reads the request before it meets the
+// project. The CLI sends no such call, so this asks the fake directly.
+func TestAnAudienceAndTheNamesUnderItAreRefusedTogetherBeforeTheProject(t *testing.T) {
+	e := newTestEnv(t)
+	f := e.fixture
+	documents := "/files-tools/" + f.Files.ID + "/documents"
+	named := `"notifyIds":["` + f.Anke.ID + `"]`
+
+	if status, code := sendRaw(e, http.MethodPost, documents, `{"title":"A page","audience":"chosen"}`); status != 422 || code != "notifyIdsMissing" {
+		t.Errorf("chosen naming nobody: %d %s", status, code)
+	}
+	for _, audience := range []string{"everybody", "nobody"} {
+		body := `{"title":"A page","audience":"` + audience + `",` + named + `}`
+		if status, code := sendRaw(e, http.MethodPost, documents, body); status != 422 || code != "notifyIdsWithoutChosenAudience" {
+			t.Errorf("%s naming somebody: %d %s", audience, status, code)
+		}
+	}
+
+	// The folder and the audience are read first, and the list of people with
+	// them, so what the request says is answered before the project is met.
+	unknownFolder := `{"title":"A page","audience":"chosen","folderId":"0192f3a4-5b6c-4d7e-8f90-a1b2c3d4e5f6"}`
+	if status, code := sendRaw(e, http.MethodPost, documents, unknownFolder); status != 422 || code != "folderUnknown" {
+		t.Errorf("an unknown folder beside an empty list: %d %s, want the folder first", status, code)
+	}
+	f.Project.Archived = true
+	if status, code := sendRaw(e, http.MethodPost, documents, `{"title":"A page","audience":"nobody",`+named+`}`); status != 422 || code != "notifyIdsWithoutChosenAudience" {
+		t.Errorf("an archived project beside a list nobody asked for: %d %s, want the request first", status, code)
+	}
+}
+
+// The CLI's own guard keeps both of these out of every request it sends, so
+// what they are worth is held against the answers themselves: whoever built
+// the call by hand is still told which flag to change.
+func TestAnAudienceRefusedForItsNamesSaysWhichFlagToChange(t *testing.T) {
+	hints := map[string]string{}
+	for code, says := range map[string]string{
+		apiCodeNotifyIDsMissing:               "Give one --notify per person",
+		apiCodeNotifyIDsWithoutChosenAudience: "Leave the named people out",
+	} {
+		e := documentRefusal(&session{host: "minka.example.com"}, &api.Error{
+			Method: http.MethodPost, StatusCode: http.StatusUnprocessableEntity,
+			Code: code, Message: "refused",
+		})
+		if e.Code != CodeValidation || e.ExitCode() != ExitValidation || e.APICode != code {
+			t.Errorf("%s: code %q, apiCode %q, exit %d", code, e.Code, e.APICode, e.ExitCode())
+		}
+		if !strings.Contains(e.Hint, says) {
+			t.Errorf("%s: hint %q does not say %q", code, e.Hint, says)
+		}
+		hints[code] = e.Hint
+	}
+	if hints[apiCodeNotifyIDsMissing] == hints[apiCodeNotifyIDsWithoutChosenAudience] {
+		t.Error("the two refusals are answered with one hint, although the flag to change differs")
+	}
+}
+
+// Somebody the document is not shown to is no mistake in the request: the
+// person is named rightly and may not be told, and only naming somebody else
+// or writing where they are let in gets the document written.
+func TestAClientIsToldOnlyAboutADocumentInAFolderShownToThem(t *testing.T) {
+	e := newTestEnv(t)
+	f := e.fixture
+	create := []string{"docs", "create", "--tool", f.Files.ID, "--title", "A page", "--audience", "chosen", "--notify", f.Client.ID}
+
+	// At the top of a tool, where no client is ever let in, and in a folder the
+	// project does not show them.
+	for _, folder := range []string{"", f.Folder.ID} {
+		args := create
+		if folder != "" {
+			args = append(create, "--folder", folder)
+		}
+		env, r := e.runJSON("", args...)
+		expectCode(t, r, ExitValidation)
+		if env.Meta["apiCode"] != apiCodePersonCannotSeeIt {
+			t.Fatalf("apiCode %v for folder %q", env.Meta["apiCode"], folder)
+		}
+		if !strings.Contains(env.Hint, "refused again") || !strings.Contains(env.Hint, "Name somebody else") {
+			t.Errorf("the hint does not say that repeating is no use: %q", env.Hint)
+		}
+	}
+
+	// The same person, told about a document standing where the project lets
+	// its clients in.
+	_, r := e.runJSON("", append(create, "--folder", f.FolderShownToClients.ID)...)
+	expectCode(t, r, ExitOK)
+
+	// Of one person, membership is answered first: a client of no project of
+	// this Minka hears that they do not belong, not that something is hidden
+	// from them.
+	outside, r := e.runJSON("", "docs", "create", "--tool", f.Files.ID, "--title", "A page",
+		"--audience", "chosen", "--notify", f.ForeignClient.ID)
+	expectCode(t, r, ExitValidation)
+	if outside.Meta["apiCode"] != "personNotAProjectMember" {
+		t.Fatalf("apiCode %v, want the membership before the visibility", outside.Meta["apiCode"])
 	}
 }
 

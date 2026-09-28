@@ -18,11 +18,14 @@ import (
 // What Minka answers a write on a Docs & Files tool that it will not carry
 // out.
 const (
-	apiCodeDocumentChanged  = "documentChanged"
-	apiCodeDocumentArchived = "documentArchived"
-	apiCodeUploadArchived   = "uploadArchived"
-	apiCodeFolderUnknown    = "folderUnknown"
-	apiCodeFolderArchived   = "folderArchived"
+	apiCodeDocumentChanged                = "documentChanged"
+	apiCodeDocumentArchived               = "documentArchived"
+	apiCodeUploadArchived                 = "uploadArchived"
+	apiCodeFolderUnknown                  = "folderUnknown"
+	apiCodeFolderArchived                 = "folderArchived"
+	apiCodeNotifyIDsMissing               = "notifyIdsMissing"
+	apiCodeNotifyIDsWithoutChosenAudience = "notifyIdsWithoutChosenAudience"
+	apiCodePersonCannotSeeIt              = "personCannotSeeIt"
 )
 
 // theGuardIsKeptToTheSecond is what a guard on an entry cannot do. Minka keeps
@@ -44,7 +47,14 @@ command says so in a notice, and nothing else ever will.`
 
 const documentAudienceHelp = `--audience says whom a new document reaches: "everybody" in the project,
 "chosen" with one --notify per person, or "nobody". It is required, and
---notify belongs to "chosen" alone.`
+--notify belongs to "chosen" alone; Minka refuses either mismatch as well.
+A person is given by ID, or as "me"; minka people list <projectId> gives the
+IDs.
+
+Somebody named has to be able to see the document. A client of the project is
+told only about one in a folder that is shown to clients, and naming a client
+anywhere else is refused with personCannotSeeIt. Nothing is written then, and
+sending it again changes nothing: name somebody else.`
 
 const documentNotFoundHint = "There is no such document, it is a draft, it belongs to a project you are not a member of, or you are a client of the project and it is not shown to you."
 
@@ -189,8 +199,7 @@ func (a *app) newDocsCreateCmd() *cobra.Command {
 		Short: "Write a document in a Docs & Files tool",
 		Long: "Writes a published document at the top of a Docs & Files tool, or in the\n" +
 			"folder --folder names. There are no drafts here: what this writes is published.\n\n" +
-			documentAudienceHelp + " A person is given by ID, or as \"me\";\n" +
-			"minka people list <projectId> gives the IDs.\n\n" +
+			documentAudienceHelp + "\n\n" +
 			documentBodyHelp + "\n\n" +
 			"A document may be only a title: without --body it is written with an empty body.",
 		Example: `  minka docs create --tool 0199... --title "How the stage goes up" --audience nobody --json
@@ -846,12 +855,18 @@ func documentGuard(cmd *cobra.Command, expect string, force bool) (*string, erro
 	return &expect, nil
 }
 
-// documentRefusal classifies a failed request about a Docs & Files tool. Every
-// code here names a state the entry or its folder is in, and the hint says
-// what can be done about it.
+// documentRefusal classifies a failed request about a Docs & Files tool. Each
+// code names a state the entry, its folder or somebody named on it is in, and
+// the hint says what can be done about it — including where that is nothing.
 func documentRefusal(s *session, err error) *Error {
 	e := s.fail(err)
 	switch {
+	case e.APICode == apiCodeNotifyIDsMissing:
+		e.Hint = "An audience of \"chosen\" tells the people it names, and this request named none. Give one --notify per person, or reach everybody or nobody with --audience."
+	case e.APICode == apiCodeNotifyIDsWithoutChosenAudience:
+		e.Hint = "Only --audience chosen tells the people a request names. Leave the named people out, or say --audience chosen to tell them."
+	case e.APICode == apiCodePersonCannotSeeIt:
+		e.Hint = "Nothing was written, and the same request will be refused again: somebody named with --notify is a client of the project, and a client is told only about a document in a folder that is shown to them. Name somebody else, or write it in such a folder — which folder that is, is decided in Minka on the web."
 	case e.APICode == apiCodeDocumentArchived:
 		e.Hint = "The document, or a folder above it, lies in the archive. It can be read; nothing is written on it until it is brought back, which is done in Minka on the web."
 	case e.APICode == apiCodeUploadArchived:

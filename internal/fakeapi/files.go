@@ -36,10 +36,17 @@ type FilesTool struct {
 // Folder holds entries of a tool. A folder in the archive is in no list, and
 // everything below it goes quiet with it: readable, and closed to every write.
 type Folder struct {
-	ID        string
-	Title     string
-	ParentID  string // empty at the top of the tool
-	Archived  bool
+	ID       string
+	Title    string
+	ParentID string // empty at the top of the tool
+	Archived bool
+
+	// ShownToClients decides for everything below this folder, and only the
+	// topmost folder of a chain is asked. What stands at the top of a tool is
+	// shown to no client, a folder of its own being the only place a client is
+	// let into.
+	ShownToClients bool
+
 	CreatedAt time.Time
 	CreatorID string
 }
@@ -186,13 +193,23 @@ func (s *Server) addDocument(w http.ResponseWriter, r *http.Request, person *Per
 	if !ok {
 		return
 	}
+	// A list the audience would not use is refused rather than dropped, and
+	// both refusals read the request alone, so they come before the write
+	// meets the project.
+	if deref(audience) == "chosen" && len(notifyIDs) == 0 {
+		unprocessable(w, "notifyIdsMissing", `An audience of "chosen" names the people in "notifyIds".`)
+		return
+	}
+	if deref(audience) != "chosen" && len(notifyIDs) > 0 {
+		unprocessable(w, "notifyIdsWithoutChosenAudience", `Only an audience of "chosen" takes "notifyIds".`)
+		return
+	}
 	// The people a document tells are enrolled after it is written, so an
 	// archived project refuses the write before anybody is looked up.
 	if s.refusedAsArchived(w, s.projectWithID(tool.ProjectID)) {
 		return
 	}
-	if deref(audience) == "chosen" && !s.everybodyIsAMemberOf(tool.ProjectID, notifyIDs) {
-		unprocessable(w, "personNotAProjectMember", "Only a member of the project can be told about a document.")
+	if s.refusedAsSomebodyWhoCannotBeTold(w, tool, folder, notifyIDs) {
 		return
 	}
 
@@ -561,14 +578,41 @@ func (s *Server) refusedAsAnArchivedEntry(w http.ResponseWriter, tool *FilesTool
 	return true
 }
 
-func (s *Server) everybodyIsAMemberOf(projectID string, personIDs []string) bool {
-	project := s.projectWithID(projectID)
-	for _, personID := range personIDs {
+// refusedAsSomebodyWhoCannotBeTold answers for the first person a new document
+// cannot be told to, in the order the enrolment meets them: membership first,
+// so that somebody outside the project hears that and not that the document is
+// hidden from them, and then whether the document is shown to them at all,
+// which only a client of the project is ever refused over.
+func (s *Server) refusedAsSomebodyWhoCannotBeTold(w http.ResponseWriter, tool *FilesTool, folder *Folder, notifyIDs []string) bool {
+	project := s.projectWithID(tool.ProjectID)
+	for _, personID := range notifyIDs {
 		if project == nil || !slices.Contains(project.MemberIDs, personID) {
-			return false
+			unprocessable(w, "personNotAProjectMember", "Only a member of the project can be told about a document.")
+			return true
+		}
+		if person := s.People[personID]; person != nil && person.Client && !folderShownToClients(tool, folderIDOf(folder)) {
+			unprocessable(w, "personCannotSeeIt", "Somebody chosen is a client of the project, and this document is not shown to clients.")
+			return true
 		}
 	}
-	return true
+	return false
+}
+
+// folderShownToClients says whether the clients of the project are shown what
+// stands in this folder. The topmost folder of the chain decides for
+// everything below it, and the top of a tool is shown to no client.
+func folderShownToClients(tool *FilesTool, folderID string) bool {
+	for seen := 0; folderID != "" && seen <= len(tool.Folders); seen++ {
+		folder := folderIn(tool, folderID)
+		if folder == nil {
+			return false
+		}
+		if folder.ParentID == "" {
+			return folder.ShownToClients
+		}
+		folderID = folder.ParentID
+	}
+	return false
 }
 
 func (s *Server) projectWithID(projectID string) *Project {

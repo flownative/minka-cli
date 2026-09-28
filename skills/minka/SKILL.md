@@ -742,8 +742,22 @@ with a description. Both take comments, and the comments take reactions.
   folder, and without `--body` it is a title and nothing else.
 - `--audience` is required: `everybody`, `chosen` with one `--notify <personId>`
   per person, or `nobody`. `--notify` belongs to `chosen` alone, and `chosen`
-  without anybody is refused (exit 1) — Minka would take both and tell nobody.
-  `--notify` takes an ID or `me`; `people list <projectId>` gives the IDs.
+  without anybody is refused (exit 1) before a request goes out. Minka refuses
+  the same two itself, with `notifyIdsWithoutChosenAudience` and
+  `notifyIdsMissing`: both are **your input to change** — name people, or choose
+  the audience that takes them. You meet them only in a call you built without
+  this CLI. `--notify` takes an ID or `me`; `people list <projectId>` gives the
+  IDs.
+- **`personCannotSeeIt` is not your input to fix.** The person you named exists,
+  is a member of the project, and simply may not be told: they work with the
+  project as a client, and a client is told only about a document standing in a
+  folder that is shown to clients. Nothing was written, and **sending the same
+  request again will be refused again, however often you try**. The only thing
+  that gets the document written is to **name somebody else** — or to write it in
+  a folder that is shown to clients, which is decided in Minka on the web. The
+  people are met one at a time in the order you gave them, and of one person
+  `personNotAProjectMember` is answered before this, so a list holding both is
+  answered for whichever name comes first.
 - `docs edit <documentId>` changes the title, the body or both. `--body ""`
   empties the body. **`--title ""` does not empty the title:** a document needs
   one, so it exits 9 with `documentTitleMissing`. A title can only be replaced.
@@ -806,6 +820,8 @@ or description of an upload. All of it is done in Minka on the web.
 `documentTitleMissing`, `documentTitleTooLong`,
 `documentTitleHasControlCharacters`, `documentBodyTooLong`,
 `documentBodyNotReadable`, `documentAudienceMissing`, `personNotAProjectMember`,
+`personCannotSeeIt` (a person to replace, not input to fix), `notifyIdsMissing`,
+`notifyIdsWithoutChosenAudience`,
 `folderUnknown`, `folderArchived`, `documentArchived`, `uploadArchived`,
 `documentChanged` (409, with the document in `data`), and the comment codes a
 card knows. An entry in the archive, or one in a folder in the archive, can be

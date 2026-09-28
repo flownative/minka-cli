@@ -245,6 +245,19 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   `richtext.CarriesMarkup` for the fallback, the same rule the CLI asks, so
   the edges of the list of served elements are shared knowledge and not a
   second measurement.
+  Of the three refusals over whom a document reaches — `notifyIdsMissing`,
+  `notifyIdsWithoutChosenAudience` and `personCannotSeeIt` — **no live instance
+  has been seen to answer any one of them.** All three are read in
+  `FilesApiController::addDocumentAction`, `PeopleAPostTells::enrolEachOf` and
+  the functions `minka_item_shown_to_clients` and `minka_tool_shown_to_clients`,
+  and mirrored in the fake from that reading alone. The first two are held
+  against the fake by a request the CLI never sends, its own guard refusing them
+  first, and their hints by the answers themselves; only `personCannotSeeIt` is
+  reached by a command. For it the fake carries a person who works with the
+  project as a client and a folder whose contents its clients are shown — that
+  client signs in nowhere, so the fake never has to answer as one, and it knows
+  no word for whether a whole tool is shown, the folder at the top of a chain
+  deciding alone.
 - Everything a bundle says about clients: no extraction has met a client live.
   What the fields are and how Minka reads them was read in its appliers
   (`PeopleApplier`, `ProjectsApplier`, `ToolsApplier`, `WhatClientsSee`), and
