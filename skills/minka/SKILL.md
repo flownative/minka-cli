@@ -198,6 +198,18 @@ minka docs comments edit (--document <documentId> | --upload <uploadId>) <commen
 minka docs comments delete (--document <documentId> | --upload <uploadId>) <commentId> --json
 minka docs comments react (--document <documentId> | --upload <uploadId>) <commentId> 👍 --json
 minka docs comments unreact (--document <documentId> | --upload <uploadId>) <commentId> 👍 --json
+minka todolists tools <projectId> --json
+minka todolists list <toolId> [--archived] --json
+minka todolists show <listId> --json
+minka todolists create --tool <toolId> --title "Title" [--description - < body.md] --json
+minka todolists edit <listId> [--title "New"] [--description - < body.md] --json
+minka todolists archive <listId> --json
+minka todolists unarchive <listId> --json
+minka todolists delete <listId> --json
+minka todogroups create --list <listId> --title "Title" --json
+minka todogroups edit <groupId> --title "New" --json
+minka todogroups move <groupId> (--top | --after <groupId> | --before <groupId>) --json
+minka todogroups delete <groupId> --json
 minka work start <card> --json
 minka work stop [<card>] [--all] --json
 minka work list --json
@@ -830,6 +842,82 @@ or description of an upload. All of it is done in Minka on the web.
 `documentChanged` (409, with the document in `data`), and the comment codes a
 card knows. An entry in the archive, or one in a folder in the archive, can be
 read and takes no write: exit 9 with `documentArchived` or `uploadArchived`.
+
+## To-do lists and groups
+
+A To-dos tool holds **lists**, the newest on top. A list has a title, an
+optional description and **groups**: named headings in an order of their own.
+A to-do stands in its list directly or in one of its groups. Commands for the
+to-dos themselves are not here yet; `todolists show` lists the open ones.
+
+### Reading
+
+- `todolists tools <projectId>` lists the To-dos tools of a project in use; a
+  project can have more than one.
+- `todolists list <toolId>` lists the lists on the page of the tool, in its
+  order; `--archived` lists **the archive instead**, the list archived last
+  first. A list is on one of the two, never on both, so one missing from the
+  first is looked for in the second. Nothing is paged and nothing is cut. A line
+  carries the whole description and how many to-dos are open and done.
+- `todolists show <listId>` gives the list with its description, its files,
+  the open to-dos standing in no group (`todos`), the groups in their order with
+  the open to-dos of each, and the comments. **Done to-dos are counted
+  (`completedCount`) and not listed.** A list in the archive is shown too and
+  says `archived: true`.
+- A group has no address to read it at: its ID and its place come from
+  `todolists show`.
+
+### Writing
+
+- `todolists create --tool <toolId> --title "..."` starts a list **on top** of
+  the tool. `--description` is Markdown by default and converted here, as for a
+  card; with `--description-format html` a text carrying no element Minka serves
+  is kept as its characters, and the `notice` is the only warning you get.
+- `todolists edit <listId>` changes the title, the description or both; what
+  you do not give stays. `--description ""` empties the description. **`--title
+  ""` does not empty the title**: exit 9 `todoListTitleMissing`. A description
+  with files or mentions is not replaced unless `--drop-attachments` is given;
+  to keep them, edit `descriptionSource` and send it with
+  `--description-format html`.
+- `todolists archive` and `todolists unarchive` move a list in and out of the
+  archive of its tool; it comes back to the place it had. `todolists delete`
+  puts a list into the trash from either place, its groups and to-dos with it.
+- `todogroups create --list <listId> --title "..."` adds a group **at the end**
+  of the list. `todogroups edit <groupId> --title "..."` renames it — the title
+  is all a group has. `todogroups delete` trashes it **with its to-dos**, which
+  then leave the list and its counts.
+- `todogroups move <groupId>` needs **exactly one** of `--top`, `--after
+  <groupId>` and `--before <groupId>`; the neighbour has to be another group of
+  the same list, and the group itself or any other is exit 9
+  `todoPlaceUnknown`. A group never leaves its list.
+
+### The archive of a list
+
+A list in the archive is read and takes **no write** — no change, no new
+group — until it is back: exit 9 `todoListArchived`, and the `hint` names the
+`todolists unarchive` to run. Its **groups are at no address at all**: every
+`todogroups` command on one exits 2, as if it did not exist. Archiving a list
+twice is `todoListArchived`, bringing back one in use `todoListNotArchived`. In
+an archived project `projectArchived` comes before those three and before
+`todoPlaceUnknown`, but after what is wrong with the request itself: a title
+or a description Minka refuses is answered as such, and a list or a group that
+is not there is exit 2.
+
+### What does not exist here
+
+Moving or copying a list into another tool or project, restoring from the
+trash, reading the done to-dos, and comments on a list are not offered by this
+CLI. The to-dos themselves come with their own commands.
+
+### Codes of this part
+
+`todoListTitleMissing`, `todoListTitleTooLong`,
+`todoListTitleHasControlCharacters`, `todoListDescriptionTooLong`,
+`todoListDescriptionNotReadable`, `todoGroupTitleMissing`,
+`todoGroupTitleTooLong`, `todoGroupTitleHasControlCharacters`,
+`todoListArchived`, `todoListNotArchived`, `todoPlaceUnknown` (a neighbour
+that is no other group of the same list), all exit 9; `projectArchived`
+before any of the archive codes.
 
 ## Saying which cards you are working on
 
