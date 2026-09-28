@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+
+	"github.com/flownative/minka-cli/internal/fakeapi"
 )
 
 func TestTheToolsOfAProjectAreListed(t *testing.T) {
@@ -33,8 +35,8 @@ func TestAFolderListsWhatStandsInItAndNothingElse(t *testing.T) {
 	if ids := idsOf(t, top, "documents"); len(ids) != 1 || ids[0] != f.Document.ID {
 		t.Fatalf("the documents at the top are %v: a draft or one in the archive is among them", ids)
 	}
-	if ids := idsOf(t, top, "folders"); len(ids) != 1 || ids[0] != f.Folder.ID {
-		t.Fatalf("the folders at the top are %v", ids)
+	if ids := idsOf(t, top, "folders"); len(ids) != 2 || ids[0] != f.Folder.ID || ids[1] != f.FolderShownToClients.ID {
+		t.Fatalf("the folders at the top are %v: one in the archive is among them, or one is missing", ids)
 	}
 	if top["folder"] != nil || top["archived"] != false {
 		t.Fatalf("the top of a tool stands in no folder and in no archive: %v, %v", top["folder"], top["archived"])
@@ -198,15 +200,14 @@ func TestADocumentIsWrittenWhereItIsAskedFor(t *testing.T) {
 	}
 }
 
-func TestSayingWhomADocumentReachesIsRequiredAndHoldsTogether(t *testing.T) {
-	e := newTestEnv(t)
-	f := e.fixture
+// The CLI holds the audience as a word and a person as an ID, and nothing more:
+// which people go with which audience is left to Minka.
+func TestSayingWhomADocumentReachesIsRequired(t *testing.T) {
+	f := newTestEnv(t).fixture
 
 	for name, args := range map[string][]string{
 		"no audience":              {"docs", "create", "--tool", f.Files.ID, "--title", "A page"},
 		"an audience that is none": {"docs", "create", "--tool", f.Files.ID, "--title", "A page", "--audience", "some"},
-		"chosen without anybody":   {"docs", "create", "--tool", f.Files.ID, "--title", "A page", "--audience", "chosen"},
-		"notify without chosen":    {"docs", "create", "--tool", f.Files.ID, "--title", "A page", "--audience", "everybody", "--notify", f.Anke.ID},
 		"notify by name":           {"docs", "create", "--tool", f.Files.ID, "--title", "A page", "--audience", "chosen", "--notify", "Anke"},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -218,6 +219,193 @@ func TestSayingWhomADocumentReachesIsRequiredAndHoldsTogether(t *testing.T) {
 			}
 		})
 	}
+}
+
+// Which people go with which audience is Minka's rule, and the CLI keeps none
+// of its own: the request goes out, and the answer says which flag to change.
+// Minka reads the request before the write meets the project, so both refusals
+// come after an unknown folder and before an archived project.
+func TestAnAudienceAndTheNamesUnderItAreRefusedTogetherByMinka(t *testing.T) {
+	for name, one := range map[string]struct {
+		rest []string
+		code string
+		says string
+	}{
+		"chosen naming nobody": {
+			[]string{"--audience", "chosen"}, apiCodeNotifyIDsMissing, "Give one --notify per person",
+		},
+		"everybody naming somebody": {
+			[]string{"--audience", "everybody", "--notify", "me"}, apiCodeNotifyIDsWithoutChosenAudience, "Leave the named people out",
+		},
+		"nobody naming somebody": {
+			[]string{"--audience", "nobody", "--notify", "me"}, apiCodeNotifyIDsWithoutChosenAudience, "Leave the named people out",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			e := newTestEnv(t)
+			env, r := e.runJSON("", newDocument(e, one.rest...)...)
+			expectCode(t, r, ExitValidation)
+			if env.Meta["apiCode"] != one.code {
+				t.Fatalf("apiCode %v, want %s", env.Meta["apiCode"], one.code)
+			}
+			if !strings.Contains(env.Hint, one.says) {
+				t.Errorf("hint %q does not say %q", env.Hint, one.says)
+			}
+		})
+	}
+
+	e := newTestEnv(t)
+	env, r := e.runJSON("", newDocument(e, "--audience", "chosen",
+		"--folder", "0192f3a4-5b6c-4d7e-8f90-a1b2c3d4e5f6")...)
+	expectCode(t, r, ExitValidation)
+	if env.Meta["apiCode"] != apiCodeFolderUnknown {
+		t.Errorf("apiCode %v, want the folder before the people it names", env.Meta["apiCode"])
+	}
+
+	e.fixture.Project.Archived = true
+	env, r = e.runJSON("", newDocument(e, "--audience", "nobody", "--notify", "me")...)
+	expectCode(t, r, ExitValidation)
+	if env.Meta["apiCode"] != apiCodeNotifyIDsWithoutChosenAudience {
+		t.Errorf("apiCode %v, want the request before the project", env.Meta["apiCode"])
+	}
+}
+
+// newDocument is the command line of a document in the tool of the fixture,
+// with whatever the case adds to it.
+func newDocument(e *testEnv, rest ...string) []string {
+	return append([]string{"docs", "create", "--tool", e.fixture.Files.ID, "--title", "A page"}, rest...)
+}
+
+// Somebody the document is not shown to is no mistake in the request: the
+// person is named rightly and may not be told, and only naming somebody else
+// or writing where they are let in gets the document written.
+func TestAClientIsToldOnlyAboutADocumentInAFolderShownToThem(t *testing.T) {
+	e := newTestEnv(t)
+	f := e.fixture
+	create := newDocument(e, "--audience", "chosen", "--notify", f.Client.ID)
+	before := len(f.Files.Documents)
+
+	// At the top of the tool, where a new document is shown to no client, and
+	// in a folder the project does not show them.
+	for _, folder := range []string{"", f.Folder.ID} {
+		args := create
+		if folder != "" {
+			args = append(create, "--folder", folder)
+		}
+		env, r := e.runJSON("", args...)
+		expectCode(t, r, ExitValidation)
+		if env.Meta["apiCode"] != apiCodePersonCannotSeeIt {
+			t.Fatalf("apiCode %v for folder %q", env.Meta["apiCode"], folder)
+		}
+		if !strings.Contains(env.Hint, "refused again") || !strings.Contains(env.Hint, "Name somebody else") {
+			t.Errorf("the hint does not say that repeating is no use: %q", env.Hint)
+		}
+		if env.Retryable {
+			t.Error("the refusal reads as one a repeat could get past")
+		}
+	}
+	if len(f.Files.Documents) != before {
+		t.Fatalf("%d documents after the refusals, want the %d of before", len(f.Files.Documents), before)
+	}
+
+	// The same person, told about a document standing where the project lets
+	// its clients in.
+	_, r := e.runJSON("", append(create, "--folder", f.FolderShownToClients.ID)...)
+	expectCode(t, r, ExitOK)
+
+	// Of one person, membership is answered first: a client of no project of
+	// this Minka hears that they do not belong, not that something is hidden
+	// from them.
+	outside, r := e.runJSON("", newDocument(e, "--audience", "chosen", "--notify", f.ForeignClient.ID)...)
+	expectCode(t, r, ExitValidation)
+	if outside.Meta["apiCode"] != "personNotAProjectMember" {
+		t.Fatalf("apiCode %v, want the membership before the visibility", outside.Meta["apiCode"])
+	}
+
+	// Of a list, the first name that is refused decides.
+	for want, names := range map[string][]string{
+		apiCodePersonCannotSeeIt:  {f.Client.ID, f.Stranger.ID},
+		"personNotAProjectMember": {f.Stranger.ID, f.Client.ID},
+	} {
+		args := newDocument(e, "--audience", "chosen", "--notify", names[0], "--notify", names[1])
+		env, r := e.runJSON("", args...)
+		expectCode(t, r, ExitValidation)
+		if env.Meta["apiCode"] != want {
+			t.Errorf("apiCode %v, want %s for the name given first", env.Meta["apiCode"], want)
+		}
+	}
+}
+
+// A folder shown to clients lets them in only where the tool does too.
+func TestAClientIsToldNothingInAToolNotShownToThem(t *testing.T) {
+	e := newTestEnv(t)
+	f := e.fixture
+	f.Files.ShownToClients = false
+
+	env, r := e.runJSON("", newDocument(e, "--audience", "chosen", "--notify", f.Client.ID, "--folder", f.FolderShownToClients.ID)...)
+	expectCode(t, r, ExitValidation)
+	if env.Meta["apiCode"] != apiCodePersonCannotSeeIt {
+		t.Fatalf("apiCode %v, want the tool to keep the client out of a folder shown to them", env.Meta["apiCode"])
+	}
+}
+
+// Only the topmost folder of a chain says whether the clients are shown what
+// stands below it; a folder further down has no say.
+func TestTheTopmostFolderDecidesWhatAClientIsToldAbout(t *testing.T) {
+	e := newTestEnv(t)
+	f := e.fixture
+	hiddenBelowShown := &fakeapi.Folder{ID: "0192f3a4-5b6c-4d7e-8f90-a1b2c3d4e501", Title: "Inside", ParentID: f.FolderShownToClients.ID}
+	shownBelowHidden := &fakeapi.Folder{ID: "0192f3a4-5b6c-4d7e-8f90-a1b2c3d4e502", Title: "Outside", ParentID: f.Folder.ID, ShownToClients: true}
+	f.Files.Folders = append(f.Files.Folders, hiddenBelowShown, shownBelowHidden)
+	create := newDocument(e, "--audience", "chosen", "--notify", f.Client.ID)
+
+	_, r := e.runJSON("", append(create, "--folder", hiddenBelowShown.ID)...)
+	expectCode(t, r, ExitOK)
+
+	env, r := e.runJSON("", append(create, "--folder", shownBelowHidden.ID)...)
+	expectCode(t, r, ExitValidation)
+	if env.Meta["apiCode"] != apiCodePersonCannotSeeIt {
+		t.Fatalf("apiCode %v, want the hidden folder at the top to decide", env.Meta["apiCode"])
+	}
+}
+
+// An agent works with what its principal is shown, so the agent of a client is
+// told only what a client is.
+func TestTheAgentOfAClientIsToldAsAClientIs(t *testing.T) {
+	e := newTestEnv(t)
+	f := e.fixture
+	agent := &fakeapi.Person{ID: "0192f3a4-5b6c-4d7e-8f90-a1b2c3d4e503", Name: "Claude (Nele)", Email: "claude-nele@agents.invalid", PrincipalID: f.Client.ID}
+	e.server.People[agent.ID] = agent
+	f.Project.MemberIDs = append(f.Project.MemberIDs, agent.ID)
+	create := newDocument(e, "--audience", "chosen", "--notify", agent.ID)
+
+	env, r := e.runJSON("", create...)
+	expectCode(t, r, ExitValidation)
+	if env.Meta["apiCode"] != apiCodePersonCannotSeeIt {
+		t.Fatalf("apiCode %v, want the agent kept out as its client is", env.Meta["apiCode"])
+	}
+	_, r = e.runJSON("", append(create, "--folder", f.FolderShownToClients.ID)...)
+	expectCode(t, r, ExitOK)
+}
+
+// Minka finds somebody named a second time already on the list and answers as
+// for somebody it could not put there. The writer is on it from the start and
+// passed over, however often they are named.
+func TestSomebodyNamedTwiceIsRefusedAsNoMember(t *testing.T) {
+	e := newTestEnv(t)
+	f := e.fixture
+
+	env, r := e.runJSON("", newDocument(e, "--audience", "chosen", "--notify", f.Anke.ID, "--notify", f.Anke.ID)...)
+	expectCode(t, r, ExitValidation)
+	if env.Meta["apiCode"] != apiCodePersonNotAProjectMember {
+		t.Fatalf("apiCode %v, want the second naming refused", env.Meta["apiCode"])
+	}
+	if !strings.Contains(env.Hint, "named twice") {
+		t.Errorf("the hint does not name the repetition: %q", env.Hint)
+	}
+
+	_, r = e.runJSON("", newDocument(e, "--audience", "chosen", "--notify", "me", "--notify", "me", "--notify", f.Anke.ID)...)
+	expectCode(t, r, ExitOK)
 }
 
 // Whom a document tells is looked up after it is written, so a project that

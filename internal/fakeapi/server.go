@@ -69,6 +69,12 @@ type Person struct {
 	Email       string
 	PrincipalID string
 	Retired     bool // an agent that stepped down: gone from every circle, and its tokens with it
+
+	// Client says that this person works with the organization as a client and
+	// not on its team. No resource of the API carries the word, so nothing the
+	// fake answers with shows it: it decides what a client may be told about,
+	// and nothing else.
+	Client bool
 }
 
 type Project struct {
@@ -440,6 +446,8 @@ type Fixture struct {
 	Bruno         *Person
 	Anke          *Person // a member of the project besides Bruno
 	Stranger      *Person // no member of the project
+	Client        *Person // a member of the project who works with it as a client, and signs in nowhere
+	ForeignClient *Person // a client of no project of this server, so no place can tell them anything
 	Agent         *Person
 	RetiredAgent  *Person // an agent that stepped down: still a member, in no list
 	Project       *Project
@@ -459,11 +467,12 @@ type Fixture struct {
 
 	// The Docs & Files tool of the project: a folder with a document and an
 	// upload in it, a folder in the archive below that one with a document of
-	// its own, and at the top a published document, a draft and one in the
-	// archive.
+	// its own, a folder whose contents the clients of the project are shown,
+	// and at the top a published document, a draft and one in the archive.
 	Files                          *FilesTool
 	Folder                         *Folder
 	ArchivedFolder                 *Folder
+	FolderShownToClients           *Folder
 	Document                       *Document // at the top of the tool, with one comment on it
 	DocumentInFolder               *Document
 	DocumentBelowTheArchivedFolder *Document
@@ -489,14 +498,16 @@ func New(t testing.TB) (*Server, *Fixture) {
 	agent := &Person{ID: newID(), Name: "Claude (Bruno)", Email: "claude-bruno@agents.invalid", PrincipalID: bruno.ID}
 	anke := &Person{ID: newID(), Name: "Anke", Email: "anke@example.com"}
 	retired := &Person{ID: newID(), Name: "Claude (Anke)", Email: "claude-anke@agents.invalid", PrincipalID: anke.ID, Retired: true}
-	for _, p := range []*Person{bruno, anke, stranger, agent, retired} {
+	client := &Person{ID: newID(), Name: "Nele", Email: "nele@example.com", Client: true}
+	foreignClient := &Person{ID: newID(), Name: "Ilka", Email: "ilka@example.com", Client: true}
+	for _, p := range []*Person{bruno, anke, stranger, agent, retired, client, foreignClient} {
 		s.People[p.ID] = p
 	}
 	s.Tokens["minka_pat_bruno"] = bruno.ID
 	s.Tokens["minka_pat_stranger"] = stranger.ID
 	s.Tokens["minka_pat_agent"] = agent.ID
 
-	project := &Project{ID: newID(), Name: "Test-Projekt", Description: "For trying things", MemberIDs: []string{bruno.ID, anke.ID, agent.ID, retired.ID}}
+	project := &Project{ID: newID(), Name: "Test-Projekt", Description: "For trying things", MemberIDs: []string{bruno.ID, anke.ID, agent.ID, retired.ID, client.ID}}
 	triage := &Column{ID: newID(), Type: "triage"}
 	doingTitle := "Doing"
 	doing := &Column{ID: newID(), Type: "column", CustomTitle: &doingTitle}
@@ -536,6 +547,7 @@ func New(t testing.TB) (*Server, *Fixture) {
 	aWholeSecond := s.now.Truncate(time.Second)
 	folder := &Folder{ID: newID(), Title: "Plans", CreatedAt: aWholeSecond, CreatorID: bruno.ID}
 	archivedFolder := &Folder{ID: newID(), Title: "Last year", ParentID: folder.ID, Archived: true, CreatedAt: aWholeSecond, CreatorID: bruno.ID}
+	folderShownToClients := &Folder{ID: newID(), Title: "For the client", ShownToClients: true, CreatedAt: aWholeSecond, CreatorID: bruno.ID}
 	document := &Document{ID: newID(), Title: "How the stage goes up", Body: "<p>Eight people on <strong>Friday</strong>.</p>",
 		CreatedAt: aWholeSecond, UpdatedAt: aWholeSecond, CreatorID: bruno.ID,
 		Comments: []*Comment{{ID: newID(), AuthorID: anke.ID, Body: "<p>I can help</p>", CreatedAt: s.now}}}
@@ -554,8 +566,8 @@ func New(t testing.TB) (*Server, *Fixture) {
 		Comments: []*Comment{{ID: newID(), AuthorID: bruno.ID, Body: "<p>Printed</p>", CreatedAt: s.now}}}
 	s.Uploads = append(s.Uploads, sitePlan)
 	files := &FilesTool{
-		ID: newID(), ProjectID: project.ID, Title: "Documents",
-		Folders:   []*Folder{folder, archivedFolder},
+		ID: newID(), ProjectID: project.ID, Title: "Documents", ShownToClients: true,
+		Folders:   []*Folder{folder, archivedFolder, folderShownToClients},
 		Documents: []*Document{document, draftDocument, archivedDocument, documentInFolder, documentBelowTheArchivedFolder},
 		Uploads:   []*FilesUpload{filesUpload},
 	}
@@ -624,12 +636,12 @@ func New(t testing.TB) (*Server, *Fixture) {
 
 	return s, &Fixture{
 		Token: "minka_pat_bruno", StrangerToken: "minka_pat_stranger", AgentToken: "minka_pat_agent",
-		Bruno: bruno, Anke: anke, Stranger: stranger, Agent: agent, RetiredAgent: retired, Project: project, Board: board,
+		Bruno: bruno, Anke: anke, Stranger: stranger, Client: client, ForeignClient: foreignClient, Agent: agent, RetiredAgent: retired, Project: project, Board: board,
 		Triage: triage, Doing: doing, NotNow: notNow, Done: done,
 		CardInTriage: cardInTriage, CardInDoing: cardInDoing,
 		OtherProject: otherProject, OtherBoard: otherBoard, OtherCard: otherCard,
 		Chat: chat, OtherChat: otherChat, Conversation: conversation,
-		Files: files, Folder: folder, ArchivedFolder: archivedFolder,
+		Files: files, Folder: folder, ArchivedFolder: archivedFolder, FolderShownToClients: folderShownToClients,
 		Document: document, DocumentInFolder: documentInFolder,
 		DocumentBelowTheArchivedFolder: documentBelowTheArchivedFolder,
 		DraftDocument:                  draftDocument, ArchivedDocument: archivedDocument,

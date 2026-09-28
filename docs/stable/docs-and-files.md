@@ -84,21 +84,30 @@ names the `--expect` to send next. An upload refuses with `uploadChanged` and
 
 ## Whom a new document reaches
 
-`--audience` is required: `everybody`, `chosen` with one `--notify` per person,
-or `nobody`. Minka passes over `notifyIds` for every audience but `chosen`, and
-takes `chosen` with nobody named. Both write a document that reaches somebody
-other than the writer meant, so the CLI refuses `--notify` without `chosen` and
-`chosen` without `--notify`, before a request goes out.
+`--audience` is required, and the CLI holds that word alone: `everybody`,
+`chosen` or `nobody`, and anything else is a usage error before a request goes
+out. Which people go with which audience is Minka's rule and stays there —
+`notifyIds` under any audience but `chosen` is `notifyIdsWithoutChosenAudience`,
+and `chosen` with nobody named is `notifyIdsMissing`. Both come back as exit 9
+with a hint naming the flag to change. One rule in one place: a second copy here
+would be a second thing to keep in step with a server that already answers it
+([C-070](../decisions.md#c-070)).
 
 `--notify` takes the ID of a person, or `me`. A name is not looked up: which
 project a tool hangs in is not known before the document exists, and a name can
 only be matched against the members of a project.
 
-A **client** of the project is a member, so `--notify` naming one is accepted
-and enrols them; E-199 then keeps them out of the notification and out of the
-read. The CLI cannot tell a client apart here and does not try — it does not
-know the project before the document exists — and whether a client then sees
-the document is Minka's to decide.
+A **client** of the project is a member, and being a member is not enough to be
+told. An agent whose principal is a client counts as a client. `--notify`
+naming either is refused with `personCannotSeeIt` wherever the document is not
+shown to clients (E-199): it is shown only where the tool is shown to clients
+**and** the topmost folder above the document is. A folder further down has no
+say, and a new document at the top of the tool is shown to no client. Nothing
+is written then, and nothing about the request can be mended — the person is
+real, belongs to the project and may simply not hear of it, so the answer is to
+name somebody else. The CLI cannot tell a client apart and does not try: it
+does not know the project before the document exists, and which tools and
+folders a project shows its clients is decided in Minka on the web.
 
 ## Two kinds of entry, one flag
 
@@ -120,10 +129,24 @@ it.
 ## The refusals
 
 `docs create` says what is wrong with the request before it meets the project:
-the title, the body, the folder and the audience are read first, so an archived
-project with an unknown folder answers `folderUnknown`. Everywhere else
-`projectArchived` comes first, because there the statement refuses before
-anything else can.
+the title, the body, the folder, the audience and the people named under it are
+read first, so an archived project with an unknown folder answers
+`folderUnknown`. Everywhere else `projectArchived` comes first, because there
+the statement refuses before anything else can.
+
+The people `--notify` names are met one at a time, in the order they were
+given, and each is asked two things in turn: whether they belong to the project
+at all, and whether the document is shown to them. So of one person
+`personNotAProjectMember` comes before `personCannotSeeIt`, and of a list the
+first name that is refused decides which of the two the answer is.
+
+Minka puts each person on the document's list as it meets them, and one it
+finds there already counts as one it could not put there. So **a person named
+twice is refused with `personNotAProjectMember`**, at the second naming,
+although they are a member. The writer is on the list from the start and is
+passed over, however often they are named. The CLI sends `--notify` as given
+and does not merge repetitions: the hint of `personNotAProjectMember` names
+this case beside the stranger.
 
 | Answer | Command | Exit |
 |---|---|---|
@@ -134,10 +157,12 @@ anything else can.
 | 422 `documentTitleMissing`, `documentTitleTooLong`, `documentTitleHasControlCharacters` | `docs create`, `docs edit` | 9 |
 | 422 `documentBodyTooLong`, `documentBodyNotReadable` | `docs create`, `docs edit` | 9 |
 | 422 `documentAudienceMissing` | unreachable: the audience is held here | — |
-| 422 `personNotAProjectMember` | `docs create --notify` naming somebody outside the project | 9 |
+| 422 `notifyIdsMissing`, `notifyIdsWithoutChosenAudience` | `docs create --audience` and `--notify` that do not go together | 9 |
+| 422 `personNotAProjectMember` | `docs create --notify` naming somebody outside the project, or somebody other than the writer twice | 9 |
+| 422 `personCannotSeeIt` | `docs create --notify` naming a client of the project or an agent of one, for a document the clients of it are not shown | 9 |
 | 422 `folderUnknown`, `folderArchived` | `docs create --folder` | 9 |
 | 422 `documentArchived`, `uploadArchived` | every write on an archived entry, or under one, comments included | 9 |
-| 422 `projectArchived` | every write; on `docs edit` and the comments before the codes above, on `docs create` after the title, the body and the folder | 9 |
+| 422 `projectArchived` | every write; on `docs edit` and the comments before the codes above, on `docs create` after the title, the body, the folder, the audience and `notifyIdsMissing` / `notifyIdsWithoutChosenAudience`, and before `personNotAProjectMember` and `personCannotSeeIt` | 9 |
 | 404 `variantNotAvailable` | `uploads download --variant` of the file of an upload, as for any file | 2 |
 | 422 the comment codes | `docs comments …`, as under a card | 9 |
 

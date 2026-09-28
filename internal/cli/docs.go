@@ -18,11 +18,15 @@ import (
 // What Minka answers a write on a Docs & Files tool that it will not carry
 // out.
 const (
-	apiCodeDocumentChanged  = "documentChanged"
-	apiCodeDocumentArchived = "documentArchived"
-	apiCodeUploadArchived   = "uploadArchived"
-	apiCodeFolderUnknown    = "folderUnknown"
-	apiCodeFolderArchived   = "folderArchived"
+	apiCodeDocumentChanged                = "documentChanged"
+	apiCodeDocumentArchived               = "documentArchived"
+	apiCodeUploadArchived                 = "uploadArchived"
+	apiCodeFolderUnknown                  = "folderUnknown"
+	apiCodeFolderArchived                 = "folderArchived"
+	apiCodeNotifyIDsMissing               = "notifyIdsMissing"
+	apiCodeNotifyIDsWithoutChosenAudience = "notifyIdsWithoutChosenAudience"
+	apiCodePersonCannotSeeIt              = "personCannotSeeIt"
+	apiCodePersonNotAProjectMember        = "personNotAProjectMember"
 )
 
 // theGuardIsKeptToTheSecond is what a guard on an entry cannot do. Minka keeps
@@ -43,8 +47,22 @@ Markdown sent that way stands in the document afterwards as "# Heading". The
 command says so in a notice, and nothing else ever will.`
 
 const documentAudienceHelp = `--audience says whom a new document reaches: "everybody" in the project,
-"chosen" with one --notify per person, or "nobody". It is required, and
---notify belongs to "chosen" alone.`
+"chosen" with one --notify per person, or "nobody". It is required. --notify
+belongs to "chosen" alone: Minka refuses names under any other audience with
+notifyIdsWithoutChosenAudience and "chosen" without a name with
+notifyIdsMissing; this command sends what it is given and leaves the rule
+to Minka.
+A person is given by ID, or as "me"; minka people list <projectId> gives the
+IDs.
+
+Somebody named has to be able to see the document. A client of the project,
+or an agent working for one, is told only about a document in a folder shown to
+clients, in a tool shown to clients; the topmost folder decides for everything
+below it. Naming them anywhere else is refused with personCannotSeeIt. Nothing
+is written then, and sending it again changes nothing: name somebody else.
+
+Minka refuses a person named twice as one who is not a member of the project
+(personNotAProjectMember); you yourself may be named as often as you like.`
 
 const documentNotFoundHint = "There is no such document, it is a draft, it belongs to a project you are not a member of, or you are a client of the project and it is not shown to you."
 
@@ -189,8 +207,7 @@ func (a *app) newDocsCreateCmd() *cobra.Command {
 		Short: "Write a document in a Docs & Files tool",
 		Long: "Writes a published document at the top of a Docs & Files tool, or in the\n" +
 			"folder --folder names. There are no drafts here: what this writes is published.\n\n" +
-			documentAudienceHelp + " A person is given by ID, or as \"me\";\n" +
-			"minka people list <projectId> gives the IDs.\n\n" +
+			documentAudienceHelp + "\n\n" +
 			documentBodyHelp + "\n\n" +
 			"A document may be only a title: without --body it is written with an empty body.",
 		Example: `  minka docs create --tool 0199... --title "How the stage goes up" --audience nobody --json
@@ -208,7 +225,7 @@ func (a *app) newDocsCreateCmd() *cobra.Command {
 			if err := checkBodyFormat(cmd, bodyFormat); err != nil {
 				return err
 			}
-			if err := checkAudience(cmd, audience, notify); err != nil {
+			if err := checkAudience(cmd, audience); err != nil {
 				return err
 			}
 
@@ -739,20 +756,15 @@ func checkBodyFormat(cmd *cobra.Command, format string) error {
 	return nil
 }
 
-// checkAudience holds the two flags that decide whom a new document reaches
-// against each other. Minka passes over notifyIds for every audience but
-// "chosen" and takes "chosen" without anybody, and both of those write a
-// document that reaches somebody other than the writer meant.
-func checkAudience(cmd *cobra.Command, audience string, notify []string) error {
+// checkAudience holds the one word a document cannot be written without. Which
+// people go with which audience is the server's rule and is left to it, so that
+// there is one place where it stands.
+func checkAudience(cmd *cobra.Command, audience string) error {
 	switch {
 	case audience == "":
 		return usageErrorf(cmd, "say whom the document reaches: --audience everybody, chosen or nobody")
 	case audience != "everybody" && audience != "chosen" && audience != "nobody":
 		return usageErrorf(cmd, "--audience is everybody, chosen or nobody, not %q", audience)
-	case audience == "chosen" && len(notify) == 0:
-		return usageErrorf(cmd, "--audience chosen needs at least one --notify; --audience nobody tells nobody")
-	case audience != "chosen" && len(notify) > 0:
-		return usageErrorf(cmd, "--notify belongs to --audience chosen; %q tells nobody it names", audience)
 	}
 	return nil
 }
@@ -846,12 +858,20 @@ func documentGuard(cmd *cobra.Command, expect string, force bool) (*string, erro
 	return &expect, nil
 }
 
-// documentRefusal classifies a failed request about a Docs & Files tool. Every
-// code here names a state the entry or its folder is in, and the hint says
-// what can be done about it.
+// documentRefusal classifies a failed request about a Docs & Files tool. Each
+// code names a state the entry, its folder or somebody named on it is in, and
+// the hint says what can be done about it — including where that is nothing.
 func documentRefusal(s *session, err error) *Error {
 	e := s.fail(err)
 	switch {
+	case e.APICode == apiCodeNotifyIDsMissing:
+		e.Hint = "An audience of \"chosen\" tells the people it names, and this request named none. Give one --notify per person, or reach everybody or nobody with --audience."
+	case e.APICode == apiCodeNotifyIDsWithoutChosenAudience:
+		e.Hint = "Only --audience chosen tells the people a request names. Leave the named people out, or say --audience chosen to tell them."
+	case e.APICode == apiCodePersonCannotSeeIt:
+		e.Hint = "Nothing was written, and the same request will be refused again: somebody named with --notify is a client of the project, or an agent working for one, and is told only about a document in a folder shown to clients, in a tool shown to clients. Name somebody else. Which tools and folders the clients are shown is decided in Minka on the web."
+	case e.APICode == apiCodePersonNotAProjectMember:
+		e.Hint = "Somebody named with --notify is not a member of the project, or somebody other than you is named twice, which Minka refuses the same way. minka people list <projectId> gives the members."
 	case e.APICode == apiCodeDocumentArchived:
 		e.Hint = "The document, or a folder above it, lies in the archive. It can be read; nothing is written on it until it is brought back, which is done in Minka on the web."
 	case e.APICode == apiCodeUploadArchived:

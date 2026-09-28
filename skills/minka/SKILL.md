@@ -741,9 +741,27 @@ with a description. Both take comments, and the comments take reactions.
   **published** document; there are no drafts here. `--folder` puts it in a
   folder, and without `--body` it is a title and nothing else.
 - `--audience` is required: `everybody`, `chosen` with one `--notify <personId>`
-  per person, or `nobody`. `--notify` belongs to `chosen` alone, and `chosen`
-  without anybody is refused (exit 1) — Minka would take both and tell nobody.
-  `--notify` takes an ID or `me`; `people list <projectId>` gives the IDs.
+  per person, or `nobody`. A word that is none of the three exits 1 before a
+  request goes out; which people go with which audience is Minka's rule and the
+  CLI keeps none of its own. `--notify` under any audience but `chosen` is exit 9
+  `notifyIdsWithoutChosenAudience`, and `chosen` naming nobody is exit 9
+  `notifyIdsMissing`. Both are **your input to change** — name people, or choose
+  the audience that takes them — and the `hint` says which flag. `--notify`
+  takes an ID or `me`; `people list <projectId>` gives the IDs.
+- **`personCannotSeeIt` is not your input to fix.** The person you named exists,
+  is a member of the project, and simply may not be told: they work with the
+  project as a client, or are an agent working for a client. Such a person is
+  told only about a document in a folder shown to clients, in a tool shown to
+  clients, and only the topmost folder above the document counts. Nothing was
+  written, and **sending the same request again will be refused again, however
+  often you try**. The only thing that gets the document written is to **name
+  somebody else**; which tools and folders clients are shown is decided in
+  Minka on the web. The people are met one at a time in the order you gave them,
+  and of one person `personNotAProjectMember` is answered before this, so a list
+  holding both is answered for whichever name comes first.
+- **Name each person once.** Minka refuses a person named twice with exit 9
+  `personNotAProjectMember`, although they are a member; naming yourself more
+  than once is harmless.
 - `docs edit <documentId>` changes the title, the body or both. `--body ""`
   empties the body. **`--title ""` does not empty the title:** a document needs
   one, so it exits 9 with `documentTitleMissing`. A title can only be replaced.
@@ -806,6 +824,8 @@ or description of an upload. All of it is done in Minka on the web.
 `documentTitleMissing`, `documentTitleTooLong`,
 `documentTitleHasControlCharacters`, `documentBodyTooLong`,
 `documentBodyNotReadable`, `documentAudienceMissing`, `personNotAProjectMember`,
+`personCannotSeeIt` (a person to replace, not input to fix), `notifyIdsMissing`,
+`notifyIdsWithoutChosenAudience`,
 `folderUnknown`, `folderArchived`, `documentArchived`, `uploadArchived`,
 `documentChanged` (409, with the document in `data`), and the comment codes a
 card knows. An entry in the archive, or one in a folder in the archive, can be

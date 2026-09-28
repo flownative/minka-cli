@@ -2108,7 +2108,9 @@ func TestPeopleListShowsTheMembersOfAProject(t *testing.T) {
 	for _, person := range people {
 		names = append(names, person.Name)
 	}
-	if got := strings.Join(names, ","); got != "Bruno,Anke,Claude (Bruno)" {
+	// A client of the project is among them, and nothing says which one it is:
+	// the API tells no client apart, so neither can a reader of this list.
+	if got := strings.Join(names, ","); got != "Bruno,Anke,Claude (Bruno),Nele" {
 		t.Errorf("people %q", got)
 	}
 

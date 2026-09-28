@@ -1134,3 +1134,26 @@ an account and call the run a success.
 **Implemented as:** `basecamp.whoseWordAMissingFileIs`,
 `basecamp.howTheDownloadEnded`, `basecamp.ourOwnRefusal`,
 `cli.incompleteImport`, see [Importing from Basecamp](stable/import.md).
+
+<a id="c-070"></a>
+## C-070 — Which people go with which audience is Minka's rule alone
+
+*Applies to: `docs create --audience` and `--notify`*
+
+The CLI checks that `--audience` is one of its three words and that a
+`--notify` is an ID or `me`, and nothing more. `chosen` without a name and
+names under another audience go out as they are given; Minka answers them with
+`notifyIdsMissing` and `notifyIdsWithoutChosenAudience`, exit 9, and the hint
+names the flag to change. `personCannotSeeIt` is exit 9 as well, not
+retryable, and its hint says that only another name gets the document written.
+A person named twice is sent twice, and the hint of the
+`personNotAProjectMember` Minka answers with names that case.
+
+**Why:** the CLI refused both mismatches itself while Minka had not yet
+answered them. Now that it does, a second copy of the rule would be a second
+thing to keep in step with the server, and the round trip it saved is the only
+cost of leaving it out. Whether a named person may be told cannot be judged
+here at all: the CLI does not know the project before the document exists, nor
+which folder its clients are shown.
+**Implemented as:** `cli.checkAudience`, `cli.documentRefusal`, see
+[Docs & Files](stable/docs-and-files.md).
