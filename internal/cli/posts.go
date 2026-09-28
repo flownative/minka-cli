@@ -370,7 +370,9 @@ Files and mentions stand in a body as action-text-attachment elements, which
 Markdown cannot hold. To keep them, take the bodySource from posts show --json,
 change it and send it back with --body-format html. A new body that would drop
 them is refused unless --drop-attachments is given; the command reads the post
-first to know.`,
+first to know. Where it is about to refuse, it reads the archived projects as
+well: in an archived project Minka refuses any body, so the request goes out
+and projectArchived is the answer.`,
 		Example: `  minka posts edit 0199... --title "The tent comes on Saturday"
   minka posts edit 0199... --body - < post.md
   minka posts edit 0199... --no-category`,
@@ -652,7 +654,11 @@ Files and mentions stand in a comment as action-text-attachment elements, which
 Markdown cannot hold. To keep them, take the bodySource of the comment from
 posts show --json, change it and send it back with --format html. A new text
 that would drop them from a comment of yours is refused unless
---drop-attachments is given; the command reads the post first to know.`,
+--drop-attachments is given; the command reads the post first to know, and
+where the comment carries files or mentions, the person of the token to know
+whose it is. Where it is about to refuse, it reads the archived projects as
+well: in an archived project Minka refuses any text, so the request goes out
+and projectArchived is the answer.`,
 		Example: `  minka posts comments edit 0199... 0199... "Looks right after all"`,
 		Args:    requireArgs("postId", "commentId", "text"),
 		RunE: func(cmd *cobra.Command, args []string) error {

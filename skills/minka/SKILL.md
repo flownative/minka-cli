@@ -1217,7 +1217,9 @@ title and the body, then `projectArchived`, `postArchived` and
 `postCategoryUnknown`. For pin, unpin, a comment and archiving:
 `projectArchived` before `postArchived` — except that archiving a post in the
 trash says `postInTrash` first. `posts edit --body` and `posts comments edit`
-read the post first, and their guard over files never comes before
+read the post first; `posts comments edit` reads you (`me`) as well where the
+comment carries files or mentions, and both read the archived projects where
+their guard over files is about to refuse. That guard never comes before
 `projectArchived` or `postArchived`.
 
 ### Codes of this part

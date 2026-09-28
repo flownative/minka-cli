@@ -875,3 +875,22 @@ func TestAReactionOnACommentThatIsNotThereNamesNoAuthor(t *testing.T) {
 		t.Fatalf("hint %q", env.Hint)
 	}
 }
+
+// The archived projects are read only where the guard over files is about to
+// refuse, so a guarded edit that goes through costs no read of them.
+func TestAGuardedEditThatGoesThroughReadsNoProjects(t *testing.T) {
+	e := newTestEnv(t)
+	f := e.fixture
+	f.Post.Body = "<div>See " + aMention + "</div>"
+	mine := &fakeapi.Comment{ID: "0192f3a4-5b6c-4d7e-8f90-a1b2c3d4e513", AuthorID: f.Bruno.ID, Body: "<div>" + aMention + "</div>", CreatedAt: time.Now()}
+	f.Post.Comments = append(f.Post.Comments, mine)
+	kept := "<div>Still " + aMention + "</div>"
+
+	runOK(t, e, "posts", "edit", f.Post.ID, "--body", kept, "--body-format", "html")
+	runOK(t, e, "posts", "comments", "edit", f.Post.ID, mine.ID, kept, "--format", "html")
+	for _, request := range e.server.Requests() {
+		if request.Path == "/api/v1/projects" {
+			t.Fatalf("the projects were read although the guard let the text through: %+v", request)
+		}
+	}
+}
