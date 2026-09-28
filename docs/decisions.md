@@ -1146,6 +1146,8 @@ names under another audience go out as they are given; Minka answers them with
 `notifyIdsMissing` and `notifyIdsWithoutChosenAudience`, exit 9, and the hint
 names the flag to change. `personCannotSeeIt` is exit 9 as well, not
 retryable, and its hint says that only another name gets the document written.
+A person named twice is sent twice, and the hint of the
+`personNotAProjectMember` Minka answers with names that case.
 
 **Why:** the CLI refused both mismatches itself while Minka had not yet
 answered them. Now that it does, a second copy of the rule would be a second

@@ -259,8 +259,10 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   person who works with the project as a client and a folder whose contents its
   clients are shown — that client signs in nowhere, so the fake never has to
   answer as one. The fake also carries whether the tool is shown to clients,
-  that the topmost folder decides, and that an agent of a client counts as a
-  client.
+  that the topmost folder decides, that an agent of a client counts as a
+  client, and that a person named twice is refused as no member. The last is
+  read from `DbalItemSubscriptionRepository::enrol` and has not been seen
+  anywhere, and it is a quirk the coordination passes on to Minka.
 - Everything a bundle says about clients: no extraction has met a client live.
   What the fields are and how Minka reads them was read in its appliers
   (`PeopleApplier`, `ProjectsApplier`, `ToolsApplier`, `WhatClientsSee`), and

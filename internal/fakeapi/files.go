@@ -214,7 +214,7 @@ func (s *Server) addDocument(w http.ResponseWriter, r *http.Request, person *Per
 	if s.refusedAsArchived(w, s.projectWithID(tool.ProjectID)) {
 		return
 	}
-	if s.refusedAsSomebodyWhoCannotBeTold(w, tool, folder, notifyIDs) {
+	if s.refusedAsSomebodyWhoCannotBeTold(w, person, tool, folder, notifyIDs) {
 		return
 	}
 
@@ -588,13 +588,22 @@ func (s *Server) refusedAsAnArchivedEntry(w http.ResponseWriter, tool *FilesTool
 // so that somebody outside the project hears that and not that the document is
 // hidden from them, and then whether the document is shown to them at all,
 // which only a client of the project is ever refused over.
-func (s *Server) refusedAsSomebodyWhoCannotBeTold(w http.ResponseWriter, tool *FilesTool, folder *Folder, notifyIDs []string) bool {
+//
+// The writer is on the list already and is passed over. Anybody else named a
+// second time finds themselves on it too, and Minka reads that as somebody it
+// could not enrol, so the second naming is answered as a stranger would be.
+func (s *Server) refusedAsSomebodyWhoCannotBeTold(w http.ResponseWriter, writer *Person, tool *FilesTool, folder *Folder, notifyIDs []string) bool {
 	project := s.projectWithID(tool.ProjectID)
+	enrolled := map[string]bool{}
 	for _, personID := range notifyIDs {
-		if project == nil || !slices.Contains(project.MemberIDs, personID) {
+		if personID == writer.ID {
+			continue
+		}
+		if project == nil || !slices.Contains(project.MemberIDs, personID) || enrolled[personID] {
 			unprocessable(w, "personNotAProjectMember", "Only a member of the project can be told about a document.")
 			return true
 		}
+		enrolled[personID] = true
 		if s.isAClient(personID) && !shownToClients(tool, folderIDOf(folder)) {
 			unprocessable(w, "personCannotSeeIt", "Somebody chosen is a client of the project, and this document is not shown to clients.")
 			return true

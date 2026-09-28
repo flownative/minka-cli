@@ -759,6 +759,9 @@ with a description. Both take comments, and the comments take reactions.
   Minka on the web. The people are met one at a time in the order you gave them,
   and of one person `personNotAProjectMember` is answered before this, so a list
   holding both is answered for whichever name comes first.
+- **Name each person once.** Minka refuses a person named twice with exit 9
+  `personNotAProjectMember`, although they are a member; naming yourself more
+  than once is harmless.
 - `docs edit <documentId>` changes the title, the body or both. `--body ""`
   empties the body. **`--title ""` does not empty the title:** a document needs
   one, so it exits 9 with `documentTitleMissing`. A title can only be replaced.

@@ -26,6 +26,7 @@ const (
 	apiCodeNotifyIDsMissing               = "notifyIdsMissing"
 	apiCodeNotifyIDsWithoutChosenAudience = "notifyIdsWithoutChosenAudience"
 	apiCodePersonCannotSeeIt              = "personCannotSeeIt"
+	apiCodePersonNotAProjectMember        = "personNotAProjectMember"
 )
 
 // theGuardIsKeptToTheSecond is what a guard on an entry cannot do. Minka keeps
@@ -58,7 +59,10 @@ Somebody named has to be able to see the document. A client of the project,
 or an agent working for one, is told only about a document in a folder shown to
 clients, in a tool shown to clients; the topmost folder decides for everything
 below it. Naming them anywhere else is refused with personCannotSeeIt. Nothing
-is written then, and sending it again changes nothing: name somebody else.`
+is written then, and sending it again changes nothing: name somebody else.
+
+Minka refuses a person named twice as one who is not a member of the project
+(personNotAProjectMember); you yourself may be named as often as you like.`
 
 const documentNotFoundHint = "There is no such document, it is a draft, it belongs to a project you are not a member of, or you are a client of the project and it is not shown to you."
 
@@ -866,6 +870,8 @@ func documentRefusal(s *session, err error) *Error {
 		e.Hint = "Only --audience chosen tells the people a request names. Leave the named people out, or say --audience chosen to tell them."
 	case e.APICode == apiCodePersonCannotSeeIt:
 		e.Hint = "Nothing was written, and the same request will be refused again: somebody named with --notify is a client of the project, or an agent working for one, and is told only about a document in a folder shown to clients, in a tool shown to clients. Name somebody else. Which tools and folders the clients are shown is decided in Minka on the web."
+	case e.APICode == apiCodePersonNotAProjectMember:
+		e.Hint = "Somebody named with --notify is not a member of the project, or somebody other than you is named twice, which Minka refuses the same way. minka people list <projectId> gives the members."
 	case e.APICode == apiCodeDocumentArchived:
 		e.Hint = "The document, or a folder above it, lies in the archive. It can be read; nothing is written on it until it is brought back, which is done in Minka on the web."
 	case e.APICode == apiCodeUploadArchived:

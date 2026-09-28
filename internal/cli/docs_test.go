@@ -388,6 +388,26 @@ func TestTheAgentOfAClientIsToldAsAClientIs(t *testing.T) {
 	expectCode(t, r, ExitOK)
 }
 
+// Minka finds somebody named a second time already on the list and answers as
+// for somebody it could not put there. The writer is on it from the start and
+// passed over, however often they are named.
+func TestSomebodyNamedTwiceIsRefusedAsNoMember(t *testing.T) {
+	e := newTestEnv(t)
+	f := e.fixture
+
+	env, r := e.runJSON("", newDocument(e, "--audience", "chosen", "--notify", f.Anke.ID, "--notify", f.Anke.ID)...)
+	expectCode(t, r, ExitValidation)
+	if env.Meta["apiCode"] != apiCodePersonNotAProjectMember {
+		t.Fatalf("apiCode %v, want the second naming refused", env.Meta["apiCode"])
+	}
+	if !strings.Contains(env.Hint, "named twice") {
+		t.Errorf("the hint does not name the repetition: %q", env.Hint)
+	}
+
+	_, r = e.runJSON("", newDocument(e, "--audience", "chosen", "--notify", "me", "--notify", "me", "--notify", f.Anke.ID)...)
+	expectCode(t, r, ExitOK)
+}
+
 // Whom a document tells is looked up after it is written, so a project that
 // takes no writes says so before anybody is looked for.
 func TestSomebodyOutsideTheProjectIsNamedAfterTheProjectItself(t *testing.T) {
