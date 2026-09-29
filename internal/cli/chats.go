@@ -252,11 +252,15 @@ func (a *app) newMessagesCreateCmd() *cobra.Command {
 sent again writes nothing new and answers with the message written before, so
 a message whose sending failed can be sent again without appearing twice.`,
 		Example: `  minka messages create 0199... "Tent is booked"
-  minka messages create 0199... - --client-message-id "$(uuidgen | tr A-Z a-z)" < note.txt`,
+  minka messages create 0199... - --client-message-id "$(uuidgen)" < note.txt`,
 		Args: requireArgs("chatId", "text"),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if clientMessageID != "" && !uuidPattern.MatchString(clientMessageID) {
-				return usageErrorf(cmd, "--client-message-id has to be a UUID")
+			if clientMessageID != "" {
+				id, ok := asID(clientMessageID)
+				if !ok {
+					return usageErrorf(cmd, "--client-message-id has to be a UUID")
+				}
+				clientMessageID = id
 			}
 			if _, _, err := messageBody(cmd, "", format); err != nil {
 				return err

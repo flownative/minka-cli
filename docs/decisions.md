@@ -1380,3 +1380,18 @@ so the archived projects are read only where the guard is about to refuse.
 **Implemented as:** `cli.guardOverFiles`, `cli.newPostsEditCmd`,
 `cli.keepsTheAttachmentsOfAComment`, see
 [Posts](stable/posts.md).
+
+<a id="c-083"></a>
+## C-083 — An ID goes out in lowercase
+
+*Applies to: every command that takes an ID, as an argument, a flag or among
+the people it names*
+
+Whatever case an ID is typed in, it is written in lowercase before it is
+compared or sent. A short identifier of a card is not written in lowercase;
+it is looked up in capitals.
+
+**Why:** Lowercase is the one form Minka keeps and reads an ID in; one in
+capitals names nothing there, and the answer it gets says something untrue.
+**Implemented as:** `cli.asID`, `cli.requireID`, `cli.requireArgs`, see
+[Token, hosts and requests](stable/security.md).

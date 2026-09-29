@@ -328,10 +328,10 @@ the bytes itself and refuses a file that contradicts what the type says.`,
 				return usageErrorf(cmd, "give --project or --conversation, not both and not neither")
 			}
 			if flags.Changed("project") {
-				if err := requireID(cmd, "--project", projectID); err != nil {
+				if err := requireID(cmd, "--project", &projectID); err != nil {
 					return err
 				}
-			} else if err := requireID(cmd, "--conversation", conversationID); err != nil {
+			} else if err := requireID(cmd, "--conversation", &conversationID); err != nil {
 				return err
 			}
 

@@ -58,7 +58,7 @@ func (a *app) notifiedPeople(cmd *cobra.Command, s *session, notify []string) ([
 			people = append(people, id)
 			continue
 		}
-		if err := requireID(cmd, "--notify", value); err != nil {
+		if err := requireID(cmd, "--notify", &value); err != nil {
 			return nil, &Error{
 				Code:    CodeUsage,
 				Message: fmt.Sprintf("--notify takes the ID of a person, or me; %q is neither", value),

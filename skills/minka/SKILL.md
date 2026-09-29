@@ -26,7 +26,8 @@ when stdout is not a terminal, so an agent gets structured output by default.
   has to be a pipe or a file, not a terminal.
 - IDs are UUIDs. Take them from earlier output, never guess them. A card may
   also be named by its short identifier, such as `MNK-1A`. A value that is
-  neither is refused with exit 1 before any request.
+  neither is refused with exit 1 before any request. An ID may be written in
+  capitals; it is sent in lowercase, the only form Minka knows it by.
 - Retry only when `retryable` is true, which only happens for reads. After a
   failed write, read the card back before trying again: the change may have
   reached the server. A 404 (`not_found`) means the thing does not exist,

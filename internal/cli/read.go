@@ -259,7 +259,7 @@ what it read before it, with its notices, and so does one that ends with 7
 				return usageErrorf(cmd, "--limit is a number of cards between 1 and %d, not %d; a larger page is cut down by the server without a word, and the end of the archive would then be read where there is none", api.ArchivePageMax, limit)
 			}
 			if cmd.Flags().Changed("before") {
-				if err := requireID(cmd, "--before", before); err != nil {
+				if err := requireID(cmd, "--before", &before); err != nil {
 					return err
 				}
 			}

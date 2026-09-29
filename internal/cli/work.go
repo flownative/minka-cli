@@ -856,7 +856,7 @@ func optionalCardArg(cmd *cobra.Command, args []string) error {
 		return usageErrorf(cmd, "unexpected argument %q", args[1])
 	}
 	if len(args) == 1 {
-		return requireID(cmd, "cardId", args[0])
+		return requireID(cmd, "cardId", &args[0])
 	}
 	return nil
 }

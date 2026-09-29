@@ -261,6 +261,16 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
 
 ## Checked against the fake only
 
+- An ID in capitals: that Minka names nothing by it is read in its code
+  (`IsUuid`, every controller under `Presentation/Api`), not seen live. The
+  fake answers alike wherever a command can send one — the 404, the refusal
+  of a person as no member, the unknown place, the step and the subtask that
+  are not deleted with a success — and reads the people to tell before the
+  audience, as Minka does. The CLI sends every ID in lowercase, so no command
+  reaches any of it; the one list Minka writes in lowercase itself is
+  `cardIds` of `me/work`. `replyTo` of a chat message is not mirrored: no
+  command sends it.
+
 - Of the notes of a card: `cardNotesHasControlCharacters`, and `cardArchived`
   for a card in its board's archive, which no write of the fake refuses with.
   Notes over 100000 characters are refused before sending, counted as the

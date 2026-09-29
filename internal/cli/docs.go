@@ -121,7 +121,7 @@ markup, cut where the count runs out and not at a word.`,
 		Args: requireArgs("toolId"),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if cmd.Flags().Changed("folder") {
-				if err := requireID(cmd, "--folder", folderID); err != nil {
+				if err := requireID(cmd, "--folder", &folderID); err != nil {
 					return err
 				}
 			}
@@ -202,11 +202,11 @@ func (a *app) newDocsCreateCmd() *cobra.Command {
   minka docs create --tool 0199... --title "Costs" --folder 0199... --audience everybody --body - < costs.md`,
 		Args: requireArgs(),
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			if err := requireID(cmd, "--tool", toolID); err != nil {
+			if err := requireID(cmd, "--tool", &toolID); err != nil {
 				return err
 			}
 			if cmd.Flags().Changed("folder") {
-				if err := requireID(cmd, "--folder", folderID); err != nil {
+				if err := requireID(cmd, "--folder", &folderID); err != nil {
 					return err
 				}
 			}
@@ -692,12 +692,12 @@ func entryOfFlags(cmd *cobra.Command, documentID, uploadID string) (api.Commente
 	case documentID != "" && uploadID != "":
 		return api.Commented{}, usageErrorf(cmd, "--document and --upload exclude each other")
 	case documentID != "":
-		if err := requireID(cmd, "--document", documentID); err != nil {
+		if err := requireID(cmd, "--document", &documentID); err != nil {
 			return api.Commented{}, err
 		}
 		return api.Commented{Kind: api.CommentedDocument, ID: documentID}, nil
 	case uploadID != "":
-		if err := requireID(cmd, "--upload", uploadID); err != nil {
+		if err := requireID(cmd, "--upload", &uploadID); err != nil {
 			return api.Commented{}, err
 		}
 		return api.Commented{Kind: api.CommentedUpload, ID: uploadID}, nil

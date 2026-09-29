@@ -110,11 +110,11 @@ meta.apiCode todoListArchived.`,
   minka todos create --list 0199... --group 0199... --title "Book the van" --notes - < notes.md`,
 		Args: requireArgs(),
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			if err := requireID(cmd, "--list", listID); err != nil {
+			if err := requireID(cmd, "--list", &listID); err != nil {
 				return err
 			}
 			if groupID != "" {
-				if err := requireID(cmd, "--group", groupID); err != nil {
+				if err := requireID(cmd, "--group", &groupID); err != nil {
 					return err
 				}
 			}
@@ -446,8 +446,8 @@ list: exit 9 with todoListArchived.`,
 			if groupID != "" && noGroup {
 				return usageErrorf(cmd, "--group and --no-group contradict each other")
 			}
-			for flag, id := range map[string]string{"--list": listID, "--group": groupID, "--after": after, "--before": before} {
-				if id != "" {
+			for flag, id := range map[string]*string{"--list": &listID, "--group": &groupID, "--after": &after, "--before": &before} {
+				if *id != "" {
 					if err := requireID(cmd, flag, id); err != nil {
 						return err
 					}
@@ -613,7 +613,7 @@ in a notice where the next one starts: --after <the last todoId>.`,
 				return usageErrorf(cmd, "--limit is 1 to %d, not %d: Minka serves no larger page and would cut one down without a word", api.MyTodosPageMax, limit)
 			}
 			if after != "" {
-				if err := requireID(cmd, "--after", after); err != nil {
+				if err := requireID(cmd, "--after", &after); err != nil {
 					return err
 				}
 			}
@@ -730,8 +730,8 @@ func newProjectPeople(a *app, s *session, projectID func() (string, error)) *pro
 func (p *projectPeople) resolve(values []string) ([]string, error) {
 	var ids []string
 	for _, value := range values {
-		id := strings.TrimSpace(value)
-		if !uuidPattern.MatchString(id) {
+		id, isID := asID(strings.TrimSpace(value))
+		if !isID {
 			if err := p.readMembers(); err != nil {
 				return nil, err
 			}

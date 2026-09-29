@@ -45,6 +45,8 @@ const (
 	maxChatMessageLength = 10000
 )
 
+// uuidPattern is the shape of an identifier as Minka reads one: lowercase
+// only. One in capitals names nothing there.
 var uuidPattern = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
 
 // maxClientIDLength and clientIDPattern are the shape of the name one client
