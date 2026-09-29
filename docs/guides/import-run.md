@@ -27,6 +27,15 @@ BASECAMP_PROFILE=flownative-robert ./bin/minka import basecamp \
   --out ~/minka-import/<bundle> --json > <scratchpad>/run.json
 ```
 
+Without `--project` the run takes every project the identity sees, the
+archived ones included, which is the whole account and many times the time
+below; `--active-only` leaves the archived ones out. A dry run over
+everything is the step before the first full run: it costs almost the whole
+walk, only the downloads are left out, and says how much a run would fetch. A
+single failure anywhere ends a full run with nothing written. A `not_found`
+names what is missing in its message; the hint to list the projects comes only
+where a project is missing, a tool that answers 404 gets another one.
+
 Robert has allowed that profile for extraction runs, reading only. It is his
 own sign-in: nothing else is done under it. Under it the people list of the
 account holds every kind of person, bots and deleted people included.

@@ -266,7 +266,7 @@ minka work list --json
 minka heartbeat --json
 minka hooks install [--file <path>] [--command <command line>] --json
 minka hooks status [--file <path>] --json
-minka import basecamp --project <basecampProjectId> [--project <basecampProjectId>]... (--out <dir> | --dry-run) --json
+minka import basecamp [--project <basecampProjectId>... | --active-only] (--out <dir> | --dry-run) --json
 ```
 
 `<column>` is a column ID, a type (`triage`, `not_now`, `done`) or a title
@@ -1400,7 +1400,7 @@ this:
 
 ## Importing from Basecamp
 
-- `import basecamp --project <id> --out <dir>` extracts projects of a Basecamp
+- `import basecamp --out <dir>` extracts projects of a Basecamp
   account into an import bundle, the directory Minka's applier reads foreign
   history from. It talks to Basecamp only, and only reads there; it needs no
   Minka host and no token.
@@ -1411,8 +1411,16 @@ this:
   signed in may not see the addresses of other people. Nothing was written and
   trying again does not help: tell the person that the run needs an identity
   of the account's own company, or an admin.
-- `--project` takes the numeric ID of a Basecamp project and is repeated for
-  several. Anything that is no number exits 1 before any request.
+- Without `--project` the run takes every project the Basecamp identity can
+  see, the active and the archived ones; an archived project comes with
+  `status` `archived`. `--active-only` leaves the archived ones out. Projects
+  in the trash are never taken. The projects stand in the bundle in the order
+  of their IDs. An identity that sees no project (no active one with
+  `--active-only`) exits 2.
+- `--project` takes the numeric ID of a Basecamp project, names exactly the
+  projects to take whatever their status, and is repeated for several.
+  Anything that is no number exits 1 before any request, and so does
+  `--project` together with `--active-only`.
 - `data.invalidAddresses` lists, by ID only, the people who come without an
   e-mail address, and so without a login, because the one Basecamp holds is
   none; `notice` says how many. The run still exits 0 and running it again

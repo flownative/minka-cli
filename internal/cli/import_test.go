@@ -730,8 +730,90 @@ func TestImportOfAProjectThatIsNotThereIsNotFound(t *testing.T) {
 	e := newImportEnv(t)
 	env, r := e.runJSON("import", "basecamp", "--project", "7001", "--project", "8888", "--dry-run")
 	expectCode(t, r, ExitNotFound)
-	if env.Code != CodeNotFound || !strings.Contains(env.Error, "8888") {
-		t.Errorf("code %q, error %q", env.Code, env.Error)
+	if env.Code != CodeNotFound || !strings.Contains(env.Error, "8888") || !strings.Contains(env.Hint, "basecamp projects list") {
+		t.Errorf("code %q, error %q, hint %q", env.Code, env.Error, env.Hint)
+	}
+}
+
+// A tool that is gone is no missing project, so the hint does not send anybody
+// to the list of projects.
+func TestImportOfAToolThatIsNotThereDoesNotPointAtTheProjects(t *testing.T) {
+	e := newImportEnv(t)
+	e.account.Fail["buckets/7001/chats/9001.json"] = &basecamp.Error{Kind: basecamp.NotFound, Message: "Basecamp: Resource not found"}
+	env, r := e.runJSON("import", "basecamp", "--project", "7001", "--dry-run")
+	expectCode(t, r, ExitNotFound)
+	if env.Hint == "" || strings.Contains(env.Hint, "projects list") {
+		t.Errorf("hint %q", env.Hint)
+	}
+}
+
+// projectsOfTheBundle are the projects of a bundle as "<sourceId> <status>", in
+// the order of the file.
+func projectsOfTheBundle(t *testing.T, out string) []string {
+	t.Helper()
+	var projects []string
+	for _, line := range strings.Split(strings.TrimSpace(filesUnder(t, out)["projects.jsonl"]), "\n") {
+		var project struct {
+			SourceID string `json:"sourceId"`
+			Status   string `json:"status"`
+		}
+		if err := json.Unmarshal([]byte(line), &project); err != nil {
+			t.Fatal(err)
+		}
+		projects = append(projects, project.SourceID+" "+project.Status)
+	}
+	return projects
+}
+
+func TestImportWithoutAProjectTakesEveryProjectTheIdentityCanSee(t *testing.T) {
+	e := newImportEnv(t)
+	out := filepath.Join(t.TempDir(), "bundle")
+
+	_, r := e.runJSON("import", "basecamp", "--out", out)
+	expectCode(t, r, ExitOK)
+	want := []string{"7001 active", "7002 archived", "7003 active", "7004 active", "7005 active", "7006 active",
+		"7007 active", "7008 active", "7009 active", "7010 active", "7011 active"}
+	if got := projectsOfTheBundle(t, out); !reflect.DeepEqual(got, want) {
+		t.Errorf("projects:\n got %v\nwant %v", got, want)
+	}
+}
+
+func TestImportWithActiveOnlyLeavesTheArchivedProjectsOut(t *testing.T) {
+	e := newImportEnv(t)
+	out := filepath.Join(t.TempDir(), "bundle")
+
+	_, r := e.runJSON("import", "basecamp", "--active-only", "--out", out)
+	expectCode(t, r, ExitOK)
+	if got := projectsOfTheBundle(t, out); slices.Contains(got, "7002 archived") || len(got) != 10 {
+		t.Errorf("projects: %v", got)
+	}
+}
+
+func TestImportOfNamedProjectsTakesExactlyThoseWhateverTheirStatus(t *testing.T) {
+	e := newImportEnv(t)
+	out := filepath.Join(t.TempDir(), "bundle")
+
+	_, r := e.runJSON("import", "basecamp", "--project", "7002", "--out", out)
+	expectCode(t, r, ExitOK)
+	if got, want := projectsOfTheBundle(t, out), []string{"7002 archived"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("projects: got %v, want %v", got, want)
+	}
+	for _, request := range e.account.Requests {
+		if strings.HasPrefix(request, "projects.json") {
+			t.Errorf("the projects were listed: %s", request)
+		}
+	}
+}
+
+func TestImportOfAnAccountThatListsNoProjectIsNotFound(t *testing.T) {
+	e := newImportEnv(t)
+	for i := range e.account.Projects {
+		e.account.Projects[i].Status = "archived"
+	}
+	env, r := e.runJSON("import", "basecamp", "--active-only", "--dry-run")
+	expectCode(t, r, ExitNotFound)
+	if env.Code != CodeNotFound || !strings.Contains(env.Error, "no active project") || !strings.Contains(env.Hint, "--status archived") {
+		t.Errorf("code %q, error %q, hint %q", env.Code, env.Error, env.Hint)
 	}
 }
 
@@ -739,15 +821,15 @@ func TestImportChecksTheCommandLineBeforeAskingBasecamp(t *testing.T) {
 	parent := t.TempDir()
 	out := filepath.Join(parent, "made", "bundle")
 	for name, args := range map[string][]string{
-		"no project":         {"import", "basecamp", "--out", out},
-		"no directory":       {"import", "basecamp", "--project", "7001"},
-		"a name as project":  {"import", "basecamp", "--project", "Example Project", "--out", out},
-		"a path as project":  {"import", "basecamp", "--project", "7001/../../people", "--out", out},
-		"a flag as project":  {"import", "basecamp", "--project=--help", "--out", out},
-		"a number too long":  {"import", "basecamp", "--project", "99999999999999999999999", "--out", out},
-		"one of two is none": {"import", "basecamp", "--project", "7001", "--project", "1234567890123456789", "--out", out},
-		"an argument":        {"import", "basecamp", "7001", "--out", out},
-		"an unknown command": {"import", "jira"},
+		"a project and active only": {"import", "basecamp", "--project", "7001", "--active-only", "--out", out},
+		"no directory":              {"import", "basecamp", "--project", "7001"},
+		"a name as project":         {"import", "basecamp", "--project", "Example Project", "--out", out},
+		"a path as project":         {"import", "basecamp", "--project", "7001/../../people", "--out", out},
+		"a flag as project":         {"import", "basecamp", "--project=--help", "--out", out},
+		"a number too long":         {"import", "basecamp", "--project", "99999999999999999999999", "--out", out},
+		"one of two is none":        {"import", "basecamp", "--project", "7001", "--project", "1234567890123456789", "--out", out},
+		"an argument":               {"import", "basecamp", "7001", "--out", out},
+		"an unknown command":        {"import", "jira"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			e := newImportEnv(t)

@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -125,6 +126,11 @@ type Account struct {
 	// UsersOnly.
 	Bot     Person
 	Deleted Person
+
+	// AlsoListedActive are projects the list of the active ones hands out as
+	// well as the list of their own status, as it does for a project that went
+	// on the shelf between the two requests.
+	AlsoListedActive []int64
 
 	// MemberEmail replaces the address of a person in the list of a project.
 	MemberEmail map[int64]string
@@ -351,6 +357,12 @@ func (a *Account) Get(_ context.Context, path string) ([]byte, error) {
 	switch {
 	case path == "people.json":
 		return a.page(a.People, page), nil
+	case path == "projects.json":
+		return a.projectsPage("active", page), nil
+	case path == "projects.json?status=archived":
+		return a.projectsPage("archived", page), nil
+	case path == "projects.json?status=trashed":
+		return a.projectsPage("trashed", page), nil
 	case projectPattern.MatchString(path):
 		if p := a.project(projectPattern.FindStringSubmatch(path)[1]); p != nil {
 			return encode(a.projectJSON(*p)), nil
@@ -423,6 +435,23 @@ func (a *Account) page(people []Person, page int) []byte {
 	items := []map[string]any{}
 	for i := start; i < len(people) && i < start+a.PageSize; i++ {
 		items = append(items, a.person(people[i]))
+	}
+	return encode(items)
+}
+
+// projectsPage is a page of the projects of one status, as Basecamp lists them:
+// the whole project, dock included, in the order of the account.
+func (a *Account) projectsPage(status string, page int) []byte {
+	var listed []Project
+	for _, p := range a.Projects {
+		if p.Status == status || (status == "active" && slices.Contains(a.AlsoListedActive, p.ID)) {
+			listed = append(listed, p)
+		}
+	}
+	start := (max(page, 1) - 1) * a.PageSize
+	items := []map[string]any{}
+	for i := start; i < len(listed) && i < start+a.PageSize; i++ {
+		items = append(items, a.projectJSON(listed[i]))
 	}
 	return encode(items)
 }

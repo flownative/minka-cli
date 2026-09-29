@@ -462,6 +462,25 @@ func ValidProjectID(value string) bool {
 // hang on: those of cards, those of posts, those of lines, those of answers,
 // those of lists and to-dos, those of mails, those of documents and uploads.
 func (e *Extractor) Extract(ctx context.Context, projectIDs []string, w *bundle.Writer) (Result, error) {
+	ids, err := sortedIDs(projectIDs)
+	if err != nil {
+		return Result{}, err
+	}
+	return e.extract(ctx, w, func(context.Context) ([]int64, error) { return ids, nil })
+}
+
+// ExtractEveryProject walks every project the identity can see, the active and
+// the archived ones, or the active ones alone, the way Extract walks the
+// projects it is given.
+func (e *Extractor) ExtractEveryProject(ctx context.Context, activeOnly bool, w *bundle.Writer) (Result, error) {
+	return e.extract(ctx, w, func(ctx context.Context) ([]int64, error) {
+		return everyProject(ctx, e.Source, activeOnly)
+	})
+}
+
+// extract walks the projects pick names. They are picked once the people of the
+// account have been read, so that a run that cannot end well asks nothing else.
+func (e *Extractor) extract(ctx context.Context, w *bundle.Writer, pick func(context.Context) ([]int64, error)) (Result, error) {
 	if e.LargestFile == 0 {
 		e.LargestFile = largestFileMinkaTakes
 	}
@@ -511,17 +530,16 @@ func (e *Extractor) Extract(ctx context.Context, projectIDs []string, w *bundle.
 	e.filesOfTheSource, e.attached = map[string]*fileOfTheSource{}, map[string]bool{}
 	e.filesThatNeverArrive, e.fileRecords, e.files = map[string]bool{}, nil, FileCounts{}
 
-	ids, err := sortedIDs(projectIDs)
-	if err != nil {
-		return Result{}, err
-	}
-
 	listed, err := getList[person](ctx, e.Source, "people.json")
 	if err != nil {
 		return Result{}, err
 	}
 	// Before anything else is asked for: a run that cannot end well ends here.
 	if err := e.people.listAccount(listed); err != nil {
+		return Result{}, err
+	}
+	ids, err := pick(ctx)
+	if err != nil {
 		return Result{}, err
 	}
 
@@ -646,12 +664,61 @@ func sortedIDs(values []string) ([]int64, error) {
 	return ids, nil
 }
 
+// The lists of projects Basecamp hands out by status; the one without a status
+// holds the active projects alone. The trashed ones are never asked for: a
+// project in the trash is one nobody chose to keep.
+const (
+	activeProjects   = "projects.json"
+	archivedProjects = "projects.json?status=archived"
+)
+
+// everyProject lists the projects the identity can see, in the order of their
+// IDs as the projects named on the command line are, so that the order of a
+// bundle does not follow the order Basecamp lists them in. A project that moves
+// to the shelf between the two lists is met in both and walked once.
+func everyProject(ctx context.Context, source Source, activeOnly bool) ([]int64, error) {
+	listings := []string{activeProjects}
+	if !activeOnly {
+		listings = append(listings, archivedProjects)
+	}
+	var ids []string
+	for _, listing := range listings {
+		listed, err := getList[struct {
+			ID int64 `json:"id"`
+		}](ctx, source, listing)
+		if err != nil {
+			return nil, err
+		}
+		for _, p := range listed {
+			// An entry without an ID reads as 0, which no project is.
+			id := strconv.FormatInt(p.ID, 10)
+			if p.ID == 0 || !ValidProjectID(id) {
+				return nil, &Error{Kind: API, Message: fmt.Sprintf("Basecamp lists a project under %s, which is no ID of a project", id)}
+			}
+			ids = append(ids, id)
+		}
+	}
+	if len(ids) == 0 {
+		which := "no project"
+		if activeOnly {
+			which = "no active project"
+		}
+		return nil, &Error{Kind: NotFound, Message: "Basecamp lists " + which + " that you can see", Hint: listTheProjects}
+	}
+	return sortedIDs(ids)
+}
+
+// listTheProjects is the next step where a project is missing. Only such a
+// failure carries it: anything else of a run that is not found says nothing
+// about which projects there are.
+const listTheProjects = "List the projects you can see with: basecamp projects list --all, and the archived ones with: basecamp projects list --all --status archived"
+
 func (e *Extractor) extractProject(ctx context.Context, id int64, w *bundle.Writer) error {
 	p, err := getOne[project](ctx, e.Source, fmt.Sprintf("projects/%d.json", id))
 	if err != nil {
 		var failed *Error
 		if errors.As(err, &failed) && failed.Kind == NotFound {
-			return &Error{Kind: NotFound, Message: fmt.Sprintf("Basecamp has no project %d that you can see", id)}
+			return &Error{Kind: NotFound, Message: fmt.Sprintf("Basecamp has no project %d that you can see", id), Hint: listTheProjects}
 		}
 		return err
 	}

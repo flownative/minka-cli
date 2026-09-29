@@ -76,7 +76,9 @@ fake, see below.
 boards, the chats, the check-ins, the to-dos, the forwarded mail and the
 Docs & Files of Basecamp
 projects into an
-import bundle for Minka's applier: people with avatars, projects with members,
+import bundle for Minka's applier, every project the identity sees, the
+archived ones included, unless `--project` names some or `--active-only`
+leaves the archived ones out (C-088): people with avatars, projects with members,
 the boards, chats, message boards, questionnaires, to-do sets, inboxes and
 Docs & Files tools as tools, of
 each board the columns, cards, steps, comments and boosts, of each message
@@ -511,6 +513,11 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   numbers), the order by creation, `--before` also for a number that was taken
   back or that no message carries, the read mark and its hint taking the
   highest number of a page, one's own messages never unread, and the refusals.
+- Of `import basecamp` without `--project`: the lists of the active and the
+  archived projects answer live in the shape the fake gives, one project
+  object each with its `status`, and `?status=trashed` answers `[]` for the
+  account; a walk of their pages and a whole run over every project are not
+  seen live yet.
 - Of `import basecamp`: a Basecamp CLI that is not signed in, forbidden by
   Basecamp or rate limited, a creator who left the account, a dock entry
   asked for the creator of a project that the identity may not see, and that an

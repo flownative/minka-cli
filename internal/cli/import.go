@@ -189,14 +189,22 @@ type importAvatars struct {
 
 func (a *app) newImportBasecampCmd() *cobra.Command {
 	var projects []string
+	var activeOnly bool
 	var out string
 	var dryRun bool
 
 	cmd := &cobra.Command{
-		Use:   "basecamp --project <id> [--project <id> …] --out <dir> [--dry-run]",
+		Use:   "basecamp [--project <id> … | --active-only] --out <dir> [--dry-run]",
 		Short: "Extract projects of a Basecamp account into an import bundle",
 		Long: `Extracts projects of a Basecamp account into an import bundle, the directory
 Minka's applier reads foreign history from.
+
+Without --project a run takes every project the Basecamp identity can see, the
+active and the archived ones, and an archived project comes as archived.
+--active-only leaves the archived ones out. --project names exactly the
+projects to take, whatever their status, and is repeated for several; it
+cannot be combined with --active-only. Projects in the trash are never taken.
+The projects stand in the bundle in the order of their IDs.
 
 It reads Basecamp through the Basecamp CLI, which has to be installed and
 signed in (basecamp auth login) as somebody who may see the projects and the
@@ -206,7 +214,7 @@ host or token is needed.
 
 So far a bundle holds the structure, the boards, the message boards, the
 chats, the check-ins, the to-dos, the forwarded mail and the Docs & Files: the
-people the named
+people the
 projects refer to with their avatars (their members and whoever a record names,
 not the rest of the account), the projects with their members, of each project
 the card tables, chats, message boards, questionnaires, to-do sets, inboxes and
@@ -440,8 +448,8 @@ A bundle holds personal data. Keep it out of repositories and delete it when
 it has been applied.`,
 		Args: requireArgs(),
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			if len(projects) == 0 {
-				return usageErrorf(cmd, "name at least one project with --project")
+			if activeOnly && len(projects) > 0 {
+				return usageErrorf(cmd, "--project names exactly the projects to take; leave out --active-only, or --project to take every active project")
 			}
 			for _, id := range projects {
 				if !basecamp.ValidProjectID(id) {
@@ -475,7 +483,13 @@ it has been applied.`,
 			// again, whatever kind it is of and whether anything is written.
 			source := basecamp.NewRetrying(a.basecampSource, a.retryPause)
 			extractor := basecamp.Extractor{Source: source, Avatars: a.avatarFetcher, Files: a.basecampFiles, Now: a.now}
-			result, err := extractor.Extract(a.ctx, projects, writer)
+			var result basecamp.Result
+			var err error
+			if len(projects) > 0 {
+				result, err = extractor.Extract(a.ctx, projects, writer)
+			} else {
+				result, err = extractor.ExtractEveryProject(a.ctx, activeOnly, writer)
+			}
 			if err != nil {
 				return basecampError(err)
 			}
@@ -796,7 +810,8 @@ it has been applied.`,
 			})
 		},
 	}
-	cmd.Flags().StringArrayVar(&projects, "project", nil, "ID of a Basecamp project to extract; repeat for several")
+	cmd.Flags().StringArrayVar(&projects, "project", nil, "ID of a Basecamp project to extract, whatever its status; repeat for several. Without it every project is extracted")
+	cmd.Flags().BoolVar(&activeOnly, "active-only", false, "Without --project, extract the active projects and leave the archived ones out")
 	cmd.Flags().StringVar(&out, "out", "", "Directory of the bundle; an earlier bundle there is replaced")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Walk Basecamp and show the counts, write nothing")
 	return cmd
@@ -1185,7 +1200,7 @@ func basecampError(err error) *Error {
 		e.Hint = "minka reads Basecamp through the Basecamp CLI. Install it from https://github.com/basecamp/basecamp-cli and sign in with: basecamp auth login"
 	case basecamp.NotFound:
 		e.Code = CodeNotFound
-		e.Hint = "List the projects you can see with: basecamp projects list"
+		e.Hint = "What the message names is gone from Basecamp or hidden from this identity. Look it up there: a new run fails the same way until it is back or visible to this identity."
 	case basecamp.AuthRequired:
 		e.Code = CodeAuth
 		e.Hint = "Sign the Basecamp CLI in with: basecamp auth login"
