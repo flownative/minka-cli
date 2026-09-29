@@ -162,6 +162,28 @@ type UpdateDocumentInput struct {
 	ExpectedUpdatedAt *string `json:"expectedUpdatedAt,omitempty"`
 }
 
+// AddFilesUploadInput puts a stored file into a Docs & Files tool. BlobID
+// names a file the writer stored in the tool's project that stands in no
+// upload or text yet. A Title left out names the upload after the file, and an
+// empty one is refused. Description is HTML and may be empty.
+type AddFilesUploadInput struct {
+	BlobID      string  `json:"blobId"`
+	Title       *string `json:"title,omitempty"`
+	Description string  `json:"description,omitempty"`
+	FolderID    string  `json:"folderId,omitempty"` // left out for the top of the tool
+}
+
+// UpdateFilesUploadInput changes the title or the description of an upload.
+// What it leaves out stays; an empty Description empties it, an empty Title is
+// refused. The file of an upload is not among what it can change.
+//
+// ExpectedUpdatedAt works as it does for a document.
+type UpdateFilesUploadInput struct {
+	Title             *string `json:"title,omitempty"`
+	Description       *string `json:"description,omitempty"`
+	ExpectedUpdatedAt *string `json:"expectedUpdatedAt,omitempty"`
+}
+
 // FilesTools lists the Docs & Files tools of a project, in the order of the
 // project page.
 func (c *Client) FilesTools(ctx context.Context, projectID string) (Result[[]FilesTool], error) {
@@ -199,4 +221,17 @@ func (c *Client) UpdateDocument(ctx context.Context, documentID string, input Up
 // FilesUploadOf reads one upload of a Docs & Files tool.
 func (c *Client) FilesUploadOf(ctx context.Context, uploadID string) (Result[FilesUpload], error) {
 	return request[FilesUpload](ctx, c, http.MethodGet, "/files-uploads/"+url.PathEscape(uploadID), nil)
+}
+
+// AddFilesUpload puts a stored file on top of a tool, or of the folder the
+// input names. The file cannot go into a second upload.
+func (c *Client) AddFilesUpload(ctx context.Context, toolID string, input AddFilesUploadInput) (Result[FilesUpload], error) {
+	return request[FilesUpload](ctx, c, http.MethodPost, "/files-tools/"+url.PathEscape(toolID)+"/uploads", input)
+}
+
+// UpdateFilesUpload writes over the title or the description of an upload. An
+// upload written over since the moment the input names is left as it stands
+// and answered with 409 uploadChanged, whose body carries it under "upload".
+func (c *Client) UpdateFilesUpload(ctx context.Context, uploadID string, input UpdateFilesUploadInput) (Result[FilesUpload], error) {
+	return request[FilesUpload](ctx, c, http.MethodPatch, "/files-uploads/"+url.PathEscape(uploadID), input)
 }

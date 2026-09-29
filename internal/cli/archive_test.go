@@ -63,6 +63,8 @@ func everyWrite(e *testEnv) map[string][]string {
 
 		"docs create":           {"docs", "create", "--tool", f.Files.ID, "--title", "A new page", "--audience", "nobody"},
 		"docs edit":             {"docs", "edit", document, "--title", "Renamed", "--force"},
+		"docs uploads create":   {"docs", "uploads", "create", aFileToUpload(e), "--tool", f.Files.ID, "--project", f.Project.ID},
+		"docs uploads edit":     {"docs", "uploads", "edit", upload, "--title", "Renamed", "--force"},
 		"docs comments create":  {"docs", "comments", "create", "--document", document, "Another comment"},
 		"docs comments edit":    {"docs", "comments", "edit", "--document", document, entryComment, "Other words"},
 		"docs comments delete":  {"docs", "comments", "delete", "--document", document, entryComment},

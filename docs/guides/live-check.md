@@ -29,7 +29,9 @@ project of others — is a decision of Robert or Shaun, not of the coordinator.
 4. Look at the text view, not only at `--quiet`. An error in the rendering
    shows up only there.
 5. Tidy up: delete your own cards, remove your own messages. An upload that no
-   stored text points to disappears by itself after seven days.
+   stored text or upload points to disappears by itself on a sweep after at
+   least seven days; an upload of a Docs & Files tool stays until it is removed
+   on the web.
 6. What the run showed goes into the status; what it uncovered in the CLI gets
    fixed at once.
 

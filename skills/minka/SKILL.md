@@ -194,6 +194,9 @@ minka docs show <documentId> --json
 minka docs create --tool <toolId> --title "Title" --audience everybody|chosen|nobody [--notify <personId>]... [--folder <folderId>] [--body - < body.md] --json
 minka docs edit <documentId> [--title "New"] [--body - < body.md] (--expect <updatedAt> | --force) --json
 minka docs uploads show <uploadId> --json
+minka docs uploads create <file> --tool <toolId> --project <projectId> [--folder <folderId>] [--title "Title"] [--description - < about.md] --json
+minka docs uploads create --blob <blobId> --tool <toolId> [--folder <folderId>] [--title "Title"] --json
+minka docs uploads edit <uploadId> [--title "New"] [--description - < about.md] (--expect <updatedAt> | --force) --json
 minka docs comments create (--document <documentId> | --upload <uploadId>) - --json < comment.md
 minka docs comments edit (--document <documentId> | --upload <uploadId>) <commentId> - [--format html] --json < comment.md
 minka docs comments delete (--document <documentId> | --upload <uploadId>) <commentId> --json
@@ -722,8 +725,12 @@ minka cards edit <cardId> --description - --description-format html < text.html
   in the texts of that project, a file of a conversation in the messages of
   that conversation. Anywhere else the server drops it while saving, without an
   error, so read the text back if it matters.
-- A file is kept only once a text carrying it is saved. An upload no saved text
-  points to is removed after seven days.
+- A file is kept for good only once a text or an upload of a Docs & Files tool
+  carries it. One that nothing carries is kept for **at least** seven days and
+  taken away some time after that — a floor, not a deadline you can count on.
+- The `id` of the answer is what `docs uploads create --blob <blobId>` takes
+  to let the file stand on its own in a Docs & Files tool. A file goes into one
+  place only: a text or an upload.
 - The bytes of a picture are not the ones that went in: Minka turns a picture
   the right way up, strips it of everything but its colour profile — the place
   a camera wrote into it among the rest — and encodes it again, so `size`, and
@@ -733,8 +740,11 @@ minka cards edit <cardId> --description - --description-format html < text.html
   everything that is no picture keep their bytes.
 - The media type comes from the name of the file, and from its first bytes
   where the name says nothing. `--content-type` gives it instead. The server
-  reads the bytes itself: a file that says it is a picture and is not exits 9
-  with `meta.apiCode` `contentTypeMismatch`, a broken picture `notReadable`.
+  reads the bytes itself and keeps the type they show. It refuses a file only
+  where the bytes and the type disagree **and one of the two is a picture it
+  shows** (AVIF, GIF, JPEG, PNG, WebP): exit 9 with `meta.apiCode`
+  `contentTypeMismatch`. An SVG counts as a document. Otherwise the type the
+  bytes show is kept without a word, whatever was sent.
 - At most 100 MiB. A larger file exits 1 before it travels, and a server that
   refuses one exits 9 with `tooLarge`.
 - `--name` gives the file another name in Minka than it has here.
@@ -791,7 +801,8 @@ with a description. Both take comments, and the comments take reactions.
   the archive. The inside of an archived folder **can** be listed by naming it,
   and then the answer and every line of it says `archived: true`.
 - `docs show <documentId>` gives the document with its body, its files and its
-  comments. `docs uploads show <uploadId>` gives an upload the same way. A
+  comments. `docs uploads show <uploadId>` gives an upload the same way, with
+  its `description` and `descriptionSource`. A
   **draft is at no address**, its author included: exit 2.
 - The bytes of an upload are fetched with `uploads download <blobId>`, where
   `<blobId>` is `file.id` of the upload — not the upload's own ID, which names
@@ -828,6 +839,54 @@ with a description. Both take comments, and the comments take reactions.
   empties the body. **`--title ""` does not empty the title:** a document needs
   one, so it exits 9 with `documentTitleMissing`. A title can only be replaced.
 
+### Putting a file into a tool
+
+- `docs uploads create <file> --tool <toolId> --project <projectId>` puts a
+  file of this machine on top of the tool, or of `--folder <folderId>`. Minka
+  takes it in two requests — the file is stored in the project, then put into
+  the tool — and the command does both. `--project` is needed because Minka's
+  addresses do not say which project a tool is in; the tool is looked up in it
+  first, and a tool the project has not got exits 2 **before the file
+  travels**. `data` is the upload, as `docs uploads show` gives it.
+- A step that fails ends the run, and nothing after it goes out. Where the file
+  was stored and the second step was refused, the error's `data` is the stored
+  file and the `hint` names `--blob <blobId>`: **try again with `--blob`
+  instead of the file**, and it does not travel a second time.
+- `docs uploads create --blob <blobId> --tool <toolId>` puts in a file stored
+  earlier — by `uploads create --project` or by a run that failed at the
+  second step. `--project`, `--name` and `--content-type` belong to storing a
+  file and exit 1 beside `--blob`.
+- Without `--title` the upload is named after the file. **`--title ""` exits 1
+  before anything goes out**, because Minka would refuse it only after the file
+  travelled.
+- `--description` is Markdown converted here, as the body of a document is.
+  Somebody `@`-mentioned in it is told; nobody else is, and there is no
+  `--audience` or `--notify` for an upload. You are subscribed to your own
+  upload.
+- **`fileUnknown` tells no cause apart.** The file may have been swept after
+  standing in nothing, never stored, be of another project, or be somebody
+  else's. With `--blob` the one remedy worth trying is to store it again:
+  give the file itself, with `--project`. Where the same run stored it a moment
+  ago it cannot have been swept, and the `hint` says so instead.
+- **`fileInUse`**: the file of yours stands in an upload or a text already. A
+  file goes into one place; give the file itself to store it anew.
+
+### Changing an upload
+
+- `docs uploads edit <uploadId>` changes the title, the description or both,
+  guarded as `docs edit` is: `--expect <updatedAt>` or `--force`, a conflict
+  exits 9 with `uploadChanged` and the upload in `data`, and the guard is blind
+  for one second.
+- `--description ""` empties the description. **`--title ""` does not empty the
+  title**: exit 9 `uploadTitleMissing`.
+- **The file of an upload cannot be replaced.** Minka ignores a file sent with
+  a change, so the command has no flag for it. To put another file in, create a
+  new upload.
+- The description is held against the files and mentions it carries, as a
+  document's body is: a Markdown description that would drop them exits 1
+  unless `--drop-attachments` is given. Send the `descriptionSource` back with
+  `--description-format html` to keep them. People newly mentioned are told.
+
 ### The body, and the trap under it
 
 **Minka refuses no body.** A body that carries no element it serves — raw
@@ -854,8 +913,8 @@ command's `notice` is the only warning you will ever get.
 - **The guard is blind for one second.** Minka keeps the moment of a document
   and of an upload to the whole second. A change somebody else made **in the
   same second as your read** carries the moment you read and passes the guard.
-  So after a write that matters, **read the document back** with `docs show`
-  and check that it says what you wrote. There is no flag for this and no
+  So after a write that matters, **read it back** with `docs show` or `docs
+  uploads show` and check that it says what you wrote. There is no flag for this and no
   answer that mentions it.
 - Send the `updatedAt` back **exactly as you read it**. It always ends
   `.000000Z`. A value that is no moment of that shape — one without a zone
@@ -881,8 +940,8 @@ command's `notice` is the only warning you will ever get.
 There is no delete, trash, archive, unarchive or move of a document; no
 creating, renaming or deleting a folder, so the CLI writes only into folders
 that already exist; no reading of a tool's archive; no reading of a draft, by
-anybody; and no putting a file into a Docs & Files tool or changing the title
-or description of an upload. All of it is done in Minka on the web.
+anybody; no replacing the file of an upload, nor deleting, archiving or moving
+one. All of it is done in Minka on the web.
 
 ### Codes of this part
 
@@ -892,7 +951,11 @@ or description of an upload. All of it is done in Minka on the web.
 `personCannotSeeIt` (a person to replace, not input to fix), `notifyIdsMissing`,
 `notifyIdsWithoutChosenAudience`,
 `folderUnknown`, `folderArchived`, `documentArchived`, `uploadArchived`,
-`documentChanged` (409, with the document in `data`), and the comment codes a
+`documentChanged` (409, with the document in `data`), `uploadTitleMissing`,
+`uploadTitleTooLong`, `uploadTitleHasControlCharacters`,
+`uploadDescriptionTooLong`, `uploadDescriptionNotReadable`, `uploadChanged`
+(409, with the upload in `data`), `fileUnknown`, `fileInUse`, the codes of
+storing a file (`contentTypeMismatch`, `tooLarge`), and the comment codes a
 card knows. An entry in the archive, or one in a folder in the archive, can be
 read and takes no write: exit 9 with `documentArchived` or `uploadArchived`.
 

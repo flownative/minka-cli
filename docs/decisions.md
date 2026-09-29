@@ -1071,7 +1071,7 @@ moved would store the same bytes again.
 <a id="c-067"></a>
 ## C-067 — Three guards, three mappings, and never a null expectation
 
-*Applies to: `docs edit`, `cards notes set`*
+*Applies to: `docs edit`, `docs uploads edit`, `cards notes set`*
 
 `--expect <updatedAt>` on a document sends the string **verbatim**;
 `--force` leaves `expectedUpdatedAt` **out of the body** rather than sending
@@ -1084,7 +1084,8 @@ helper over both would invert the meaning on one of them — and a document,
 whose moment is kept to the whole second, cannot see a change made in the same
 second as the read, which is why every guarded write says so rather than
 promising more than it holds.
-**Implemented as:** `cli.documentGuard`, `api.UpdateDocumentInput`, see
+**Implemented as:** `cli.entryGuard`, `api.UpdateDocumentInput`,
+`api.UpdateFilesUploadInput`, see
 [Docs & Files](stable/docs-and-files.md).
 
 <a id="c-068"></a>
@@ -1365,8 +1366,8 @@ the same tool, which `todolists list --archived` already reads that way
 
 *Applies to: every text the CLI replaces — `cards edit --description`,
 `comments edit`, `posts edit --body`, `posts comments edit`, `docs edit --body`,
-`docs comments edit`, `todolists edit --description`, `todos edit --notes` and
-`checkins answers edit`*
+`docs uploads edit --description`, `docs comments edit`, `todolists edit
+--description`, `todos edit --notes` and `checkins answers edit`*
 
 The guard that refuses a text dropping the files and mentions of the one it
 replaces asks only where Minka would take the write: not in an archived
@@ -1422,3 +1423,22 @@ a trashed, not found or forbidden record goes without it and ends 0.
 **Why:** Minka takes the list as the whole truth, so a guessed one unsubscribes silently.
 **Implemented as:** `basecamp.Extractor.subscribersOf`, `basecamp.handedTo`, see
 [Importing from Basecamp](stable/import.md).
+
+<a id="c-085"></a>
+## C-085 — A file goes into a tool in one run, and a refused second step hands over what the first stored
+
+*Applies to: `docs uploads create`, `docs uploads edit`*
+
+`docs uploads create <file>` looks the tool up in `--project`, stores the file
+and puts it into the tool; a failed step ends the run. A refused second step
+hands over the stored file, and `--blob <blobId>` takes that step alone. An
+empty `--title` is refused before anything goes out. `fileUnknown` says whether
+this run stored the file; `docs uploads edit` has no flag for the file.
+
+**Why:** Minka refuses a tool of another project and an empty title only after
+up to 100 MiB travelled and a retry would send them again, a file stored a
+moment ago cannot have been swept, and a flag for the file would promise a
+change Minka silently ignores.
+**Implemented as:** `cli.newDocsUploadsCreateCmd`, `cli.requireToolOfProject`,
+`cli.filesUploadRefusal`, `api.AddFilesUploadInput`, see
+[Docs & Files](stable/docs-and-files.md).

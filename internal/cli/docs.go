@@ -19,17 +19,20 @@ import (
 // out.
 const (
 	apiCodeDocumentChanged  = "documentChanged"
+	apiCodeUploadChanged    = "uploadChanged"
 	apiCodeDocumentArchived = "documentArchived"
 	apiCodeUploadArchived   = "uploadArchived"
 	apiCodeFolderUnknown    = "folderUnknown"
 	apiCodeFolderArchived   = "folderArchived"
+	apiCodeFileUnknown      = "fileUnknown"
+	apiCodeFileInUse        = "fileInUse"
 )
 
 // theGuardIsKeptToTheSecond is what a guard on an entry cannot do. Minka keeps
 // the moment of a document and of an upload to the whole second, so a change
 // made in the same second as the read carries the moment that was read and
 // passes for it.
-const theGuardIsKeptToTheSecond = "the guard is kept to the whole second: a change somebody else made in the same second as your read is not noticed, so read the document back after a write that matters"
+const theGuardIsKeptToTheSecond = "the guard is kept to the whole second: a change somebody else made in the same second as your read is not noticed, so read it back after a write that matters"
 
 const documentBodyHelp = `The body is Markdown by default and is sent as HTML, the way a description is.
 Minka keeps headings, bold, italic, strikethrough, inline code, links, lists,
@@ -57,7 +60,7 @@ const documentNotFoundHint = "There is no such document, it is a draft, it belon
 const uploadNotFoundHint = "There is no such upload, it belongs to a project you are not a member of, or you are a client of the project and it is not shown to you."
 
 func (a *app) newDocsCmd() *cobra.Command {
-	return group("docs", "Read and write the documents of a Docs & Files tool, and comment on its entries",
+	return group("docs", "Read and write the documents and uploads of a Docs & Files tool, and comment on them",
 		a.newDocsToolsCmd(),
 		a.newDocsListCmd(),
 		a.newDocsShowCmd(),
@@ -302,7 +305,7 @@ them is refused unless --drop-attachments is given.`,
 			if err := checkBodyFormat(cmd, bodyFormat); err != nil {
 				return err
 			}
-			guard, err := documentGuard(cmd, expect, force)
+			guard, err := entryGuard(cmd, "document", "minka docs show <documentId>", expect, force)
 			if err != nil {
 				return err
 			}
@@ -349,7 +352,8 @@ them is refused unless --drop-attachments is given.`,
 
 			document, err := s.client.UpdateDocument(a.ctx, args[0], input)
 			if err != nil {
-				return a.documentConflict(documentRefusal(s, err), err)
+				return entryConflict(a, documentRefusal(s, err), err, apiCodeDocumentChanged, "document",
+					func(d api.Document) string { return d.UpdatedAt }, renderDocument)
 			}
 
 			if guard != nil {
@@ -380,7 +384,11 @@ them is refused unless --drop-attachments is given.`,
 }
 
 func (a *app) newDocsUploadsCmd() *cobra.Command {
-	return group("uploads", "Read the uploads of a Docs & Files tool", a.newDocsUploadsShowCmd())
+	return group("uploads", "Read, put in and change the uploads of a Docs & Files tool",
+		a.newDocsUploadsShowCmd(),
+		a.newDocsUploadsCreateCmd(),
+		a.newDocsUploadsEditCmd(),
+	)
 }
 
 func (a *app) newDocsUploadsShowCmd() *cobra.Command {
@@ -393,8 +401,8 @@ was said about it and everything said under it.
 The bytes are fetched with "uploads download <blobId>", where <blobId> is
 file.id of this upload — not its own ID, which names the entry.
 
-Putting a file into a Docs & Files tool, and changing the title or the
-description of one, are not here yet. Both are done in Minka on the web.`,
+updatedAt is what docs uploads edit --expect takes. The file of an upload is
+never replaced here: Minka offers no way to do it.`,
 		Args: requireArgs("uploadId"),
 		RunE: func(_ *cobra.Command, args []string) error {
 			s, err := a.session()
@@ -403,11 +411,7 @@ description of one, are not here yet. Both are done in Minka on the web.`,
 			}
 			upload, err := s.client.FilesUploadOf(a.ctx, args[0])
 			if err != nil {
-				e := documentRefusal(s, err)
-				if e.Code == CodeNotFound {
-					e.Hint = uploadNotFoundHint
-				}
-				return e
+				return uploadRefusal(s, err)
 			}
 
 			return a.ok(success{
@@ -418,6 +422,344 @@ description of one, are not here yet. Both are done in Minka on the web.`,
 			})
 		},
 	}
+}
+
+const uploadDescriptionHelp = `The description is Markdown by default and is sent as HTML, the way the body of
+a document is; --description - reads it from stdin. --description-format html
+sends HTML as it is, and one that carries no element Minka serves is kept as
+the characters it consists of, which the command says in a notice.
+
+Somebody mentioned in the description is told about the upload. Nobody else is.`
+
+func (a *app) newDocsUploadsCreateCmd() *cobra.Command {
+	var toolID, projectID, blobID, folderID, title, description, descriptionFormat, name, contentType string
+
+	cmd := &cobra.Command{
+		Use:   "create [<file>] --tool <toolId> (--project <projectId> | --blob <blobId>)",
+		Short: "Put a file into a Docs & Files tool",
+		Long: `Puts a file on top of a Docs & Files tool, or of the folder --folder names, as an
+upload of its own.
+
+Minka takes it in two requests: the file is stored in the project first, and
+then put into the tool. Given a file, the command does both, and --project
+names the project of the tool, since Minka's addresses do not say which one it
+is; the tool is looked up in it before the file travels. A step that fails
+ends the run, and nothing after it is sent.
+
+Where the file was stored and the second step was refused, the error hands
+over the stored file under "data": give --blob <blobId> with its id in place
+of the file to try again without sending it anew. --blob also takes a file
+stored earlier with "uploads create --project". A file goes into one place
+only: one that stands in an upload or a text already is refused with
+fileInUse.
+
+` + unattachedFileHelp + `
+
+Without --title the upload is named after the file. A title cannot be empty:
+--title "" is refused here, before the file travels.
+
+` + uploadDescriptionHelp + `
+
+` + mediaTypeHelp,
+		Example: `  minka docs uploads create site-plan.pdf --tool 0199... --project 0199...
+  minka docs uploads create shot.png --tool 0199... --project 0199... --folder 0199... --title "The stage" --description - < about.md
+  minka docs uploads create --blob 0199... --tool 0199...`,
+		Args: func(cmd *cobra.Command, args []string) error {
+			if len(args) > 1 {
+				return usageErrorf(cmd, "unexpected argument %q", args[1])
+			}
+			return nil
+		},
+		RunE: func(cmd *cobra.Command, args []string) error {
+			flags := cmd.Flags()
+			if err := requireID(cmd, "--tool", &toolID); err != nil {
+				return err
+			}
+			storing := len(args) == 1
+			switch {
+			case storing == flags.Changed("blob"):
+				return usageErrorf(cmd, "give a file or --blob, not both and not neither")
+			case storing:
+				if err := requireID(cmd, "--project", &projectID); err != nil {
+					return err
+				}
+			default:
+				if err := requireID(cmd, "--blob", &blobID); err != nil {
+					return err
+				}
+				for _, flag := range []string{"project", "name", "content-type"} {
+					if flags.Changed(flag) {
+						return usageErrorf(cmd, "--%s belongs to storing a file; the file --blob names is stored already", flag)
+					}
+				}
+			}
+			if flags.Changed("folder") {
+				if err := requireID(cmd, "--folder", &folderID); err != nil {
+					return err
+				}
+			}
+			input := api.AddFilesUploadInput{FolderID: folderID}
+			if flags.Changed("title") {
+				// Minka refuses an empty title only after the file has travelled,
+				// so it is refused here while that costs nothing.
+				if strings.Trim(title, phpWhitespace) == "" {
+					return &Error{
+						Code:    CodeUsage,
+						Message: "an upload needs a title, and an empty one is refused",
+						Hint:    "Leave --title out to name the upload after the file.",
+					}
+				}
+				input.Title = &title
+			}
+			if err := checkDescriptionFormat(cmd, descriptionFormat); err != nil {
+				return err
+			}
+			var notices []string
+			if flags.Changed("description") {
+				html, warnings, err := a.descriptionHTML(cmd, description, descriptionFormat)
+				if err != nil {
+					return err
+				}
+				input.Description, notices = html, warnings
+			}
+
+			var file *fileToStore
+			if storing {
+				var err error
+				if file, err = openFileToStore(args[0], name, contentType); err != nil {
+					return err
+				}
+				defer file.close()
+			}
+
+			s, err := a.session()
+			if err != nil {
+				return err
+			}
+			var stored *api.Result[api.Upload]
+			if storing {
+				if err := a.requireToolOfProject(s, projectID, toolID); err != nil {
+					return err
+				}
+				uploaded, err := s.client.UploadToProject(a.ctx, projectID, file.filename, file.mediaType, file.content, file.size)
+				if err != nil {
+					return storeRefusal(s, err)
+				}
+				stored, blobID = &uploaded, uploaded.Value.ID
+			}
+			input.BlobID = blobID
+
+			upload, err := s.client.AddFilesUpload(a.ctx, toolID, input)
+			if err != nil {
+				return filesUploadRefusal(s, err, toolID, blobID, stored)
+			}
+
+			summary := fmt.Sprintf("Put %s into %s as upload %s", upload.Value.File.Filename, upload.Value.Tool.Title, upload.Value.Title)
+			return a.ok(success{
+				data:        upload.Raw,
+				summary:     summary,
+				notices:     notices,
+				breadcrumbs: uploadBreadcrumbs(upload.Value),
+				text: func(w io.Writer) {
+					fmt.Fprintf(w, "%s.\nUpload: %s\nFile: %s\n%s\n", summary, upload.Value.ID, upload.Value.File.ID, upload.Value.AppURL)
+				},
+			})
+		},
+	}
+
+	flags := cmd.Flags()
+	flags.StringVar(&toolID, "tool", "", "ID of the Docs & Files tool the file goes into")
+	flags.StringVar(&projectID, "project", "", "ID of the project of the tool, where the file is stored")
+	flags.StringVar(&blobID, "blob", "", "ID of a file stored already, in place of a file of this machine")
+	flags.StringVar(&folderID, "folder", "", "ID of the folder to put it in; the top of the tool without it")
+	flags.StringVar(&title, "title", "", "Title of the upload; the name of the file without it")
+	flags.StringVar(&description, "description", "", "Description of the upload, - to read it from stdin")
+	flags.StringVar(&descriptionFormat, "description-format", "markdown", "Format of the description: markdown or html")
+	addFileToStoreFlags(cmd, &name, &contentType)
+
+	return cmd
+}
+
+// phpWhitespace is what Minka trims off a title before it asks whether one is
+// left.
+const phpWhitespace = " \t\n\r\x00\x0b"
+
+// requireToolOfProject makes sure the tool is one of the project before the
+// file is stored there. Minka's addresses do not tie a tool to its project,
+// and a file stored in another project would travel only to be refused.
+func (a *app) requireToolOfProject(s *session, projectID, toolID string) error {
+	tools, err := s.client.FilesTools(a.ctx, projectID)
+	if err != nil {
+		e := s.fail(err)
+		if e.Code == CodeNotFound {
+			e.Hint = "There is no such project, or you are not a member of it."
+		}
+		return e
+	}
+	for _, tool := range tools.Value {
+		if tool.ID == toolID {
+			return nil
+		}
+	}
+	return &Error{
+		Code:    CodeNotFound,
+		Message: "the project has no Docs & Files tool " + toolID + " that you can see, nothing was sent",
+		Hint:    "List the tools of the project with: minka docs tools " + projectID,
+	}
+}
+
+// filesUploadRefusal classifies a file Minka did not put into a tool. stored
+// is the file this run stored a moment before, and nil where --blob named it:
+// a refusal then costs no transfer, and a file stored in this run cannot have
+// been swept.
+func filesUploadRefusal(s *session, err error, toolID, blobID string, stored *api.Result[api.Upload]) *Error {
+	e := documentRefusal(s, err)
+	switch {
+	case e.Code == CodeNotFound:
+		e.Hint = "There is no such Docs & Files tool, it belongs to a project you are not a member of, or you are a client of the project and it is not shown to you."
+	case e.APICode == apiCodeFileUnknown && stored != nil:
+		e.Hint = "The file was stored in this same run, so it has not been swept, and storing it again is not the remedy. Minka says no more about why it did not take it: check that the tool is still there with minka docs list " + toolID + ", and try once more with --blob " + blobID + "."
+	case e.APICode == apiCodeFileUnknown:
+		e.Hint = "Minka tells no cause apart: the file may have been swept after standing in nothing (such a file is kept for at least seven days and may go any time after), never have been stored, belong to another project, or be somebody else's. The one remedy worth trying is to store it again: give the file itself in place of --blob, with --project."
+	case e.APICode == apiCodeFileInUse && stored != nil:
+		e.Hint = "The file stands in an upload or a text already, and a file goes into one place only, so naming it again cannot help. Running the command again stores the file anew."
+	case e.APICode == apiCodeFileInUse:
+		e.Hint = "The file stands in an upload or a text already, and a file goes into one place only. Give the file itself in place of --blob, with --project, to store it anew."
+	}
+	if stored == nil {
+		return e
+	}
+	// The transfer is not lost: the file stands stored, and a second try can
+	// name it rather than send it again.
+	e.Data = stored.Raw
+	// A file Minka does not know or has put somewhere already is no better
+	// for being named again.
+	if e.APICode != apiCodeFileUnknown && e.APICode != apiCodeFileInUse {
+		e.Hint = strings.TrimSpace(e.Hint + " The file is stored as " + blobID + " and kept for at least seven days while nothing carries it: give --blob " + blobID + " in place of the file to try again without sending it anew.")
+	}
+	return e
+}
+
+func (a *app) newDocsUploadsEditCmd() *cobra.Command {
+	var title, description, descriptionFormat, expect string
+	var force, dropAttachments bool
+
+	cmd := &cobra.Command{
+		Use:   "edit <uploadId>",
+		Short: "Change the title or the description of an upload",
+		Long: `Changes the title, the description or both. What is not given stays as it is.
+The file of an upload stays whatever is sent: Minka offers no way to replace
+it, so this command has no flag for it.
+
+--description "" empties the description. --title "" does not empty the title:
+an upload needs one, so an empty title exits 9 (validation) with meta.apiCode
+uploadTitleMissing. A title can only be replaced, never removed.
+
+` + uploadDescriptionHelp + ` Of the people mentioned, only those the old
+description did not mention yet are told.
+
+Somebody else may have written the upload since you read it. Give the
+updatedAt you read with --expect: an upload written over since is then left as
+it stands, the command prints it and exits with 9 (meta.apiCode
+uploadChanged). --force writes over whatever stands, and one of the two flags
+is required. --expect none is not a value here: it belongs to the notes of a
+card. The guard reaches only as far as Minka's own clock, the whole second, so
+a change made in the same second as your read is not noticed.
+
+Files and mentions stand in a description as action-text-attachment elements,
+which Markdown cannot hold. To keep them, take the descriptionSource from docs
+uploads show --json, change it and send it back with --description-format
+html. A new description that would drop them is refused unless
+--drop-attachments is given.`,
+		Example: `  minka docs uploads edit 0199... --title "Site plan, final" --expect 2026-09-26T14:03:12.000000Z
+  minka docs uploads edit 0199... --description - --expect 2026-09-26T14:03:12.000000Z < about.md
+  minka docs uploads edit 0199... --description "" --force`,
+		Args: requireArgs("uploadId"),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := checkDescriptionFormat(cmd, descriptionFormat); err != nil {
+				return err
+			}
+			guard, err := entryGuard(cmd, "upload", "minka docs uploads show <uploadId>", expect, force)
+			if err != nil {
+				return err
+			}
+
+			input := api.UpdateFilesUploadInput{ExpectedUpdatedAt: guard}
+			var notices []string
+			if cmd.Flags().Changed("title") {
+				input.Title = &title
+			}
+			if cmd.Flags().Changed("description") {
+				html, warnings, err := a.descriptionHTML(cmd, description, descriptionFormat)
+				if err != nil {
+					return err
+				}
+				input.Description, notices = &html, warnings
+			}
+			if input.Title == nil && input.Description == nil {
+				return usageErrorf(cmd, "nothing to change, give --title or --description")
+			}
+
+			s, err := a.session()
+			if err != nil {
+				return err
+			}
+			if input.Description != nil {
+				// Read for the files and mentions the new description has to keep,
+				// not for the guard, which stands for what the writer read.
+				current, err := s.client.FilesUploadOf(a.ctx, args[0])
+				if err != nil {
+					return uploadRefusal(s, err)
+				}
+				dropped, err := a.guardOverFiles(s, current.Value.ProjectID, closedIf(current.Value.Archived), firstNonEmpty(current.Value.DescriptionSource, current.Value.Description), *input.Description, dropAttachments,
+					"the upload has attachments or mentions in its description, and the new one would drop them",
+					"Change the descriptionSource from docs uploads show --json and send it back with --description-format html, or give --drop-attachments.")
+				if err != nil {
+					return err
+				}
+				notices = append(notices, dropped...)
+			}
+
+			upload, err := s.client.UpdateFilesUpload(a.ctx, args[0], input)
+			if err != nil {
+				return entryConflict(a, uploadRefusal(s, err), err, apiCodeUploadChanged, "upload",
+					func(u api.FilesUpload) string { return u.UpdatedAt }, renderFilesUpload)
+			}
+
+			if guard != nil {
+				notices = append(notices, theGuardIsKeptToTheSecond)
+			}
+			summary := "Wrote over upload " + upload.Value.Title
+			return a.ok(success{
+				data:        upload.Raw,
+				summary:     summary,
+				notices:     notices,
+				breadcrumbs: uploadBreadcrumbs(upload.Value),
+				text: func(w io.Writer) {
+					fmt.Fprintf(w, "%s.\nTo write over it: --expect %s\n%s\n", summary, upload.Value.UpdatedAt, upload.Value.AppURL)
+				},
+			})
+		},
+	}
+
+	flags := cmd.Flags()
+	flags.StringVar(&title, "title", "", "New title; an empty one is refused, a title cannot be removed")
+	flags.StringVar(&description, "description", "", "New description, - to read it from stdin, empty to empty it")
+	flags.StringVar(&descriptionFormat, "description-format", "markdown", "Format of the description: markdown or html")
+	flags.StringVar(&expect, "expect", "", "The updatedAt of the upload you read")
+	flags.BoolVar(&force, "force", false, "Write over the upload whatever stands")
+	flags.BoolVar(&dropAttachments, "drop-attachments", false, "Replace a description that has attachments or mentions, which drops them")
+
+	return cmd
+}
+
+// uploadRefusal classifies a failed request about one upload.
+func uploadRefusal(s *session, err error) *Error {
+	e := documentRefusal(s, err)
+	if e.Code == CodeNotFound {
+		e.Hint = uploadNotFoundHint
+	}
+	return e
 }
 
 func (a *app) newDocsCommentsCmd() *cobra.Command {
@@ -859,14 +1201,15 @@ func (a *app) documentBody(value, format string) (string, []string, error) {
 	return result.HTML, result.Warnings, nil
 }
 
-// documentGuard turns --expect and --force into what a write sends: the moment
-// the writer read, or nothing at all.
+// entryGuard turns --expect and --force into what a write on a document or an
+// upload sends: the moment the writer read, or nothing at all. kind names the
+// entry and show the command that reads it.
 //
 // It shares no rule with the notes of a card. There "--expect none" sends
-// expectedUpdatedAt null and means that nobody has written any notes yet; on a
-// document null says that nothing is expected. A write that expects nothing
+// expectedUpdatedAt null and means that nobody has written any notes yet; on an
+// entry null says that nothing is expected. A write that expects nothing
 // therefore leaves the field out.
-func documentGuard(cmd *cobra.Command, expect string, force bool) (*string, error) {
+func entryGuard(cmd *cobra.Command, kind, show, expect string, force bool) (*string, error) {
 	expected := cmd.Flags().Changed("expect")
 	switch {
 	case expected && force:
@@ -876,20 +1219,20 @@ func documentGuard(cmd *cobra.Command, expect string, force bool) (*string, erro
 	case !expected:
 		return nil, &Error{
 			Code:    CodeUsage,
-			Message: "say which document the change may write over: give --expect or --force",
-			Hint:    "minka docs show <documentId> gives the updatedAt for --expect.",
+			Message: fmt.Sprintf("say which %s the change may write over: give --expect or --force", kind),
+			Hint:    show + " gives the updatedAt for --expect.",
 		}
 	case expect == expectNone:
 		return nil, &Error{
 			Code:    CodeUsage,
-			Message: "--expect none belongs to the notes of a card, where it means that nobody has written any; a document always has an updatedAt",
-			Hint:    "minka docs show <documentId> gives the updatedAt to copy; --force writes over whatever stands.",
+			Message: fmt.Sprintf("--expect none belongs to the notes of a card, where it means that nobody has written any; a %s always has an updatedAt", kind),
+			Hint:    show + " gives the updatedAt to copy; --force writes over whatever stands.",
 		}
 	case !isATimeMinkaReads(expect):
 		return nil, &Error{
 			Code:    CodeUsage,
-			Message: fmt.Sprintf("--expect takes the updatedAt of the document as Minka gives it, such as 2026-09-26T14:03:12.000000Z; %q is not", expect),
-			Hint:    "minka docs show <documentId> gives the updatedAt to copy.",
+			Message: fmt.Sprintf("--expect takes the updatedAt of the %s as Minka gives it, such as 2026-09-26T14:03:12.000000Z; %q is not", kind, expect),
+			Hint:    show + " gives the updatedAt to copy.",
 		}
 	}
 	return &expect, nil
@@ -932,28 +1275,26 @@ func commentRefusal(s *session, err error) *Error {
 	return e
 }
 
-// documentConflict adds to a refused write what a writer needs to merge: the
-// document as it stands, as the data of the error and printed for a person.
-func (a *app) documentConflict(e *Error, err error) *Error {
+// entryConflict adds to a write refused as code what a writer needs to merge:
+// the entry as it stands, which Minka sends under kind, as the data of the
+// error and printed for a person.
+func entryConflict[T any](a *app, e *Error, err error, code, kind string, updatedAt func(T) string, render func(io.Writer, T)) *Error {
 	var apiErr *api.Error
-	if e.APICode != apiCodeDocumentChanged || !errors.As(err, &apiErr) || apiErr.StatusCode != http.StatusConflict {
+	if e.APICode != code || !errors.As(err, &apiErr) || apiErr.StatusCode != http.StatusConflict {
 		return e
 	}
-	var body struct {
-		Document json.RawMessage `json:"document"`
-	}
-	var current api.Document
-	if json.Unmarshal(apiErr.Body, &body) != nil || json.Unmarshal(body.Document, &current) != nil {
+	var body map[string]json.RawMessage
+	var current T
+	if json.Unmarshal(apiErr.Body, &body) != nil || json.Unmarshal(body[kind], &current) != nil {
 		return e
 	}
 
-	e.Message = "the document was written over since it was read, nothing was written"
-	e.Data = body.Document
-	e.Hint = "Merge your text into the document as it stands and send it again with --expect " + current.UpdatedAt + "."
+	e.Message = "the " + kind + " was written over since it was read, nothing was written"
+	e.Data = body[kind]
+	e.Hint = "Merge your change into the " + kind + " as it stands and send it again with --expect " + updatedAt(current) + "."
 	e.Text = func(w io.Writer) {
-		fmt.Fprintln(a.stderr, "The document as it stands:")
-		fmt.Fprintln(a.stderr)
-		renderDocument(w, current)
+		fmt.Fprintf(a.stderr, "The %s as it stands:\n\n", kind)
+		render(w, current)
 	}
 	return e
 }
@@ -1176,6 +1517,10 @@ func entriesBreadcrumbs(toolID string, entries api.FilesEntries) []Breadcrumb {
 		Action:      "create",
 		Cmd:         "minka docs create --tool " + toolID + " --title <title> --audience nobody",
 		Description: "Write a document here",
+	}, Breadcrumb{
+		Action:      "put-file",
+		Cmd:         "minka docs uploads create <file> --tool " + toolID + " --project <projectId>",
+		Description: "Put a file here",
 	})
 }
 
@@ -1189,6 +1534,7 @@ func documentBreadcrumbs(document api.Document) []Breadcrumb {
 
 func uploadBreadcrumbs(upload api.FilesUpload) []Breadcrumb {
 	return []Breadcrumb{
+		{Action: "edit", Cmd: "minka docs uploads edit " + upload.ID + " --description - --expect " + upload.UpdatedAt, Description: "Write over the upload, unless somebody wrote since"},
 		{Action: "download", Cmd: "minka uploads download " + upload.File.ID, Description: "Fetch the bytes of the file"},
 		{Action: "comment", Cmd: "minka docs comments create --upload " + upload.ID + " <text|->", Description: "Comment on the upload"},
 		{Action: "folder", Cmd: "minka docs list " + upload.ToolID + folderFlagOf(upload.Folder), Description: "List what stands beside it"},

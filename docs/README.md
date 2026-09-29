@@ -44,9 +44,10 @@ the documentation says what holds; how it came about is in git.
   writes — before any work on `boards archive`, `cards archive` or `cards
   unarchive`.
 - [Docs & Files](stable/docs-and-files.md): What a document and an upload are,
-  the body that is never refused, the guard that cannot see one second, whom a
-  new document reaches, the flag that names the kind of entry, the archive of a
-  folder, the refusals — before any work on `docs`.
+  the two requests a file goes into a tool with, the body that is never
+  refused, the guard that cannot see one second, whom a new document reaches,
+  the flag that names the kind of entry, the archive of a folder, the refusals
+  — before any work on `docs`.
 - [To-do lists and groups](stable/todo-lists.md): What a read of a list hands
   over and what it only counts, the archive a list goes quiet in and the group
   that is then at no address, why a group move names its place, the refusals —

@@ -32,6 +32,9 @@ type idInCapitals struct {
 const openStepID = "0192f3a4-5b6c-4d7e-8f90-a1b2c3d4e5f6"
 const doneStepID = "0192f3a4-5b6c-4d7e-8f90-a1b2c3d4e5f7"
 
+// storedBlobID is a file stored and put nowhere yet, with letters in its ID.
+const storedBlobID = "0192f3a4-5b6c-4d7e-8f90-a1b2c3d4e5fb"
+
 func withStepsSpelledInLetters(e *testEnv) {
 	e.fixture.CardInTriage.Steps = []*fakeapi.Step{{ID: openStepID, Title: "Check"}, {ID: doneStepID, Title: "Checked", Completed: true}}
 }
@@ -120,6 +123,15 @@ var idsInCapitals = []idInCapitals{
 	}},
 	{command: "docs create", inputs: []string{"--tool", "--folder", "--notify"}, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
 		return []string{"--tool", up(f.Files.ID), "--folder", up(f.Folder.ID), "--title", "Costs", "--audience", "chosen", "--notify", up(f.Anke.ID), "--body", "Four hundred."}
+	}},
+	{command: "docs uploads create", inputs: []string{"--tool", "--project", "--folder"}, args: func(e *testEnv, f *fakeapi.Fixture) []string {
+		return []string{aFileToUpload(e), "--tool", up(f.Files.ID), "--project", up(f.Project.ID), "--folder", up(f.Folder.ID)}
+	}},
+	{command: "docs uploads create", inputs: []string{"--blob"}, prepare: func(e *testEnv) {
+		e.server.Uploads = append(e.server.Uploads, &fakeapi.Upload{ID: storedBlobID, Circle: e.fixture.Project.ID, Filename: "notes.txt",
+			ContentType: "text/plain", Content: []byte("Four hundred."), Size: 13, UploaderID: e.fixture.Bruno.ID})
+	}, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
+		return []string{"--blob", up(storedBlobID), "--tool", f.Files.ID}
 	}},
 	{command: "docs comments create", inputs: []string{"--document"}, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
 		return []string{"Me too", "--document", up(f.Document.ID)}
@@ -338,7 +350,7 @@ var idInputsExcepted = map[string]string{
 // in a variable or on another receiver is not: todogroups move passes its flag
 // in a variable and cards move passes neighbourCard, and both are covered only
 // because --after and --before are on the list.
-var idFlagNames = []string{"after", "before", "assignee", "notify-when-done", "notify", "ask", "person", "list", "group", "tool", "board", "folder", "document", "upload", "category", "project", "conversation", "column", "client-message-id"}
+var idFlagNames = []string{"after", "before", "assignee", "notify-when-done", "notify", "ask", "person", "list", "group", "tool", "board", "folder", "document", "upload", "blob", "category", "project", "conversation", "column", "client-message-id"}
 
 // idPositions are the positions that take an ID among other names for a thing;
 // a position whose name ends in "Id" takes nothing else and is held by the
