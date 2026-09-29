@@ -917,9 +917,9 @@ and Minka applies the kinds in an order of its own.
   of its comments. A boost has one time, which is both `createdAt` and
   `updatedAt`.
 
-Left out besides: the colours of the columns, wormholes between boards, who
-follows a card or a post and whom a post told, being on hold as anything more
-than the flag, and the earlier copies of the file of an upload.
+Left out besides: the colours of the columns, wormholes between boards, whom
+a post told, being on hold as anything more than the flag, and the earlier
+copies of the file of an upload.
 
 What Basecamp does not hand out, so that no bundle carries it:
 
