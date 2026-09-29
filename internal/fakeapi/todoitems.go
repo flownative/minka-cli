@@ -516,10 +516,11 @@ func (s *Server) moveSubtask(w http.ResponseWriter, r *http.Request, person *Per
 }
 
 // removeSubtask takes a subtask off. One that is not there is what was asked
-// for, unless nothing may be written at all.
+// for, unless nothing may be written at all; an address that names no subtask
+// at all is 404.
 func (s *Server) removeSubtask(w http.ResponseWriter, r *http.Request, person *Person) {
 	tool, list, todo := s.visibleTodo(r.PathValue("todoId"), person)
-	if todo == nil {
+	if todo == nil || !uuidPattern.MatchString(r.PathValue("subtaskId")) {
 		notFound(w)
 		return
 	}
@@ -541,7 +542,7 @@ func (s *Server) myTodos(w http.ResponseWriter, r *http.Request, person *Person)
 		return
 	}
 	var boundary *assignedTodo
-	if after := r.URL.Query().Get("after"); after != "" {
+	if after := strings.ToLower(r.URL.Query().Get("after")); after != "" {
 		boundary = s.todoOfAProjectOf(after, person)
 		if boundary == nil {
 			unprocessable(w, "todosAfterUnknown", "The page starts after a to-do of one of your projects, named by its id.")

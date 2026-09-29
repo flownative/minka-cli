@@ -309,7 +309,8 @@ func (s *Server) checkinAnswers(w http.ResponseWriter, r *http.Request, person *
 		return
 	}
 	query := r.URL.Query()
-	on, limitValue, personID, before := query.Get("on"), query.Get("limit"), query.Get("personId"), query.Get("before")
+	on, limitValue := query.Get("on"), query.Get("limit")
+	personID, before := strings.ToLower(query.Get("personId")), strings.ToLower(query.Get("before"))
 	if on != "" && !isAnswerDay(on) {
 		unprocessable(w, "answerDayNotADate", "A day is written as YYYY-MM-DD.")
 		return

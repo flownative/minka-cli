@@ -1,89 +1,249 @@
 package fakeapi
 
 import (
-	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
+	"slices"
 	"strings"
 	"testing"
 )
 
-// Minka reads an identifier in lowercase only, and an identifier in capitals
-// names nothing wherever it stands: in the path, in the query, in a field and in
-// a list of people. How that is answered differs from address to address, and
-// the fake answers the same, so that a request carrying capitals is noticed.
-func TestAnIdentifierInCapitalsNamesNothing(t *testing.T) {
+// Minka writes an identifier in lowercase before it reads it, wherever it
+// stands: in the path, in the query, in a field and in a list of people. One in
+// capitals names what it names in lowercase. The name a client gives a draft of
+// a chat message is no identifier of Minka's and stays refused in capitals.
+func TestAnIdentifierInCapitalsNamesWhatItNamesInLowercase(t *testing.T) {
 	up := strings.ToUpper
-	type probe struct{ name, method, path, body, want string }
-	s, f := New(t)
-	card := f.CardInTriage
-	card.Steps = append(card.Steps, &Step{ID: newID(), Title: "Check"})
-	subtask := f.GroupedTodo.Subtasks[0]
+	type probe struct {
+		name, method, path, body, want string
+		agent                          bool
+		prepare                        func(s *Server, f *Fixture)
+		// done says whether the write took place, where the status alone
+		// cannot tell: a removal answers 204 for what was not there as well.
+		done func(f *Fixture) bool
+	}
+	withStep := func(_ *Server, f *Fixture) {
+		f.CardInTriage.Steps = append(f.CardInTriage.Steps, &Step{ID: newID(), Title: "Check"})
+	}
+	stepPath := func(f *Fixture) string {
+		return "/api/v1/cards/" + f.CardInTriage.ID + "/steps/" + up(f.CardInTriage.Steps[0].ID)
+	}
 	probes := []probe{
-		{"path card", "GET", "/api/v1/cards/" + up(card.ID), "", "404"},
-		{"doc notify everybody", "POST", "/api/v1/files-tools/" + f.Files.ID + "/documents", `{"title":"t","body":"<p>b</p>","audience":"everybody","notifyIds":["` + up(f.Anke.ID) + `"]}`, "422 personNotAProjectMember"},
-		{"doc notify chosen", "POST", "/api/v1/files-tools/" + f.Files.ID + "/documents", `{"title":"t","body":"<p>b</p>","audience":"chosen","notifyIds":["` + up(f.Anke.ID) + `"]}`, "422 personNotAProjectMember"},
-		{"doc folder", "POST", "/api/v1/files-tools/" + f.Files.ID + "/documents", `{"title":"t","body":"<p>b</p>","audience":"nobody","folderId":"` + up(f.Folder.ID) + `"}`, "422 folderUnknown"},
-		{"post notify everybody", "POST", "/api/v1/posts-tools/" + f.Posts.ID + "/posts", `{"title":"t","body":"<p>b</p>","audience":"everybody","notifyIds":["` + up(f.Anke.ID) + `"]}`, "422 personNotAProjectMember"},
-		{"post category", "POST", "/api/v1/posts-tools/" + f.Posts.ID + "/posts", `{"title":"t","body":"<p>b</p>","audience":"nobody","categoryId":"` + up(f.Announcement.ID) + `"}`, "422 postCategoryUnknown"},
-		{"post edit category", "PATCH", "/api/v1/posts/" + f.Post.ID, `{"categoryId":"` + up(f.Announcement.ID) + `"}`, "422 postCategoryUnknown"},
-		{"card assignees", "POST", "/api/v1/boards/" + f.Board.ID + "/cards", `{"title":"t","assigneeIds":["` + up(f.Anke.ID) + `"]}`, "422 personNotAProjectMember"},
-		{"card column", "POST", "/api/v1/boards/" + f.Board.ID + "/cards", `{"title":"t","columnId":"` + up(f.Doing.ID) + `"}`, "404"},
-		{"move column", "POST", "/api/v1/cards/" + card.ID + "/moves", `{"columnId":"` + up(f.Doing.ID) + `"}`, "404"},
-		{"move prev", "POST", "/api/v1/cards/" + card.ID + "/moves", `{"columnId":"` + f.Doing.ID + `","previousCardId":"` + up(f.CardInDoing.ID) + `"}`, "404"},
-		{"assign", "POST", "/api/v1/cards/" + card.ID + "/assignees", `{"personId":"` + up(f.Anke.ID) + `"}`, "422 personNotAProjectMember"},
-		{"unassign", "DELETE", "/api/v1/cards/" + card.ID + "/assignees/" + up(f.Anke.ID), "", "404"},
-		{"subscribe", "POST", "/api/v1/cards/" + card.ID + "/subscribers/" + up(f.Anke.ID), "", "422 personNotAProjectMember"},
-		{"unsubscribe", "DELETE", "/api/v1/cards/" + card.ID + "/subscribers/" + up(f.Anke.ID), "", "422 personNotAProjectMember"},
-		{"step patch", "PATCH", "/api/v1/cards/" + card.ID + "/steps/" + up(card.Steps[0].ID), `{"completed":true}`, "404"},
-		{"step delete", "DELETE", "/api/v1/cards/" + card.ID + "/steps/" + up(card.Steps[0].ID), "", "204"},
-		// The one list Minka writes in lowercase itself before it reads it.
-		{"work", "PUT", "/api/v1/me/work", `{"clientId":"c","cardIds":["` + up(card.ID) + `"]}`, "204"},
-		{"todo assignees", "POST", "/api/v1/todo-lists/" + f.TodoList.ID + "/todos", `{"title":"t","assigneeIds":["` + up(f.Anke.ID) + `"]}`, "422 personNotAProjectMember"},
-		{"todo notified", "POST", "/api/v1/todo-lists/" + f.TodoList.ID + "/todos", `{"title":"t","notifiedIds":["` + up(f.Anke.ID) + `"]}`, "422 personNotAProjectMember"},
-		{"todo add group", "POST", "/api/v1/todo-lists/" + f.TodoList.ID + "/todos", `{"title":"t","groupId":"` + up(f.StageGroup.ID) + `"}`, "422 todoPlaceUnknown"},
-		{"todo move list", "POST", "/api/v1/todos/" + f.LooseTodo.ID + "/moves", `{"listId":"` + up(f.TodoList.ID) + `","position":"top"}`, "422 todoPlaceUnknown"},
-		{"todo move prev", "POST", "/api/v1/todos/" + f.LooseTodo.ID + "/moves", `{"previousTodoId":"` + up(f.GroupedTodo.ID) + `","groupId":"` + f.StageGroup.ID + `"}`, "422 todoPlaceUnknown"},
-		{"group move", "POST", "/api/v1/todo-groups/" + f.StageGroup.ID + "/moves", `{"previousGroupId":"` + up(f.KitchenGroup.ID) + `"}`, "422 todoPlaceUnknown"},
-		{"subtask assignee", "POST", "/api/v1/todos/" + f.GroupedTodo.ID + "/subtasks", `{"title":"t","assigneeId":"` + up(f.Anke.ID) + `"}`, "422 personNotAProjectMember"},
-		{"subtask patch", "PATCH", "/api/v1/todos/" + f.GroupedTodo.ID + "/subtasks/" + up(subtask.ID), `{"title":"x"}`, "404"},
-		{"subtask move", "POST", "/api/v1/todos/" + f.GroupedTodo.ID + "/subtasks/" + up(subtask.ID) + "/moves", `{"position":"top"}`, "404"},
-		{"subtask move prev", "POST", "/api/v1/todos/" + f.GroupedTodo.ID + "/subtasks/" + subtask.ID + "/moves", `{"previousSubtaskId":"` + up(f.GroupedTodo.Subtasks[1].ID) + `"}`, "422 todoPlaceUnknown"},
-		{"subtask delete", "DELETE", "/api/v1/todos/" + f.GroupedTodo.ID + "/subtasks/" + up(subtask.ID), "", "204"},
-		{"question asked", "POST", "/api/v1/checkins/" + f.CheckinsTool.ID + "/questions", `{"title":"t","schedule":{"rhythm":"daily","time":"09:00","weekdays":[1]},"askedIds":["` + up(f.Anke.ID) + `"]}`, "422 personNotAProjectMember"},
-		{"question edit asked", "PATCH", "/api/v1/questions/" + f.DailyQuestion.ID, `{"askedIds":["` + up(f.Anke.ID) + `"]}`, "422 personNotAProjectMember"},
-		{"chat client id", "POST", "/api/v1/chats/" + f.Chat.ID + "/messages", `{"body":"<p>hi</p>","clientMessageId":"` + up(newID()) + `"}`, "422 chatMessageDraftNotAnIdentifier"},
-		{"conversation start", "POST", "/api/v1/messages/with/" + up(f.Anke.ID), "", "404"},
-		{"archive before", "GET", "/api/v1/boards/" + f.Board.ID + "/archive?before=" + up(card.ID), "", "422 archivedCardsBeforeUnknown"},
-		{"my todos after", "GET", "/api/v1/me/todos?after=" + up(f.LooseTodo.ID), "", "422 todosAfterUnknown"},
-		{"answers person", "GET", "/api/v1/questions/" + f.DailyQuestion.ID + "/answers?personId=" + up(f.Anke.ID), "", "404"},
-		{"answers before", "GET", "/api/v1/questions/" + f.DailyQuestion.ID + "/answers?before=" + up(f.BrunosAnswer.ID), "", "422 answersBeforeUnknown"},
-		{"entries folder", "GET", "/api/v1/files-tools/" + f.Files.ID + "/entries?folderId=" + up(f.Folder.ID), "", "404"},
+		{name: "path card", method: "GET", want: "200", path: "/api/v1/cards/{card}"},
+		{name: "path notes", method: "GET", want: "200", path: "/api/v1/cards/{CARD}/notes"},
+		{name: "conversation upload", method: "POST", want: "201", path: "/api/v1/messages/{CONVERSATION}/uploads?filename=plan.txt", body: "plan"},
+		{name: "reply to", method: "POST", path: "/api/v1/chats/{chat}/messages", body: `{"body":"<p>hi</p>","replyTo":"{FIRSTMESSAGE}"}`, want: "201"},
+		{name: "move next", method: "POST", path: "/api/v1/cards/{card}/moves", body: `{"columnId":"{doing}","nextCardId":"{CARDINDOING}"}`, want: "200"},
+		{name: "todo move next", method: "POST", path: "/api/v1/todos/{loose}/moves", body: `{"nextTodoId":"{GROUPED}","groupId":"{stage}"}`, want: "200"},
+		{name: "group move next", method: "POST", path: "/api/v1/todo-groups/{stage}/moves", body: `{"nextGroupId":"{KITCHEN}"}`, want: "200"},
+		{name: "subtask move next", method: "POST", path: "/api/v1/todos/{grouped}/subtasks/{SECONDSUBTASK}/moves", body: `{"nextSubtaskId":"{SUBTASK}"}`, want: "200"},
+		{name: "doc notify everybody", method: "POST", path: "/api/v1/files-tools/{files}/documents", body: `{"title":"t","body":"<p>b</p>","audience":"everybody","notifyIds":["{ANKE}"]}`, want: "422 notifyIdsWithoutChosenAudience"},
+		{name: "doc notify chosen", method: "POST", path: "/api/v1/files-tools/{files}/documents", body: `{"title":"t","body":"<p>b</p>","audience":"chosen","notifyIds":["{ANKE}"]}`, want: "201"},
+		{name: "doc folder", method: "POST", path: "/api/v1/files-tools/{files}/documents", body: `{"title":"t","body":"<p>b</p>","audience":"nobody","folderId":"{FOLDER}"}`, want: "201"},
+		{name: "post notify everybody", method: "POST", path: "/api/v1/posts-tools/{posts}/posts", body: `{"title":"t","body":"<p>b</p>","audience":"everybody","notifyIds":["{ANKE}"]}`, want: "422 notifyIdsWithoutChosenAudience"},
+		{name: "post category", method: "POST", path: "/api/v1/posts-tools/{posts}/posts", body: `{"title":"t","body":"<p>b</p>","audience":"nobody","categoryId":"{ANNOUNCEMENT}"}`, want: "201"},
+		{name: "post edit category", method: "PATCH", path: "/api/v1/posts/{post}", body: `{"categoryId":"{ANNOUNCEMENT}"}`, want: "200"},
+		{name: "card assignees", method: "POST", path: "/api/v1/boards/{board}/cards", body: `{"title":"t","assigneeIds":["{ANKE}"]}`, want: "201"},
+		{name: "card column", method: "POST", path: "/api/v1/boards/{board}/cards", body: `{"title":"t","columnId":"{DOING}"}`, want: "201"},
+		{name: "move column", method: "POST", path: "/api/v1/cards/{card}/moves", body: `{"columnId":"{DOING}"}`, want: "200"},
+		{name: "move prev", method: "POST", path: "/api/v1/cards/{card}/moves", body: `{"columnId":"{doing}","previousCardId":"{CARDINDOING}"}`, want: "200"},
+		{name: "assign", method: "POST", path: "/api/v1/cards/{card}/assignees", body: `{"personId":"{ANKE}"}`, want: "201"},
+		{name: "unassign", method: "DELETE", path: "/api/v1/cards/{card}/assignees/{ANKE}", want: "204",
+			prepare: func(_ *Server, f *Fixture) { f.CardInTriage.AssigneeIDs = []string{f.Anke.ID} },
+			done:    func(f *Fixture) bool { return len(f.CardInTriage.AssigneeIDs) == 0 }},
+		{name: "subscribe", method: "POST", path: "/api/v1/cards/{card}/subscribers/{ANKE}", want: "200"},
+		{name: "unsubscribe", method: "DELETE", path: "/api/v1/cards/{card}/subscribers/{ANKE}", want: "204",
+			prepare: func(_ *Server, f *Fixture) { f.CardInTriage.SubscriberIDs = []string{f.Anke.ID} },
+			done:    func(f *Fixture) bool { return !slices.Contains(f.CardInTriage.SubscriberIDs, f.Anke.ID) }},
+		{name: "step patch", method: "PATCH", body: `{"completed":true}`, want: "200", prepare: withStep,
+			done: func(f *Fixture) bool { return f.CardInTriage.Steps[0].Completed }},
+		{name: "step delete", method: "DELETE", want: "204", prepare: withStep,
+			done: func(f *Fixture) bool { return len(f.CardInTriage.Steps) == 0 }},
+		{name: "work", method: "PUT", path: "/api/v1/me/work", body: `{"clientId":"c","cardIds":["{CARD}"]}`, want: "204", agent: true},
+		{name: "todo assignees", method: "POST", path: "/api/v1/todo-lists/{list}/todos", body: `{"title":"t","assigneeIds":["{ANKE}"]}`, want: "201"},
+		{name: "todo notified", method: "POST", path: "/api/v1/todo-lists/{list}/todos", body: `{"title":"t","notifiedIds":["{ANKE}"]}`, want: "201"},
+		{name: "todo add group", method: "POST", path: "/api/v1/todo-lists/{list}/todos", body: `{"title":"t","groupId":"{STAGE}"}`, want: "201"},
+		{name: "todo move list", method: "POST", path: "/api/v1/todos/{loose}/moves", body: `{"listId":"{LIST}","position":"top"}`, want: "200"},
+		{name: "todo move prev", method: "POST", path: "/api/v1/todos/{loose}/moves", body: `{"previousTodoId":"{GROUPED}","groupId":"{stage}"}`, want: "200"},
+		{name: "group move", method: "POST", path: "/api/v1/todo-groups/{stage}/moves", body: `{"previousGroupId":"{KITCHEN}"}`, want: "200"},
+		{name: "subtask assignee", method: "POST", path: "/api/v1/todos/{grouped}/subtasks", body: `{"title":"t","assigneeId":"{ANKE}"}`, want: "201"},
+		{name: "subtask patch", method: "PATCH", path: "/api/v1/todos/{grouped}/subtasks/{SUBTASK}", body: `{"title":"x"}`, want: "200"},
+		{name: "subtask move", method: "POST", path: "/api/v1/todos/{grouped}/subtasks/{SUBTASK}/moves", body: `{"position":"top"}`, want: "200"},
+		{name: "subtask move prev", method: "POST", path: "/api/v1/todos/{grouped}/subtasks/{subtask}/moves", body: `{"previousSubtaskId":"{SECONDSUBTASK}"}`, want: "200"},
+		{name: "subtask delete", method: "DELETE", path: "/api/v1/todos/{grouped}/subtasks/{SUBTASK}", want: "204",
+			done: func(f *Fixture) bool { return len(f.GroupedTodo.Subtasks) == 1 }},
+		{name: "question asked", method: "POST", path: "/api/v1/checkins/{checkins}/questions", body: `{"title":"t","rhythm":"daily","timeOfDay":"09:00","weekdays":[1],"askedIds":["{ANKE}"]}`, want: "201"},
+		{name: "question edit asked", method: "PATCH", path: "/api/v1/questions/{daily}", body: `{"askedIds":["{ANKE}"]}`, want: "200"},
+		{name: "chat client id", method: "POST", path: "/api/v1/chats/{chat}/messages", body: `{"body":"<p>hi</p>","clientMessageId":"{NEW}"}`, want: "422 chatMessageDraftNotAnIdentifier"},
+		{name: "conversation start", method: "POST", path: "/api/v1/messages/with/{ANKE}", want: "200"},
+		{name: "conversation with oneself", method: "POST", path: "/api/v1/messages/with/{BRUNO}", want: "404"},
+		{name: "archive before", method: "GET", path: "/api/v1/boards/{board}/archive?before={CARD}", want: "200",
+			prepare: func(s *Server, f *Fixture) { s.PutInTheArchive(f.CardInTriage) }},
+		{name: "my todos after", method: "GET", path: "/api/v1/me/todos?after={LOOSE}", want: "200"},
+		{name: "answers person", method: "GET", path: "/api/v1/questions/{daily}/answers?personId={ANKE}", want: "200"},
+		{name: "answers before", method: "GET", path: "/api/v1/questions/{daily}/answers?before={BRUNOSANSWER}", want: "200"},
+		{name: "entries folder", method: "GET", path: "/api/v1/files-tools/{files}/entries?folderId={FOLDER}", want: "200"},
 	}
 	for _, p := range probes {
-		req, _ := http.NewRequest(p.method, s.URL+p.path, strings.NewReader(p.body))
-		req.Header.Set("Authorization", "Bearer "+f.Token)
-		if p.name == "work" {
-			req.Header.Set("Authorization", "Bearer "+f.AgentToken)
+		s, f := New(t)
+		if p.prepare != nil {
+			p.prepare(s, f)
 		}
-		if p.body != "" {
-			req.Header.Set("Content-Type", "application/json")
+		path := p.path
+		if path == "" {
+			path = stepPath(f)
 		}
-		resp, err := http.DefaultClient.Do(req)
-		if err != nil {
-			t.Fatal(err)
+		names := map[string]string{
+			"card": f.CardInTriage.ID, "cardInDoing": f.CardInDoing.ID, "anke": f.Anke.ID, "bruno": f.Bruno.ID,
+			"files": f.Files.ID, "folder": f.Folder.ID, "posts": f.Posts.ID, "post": f.Post.ID,
+			"announcement": f.Announcement.ID, "board": f.Board.ID, "doing": f.Doing.ID,
+			"list": f.TodoList.ID, "loose": f.LooseTodo.ID, "grouped": f.GroupedTodo.ID,
+			"stage": f.StageGroup.ID, "kitchen": f.KitchenGroup.ID,
+			"subtask": f.GroupedTodo.Subtasks[0].ID, "secondSubtask": f.GroupedTodo.Subtasks[1].ID,
+			"checkins": f.CheckinsTool.ID, "daily": f.DailyQuestion.ID, "chat": f.Chat.ID,
+			"brunosAnswer": f.BrunosAnswer.ID, "new": newID(),
+			"conversation": f.Conversation.ID, "firstMessage": f.Chat.Messages[0].ID,
 		}
-		raw, _ := io.ReadAll(resp.Body)
-		_ = resp.Body.Close()
-		var e struct{ Error struct{ Code string } }
-		_ = json.Unmarshal(raw, &e)
-		got := fmt.Sprint(resp.StatusCode)
-		if e.Error.Code != "" && resp.StatusCode != 404 {
-			got += " " + e.Error.Code
+		body := p.body
+		for name, id := range names {
+			for _, text := range []*string{&path, &body} {
+				*text = strings.ReplaceAll(*text, "{"+up(name)+"}", up(id))
+				*text = strings.ReplaceAll(*text, "{"+name+"}", id)
+			}
 		}
-		if got != p.want {
+		token := f.Token
+		if p.agent {
+			token = f.AgentToken
+		}
+		if got, _ := answerTo(t, s, token, p.method, path, body); got != p.want {
 			t.Errorf("%s: %s, want %s", p.name, got, p.want)
 		}
+		if p.done != nil && !p.done(f) {
+			t.Errorf("%s: answered, and nothing was written", p.name)
+		}
+	}
+}
+
+// Minka answers an address whose identifier is none with the 404 of an
+// address that names nothing, before it asks whether the project is archived:
+// only an identifier that could name something learns that the project is.
+func TestAnAddressThatNamesNoIdentifierIsNotFoundBeforeTheArchive(t *testing.T) {
+	s, f := New(t)
+	f.CardInTriage.Steps = []*Step{{ID: newID(), Title: "Check"}}
+	f.Project.Archived = true
+	card, todo := f.CardInTriage.ID, f.GroupedTodo.ID
+	document, upload, chat := f.Document.ID, f.FilesUpload.ID, f.Chat.ID
+	for _, p := range []struct{ method, path, body string }{
+		{"DELETE", "/api/v1/cards/" + card + "/comments/%s", ""},
+		{"DELETE", "/api/v1/documents/" + document + "/comments/%s", ""},
+		{"DELETE", "/api/v1/files-uploads/" + upload + "/comments/%s", ""},
+		{"DELETE", "/api/v1/chats/" + chat + "/messages/%s", ""},
+		{"DELETE", "/api/v1/cards/" + card + "/assignees/%s", ""},
+		{"POST", "/api/v1/cards/" + card + "/subscribers/%s", ""},
+		{"DELETE", "/api/v1/cards/" + card + "/subscribers/%s", ""},
+		{"PATCH", "/api/v1/cards/" + card + "/steps/%s", `{"completed":true}`},
+		{"DELETE", "/api/v1/cards/" + card + "/steps/%s", ""},
+		{"PATCH", "/api/v1/todos/" + todo + "/subtasks/%s", `{"title":"x"}`},
+		{"POST", "/api/v1/todos/" + todo + "/subtasks/%s/moves", `{"position":"top"}`},
+		{"DELETE", "/api/v1/todos/" + todo + "/subtasks/%s", ""},
+	} {
+		if got, _ := answerTo(t, s, f.Token, p.method, fmt.Sprintf(p.path, "nonsense"), p.body); got != "404" {
+			t.Errorf("%s %s with no identifier: %s, want 404", p.method, p.path, got)
+		}
+	}
+
+	// An identifier that names nothing on the card is asked about the archive.
+	for _, p := range []struct{ method, path, body string }{
+		{"DELETE", "/api/v1/cards/" + card + "/comments/" + newID(), ""},
+		{"DELETE", "/api/v1/documents/" + document + "/comments/" + newID(), ""},
+		{"DELETE", "/api/v1/files-uploads/" + upload + "/comments/" + newID(), ""},
+		{"DELETE", "/api/v1/chats/" + chat + "/messages/" + newID(), ""},
+		{"DELETE", "/api/v1/cards/" + card + "/assignees/" + newID(), ""},
+		{"POST", "/api/v1/cards/" + card + "/subscribers/" + newID(), ""},
+		{"DELETE", "/api/v1/cards/" + card + "/subscribers/" + newID(), ""},
+		{"PATCH", "/api/v1/cards/" + card + "/steps/" + newID(), `{"completed":true}`},
+		{"DELETE", "/api/v1/cards/" + card + "/steps/" + newID(), ""},
+		{"DELETE", "/api/v1/todos/" + todo + "/subtasks/" + newID(), ""},
+	} {
+		if got, _ := answerTo(t, s, f.Token, p.method, p.path, p.body); got != "422 projectArchived" {
+			t.Errorf("%s %s: %s, want 422 projectArchived", p.method, p.path, got)
+		}
+	}
+}
+
+// Removing a step or a subtask that is not there answers 204, and one of
+// another card or to-do is not there; an address that names no step or
+// subtask at all is 404, and so is a subscriber that is no identifier.
+func TestARemovalNamingNoIdentifierIsNotFound(t *testing.T) {
+	s, f := New(t)
+	foreignStep := &Step{ID: newID(), Title: "Theirs"}
+	f.CardInDoing.Steps = []*Step{foreignStep}
+	card, todo := f.CardInTriage.ID, f.GroupedTodo.ID
+
+	for _, p := range []struct{ method, path, want string }{
+		{"DELETE", "/api/v1/cards/" + card + "/steps/nonsense", "404"},
+		{"DELETE", "/api/v1/todos/" + todo + "/subtasks/nonsense", "404"},
+		{"POST", "/api/v1/cards/" + card + "/subscribers/nonsense", "404"},
+		{"DELETE", "/api/v1/cards/" + card + "/subscribers/nonsense", "404"},
+		{"DELETE", "/api/v1/cards/" + card + "/steps/" + foreignStep.ID, "204"},
+		{"PATCH", "/api/v1/cards/" + card + "/steps/" + foreignStep.ID, "404"},
+		{"DELETE", "/api/v1/todos/" + todo + "/subtasks/" + f.LooseTodo.ID, "204"},
+	} {
+		body := ""
+		if p.method == "PATCH" {
+			body = `{"completed":true}`
+		}
+		if got, _ := answerTo(t, s, f.Token, p.method, p.path, body); got != p.want {
+			t.Errorf("%s %s: %s, want %s", p.method, p.path, got, p.want)
+		}
+	}
+	if len(f.CardInDoing.Steps) != 1 || f.CardInDoing.Steps[0].Completed {
+		t.Errorf("the step of another card was touched: %+v", f.CardInDoing.Steps)
+	}
+}
+
+// A reply answers a message of the same chat that still stands; a value that
+// is no identifier, and a message of another chat, are refused alike, but only
+// the first before an archived project.
+func TestAReplyAnswersAMessageOfTheSameChat(t *testing.T) {
+	s, f := New(t)
+	removed := f.Chat.Messages[1]
+	removed.Removed = true
+	for replyTo, want := range map[string]string{
+		removed.ID:                 "422 chatMessageReplyToUnknown",
+		"nonsense":                 "422 chatMessageReplyToUnknown",
+		f.OtherChat.Messages[0].ID: "422 chatMessageReplyToUnknown",
+		f.Chat.Messages[0].ID:      "201",
+		"":                         "201",
+	} {
+		body := `{"body":"<p>hi</p>","replyTo":"` + replyTo + `"}`
+		if got, _ := answerTo(t, s, f.Token, "POST", "/api/v1/chats/"+f.Chat.ID+"/messages", body); got != want {
+			t.Errorf("replyTo %q: %s, want %s", replyTo, got, want)
+		}
+	}
+
+	// A value that is no identifier is refused before an archived project is
+	// told; a message that is not there, after.
+	f.Project.Archived = true
+	for replyTo, want := range map[string]string{
+		"nonsense": "422 chatMessageReplyToUnknown",
+		newID():    "422 projectArchived",
+	} {
+		body := `{"body":"<p>hi</p>","replyTo":"` + replyTo + `"}`
+		if got, _ := answerTo(t, s, f.Token, "POST", "/api/v1/chats/"+f.Chat.ID+"/messages", body); got != want {
+			t.Errorf("replyTo %q in an archived project: %s, want %s", replyTo, got, want)
+		}
+	}
+}
+
+// The reply is read only after the chat is found, so a chat the person may
+// not see answers 404 whatever the reply carries.
+func TestAReplyIsReadAfterTheChat(t *testing.T) {
+	s, f := New(t)
+	body := `{"body":"<p>hi</p>","replyTo":1}`
+	if got, _ := answerTo(t, s, f.Token, "POST", "/api/v1/chats/"+f.OtherChat.ID+"/messages", body); got != "404" {
+		t.Errorf("a reply that is no string to a chat not seen: %s, want 404", got)
+	}
+	if got, _ := answerTo(t, s, f.Token, "POST", "/api/v1/chats/"+f.Chat.ID+"/messages", body); got != "400 malformedBody" {
+		t.Errorf("a reply that is no string: %s, want 400 malformedBody", got)
 	}
 }

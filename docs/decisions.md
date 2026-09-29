@@ -1408,8 +1408,12 @@ Whatever case an ID is typed in, it is written in lowercase before it is
 compared or sent. A short identifier of a card is not written in lowercase;
 it is looked up in capitals.
 
-**Why:** Lowercase is the one form Minka keeps and reads an ID in; one in
-capitals names nothing there, and the answer it gets says something untrue.
+**Why:** Lowercase is the form Minka keeps and hands out an ID in, and the one
+every version of it reads. A Minka that reads IDs in any case names the same
+thing by one in capitals; one from before named nothing by it and answered
+something untrue — a person as no member, a step or a subtask not taken off
+with a success all the same. The name of a draft of a chat message is refused
+in capitals to this day.
 **Implemented as:** `cli.asID`, `cli.requireID`, `cli.requireArgs`, see
 [Token, hosts and requests](stable/security.md).
 

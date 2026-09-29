@@ -46,7 +46,7 @@ func TestAFileGoesIntoAToolInTheOrderMinkaRefuses(t *testing.T) {
 		want    string
 	}{
 		{"no blob", nil, `{}`, "400 malformedBody"},
-		{"a blob in capitals", nil, `{"blobId":"UP"}`, "400 malformedBody"},
+		{"a blob that is no identifier", nil, `{"blobId":"plan.pdf"}`, "400 malformedBody"},
 		{"a swept blob in an archived project", func(s *Server, f *Fixture, file *Upload) {
 			file.Swept = true
 			f.Project.Archived = true
@@ -73,6 +73,7 @@ func TestAFileGoesIntoAToolInTheOrderMinkaRefuses(t *testing.T) {
 			f.Files.Uploads = append(f.Files.Uploads, &FilesUpload{ID: newID(), Title: "twice", BlobID: file.ID})
 		}, `{"blobId":"BLOB"}`, "422 fileInUse"},
 		{"an own blob that stands nowhere", nil, `{"blobId":"BLOB","title":null,"description":null}`, "201"},
+		{"an own blob named in capitals", nil, `{"blobId":"UP"}`, "201"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			s, f := New(t)

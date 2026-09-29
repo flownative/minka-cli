@@ -249,9 +249,10 @@ func aFileToUpload(e *testEnv) string {
 	return path
 }
 
-// Minka knows an ID only in lowercase and answers one in capitals as naming
-// nothing — at some addresses without a word. Whatever case an ID is typed
-// in, it goes out in lowercase.
+// Lowercase is the form Minka keeps an ID in, and the one every version of it
+// reads; one in capitals named nothing before Minka began to read IDs in any
+// case, at some addresses without a word. Whatever case an ID is typed in, it
+// goes out in lowercase.
 func TestAnIDTypedInCapitalsGoesOutInLowercase(t *testing.T) {
 	for _, run := range idsInCapitals {
 		t.Run(run.command+" "+strings.Join(run.inputs, " "), func(t *testing.T) {
@@ -281,19 +282,28 @@ func TestAnIDTypedInCapitalsGoesOutInLowercase(t *testing.T) {
 	}
 }
 
-// The steps and the subtasks of Minka take nothing off for an ID in capitals
-// and say it was done; only one written in lowercase takes the line away.
+// A step or a subtask named by its ID in capitals is the line with that ID:
+// the command finds it among the lines it read, says which one it took off,
+// and takes it off.
 func TestAStepNamedInCapitalsIsReallyDeleted(t *testing.T) {
 	e := newTestEnv(t)
 	withStepsSpelledInLetters(e)
 
-	runOK(t, e, "steps", "delete", e.fixture.CardInTriage.ID, up(openStepID))
+	env, r := e.runJSON("", "steps", "delete", e.fixture.CardInTriage.ID, up(openStepID))
+	expectCode(t, r, ExitOK)
+	if data := decode(t, env.Data); data["wasOnCard"] != true || data["stepId"] != openStepID {
+		t.Errorf("the step was not found on the card: %s", env.Data)
+	}
 	if len(e.fixture.CardInTriage.Steps) != 1 || e.fixture.CardInTriage.Steps[0].ID != doneStepID {
 		t.Fatalf("the step is still on the card: %v", e.fixture.CardInTriage.Steps)
 	}
 
 	subtask := e.fixture.GroupedTodo.Subtasks[0].ID
-	runOK(t, e, "todos", "subtasks", "delete", e.fixture.GroupedTodo.ID, up(subtask))
+	env, r = e.runJSON("", "todos", "subtasks", "delete", e.fixture.GroupedTodo.ID, up(subtask))
+	expectCode(t, r, ExitOK)
+	if data := decode(t, env.Data); data["wasOnTodo"] != true || data["subtaskId"] != subtask {
+		t.Errorf("the subtask was not found on the to-do: %s", env.Data)
+	}
 	if slices.ContainsFunc(e.fixture.GroupedTodo.Subtasks, func(s *fakeapi.Subtask) bool { return s.ID == subtask }) {
 		t.Fatal("the subtask is still on the to-do")
 	}
