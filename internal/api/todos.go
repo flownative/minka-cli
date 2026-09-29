@@ -82,6 +82,7 @@ type TodoLine struct {
 	StartsOn              *string           `json:"startsOn"`
 	DueOn                 *string           `json:"dueOn"`
 	IsOverdue             bool              `json:"isOverdue"`
+	SeriesID              *string           `json:"seriesId"` // the series it is an occurrence of, nil for none
 	CommentCount          int               `json:"commentCount"`
 	SubtaskCount          int               `json:"subtaskCount"`
 	CompletedSubtaskCount int               `json:"completedSubtaskCount"`
@@ -215,28 +216,29 @@ type TodoGroupReference struct {
 
 // Todo is one to-do with everything said under it.
 type Todo struct {
-	ID              string              `json:"id"`
-	ProjectID       string              `json:"projectId"`
-	ToolID          string              `json:"toolId"`
-	ListID          string              `json:"listId"`
-	GroupID         *string             `json:"groupId"` // nil for a to-do standing in its list directly
-	Project         ProjectReference    `json:"project"`
-	Tool            TodosToolReference  `json:"tool"`
-	List            TodoListReference   `json:"list"`
-	Group           *TodoGroupReference `json:"group"`
-	Title           string              `json:"title"`
-	Completed       bool                `json:"completed"`
-	CompletedAt     *string             `json:"completedAt"`
-	CompletedByName *string             `json:"completedByName"`
-	Notes           string              `json:"notes"`       // the stored HTML, empty where the to-do has none
-	NotesSource     string              `json:"notesSource"` // the notes as the editor opens them
-	Attachments     []Attachment        `json:"attachments"`
-	StartsOn        *string             `json:"startsOn"`
-	DueOn           *string             `json:"dueOn"`
-	IsOverdue       bool                `json:"isOverdue"`
-	Assignees       []PersonReference   `json:"assignees"`
-	Notified        []PersonReference   `json:"notified"` // the people told when it is done
-	Subtasks        []TodoSubtask       `json:"subtasks"`
+	ID              string               `json:"id"`
+	ProjectID       string               `json:"projectId"`
+	ToolID          string               `json:"toolId"`
+	ListID          string               `json:"listId"`
+	GroupID         *string              `json:"groupId"` // nil for a to-do standing in its list directly
+	Project         ProjectReference     `json:"project"`
+	Tool            TodosToolReference   `json:"tool"`
+	List            TodoListReference    `json:"list"`
+	Group           *TodoGroupReference  `json:"group"`
+	Title           string               `json:"title"`
+	Completed       bool                 `json:"completed"`
+	CompletedAt     *string              `json:"completedAt"`
+	CompletedByName *string              `json:"completedByName"`
+	Notes           string               `json:"notes"`       // the stored HTML, empty where the to-do has none
+	NotesSource     string               `json:"notesSource"` // the notes as the editor opens them
+	Attachments     []Attachment         `json:"attachments"`
+	StartsOn        *string              `json:"startsOn"`
+	DueOn           *string              `json:"dueOn"`
+	IsOverdue       bool                 `json:"isOverdue"`
+	Series          *TodoSeriesReference `json:"series"` // nil for a to-do that is no occurrence
+	Assignees       []PersonReference    `json:"assignees"`
+	Notified        []PersonReference    `json:"notified"` // the people told when it is done
+	Subtasks        []TodoSubtask        `json:"subtasks"`
 	// ListArchived says the list of the to-do lies in the archive of its tool:
 	// the to-do is read, and nothing about it changes until the list is back.
 	ListArchived bool            `json:"listArchived"`

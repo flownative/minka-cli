@@ -504,6 +504,9 @@ func todoLineDetails(todo api.TodoLine) string {
 		}
 		details = append(details, due)
 	}
+	if todo.SeriesID != nil {
+		details = append(details, "repeats")
+	}
 	if todo.SubtaskCount > 0 {
 		details = append(details, fmt.Sprintf("%d/%d subtasks", todo.CompletedSubtaskCount, todo.SubtaskCount))
 	}
@@ -547,6 +550,7 @@ func todoListBreadcrumbs(list api.TodoList) []Breadcrumb {
 		{Action: "show", Cmd: "minka todolists show " + list.ID, Description: "Read the list with its groups and open to-dos"},
 		{Action: "group", Cmd: "minka todogroups create --list " + list.ID + " --title <title>", Description: "Add a group at the end of the list"},
 		{Action: "edit", Cmd: "minka todolists edit " + list.ID + " --description -", Description: "Change the title or the description"},
+		{Action: "series", Cmd: "minka todos series list " + list.ID, Description: "List the series that repeat to-dos of the list"},
 		{Action: "lists", Cmd: "minka todolists list " + list.ToolID, Description: "List the lists of the tool"},
 	}
 }

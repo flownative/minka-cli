@@ -1495,3 +1495,16 @@ walked once; `--active-only` drops the archived. `--project` is "exactly
 these", a usage error with `--active-only`. No trash, stars or hill charts.
 **Why:** Basecamp lists active projects alone, and Robert decided the archived
 ones go along. **Implemented as:** `basecamp.Extractor.ExtractEveryProject`.
+
+<a id="c-089"></a>
+## C-089 — A series edit sends only the flags given, guarded like a document
+
+*Applies to: `todos repeat`, `todos series …`*
+
+Flags mirror Minka's fields (`--weekdays`, `--weekday`, `--instance` 1-4 or
+`last`, …); an edit sends only those given, needs `--expect` or `--force`, and
+reads the series only for names. A detail `--rhythm` does not use is a usage
+error, one Minka ignored a notice. `show-now` answers `{series, todoId}` from
+`Location`; no day is computed. **Why:** echoed details pin what Minka lets
+follow a new first day. **Implemented as:** `cli.scheduleFlags`,
+`cli.newTodoSeriesEditCmd`, `api.ScheduleInput`.

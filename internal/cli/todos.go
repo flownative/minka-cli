@@ -40,7 +40,7 @@ const todoPeopleFlagsHelp = `--assignee and --notify-when-done name a member of 
 be given more than once. ` + personHelp
 
 func (a *app) newTodosCmd() *cobra.Command {
-	return group("todos", "Show, add, change, tick off, move and trash to-dos and their subtasks",
+	return group("todos", "Show, add, change, tick off, move, trash and repeat to-dos, and their subtasks",
 		a.newTodosMineCmd(),
 		a.newTodosShowCmd(),
 		a.newTodosCompletedCmd(),
@@ -50,7 +50,9 @@ func (a *app) newTodosCmd() *cobra.Command {
 		a.newTodosReopenCmd(),
 		a.newTodosMoveCmd(),
 		a.newTodosDeleteCmd(),
+		a.newTodosRepeatCmd(),
 		a.newSubtasksCmd(),
+		a.newTodoSeriesCmd(),
 	)
 }
 
@@ -787,6 +789,12 @@ func todoBreadcrumbs(todo api.Todo) []Breadcrumb {
 	} else {
 		crumbs = append(crumbs, Breadcrumb{Action: "complete", Cmd: "minka todos complete " + todo.ID, Description: "Tick the to-do off"})
 	}
+	switch {
+	case todo.Series != nil:
+		crumbs = append(crumbs, Breadcrumb{Action: "series", Cmd: "minka todos series show " + todo.Series.ID, Description: "Read the series the to-do is an occurrence of"})
+	case todo.DueOn != nil:
+		crumbs = append(crumbs, Breadcrumb{Action: "repeat", Cmd: "minka todos repeat " + todo.ID, Description: "Make the to-do repeat from its due day"})
+	}
 	return append(crumbs,
 		Breadcrumb{Action: "subtask", Cmd: "minka todos subtasks create " + todo.ID + " <text>", Description: "Add a subtask"},
 		Breadcrumb{Action: "list", Cmd: "minka todolists show " + todo.ListID, Description: "Read the list of the to-do"},
@@ -820,6 +828,13 @@ func renderTodo(w io.Writer, todo api.Todo) {
 			overdue = " (overdue)"
 		}
 		fmt.Fprintf(w, "Due: %s%s\n", *todo.DueOn, overdue)
+	}
+	if todo.Series != nil {
+		if todo.Series.OccursOn != nil {
+			fmt.Fprintf(w, "Repeats: the occurrence of %s of series %s\n", *todo.Series.OccursOn, todo.Series.ID)
+		} else {
+			fmt.Fprintf(w, "Repeats: an occurrence of series %s\n", todo.Series.ID)
+		}
 	}
 	if len(todo.Assignees) > 0 {
 		fmt.Fprintf(w, "Assigned: %s\n", assigneeNames(todo.Assignees))

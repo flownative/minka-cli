@@ -21,6 +21,8 @@ func everyWrite(e *testEnv) map[string][]string {
 	message := f.Chat.Messages[0].ID
 
 	document, upload := f.Document.ID, f.FilesUpload.ID
+	dueOn := "2026-09-20"
+	f.LooseTodo.DueOn = &dueOn
 
 	expectCode(e.t, e.run("", "comments", "create", card, "A comment", "--json"), ExitOK)
 	expectCode(e.t, e.run("", "steps", "create", card, "A step", "--json"), ExitOK)
@@ -93,6 +95,11 @@ func everyWrite(e *testEnv) map[string][]string {
 		"todos subtasks reopen":   {"todos", "subtasks", "reopen", f.GroupedTodo.ID, "2"},
 		"todos subtasks move":     {"todos", "subtasks", "move", f.GroupedTodo.ID, "2", "--top"},
 		"todos subtasks delete":   {"todos", "subtasks", "delete", f.GroupedTodo.ID, "1"},
+		"todos repeat":            {"todos", "repeat", f.LooseTodo.ID},
+		"todos series edit":       {"todos", "series", "edit", f.Series.ID, "--title", "Renamed", "--force"},
+		"todos series stop":       {"todos", "series", "stop", f.Series.ID},
+		"todos series resume":     {"todos", "series", "resume", f.Series.ID},
+		"todos series show-now":   {"todos", "series", "show-now", f.Series.ID},
 
 		"checkins create": {"checkins", "create", "--tool", f.CheckinsTool.ID, "--title", "New", "--rhythm", "daily",
 			"--weekday", "mon", "--time", "09:00", "--ask", f.Anke.ID},
@@ -128,7 +135,7 @@ var notAWriteIntoAProject = []string{
 	"cards mine", "cards show", "cards notes show", "steps list", "chats list", "messages list",
 	"docs tools", "docs list", "docs show", "docs uploads show",
 	"todolists tools", "todolists list", "todolists show",
-	"todos mine", "todos show", "todos completed", "todos subtasks list",
+	"todos mine", "todos show", "todos completed", "todos subtasks list", "todos series list", "todos series show",
 	"checkins tools", "checkins list", "checkins show", "checkins reminders",
 	"checkins answers list", "checkins answers show",
 	"posts tools", "posts categories", "posts list", "posts show", "posts comments list",

@@ -197,7 +197,7 @@ and named nowhere; the command says so in a notice.`,
 			if err := requireID(cmd, "--tool", &toolID); err != nil {
 				return err
 			}
-			days, err := weekdayNumbers(cmd, weekdays)
+			days, err := weekdayNumbers(cmd, "--weekday", weekdays)
 			if err != nil {
 				return err
 			}
@@ -278,7 +278,7 @@ somebody: exit 9 with questionNobodyAsked.`,
 				input.TimeOfDay = &timeOfDay
 			}
 			if flags.Changed("weekday") {
-				days, err := weekdayNumbers(cmd, weekdays)
+				days, err := weekdayNumbers(cmd, "--weekday", weekdays)
 				if err != nil {
 					return err
 				}
@@ -713,7 +713,7 @@ var weekdayNames = map[string]int{
 // number goes out as it is, so that Minka says what it makes of one outside
 // the week; only a word that names no weekday is refused here, because it
 // cannot be sent as a number at all.
-func weekdayNumbers(cmd *cobra.Command, values []string) ([]int, error) {
+func weekdayNumbers(cmd *cobra.Command, flag string, values []string) ([]int, error) {
 	var days []int
 	for _, value := range values {
 		value = strings.TrimSpace(value)
@@ -723,7 +723,7 @@ func weekdayNumbers(cmd *cobra.Command, values []string) ([]int, error) {
 		}
 		number, known := weekdayNames[strings.ToLower(value)]
 		if !known {
-			return nil, usageErrorf(cmd, "--weekday is a number from 1 (Monday) to 7 or a name such as mon, not %q", value)
+			return nil, usageErrorf(cmd, "%s is a number from 1 (Monday) to 7 or a name such as mon, not %q", flag, value)
 		}
 		days = append(days, number)
 	}

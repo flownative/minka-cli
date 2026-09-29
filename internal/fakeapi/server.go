@@ -60,7 +60,7 @@ var identifierFields = []string{
 	"assigneeId", "assigneeIds", "askedIds", "blobId", "cardIds", "categoryId", "columnId",
 	"folderId", "groupId", "listId", "nextCardId", "nextGroupId", "nextSubtaskId", "nextTodoId",
 	"notifiedIds", "notifyIds", "personId", "previousCardId", "previousGroupId",
-	"previousSubtaskId", "previousTodoId", "replyTo",
+	"previousSubtaskId", "previousTodoId", "replyTo", "todoId",
 }
 
 // identifiersOfTheAddressInAnyCase writes every identifier of the address in
@@ -551,7 +551,9 @@ type Fixture struct {
 	// to-do in that group. A second tool of the project is no longer in use, and
 	// the project that belongs to somebody else has a tool with a list and a
 	// to-do. The grouped to-do is Bruno's, due on a day before the fake's today,
-	// with an open subtask of Anke's and a done one of nobody's.
+	// with an open subtask of Anke's and a done one of nobody's. It is the first
+	// occurrence of a series Anke made of it, weekly on Thursdays with a lead of
+	// two days, whose next one shows after today.
 	Todos            *TodosTool
 	TodoList         *TodoList
 	StageGroup       *TodoGroup // the first group of the list, red, with an open to-do in it
@@ -567,6 +569,7 @@ type Fixture struct {
 	OtherTodoList    *TodoList
 	ArchivedListTodo *Todo // in the group of the list in the archive, with one subtask
 	OtherTodo        *Todo
+	Series           *TodoSeries // of the list, made of the grouped to-do
 
 	// The Check-ins tool of the project, on the fake's today, a Sunday. A
 	// daily question asks Anke, Bruno and the client, who is not shown it;
@@ -707,7 +710,11 @@ func New(t testing.TB) (*Server, *Fixture) {
 		Subtasks: []*Subtask{{ID: newID(), Title: "Find the cables", AssigneeID: anke.ID}, {ID: newID(), Title: "Book the van", Completed: true}}}
 	doneAt := s.now
 	doneTodo := &Todo{ID: newID(), Title: "Order the beer", CompletedAt: &doneAt, CompletedByID: anke.ID, CreatedAt: s.now, CreatorID: bruno.ID}
-	todoList := &TodoList{ID: newID(), Title: "Setting up", Description: "<p>Everything for <strong>Saturday</strong>.</p>", CreatorID: bruno.ID,
+	series := &TodoSeries{ID: newID(), Title: groupedTodo.Title, GroupID: stageGroup.ID, LeadDays: 2, LastOccursOn: speakersDue,
+		Schedule:    RepetitionSchedule{Rhythm: RepeatsWeekly, Weekdays: []int{4}, Interval: 1, StartsOn: speakersDue},
+		AssigneeIDs: []string{bruno.ID}, CreatedAt: s.now, UpdatedAt: s.now, CreatorID: anke.ID}
+	groupedTodo.SeriesID, groupedTodo.OccursOn = series.ID, speakersDue
+	todoList := &TodoList{ID: newID(), Title: "Setting up", Series: []*TodoSeries{series}, Description: "<p>Everything for <strong>Saturday</strong>.</p>", CreatorID: bruno.ID,
 		Groups: []*TodoGroup{stageGroup, kitchenGroup}, Todos: []*Todo{looseTodo, groupedTodo, doneTodo},
 		Comments: []*Comment{{ID: newID(), AuthorID: anke.ID, Body: "<p>I bring the van</p>", CreatedAt: s.now}}}
 	emptyTodoList := &TodoList{ID: newID(), Title: "Tearing down", CreatorID: anke.ID}
@@ -859,7 +866,7 @@ func New(t testing.TB) (*Server, *Fixture) {
 		LooseTodo: looseTodo, GroupedTodo: groupedTodo, DoneTodo: doneTodo,
 		EmptyTodoList: emptyTodoList, ArchivedList: archivedList, ArchivedGroup: archivedGroup,
 		TodosOutOfUse: todosOutOfUse, OtherTodos: otherTodos, OtherTodoList: otherTodoList,
-		ArchivedListTodo: archivedListTodo, OtherTodo: otherTodo,
+		ArchivedListTodo: archivedListTodo, OtherTodo: otherTodo, Series: series,
 		CheckinsTool: checkinsTool, DailyQuestion: dailyQuestion, WeeklyQuestion: weeklyQuestion, PausedQuestion: pausedQuestion,
 		BrunosAnswer: brunosAnswer, AnkesAnswer: ankesAnswer, AnkesEarlierAnswer: ankesEarlierAnswer,
 		OtherCheckinsTool: otherCheckinsTool, OtherQuestion: otherQuestion,

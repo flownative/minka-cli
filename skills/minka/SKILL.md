@@ -230,6 +230,13 @@ minka todos subtasks complete <todoId> <subtask> --json
 minka todos subtasks reopen <todoId> <subtask> --json
 minka todos subtasks move <todoId> <subtask> (--top | --after <subtask> | --before <subtask>) --json
 minka todos subtasks delete <todoId> <subtask> --json
+minka todos repeat <todoId> [--rhythm <rhythm>] [--weekdays <days>] [--interval <n>] [--day <n>] [--weekday <day>] [--instance <1-4|last>] [--month <n>] [--ends-on <day>] [--lead-days <n>] --json
+minka todos series list <listId> --json
+minka todos series show <seriesId> --json
+minka todos series edit <seriesId> (--expect <updatedAt> | --force) [--title "New"] [schedule flags] [--starts-on <day>] [--ends-on <day>|""] [--lead-days <n>] [--assignee <person>]... [--no-assignees] [--notify-when-done <person>]... [--no-notify-when-done] --json
+minka todos series stop <seriesId> --json
+minka todos series resume <seriesId> --json
+minka todos series show-now <seriesId> --json
 minka checkins tools <projectId> --json
 minka checkins list <toolId> --json
 minka checkins show <questionId> --json
@@ -1125,6 +1132,60 @@ names a person that way, or gives a due day without a start.
 `todosLimitNotANumber`, `completedTodosBeforeUnknown` (a `--before` that is
 no `next`), `todosAfterUnknown` (an `--after` of none of your projects), all
 exit 9.
+
+## Repeating to-dos
+
+A **series** makes a to-do again and again. It is made **from a to-do with a
+due day**, which becomes its first occurrence; every further occurrence is an
+ordinary to-do at the end of the list, due on its day, with `series: {id,
+occursOn}` in `todos show` and `seriesId` on its line in `todolists show`. A
+series is **never deleted, only stopped**.
+
+### Reading
+
+- `todos series list <listId>` gives every series of a list, stopped ones too.
+- `todos series show <seriesId>` gives `schedule`, `leadDays`, `state`
+  (`running`, `stopped`, or `finished`: past its end), `nextOccursOn` (the day
+  of the next occurrence), `nextShowsOn` (the day it appears in the list, null
+  where it comes with the next round or is there already), `canShowNow`,
+  `assignees`, `notified` and `updatedAt`. **Take the days from Minka**; the
+  CLI never works them out, and "today" is the installation's day.
+
+### Writing
+
+- `todos repeat <todoId>` makes the series; it starts on the to-do's due day.
+  Without `--rhythm` it is weekly on that weekday. The rhythms and the details
+  each takes: `daily` (`--weekdays`), `weekly` (`--weekdays`, `--interval`),
+  `monthlyOnDay` (`--day`, `--interval`), `monthlyOnWeekday` (`--weekday`,
+  `--instance` 1-4 or `last`, `--interval`), `yearly` (`--month`, `--day`).
+  Weekdays are `1`-`7` or names such as `mon`. What is not given follows from
+  the first day. A detail the rhythm does not use is a usage error when you
+  give `--rhythm`, and a `notice` otherwise (Minka ignores it).
+- `todos series edit` sends **only the flags you give**, never the stored
+  details, and needs `--expect <updatedAt>` (from `todos series show`) or
+  `--force`. While rhythm and first day stay, `--interval 2` alone keeps the
+  day; a new `--rhythm` or `--starts-on` takes the details not given from the
+  first day. `--ends-on ""` takes the end off. `--assignee` and
+  `--notify-when-done` are the **whole set**. It changes the occurrences made
+  from now on; the notes cannot be changed. Written over since you read it:
+  exit 9 `todoSeriesChanged`, and `data` is the series as it stands.
+- `todos series stop` stops it; the to-dos it made stay. `todos series resume`
+  continues a stopped one with its first day **after today**; missed days are
+  not made up.
+- `todos series show-now` makes the upcoming occurrence at once: `data` is
+  `{series, todoId}`, where `todoId` is the new to-do. A series holds at most
+  one occurrence not yet due.
+
+### Codes of this part
+
+`todoToRepeatUnknown`, `todoSeriesNeedsDueDay`, `todoRepeatsAlready`,
+`todoSeriesScheduleInvalid`, `todoSeriesDatesNotADate`,
+`todoSeriesDatesOutOfOrder`, `todoSeriesLeadDaysInvalid`,
+`personNotAProjectMember`, `todoSeriesStopped` (stop or show-now of a stopped
+series), `todoSeriesNotStopped` (resume of one that is not stopped, a finished
+one included), `todoSeriesOccurrenceAhead`, `todoSeriesFinished`,
+`todoListArchived`, `projectArchived` and `todoSeriesChanged` (409), all exit
+9. A series of a list you may not read is exit 2.
 
 ## Check-ins
 
