@@ -54,6 +54,8 @@ type Document struct {
 	// VisibleToClients is what the document says about clients, at the top of
 	// its tool and below it alike.
 	VisibleToClients *bool
+	// Subscribers are whom the account hands the document to; nil is nobody.
+	Subscribers []Person
 }
 
 // UploadedFile is an upload of a Docs & Files tool: one stored file with a title
@@ -100,6 +102,8 @@ type UploadedFile struct {
 	// VisibleToClients is what the upload says about clients, at the top of its
 	// tool and below it alike.
 	VisibleToClients *bool
+	// Subscribers are whom the account hands the upload to; nil is nobody.
+	Subscribers []Person
 }
 
 // docsProject is a project with every case of a Docs & Files tool: two tools
@@ -142,6 +146,7 @@ func docsProject(ada, grace, former Person, tool func(int64, string, string, str
 	// comments with a boost, and a boost of its own.
 	chapter := Document{
 		ID: 9240, Title: "Chapter one", Creator: &ada, CreatedAt: at(2, 8), UpdatedAt: at(2, 9),
+		Subscribers:      []Person{ada},
 		VisibleToClients: &shown,
 		Content: `<div>How it works, says ` + Mention(SGID("gid://bc3/Person/102?expires_in"), "", 102, "Grace Sample") +
 			`</div>` + Embed{File: chart}.HTML(),
@@ -170,6 +175,7 @@ func docsProject(ada, grace, former Person, tool func(int64, string, string, str
 		ID: 9260, Title: "The mark we use", Filename: "logo.png", ContentType: "image/png", Bytes: 4096, Position: 1,
 		Creator: &ada, CreatedAt: at(3, 8), UpdatedAt: at(3, 9), VisibleToClients: &shown,
 		Description: `<div>The one we use</div>`,
+		Subscribers: []Person{grace, ada},
 		Comments: []Comment{{ID: 9273, Creator: &grace, CreatedAt: at(3, 10), UpdatedAt: at(3, 10),
 			Content: `<div>Looks right</div>`}},
 		Boosts: []Boost{{ID: 9283, Content: "👏", CreatedAt: at(3, 11), Booster: &grace}},
@@ -188,12 +194,13 @@ func docsProject(ada, grace, former Person, tool func(int64, string, string, str
 	// In the trash inside a folder that is in use, which the project's own list of
 	// records it has put away hands out and the folder does not.
 	binned := UploadedFile{ID: 9270, Status: "trashed", Title: "draft.pdf", Filename: "draft.pdf",
-		ContentType: "application/pdf", Bytes: 192, Creator: &ada, CreatedAt: at(3, 12), UpdatedAt: at(5, 13)}
+		ContentType: "application/pdf", Bytes: 192, Creator: &ada, CreatedAt: at(3, 12), UpdatedAt: at(5, 13),
+		Subscribers: []Person{ada}}
 	// On the shelf inside a folder that is in use, which the project's own list of
 	// records it has put away hands out and the folder's own list does not: an
 	// entry keeps its own state wherever it stands.
 	shelved := Document{ID: 9255, Status: "archived", Title: "Of another year", Creator: &grace,
-		CreatedAt: at(2, 16), UpdatedAt: at(5, 16), Content: `<div>Kept</div>`}
+		CreatedAt: at(2, 16), UpdatedAt: at(5, 16), Content: `<div>Kept</div>`, Subscribers: []Person{grace}}
 	handbook := Folder{ID: 9220, Title: "Handbook", Creator: &ada, CreatedAt: at(1, 8), UpdatedAt: at(1, 8),
 		VisibleToClients: &shown,
 		Folders:          []Folder{nested},

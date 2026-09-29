@@ -37,6 +37,8 @@ type Post struct {
 	// VisibleToClients is what the message says about clients, which is its own
 	// word and not that of its board.
 	VisibleToClients *bool
+	// Subscribers are whom the account hands the message to; nil is nobody.
+	Subscribers []Person
 }
 
 const (
@@ -123,7 +125,10 @@ func talkProject(ada, grace, linus, edsger, former, bot, deleted Person, tool fu
 	news.CreatedAt = "2023-04-01T07:00:00.200Z"
 	news.Posts = []Post{
 		{ID: 9701, Subject: "Office move", Category: &announcement, Creator: &ada, CreatedAt: at(10, 8), UpdatedAt: at(10, 12), Files: []File{floor},
-			Content: `<div>We move in May, ` + Mention(SGID("gid://bc3/Person/102?expires_in"), "", 102, "Grace Sample") + ` packs.</div><h1>Plan</h1><table><tr><td>Boxes &amp; tape</td></tr></table>` + EmbeddedFile(floor.SGID, "floor.png"),
+			// The writer stopped following it, and somebody who has left the
+			// account still does.
+			Subscribers: []Person{grace, former},
+			Content:     `<div>We move in May, ` + Mention(SGID("gid://bc3/Person/102?expires_in"), "", 102, "Grace Sample") + ` packs.</div><h1>Plan</h1><table><tr><td>Boxes &amp; tape</td></tr></table>` + EmbeddedFile(floor.SGID, "floor.png"),
 			Comments: []Comment{
 				{ID: 9752, Creator: &former, CreatedAt: at(10, 10), UpdatedAt: at(10, 10), Content: `<div>Who carries the plants? ` + ForeignPicture("https://pictures.example.test/fern.png", "A fern") + `</div>`},
 				{ID: 9751, Creator: &grace, CreatedAt: at(10, 9), UpdatedAt: at(10, 9), Content: `<div>Count me in</div>`,

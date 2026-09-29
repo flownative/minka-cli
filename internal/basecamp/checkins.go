@@ -68,11 +68,6 @@ type answered struct {
 	on time.Time
 }
 
-// subscription is who a recording is handed to.
-type subscription struct {
-	Subscribers []person `json:"subscribers"`
-}
-
 // ImpossibleQuestion is a question whose schedule Minka has no words for,
 // named with the field that makes it impossible. Such a question is left out
 // with its answers.
@@ -95,15 +90,6 @@ type InferredAnchor struct {
 type NobodyAsked struct {
 	QuestionSourceID string `json:"questionSourceId"`
 	LeftOut          int    `json:"leftOut"`
-}
-
-// AskedLeftOut counts, over all questions, the people a question is asked of
-// that a bundle cannot name as being asked.
-type AskedLeftOut struct {
-	NotInTheProject  int `json:"notInTheProject"`
-	Clients          int `json:"clients"`
-	Retired          int `json:"retired"`
-	WithoutAnAddress int `json:"withoutAnAddress"`
 }
 
 // dayFormat is how both Basecamp and Minka write a day.
@@ -454,46 +440,11 @@ func lastDayAnswered(answers []answered) (time.Time, bool) {
 // They come in the order of their IDs and each once, however Basecamp lists
 // them: two runs over an unchanged account write the same bytes.
 func (e *Extractor) askedOf(ctx context.Context, bucket, question int64) ([]string, int, error) {
-	handedTo, err := getOne[subscription](ctx, e.Source, fmt.Sprintf("buckets/%d/recordings/%d/subscription.json", bucket, question))
+	named, err := handedTo(ctx, e.Source, bucket, question)
 	if err != nil {
 		return nil, 0, err
 	}
-
-	members := e.members[bucket]
-	taken := map[int64]bool{}
-	leftOut := 0
-	var ids []int64
-	for _, subscriber := range handedTo.Subscribers {
-		if subscriber.ID == 0 || taken[subscriber.ID] {
-			continue
-		}
-		taken[subscriber.ID] = true
-		// Whoever the bundle has in the project came in where the project was
-		// written, so a member of it is somebody it knows.
-		known, _ := e.people.known(subscriber.ID)
-		switch {
-		case !members[subscriber.ID]:
-			e.askedLeftOut.NotInTheProject++
-			leftOut++
-		case known.aClient():
-			e.askedLeftOut.Clients++
-			leftOut++
-		case known.retired():
-			e.askedLeftOut.Retired++
-			leftOut++
-		case known.EmailAddress == "":
-			e.askedLeftOut.WithoutAnAddress++
-			leftOut++
-		default:
-			ids = append(ids, subscriber.ID)
-		}
-	}
-	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
-
-	asked := make([]string, 0, len(ids))
-	for _, id := range ids {
-		asked = append(asked, sourceID(id))
-	}
+	asked, leftOut := e.whomMinkaTakes(bucket, named, &e.askedLeftOut)
 	return asked, leftOut, nil
 }
 

@@ -141,7 +141,7 @@ type importReport struct {
 	NobodyAsked []basecamp.NobodyAsked `json:"nobodyAsked"`
 	// AskedLeftOut counts the people a question is asked of that the bundle
 	// cannot say are asked.
-	AskedLeftOut basecamp.AskedLeftOut `json:"askedLeftOut"`
+	AskedLeftOut basecamp.PeopleLeftOff `json:"askedLeftOut"`
 	// AnswersWithoutABody are the answers that say nothing and AnswersTrashed
 	// those in the trash; both are left out. AnswersWithoutADay are those
 	// Basecamp names no day for, which take the day they were written on.
@@ -155,6 +155,10 @@ type importReport struct {
 	// Docs says what became of the Docs & Files a run met, beside counts.folders,
 	// counts.documents and counts.uploads.
 	Docs basecamp.DocsCounts `json:"docs"`
+	// Subscribers says who follows a post, a card, a to-do, a document or an
+	// upload: how many records carry the list, whom the lists leave off and
+	// which records the source would not say it of.
+	Subscribers basecamp.SubscriberCounts `json:"subscribers"`
 	// MessagesByType splits counts.messages by what a line was in its chat.
 	// MessagesWithEmptyBody are lines somebody wrote that say nothing,
 	// UploadLinesLeftOut lines that were files alone, none of which can be
@@ -334,7 +338,20 @@ left out where nobody ever answered it. An answer that says nothing or lies in
 the trash is left out (answersWithoutABody, answersTrashed), and one Basecamp
 names no day for takes the day it was written in the zone of whoever wrote it
 (answersWithoutADay). Other tools and tools that are switched off are counted as
-skipped. A mention and a file in a text become a reference, and so does a file
+skipped.
+
+A post, a card, a to-do, a document and an upload say who follows them at the
+source (subscribers), which Minka takes as the whole truth: everybody else is
+taken off the item, the writer included, and an empty list means nobody follows
+it. Only a member of the project who is no client, is still there and has an
+address is named; subscribers.leftOff counts the rest by reason. An item in the
+trash is not asked. Where Basecamp will not hand the list out, as not found or
+forbidden, the record comes without it and Minka follows it as before;
+subscribers.unread names it, and the run ends with 0. An answer that is not
+plainly the whole list — none at all, an entry without an ID, fewer or more
+people than it counts — ends the run.
+
+A mention and a file in a text become a reference, and so does a file
 dropped into a chat. A video or a player embedded in a text, an iframe,
 becomes an embed that carries its address and nothing else (embeds); one whose
 address Minka would not take is left out (embedsLeftOut). A link to a card, a
@@ -539,8 +556,9 @@ it has been applied.`,
 				AnswersWithoutADay:  result.AnswersWithoutADay,
 				AnswersTrashed:      result.AnswersTrashed,
 
-				Forwards: result.Forwards,
-				Docs:     result.Docs,
+				Forwards:    result.Forwards,
+				Docs:        result.Docs,
+				Subscribers: result.Subscribers,
 
 				MessagesWithEmptyBody: result.MessagesWithEmptyBody,
 				LongestBody:           result.LongestBody,
@@ -605,6 +623,16 @@ it has been applied.`,
 				notices = append(notices, plural(count,
 					"person a question asks cannot be said to be asked, because they are no member of the project, are a client, have left, or come without an address; the question comes without them",
 					"people questions ask cannot be said to be asked, because they are no members of their project, are clients, have left, or come without an address; the questions come without them"))
+			}
+			if count := len(report.Subscribers.Unread); count > 0 {
+				notices = append(notices, plural(count,
+					"record comes without saying who follows it, because Basecamp would not hand out the list; data.subscribers.unread names it with what Basecamp answered. Minka follows it the way it did before lists came, and a later run brings the list once Basecamp hands it out",
+					"records come without saying who follows them, because Basecamp would not hand out the lists; data.subscribers.unread names each with what Basecamp answered. Minka follows them the way it did before lists came, and a later run brings the lists once Basecamp hands them out"))
+			}
+			if count := subscribersLeftOff(report); count > 0 {
+				notices = append(notices, plural(count,
+					"person who follows an item at the source is left off it, because they are no member of the project, are a client, have left, or come without an address; Minka puts nobody else on the item in their place",
+					"people who follow items at the source are left off them, because they are no members of the project, are clients, have left, or come without an address; Minka puts nobody else on the items in their place"))
 			}
 			if count := report.AnswersWithoutADay; count > 0 {
 				notices = append(notices, plural(count,
@@ -838,6 +866,7 @@ func renderImportReport(w io.Writer, report importReport) {
 	renderTodos(w, report)
 	renderForwards(w, report)
 	renderDocs(w, report)
+	renderSubscribers(w, report)
 	fmt.Fprintf(w, "In the texts: %s referred to, %s Basecamp lists nothing for dropped, %s, %s, %s\n",
 		plural(report.FilesInBodies, "file", "files"), plural(report.FilesDropped, "file", "files"),
 		plural(report.MentionsUnresolved, "mention left as a name", "mentions left as names"),
@@ -903,6 +932,13 @@ func askedLeftOut(report importReport) int {
 	return left.NotInTheProject + left.Clients + left.Retired + left.WithoutAnAddress
 }
 
+// subscribersLeftOff is how many people the lists of who follows an item left
+// off, over every reason.
+func subscribersLeftOff(report importReport) int {
+	left := report.Subscribers.LeftOff
+	return left.NotInTheProject + left.Clients + left.Retired + left.WithoutAnAddress
+}
+
 // recordsLeftOut is how many records a run left out for want of a word for what
 // the source said of them, over every kind of record, word and place. It counts
 // records and not entries: one entry may stand for many.
@@ -912,6 +948,20 @@ func recordsLeftOut(report importReport) int {
 		count += one.LeftOut
 	}
 	return count
+}
+
+// renderSubscribers says what became of who follows the items a run met.
+func renderSubscribers(w io.Writer, report importReport) {
+	subscribers := report.Subscribers
+	fmt.Fprintf(w, "Items that say who follows them: %d; people left off: %d no member of the project, %d a client, %d no longer there, %d without an address\n",
+		subscribers.Lists, subscribers.LeftOff.NotInTheProject, subscribers.LeftOff.Clients, subscribers.LeftOff.Retired, subscribers.LeftOff.WithoutAnAddress)
+	if len(subscribers.Unread) > 0 {
+		unread := make([]string, 0, len(subscribers.Unread))
+		for _, one := range subscribers.Unread {
+			unread = append(unread, fmt.Sprintf("%s %s in %s (%s)", one.Record, one.SourceID, one.ProjectSourceID, one.Why))
+		}
+		fmt.Fprintf(w, "Items Basecamp would not say who follows, which Minka follows as before: %d — %s\n", len(unread), strings.Join(unread, ", "))
+	}
 }
 
 // renderCheckins says what became of the questions of the check-ins a run met.

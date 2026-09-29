@@ -164,9 +164,8 @@ func checkinProject(ada, grace, linus, edsger, niklaus, deleted Person, tool fun
 }
 
 var (
-	questionsPattern    = regexp.MustCompile(`^buckets/([0-9]+)/questionnaires/([0-9]+)/questions\.json$`)
-	answersPattern      = regexp.MustCompile(`^buckets/([0-9]+)/questions/([0-9]+)/answers\.json$`)
-	subscriptionPattern = regexp.MustCompile(`^buckets/([0-9]+)/recordings/([0-9]+)/subscription\.json$`)
+	questionsPattern = regexp.MustCompile(`^buckets/([0-9]+)/questionnaires/([0-9]+)/questions\.json$`)
+	answersPattern   = regexp.MustCompile(`^buckets/([0-9]+)/questions/([0-9]+)/answers\.json$`)
 )
 
 // checkins answers the paths of questionnaires. The second value tells whether
@@ -205,21 +204,6 @@ func (a *Account) checkins(path string, page int) ([]byte, bool) {
 					}
 				}
 				return a.pageOf(found, page), true
-			}
-		}
-	case subscriptionPattern.MatchString(path):
-		match := subscriptionPattern.FindStringSubmatch(path)
-		if p := a.project(match[1]); p != nil {
-			if question, known := a.questionOf(p, match[2]); known {
-				subscribers := []map[string]any{}
-				for _, subscriber := range question.Subscribers {
-					subscribers = append(subscribers, a.person(subscriber))
-				}
-				// The subscription of a recording is no list and has no pages.
-				return encode(map[string]any{
-					"subscribed": true, "count": len(question.Subscribers),
-					"url": a.root() + path, "subscribers": subscribers,
-				}), true
 			}
 		}
 	}

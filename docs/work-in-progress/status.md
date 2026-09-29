@@ -190,6 +190,15 @@ into a chat come with a record and their bytes, streamed from the
 Basecamp CLI or taken over from the bundle the run replaces. It reads
 through the Basecamp CLI and is tested against the invented account in
 `internal/fakebasecamp`.
+A post, a card, a to-do, a document and an upload say who follows them at the
+source (`subscribers`, C-084), which Minka takes as the whole truth. The list is
+read per record from Basecamp's subscription of the recording and names only the
+members Minka can put on the item; `subscribers.leftOff` counts the rest by
+reason. A record in the trash is not asked, and one whose list Basecamp answers
+as not found or forbidden comes without the field, named in
+`subscribers.unread`, so Minka follows it as before instead of taking everybody
+off it. It costs one request per record.
+
 The check-ins are checked against the fake alone: no extraction has met a
 questionnaire live yet. The frequencies Basecamp sends are `every_day`,
 `on_certain_days`, `every_week`, `every_other_week` and `every_month`, and the
@@ -219,6 +228,9 @@ measured on — the kind, the identifier and the place it stands in — so the n
 such number can be traced without walking the account again. Basecamp's own
 address of the record is not in it: no run carries one. A run into a bundle over
 the whole account is still owed, and its size is Robert's and Shaun's to allow.
+Owed with it: a dry run that meets the lists of who follows an item. How
+`subscription.json` answers was measured read-only, see below; a list longer
+than seven people has not been seen.
 
 The working notes on the back of a card are read with `cards notes show` and
 written with `cards notes set`, which needs `--expect` or `--force` (C-042).
@@ -388,6 +400,25 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   written again with the same text moves its `editedAt` in Minka
   (`DbalCommentRepository::change`) and in the fake; the comments under a card
   and a document in the fake still keep it.
+- The `subscribers` of posts, cards, to-dos, documents and uploads: no
+  extraction has read one live. What `recordings/{id}/subscription.json`
+  answers was **measured** read-only by the coordination, some 40
+  requests under the default identity: 200 for a card, a message, a to-do, a
+  document and an upload, in the shape a question's answer has as well —
+  `count`, `subscribed`, `subscribers` and `url`, every entry with an `id` and
+  `personable_type` `User`, and `count` equal to the length of the list in every
+  answer, seven people at most. Nothing in the body hints at pages, and the
+  OpenAPI description the Basecamp CLI 0.11.0 carries marks no pagination for
+  it where it marks it for the operations that page. A cap above seven is not
+  measured; the run ends where the list holds fewer people than `count`, so a
+  capped list stops the run instead of unsubscribing anybody. A recording that
+  is not there, a wrong project and one the identity cannot see all answered
+  404 (`not_found`); no 403 was seen, so `forbidden` is held against the fake
+  alone. A record in the **trash still answers 200 with its list**: that such a
+  record is not asked rests on the status the run already read, never on an
+  answer of the source. What Minka makes of the field was read in
+  `ImportedSubscribers`, `SetImportedItemSubscribersHandler` and
+  `BundleRecord::strings` at Minka's main 6780365e.
 - Everything a bundle says about clients: no extraction has met a client live.
   What the fields are and how Minka reads them was read in its appliers
   (`PeopleApplier`, `ProjectsApplier`, `ToolsApplier`, `WhatClientsSee`), and

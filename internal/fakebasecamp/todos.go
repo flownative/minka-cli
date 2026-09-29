@@ -106,12 +106,14 @@ func todoProject(ada, grace, edsger, former Person, tool func(int64, string, str
 			StartsOn: "2025-04-20", DueOn: "2025-05-01",
 			// Not in the order of their IDs, and one of them twice.
 			Assignees: []Person{grace, ada, grace}, NotifiedWhenDone: []Person{edsger, edsger}, Subtasks: 2,
+			Subscribers: []Person{edsger, ada, former},
 			Comments: []Comment{{ID: 9471, Creator: &grace, CreatedAt: at(2, 12), UpdatedAt: at(2, 12), Content: `<div>Which paper?</div>`,
 				Boosts: []Boost{{ID: 9482, Content: "📄", CreatedAt: at(2, 14), Booster: &ada}}}},
 			Boosts: []Boost{{ID: 9481, Content: "👍", CreatedAt: at(2, 13), Booster: &grace}}},
 		{ID: 9422, Title: "Book the room", Creator: &ada, CreatedAt: at(2, 9), UpdatedAt: at(2, 9),
 			Completion: &Completion{At: at(3, 9), By: &grace}},
-		{ID: 9423, Status: "trashed", Title: "Cancelled", Creator: &ada, CreatedAt: at(2, 10), UpdatedAt: at(3, 10)},
+		{ID: 9423, Status: "trashed", Title: "Cancelled", Creator: &ada, CreatedAt: at(2, 10), UpdatedAt: at(3, 10),
+			Subscribers: []Person{ada}},
 	}
 
 	// A second list with a group of its own: a to-do that named a group of
@@ -198,6 +200,8 @@ type Todo struct {
 	// VisibleToClients is what the to-do says about clients, which no bundle has a
 	// word for: a to-do follows its list.
 	VisibleToClients *bool
+	// Subscribers are whom the account hands the to-do to; nil is nobody.
+	Subscribers []Person
 }
 
 var (

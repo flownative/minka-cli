@@ -124,6 +124,9 @@ func TestAPostComesWithItsBoardItsKindItsSubjectAndItsText(t *testing.T) {
 		"body": `<div>We move in May, <import-mention ref="102">Grace Sample</import-mention> packs.</div><h1>Plan</h1>` +
 			`<table><tr><td>Boxes &amp; tape</td></tr></table><import-attachment ref="attachment-5011"></import-attachment>`,
 		"pinnedAt": nil, "status": "active",
+		// The writer who stopped following it is not put back, and somebody who
+		// has left the account is no member.
+		"subscribers": []any{"102"},
 	}
 	if got := recordWithID(t, posts, "9701"); !reflect.DeepEqual(got, want) {
 		t.Errorf("post:\n got %v\nwant %v", got, want)
@@ -133,7 +136,7 @@ func TestAPostComesWithItsBoardItsKindItsSubjectAndItsText(t *testing.T) {
 	want = map[string]any{
 		"sourceId": "9702", "createdAt": "2023-04-11T08:00:00.000Z", "updatedAt": "2023-04-11T08:00:00.000Z", "createdBy": "102",
 		"projectSourceId": "7004", "toolSourceId": "9030", "categorySourceId": nil, "title": "Reminder without words",
-		"body": "", "pinnedAt": nil, "status": "active",
+		"body": "", "pinnedAt": nil, "status": "active", "subscribers": []any{},
 	}
 	if got := recordWithID(t, posts, "9702"); !reflect.DeepEqual(got, want) {
 		t.Errorf("post:\n got %v\nwant %v", got, want)
