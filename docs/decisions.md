@@ -1472,3 +1472,15 @@ knowingly, because the copy only feeds a hint and never a refusal.
 **Implemented as:** `basecamp.groupColor`, `cli.newTodoGroupsEditCmd`,
 `cli.todoGroupColorUnknownHint`, see [Importing from Basecamp](stable/import.md)
 and [To-do lists and groups](stable/todo-lists.md).
+
+<a id="c-087"></a>
+## C-087 — What stands in a list or a group on the shelf or in the trash comes in use
+
+*Applies to: `import basecamp`, the `status` of `todogroups` and `todos`*
+
+A group or to-do marked `inherits_status` is written `active`; one with a
+status of its own stays `trashed` or is left out (C-050). The run trusts the
+mark: were an own status under such a parent marked too (not seen live, see
+[Status](work-in-progress/status.md)), one trashed of its own would be in use.
+**Why:** In Minka the list or group alone holds the shelf and the trash, and
+restoring it restores all in it. **Implemented as:** `basecamp.bundleStatus`.

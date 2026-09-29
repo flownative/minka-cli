@@ -282,6 +282,13 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
 
 ## Checked against the fake only
 
+- The status of what stands in a list or a group on the shelf or in the trash:
+  seen live for an archived list, whose groups and to-dos come `archived` with
+  `inherits_status` in its `groups.json` and `todos.json` and among the
+  archived records of the project. Not seen live, and mirrored by the fake all
+  the same: a trashed list or group, and a group or to-do with a status of its
+  own under a parent that has one, which the fake reports as the parent's and
+  inherited. A live check is open.
 - IDs in any case: that Minka writes an ID in lowercase before it reads it
   (`AbstractApiController::readId`), in the address, the body and the query,
   is read in its code on `main` (00bbcf39), not released and not seen live.

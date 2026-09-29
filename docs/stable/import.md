@@ -121,9 +121,11 @@ question or an answer whose status is neither `active` nor `archived` nor
 `trashed`, a draft among them, a to-do list of such a status, and a group or a
 to-do whose status is neither `active` nor `trashed`, the shelf among them,
 because a bundle gives neither of the two a shelf, a forwarded mail of a status
-that is none of the three, an answer by mail that says anything but
-`active`, because a bundle gives an answer no status at all, and a folder, a
-document or an upload of Docs & Files whose status is none of the three.
+that is none of the three, an answer by mail that says anything but `active`,
+because a bundle gives an answer no status at all, and a folder, a document or
+an upload of Docs & Files whose status is none of the three. A shelf a group or
+a to-do only inherits from its list or its group leaves nothing out, see Groups
+under What a bundle holds so far (C-087).
 `recordsLeftOut` names each
 with the kind of record, the field, the word the source said there, the record
 it stood in and how many were left out, counting records and not entries.
@@ -598,9 +600,22 @@ and Minka applies the kinds in an order of its own.
   to-do list of its own, and what a record hangs on is what tells the two
   apart. A group goes to the end of its list, so the order of the file is the
   order of the list: the groups in use as Basecamp lists them, then the ones
-  it has thrown away. `status` is `active` or `trashed`, because the shelf is
-  the list's alone, so a group the source has put on the shelf is left out and
-  counted. A group of a list that is not extracted is left out and counted as
+  it has thrown away. The groups of a list on the shelf or in the trash come in
+  the order the list gives them too; the records of the project only stand in
+  for one the list does not name, after the ones it does. `status` is `active`
+  or `trashed`, because the shelf is the list's alone, so a group the source
+  has put on the shelf is left out and counted. **What stands in a list or a
+  group on the shelf or in the trash comes in use** (C-087): Basecamp puts
+  every group and to-do of a list on the shelf with it and says so with
+  `inherits_status`; for the trash that is not seen live yet, see the Status.
+  In Minka the list or the group alone holds the shelf and the trash, and
+  restoring it restores what stands in it, so a status marked inherited is
+  written `active`. A status of its own stays: a trashed one comes `trashed`,
+  an archived one is left out. The run trusts `inherits_status`; what Basecamp
+  says of a status of its own under a list or a group that has one is not seen
+  live. Should it say inherited there, a group or a to-do trashed of its own
+  before its list went on the shelf or into the trash comes back in use in
+  Minka. A group of a list that is not extracted is left out and counted as
   well. **Nothing hangs on a group:** the format has no word for a comment, a
   reaction or a file of one, such a record would wait in Minka for ever, so
   none is written and none is asked for. **A group carries its colour** in
@@ -634,15 +649,17 @@ and Minka applies the kinds in an order of its own.
   thrown away. `groupSourceId` names a group of the to-do's own list and is
   `null` for a to-do standing in the list itself; both it and a `listSourceId`
   that named anything else would be disguised in Minka as "the list is not in
-  use here". `status` is `active` or `trashed`, as a group's is. The notes are
-  the rendered text, `assignees` and `notifyWhenDone` are the people the
-  source names, in the order of their IDs and each once, `completedAt` and
-  `completedBy` come from the completion Basecamp records, and `startsOn` and
-  `dueOn` as given, both held to the shape of a day. Comments, boosts and files hang on a to-do. **`updatedAt`
-  is never older than `completedAt`** (C-051). **Subtasks are not carried:**
-  the format has no word for them, so all that is left of them is how many
-  there were, counted in `todosWithSubtasks` and `subtasksLeftOut` and asked
-  for never.
+  use here". `status` is `active` or `trashed`, as a group's is, and a to-do
+  whose status is inherited from its list or its group comes `active`, as a
+  group does. The notes are the rendered text, `assignees` and
+  `notifyWhenDone` are the people the source names, in the order of their
+  IDs and each once, `completedAt` and `completedBy` come from the
+  completion Basecamp records, and `startsOn` and `dueOn` as given, both held
+  to the shape of a day. Comments, boosts and files hang on a to-do.
+  **`updatedAt` is never older than `completedAt`** (C-051). **Subtasks are
+  not carried:** the format has no word for them, so all that is left of
+  them is how many there were, counted in `todosWithSubtasks` and
+  `subtasksLeftOut` and asked for never.
   **A schedule is not carried either:** a to-do that comes again at the source
   comes here as an ordinary to-do, because Minka has no repeating one, and
   `todosThatRepeat` counts the ones a bundle carries. Basecamp leaves the key of
@@ -886,7 +903,10 @@ and Minka applies the kinds in an order of its own.
   A record in the **trash** is not asked and carries no list: Minka changes
   nothing on an item in the trash. That rests on the status the run has
   already read of the record: Basecamp answers the list of a trashed recording
-  like any other. A record in the archive is asked like any
+  like any other. A to-do in the trash with its list or its group counts as
+  one in the trash here, though it comes `active` (C-087): it goes back with
+  its list or group in Minka and keeps whom it had there. One on the shelf with
+  its list is asked like any other. A record in the archive is asked like any
   other, because Minka applies the list before it archives. Where Basecamp
   answers the list as **not found or forbidden**, the record comes without the
   field, and Minka follows the item the way it did before the field existed.

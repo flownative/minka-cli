@@ -367,6 +367,136 @@ func TestAGroupOnTheShelfIsLeftOutAndCounted(t *testing.T) {
 	}
 }
 
+// Basecamp puts everything standing in a list on the shelf or in the trash with
+// the list, and says that it inherits the status. In Minka the list alone holds
+// the shelf and the trash and what stands in it follows, so its groups and
+// to-dos, open and done, come in use within it, and none of them is left out.
+// The list decides their order, as it does for a list in use: the records of the
+// project, which list them the other way round, only stand in for a group the
+// list does not name and come after the ones it does, and one group the account
+// hands out among the groups of its list alone. A to-do in the trash with its list keeps whom it had in Minka,
+// so nobody asks who follows it; one on the shelf with its list is asked.
+func TestWhatStandsInAListOnTheShelfOrInTheTrashComesInUseWithIt(t *testing.T) {
+	for _, status := range []string{"archived", "trashed"} {
+		t.Run(status, func(t *testing.T) {
+			account := fakebasecamp.New()
+			at := func(hour int) string { return fmt.Sprintf("2025-04-03T%02d:00:00.000Z", hour) }
+			gone := theList(account, 9403)
+			gone.Status = status
+			gone.Groups = []fakebasecamp.TodoList{
+				// In the trash of its own before its list went: the list does not
+				// name it, and the records of the project say it inherits.
+				{ID: 9420, Status: "trashed", Title: "Met among the records alone", CreatedAt: at(12), UpdatedAt: at(12)},
+				{ID: 9417, Title: "First", CreatedAt: at(13), UpdatedAt: at(13), Todos: []fakebasecamp.Todo{
+					{ID: 9433, Title: "Open in a group", CreatedAt: at(14), UpdatedAt: at(14)},
+				}},
+				{ID: 9418, Title: "Second, met in its list alone", OnlyInItsList: true, CreatedAt: at(13), UpdatedAt: at(13)},
+				{ID: 9419, Title: "Third", CreatedAt: at(13), UpdatedAt: at(13)},
+			}
+			gone.Todos = []fakebasecamp.Todo{
+				{ID: 9434, Title: "Open in the list", CreatedAt: at(15), UpdatedAt: at(15),
+					Subscribers: theTodo(account, 9421).Subscribers},
+				{ID: 9436, Title: "Open as well", CreatedAt: at(15), UpdatedAt: at(15)},
+				{ID: 9435, Title: "Done in the list", CreatedAt: at(16), UpdatedAt: at(17),
+					Completion: &fakebasecamp.Completion{At: at(16)}},
+			}
+			dir, result := extract(t, account, todoProject)
+
+			if got := recordWithID(t, records(t, dir, bundle.TodoLists), "9403")["status"]; got != status {
+				t.Errorf("the list came as %v, want %s", got, status)
+			}
+			var groups, todos []string
+			for _, group := range records(t, dir, bundle.TodoGroups) {
+				if group["listSourceId"] == "9403" {
+					groups = append(groups, group["sourceId"].(string))
+					if group["status"] != "active" {
+						t.Errorf("group %v of the list came as %v", group["sourceId"], group["status"])
+					}
+				}
+			}
+			if want := []string{"9417", "9418", "9419", "9420"}; !slices.Equal(groups, want) {
+				t.Errorf("the groups of the list came as %v, want %v", groups, want)
+			}
+			written := records(t, dir, bundle.Todos)
+			for _, one := range written {
+				if one["listSourceId"] == "9403" {
+					todos = append(todos, one["sourceId"].(string))
+					if one["status"] != "active" {
+						t.Errorf("to-do %v of the list came as %v", one["sourceId"], one["status"])
+					}
+				}
+			}
+			if want := []string{"9434", "9436", "9435", "9433"}; !slices.Equal(todos, want) {
+				t.Errorf("the to-dos of the list came as %v, want %v", todos, want)
+			}
+			if done := recordWithID(t, written, "9435")["completedAt"]; done != at(16) {
+				t.Errorf("the done to-do of the list came done at %v", done)
+			}
+			if in := recordWithID(t, written, "9433")["groupSourceId"]; in != "9417" {
+				t.Errorf("the to-do of the group came in %v", in)
+			}
+
+			followers, carried := recordWithID(t, written, "9434")["subscribers"]
+			wasAsked := slices.Contains(account.Requests, subscriptionOf(todoProject, "9434"))
+			if status == "trashed" && (wasAsked || carried) {
+				t.Errorf("a to-do in the trash with its list was asked who follows it (%v) or carries %v", wasAsked, followers)
+			}
+			if status == "archived" && !reflect.DeepEqual(followers, []any{"101", "104"}) {
+				t.Errorf("a to-do on the shelf with its list is followed by %v, want [101 104]", followers)
+			}
+
+			// Only what the account holds on the shelf of its own is left out, as ever.
+			want := []basecamp.LeftOutRecords{{Record: "group", Field: "status", Value: "archived", In: "project", InSourceID: "7008", LeftOut: 1}}
+			if got := result.RecordsLeftOut; !slices.Equal(got, want) {
+				t.Errorf("records left out:\n got %v\nwant %v", got, want)
+			}
+		})
+	}
+}
+
+// A to-do in a group in the trash inherits the trash from the group, which alone
+// holds it in Minka: the group comes trashed and the to-do in use within it,
+// nobody asking who follows it. A to-do in the trash of its own, in a list in
+// use, stays in the trash.
+func TestAToDoTakesTheTrashFromItsGroupAndKeepsItsOwn(t *testing.T) {
+	account := fakebasecamp.New()
+	dir, _ := extract(t, account, todoProject)
+
+	if got := recordWithID(t, records(t, dir, bundle.TodoGroups), "9413")["status"]; got != "trashed" {
+		t.Errorf("the group in the trash came as %v", got)
+	}
+	todos := records(t, dir, bundle.Todos)
+	if one := recordWithID(t, todos, "9426"); one["status"] != "active" || one["groupSourceId"] != "9413" {
+		t.Errorf("the to-do of the group in the trash came as %v", one)
+	}
+	// In the trash with its group, it keeps whom it had in Minka as well.
+	if _, carried := recordWithID(t, todos, "9426")["subscribers"]; carried || slices.Contains(account.Requests, subscriptionOf(todoProject, "9426")) {
+		t.Errorf("the to-do of the group in the trash was asked who follows it")
+	}
+	if got := recordWithID(t, todos, "9423")["status"]; got != "trashed" {
+		t.Errorf("the to-do in the trash of its own came as %v", got)
+	}
+}
+
+// A to-do put on the shelf of its own, in a list in use, is one a bundle has no
+// word for: it is left out and counted as before.
+func TestAToDoOnTheShelfOfItsOwnIsLeftOutAndCounted(t *testing.T) {
+	account := fakebasecamp.New()
+	theTodo(account, 9421).Status = "archived"
+	dir, result := extract(t, account, todoProject)
+
+	if ids := sourceIDs(records(t, dir, bundle.Todos)); slices.Contains(ids, "9421") {
+		t.Errorf("a to-do on the shelf of its own came along: %v", ids)
+	}
+	want := []basecamp.LeftOutRecords{
+		{Record: "group", Field: "status", Value: "archived", In: "project", InSourceID: "7008", LeftOut: 1},
+		{Record: "to-do", Field: "status", Value: "archived", In: "project", InSourceID: "7008", LeftOut: 1},
+	}
+	if got := result.RecordsLeftOut; !slices.Equal(got, want) {
+		t.Errorf("records left out:\n got %v\nwant %v", got, want)
+	}
+}
+
 // The format has no word for a comment, a reaction or a file of a group, so such
 // a record would wait in Minka for ever: none is written, and none is asked for.
 // The account holds all three on a group and answers for it as it does for a
@@ -449,7 +579,8 @@ func TestTheToDosOfAListComeInItsOrderWithTheirDaysAndPeople(t *testing.T) {
 			"projectSourceId": "7008", "toolSourceId": "9080", "listSourceId": "9401", "groupSourceId": "9413",
 			"title": "Of a group in the trash", "notes": nil, "startsOn": nil, "dueOn": nil,
 			"assignees": []any{}, "notifyWhenDone": []any{},
-			"completedAt": nil, "completedBy": nil, "status": "active", "subscribers": []any{}},
+			// In the trash with its group, so nobody asks who follows it either.
+			"completedAt": nil, "completedBy": nil, "status": "active"},
 		{"sourceId": "9427", "createdAt": "2025-04-02T22:00:00.000Z", "updatedAt": "2025-04-02T22:00:00.000Z", "createdBy": "102",
 			"projectSourceId": "7008", "toolSourceId": "9081", "listSourceId": "9405", "groupSourceId": nil,
 			"title": "Water the plants", "notes": nil, "startsOn": nil, "dueOn": nil,
@@ -946,6 +1077,9 @@ func TestTwoRunsOverTheSameToDosWriteTheSameBytes(t *testing.T) {
 // Every other failure of such a request ends the run as any other does.
 func TestAPlaceThatIsGoneTakesNothingWithItAndCostsNoRun(t *testing.T) {
 	account := fakebasecamp.New()
+	// A group that is gone has nothing left among the records of the project
+	// either.
+	theList(account, 9414).Todos = nil
 	for _, path := range []string{
 		"buckets/7008/todolists/9414/todos.json",
 		"buckets/7008/todolists/9414/todos.json?completed=true",
