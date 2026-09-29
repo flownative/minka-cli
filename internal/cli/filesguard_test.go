@@ -81,6 +81,21 @@ func TestTheGuardOverFilesStandsAsideWhereMinkaRefusesTheWrite(t *testing.T) {
 			e.fixture.Project.Archived = true
 			return []string{"docs", "edit", e.fixture.Document.ID, "--body", "Plain", "--force"}
 		}, ExitValidation, apiCodeProjectArchived},
+		"an upload of the archive": {func(e *testEnv) []string {
+			upload := e.fixture.FilesUpload
+			upload.Description, upload.Archived = withMention, true
+			return []string{"docs", "uploads", "edit", upload.ID, "--description", "Plain", "--force"}
+		}, ExitValidation, apiCodeUploadArchived},
+		"an upload below an archived folder": {func(e *testEnv) []string {
+			upload := e.fixture.FilesUpload
+			upload.Description, upload.FolderID = withMention, e.fixture.ArchivedFolder.ID
+			return []string{"docs", "uploads", "edit", upload.ID, "--description", "Plain", "--force"}
+		}, ExitValidation, apiCodeUploadArchived},
+		"an upload in an archived project": {func(e *testEnv) []string {
+			e.fixture.FilesUpload.Description = withMention
+			e.fixture.Project.Archived = true
+			return []string{"docs", "uploads", "edit", e.fixture.FilesUpload.ID, "--description", "Plain", "--force"}
+		}, ExitValidation, apiCodeProjectArchived},
 		"a comment of somebody else on a document": {func(e *testEnv) []string {
 			document := e.fixture.Document
 			document.Comments[0].Body = withMention
@@ -184,6 +199,11 @@ func TestTheGuardOverFilesStandsOnDocumentsInUse(t *testing.T) {
 			document := e.fixture.Document
 			document.Body = withMention
 			return []string{"docs", "edit", document.ID, "--body", "Plain", "--force"}, func() string { return document.Body }
+		},
+		"an upload": func(e *testEnv) ([]string, func() string) {
+			upload := e.fixture.FilesUpload
+			upload.Description = withMention
+			return []string{"docs", "uploads", "edit", upload.ID, "--description", "Plain", "--force"}, func() string { return upload.Description }
 		},
 		"an own comment on a document": func(e *testEnv) ([]string, func() string) {
 			document := e.fixture.Document

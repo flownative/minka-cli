@@ -241,6 +241,16 @@ type Upload struct {
 	// every other file. Nothing here reads a picture, so it is a shorter run
 	// of bytes of its own rather than a rendering of the original.
 	Display []byte
+
+	// UploaderID is who stored the file. Only they can put it into an upload
+	// of a Docs & Files tool, and only while it stands nowhere yet.
+	UploaderID string
+	// StandsInAText says that a saved text carries the file. The fake does
+	// not look through its texts for it, so a test says so here.
+	StandsInAText bool
+	// Swept says that the file stood in nothing for longer than Minka keeps
+	// such a file and was taken away: it is then at no address at all.
+	Swept bool
 }
 
 // renderings are the names this file can be asked for, the original first and
@@ -409,6 +419,11 @@ type Server struct {
 	// a card that has no ID, which no Minka does: what a client does with an
 	// answer it cannot use must not depend on that.
 	AnswersCardsWithoutID bool
+
+	// AfterStoring is called with every file just stored, before the answer
+	// goes out. It lets a test change what the file meets next, such as a
+	// sweep between storing a file and putting it into a tool.
+	AfterStoring func(*Upload)
 
 	// StoreURL stands for a file store that serves the bytes itself. Where it
 	// is set, a picture is answered with a redirect there, the way an
@@ -627,7 +642,7 @@ func New(t testing.TB) (*Server, *Fixture) {
 		CreatedAt: aWholeSecond, UpdatedAt: aWholeSecond, CreatorID: bruno.ID}
 	archivedDocument := &Document{ID: newID(), Title: "Put away", Body: "<p>Done with.</p>", Archived: true,
 		CreatedAt: aWholeSecond, UpdatedAt: aWholeSecond, CreatorID: bruno.ID}
-	sitePlan := &Upload{ID: newID(), Circle: project.ID, Filename: "site-plan.pdf", ContentType: "application/pdf", Content: []byte("%PDF-1.4 a plan")}
+	sitePlan := &Upload{ID: newID(), Circle: project.ID, Filename: "site-plan.pdf", ContentType: "application/pdf", Content: []byte("%PDF-1.4 a plan"), UploaderID: anke.ID}
 	sitePlan.Size = len(sitePlan.Content)
 	filesUpload := &FilesUpload{ID: newID(), Title: "site-plan.pdf", BlobID: sitePlan.ID, FolderID: folder.ID,
 		Description: "<p>Where everything stands</p>", CreatedAt: aWholeSecond, UpdatedAt: aWholeSecond, CreatorID: anke.ID,
@@ -2679,9 +2694,12 @@ func (s *Server) upload(w http.ResponseWriter, r *http.Request, person *Person) 
 
 	upload := &Upload{
 		ID: newID(), Circle: circle, Filename: filename, ContentType: stored, Size: len(content),
-		Content: content, Display: displayRenderingOf(content, stored),
+		Content: content, Display: displayRenderingOf(content, stored), UploaderID: person.ID,
 	}
 	s.Uploads = append(s.Uploads, upload)
+	if s.AfterStoring != nil {
+		s.AfterStoring(upload)
+	}
 	writeJSON(w, http.StatusCreated, s.uploadResource(upload))
 }
 
@@ -2802,7 +2820,7 @@ func (s *Server) visibleUpload(blobID string, person *Person) *Upload {
 		return nil
 	}
 	for _, upload := range s.Uploads {
-		if upload.ID != blobID {
+		if upload.ID != blobID || upload.Swept {
 			continue
 		}
 		if conversationID, private := strings.CutPrefix(upload.Circle, "conversation:"); private {

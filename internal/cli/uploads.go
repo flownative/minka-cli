@@ -307,17 +307,18 @@ of a comment or a message, unchanged, and send that back as HTML:
   printf '%s' "$SOURCE" >> text.html
   minka cards edit <cardId> --description - --description-format html < text.html
 
+A file of a project can also stand on its own in a Docs & Files tool: give its
+id to "docs uploads create --blob". It goes into one place only, a text or an
+upload.
+
 A file belongs to the circle it was uploaded into: a file of a project hangs
 in the texts of that project, a file of a conversation in the messages of that
 conversation, and nowhere else. A foreign attachment is dropped while saving,
 without an error, so read the text back after saving if you want to be sure.
 
-A file is kept only once a text that carries it is saved. An upload no saved
-text points to is removed after seven days.
+` + unattachedFileHelp + `
 
-The media type comes from the name of the file and, failing that, from its
-first bytes. Give --content-type where that guess is wrong: the server reads
-the bytes itself and refuses a file that contradicts what the type says.`,
+` + mediaTypeHelp,
 		Example: `  minka uploads create screenshot.png --project 0199...
   minka uploads create report.csv --project 0199... --content-type text/csv
   minka uploads create shot.png --conversation 0199...`,
@@ -335,36 +336,11 @@ the bytes itself and refuses a file that contradicts what the type says.`,
 				return err
 			}
 
-			path := args[0]
-			file, err := os.Open(path)
+			file, err := openFileToStore(args[0], name, contentType)
 			if err != nil {
-				return &Error{Code: CodeUsage, Message: fmt.Sprintf("cannot read %s: %v", path, err)}
+				return err
 			}
-			defer file.Close()
-
-			info, err := file.Stat()
-			switch {
-			case err != nil:
-				return &Error{Code: CodeUsage, Message: fmt.Sprintf("cannot read %s: %v", path, err)}
-			case info.IsDir():
-				return &Error{Code: CodeUsage, Message: fmt.Sprintf("%s is a directory, not a file", path)}
-			case info.Size() > maxUploadBytes:
-				return &Error{
-					Code:    CodeUsage,
-					Message: fmt.Sprintf("%s is %s, and Minka takes at most %s", path, fileSize(info.Size()), maxUploadSize),
-				}
-			}
-
-			filename := name
-			if filename == "" {
-				filename = filepath.Base(path)
-			}
-			mediaType := contentType
-			if mediaType == "" {
-				if mediaType, err = mediaTypeOf(filename, file); err != nil {
-					return &Error{Code: CodeUsage, Message: fmt.Sprintf("cannot read %s: %v", path, err)}
-				}
-			}
+			defer file.close()
 
 			s, err := a.session()
 			if err != nil {
@@ -375,29 +351,17 @@ the bytes itself and refuses a file that contradicts what the type says.`,
 			if conversationID != "" {
 				upload, target = s.client.UploadToConversation, conversationID
 			}
-			uploaded, err := upload(a.ctx, target, filename, mediaType, file, info.Size())
+			uploaded, err := upload(a.ctx, target, file.filename, file.mediaType, file.content, file.size)
 			if err != nil {
-				e := s.fail(err)
-				if e.Code == CodeNotFound {
-					e.Hint = "There is no such project or conversation, or you are not in it."
-				}
-				switch e.APICode {
-				case "contentTypeMismatch":
-					e.Hint = "The bytes are not what their media type says. Give the right one with --content-type."
-				case "notReadable":
-					e.Hint = "The picture is broken or in a format Minka cannot read."
-				case "tooLarge":
-					e.Hint = "Minka takes at most " + maxUploadSize + " for one file."
-				}
-				return e
+				return storeRefusal(s, err)
 			}
 
 			summary := fmt.Sprintf("Uploaded %s as %s, %s", uploaded.Value.Filename, uploaded.Value.Kind, fileSize(uploaded.Value.Size))
 			return a.ok(success{
 				data:        uploaded.Raw,
 				summary:     summary,
-				notices:     []string{"the file is kept only once a text that carries it is saved, and is removed after seven days if none does"},
-				breadcrumbs: attachmentBreadcrumbs(conversationID != ""),
+				notices:     []string{unattachedFileNotice},
+				breadcrumbs: attachmentBreadcrumbs(conversationID != "", uploaded.Value.ID),
 				text: func(w io.Writer) {
 					fmt.Fprintf(w, "%s.\n%s\n\n%s\n", summary, uploaded.Value.AppURL, uploaded.Value.AttachmentSource)
 				},
@@ -407,15 +371,99 @@ the bytes itself and refuses a file that contradicts what the type says.`,
 	flags := cmd.Flags()
 	flags.StringVar(&projectID, "project", "", "Project the file goes into")
 	flags.StringVar(&conversationID, "conversation", "", "Private conversation the file goes into")
-	flags.StringVar(&name, "name", "", "Name the file gets in Minka, by default the name it has here")
-	flags.StringVar(&contentType, "content-type", "", "Media type of the file, by default guessed from its name and its bytes")
+	addFileToStoreFlags(cmd, &name, &contentType)
 
 	return cmd
 }
 
+// unattachedFileHelp says how long Minka keeps a file nothing points to. The
+// span is a floor: the file is taken away on a later sweep, never before.
+const unattachedFileHelp = `A file is kept for good once a text or an upload carries it. One that nothing
+carries is kept for at least seven days and taken away some time after that.`
+
+const unattachedFileNotice = "the file is kept for good only once a text or an upload carries it; until then it is kept for at least seven days and taken away some time after"
+
+// mediaTypeHelp says where the media type of a file comes from and what Minka
+// holds it against: the bytes decide what a file is, and only a picture Minka
+// shows where it stands is refused when the two disagree.
+const mediaTypeHelp = `The media type comes from the name of the file and, failing that, from its
+first bytes. Give --content-type where that guess is wrong. Minka reads the
+bytes itself and keeps the type they show; it refuses a file only where the
+bytes and the type disagree and one of the two is a picture it shows (AVIF,
+GIF, JPEG, PNG or WebP). An SVG counts as a document, not as a picture.`
+
+func addFileToStoreFlags(cmd *cobra.Command, name, contentType *string) {
+	cmd.Flags().StringVar(name, "name", "", "Name the file gets in Minka, by default the name it has here")
+	cmd.Flags().StringVar(contentType, "content-type", "", "Media type of the file, by default guessed from its name and its bytes")
+}
+
+// fileToStore is a file of this machine on its way into Minka, held against
+// what Minka takes before a byte of it travels.
+type fileToStore struct {
+	content   *os.File
+	size      int64
+	filename  string // the name it gets in Minka
+	mediaType string
+}
+
+func (f *fileToStore) close() {
+	_ = f.content.Close()
+}
+
+// openFileToStore opens a file for storing. A file that is certainly too big
+// is refused here, where it costs nothing, rather than after it travelled.
+func openFileToStore(path, name, contentType string) (*fileToStore, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, &Error{Code: CodeUsage, Message: fmt.Sprintf("cannot read %s: %v", path, err)}
+	}
+	info, err := file.Stat()
+	var refusal *Error
+	switch {
+	case err != nil:
+		refusal = &Error{Code: CodeUsage, Message: fmt.Sprintf("cannot read %s: %v", path, err)}
+	case info.IsDir():
+		refusal = &Error{Code: CodeUsage, Message: fmt.Sprintf("%s is a directory, not a file", path)}
+	case info.Size() > maxUploadBytes:
+		refusal = &Error{Code: CodeUsage, Message: fmt.Sprintf("%s is %s, and Minka takes at most %s", path, fileSize(info.Size()), maxUploadSize)}
+	}
+	if refusal != nil {
+		_ = file.Close()
+		return nil, refusal
+	}
+
+	filename := name
+	if filename == "" {
+		filename = filepath.Base(path)
+	}
+	mediaType := contentType
+	if mediaType == "" {
+		if mediaType, err = mediaTypeOf(filename, file); err != nil {
+			_ = file.Close()
+			return nil, &Error{Code: CodeUsage, Message: fmt.Sprintf("cannot read %s: %v", path, err)}
+		}
+	}
+	return &fileToStore{content: file, size: info.Size(), filename: filename, mediaType: mediaType}, nil
+}
+
+// storeRefusal classifies a file Minka did not store.
+func storeRefusal(s *session, err error) *Error {
+	e := s.fail(err)
+	if e.Code == CodeNotFound {
+		e.Hint = "There is no such project or conversation, or you are not in it."
+	}
+	switch e.APICode {
+	case "contentTypeMismatch":
+		e.Hint = "The bytes and the media type disagree, and one of the two is a picture Minka shows. Give the right type with --content-type."
+	case "tooLarge":
+		e.Hint = "Minka takes at most " + maxUploadSize + " for one file."
+	}
+	return e
+}
+
 // attachmentBreadcrumbs say where an uploaded file can hang, which for a
 // conversation is nowhere but that conversation.
-func attachmentBreadcrumbs(inAConversation bool) []Breadcrumb {
+func attachmentBreadcrumbs(inAConversation bool, blobID string) []Breadcrumb {
 	if inAConversation {
 		return []Breadcrumb{
 			{Action: "attach-to-message", Cmd: "minka messages create <conversationId> - --format html", Description: "Say something that carries attachmentSource"},
@@ -424,6 +472,7 @@ func attachmentBreadcrumbs(inAConversation bool) []Breadcrumb {
 	return []Breadcrumb{
 		{Action: "attach-to-card", Cmd: "minka cards edit <cardId> --description - --description-format html", Description: "Send a description that carries attachmentSource"},
 		{Action: "attach-to-comment", Cmd: "minka comments create <cardId> - --format html", Description: "Write a comment that carries attachmentSource"},
+		{Action: "put-into-files", Cmd: "minka docs uploads create --blob " + blobID + " --tool <toolId>", Description: "Let the file stand on its own in a Docs & Files tool"},
 	}
 }
 

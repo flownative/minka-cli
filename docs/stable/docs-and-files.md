@@ -5,20 +5,20 @@ page with a title and a body, an **upload** a file standing on its own with a
 description. Both take comments, and the comments take reactions.
 
 `docs tools`, `docs list`, `docs show` and `docs uploads show` read; `docs
-create` and `docs edit` write a document; `docs comments …` write under either
-kind of entry.
+create` and `docs edit` write a document; `docs uploads create` puts a file into
+a tool and `docs uploads edit` changes an upload; `docs comments …` write under
+either kind of entry.
 
 ## What is not there, and why nothing pretends otherwise
 
-The API offers no delete, trash, archive, unarchive or move of a document, no
-creating, renaming or deleting of a folder, no reading of a tool's archive and
-no reading of a draft — a draft is 404 for everybody, its author included.
-Reactions reach the comments alone, although the web offers them on an entry
-as well. Putting a file into a tool is two requests with their own failure
-modes and waits for a card of its own; changing the title or the description
-of an upload waits with it. The CLI therefore writes only into folders that
-already exist, and the help of `docs uploads show` says where the rest is
-done.
+The API offers no delete, trash, archive, unarchive or move of a document or
+an upload, no creating, renaming or deleting of a folder, no reading of a
+tool's archive and no reading of a draft — a draft is 404 for everybody, its
+author included. Reactions reach the comments alone, although the web offers
+them on an entry as well. The file of an upload cannot be replaced: Minka
+ignores a `blobId` sent with a change, so `docs uploads edit` has no flag for
+it ([C-085](../decisions.md#c-085)). The CLI writes only into folders that
+already exist.
 
 ## The body, and the refusal that never comes
 
@@ -37,6 +37,54 @@ element the server serves draws a `notice` naming what becomes of it
 ([C-068](../decisions.md#c-068)). It is not refused: the server accepts it, and
 a CLI that refused what the server takes would be wrong about it.
 
+## A file goes into a tool in two requests
+
+Minka takes a file into a tool in two steps: `POST projects/{id}/uploads`
+stores the bytes in the project, as `uploads create` does, and `POST
+files-tools/{id}/uploads` with the `blobId` of that answer puts the stored file
+on top of the tool or of a folder. `docs uploads create <file> --tool <toolId>
+--project <projectId>` takes both in one run ([C-085](../decisions.md#c-085)):
+
+1. It reads the tools of the project and stops with exit 2, before the file
+   travels, where the tool is not among them. Minka's addresses do not tie a
+   tool to its project, and a file stored in the wrong one is refused only
+   after it travelled.
+2. It stores the file. A refusal ends the run and nothing is put anywhere.
+3. It puts the stored file into the tool. Where Minka refuses that, the file
+   stays stored and nothing carries it: the error's `data` is the stored file
+   and the hint names `--blob <blobId>`, which takes this step alone.
+
+`--blob <blobId>` in place of the file is the second step alone, for such a
+file or one `uploads create --project` stored; `--project`, `--name` and
+`--content-type` are refused beside it. A file stands in one place: in a text
+or in an upload, never in two.
+
+A file nothing carries is kept for **at least** seven days. Minka's sweeper runs
+daily and when the service starts, so seven days are a floor and not a
+deadline, and everything that speaks of them says so.
+
+### The title and the description of a new upload
+
+A title left out, or `null`, names the upload after the file; `""` is 422
+`uploadTitleMissing`. Minka reads the title only after the file travelled, so
+the CLI refuses an empty or blank `--title` itself, before anything goes out,
+and sends no title where none was given. A description left out, `null` and
+`""` all mean an empty one; it is Markdown converted here, as a body is.
+
+Nobody is told about a new upload but the people mentioned in its description,
+and there is no audience and no `notifyIds`. The writer is subscribed to it.
+
+### The file Minka does not know
+
+`fileUnknown` covers a file swept after standing in nothing, one never stored,
+one of another project, one hidden from a client and one somebody else stored.
+Nothing tells these apart. With `--blob` the hint names the one remedy worth
+trying: store the file again by giving it in place of `--blob`. Where the same
+run stored the file a moment before, it cannot have been swept, and the hint
+says that storing it again is not the remedy. `fileInUse` is a file of one's
+own that stands in an upload or a text already; of somebody else's Minka says
+`fileUnknown`.
+
 ## The title of a document, which is not a value one clears
 
 `"title": null` and an absent title keep what stands. `"title": ""` is 422
@@ -44,6 +92,11 @@ a CLI that refused what the server takes would be wrong about it.
 `--description ""`, which clear a value, so `docs edit --title ""` reaches the
 server and comes back as exit 9, and the help says that a title can only be
 replaced. `--body ""` empties the body, as `"body": null` does.
+
+An upload is the same: `docs uploads edit --title ""` reaches Minka and comes
+back as exit 9 `uploadTitleMissing`, `"title": null` keeps the title, and
+`--description ""` empties the description, as `"description": null` does.
+A change that names nothing new answers 200 and writes nothing.
 
 ## The guard, and the second it cannot see
 
@@ -54,12 +107,12 @@ wins**. The working notes of a card keep theirs in `TIMESTAMP(6)`, and there
 invert the meaning on one of them, so there are three mappings and no shared
 helper ([C-067](../decisions.md#c-067)):
 
-- `docs edit --expect <updatedAt>` sends the string **verbatim as it was read**.
+- `docs edit --expect <updatedAt>` and `docs uploads edit --expect` send the
+  string **verbatim as it was read**.
   It always ends `.000000Z`. The shape is held here first, so a value with no
   zone exits 1 as a usage error rather than travelling to be answered with 400
   `malformedBody`.
-- `docs edit --force` leaves the field **out of the body**, and never sends
-  `null`.
+- `--force` leaves the field **out of the body**, and never sends `null`.
 - `--expect none` is refused as a usage error: it is the word of `cards notes
   set`, and it would mean the opposite here.
 
@@ -71,6 +124,8 @@ against — whether the old one carries files or mentions that Markdown cannot
 hold — and that read still fills no guard. That guard stands aside for a
 document of the archive, one below an archived folder and one in an archived
 project, where Minka refuses any body ([C-082](../decisions.md#c-082)).
+`docs uploads edit --description` reads the upload for the same reason and
+stands aside in the same places.
 
 `docs comments edit` reads the entry first, for the files and mentions a
 comment of one's own may carry. A comment of somebody else, one under an entry
@@ -89,8 +144,8 @@ so in a `notice`, the help says it, and the SKILL.md says it where agents read
 
 A refused write is 409 `documentChanged` with the document under `"document"`,
 which becomes the `data` of the error, is printed for a person, and the `hint`
-names the `--expect` to send next. An upload refuses with `uploadChanged` and
-`"upload"`, which no command of this CLI can reach yet.
+names the `--expect` to send next. An upload refuses the same way with
+`uploadChanged` and the upload under `"upload"`.
 
 ## Whom a new document reaches
 
@@ -161,18 +216,25 @@ this case beside the stranger.
 | Answer | Command | Exit |
 |---|---|---|
 | 404 | every read and write, for what is unknown, foreign, hidden from a client, in the trash, or a draft | 2 |
+| — | `docs uploads create <file>` with a tool the project of `--project` has not got, before the file travels | 2 |
 | 415 `unsupportedMediaType` | unreachable: every write of this CLI sends JSON | — |
-| 400 `malformedBody` | unreachable: a moment `--expect` lets through is one the server reads | — |
+| 400 `malformedBody` | unreachable: a moment `--expect` lets through is one the server reads, and a `--blob` that is no ID exits 1 | — |
 | 409 `documentChanged` | `docs edit --expect` against a document written over since | 9 |
+| 409 `uploadChanged` | `docs uploads edit --expect` against an upload written over since | 9 |
+| 422 `uploadTitleMissing`, `uploadTitleTooLong`, `uploadTitleHasControlCharacters` | `docs uploads edit`; of `docs uploads create`, all but an empty title, which exits 1 before anything goes out | 9 |
+| 422 `uploadDescriptionTooLong`, `uploadDescriptionNotReadable` | `docs uploads create`, `docs uploads edit` | 9 |
+| 422 `fileUnknown` | `docs uploads create`, for a file swept, never stored, of another project or somebody else's — one answer for all | 9 |
+| 422 `fileInUse` | `docs uploads create --blob` naming a file of one's own that stands in an upload or a text | 9 |
+| 422 `contentTypeMismatch`, 413 `tooLarge` | `docs uploads create <file>`, storing it, as `uploads create` | 9 |
 | 422 `documentTitleMissing`, `documentTitleTooLong`, `documentTitleHasControlCharacters` | `docs create`, `docs edit` | 9 |
 | 422 `documentBodyTooLong`, `documentBodyNotReadable` | `docs create`, `docs edit` | 9 |
 | 422 `documentAudienceMissing` | unreachable: the audience is held here | — |
 | 422 `notifyIdsMissing`, `notifyIdsWithoutChosenAudience` | `docs create --audience` and `--notify` that do not go together | 9 |
 | 422 `personNotAProjectMember` | `docs create --notify` naming somebody outside the project, or somebody other than the writer twice | 9 |
 | 422 `personCannotSeeIt` | `docs create --notify` naming a client of the project or an agent of one, for a document the clients of it are not shown | 9 |
-| 422 `folderUnknown`, `folderArchived` | `docs create --folder` | 9 |
+| 422 `folderUnknown`, `folderArchived` | `docs create --folder`, `docs uploads create --folder` | 9 |
 | 422 `documentArchived`, `uploadArchived` | every write on an archived entry, or under one, comments included — but a change of one's own comment under an entry that lies in the archive only through a folder above it is written | 9 |
-| 422 `projectArchived` | every write; on `docs edit` and the comments before the codes above, on `docs create` after the title, the body, the folder, the audience and `notifyIdsMissing` / `notifyIdsWithoutChosenAudience`, and before `personNotAProjectMember` and `personCannotSeeIt` | 9 |
+| 422 `projectArchived` | every write; on `docs edit`, `docs uploads edit` and the comments before the codes above but after the title, the description and the moment of `--expect`; on `docs create` after the title, the body, the folder, the audience and `notifyIdsMissing` / `notifyIdsWithoutChosenAudience`, and before `personNotAProjectMember` and `personCannotSeeIt`; on `docs uploads create` with a file when storing it, after the whole transfer, and with `--blob` before `fileUnknown` and again before `fileInUse` | 9 |
 | 404 `variantNotAvailable` | `uploads download --variant` of the file of an upload, as for any file | 2 |
 | 422 the comment codes | `docs comments …`, as under a card | 9 |
 

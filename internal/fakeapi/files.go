@@ -16,8 +16,9 @@ import (
 // What the server keeps of a document, and how much of its body a folder
 // shows beside its title.
 const (
-	maxDocumentBodyLength = 100000
-	leadLength            = 240
+	maxDocumentBodyLength      = 100000
+	maxUploadDescriptionLength = 100000
+	leadLength                 = 240
 )
 
 // Audiences a new document can reach, as the API names them.
@@ -94,7 +95,9 @@ func (s *Server) registerFilesRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/v1/files-tools/{toolId}/documents", s.authenticated(s.addDocument))
 	mux.HandleFunc("GET /api/v1/documents/{documentId}", s.authenticated(s.document))
 	mux.HandleFunc("PATCH /api/v1/documents/{documentId}", s.authenticated(s.updateDocument))
+	mux.HandleFunc("POST /api/v1/files-tools/{toolId}/uploads", s.authenticated(s.addFilesUpload))
 	mux.HandleFunc("GET /api/v1/files-uploads/{uploadId}", s.authenticated(s.filesUpload))
+	mux.HandleFunc("PATCH /api/v1/files-uploads/{uploadId}", s.authenticated(s.updateFilesUpload))
 
 	for _, entry := range []string{"documents/{documentId}", "files-uploads/{uploadId}"} {
 		under := "/api/v1/" + entry + "/comments"
@@ -307,6 +310,207 @@ func (s *Server) filesUpload(w http.ResponseWriter, r *http.Request, person *Per
 		return
 	}
 	writeJSON(w, http.StatusOK, s.filesUploadResource(tool, upload))
+}
+
+// addFilesUpload puts a stored file that stands nowhere yet into a tool, on
+// top of the tool or of a folder. The file is found first, and what the
+// request says about the upload only then; whether the file may go in is
+// learnt from the write itself, after the archived project.
+func (s *Server) addFilesUpload(w http.ResponseWriter, r *http.Request, person *Person) {
+	fields, ok := readBody(w, r)
+	if !ok {
+		return
+	}
+	tool := s.visibleFilesTool(r.PathValue("toolId"), person)
+	if tool == nil {
+		notFound(w)
+		return
+	}
+	project := s.projectWithID(tool.ProjectID)
+	blobID, ok := stringField(w, fields, "blobId")
+	if !ok {
+		return
+	}
+	if blobID == nil || !uuidPattern.MatchString(*blobID) {
+		malformed(w, `The field "blobId" has to name a stored file by its identifier.`)
+		return
+	}
+	file := s.storedFileOf(tool.ProjectID, *blobID)
+	if file == nil {
+		if !s.refusedAsArchived(w, project) {
+			fileUnknown(w)
+		}
+		return
+	}
+	title, ok := stringField(w, fields, "title")
+	if !ok {
+		return
+	}
+	newTitle := titleOfFile(file.Filename)
+	if title != nil {
+		if !validEntryTitle(w, "upload", *title) {
+			return
+		}
+		newTitle = phpTrim(*title)
+	}
+	description, ok := stringField(w, fields, "description")
+	if !ok {
+		return
+	}
+	stored, ok := storedDescription(w, deref(description))
+	if !ok {
+		return
+	}
+	folderID, ok := stringField(w, fields, "folderId")
+	if !ok {
+		return
+	}
+	folder, ok := folderToWriteIn(w, tool, deref(folderID))
+	if !ok {
+		return
+	}
+
+	// The write takes only a file of the writer's own that stands nowhere
+	// yet. Why it took nothing is asked afterwards, and only a file of one's
+	// own is ever said to be in use.
+	if file.UploaderID != person.ID || s.fileIsInUse(file) {
+		if s.refusedAsArchived(w, project) {
+			return
+		}
+		if file.UploaderID == person.ID {
+			unprocessable(w, "fileInUse", "This file already stands in an upload or a text. Store it again to put it in another upload.")
+			return
+		}
+		fileUnknown(w)
+		return
+	}
+	if s.refusedAsArchived(w, project) {
+		return
+	}
+
+	upload := &FilesUpload{
+		ID: newID(), FolderID: folderIDOf(folder), Title: newTitle, BlobID: file.ID, Description: stored,
+		CreatedAt: s.aWholeSecond(), UpdatedAt: s.aWholeSecond(), CreatorID: person.ID,
+	}
+	tool.Uploads = append([]*FilesUpload{upload}, tool.Uploads...)
+	writeJSON(w, http.StatusCreated, s.filesUploadResource(tool, upload))
+}
+
+// updateFilesUpload writes over the title and the description of an upload.
+// The file stays whatever the request says: a "blobId" is not read at all.
+// A description sent as null is emptied, as one sent empty is.
+func (s *Server) updateFilesUpload(w http.ResponseWriter, r *http.Request, person *Person) {
+	fields, ok := readBody(w, r)
+	if !ok {
+		return
+	}
+	tool, upload := s.visibleFilesUpload(r.PathValue("uploadId"), person)
+	if upload == nil {
+		notFound(w)
+		return
+	}
+	title, ok := stringField(w, fields, "title")
+	if !ok {
+		return
+	}
+	if title != nil && !validEntryTitle(w, "upload", *title) {
+		return
+	}
+	newTitle := upload.Title
+	if title != nil {
+		newTitle = phpTrim(*title)
+	}
+	newDescription := upload.Description
+	if _, given := fields["description"]; given {
+		description, ok := stringField(w, fields, "description")
+		if !ok {
+			return
+		}
+		if newDescription, ok = storedDescription(w, deref(description)); !ok {
+			return
+		}
+	}
+	expected, guarded, ok := expectedUpdatedAt(w, fields)
+	if !ok {
+		return
+	}
+
+	if s.refusedAsArchived(w, s.projectWithID(tool.ProjectID)) {
+		return
+	}
+	if s.refusedAsAnArchivedEntry(w, tool, upload.FolderID, upload.Archived, "upload") {
+		return
+	}
+	if newTitle == upload.Title && newDescription == upload.Description {
+		writeJSON(w, http.StatusOK, s.filesUploadResource(tool, upload))
+		return
+	}
+	if guarded && !expected.Equal(upload.UpdatedAt) {
+		refusal := errorBody("uploadChanged", `This upload was written over since it was read. Nothing was written; "upload" holds it as it stands.`)
+		refusal["upload"] = s.filesUploadResource(tool, upload)
+		writeJSON(w, http.StatusConflict, refusal)
+		return
+	}
+	upload.Title, upload.Description = newTitle, newDescription
+	upload.UpdatedAt = later(s.aWholeSecond(), upload.UpdatedAt.Add(time.Second))
+	writeJSON(w, http.StatusOK, s.filesUploadResource(tool, upload))
+}
+
+// titleOfFile is the title an upload without one is given: its file name,
+// and where that is too long for a title, cut before the extension so that
+// the extension stays. It is trimmed as every title is, after the cut.
+func titleOfFile(filename string) string {
+	name := []rune(filename)
+	if len(name) <= maxTitleLength {
+		return phpTrim(filename)
+	}
+	extension := []rune(fileExtension.FindString(filename))
+	room := maxTitleLength - len(extension)
+	if room <= 0 {
+		return phpTrim(string(name[:maxTitleLength]))
+	}
+	return phpTrim(string(name[:room]) + string(extension))
+}
+
+// fileExtension is what Minka counts as the extension of a file name.
+var fileExtension = regexp.MustCompile(`\.[A-Za-z0-9]{1,8}$`)
+
+// storedFileOf is a file stored in this project that has not been swept,
+// whoever stored it and wherever it stands.
+func (s *Server) storedFileOf(projectID, blobID string) *Upload {
+	for _, file := range s.Uploads {
+		if file.ID == blobID && file.Circle == projectID && !file.Swept {
+			return file
+		}
+	}
+	return nil
+}
+
+// fileIsInUse says whether an upload of any tool stands for the file, or a
+// saved text carries it.
+func (s *Server) fileIsInUse(file *Upload) bool {
+	if file.StandsInAText {
+		return true
+	}
+	for _, tool := range s.FilesTools {
+		for _, upload := range tool.Uploads {
+			if upload.BlobID == file.ID {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// fileUnknown is one answer for every file the writer cannot put into an
+// upload: swept, never stored, of another project or of somebody else.
+func fileUnknown(w http.ResponseWriter) {
+	unprocessable(w, "fileUnknown", `The field "blobId" has to name a file you stored in this project that stands in no upload or text yet.`)
+}
+
+// storedDescription is the description of an upload as the server keeps it.
+func storedDescription(w http.ResponseWriter, value string) (string, bool) {
+	return storedRichText(w, "uploadDescriptionTooLong", "The description of an upload is too long.", maxUploadDescriptionLength, value)
 }
 
 // commentedEntry is what the comments under a document and under an upload

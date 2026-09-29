@@ -25,13 +25,15 @@ anything being taken out of the text.
 
 The Docs & Files of a project are read with `docs tools`, `docs list`,
 `docs show` and `docs uploads show`; `docs create` and `docs edit` write a
-document, and `docs comments …` write under a document or an upload. The rule
-the commands follow is [Docs & Files](../stable/docs-and-files.md) (C-067,
-C-068). Putting a file into a tool and changing an upload wait for a card of
-their own, and everything the API does not offer — deleting, archiving and
-moving an entry, folders, the archive of a tool, drafts — is named there and
-nowhere pretended. None of it has been seen live: the whole feature is checked
-against the fake, see below.
+document, `docs uploads create` puts a file into a tool — both requests Minka
+takes it in, in one run, or the second alone with `--blob` — and `docs uploads
+edit` changes the title and the description of an upload; `docs comments …`
+write under a document or an upload. The rule the commands follow is
+[Docs & Files](../stable/docs-and-files.md) (C-067, C-068, C-085). Everything
+the API does not offer — replacing the file of an upload, deleting, archiving
+and moving an entry, folders, the archive of a tool, drafts — is named there
+and nowhere pretended. None of it has been seen live: the whole feature is
+checked against the fake, see below.
 
 The to-do lists of a project are read with `todolists tools`, `todolists list`
 and `todolists show`, and written with `todolists create`, `edit`, `archive`,
@@ -301,8 +303,7 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   the draft that is at no address. Two things it deliberately does not
   mirror: a second write within the same second, because every write of the
   fake stands a second after the one before so that a guard has something to
-  tell apart — which is the one case the guard cannot see live — and
-  `PATCH files-uploads/{id}`, which no command reaches. The fake asks
+  tell apart — which is the one case the guard cannot see live. The fake asks
   `richtext.CarriesMarkup` for the fallback, the same rule the CLI asks, so
   the edges of the list of served elements are shared knowledge and not a
   second measurement.
@@ -322,6 +323,21 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   client, and that a person named twice is refused as no member. The last is
   read from `DbalItemSubscriptionRepository::enrol` and has not been seen
   anywhere, and it is a quirk the coordination passes on to Minka.
+- Putting a file into a tool and changing an upload were read in
+  `FilesApiController::addUploadAction` and `updateUploadAction`,
+  `BlobQueryService::findStoredBlob` and `isOwnFileInUse`, `AddUploadHandler`,
+  `EditUploadHandler` and `DbalFilesRepository::editUpload` at Minka 345c063e,
+  and mirrored in the fake from that reading alone: the tool, then the file,
+  then the title, the description and the folder, and only from the write
+  itself `projectArchived`, `fileInUse` for a file of one's own and
+  `fileUnknown` for everything else; a change that keeps the file whatever is
+  sent and empties the description on `null` as on `""`. What the fake does not
+  mirror: it does not look through its texts for a stored file, so a test says
+  with `StandsInAText` that one carries it, and a sweep is a test setting
+  `Swept`; the moment a sweep comes is Minka's and nothing here measures it.
+  Who is told about a mention in the description, and the subscription of the
+  writer, the fake does not keep at all. Which files a client is shown the fake
+  has no word for.
 - Everything of `todolists` and `todogroups`: no request of it has gone to a
   real Minka. The fake mirrors what was read in `TodosApiController`, the
   `TodoQueryService`, the handlers and `DbalTodoRepository`: the order the
@@ -1164,6 +1180,15 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   a subtask of one's own, and the subtasks added, named by position, moved and
   taken off twice. Look at `isOverdue` and at the cursor near midnight in a time
   zone that is not UTC, which the fake cannot show.
+- Check the uploads of a Docs & Files tool live, as the
+  [live check](../guides/live-check.md) says: a file put in with both steps and
+  one with `--blob` after `uploads create --project`, a title left out, one
+  refused as empty before the file travels, a folder of the archive refused
+  after the file was stored and the retry with `--blob`, `fileInUse` for the
+  same blob twice, `fileUnknown` for a blob of another project, a description
+  with a mention, its change guarded and conflicting, `--description ""`, and a
+  change of an upload of the archive. The uploads stay behind: there is no
+  delete in the API, so a live run writes them into a project kept for tests.
 - See the three refusals over whom a document reaches answered by a running
   instance: `notifyIdsMissing`, `notifyIdsWithoutChosenAudience` and
   `personCannotSeeIt`. All three are reachable with `docs create` now that the
