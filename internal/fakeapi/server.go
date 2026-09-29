@@ -1571,7 +1571,7 @@ func (s *Server) updateCard(w http.ResponseWriter, r *http.Request, person *Pers
 		unprocessable(w, "nothingToChange", "The body names neither a title nor a description nor a due date.")
 		return
 	}
-	if title != nil && !validTitle(w, *title) || description != nil && !validDescription(w, *description) {
+	if title != nil && !validTitle(w, *title) {
 		return
 	}
 	dueOn, ok := stringField(w, fields, "dueOn")
@@ -1579,12 +1579,25 @@ func (s *Server) updateCard(w http.ResponseWriter, r *http.Request, person *Pers
 		return
 	}
 
+	// A card of the archive is found as well: why nothing was written on it is
+	// asked after the description, as the server does.
 	board, column, card := s.visibleCard(r.PathValue("cardId"), person)
+	onItsBoard := card != nil
+	if card == nil {
+		board, column, card = s.visibleArchivedCard(r.PathValue("cardId"), person)
+	}
 	if card == nil {
 		notFound(w)
 		return
 	}
-	if s.refusedAsArchived(w, s.projectOfCard(r.PathValue("cardId"))) {
+	if description != nil && !validDescription(w, *description) {
+		return
+	}
+	if s.refusedAsArchived(w, s.projectOf(board)) {
+		return
+	}
+	if !onItsBoard {
+		unprocessable(w, "cardArchived", "This card is archived. Nothing is written on it until it is back on its board.")
 		return
 	}
 	if title != nil {
@@ -2962,23 +2975,20 @@ func ownComment(card *Card, commentID string, person *Person) *Comment {
 	return nil
 }
 
-// editComment looks up card and comment before it checks the text, in the
-// order the server does.
+// editComment checks the text once the card is found, and asks why nothing
+// was written only then, in the order the server does: the project, the
+// archive of the board, and last the comment, which only its author changes.
 func (s *Server) editComment(w http.ResponseWriter, r *http.Request, person *Person) {
 	fields, ok := readBody(w, r)
 	if !ok {
 		return
 	}
 	board, _, card := s.visibleCard(r.PathValue("cardId"), person)
+	onItsBoard := card != nil
 	if card == nil {
-		notFound(w)
-		return
+		board, _, card = s.visibleArchivedCard(r.PathValue("cardId"), person)
 	}
-	if s.refusedAsArchived(w, s.projectOfCard(r.PathValue("cardId"))) {
-		return
-	}
-	comment := ownComment(card, r.PathValue("commentId"), person)
-	if comment == nil {
+	if card == nil {
 		notFound(w)
 		return
 	}
@@ -2986,16 +2996,20 @@ func (s *Server) editComment(w http.ResponseWriter, r *http.Request, person *Per
 	if !ok {
 		return
 	}
-	text := phpTrim(deref(body))
-	switch {
-	case strings.IndexFunc(text, isCommentControl) >= 0:
-		unprocessable(w, "commentHasControlCharacters", "A comment must not contain control characters other than line breaks and tabs.")
+	text, ok := commentText(w, deref(body))
+	if !ok {
 		return
-	case utf8.RuneCountInString(text) > maxCommentLength:
-		unprocessable(w, "commentTooLong", "The comment is too long.")
+	}
+	if s.refusedAsArchived(w, s.projectOf(board)) {
 		return
-	case text == "":
-		unprocessable(w, "commentMissing", "A comment needs a body.")
+	}
+	if !onItsBoard {
+		unprocessable(w, "cardArchived", "This card is archived. Nothing is written on it until it is back on its board.")
+		return
+	}
+	comment := ownComment(card, r.PathValue("commentId"), person)
+	if comment == nil {
+		notFound(w)
 		return
 	}
 	if comment.Body != text {

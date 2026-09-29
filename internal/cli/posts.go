@@ -420,17 +420,14 @@ and projectArchived is the answer.`,
 				if err != nil {
 					return postRefusal(s, err)
 				}
-				// A post in the archive takes no body at all, so Minka's refusal
-				// is the answer and nothing can be lost.
-				if !current.Value.Archived {
-					dropped, err := a.guardOverFiles(s, current.Value.ProjectID, firstNonEmpty(current.Value.BodySource, current.Value.Body), *input.Body, dropAttachments,
-						"the post has attachments or mentions, and the new body would drop them",
-						"Change the bodySource from posts show --json and send it back with --body-format html, or give --drop-attachments.")
-					if err != nil {
-						return err
-					}
-					notices = append(notices, dropped...)
+				// A post in the archive takes no body at all.
+				dropped, err := a.guardOverFiles(s, current.Value.ProjectID, closedIf(current.Value.Archived), firstNonEmpty(current.Value.BodySource, current.Value.Body), *input.Body, dropAttachments,
+					"the post has attachments or mentions, and the new body would drop them",
+					"Change the bodySource from posts show --json and send it back with --body-format html, or give --drop-attachments.")
+				if err != nil {
+					return err
 				}
+				notices = append(notices, dropped...)
 			}
 
 			post, err := s.client.UpdatePost(a.ctx, args[0], input)
@@ -682,7 +679,9 @@ and projectArchived is the answer.`,
 			if err != nil {
 				return postRefusal(s, err)
 			}
-			dropped, err := a.keepsTheAttachmentsOfAComment(s, post.Value, args[1], body, dropAttachments)
+			// A comment under a post of the archive takes no text at all.
+			dropped, err := a.keepsTheAttachmentsOfAComment(s, post.Value.ProjectID, closedIf(post.Value.Archived), post.Value.Comments, args[1], body, dropAttachments,
+				"Change the bodySource of the comment from posts show --json and send it back with --format html, or give --drop-attachments.")
 			if err != nil {
 				return err
 			}
@@ -707,53 +706,6 @@ and projectArchived is the answer.`,
 	cmd.Flags().BoolVar(&dropAttachments, "drop-attachments", false, "Replace a comment that has attachments or mentions, which drops them")
 
 	return cmd
-}
-
-// keepsTheAttachmentsOfAComment holds a new text against the comment it
-// replaces, where anything could be lost: a comment of somebody else and a
-// comment under a post in the archive are refused by Minka whatever is sent,
-// so its answer comes first there and this side keeps no guard of its own.
-func (a *app) keepsTheAttachmentsOfAComment(s *session, post api.Post, commentID, body string, allowed bool) ([]string, error) {
-	if post.Archived {
-		return nil, nil
-	}
-	for _, current := range post.Comments {
-		if current.ID != commentID || !richtext.HasAttachments(firstNonEmpty(current.BodySource, current.Body)) {
-			continue
-		}
-		me, err := a.meID(s)()
-		if err != nil {
-			return nil, err
-		}
-		if current.Author.ID != me {
-			return nil, nil
-		}
-		return a.guardOverFiles(s, post.ProjectID, firstNonEmpty(current.BodySource, current.Body), body, allowed,
-			"the comment has attachments or mentions, and the new text would drop them",
-			"Change the bodySource of the comment from posts show --json and send it back with --format html, or give --drop-attachments.")
-	}
-	return nil, nil
-}
-
-// guardOverFiles holds a new text against the one it replaces, and stands
-// aside where Minka refuses the write whatever is sent. The post does not say
-// whether its project is archived, so that is asked only where the guard is
-// about to refuse.
-func (a *app) guardOverFiles(s *session, projectID, current, replacement string, allowed bool, message, hint string) ([]string, error) {
-	dropped, refusal := keepsTheAttachments(current, replacement, allowed, message, hint)
-	if refusal == nil {
-		return dropped, nil
-	}
-	archived, err := s.client.Projects(a.ctx, true)
-	if err != nil {
-		return nil, s.fail(err)
-	}
-	for _, project := range archived.Value {
-		if project.ID == projectID && project.Status == "archived" {
-			return nil, nil
-		}
-	}
-	return nil, refusal
 }
 
 func (a *app) newPostCommentsDeleteCmd() *cobra.Command {

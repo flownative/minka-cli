@@ -68,7 +68,17 @@ the document to fill `--expect` in: a guard protects only what the writer read
 before it began to write ([C-042](../decisions.md#c-042)). Where `--body` is
 given the document **is** read, for the one thing the new body has to be held
 against — whether the old one carries files or mentions that Markdown cannot
-hold — and that read still fills no guard.
+hold — and that read still fills no guard. That guard stands aside for a
+document of the archive, one below an archived folder and one in an archived
+project, where Minka refuses any body ([C-082](../decisions.md#c-082)).
+
+`docs comments edit` reads the entry first, for the files and mentions a
+comment of one's own may carry. A comment of somebody else, one under an entry
+of the archive and one in an archived project Minka refuses whatever is sent,
+so there the request goes out. **An own comment under an entry that lies in the
+archive only through a folder above it is changed** — Minka's statement asks
+the entry, not its folders — so there the guard stands; the entry says
+`archived` for both cases, and the command reads the folder to tell them apart.
 
 The round trip is safe: the `updatedAt` a read hands over is the column the
 write is held against. What it cannot do is notice a change made **in the same
@@ -161,7 +171,7 @@ this case beside the stranger.
 | 422 `personNotAProjectMember` | `docs create --notify` naming somebody outside the project, or somebody other than the writer twice | 9 |
 | 422 `personCannotSeeIt` | `docs create --notify` naming a client of the project or an agent of one, for a document the clients of it are not shown | 9 |
 | 422 `folderUnknown`, `folderArchived` | `docs create --folder` | 9 |
-| 422 `documentArchived`, `uploadArchived` | every write on an archived entry, or under one, comments included | 9 |
+| 422 `documentArchived`, `uploadArchived` | every write on an archived entry, or under one, comments included — but a change of one's own comment under an entry that lies in the archive only through a folder above it is written | 9 |
 | 422 `projectArchived` | every write; on `docs edit` and the comments before the codes above, on `docs create` after the title, the body, the folder, the audience and `notifyIdsMissing` / `notifyIdsWithoutChosenAudience`, and before `personNotAProjectMember` and `personCannotSeeIt` | 9 |
 | 404 `variantNotAvailable` | `uploads download --variant` of the file of an upload, as for any file | 2 |
 | 422 the comment codes | `docs comments …`, as under a card | 9 |

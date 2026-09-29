@@ -662,7 +662,8 @@ command reads the answer first to know.`,
 					return &Error{Code: CodeNotFound, Message: "answer " + args[0] + " was written by " + current.Value.Author.Name + ", not by you", Hint: answerWriterHint}
 				}
 			}
-			dropped, err := keepsTheAttachments(firstNonEmpty(current.Value.BodySource, current.Value.Body), body, dropAttachments,
+			// An answer lies in no archive of its own; only its project closes it.
+			dropped, err := a.guardOverFiles(s, current.Value.ProjectID, closedIf(false), firstNonEmpty(current.Value.BodySource, current.Value.Body), body, dropAttachments,
 				"the answer has attachments or mentions, and the new text would drop them",
 				"Change bodySource from checkins answers show --json and send it back with --format html, or give --drop-attachments.")
 			if err != nil {

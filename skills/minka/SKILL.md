@@ -643,7 +643,10 @@ What the two commands do:
   change it and send it back with `cards edit --description - --description-format html`.
   A new description that would drop them is refused (exit 1) unless
   `--drop-attachments` is given — the refusal calls them all attachments,
-  after the flag.
+  after the flag. This holds for every text below as well. Where Minka refuses
+  the write anyway — an archived project, a card, post, document, list or
+  to-do in an archive, somebody else's comment — there is no exit 1: Minka's
+  own refusal comes, and `--drop-attachments` would change nothing about it.
 - `cards show --styled` prints the description as Markdown, which can be edited
   and sent back with `cards edit --description -`.
 - Comments and messages carry `reactions`: `[{content, people}]`, the same
@@ -867,6 +870,9 @@ command's `notice` is the only warning you will ever get.
   nothing at the address of the other, so the flag says which it is.
 - The text is Markdown by default, as for a card. Only the author can change or
   remove a comment; somebody else's answers exit 2.
+- A document or an upload inside an archived folder shows `archived: true`,
+  yet **your own comment on it can still be changed**, and there a text that
+  drops files or mentions is refused unless `--drop-attachments` is given.
 - Reactions live on the comments alone. A document and an upload themselves
   take none through the API, although the web offers it.
 

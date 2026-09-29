@@ -312,7 +312,8 @@ todoListArchived.`,
 				if err != nil {
 					return err
 				}
-				dropped, err := keepsTheAttachments(firstNonEmpty(todo.NotesSource, todo.Notes), *input.Notes, dropAttachments,
+				// A to-do of a list in the archive takes no notes at all.
+				dropped, err := a.guardOverFiles(s, todo.ProjectID, closedIf(todo.ListArchived), firstNonEmpty(todo.NotesSource, todo.Notes), *input.Notes, dropAttachments,
 					"the notes have attachments or mentions, and the new notes would drop them",
 					"Change notesSource from todos show --json and send it back with --notes-format html, or give --drop-attachments.")
 				if err != nil {

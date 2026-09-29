@@ -399,12 +399,15 @@ func (s *Server) editCommentOnEntry(w http.ResponseWriter, r *http.Request, pers
 	if !ok {
 		return
 	}
-	if s.refusedAsClosed(w, entry) {
-		return
-	}
+	// Minka's statement changes a comment of the writer under an entry that is
+	// itself in use, and does not look at the folders above it: an own comment
+	// below an archived folder is written. Why a refused write wrote nothing is
+	// asked only afterwards, and there a folder above counts.
 	comment := ownCommentOf(*entry.comments, r.PathValue("commentId"), person)
-	if comment == nil {
-		notFound(w)
+	if project := s.projectWithID(entry.tool.ProjectID); comment == nil || entry.archived || project != nil && project.Archived {
+		if !s.refusedAsClosed(w, entry) {
+			notFound(w)
+		}
 		return
 	}
 

@@ -8,7 +8,6 @@ import (
 
 	"github.com/flownative/minka-cli/internal/api"
 	"github.com/flownative/minka-cli/internal/markdown"
-	"github.com/flownative/minka-cli/internal/richtext"
 	"github.com/spf13/cobra"
 )
 
@@ -444,19 +443,14 @@ func (a *app) newCardsEditCmd() *cobra.Command {
 				if err != nil {
 					return s.fail(err)
 				}
-				// Files and mentions stand in the text as elements Markdown cannot
-				// hold, so only a description that carries them keeps them.
-				existing := firstNonEmpty(current.Value.DescriptionSource, current.Value.Description)
-				if richtext.HasAttachments(existing) && !richtext.HasAttachments(*input.Description) {
-					if !dropAttachments {
-						return &Error{
-							Code:    CodeUsage,
-							Message: "the description has attachments or mentions, and the new description would drop them",
-							Hint:    "Change descriptionSource from cards show --json and send it back with --description-format html, or give --drop-attachments.",
-						}
-					}
-					notices = append(notices, "the attachments and mentions of the description were dropped")
+				// A card of the archive takes no description at all.
+				dropped, err := a.guardOverFiles(s, current.Value.ProjectID, closedIf(current.Value.Archived), firstNonEmpty(current.Value.DescriptionSource, current.Value.Description), *input.Description, dropAttachments,
+					"the description has attachments or mentions, and the new description would drop them",
+					"Change descriptionSource from cards show --json and send it back with --description-format html, or give --drop-attachments.")
+				if err != nil {
+					return err
 				}
+				notices = append(notices, dropped...)
 			}
 			card, err := s.client.UpdateCard(a.ctx, args[0], input)
 			if err != nil {

@@ -73,7 +73,9 @@ flag is a usage error here.
 description of a list does: `--notes` is Markdown converted here, and
 `--notes-format html` draws the notice of [C-068](../decisions.md#c-068) where
 the text carries no served markup. Notes that carry files or mentions are not
-replaced by ones that do not, unless `--drop-attachments` is given.
+replaced by ones that do not, unless `--drop-attachments` is given — except for
+a to-do of a list in the archive and in an archived project, where Minka
+refuses any notes and its answer comes ([C-082](../decisions.md#c-082)).
 
 **The days.** A start is kept only on a day before the due day. One day alone
 is the due day, whichever field it was written in, and a start on the due day is
