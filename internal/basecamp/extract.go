@@ -299,7 +299,7 @@ type Result struct {
 	NobodyAsked []NobodyAsked
 	// AskedLeftOut counts the people a question is asked of that a bundle
 	// cannot say are asked.
-	AskedLeftOut AskedLeftOut
+	AskedLeftOut PeopleLeftOff
 	// AnswersWithoutABody counts the answers that say nothing and
 	// AnswersTrashed those in the trash; both are left out. AnswersWithoutADay
 	// counts those Basecamp names no day for, which take the day they were
@@ -311,6 +311,9 @@ type Result struct {
 	// became of the Docs & Files.
 	Forwards ForwardCounts
 	Docs     DocsCounts
+	// Subscribers says what became of who follows a post, a card, a to-do, a
+	// document or an upload at the source.
+	Subscribers SubscriberCounts
 	// LongestBody is the longest text of a kind, in characters, and
 	// LongestBodyRecords the record it was measured on, per kind. A kind whose
 	// longest text has no characters names no record.
@@ -389,13 +392,14 @@ type Extractor struct {
 	subtasksLeftOut   int
 	todosThatRepeat   int
 
-	forwards ForwardCounts
-	docs     DocsCounts
+	forwards    ForwardCounts
+	docs        DocsCounts
+	subscribers SubscriberCounts
 
 	questionsLeftOut    []ImpossibleQuestion
 	anchorsInferred     []InferredAnchor
 	nobodyAsked         []NobodyAsked
-	askedLeftOut        AskedLeftOut
+	askedLeftOut        PeopleLeftOff
 	answersWithoutABody int
 	answersWithoutADay  int
 	answersTrashed      int
@@ -471,7 +475,7 @@ func (e *Extractor) Extract(ctx context.Context, projectIDs []string, w *bundle.
 	e.cardsOnHold, e.cardsLeftOut, e.commentsTrashed, e.bodies = 0, 0, 0, BodyCounts{}
 	e.talks, e.members = nil, map[int64]map[int64]bool{}
 	e.questionsLeftOut, e.anchorsInferred, e.nobodyAsked = []ImpossibleQuestion{}, []InferredAnchor{}, []NobodyAsked{}
-	e.askedLeftOut, e.answersWithoutABody, e.answersWithoutADay, e.answersTrashed = AskedLeftOut{}, 0, 0, 0
+	e.askedLeftOut, e.answersWithoutABody, e.answersWithoutADay, e.answersTrashed = PeopleLeftOff{}, 0, 0, 0
 	e.postsByStatus = everyStatus()
 	e.postsLeftOut, e.postsWithEmptyBody, e.uploadLinesLeftOut, e.messagesWithEmptyBody = 0, 0, 0, 0
 	e.recordsLeftOut = []LeftOutRecords{}
@@ -499,6 +503,7 @@ func (e *Extractor) Extract(ctx context.Context, projectIDs []string, w *bundle.
 		OnlyAFileNoRunWillBring:         []string{},
 		PlacesLeftOut:                   []DocsPlaceLeftOut{},
 	}
+	e.subscribers = SubscriberCounts{Unread: []UnreadSubscribers{}}
 	e.longestBody = map[bundle.Kind]int{bundle.Cards: 0, bundle.Comments: 0, bundle.Posts: 0, bundle.Messages: 0, bundle.Answers: 0,
 		bundle.TodoLists: 0, bundle.Todos: 0, bundle.Forwards: 0, bundle.ForwardReplies: 0,
 		bundle.Documents: 0, bundle.Uploads: 0}
@@ -604,8 +609,9 @@ func (e *Extractor) Extract(ctx context.Context, projectIDs []string, w *bundle.
 		AnswersWithoutADay:  e.answersWithoutADay,
 		AnswersTrashed:      e.answersTrashed,
 
-		Forwards: e.forwards,
-		Docs:     e.docs,
+		Forwards:    e.forwards,
+		Docs:        e.docs,
+		Subscribers: e.subscribers,
 
 		MessagesWithEmptyBody: e.messagesWithEmptyBody,
 		LongestBody:           e.longestBody,

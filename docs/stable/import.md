@@ -849,6 +849,58 @@ and Minka applies the kinds in an order of its own.
   rendered text of a comment only. A comment in the trash is left out with
   its boosts and counted (`commentsTrashed`); any other comes, the archived
   comment of an archived card as well.
+- **Subscribers** are whom the source says follow a post, a card, a to-do, a
+  document or an upload (C-084). They come from
+  `buckets/{bucket}/recordings/{id}/subscription.json`, one request per record,
+  in a dry run as well. Measured read-only: it answers every one of the five
+  kinds and a question alike, with `count`, `subscribed`, `subscribers` and
+  `url`, `count` the length of the list, and no pages; a recording or a project
+  that is not there or not visible answers 404, and no 403 has been seen. A cap
+  above seven people has not been measured, which the check against `count`
+  holds. They stand in `subscribers` as person `sourceId`s, in the
+  order of their IDs and each once. Minka takes a list that is there as the
+  whole truth: exactly those people follow the item once the run is through,
+  and everybody else is taken off it — the writer, the people it is handed to,
+  its commenters and the people it mentions included. So `[]` is written where
+  the source names nobody, and means nobody follows the item.
+
+  Only somebody Minka can put on an item is named: a member of the project who
+  is no client, is still there and has an address, the same four reasons a
+  question leaves somebody out for. The rest is counted in
+  `subscribers.leftOff` under the first reason that holds, and not named per
+  record: nothing can be done about them at the source, and whoever reads the
+  report needs the size, as for the people a question asks. The filter stands
+  here and not only in Minka, so that the bundle says what the import will do.
+  Every member of a
+  project comes into the bundle where the project is written, so a list never
+  names somebody `people.jsonl` does not carry, and nobody comes into the
+  bundle for following an item.
+
+  A record in the **trash** is not asked and carries no list: Minka changes
+  nothing on an item in the trash. That rests on the status the run has
+  already read of the record: Basecamp answers the list of a trashed recording
+  like any other. A record in the archive is asked like any
+  other, because Minka applies the list before it archives. Where Basecamp
+  answers the list as **not found or forbidden**, the record comes without the
+  field, and Minka follows the item the way it did before the field existed.
+  `subscribers.unread` names each such record with `record`, `sourceId`,
+  `projectSourceId` and `why` (`notFound` or `forbidden`, what Basecamp
+  answered), a `notice` counts them, and the run goes on. An empty list in
+  their place would take everybody off the item, which is the one mistake this
+  field can make without anybody seeing it. This decides nothing about the exit
+  code: without the list Minka loses nothing it would otherwise have had, and a
+  later run brings the list once Basecamp hands it out (C-069 speaks of files
+  alone). An answer that is not plainly the whole list ends the run as
+  `api_error`, and so does every other failure as it does anywhere: an answer
+  without `subscribers` or with `null`, an entry that is `null` or has no ID
+  above 0, and a list that holds fewer or more entries than the `count` beside
+  it, where there is one. Read as a list, each would name nobody and take
+  everybody off the item. Somebody named twice is taken once. The same holds
+  for the people a question asks, which come from the same answer.
+  `subscribers.lists` counts the records that carry a list. A **dry run** asks
+  the list of an upload whose file a real run then finds it can never have and
+  leaves out with the upload, so its `subscribers.lists` can be higher than a
+  real run's.
 - **Reactions** are the boosts of a card (`targetKind` `card`), of a post
   (`post`), of an answer (`answer`), of a to-do list (`todolist`), of a to-do
   (`todo`), of a forwarded mail (`forward`), of a document (`document`), of an
@@ -1450,9 +1502,10 @@ A name and a company are personal data.
   `todosNotDone`, `todosWithPeople`, `todosWithSubtasks`, `subtasksLeftOut`,
   `todosThatRepeat`,
   `questionsLeftOut`, `anchorsInferred`, `nobodyAsked`, `askedLeftOut`
-  (`notInTheProject`,
+  (`notInTheProject`, `clients`,
   `retired`, `withoutAnAddress`), `answersWithoutABody`, `answersWithoutADay`,
-  `answersTrashed`, `longestBody`, `longestBodyRecords`, `requestsRetried` and the absolute path of
+  `answersTrashed`, `subscribers` (`lists`, `leftOff` with the four reasons of
+  `askedLeftOut`, `unread`), `longestBody`, `longestBodyRecords`, `requestsRetried` and the absolute path of
   the bundle. The lines about check-ins are shown only by a run that met a
   questionnaire, and those about to-dos only by one that met a To-dos tool.
   `filesBytes` is what the files of the bundle weigh, fetched or taken over, each

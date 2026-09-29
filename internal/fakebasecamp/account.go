@@ -129,6 +129,10 @@ type Account struct {
 	// MemberEmail replaces the address of a person in the list of a project.
 	MemberEmail map[int64]string
 
+	// SubscriptionAnswer replaces every subscription the account answers with
+	// this object, for the shapes of an answer no real list has been seen in.
+	SubscriptionAnswer map[string]any
+
 	// VaultsWithoutAParent leaves the parent out of every vault the account lists
 	// among the records it has put away, the way it lists the vault at the top of
 	// a tool: a shape no record of a real account has been seen in, because no
@@ -390,6 +394,9 @@ func (a *Account) Get(_ context.Context, path string) ([]byte, error) {
 			return answer, nil
 		}
 		if answer, known := a.talks(path, page); known {
+			return answer, nil
+		}
+		if answer, known := a.subscription(path); known {
 			return answer, nil
 		}
 		if answer, known := a.checkins(path, page); known {

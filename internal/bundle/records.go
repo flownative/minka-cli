@@ -223,6 +223,11 @@ type Card struct {
 	Assignees       []string `json:"assignees"`
 	Status          string   `json:"status"`
 	OnHold          bool     `json:"onHold,omitempty"`
+
+	// Subscribers are whom the source says follow the item. Minka takes them as
+	// the whole truth, so nil leaves the field out and Minka follows the item
+	// as it always did, while an empty list says nobody follows it.
+	Subscribers *[]string `json:"subscribers,omitempty"`
 }
 
 type Step struct {
@@ -250,6 +255,9 @@ type Post struct {
 	Status           string  `json:"status"`
 
 	VisibleToClients *bool `json:"visibleToClients,omitempty"`
+
+	// Subscribers are what they are on a Card.
+	Subscribers *[]string `json:"subscribers,omitempty"`
 }
 
 // Question is a question a Check-ins tool asks on a schedule. Weekdays count
@@ -347,6 +355,9 @@ type Todo struct {
 	CompletedAt     *string  `json:"completedAt"`
 	CompletedBy     *string  `json:"completedBy"`
 	Status          string   `json:"status"`
+
+	// Subscribers are what they are on a Card.
+	Subscribers *[]string `json:"subscribers,omitempty"`
 }
 
 // Forward is a mail somebody forwarded into a project. Title is the subject,
@@ -421,6 +432,9 @@ type Document struct {
 	Status          string  `json:"status"`
 
 	VisibleToClients *bool `json:"visibleToClients,omitempty"`
+
+	// Subscribers are what they are on a Card.
+	Subscribers *[]string `json:"subscribers,omitempty"`
 }
 
 // Upload is one stored file of a Docs & Files tool standing beside a text
@@ -441,6 +455,9 @@ type Upload struct {
 	Status          string  `json:"status"`
 
 	VisibleToClients *bool `json:"visibleToClients,omitempty"`
+
+	// Subscribers are what they are on a Card.
+	Subscribers *[]string `json:"subscribers,omitempty"`
 }
 
 // Message is one line of a chat.

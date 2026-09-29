@@ -150,6 +150,8 @@ func TestImportBasecampWritesABundleAndReportsWhatItHolds(t *testing.T) {
 			"longerThanMinkaTakes":            float64(0),
 			"leftOut":                         map[string]any{"folders": float64(0), "documents": float64(0), "uploads": float64(0)},
 			"placesLeftOut":                   []any{}},
+		"subscribers": map[string]any{"lists": float64(0), "unread": []any{},
+			"leftOff": map[string]any{"notInTheProject": float64(0), "clients": float64(0), "retired": float64(0), "withoutAnAddress": float64(0)}},
 		"longestBody": map[string]any{"cards": float64(0), "comments": float64(0), "posts": float64(0), "messages": float64(0), "answers": float64(0),
 			"todolists": float64(0), "todos": float64(0), "forwards": float64(0), "forwardreplies": float64(0),
 			"documents": float64(0), "uploads": float64(0)},
@@ -1755,6 +1757,42 @@ func TestAToolTheIdentityMayNotSeeIsSaidToBePassedOver(t *testing.T) {
 	expectCode(t, r, ExitOK)
 	if strings.Contains(env.Notice, "could not be asked who created") {
 		t.Errorf("a run that met no refusal says one: %q", env.Notice)
+	}
+}
+
+// Who follows an item is reported beside the counts: how many records carry the
+// list, whom the lists leave off, and which records the source would not say it
+// of. Such a record ends the run with 0: without the list Minka follows the item
+// as before, and nothing is lost that a later run cannot bring.
+func TestImportBasecampReportsWhoFollowsTheItems(t *testing.T) {
+	for _, mode := range [][]string{{"--json"}, {"--styled"}} {
+		e := newImportEnv(t)
+		e.account.Fail["buckets/7004/recordings/9701/subscription.json"] = &basecamp.Error{Kind: basecamp.Forbidden, Message: "Basecamp forbids it"}
+		e.account.Projects[3].Dock[0].Posts[1].Subscribers = []fakebasecamp.Person{e.account.People[1], e.account.Former}
+		r := e.run(append([]string{"import", "basecamp", "--project", "7004", "--out", filepath.Join(t.TempDir(), "bundle")}, mode...)...)
+		expectCode(t, r, ExitOK)
+		output := r.stdout + r.stderr
+		for _, want := range []string{
+			"1 record comes without saying who follows it, because Basecamp would not hand out the list",
+			"1 person who follows an item at the source is left off it",
+		} {
+			if !strings.Contains(output, want) {
+				t.Errorf("%v: the output lacks %q:\n%s", mode, want, output)
+			}
+		}
+		if mode[0] == "--json" {
+			var env envelope
+			if err := json.Unmarshal([]byte(r.stdout), &env); err != nil {
+				t.Fatal(err)
+			}
+			got := decode(t, env.Data)["subscribers"].(map[string]any)
+			want := []any{map[string]any{"record": "post", "sourceId": "9701", "projectSourceId": "7004", "why": "forbidden"}}
+			if !reflect.DeepEqual(got["unread"], want) || got["leftOff"].(map[string]any)["notInTheProject"] != float64(1) {
+				t.Errorf("subscribers: %v", got)
+			}
+		} else if want := "Items Basecamp would not say who follows, which Minka follows as before: 1 — post 9701 in 7004 (forbidden)"; !strings.Contains(r.stdout, want) {
+			t.Errorf("the text lacks %q:\n%s", want, r.stdout)
+		}
 	}
 }
 

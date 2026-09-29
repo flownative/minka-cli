@@ -111,6 +111,7 @@ func TestTheDocsAndFilesOfAToolComeAsFoldersDocumentsAndUploads(t *testing.T) {
 		"sourceId": "9240", "createdAt": "2025-06-02T08:00:00.000Z", "updatedAt": "2025-06-02T09:00:00.000Z", "createdBy": "101",
 		"projectSourceId": docsProject, "toolSourceId": "9210", "folderSourceId": "9220",
 		"title": "Chapter one", "status": bundle.StatusActive, "visibleToClients": true,
+		"subscribers": []any{"101"},
 		// The description of an upload at the top of the tool embeds the same
 		// file and is met first, so this record is a further owner of it.
 		"body": `<div>How it works, says <import-mention ref="102">Grace Sample</import-mention></div>` +
@@ -128,6 +129,9 @@ func TestTheDocsAndFilesOfAToolComeAsFoldersDocumentsAndUploads(t *testing.T) {
 	upload := recordWithID(t, records(t, dir, bundle.Uploads), "9260")
 	if upload["title"] != "The mark we use" || upload["file"] != "upload-9260" || upload["folderSourceId"] != "9220" {
 		t.Errorf("the upload with its file: %v", upload)
+	}
+	if got, want := upload["subscribers"], []any{"101", "102"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("the upload is followed by %v, want %v", got, want)
 	}
 
 	// A comment and a boost hang on a document and on an upload by their own
@@ -862,6 +866,22 @@ func TestADryRunOfDocsAndFilesWalksTheSameWay(t *testing.T) {
 	}
 	if len(dry.Downloads) > 0 {
 		t.Errorf("a dry run downloaded %d files", len(dry.Downloads))
+	}
+	// The upload a dry run writes and a run leaves out is asked who follows it,
+	// and nothing else is asked for besides.
+	onlyInTheDryRun := 0
+	for _, record := range wet.Docs.OnlyAFileNoRunWillBring {
+		asked := "buckets/" + docsProject + "/recordings/" + record + "/subscription.json"
+		if slices.Contains(account.Requests, asked) {
+			continue
+		}
+		if slices.Contains(dry.Requests, asked) {
+			onlyInTheDryRun++
+		}
+		dry.Requests = slices.DeleteFunc(dry.Requests, func(request string) bool { return request == asked })
+	}
+	if onlyInTheDryRun != 1 {
+		t.Errorf("%d records only a dry run writes were asked who follows them, want 1", onlyInTheDryRun)
 	}
 	if !reflect.DeepEqual(dry.Requests, account.Requests) {
 		t.Error("a dry run asked Basecamp for something else than a run")

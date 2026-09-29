@@ -659,6 +659,9 @@ func (e *Extractor) writeTodo(ctx context.Context, w *bundle.Writer, bucket, too
 		CompletedBy:     completedBy,
 		Status:          found.Status,
 	}
+	if record.Subscribers, err = e.subscribersOf(ctx, "to-do", bucket, found.ID, found.Status); err != nil {
+		return err
+	}
 	if group != nil {
 		named := sourceID(*group)
 		record.GroupSourceID = &named

@@ -313,7 +313,7 @@ func TestSomebodyWhoIsAClientAndMoreIsLeftOutOfAQuestionAsAClient(t *testing.T) 
 	if person["client"] != true || person["retired"] != true || person["email"] != nil {
 		t.Fatalf("the client who has left and has no address comes as %v", person)
 	}
-	want := basecamp.AskedLeftOut{Clients: 4}
+	want := basecamp.PeopleLeftOff{Clients: 4}
 	if result.AskedLeftOut != want {
 		t.Errorf("people left out of asked %+v, want %+v", result.AskedLeftOut, want)
 	}

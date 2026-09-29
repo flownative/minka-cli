@@ -455,6 +455,9 @@ func (e *Extractor) writeCard(ctx context.Context, w *bundle.Writer, bucket int6
 		Status:          found.Status,
 		OnHold:          found.onHold,
 	}
+	if record.Subscribers, err = e.subscribersOf(ctx, "card", bucket, found.ID, found.Status); err != nil {
+		return err
+	}
 	// A note without anything in it is no note.
 	if description != "" {
 		record.Description = &description

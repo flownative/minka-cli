@@ -219,7 +219,7 @@ func TestWhoIsAskedComesFromTheSubscribersAndNotFromWhoAnswered(t *testing.T) {
 	if got, want := question["asked"], []any{"101", "102", "104"}; !reflect.DeepEqual(got, want) {
 		t.Errorf("asked %v, want %v", got, want)
 	}
-	want := basecamp.AskedLeftOut{NotInTheProject: 1, Retired: 1, WithoutAnAddress: 1}
+	want := basecamp.PeopleLeftOff{NotInTheProject: 1, Retired: 1, WithoutAnAddress: 1}
 	if result.AskedLeftOut != want {
 		t.Errorf("people left out of asked %+v, want %+v", result.AskedLeftOut, want)
 	}

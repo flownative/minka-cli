@@ -1570,6 +1570,21 @@ this:
   `data.answersWithoutABody` and `data.answersTrashed` count the answers left
   out, `data.answersWithoutADay` those Basecamp names no day for, which take the
   day they were written in the zone of whoever wrote them.
+- A post, a card, a to-do, a document and an upload carry `subscribers`: whom
+  the source says follow the item, by `sourceId`, in the order of their IDs.
+  Minka takes the list as the whole truth and takes everybody else off the item,
+  the writer included, so `[]` means nobody follows it. Only a member of the
+  project who is no client, is still there and has an address is named;
+  `data.subscribers.leftOff` counts the rest by reason, one reason each, and
+  `data.subscribers.lists` the records that carry a list. An item in the trash
+  carries none and is not asked. Where Basecamp answers the list as not found or
+  forbidden the record carries no `subscribers` at all, Minka follows it as it
+  did before lists came, and `data.subscribers.unread` names it (`record`,
+  `sourceId`, `projectSourceId`, `why`: `notFound` or `forbidden`); a `notice`
+  counts them, and the run still exits 0. An answer that is not plainly the
+  whole list ends the run: no list or a `null` one, an entry that is `null` or
+  has no ID, or a list whose length differs from the `count` beside it. So does
+  any other failure.
 - The messages are written in parts, `messages-0001.jsonl` and on, each with
   lines of one chat; a part ends once it holds 10,000 lines, where the second
   changes, so it may hold somewhat more. `data.parts.messages` and the

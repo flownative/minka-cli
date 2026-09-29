@@ -224,6 +224,9 @@ func (e *Extractor) writePost(ctx context.Context, w *bundle.Writer, bucket int6
 		Status:           found.Status,
 		VisibleToClients: visibleToClientsOf(found.recording),
 	}
+	if record.Subscribers, err = e.subscribersOf(ctx, "post", bucket, found.ID, found.Status); err != nil {
+		return err
+	}
 	if found.Category != nil && found.Category.ID != 0 {
 		id := sourceID(found.Category.ID)
 		record.CategorySourceID = &id

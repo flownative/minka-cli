@@ -52,6 +52,8 @@ type Card struct {
 	Comments   []Comment
 	Boosts     []Boost
 	Files      []File
+	// Subscribers are whom the account hands the card to; nil is nobody.
+	Subscribers []Person
 }
 
 type Completion struct {
@@ -186,7 +188,10 @@ func boardProject(ada, grace, linus, edsger, former Person, tool func(int64, str
 			Cards: []Card{
 				{
 					ID: 9201, Title: "Draw the map", Position: 1, DueOn: "2023-04-01", Creator: &ada, Assignees: []Person{grace, ada},
-					CreatedAt: at(5, 8), UpdatedAt: at(6, 8),
+					// Not in the order of their IDs, one of them twice, and one who is
+					// no member of the project.
+					Subscribers: []Person{grace, edsger, ada, grace},
+					CreatedAt:   at(5, 8), UpdatedAt: at(6, 8),
 					Content: `<div>Ask <bc-attachment sgid="` + graceMention + `" content-type="application/vnd.basecamp.mention" content='&lt;bc-mention gid="gid://bc3/Person/102"&gt;&lt;/bc-mention&gt;'></bc-attachment> about tea &amp; biscuits.</div>` +
 						`<bc-attachment content-type="application/vnd.basecamp.horizontal-rule.html"></bc-attachment>` +
 						`<div><bc-attachment sgid="` + sketch.SGID + `" content-type="image/png" filename="sketch.png"></bc-attachment></div>`,

@@ -490,6 +490,9 @@ func (e *Extractor) writeDocument(ctx context.Context, w *bundle.Writer, walk *d
 		Status:           found.status(),
 		VisibleToClients: visibleToClientsOf(found.recording),
 	}
+	if record.Subscribers, err = e.subscribersOf(ctx, "document", walk.bucket, found.ID, found.status()); err != nil {
+		return err
+	}
 	// A document without words is a document nobody has written anything in yet,
 	// which Minka takes.
 	if body != "" {
@@ -595,6 +598,9 @@ func (e *Extractor) writeUpload(ctx context.Context, w *bundle.Writer, walk *doc
 		File:             file.ref,
 		Status:           found.status(),
 		VisibleToClients: visibleToClientsOf(found.recording),
+	}
+	if record.Subscribers, err = e.subscribersOf(ctx, "upload", walk.bucket, found.ID, found.status()); err != nil {
+		return err
 	}
 	// An upload without a description has none.
 	if description != "" {

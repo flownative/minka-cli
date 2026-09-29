@@ -1411,3 +1411,14 @@ it is looked up in capitals.
 capitals names nothing there, and the answer it gets says something untrue.
 **Implemented as:** `cli.asID`, `cli.requireID`, `cli.requireArgs`, see
 [Token, hosts and requests](stable/security.md).
+
+<a id="c-084"></a>
+## C-084 — A list of who follows an item is written only where the source handed it out
+
+*Applies to: `import`, the `subscribers` of posts, cards, to-dos, documents and uploads*
+
+`subscribers` is written only from a whole list Basecamp handed out, `[]` included;
+a trashed, not found or forbidden record goes without it and ends 0.
+**Why:** Minka takes the list as the whole truth, so a guessed one unsubscribes silently.
+**Implemented as:** `basecamp.Extractor.subscribersOf`, `basecamp.handedTo`, see
+[Importing from Basecamp](stable/import.md).

@@ -104,6 +104,8 @@ func TestACardComesWithItsColumnItsPeopleAndItsNote(t *testing.T) {
 			`<div><import-attachment ref="attachment-5001"></import-attachment></div>`,
 		"position": float64(1), "dueOn": "2023-04-01", "completedAt": nil, "completedBy": nil,
 		"assignees": []any{"101", "102"}, "status": "active",
+		// In the order of their IDs and each once, and nobody who is no member.
+		"subscribers": []any{"101", "102"},
 	}
 	if got := recordWithID(t, cards, "9201"); !reflect.DeepEqual(got, busy) {
 		t.Errorf("a card with everything:\n got %v\nwant %v", got, busy)
@@ -114,6 +116,8 @@ func TestACardComesWithItsColumnItsPeopleAndItsNote(t *testing.T) {
 		"projectSourceId": "7003", "toolSourceId": "9020", "columnSourceId": "9102", "title": "Buy paper",
 		"description": nil, "position": float64(1), "dueOn": nil,
 		"completedAt": "2023-03-03T14:00:00.000Z", "completedBy": "104", "assignees": []any{}, "status": "active",
+		// Nobody follows it at the source, which is said and not left out.
+		"subscribers": []any{},
 	}
 	if got := recordWithID(t, cards, "9206"); !reflect.DeepEqual(got, completed) {
 		t.Errorf("a completed card:\n got %v\nwant %v", got, completed)
