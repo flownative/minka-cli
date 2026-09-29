@@ -194,6 +194,9 @@ var idsInCapitals = []idInCapitals{
 	{command: "todos edit", inputs: []string{"--assignee", "--notify-when-done"}, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
 		return []string{f.LooseTodo.ID, "--assignee", up(f.Anke.ID), "--notify-when-done", up(f.Anke.ID)}
 	}},
+	{command: "todos series edit", inputs: []string{"--assignee", "--notify-when-done"}, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
+		return []string{f.Series.ID, "--assignee", up(f.Anke.ID), "--notify-when-done", up(f.Anke.ID), "--force"}
+	}},
 	{command: "todos mine", inputs: []string{"--after"}, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
 		return []string{"--after", up(f.GroupedTodo.ID)}
 	}},

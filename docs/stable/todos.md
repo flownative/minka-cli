@@ -17,10 +17,12 @@ references; `group` and `groupId` are null for one standing in no group),
 `isOverdue`, `assignees` and `notified` in the order they were put on,
 `subtasks` in their order (`id`, `title`, `completed`, `assignee` or null,
 `dueOn`, `isOverdue`), `listArchived`, `commentCount`, `createdAt`, `creator`,
-`comments` and `appUrl`. Somebody who left the project stays on a to-do and is
-named nowhere in it; the assignee of a subtask who left reads as null. A to-do
-of an archived list is read like any other and says `listArchived: true`; one in
-the trash, in a group in the trash or in a list in the trash is at no address.
+`comments` and `appUrl`, and `series`: `{id, occursOn}` for an occurrence of a
+series, null otherwise ([Repeating to-dos](todo-series.md)). Somebody who left
+the project stays on a to-do and is named nowhere in it; the assignee of a
+subtask who left reads as null. A to-do of an archived list is read like any
+other and says `listArchived: true`; one in the trash, in a group in the trash
+or in a list in the trash is at no address.
 
 `isOverdue` is a due day before today in the time zone of the person asking, and
 never for something done.

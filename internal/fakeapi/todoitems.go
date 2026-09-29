@@ -557,7 +557,7 @@ func (s *Server) myTodos(w http.ResponseWriter, r *http.Request, person *Person)
 			continue
 		}
 		for _, list := range tool.Lists {
-			if list.Trashed || list.Archived {
+			if list.Trashed || list.Archived || !s.showsTheList(list, person) {
 				continue
 			}
 			for _, todo := range countedTodos(list) {
@@ -756,7 +756,8 @@ func (s *Server) visibleTodo(todoID string, person *Person) (*TodosTool, *TodoLi
 				if todo.ID != todoID {
 					continue
 				}
-				if todo.Trashed || list.Trashed || todo.GroupID != "" && groupOf(list, todo.GroupID) == nil || s.visibleProject(tool.ProjectID, person) == nil {
+				if todo.Trashed || list.Trashed || todo.GroupID != "" && groupOf(list, todo.GroupID) == nil || s.visibleProject(tool.ProjectID, person) == nil ||
+					!s.showsTheList(list, person) {
 					return nil, nil, nil
 				}
 				return tool, list, todo
@@ -1010,11 +1011,21 @@ func (s *Server) todoResource(tool *TodosTool, list *TodoList, todo *Todo) map[s
 		"completedByName": completedBy,
 		"notes":           todo.Notes, "notesSource": todo.Notes, "attachments": s.attachmentsIn(tool.ProjectID, todo.Notes),
 		"startsOn": todo.StartsOn, "dueOn": todo.DueOn, "isOverdue": s.isOverdue(todo.DueOn, todo.CompletedAt != nil),
+		"series":    seriesReference(todo),
 		"assignees": s.peopleOnTodo(tool, todo.AssigneeIDs), "notified": s.peopleOnTodo(tool, todo.NotifiedIDs),
 		"subtasks": subtasks, "listArchived": list.Archived,
 		"commentCount": len(todo.Comments), "createdAt": timestamp(todo.CreatedAt), "creator": s.personReference(todo.CreatorID),
 		"comments": comments, "appUrl": s.todoURL(tool, todo),
 	}
+}
+
+// seriesReference names the series a to-do is an occurrence of and the day it
+// stands for, and is null for a to-do that is none.
+func seriesReference(todo *Todo) any {
+	if todo.SeriesID == "" {
+		return nil
+	}
+	return map[string]any{"id": todo.SeriesID, "occursOn": todo.OccursOn}
 }
 
 func (s *Server) todoURL(tool *TodosTool, todo *Todo) string {

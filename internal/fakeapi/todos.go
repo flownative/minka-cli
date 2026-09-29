@@ -47,6 +47,12 @@ type TodoList struct {
 	Todos       []*Todo      // in their order, grouped or not
 	Comments    []*Comment
 	CreatorID   string
+
+	// HiddenFromClients keeps the list from the clients of the project: to
+	// them it, its to-dos and its series are at no address.
+	HiddenFromClients bool
+
+	Series []*TodoSeries // in the order they were made
 }
 
 // TodoGroup is a named heading of a list. A group in the trash takes its
@@ -104,6 +110,8 @@ type Todo struct {
 	CreatorID     string
 	Comments      []*Comment
 	Trashed       bool
+	SeriesID      string // the series it is an occurrence of, empty for none
+	OccursOn      string // the day of the series it stands for
 }
 
 // Subtask is one line of work under a to-do. It is no item of its own: it has
@@ -131,6 +139,7 @@ func (s *Server) registerTodosRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("DELETE /api/v1/todo-groups/{groupId}", s.authenticated(s.removeTodoGroup))
 	mux.HandleFunc("POST /api/v1/todo-groups/{groupId}/moves", s.authenticated(s.moveTodoGroup))
 	s.registerTodoItemRoutes(mux)
+	s.registerTodoSeriesRoutes(mux)
 }
 
 // todosTools lists the To-dos tools of a project that are in use, in the
@@ -559,7 +568,7 @@ func (s *Server) visibleTodoList(listID string, person *Person) (*TodosTool, *To
 			if list.ID != listID || list.Trashed {
 				continue
 			}
-			if s.visibleProject(tool.ProjectID, person) == nil {
+			if s.visibleProject(tool.ProjectID, person) == nil || !s.showsTheList(list, person) {
 				return nil, nil
 			}
 			return tool, list
@@ -580,13 +589,19 @@ func (s *Server) visibleTodoGroup(groupID string, person *Person) (*TodosTool, *
 			if group == nil || list.Trashed || list.Archived {
 				continue
 			}
-			if s.visibleProject(tool.ProjectID, person) == nil {
+			if s.visibleProject(tool.ProjectID, person) == nil || !s.showsTheList(list, person) {
 				return nil, nil, nil
 			}
 			return tool, list, group
 		}
 	}
 	return nil, nil, nil
+}
+
+// showsTheList says whether the list is shown to the person at all: a client
+// is not shown one hidden from the clients.
+func (s *Server) showsTheList(list *TodoList, person *Person) bool {
+	return !list.HiddenFromClients || !s.isAClient(person.ID)
 }
 
 // groupOf is a group of the list that is out of the trash.
@@ -688,7 +703,7 @@ func (s *Server) todoLineResource(tool *TodosTool, todo *Todo) map[string]any {
 		"id": todo.ID, "title": todo.Title, "completed": todo.CompletedAt != nil,
 		"completedAt": timestampOrNil(todo.CompletedAt), "groupId": nullable(todo.GroupID),
 		"assignees": s.peopleOnTodo(tool, todo.AssigneeIDs), "startsOn": todo.StartsOn, "dueOn": todo.DueOn,
-		"isOverdue":    s.isOverdue(todo.DueOn, todo.CompletedAt != nil),
+		"isOverdue": s.isOverdue(todo.DueOn, todo.CompletedAt != nil), "seriesId": nullable(todo.SeriesID),
 		"commentCount": len(todo.Comments), "subtaskCount": len(todo.Subtasks), "completedSubtaskCount": done,
 		"appUrl": s.todoURL(tool, todo),
 	}

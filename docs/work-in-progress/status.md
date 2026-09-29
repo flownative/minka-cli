@@ -52,6 +52,15 @@ subtasks with `todos subtasks list`, `create`, `edit`, `complete`, `reopen`,
 [To-dos and subtasks](../stable/todos.md) (C-073 to C-076). None of it has been
 seen live: the whole feature is checked against the fake, see below.
 
+A to-do with a due day is made to repeat with `todos repeat`, and its series is
+read with `todos series list` and `todos series show`, and written with `todos
+series edit`, `stop`, `resume` and `show-now`; `todos show` and `todolists show`
+name the series of an occurrence. The rule the commands follow is
+[Repeating to-dos](../stable/todo-series.md) (C-089). The API is on Minka's
+`main` and in no release yet: none of it has been seen live, and the whole
+feature is checked against the fake until a Minka release carries it, see
+below.
+
 The check-ins are read with `checkins tools`, `checkins list`, `checkins show`
 and `checkins reminders`, and written with `checkins create`, `edit`, `pause`
 and `resume`; their answers with `checkins answers list`, `show`, `create` and
@@ -384,12 +393,30 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   archive ordered by the moment of archiving, a list coming back to its place,
   a trashed group taking its to-dos out of every count, and a tool no longer in
   use that the project does not name and that is read at its own address. What
-  it does not mirror: which lists and groups a **client** is shown, which the
-  fake has no word for on a To-dos tool; `todoListDescriptionNotReadable`,
+  it does not mirror: which lists and groups a **client** is shown beyond a
+  list hidden from the clients (`HiddenFromClients`), which the fake has no
+  word for on a tool, a group or a to-do; `todoListDescriptionNotReadable`,
   which needs markup nested deeper than a cleaner reads; and the race in which
   a group write meets a list archived after the group was found, which is the
   one way to `todoListArchived` on a group and which no command can steer
   into.
+- Everything of `todos repeat` and `todos series`: the API is on Minka's `main`
+  (bef86f70) and in no release, and no request of it has gone to a real Minka.
+  The fake mirrors what was read in `TodoSeriesApiController`,
+  `RepetitionScheduleFields`, `RepetitionSchedule`, `TodoSeriesQueryService`,
+  the series handlers, `DbalTodoSeriesRepository` and `ApiTodoSeriesTest`: the
+  order the controller refuses in — the type of every field before any value —
+  an edit that changes nothing writing nothing and meeting no conflict, people
+  compared as the series shows them, the details a request leaves out taken from
+  the stored schedule or the first day, the resource with its state and days,
+  a list hidden from a client at no address, the guard, and the occurrence
+  `show-now` makes at the end of the list with the series' people and creator.
+  The date math is a port of `RepetitionSchedule`, held against the cases of
+  Minka's `RepetitionScheduleTest`. What it does not mirror: the round that
+  makes occurrences as days pass — the fake's clock stands still and nothing
+  but `show-now` makes one; the installation's time zone, for which the fake
+  takes UTC; who follows an occurrence; and the race in which a series is made
+  or shown twice in one moment.
 - Everything of `todos`: no request of it has gone to a real Minka. The fake
   mirrors what was read in `TodosApiController`, the `TodoQueryService`, the
   `AssignedTodoQueryService`, the to-do and subtask handlers,
