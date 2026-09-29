@@ -34,8 +34,30 @@ that is no longer in use is not named there and is still read, and written, at
 its own address.
 
 A group has **no address to read it at**. Every write on a group answers the
-group (`id`, `listId`, `title`, `todos`), and `todolists show` is where its ID
-and its place come from.
+group (`id`, `listId`, `title`, `color`, `todos`), and `todolists show` is where
+its ID and its place come from.
+
+## The colour of a group
+
+A group carries one of the colours of a board column, or none: `color` is
+always in the answer, `null` where there is none, and the text of `todolists
+show` names a colour in the heading of its group only where there is one.
+`todogroups create` and `todogroups edit` take it as `--color`; `edit` needs
+`--title`, `--color` or both, and Minka writes what the body names together or
+not at all, so a refused colour leaves a new title unwritten as well.
+
+The names are Minka's: `white`, `red`, `orange`, `yellow`, `green`, `blue`,
+`aqua`, `purple`, `gray`, `pink` and `brown`, as its API controller and its
+importer read them, the same as Basecamp's. **`white` is no colour**: a group
+given white is stored and answered with `null`, which is why `--color white`
+is how a colour is taken away and there is no `--color none`. The API would
+take `"color": null` as well, which the CLI never sends.
+
+The CLI sends what is typed and refuses nothing itself (C-086): a name in
+capitals, an unknown one and the empty one given as `--color ""` go to Minka,
+which answers 422 `todoGroupColorUnknown`, and the hint names the eleven. A
+colour is refused before the list or the group is looked up, so a bad one
+aimed at a list or a group that is not there is still `todoGroupColorUnknown`.
 
 ## The description, and the refusal that never comes
 
@@ -96,8 +118,9 @@ ID.
 ## The refusals
 
 The writes check in the controller's order: the body and the title first, then
-whether the list or the group is there, then the description, and only after
-the statement refused why it did — the project, then the archive of the list.
+the colour of a group, then whether the list or the group is there, then the
+description, and only after the statement refused why it did — the project,
+then the archive of the list.
 
 | Answer | Command | Exit |
 |---|---|---|
@@ -105,6 +128,7 @@ the statement refused why it did — the project, then the archive of the list.
 | 422 `todoListTitleMissing`, `todoListTitleTooLong`, `todoListTitleHasControlCharacters` | `todolists create`, `todolists edit`; on `create` before an unknown tool | 9 |
 | 422 `todoListDescriptionTooLong`, `todoListDescriptionNotReadable` | `todolists create`, `todolists edit` | 9 |
 | 422 `todoGroupTitleMissing`, `todoGroupTitleTooLong`, `todoGroupTitleHasControlCharacters` | `todogroups create`, `todogroups edit` | 9 |
+| 422 `todoGroupColorUnknown` | `todogroups create`, `todogroups edit`, after the title and before an unknown list or group | 9 |
 | 422 `todoListArchived` | every write on an archived list but `unarchive` and `delete`, `todogroups create` on one included | 9 |
 | 422 `todoListNotArchived` | `todolists unarchive` on a list in use | 9 |
 | 422 `todoPlaceUnknown` | `todogroups move` next to a group of another list or one in the trash | 9 |

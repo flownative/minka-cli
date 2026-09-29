@@ -470,7 +470,11 @@ func renderTodoList(w io.Writer, list api.TodoList) {
 	fmt.Fprintf(w, "\n## Open to-dos (%d)\n\n", len(list.Todos))
 	renderTodoLines(w, list.Todos)
 	for _, group := range list.Groups {
-		fmt.Fprintf(w, "\n## %s (group %s, %d open)\n\n", group.Title, group.ID, len(group.Todos))
+		colour := ""
+		if group.Color != nil {
+			colour = *group.Color + ", "
+		}
+		fmt.Fprintf(w, "\n## %s (group %s, %s%d open)\n\n", group.Title, group.ID, colour, len(group.Todos))
 		renderTodoLines(w, group.Todos)
 	}
 	renderEntryComments(w, list.Comments)

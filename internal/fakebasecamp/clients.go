@@ -78,12 +78,13 @@ func clientProject(ada, iris, otto, nora, cora, tessa Person, tool func(int64, s
 	clientChat.VisibleToClients = &shown
 
 	// A tool the clients see, holding a list they do not, and in that list a
-	// group and a to-do whose word falls to the list.
+	// group and a to-do whose word falls to the list. The group names its colour
+	// as the empty string.
 	todos := tool(9224, "todoset", "todosets", "Client to-dos", true, 5, &ada)
 	todos.VisibleToClients = &shown
 	todos.TodoLists = []TodoList{
 		{ID: 9241, Title: "Ours alone", Creator: &ada, CreatedAt: at(3, 8), UpdatedAt: at(3, 8), VisibleToClients: &hidden,
-			Groups: []TodoList{{ID: 9251, Title: "This week", Creator: &ada, CreatedAt: at(3, 9), UpdatedAt: at(3, 9), VisibleToClients: &hidden}},
+			Groups: []TodoList{{ID: 9251, Title: "This week", EmptyColor: true, Creator: &ada, CreatedAt: at(3, 9), UpdatedAt: at(3, 9), VisibleToClients: &hidden}},
 			Todos: []Todo{{ID: 9261, Title: "Write the offer", Creator: &ada, CreatedAt: at(3, 10), UpdatedAt: at(3, 10),
 				VisibleToClients: &shown}}},
 		{ID: 9242, Title: "Together", Creator: &ada, CreatedAt: at(3, 11), UpdatedAt: at(3, 11), VisibleToClients: &shown},

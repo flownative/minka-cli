@@ -603,7 +603,14 @@ and Minka applies the kinds in an order of its own.
   counted. A group of a list that is not extracted is left out and counted as
   well. **Nothing hangs on a group:** the format has no word for a comment, a
   reaction or a file of one, such a record would wait in Minka for ever, so
-  none is written and none is asked for.
+  none is written and none is asked for. **A group carries its colour** in
+  `color`, Basecamp's name as it is, never checked, lowercased or mapped:
+  Minka knows Basecamp's eleven names and warns about any other (C-086).
+  `white` goes along too, since Basecamp says it of every group nobody
+  coloured and it is the one word that takes a colour away in Minka on a later
+  run. Where the source names no colour, `null` or nothing, the field is left
+  out, and Minka leaves the colour it holds alone. A list carries none:
+  Basecamp says `null` for every list.
 - **To-dos** are those of every list and of every group, and the archived
   and the trashed ones. Basecamp lists what is open apart from what is done,
   and the archived and the trashed ones of a project in one list across all
@@ -910,9 +917,9 @@ and Minka applies the kinds in an order of its own.
   of its comments. A boost has one time, which is both `createdAt` and
   `updatedAt`.
 
-Left out besides: the colours, wormholes between boards, who follows a card
-or a post and whom a post told, being on hold as anything more than the
-flag, and the earlier copies of the file of an upload.
+Left out besides: the colours of the columns, wormholes between boards, who
+follows a card or a post and whom a post told, being on hold as anything more
+than the flag, and the earlier copies of the file of an upload.
 
 What Basecamp does not hand out, so that no bundle carries it:
 

@@ -24,6 +24,9 @@ type todoList struct {
 	Parent        hangsOn    `json:"parent"`
 	CommentsCount int        `json:"comments_count"`
 	BoostsCount   int        `json:"boosts_count"`
+	// Color is the colour of a group by Basecamp's name, "white" for one nobody
+	// coloured. A list has none.
+	Color *string `json:"color"`
 }
 
 // hangsOn is what a record of Basecamp stands in: which record, and of what
@@ -468,12 +471,23 @@ func (e *Extractor) writeTodoGroups(ctx context.Context, w *bundle.Writer, bucke
 			ListSourceID:    sourceID(list),
 			Title:           title,
 			Status:          found.Status,
+			Color:           groupColor(found.Color),
 		})
 		if err != nil {
 			return nil, nil, err
 		}
 	}
 	return groups, fell, nil
+}
+
+// groupColor is the colour of a group as the source names it. White goes along
+// too: it is how a colour taken away at the source is taken away in Minka.
+// Which names Minka knows is Minka's to say.
+func groupColor(color *string) *string {
+	if color == nil || *color == "" {
+		return nil
+	}
+	return color
 }
 
 // writeTodoList adds a list with its text, its comments and its boosts.

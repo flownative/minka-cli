@@ -515,8 +515,8 @@ type Fixture struct {
 	// with an open subtask of Anke's and a done one of nobody's.
 	Todos            *TodosTool
 	TodoList         *TodoList
-	StageGroup       *TodoGroup // the first group of the list, with an open to-do in it
-	KitchenGroup     *TodoGroup // the second group, empty
+	StageGroup       *TodoGroup // the first group of the list, red, with an open to-do in it
+	KitchenGroup     *TodoGroup // the second group, empty and without a colour
 	LooseTodo        *Todo      // open, standing in the list itself
 	GroupedTodo      *Todo      // open, in the stage group
 	DoneTodo         *Todo
@@ -659,7 +659,7 @@ func New(t testing.TB) (*Server, *Fixture) {
 	otherFiles := &FilesTool{ID: newID(), ProjectID: otherProject.ID, Title: "Secret documents", Documents: []*Document{otherDocument}}
 	s.FilesTools = []*FilesTool{files, otherFiles}
 
-	stageGroup := &TodoGroup{ID: newID(), Title: "Stage"}
+	stageGroup := &TodoGroup{ID: newID(), Title: "Stage", Color: "red"}
 	kitchenGroup := &TodoGroup{ID: newID(), Title: "Kitchen"}
 	looseTodo := &Todo{ID: newID(), Title: "Count the tents", CreatedAt: s.now, CreatorID: bruno.ID}
 	speakersDue := "2026-09-10"

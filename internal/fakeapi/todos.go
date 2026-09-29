@@ -52,9 +52,38 @@ type TodoList struct {
 // TodoGroup is a named heading of a list. A group in the trash takes its
 // to-dos along: they are in no list and in no count.
 type TodoGroup struct {
-	ID      string
-	Title   string
+	ID    string
+	Title string
+	// Color is one of the colours of a board column, and empty for none. White
+	// looks uncoloured, so a group given white carries none.
+	Color   string
 	Trashed bool
+}
+
+// todoGroupColors are the names a group takes as its colour, white included.
+var todoGroupColors = []string{"white", "red", "orange", "yellow", "green", "blue", "aqua", "purple", "gray", "pink", "brown"}
+
+// todoGroupColor reads the colour a body names for a group: nil where it names
+// none or null, and a refusal for a value that is no string or no colour. The
+// empty string is no colour either.
+func todoGroupColor(w http.ResponseWriter, fields map[string]any) (*string, bool) {
+	color, ok := stringField(w, fields, "color")
+	if !ok || color == nil {
+		return nil, ok
+	}
+	if !slices.Contains(todoGroupColors, *color) {
+		unprocessable(w, "todoGroupColorUnknown", "The color has to be one of red, orange, yellow, green, blue, aqua, purple, gray, pink or brown, or white or null for none.")
+		return nil, false
+	}
+	return color, true
+}
+
+// storedTodoGroupColor is how a group keeps the colour it was given.
+func storedTodoGroupColor(color *string) string {
+	if color == nil || *color == "white" {
+		return ""
+	}
+	return *color
 }
 
 // Todo is one to-do of a list, standing in the list itself or in one of its
@@ -98,7 +127,7 @@ func (s *Server) registerTodosRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/v1/todo-lists/{listId}/archive", s.authenticated(s.archiveTodoList))
 	mux.HandleFunc("POST /api/v1/todo-lists/{listId}/unarchive", s.authenticated(s.unarchiveTodoList))
 	mux.HandleFunc("POST /api/v1/todo-lists/{listId}/groups", s.authenticated(s.addTodoGroup))
-	mux.HandleFunc("PATCH /api/v1/todo-groups/{groupId}", s.authenticated(s.renameTodoGroup))
+	mux.HandleFunc("PATCH /api/v1/todo-groups/{groupId}", s.authenticated(s.editTodoGroup))
 	mux.HandleFunc("DELETE /api/v1/todo-groups/{groupId}", s.authenticated(s.removeTodoGroup))
 	mux.HandleFunc("POST /api/v1/todo-groups/{groupId}/moves", s.authenticated(s.moveTodoGroup))
 	s.registerTodoItemRoutes(mux)
@@ -318,6 +347,10 @@ func (s *Server) addTodoGroup(w http.ResponseWriter, r *http.Request, person *Pe
 	if !validTodoTitle(w, "todoGroup", "a group", deref(title)) {
 		return
 	}
+	color, ok := todoGroupColor(w, fields)
+	if !ok {
+		return
+	}
 	tool, list := s.visibleTodoList(r.PathValue("listId"), person)
 	if list == nil {
 		notFound(w)
@@ -327,13 +360,14 @@ func (s *Server) addTodoGroup(w http.ResponseWriter, r *http.Request, person *Pe
 		return
 	}
 
-	group := &TodoGroup{ID: newID(), Title: phpTrim(deref(title))}
+	group := &TodoGroup{ID: newID(), Title: phpTrim(deref(title)), Color: storedTodoGroupColor(color)}
 	list.Groups = append(list.Groups, group)
 	writeJSON(w, http.StatusCreated, s.todoGroupResource(tool, list, group))
 }
 
-// renameTodoGroup gives a group a new title, the one thing of it that changes.
-func (s *Server) renameTodoGroup(w http.ResponseWriter, r *http.Request, person *Person) {
+// editTodoGroup gives a group a new title, a new colour or both, together or
+// not at all. A colour of null counts as named: it takes the colour away.
+func (s *Server) editTodoGroup(w http.ResponseWriter, r *http.Request, person *Person) {
 	fields, ok := readBody(w, r)
 	if !ok {
 		return
@@ -342,11 +376,16 @@ func (s *Server) renameTodoGroup(w http.ResponseWriter, r *http.Request, person 
 	if !ok {
 		return
 	}
-	if title == nil {
-		unprocessable(w, "nothingToChange", "The body names no new title for the group.")
+	_, colorNamed := fields["color"]
+	if title == nil && !colorNamed {
+		unprocessable(w, "nothingToChange", "The body names neither a new title nor a color for the group.")
 		return
 	}
-	if !validTodoTitle(w, "todoGroup", "a group", *title) {
+	if title != nil && !validTodoTitle(w, "todoGroup", "a group", *title) {
+		return
+	}
+	color, ok := todoGroupColor(w, fields)
+	if !ok {
 		return
 	}
 	tool, list, group := s.visibleTodoGroup(r.PathValue("groupId"), person)
@@ -357,7 +396,12 @@ func (s *Server) renameTodoGroup(w http.ResponseWriter, r *http.Request, person 
 	if s.refusedAsArchived(w, s.projectWithID(tool.ProjectID)) {
 		return
 	}
-	group.Title = phpTrim(*title)
+	if title != nil {
+		group.Title = phpTrim(*title)
+	}
+	if colorNamed {
+		group.Color = storedTodoGroupColor(color)
+	}
 	writeJSON(w, http.StatusOK, s.todoGroupResource(tool, list, group))
 }
 
@@ -624,7 +668,11 @@ func (s *Server) todoListResource(tool *TodosTool, list *TodoList) map[string]an
 }
 
 func (s *Server) todoGroupResource(tool *TodosTool, list *TodoList, group *TodoGroup) map[string]any {
-	return map[string]any{"id": group.ID, "listId": list.ID, "title": group.Title, "todos": s.openTodoLines(tool, list, group.ID)}
+	var color any
+	if group.Color != "" {
+		color = group.Color
+	}
+	return map[string]any{"id": group.ID, "listId": list.ID, "title": group.Title, "color": color, "todos": s.openTodoLines(tool, list, group.ID)}
 }
 
 // todoLineResource is a to-do as a list names it: enough to tick it off or to

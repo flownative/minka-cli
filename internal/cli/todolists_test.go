@@ -107,6 +107,10 @@ func TestAListIsReadWithItsGroupsAndItsOpenTodos(t *testing.T) {
 	if ids := idsOf(t, stage, "todos"); !slices.Equal(ids, []string{f.GroupedTodo.ID}) || stage["listId"] != f.TodoList.ID {
 		t.Fatalf("the stage group holds %v and names list %v", ids, stage["listId"])
 	}
+	kitchen := decode(t, rawAt(t, list, "groups", 1))
+	if color, named := kitchen["color"]; stage["color"] != "red" || !named || color != nil {
+		t.Fatalf("the colours of the groups read %v and %v", stage["color"], kitchen["color"])
+	}
 	if list["openCount"] != float64(2) || list["completedCount"] != float64(1) || list["commentCount"] != float64(1) {
 		t.Fatalf("counts %v open, %v done, %v comments", list["openCount"], list["completedCount"], list["commentCount"])
 	}
@@ -120,7 +124,7 @@ func TestAListIsReadWithItsGroupsAndItsOpenTodos(t *testing.T) {
 		"Everything for **Saturday**.",
 		"To-dos: 2 open, 1 done",
 		f.LooseTodo.ID + "  Count the tents",
-		"## Stage (group " + f.StageGroup.ID + ", 1 open)",
+		"## Stage (group " + f.StageGroup.ID + ", red, 1 open)",
 		"## Kitchen (group " + f.KitchenGroup.ID + ", 0 open)",
 		"I bring the van",
 	} {
@@ -428,6 +432,100 @@ func TestAGroupIsAddedAtTheEndRenamedAndTrashedWithItsTodos(t *testing.T) {
 	expectCode(t, r, ExitNotFound)
 	if env.Hint != todoGroupNotFoundHint {
 		t.Fatalf("hint %q", env.Hint)
+	}
+}
+
+// A colour goes out as it was typed, and only where a flag names one: Minka
+// knows the colours and refuses the rest, the empty one included. Title and
+// colour go out in one request, so they are written together or not at all.
+func TestAGroupTakesTheColourItIsGivenAndWhiteTakesItAway(t *testing.T) {
+	e := newTestEnv(t)
+	f := e.fixture
+
+	env, r := e.runJSON("", "todogroups", "create", "--list", f.TodoList.ID, "--title", "Light")
+	expectCode(t, r, ExitOK)
+	if _, sent := e.lastWriteBody()["color"]; sent {
+		t.Fatalf("a colour was sent where none was given: %v", e.lastWriteBody())
+	}
+	if color, named := decode(t, env.Data)["color"]; !named || color != nil {
+		t.Fatalf("a new group without a colour reads %v", color)
+	}
+	env, r = e.runJSON("", "todogroups", "create", "--list", f.TodoList.ID, "--title", "Sound", "--color", "blue")
+	expectCode(t, r, ExitOK)
+	if e.lastWriteBody()["color"] != "blue" || decode(t, env.Data)["color"] != "blue" {
+		t.Fatalf("sent %v, answered %v", e.lastWriteBody(), decode(t, env.Data)["color"])
+	}
+
+	_, r = e.runJSON("", "todogroups", "edit", f.StageGroup.ID, "--title", "Stage")
+	expectCode(t, r, ExitOK)
+	if _, sent := e.lastWriteBody()["color"]; sent {
+		t.Fatalf("a rename sent a colour, which Minka would take as one to set or clear: %v", e.lastWriteBody())
+	}
+	if f.StageGroup.Color != "red" {
+		t.Fatalf("a rename left the group in %q", f.StageGroup.Color)
+	}
+
+	env, r = e.runJSON("", "todogroups", "edit", f.KitchenGroup.ID, "--title", "Food", "--color", "green")
+	expectCode(t, r, ExitOK)
+	if body := e.lastWriteBody(); body["title"] != "Food" || body["color"] != "green" || len(body) != 2 {
+		t.Fatalf("an edit with both flags sent %v", body)
+	}
+	if f.KitchenGroup.Title != "Food" || f.KitchenGroup.Color != "green" {
+		t.Fatalf("the group is %q in %q", f.KitchenGroup.Title, f.KitchenGroup.Color)
+	}
+	_, r = e.runJSON("", "todogroups", "edit", f.KitchenGroup.ID, "--color", "white")
+	expectCode(t, r, ExitOK)
+	if body := e.lastWriteBody(); body["color"] != "white" || len(body) != 1 {
+		t.Fatalf("taking the colour away sent %v", body)
+	}
+	if f.KitchenGroup.Title != "Food" || f.KitchenGroup.Color != "" {
+		t.Fatalf("the group is %q in %q after white", f.KitchenGroup.Title, f.KitchenGroup.Color)
+	}
+
+	for name, args := range map[string][]string{
+		"an empty colour on an edit":       {"todogroups", "edit", f.StageGroup.ID, "--title", "Renamed", "--color", ""},
+		"an empty colour on a new group":   {"todogroups", "create", "--list", f.TodoList.ID, "--title", "Empty", "--color", ""},
+		"a colour in capitals on an edit":  {"todogroups", "edit", f.StageGroup.ID, "--color", "Blue"},
+		"an unknown colour on a new group": {"todogroups", "create", "--list", f.TodoList.ID, "--title", "Teal", "--color", "teal"},
+	} {
+		writes := len(e.server.WritingRequests())
+		env, r := e.runJSON("", args...)
+		expectCode(t, r, ExitValidation)
+		if len(e.server.WritingRequests()) != writes+1 {
+			t.Fatalf("%s: the colour was held back here instead of sent", name)
+		}
+		if env.Meta["apiCode"] != apiCodeTodoGroupColorUnknown || env.Hint != todoGroupColorUnknownHint {
+			t.Fatalf("%s: apiCode %v, hint %q", name, env.Meta["apiCode"], env.Hint)
+		}
+	}
+	if f.StageGroup.Title != "Stage" || f.StageGroup.Color != "red" {
+		t.Fatalf("a refused colour changed the group: %q in %q", f.StageGroup.Title, f.StageGroup.Color)
+	}
+
+	writes := len(e.server.WritingRequests())
+	r = e.run("", "todogroups", "edit", f.StageGroup.ID, "--json")
+	expectCode(t, r, ExitUsage)
+	if len(e.server.WritingRequests()) != writes {
+		t.Fatal("an edit without a change was sent")
+	}
+}
+
+// Every colour the hint and the help name is one Minka takes, and the help
+// names every one the hint does.
+func TestTheColoursNamedAreTheOnesMinkaTakes(t *testing.T) {
+	e := newTestEnv(t)
+	f := e.fixture
+
+	if len(todoGroupColors) != 11 {
+		t.Fatalf("%d colours named, Minka takes eleven", len(todoGroupColors))
+	}
+	help := strings.Join(strings.Fields(todoGroupColorHelp), " ")
+	for _, color := range todoGroupColors {
+		if !strings.Contains(todoGroupColorUnknownHint, color) || !strings.Contains(help, color) {
+			t.Fatalf("%s is missing from the hint or the help", color)
+		}
+		_, r := e.runJSON("", "todogroups", "edit", f.KitchenGroup.ID, "--color", color)
+		expectCode(t, r, ExitOK)
 	}
 }
 

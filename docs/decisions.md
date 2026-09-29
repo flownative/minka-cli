@@ -1442,3 +1442,29 @@ change Minka silently ignores.
 **Implemented as:** `cli.newDocsUploadsCreateCmd`, `cli.requireToolOfProject`,
 `cli.filesUploadRefusal`, `api.AddFilesUploadInput`, see
 [Docs & Files](stable/docs-and-files.md).
+
+<a id="c-086"></a>
+## C-086 — The colour of a group goes as it is named, and Minka is the one to refuse it
+
+*Applies to: `import`, the `color` of `todogroups`; `todogroups create` and
+`todogroups edit`*
+
+The extractor writes the colour of a group as Basecamp names it whenever it is
+a string with something in it, `white` included, unchecked, never lowercased
+or mapped; where Basecamp names none, the field is left out. The CLI sends
+what `--color` says, `""` included, and names the eleven colours in the hint
+once Minka has refused one. `--color white` takes a colour away; there is no
+`--color none`.
+
+**Why:** Minka reads Basecamp's names as its own and warns about the rest, so
+a list kept here as well would only go stale beside it. `white` is what
+Basecamp says of a group nobody coloured, and it is the one word that takes a
+colour away in Minka on a later run: left out, a colour taken away at the
+source would stay in Minka for ever. Minka answers `null` and `white` alike
+with no colour, so one way to say it is enough, and it is the one Minka's own
+error message names. The hint carries a copy of Minka's eleven names, and no
+test holds it against Minka, only against the fake: that is accepted
+knowingly, because the copy only feeds a hint and never a refusal.
+**Implemented as:** `basecamp.groupColor`, `cli.newTodoGroupsEditCmd`,
+`cli.todoGroupColorUnknownHint`, see [Importing from Basecamp](stable/import.md)
+and [To-do lists and groups](stable/todo-lists.md).

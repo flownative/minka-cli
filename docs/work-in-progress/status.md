@@ -38,8 +38,9 @@ checked against the fake, see below.
 The to-do lists of a project are read with `todolists tools`, `todolists list`
 and `todolists show`, and written with `todolists create`, `edit`, `archive`,
 `unarchive` and `delete`; the groups of a list with `todogroups create`, `edit`,
-`move` and `delete`. The rule the commands follow is
-[To-do lists and groups](../stable/todo-lists.md) (C-071, C-072). The comments
+`move` and `delete`, a group with its colour (`--color`, C-086). The rule the
+commands follow is [To-do lists and groups](../stable/todo-lists.md) (C-071,
+C-072). The comments
 under a list and under a to-do wait for commands of their own. None of it has
 been seen live: the whole feature is checked against the fake, see below.
 
@@ -200,6 +201,10 @@ reason. A record in the trash is not asked, and one whose list Basecamp answers
 as not found or forbidden comes without the field, named in
 `subscribers.unread`, so Minka follows it as before instead of taking everybody
 off it. It costs one request per record.
+A group of a to-do list carries its colour as Basecamp names it, `white`
+included, which is how a colour taken away at the source is taken away in Minka
+(C-086). Every group of the account seen so far said `white`; the other ten
+names come from Minka's code, not from a coloured group seen live.
 
 The check-ins are checked against the fake alone: no extraction has met a
 questionnaire live yet. The frequencies Basecamp sends are `every_day`,
@@ -435,6 +440,10 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   answer of the source. What Minka makes of the field was read in
   `ImportedSubscribers`, `SetImportedItemSubscribersHandler` and
   `BundleRecord::strings` at Minka's main 6780365e.
+- That a group in the trash carries `color` where Basecamp lists it among the
+  recordings of a project: only the fake says so. Measured read-only against
+  the live account was `color` in `groups.json` and in the recordings of
+  active and archived groups.
 - Everything a bundle says about clients: no extraction has met a client live.
   What the fields are and how Minka reads them was read in its appliers
   (`PeopleApplier`, `ProjectsApplier`, `ToolsApplier`, `WhatClientsSee`), and

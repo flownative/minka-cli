@@ -321,15 +321,19 @@ type TodoList struct {
 // list, so the order of the file is the order of the list. Status is active or
 // trashed: the shelf is the list's.
 //
+// Color is the source's name for the colour of the group, white included, and
+// nil where the source names none; Minka leaves a colour it holds alone then.
+//
 // Nothing hangs on a group: it carries no comment, no reaction and no file, and
 // the format has no word for either of one.
 type TodoGroup struct {
 	Record
-	ProjectSourceID string `json:"projectSourceId"`
-	ToolSourceID    string `json:"toolSourceId"`
-	ListSourceID    string `json:"listSourceId"`
-	Title           string `json:"title"`
-	Status          string `json:"status"`
+	ProjectSourceID string  `json:"projectSourceId"`
+	ToolSourceID    string  `json:"toolSourceId"`
+	ListSourceID    string  `json:"listSourceId"`
+	Title           string  `json:"title"`
+	Status          string  `json:"status"`
+	Color           *string `json:"color,omitempty"`
 }
 
 // Todo is a to-do of a list, standing directly in it or in one of its groups.
