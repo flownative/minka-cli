@@ -307,6 +307,7 @@ func TestEveryRecordOfAToDosToolNamesRecordsOfTheBundle(t *testing.T) {
 // the list: the groups in use as the source has them, then the one it has thrown
 // away, which comes with its status rather than being left out. The groups of a
 // list follow their list, so the second list of the tool comes with its own.
+// Each carries its colour as the source names it, and none where it names none.
 func TestTheGroupsOfAListComeInTheOrderOfTheListAndKeepTheirStatus(t *testing.T) {
 	dir, _ := extract(t, fakebasecamp.New(), todoProject)
 
@@ -314,14 +315,40 @@ func TestTheGroupsOfAListComeInTheOrderOfTheListAndKeepTheirStatus(t *testing.T)
 		{"sourceId": "9416", "createdAt": "2025-04-01T19:00:00.000Z", "updatedAt": "2025-04-01T19:00:00.000Z", "createdBy": "102",
 			"projectSourceId": "7008", "toolSourceId": "9080", "listSourceId": "9402", "title": "Some day", "status": "active"},
 		{"sourceId": "9411", "createdAt": "2025-04-01T14:00:00.000Z", "updatedAt": "2025-04-01T14:00:00.000Z", "createdBy": "101",
-			"projectSourceId": "7008", "toolSourceId": "9080", "listSourceId": "9401", "title": "Before the launch", "status": "active"},
+			"projectSourceId": "7008", "toolSourceId": "9080", "listSourceId": "9401", "title": "Before the launch", "status": "active", "color": "blue"},
 		{"sourceId": "9412", "createdAt": "2025-04-01T15:00:00.000Z", "updatedAt": "2025-04-01T15:00:00.000Z", "createdBy": "102",
-			"projectSourceId": "7008", "toolSourceId": "9080", "listSourceId": "9401", "title": "After the launch", "status": "active"},
+			"projectSourceId": "7008", "toolSourceId": "9080", "listSourceId": "9401", "title": "After the launch", "status": "active", "color": "white"},
 		{"sourceId": "9413", "createdAt": "2025-04-01T16:00:00.000Z", "updatedAt": "2025-04-03T16:00:00.000Z", "createdBy": "101",
-			"projectSourceId": "7008", "toolSourceId": "9080", "listSourceId": "9401", "title": "Given up", "status": "trashed"},
+			"projectSourceId": "7008", "toolSourceId": "9080", "listSourceId": "9401", "title": "Given up", "status": "trashed", "color": "Purple"},
 	}
 	if got := records(t, dir, bundle.TodoGroups); !reflect.DeepEqual(got, want) {
 		t.Errorf("groups:\n got %v\nwant %v", got, want)
+	}
+}
+
+// The colour of a group goes as the source names it: white, which is how Minka
+// learns that a colour was taken away at the source, and a name Minka does not
+// know, which is Minka's to warn about, alike. A group whose source names no
+// colour, as null or as the empty string, carries none, and a list never
+// carries one.
+func TestAGroupCarriesItsColourAsTheSourceNamesItAndAListNone(t *testing.T) {
+	dir, _ := extract(t, fakebasecamp.New(), todoProject, clientProject)
+
+	groups := records(t, dir, bundle.TodoGroups)
+	for id, want := range map[string]any{"9411": "blue", "9412": "white", "9413": "Purple"} {
+		if got := recordWithID(t, groups, id)["color"]; got != want {
+			t.Errorf("group %s carries the colour %v, want %v", id, got, want)
+		}
+	}
+	for _, id := range []string{"9416", "9251"} {
+		if color, carried := recordWithID(t, groups, id)["color"]; carried {
+			t.Errorf("group %s, without a colour at the source, carries %q", id, color)
+		}
+	}
+	for _, list := range records(t, dir, bundle.TodoLists) {
+		if _, carried := list["color"]; carried {
+			t.Errorf("list %v carries the colour %v", list["sourceId"], list["color"])
+		}
 	}
 }
 

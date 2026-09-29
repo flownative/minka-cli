@@ -67,6 +67,7 @@ type TodoGroup struct {
 	ID     string     `json:"id"`
 	ListID string     `json:"listId"`
 	Title  string     `json:"title"`
+	Color  *string    `json:"color"` // nil for a group without a colour
 	Todos  []TodoLine `json:"todos"`
 }
 
@@ -100,6 +101,20 @@ type CreateTodoListInput struct {
 type UpdateTodoListInput struct {
 	Title       *string `json:"title,omitempty"`
 	Description *string `json:"description,omitempty"`
+}
+
+// CreateTodoGroupInput is a new group. A Color left out makes it one without.
+type CreateTodoGroupInput struct {
+	Title string  `json:"title"`
+	Color *string `json:"color,omitempty"`
+}
+
+// UpdateTodoGroupInput changes a group, its title and its colour together or
+// neither. What it leaves out stays as it is; a Color of "white" takes the
+// colour away.
+type UpdateTodoGroupInput struct {
+	Title *string `json:"title,omitempty"`
+	Color *string `json:"color,omitempty"`
 }
 
 // MoveTodoGroupInput names where a group goes in its list: behind
@@ -157,14 +172,13 @@ func (c *Client) DeleteTodoList(ctx context.Context, listID string) error {
 }
 
 // CreateTodoGroup adds a group at the end of a list.
-func (c *Client) CreateTodoGroup(ctx context.Context, listID, title string) (Result[TodoGroup], error) {
-	return request[TodoGroup](ctx, c, http.MethodPost, todoListPath(listID)+"/groups", map[string]string{"title": title})
+func (c *Client) CreateTodoGroup(ctx context.Context, listID string, input CreateTodoGroupInput) (Result[TodoGroup], error) {
+	return request[TodoGroup](ctx, c, http.MethodPost, todoListPath(listID)+"/groups", input)
 }
 
-// RenameTodoGroup gives a group a new title, the one thing of a group that
-// changes.
-func (c *Client) RenameTodoGroup(ctx context.Context, groupID, title string) (Result[TodoGroup], error) {
-	return request[TodoGroup](ctx, c, http.MethodPatch, todoGroupPath(groupID), map[string]string{"title": title})
+// UpdateTodoGroup gives a group a new title, a new colour or both.
+func (c *Client) UpdateTodoGroup(ctx context.Context, groupID string, input UpdateTodoGroupInput) (Result[TodoGroup], error) {
+	return request[TodoGroup](ctx, c, http.MethodPatch, todoGroupPath(groupID), input)
 }
 
 // MoveTodoGroup puts a group elsewhere in its list. A group never leaves its

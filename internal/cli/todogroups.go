@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/flownative/minka-cli/internal/api"
 	"github.com/spf13/cobra"
@@ -24,18 +25,37 @@ in its order, with its ID and its open to-dos. A group of a list in the
 archive is at no address until the list is back, so every command here exits
 2 (not_found) on it.`
 
+// todoGroupColors are the colours Minka takes for a group, those of a board
+// column. The CLI only names them: refusing any other is left to Minka.
+var todoGroupColors = []string{"white", "red", "orange", "yellow", "green", "blue", "aqua", "purple", "gray", "pink", "brown"}
+
+// todoGroupColorHelp says which colours a group takes.
+const todoGroupColorHelp = `--color takes one of white, red, orange, yellow, green, blue, aqua, purple,
+gray, pink and brown, spelt exactly so. White is no colour: it takes the one a
+group has away. Any other value, the empty one included, is refused with exit
+9 (validation) and meta.apiCode todoGroupColorUnknown.`
+
+// todoGroupColorUnknownHint names what Minka takes as the colour of a group.
+var todoGroupColorUnknownHint = "A group takes one of " + strings.Join(todoGroupColors, ", ") + ", spelt exactly so; white takes the colour away."
+
+const apiCodeTodoGroupColorUnknown = "todoGroupColorUnknown"
+
 func (a *app) newTodoGroupsCreateCmd() *cobra.Command {
-	var listID, title string
+	var listID, title, color string
 
 	cmd := &cobra.Command{
 		Use:   "create",
 		Short: "Add a group at the end of a to-do list",
-		Long: `Adds a named group at the end of a list. A list in the archive takes no new
-group: exit 9 (validation) with meta.apiCode todoListArchived.
+		Long: `Adds a named group at the end of a list, without a colour unless --color
+names one. A list in the archive takes no new group: exit 9 (validation) with
+meta.apiCode todoListArchived.
+
+` + todoGroupColorHelp + `
 
 ` + todoGroupsReadHelp,
-		Example: `  minka todogroups create --list 0199... --title "Stage" --json`,
-		Args:    requireArgs(),
+		Example: `  minka todogroups create --list 0199... --title "Stage" --json
+  minka todogroups create --list 0199... --title "Stage" --color blue`,
+		Args: requireArgs(),
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if err := requireID(cmd, "--list", &listID); err != nil {
 				return err
@@ -45,9 +65,17 @@ group: exit 9 (validation) with meta.apiCode todoListArchived.
 			if err != nil {
 				return err
 			}
-			group, err := s.client.CreateTodoGroup(a.ctx, listID, title)
+			input := api.CreateTodoGroupInput{Title: title}
+			if cmd.Flags().Changed("color") {
+				input.Color = &color
+			}
+			group, err := s.client.CreateTodoGroup(a.ctx, listID, input)
 			if err != nil {
-				return todoListRefusal(s, err, listID)
+				e := todoListRefusal(s, err, listID)
+				if e.APICode == apiCodeTodoGroupColorUnknown {
+					e.Hint = todoGroupColorUnknownHint
+				}
+				return e
 			}
 
 			summary := "Added group " + group.Value.Title + " to list " + group.Value.ListID
@@ -56,7 +84,7 @@ group: exit 9 (validation) with meta.apiCode todoListArchived.
 				summary:     summary,
 				breadcrumbs: todoGroupBreadcrumbs(group.Value),
 				text: func(w io.Writer) {
-					fmt.Fprintf(w, "%s.\nGroup: %s\n", summary, group.Value.ID)
+					fmt.Fprintf(w, "%s.\nGroup: %s\nColour: %s\n", summary, group.Value.ID, todoGroupColor(group.Value))
 				},
 			})
 		},
@@ -65,38 +93,52 @@ group: exit 9 (validation) with meta.apiCode todoListArchived.
 	flags := cmd.Flags()
 	flags.StringVar(&listID, "list", "", "ID of the list the group goes into")
 	flags.StringVar(&title, "title", "", "Title of the group")
+	flags.StringVar(&color, "color", "", "Colour of the group, one of Minka's eleven (see above)")
 
 	return cmd
 }
 
 func (a *app) newTodoGroupsEditCmd() *cobra.Command {
-	var title string
+	var title, color string
 
 	cmd := &cobra.Command{
 		Use:   "edit <groupId>",
-		Short: "Rename a group of a to-do list",
-		Long: `Gives a group a new title, which is the one thing of a group that changes. An
-empty title is refused with exit 9 (validation) and meta.apiCode
-todoGroupTitleMissing: a title can only be replaced.
+		Short: "Rename or recolour a group of a to-do list",
+		Long: `Gives a group a new title, a new colour or both; at least one of --title and
+--color is required. What both name is written together or not at all: a
+refusal of either leaves the group as it was. An empty title is refused with
+exit 9 (validation) and meta.apiCode todoGroupTitleMissing: a title can only
+be replaced.
+
+` + todoGroupColorHelp + `
 
 ` + todoGroupsReadHelp,
-		Example: `  minka todogroups edit 0199... --title "Stage and light"`,
-		Args:    requireArgs("groupId"),
+		Example: `  minka todogroups edit 0199... --title "Stage and light"
+  minka todogroups edit 0199... --color green
+  minka todogroups edit 0199... --color white`,
+		Args: requireArgs("groupId"),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if !cmd.Flags().Changed("title") {
-				return usageErrorf(cmd, "nothing to change, give --title")
+			var input api.UpdateTodoGroupInput
+			if cmd.Flags().Changed("title") {
+				input.Title = &title
+			}
+			if cmd.Flags().Changed("color") {
+				input.Color = &color
+			}
+			if input.Title == nil && input.Color == nil {
+				return usageErrorf(cmd, "nothing to change, give --title, --color or both")
 			}
 
 			s, err := a.session()
 			if err != nil {
 				return err
 			}
-			group, err := s.client.RenameTodoGroup(a.ctx, args[0], title)
+			group, err := s.client.UpdateTodoGroup(a.ctx, args[0], input)
 			if err != nil {
 				return todoGroupRefusal(s, err)
 			}
 
-			summary := "Renamed group " + group.Value.ID + " to " + group.Value.Title
+			summary := "Changed group " + group.Value.ID + ": " + group.Value.Title + ", colour " + todoGroupColor(group.Value)
 			return a.ok(success{
 				data:        group.Raw,
 				summary:     summary,
@@ -105,7 +147,9 @@ todoGroupTitleMissing: a title can only be replaced.
 			})
 		},
 	}
-	cmd.Flags().StringVar(&title, "title", "", "New title of the group")
+	flags := cmd.Flags()
+	flags.StringVar(&title, "title", "", "New title of the group")
+	flags.StringVar(&color, "color", "", "New colour of the group, one of Minka's eleven; white takes it away")
 
 	return cmd
 }
@@ -215,12 +259,22 @@ func todoGroupRefusal(s *session, err error) *Error {
 	switch {
 	case e.APICode == apiCodeTodoPlaceUnknown:
 		e.Hint = "The group named with --after or --before is the group itself, no group of the same list, or in the trash. The groups of a list, in their order: minka todolists show <listId>"
+	case e.APICode == apiCodeTodoGroupColorUnknown:
+		e.Hint = todoGroupColorUnknownHint
 	case e.APICode == apiCodeTodoListArchived:
 		e.Hint = "The list of the group lies in the archive of its tool, and nothing in it changes until it is back: minka todolists unarchive <listId>"
 	case e.Code == CodeNotFound:
 		e.Hint = todoGroupNotFoundHint
 	}
 	return e
+}
+
+// todoGroupColor names the colour of a group in words.
+func todoGroupColor(group api.TodoGroup) string {
+	if group.Color == nil {
+		return "none"
+	}
+	return *group.Color
 }
 
 func todoGroupBreadcrumbs(group api.TodoGroup) []Breadcrumb {

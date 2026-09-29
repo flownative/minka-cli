@@ -38,6 +38,15 @@ type TodoList struct {
 	// and not that of its tool. A group carries one as well, which no bundle has a
 	// word for.
 	VisibleToClients *bool
+	// Color is the colour of a group, "white" when empty, which is what every
+	// group of the account says unless somebody coloured it. A list says null.
+	Color string
+	// Colorless has a group say null for its colour, which no group of the
+	// account was seen to do.
+	Colorless bool
+	// EmptyColor has a group say "" for its colour, which no group of the
+	// account was seen to do either.
+	EmptyColor bool
 }
 
 // todoProject is a project with every case of a To-dos tool: a tool whose lists
@@ -72,7 +81,7 @@ func todoProject(ada, grace, edsger, former Person, tool func(int64, string, str
 	// A group with everything a group cannot carry: a text with a file, comments
 	// and boosts. None of it reaches a bundle, and none of it is asked for.
 	launch.Groups = []TodoList{
-		{ID: 9411, Title: "Before the launch", Creator: &ada, CreatedAt: at(1, 14), UpdatedAt: at(1, 14),
+		{ID: 9411, Title: "Before the launch", Color: "blue", Creator: &ada, CreatedAt: at(1, 14), UpdatedAt: at(1, 14),
 			// Assigned to somebody who has left the account, whom the bundle
 			// carries as retired.
 			Todos: []Todo{{ID: 9424, Title: "Choose a date", Creator: &ada, CreatedAt: at(2, 18), UpdatedAt: at(2, 18),
@@ -85,7 +94,8 @@ func todoProject(ada, grace, edsger, former Person, tool func(int64, string, str
 			{ID: 9425, Title: "Send thanks", Creator: &grace, CreatedAt: at(2, 19), UpdatedAt: at(3, 19),
 				Completion: &Completion{At: at(2, 20), By: &grace}},
 		}},
-		{ID: 9413, Status: "trashed", Title: "Given up", Creator: &ada, CreatedAt: at(1, 16), UpdatedAt: at(3, 16), Todos: []Todo{
+		// A colour Minka has no name for, spelt as none of its names is.
+		{ID: 9413, Status: "trashed", Title: "Given up", Color: "Purple", Creator: &ada, CreatedAt: at(1, 16), UpdatedAt: at(3, 16), Todos: []Todo{
 			{ID: 9426, Title: "Of a group in the trash", Creator: &ada, CreatedAt: at(2, 21), UpdatedAt: at(2, 21)},
 		}},
 		// A group on the shelf, which no bundle has a word for, with a to-do in use
@@ -119,7 +129,7 @@ func todoProject(ada, grace, edsger, former Person, tool func(int64, string, str
 	// A second list with a group of its own: a to-do that named a group of
 	// another list would be seen naming it.
 	later := TodoList{ID: 9402, Title: "Later", Creator: &grace, CreatedAt: at(1, 9), UpdatedAt: at(1, 9),
-		Groups: []TodoList{{ID: 9416, Title: "Some day", Creator: &grace, CreatedAt: at(1, 19), UpdatedAt: at(1, 19), Todos: []Todo{
+		Groups: []TodoList{{ID: 9416, Title: "Some day", Colorless: true, Creator: &grace, CreatedAt: at(1, 19), UpdatedAt: at(1, 19), Todos: []Todo{
 			// Repeating in a rhythm of another kind, so that nothing hangs on
 			// which one a schedule names.
 			{ID: 9429, Title: "Think about it", Creator: &grace, CreatedAt: at(3, 8), UpdatedAt: at(3, 8),
@@ -552,6 +562,13 @@ func (a *Account) todoListJSON(p *Project, parentID int64, parentType string, l 
 	}
 	if l.Creator != nil {
 		answer["creator"] = a.person(*l.Creator)
+	}
+	answer["color"] = nil
+	if parentType == "Todolist" && !l.Colorless {
+		answer["color"] = l.Color
+		if l.Color == "" && !l.EmptyColor {
+			answer["color"] = "white"
+		}
 	}
 	return answer
 }

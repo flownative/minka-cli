@@ -210,8 +210,8 @@ minka todolists edit <listId> [--title "New"] [--description - < body.md] --json
 minka todolists archive <listId> --json
 minka todolists unarchive <listId> --json
 minka todolists delete <listId> --json
-minka todogroups create --list <listId> --title "Title" --json
-minka todogroups edit <groupId> --title "New" --json
+minka todogroups create --list <listId> --title "Title" [--color <colour>] --json
+minka todogroups edit <groupId> [--title "New"] [--color <colour>] --json
 minka todogroups move <groupId> (--top | --after <groupId> | --before <groupId>) --json
 minka todogroups delete <groupId> --json
 minka todos mine [--limit <1-100>] [--after <todoId>] --json
@@ -977,7 +977,8 @@ themselves and their subtasks are `todos …`, see the next part.
   carries the whole description and how many to-dos are open and done.
 - `todolists show <listId>` gives the list with its description, its files,
   the open to-dos standing in no group (`todos`), the groups in their order with
-  the open to-dos of each, and the comments. **Done to-dos are counted
+  the colour (`color`, `null` for none) and the open to-dos of each, and the
+  comments. **Done to-dos are counted
   (`completedCount`) and not listed.** A list in the archive is shown too and
   says `archived: true`.
 - A group has no address to read it at: its ID and its place come from
@@ -999,9 +1000,15 @@ themselves and their subtasks are `todos …`, see the next part.
   archive of its tool; it comes back to the place it had. `todolists delete`
   puts a list into the trash from either place, its groups and to-dos with it.
 - `todogroups create --list <listId> --title "..."` adds a group **at the end**
-  of the list. `todogroups edit <groupId> --title "..."` renames it — the title
-  is all a group has. `todogroups delete` trashes it **with its to-dos**, which
-  then leave the list and its counts.
+  of the list, with the colour `--color` names or none. `todogroups edit
+  <groupId>` changes the title, the colour or both, and needs at least one of
+  `--title` and `--color`; both are written together or not at all. A colour
+  is one of `white`, `red`, `orange`, `yellow`, `green`, `blue`, `aqua`,
+  `purple`, `gray`, `pink` and `brown`, spelt exactly so. **`--color white`
+  takes the colour away**: a group given white reads `color: null`. Any other
+  value, `""` included, is exit 9 `todoGroupColorUnknown`, and nothing of the
+  edit is written. `todogroups delete` trashes a group **with its to-dos**,
+  which then leave the list and its counts.
 - `todogroups move <groupId>` needs **exactly one** of `--top`, `--after
   <groupId>` and `--before <groupId>`; the neighbour has to be another group of
   the same list, and the group itself or any other is exit 9
@@ -1030,9 +1037,9 @@ trash, and comments on a list are not offered by this CLI.
 `todoListTitleHasControlCharacters`, `todoListDescriptionTooLong`,
 `todoListDescriptionNotReadable`, `todoGroupTitleMissing`,
 `todoGroupTitleTooLong`, `todoGroupTitleHasControlCharacters`,
-`todoListArchived`, `todoListNotArchived`, `todoPlaceUnknown` (a neighbour
-that is no other group of the same list), all exit 9; `projectArchived`
-before any of the archive codes.
+`todoGroupColorUnknown`, `todoListArchived`, `todoListNotArchived`,
+`todoPlaceUnknown` (a neighbour that is no other group of the same list), all
+exit 9; `projectArchived` before any of the archive codes.
 
 ## To-dos and subtasks
 
