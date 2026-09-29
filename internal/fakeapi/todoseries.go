@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"reflect"
 	"slices"
 	"strconv"
 	"time"
@@ -63,8 +64,9 @@ func (s *Server) todoSeriesOfList(w http.ResponseWriter, r *http.Request, person
 
 // repeatTodo makes a to-do of the list the first occurrence of a new series,
 // starting on its due day. The body is read in full before the list is looked
-// for; what the to-do and its days allow is asked after, and the archived
-// project and list only once the write refused.
+// for, the type of every field before any value; what the to-do and its days
+// allow is asked after, and the archived project and list only once the write
+// refused.
 func (s *Server) repeatTodo(w http.ResponseWriter, r *http.Request, person *Person) {
 	fields, ok := readBodyWith(w, r, true)
 	if !ok {
@@ -74,6 +76,14 @@ func (s *Server) repeatTodo(w http.ResponseWriter, r *http.Request, person *Pers
 	if !ok {
 		return
 	}
+	if _, ok := wholeNumberField(w, fields, "leadDays"); !ok {
+		return
+	}
+	schedule, ok := scheduleShape(w, fields)
+	if !ok {
+		return
+	}
+
 	if !uuidPattern.MatchString(deref(todoID)) {
 		todoToRepeatUnknown(w)
 		return
@@ -86,12 +96,10 @@ func (s *Server) repeatTodo(w http.ResponseWriter, r *http.Request, person *Pers
 		usual := defaultLeadDays
 		leadDays = &usual
 	}
-	schedule, ok := readScheduleFields(w, fields)
-	if !ok {
-		return
-	}
 	if schedule == nil {
 		schedule = &scheduleFields{}
+	} else if !validScheduleValues(w, *schedule) {
+		return
 	}
 	tool, list := s.visibleTodoList(r.PathValue("listId"), person)
 	if list == nil {
@@ -140,9 +148,11 @@ func (s *Server) todoSeries(w http.ResponseWriter, r *http.Request, person *Pers
 // updateTodoSeries changes what the occurrences made from now on start from.
 // What the body leaves out stays, the people it names none of included. With
 // "expectedUpdatedAt" a series written since is answered 409 with the series
-// as it stands; without it the last write wins. The body is checked in full
-// before the series is looked for, and the archived project and list, the
-// guard and the people only once the write refused, in that order.
+// as it stands; without it the last write wins. A body that changes nothing
+// writes nothing and meets no conflict. The body is checked in full before
+// the series is looked for, the type of every field before any value, and the
+// archived project and list, the guard and the people only once the write
+// refused, in that order.
 func (s *Server) updateTodoSeries(w http.ResponseWriter, r *http.Request, person *Person) {
 	fields, ok := readBodyWith(w, r, true)
 	if !ok {
@@ -153,26 +163,36 @@ func (s *Server) updateTodoSeries(w http.ResponseWriter, r *http.Request, person
 	if !ok {
 		return
 	}
-	if namesTitle && !validTodoTitle(w, "todo", "a to-do", deref(title)) {
-		return
-	}
-	assigneeIDs, ok := seriesPeopleField(w, fields, "assigneeIds")
+	assigneeIDs, ok := seriesPeopleShape(w, fields, "assigneeIds")
 	if !ok {
 		return
 	}
-	notifiedIDs, ok := seriesPeopleField(w, fields, "notifiedIds")
+	notifiedIDs, ok := seriesPeopleShape(w, fields, "notifiedIds")
 	if !ok {
 		return
 	}
-	schedule, ok := readScheduleFields(w, fields)
+	schedule, ok := scheduleShape(w, fields)
 	if !ok {
 		return
 	}
-	leadDays, ok := seriesLeadDays(w, fields)
-	if !ok {
+	if _, ok := wholeNumberField(w, fields, "leadDays"); !ok {
 		return
 	}
 	expected, guarded, ok := expectedUpdatedAt(w, fields)
+	if !ok {
+		return
+	}
+
+	if namesTitle && !validTodoTitle(w, "todo", "a to-do", deref(title)) {
+		return
+	}
+	if !seriesPeopleIdentifiers(w, assigneeIDs) || !seriesPeopleIdentifiers(w, notifiedIDs) {
+		return
+	}
+	if schedule != nil && !validScheduleValues(w, *schedule) {
+		return
+	}
+	leadDays, ok := seriesLeadDays(w, fields)
 	if !ok {
 		return
 	}
@@ -198,6 +218,18 @@ func (s *Server) updateTodoSeries(w http.ResponseWriter, r *http.Request, person
 	if s.refusedAsNothingWritten(w, tool, list) {
 		return
 	}
+	newTitle, newLeadDays := series.Title, series.LeadDays
+	if title != nil {
+		newTitle = phpTrim(*title)
+	}
+	if leadDays != nil {
+		newLeadDays = *leadDays
+	}
+	peopleChange := s.peopleChange(tool, list, assigneeIDs, series.AssigneeIDs) || s.peopleChange(tool, list, notifiedIDs, series.NotifiedIDs)
+	if !peopleChange && newTitle == series.Title && newLeadDays == series.LeadDays && reflect.DeepEqual(repetition, series.Schedule) {
+		writeJSON(w, http.StatusOK, s.todoSeriesResource(tool, list, series))
+		return
+	}
 	if guarded && !expected.Equal(series.UpdatedAt) {
 		refusal := errorBody("todoSeriesChanged", `This series was written over since it was read. Nothing was written; "series" holds it as it stands.`)
 		refusal["series"] = s.todoSeriesResource(tool, list, series)
@@ -213,13 +245,9 @@ func (s *Server) updateTodoSeries(w http.ResponseWriter, r *http.Request, person
 		}
 	}
 
-	if title != nil {
-		series.Title = phpTrim(*title)
-	}
-	series.Schedule = repetition
-	if leadDays != nil {
-		series.LeadDays = *leadDays
-	}
+	series.Title, series.Schedule, series.LeadDays = newTitle, repetition, newLeadDays
+	// Named people are the whole set: whoever is stored and no longer seen
+	// goes with such a write.
 	if assigneeIDs != nil {
 		series.AssigneeIDs = withoutRepeats(assigneeIDs)
 	}
@@ -346,6 +374,12 @@ func activeTodoOf(list *TodoList, todoID string) *Todo {
 		}
 	}
 	return nil
+}
+
+// peopleChange says whether the people named differ from those the series
+// shows, taken once each and in their order. Nobody named is no change.
+func (s *Server) peopleChange(tool *TodosTool, list *TodoList, named, stored []string) bool {
+	return named != nil && !slices.Equal(withoutRepeats(named), s.seeingTheList(tool, list, stored))
 }
 
 // seesTheList says whether somebody is a member of the project who is shown
@@ -584,11 +618,11 @@ func composedSchedule(w http.ResponseWriter, fields scheduleFields, startsOn str
 	return schedule, true
 }
 
-// readScheduleFields reads "schedule" in the order the server does: the type
-// of every field first, then the days, then the ranges, then the names of
-// rhythm, weekdays and instance. Null inside counts as left out, except in
-// "endsOn", where it takes the end off; nil is a body without a schedule.
-func readScheduleFields(w http.ResponseWriter, fields map[string]any) (*scheduleFields, bool) {
+// scheduleShape reads the type of every field of "schedule", the way the
+// server does before it looks at any value; nil is a body without a schedule.
+// Null inside counts as left out, except in "endsOn", where it takes the end
+// off.
+func scheduleShape(w http.ResponseWriter, fields map[string]any) (*scheduleFields, bool) {
 	value, present := fields["schedule"]
 	if !present {
 		return nil, true
@@ -603,6 +637,12 @@ func readScheduleFields(w http.ResponseWriter, fields map[string]any) (*schedule
 	if f.rhythm, ok = stringField(w, schedule, "rhythm"); !ok {
 		return nil, false
 	}
+	if f.startsOn, ok = stringField(w, schedule, "startsOn"); !ok {
+		return nil, false
+	}
+	if f.endsOn, ok = stringField(w, schedule, "endsOn"); !ok {
+		return nil, false
+	}
 	for _, field := range []struct {
 		name  string
 		value **int
@@ -614,41 +654,42 @@ func readScheduleFields(w http.ResponseWriter, fields map[string]any) (*schedule
 	if f.weekdays, ok = wholeNumbersField(w, schedule, "weekdays"); !ok {
 		return nil, false
 	}
-	if f.startsOn, ok = stringField(w, schedule, "startsOn"); !ok {
-		return nil, false
-	}
-	if f.endsOn, ok = stringField(w, schedule, "endsOn"); !ok {
-		return nil, false
-	}
 	_, f.namesEndsOn = schedule["endsOn"]
 	if deref(f.endsOn) == "" {
 		f.endsOn = nil
 	}
+	return &f, true
+}
+
+// validScheduleValues holds each field of a schedule on its own, in the order
+// the server does: the days, then the ranges, then the names of rhythm,
+// weekdays and instance.
+func validScheduleValues(w http.ResponseWriter, f scheduleFields) bool {
 	for _, day := range []*string{f.startsOn, f.endsOn} {
 		if _, isADay := midnightOf(deref(day)); day != nil && !isADay {
 			unprocessable(w, "todoSeriesDatesNotADate", "A day is written as YYYY-MM-DD.")
-			return nil, false
+			return false
 		}
 	}
 	if outside(f.interval, 1, maxRepetitionInterval) || outside(f.day, 1, 31) || outside(f.month, 1, 12) {
 		todoSeriesScheduleInvalid(w)
-		return nil, false
+		return false
 	}
 	if f.rhythm != nil && !slices.Contains([]string{RepeatsDaily, RepeatsWeekly, RepeatsMonthlyOnDay, RepeatsMonthlyOnWeekday, RepeatsYearly}, *f.rhythm) {
 		todoSeriesScheduleInvalid(w)
-		return nil, false
+		return false
 	}
 	for _, weekday := range f.weekdays {
 		if weekday < 1 || weekday > 7 {
 			todoSeriesScheduleInvalid(w)
-			return nil, false
+			return false
 		}
 	}
 	if outside(f.weekday, 1, 7) || f.instance != nil && !slices.Contains([]int{1, 2, 3, 4, LastWeekdayInstance}, *f.instance) {
 		todoSeriesScheduleInvalid(w)
-		return nil, false
+		return false
 	}
-	return &f, true
+	return true
 }
 
 func outside(value *int, lowest, highest int) bool {
@@ -718,10 +759,9 @@ func wholeNumber(value any) (int, bool) {
 	return number, err == nil
 }
 
-// seriesPeopleField reads a list of the people of a series: nil where the
-// body leaves it out, and null in it no list at all. An identifier that is
-// none is refused the way a stranger is.
-func seriesPeopleField(w http.ResponseWriter, fields map[string]any, name string) ([]string, bool) {
+// seriesPeopleShape reads a list of the people of a series: nil where the
+// body leaves it out, and null in it no list at all.
+func seriesPeopleShape(w http.ResponseWriter, fields map[string]any, name string) ([]string, bool) {
 	value, present := fields[name]
 	if !present {
 		return nil, true
@@ -740,13 +780,19 @@ func seriesPeopleField(w http.ResponseWriter, fields map[string]any, name string
 		}
 		ids = append(ids, id)
 	}
+	return ids, true
+}
+
+// seriesPeopleIdentifiers refuses an identifier that is none the way a
+// stranger is.
+func seriesPeopleIdentifiers(w http.ResponseWriter, ids []string) bool {
 	for _, id := range ids {
 		if !uuidPattern.MatchString(id) {
 			seriesPersonNotAMember(w)
-			return nil, false
+			return false
 		}
 	}
-	return ids, true
+	return true
 }
 
 func todoToRepeatUnknown(w http.ResponseWriter) {

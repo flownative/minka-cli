@@ -1168,7 +1168,8 @@ series is **never deleted, only stopped**.
   first day. `--ends-on ""` takes the end off. `--assignee` and
   `--notify-when-done` are the **whole set**. It changes the occurrences made
   from now on; the notes cannot be changed. Written over since you read it:
-  exit 9 `todoSeriesChanged`, and `data` is the series as it stands.
+  exit 9 `todoSeriesChanged`, and `data` is the series as it stands. A change
+  that asks for what stands already writes nothing and is no conflict.
 - `todos series stop` stops it; the to-dos it made stay. `todos series resume`
   continues a stopped one with its first day **after today**; missed days are
   not made up.

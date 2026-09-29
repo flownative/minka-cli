@@ -104,6 +104,16 @@ series as it stands as `data` and printed, and a hint naming its `updatedAt`.
 `--expect none` belongs to the notes of a card. `updatedAt` is kept to the
 microsecond, so the guard sees every write.
 
+**A change that asks for what stands already writes nothing**: 200 with the
+series, `updatedAt` stays, and a series written since is then no conflict.
+People are compared as the series shows them, once each and in their order:
+naming the same people in another order is a change. Somebody stored on the
+series who no longer sees the list is no difference; a write that names the
+people and changes anything takes such a person off, and one that leaves the
+people out keeps them. Where `--expect` was the series' own moment and it
+still is, the command says in the summary and a `notice` that nothing was
+written; with `--force`, or over a series written since, it cannot tell.
+
 ## Stop, resume, show now
 
 - `stop` ends the series; the occurrences it made stay. A finished series can
@@ -119,26 +129,27 @@ microsecond, so the guard sees every write.
 
 ## The order of the refusals
 
-What Minka says, in this order: what is wrong with the request itself,
-**field by field in the controller's order**, each field's shape (400) and
-value (422) before the next field is read — so a 422 of an earlier field comes
-before a 400 of a later one: on an edit `title: ""` is 422 `todoTitleMissing`
-before `assigneeIds: null` is 400, and on `repeat` `todoId` is read first and
-an out-of-range `leadDays` is 422 before `schedule: 5` is 400. The fields of an
-edit are read as title, `assigneeIds`, `notifiedIds`, `schedule`, `leadDays`,
-`expectedUpdatedAt`; those of `repeat` as `todoId`, `leadDays`, `schedule`. In a coming
-change the Minka side moves every 400 ahead of every lookup and of every 422.
-Then exit 2 for a list or series not there or not readable, the same
-for a stranger and for a client the list is hidden from. Then, for `repeat`,
-the to-do (`todoToRepeatUnknown`, `todoRepeatsAlready`,
-`todoSeriesNeedsDueDay`); for `repeat` and an edit, the days in order and a
-schedule that cannot hold (`todoSeriesDatesOutOfOrder`,
-`todoSeriesScheduleInvalid`). Then `projectArchived`, then `todoListArchived`.
-After those, on an edit `todoSeriesChanged` and then the people
-(`personNotAProjectMember`); on `stop` and `show-now` `todoSeriesStopped`, on
-`resume` `todoSeriesNotStopped`, and on `show-now` then `todoSeriesFinished` or
-`todoSeriesOccurrenceAhead`. Reading stays open in an archived project and
-list.
+What Minka says, in this order: first the **type of every field** (400) —
+also a `todoId` or `expectedUpdatedAt` that is no string, and an
+`expectedUpdatedAt` that is no point in time — before any value, in the order
+the controller reads them: `todoId`, `leadDays`, `schedule` on `repeat`; title,
+`assigneeIds`, `notifiedIds`, `schedule`, `leadDays`, `expectedUpdatedAt` on an
+edit. So `title: ""` beside `assigneeIds: null` is 400, and so is a `leadDays`
+of 999 beside `schedule: 5`. Then each value on its own (422), in the same
+order: a `todoId` that is no identifier (`todoToRepeatUnknown`), the title, a
+person that is no identifier (`personNotAProjectMember`), the days and the
+ranges and names of the schedule, the lead, and on an edit `nothingToChange`.
+Then exit 2 for a list or series not there or not readable, the same for a
+stranger and for a client the list is hidden from. Then, for `repeat`, the
+to-do (`todoToRepeatUnknown`, `todoRepeatsAlready`, `todoSeriesNeedsDueDay`);
+for `repeat` and an edit, the days in order and a schedule that cannot hold
+(`todoSeriesDatesOutOfOrder`, `todoSeriesScheduleInvalid`). Then
+`projectArchived`, then `todoListArchived`. After those, on an edit: a body
+that changes nothing is answered 200, and only then come `todoSeriesChanged`
+and the people (`personNotAProjectMember`); on `stop` and `show-now`
+`todoSeriesStopped`, on `resume` `todoSeriesNotStopped`, and on `show-now`
+then `todoSeriesFinished` or `todoSeriesOccurrenceAhead`. Reading stays open in
+an archived project and list.
 
 ## Codes
 

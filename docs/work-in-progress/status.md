@@ -401,11 +401,13 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   one way to `todoListArchived` on a group and which no command can steer
   into.
 - Everything of `todos repeat` and `todos series`: the API is on Minka's `main`
-  (745965c6) and in no release, and no request of it has gone to a real Minka.
+  (bef86f70) and in no release, and no request of it has gone to a real Minka.
   The fake mirrors what was read in `TodoSeriesApiController`,
   `RepetitionScheduleFields`, `RepetitionSchedule`, `TodoSeriesQueryService`,
   the series handlers, `DbalTodoSeriesRepository` and `ApiTodoSeriesTest`: the
-  order the controller refuses in, the details a request leaves out taken from
+  order the controller refuses in — the type of every field before any value —
+  an edit that changes nothing writing nothing and meeting no conflict, people
+  compared as the series shows them, the details a request leaves out taken from
   the stored schedule or the first day, the resource with its state and days,
   a list hidden from a client at no address, the guard, and the occurrence
   `show-now` makes at the end of the list with the series' people and creator.

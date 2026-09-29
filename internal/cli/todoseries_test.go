@@ -410,3 +410,20 @@ func TestAnOccurrenceWithoutItsDayNamesItsSeriesAlone(t *testing.T) {
 		t.Fatalf("text:\n%s", out.String())
 	}
 }
+
+func TestAnEditThatChangesNothingSaysSo(t *testing.T) {
+	e := newTestEnv(t)
+	f := e.fixture
+	read := "2026-09-13T14:02:11.123456Z"
+
+	env, r := e.runJSON("", "todos", "series", "edit", f.Series.ID, "--lead-days", "2", "--expect", read)
+	expectCode(t, r, ExitOK)
+	if !strings.Contains(env.Notice, "nothing changed") || !strings.Contains(env.Summary, "nothing was written") {
+		t.Fatalf("summary %q, notice %q", env.Summary, env.Notice)
+	}
+	env, r = e.runJSON("", "todos", "series", "edit", f.Series.ID, "--lead-days", "3", "--expect", read)
+	expectCode(t, r, ExitOK)
+	if strings.Contains(env.Notice, "nothing changed") || strings.Contains(env.Summary, "nothing was written") {
+		t.Fatalf("a change: summary %q, notice %q", env.Summary, env.Notice)
+	}
+}

@@ -387,7 +387,7 @@ func TestAnEditOverAVersionNotReadIsRefusedWithTheSeriesAsItStands(t *testing.T)
 		t.Errorf("null expects nothing: %s", got)
 	}
 	stopped := callSeries(t, s, f.Token, http.MethodPost, path+"/stop", nil).body["updatedAt"]
-	if got := callSeries(t, s, f.Token, http.MethodPatch, path, map[string]any{"title": "Kasse", "expectedUpdatedAt": first.body["updatedAt"]}).got; got != "409 todoSeriesChanged" || stopped == first.body["updatedAt"] {
+	if got := callSeries(t, s, f.Token, http.MethodPatch, path, map[string]any{"title": "Abrechnung", "expectedUpdatedAt": first.body["updatedAt"]}).got; got != "409 todoSeriesChanged" || stopped == first.body["updatedAt"] {
 		t.Errorf("a stop is a write too: %s", got)
 	}
 }
@@ -429,10 +429,27 @@ func TestABodyIsCheckedBeforeTheSeriesIsLookedFor(t *testing.T) {
 	if got := callSeries(t, s, f.Token, http.MethodPost, "/todo-lists/01990000-0000-4000-8000-000000000000/series", map[string]any{"todoId": f.LooseTodo.ID, "leadDays": "7"}).got; got != "400 malformedBody" {
 		t.Errorf("lead days as text at a list that is not there: %s", got)
 	}
-	// Minka reads todoId before anything else, so a body without one is refused
-	// for it, however malformed the rest is.
-	if got := callSeries(t, s, f.Token, http.MethodPost, "/todo-lists/01990000-0000-4000-8000-000000000000/series", map[string]any{"leadDays": "7", "schedule": "weekly"}).got; got != "422 todoToRepeatUnknown" {
-		t.Errorf("no todoId beside malformed fields: %s", got)
+	// The type of every field is held before any value: a 400 of a later
+	// field comes before a 422 of an earlier one. These are Minka's own cases.
+	for _, c := range []struct {
+		method, path string
+		body         any
+	}{
+		{http.MethodPost, "/todo-lists/" + f.TodoList.ID + "/series", map[string]any{"todoId": "none", "leadDays": "7"}},
+		{http.MethodPost, "/todo-lists/" + f.TodoList.ID + "/series", map[string]any{"schedule": map[string]any{"interval": "two"}}},
+		{http.MethodPost, "/todo-lists/" + f.TodoList.ID + "/series", map[string]any{"todoId": f.LooseTodo.ID, "leadDays": 999, "schedule": map[string]any{"weekdays": "Monday"}}},
+		{http.MethodPatch, invented, map[string]any{"title": "", "assigneeIds": "Anke"}},
+		{http.MethodPatch, invented, map[string]any{"assigneeIds": []string{"none"}, "notifiedIds": []int{1}}},
+		{http.MethodPatch, invented, map[string]any{"schedule": map[string]any{"interval": 0}, "expectedUpdatedAt": "yesterday"}},
+		{http.MethodPatch, invented, map[string]any{"leadDays": 999, "schedule": map[string]any{"day": "1"}}},
+	} {
+		if got := callSeries(t, s, f.Token, c.method, c.path, c.body).got; got != "400 malformedBody" {
+			t.Errorf("%s %v: %s", c.method, c.body, got)
+		}
+	}
+	// Among the values, todoId is held first.
+	if got := callSeries(t, s, f.Token, http.MethodPost, "/todo-lists/"+f.TodoList.ID+"/series", map[string]any{"todoId": "none", "leadDays": 999}).got; got != "422 todoToRepeatUnknown" {
+		t.Errorf("no identifier beside a lead out of range: %s", got)
 	}
 	if got := callSeries(t, s, f.Token, http.MethodPost, "/todo-lists/"+f.TodoList.ID+"/series", map[string]any{"todoId": f.GroupedTodo.ID, "leadDays": nil}).got; got != "422 todoSeriesLeadDaysInvalid" {
 		t.Errorf("lead days of null: %s", got)
@@ -492,5 +509,67 @@ func TestAWriteStandsAMomentAfterTheOneBefore(t *testing.T) {
 	callSeries(t, s, f.Token, http.MethodPatch, "/todo-series/"+f.Series.ID, map[string]any{"leadDays": 1})
 	if !f.Series.UpdatedAt.After(before) {
 		t.Fatalf("updatedAt %v, before %v", f.Series.UpdatedAt, before)
+	}
+}
+
+// An edit that changes nothing writes nothing: the answer is the series as it
+// stands, updatedAt stays, and a version not read is then no conflict.
+func TestAnEditThatChangesNothingWritesNothing(t *testing.T) {
+	s, f := New(t)
+	path := "/todo-series/" + f.Series.ID
+	read := callSeries(t, s, f.Token, http.MethodGet, path, nil)
+	sameAgain := map[string]any{
+		"title": " Fetch the speakers ", "assigneeIds": []string{f.Bruno.ID, f.Bruno.ID},
+		"schedule": map[string]any{"rhythm": "weekly", "interval": 1}, "leadDays": 2,
+	}
+
+	s.now = s.now.Add(time.Hour)
+	unchanged := callSeries(t, s, f.Token, http.MethodPatch, path, sameAgain)
+	if unchanged.got != "200" || unchanged.raw != read.raw {
+		t.Fatalf("an identical write: %s %s", unchanged.got, unchanged.raw)
+	}
+	callSeries(t, s, f.Token, http.MethodPatch, path, map[string]any{"leadDays": 3})
+	callSeries(t, s, f.Token, http.MethodPatch, path, map[string]any{"leadDays": 2})
+	stale := read.body["updatedAt"]
+	if got := callSeries(t, s, f.Token, http.MethodPatch, path, map[string]any{"leadDays": 2, "expectedUpdatedAt": stale}).got; got != "200" {
+		t.Errorf("an identical write over a version not read is no conflict: %s", got)
+	}
+	for name, body := range map[string]map[string]any{
+		"other people":            {"assigneeIds": []string{f.Anke.ID}, "expectedUpdatedAt": stale},
+		"somebody told when done": {"notifiedIds": []string{f.Anke.ID}, "expectedUpdatedAt": stale},
+		"another title":           {"title": "Fetch the amps", "expectedUpdatedAt": stale},
+		"another end":             {"schedule": map[string]any{"endsOn": "2030-01-01"}, "expectedUpdatedAt": stale},
+	} {
+		if got := callSeries(t, s, f.Token, http.MethodPatch, path, body).got; got != "409 todoSeriesChanged" {
+			t.Errorf("%s is a change: %s", name, got)
+		}
+	}
+	f.Series.AssigneeIDs = []string{f.Bruno.ID, f.Anke.ID}
+	if got := callSeries(t, s, f.Token, http.MethodPatch, path, map[string]any{"assigneeIds": []string{f.Anke.ID, f.Bruno.ID}, "expectedUpdatedAt": stale}).got; got != "409 todoSeriesChanged" {
+		t.Errorf("the same people in another order are a change: %s", got)
+	}
+	f.TodoList.Archived = true
+	if got := callSeries(t, s, f.Token, http.MethodPatch, path, map[string]any{"leadDays": 2}).got; got != "422 todoListArchived" {
+		t.Errorf("an identical write into an archived list: %s", got)
+	}
+}
+
+// People compare as the series shows them: somebody stored and hidden from
+// the list is no difference, stays where the people are left out or nothing
+// changes, and goes with a write that names the people and changes anything.
+func TestAPersonHiddenFromTheListStaysUntilAWriteNamesThePeople(t *testing.T) {
+	s, f := New(t)
+	path := "/todo-series/" + f.Series.ID
+	f.Series.AssigneeIDs = []string{f.Bruno.ID, f.Client.ID}
+	f.TodoList.HiddenFromClients = true
+
+	callSeries(t, s, f.Token, http.MethodPatch, path, map[string]any{"assigneeIds": []string{f.Bruno.ID}})
+	callSeries(t, s, f.Token, http.MethodPatch, path, map[string]any{"leadDays": 5})
+	if len(f.Series.AssigneeIDs) != 2 {
+		t.Fatalf("kept by an identical naming and by a write without people: %v", f.Series.AssigneeIDs)
+	}
+	callSeries(t, s, f.Token, http.MethodPatch, path, map[string]any{"assigneeIds": []string{f.Bruno.ID}, "leadDays": 6})
+	if len(f.Series.AssigneeIDs) != 1 || f.Series.AssigneeIDs[0] != f.Bruno.ID {
+		t.Fatalf("taken off by a write that names the people and changes: %v", f.Series.AssigneeIDs)
 	}
 }

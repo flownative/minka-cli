@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"text/tabwriter"
+	"time"
 
 	"github.com/flownative/minka-cli/internal/api"
 	"github.com/flownative/minka-cli/internal/richtext"
@@ -377,7 +378,13 @@ Somebody else may have changed the series since you read it. Give the
 updatedAt you read with --expect: a series written over since, by an edit, a
 stop, a resume or an occurrence made, is then left as it stands, the command
 prints it and exits with 9 (meta.apiCode todoSeriesChanged). --force writes
-over whatever stands, and one of the two flags is required.`,
+over whatever stands, and one of the two flags is required.
+
+A change that asks for what stands already writes nothing: updatedAt stays,
+and it is no conflict even over a series written since. People are compared
+as the series shows them, in their order; somebody on it who no longer sees
+the list is taken off by a write that names the people and changes anything,
+and kept otherwise.`,
 		Example: `  minka todos series edit 0199... --interval 2 --expect 2026-09-29T20:08:41.123456Z
   minka todos series edit 0199... --rhythm monthlyOnDay --day 31 --expect 2026-09-29T20:08:41.123456Z
   minka todos series edit 0199... --ends-on "" --assignee me --force`,
@@ -452,10 +459,17 @@ over whatever stands, and one of the two flags is required.`,
 			}
 
 			summary := "Changed series " + series.Value.Title + ": repeats " + describeRepetition(series.Value.Schedule)
+			notices := ignoredDetailsNotice(in, series.Value)
+			// A write that asks for what stands already writes nothing, so the
+			// moment read is still the series' own.
+			if guard != nil && sameMoment(*guard, series.Value.UpdatedAt) {
+				summary = "Series " + series.Value.Title + " holds all of this already; nothing was written"
+				notices = append(notices, "nothing changed: the series holds what was sent, and its updatedAt stays "+series.Value.UpdatedAt)
+			}
 			return a.ok(success{
 				data:        series.Raw,
 				summary:     summary,
-				notices:     ignoredDetailsNotice(in, series.Value),
+				notices:     notices,
 				breadcrumbs: todoSeriesBreadcrumbs(series.Value),
 				text: func(w io.Writer) {
 					fmt.Fprintf(w, "%s.\n%s\nTo write over it: --expect %s\n", summary, nextOccurrenceLine(series.Value), series.Value.UpdatedAt)
@@ -583,6 +597,14 @@ beforehand whether it would make one.`,
 			})
 		},
 	}
+}
+
+// sameMoment says whether two moments as Minka writes them are one, whatever
+// form of the offset each was written in.
+func sameMoment(one, other string) bool {
+	a, errA := time.Parse(time.RFC3339Nano, one)
+	b, errB := time.Parse(time.RFC3339Nano, other)
+	return errA == nil && errB == nil && a.Equal(b)
 }
 
 // todoOfLocation reads the ID of a to-do out of the address Minka names it by.
