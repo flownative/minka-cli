@@ -146,23 +146,13 @@ that would drop them is refused unless --drop-attachments is given.`,
 			if err != nil {
 				return s.fail(err)
 			}
-			// Files and mentions stand in the text as elements Markdown cannot
-			// hold, so only a text that carries them keeps them.
-			for _, current := range card.Value.Comments {
-				if current.ID != args[1] {
-					continue
-				}
-				if richtext.HasAttachments(firstNonEmpty(current.BodySource, current.Body)) && !richtext.HasAttachments(body) {
-					if !dropAttachments {
-						return &Error{
-							Code:    CodeUsage,
-							Message: "the comment has attachments or mentions, and the new text would drop them",
-							Hint:    "Change the bodySource of the comment from cards show --json and send it back with --format html, or give --drop-attachments.",
-						}
-					}
-					notices = append(notices, "the attachments and mentions of the comment were dropped")
-				}
+			// A comment under a card of the archive takes no text at all.
+			dropped, err := a.keepsTheAttachmentsOfAComment(s, card.Value.ProjectID, closedIf(card.Value.Archived), card.Value.Comments, args[1], body, dropAttachments,
+				"Change the bodySource of the comment from cards show --json and send it back with --format html, or give --drop-attachments.")
+			if err != nil {
+				return err
 			}
+			notices = append(notices, dropped...)
 
 			comment, err := s.client.EditComment(a.ctx, args[0], args[1], body)
 			if err != nil {

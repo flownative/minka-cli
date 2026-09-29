@@ -141,7 +141,10 @@ else's is 404, as if it were not there; the same body again is 200 and changes
 nothing. `checkins answers edit` reads the answer first, so that a text with
 files or mentions is not replaced by one without unless `--drop-attachments` is
 given. Where it carries them and somebody else wrote it, the command says so
-with exit 2 before that guard and writes nothing, as Minka would answer.
+with exit 2 before that guard and writes nothing, as Minka would answer: Minka
+asks who wrote the answer before the text and before the archived project. In
+an archived project one's own answer goes out and `projectArchived` is the
+answer, not the guard ([C-082](../decisions.md#c-082)).
 
 ## Reminders
 

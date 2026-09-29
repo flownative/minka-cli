@@ -80,7 +80,10 @@ are `action-text-attachment` elements with a freshly signed handle.
   drew as a card, `minka-ref` for a reference to another record. A new text
   that would lose any of them is refused; `--drop-attachments` allows it
   explicitly, and the refusal calls them all attachments, after the flag.
-  Sending the source back as HTML keeps them.
+  Sending the source back as HTML keeps them. Where Minka refuses the write
+  whatever is sent — an archived project, a text of the archive, a comment of
+  somebody else — the guard stands aside and Minka's refusal is the answer
+  ([C-082](../decisions.md#c-082)).
 - A handle is valid only within its circle — project or conversation. In a
   text elsewhere the server silently removes it on saving, which is why the
   help and the SKILL.md advise reading the text back afterwards.

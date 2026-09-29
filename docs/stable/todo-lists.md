@@ -52,7 +52,10 @@ neither field is `nothingToChange`, which the CLI never sends: an edit without a
 flag is a usage error here.
 
 A description that carries files or mentions is not replaced by one that does
-not, unless `--drop-attachments` is given, as for a card.
+not, unless `--drop-attachments` is given, as for a card. For a list of the
+archive and in an archived project that guard stands aside, and Minka's
+`todoListArchived` or `projectArchived` is the answer
+([C-082](../decisions.md#c-082)).
 
 ## The archive of a list
 

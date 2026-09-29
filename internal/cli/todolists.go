@@ -274,7 +274,8 @@ A list in the archive takes no change: exit 9 with todoListArchived.`,
 				if err != nil {
 					return todoListRefusal(s, err, args[0])
 				}
-				dropped, err := keepsTheAttachments(firstNonEmpty(current.Value.DescriptionSource, current.Value.Description), *input.Description, dropAttachments,
+				// A list of the archive takes no description at all.
+				dropped, err := a.guardOverFiles(s, current.Value.ProjectID, closedIf(current.Value.Archived), firstNonEmpty(current.Value.DescriptionSource, current.Value.Description), *input.Description, dropAttachments,
 					"the description has attachments or mentions, and the new description would drop them",
 					"Change descriptionSource from todolists show --json and send it back with --description-format html, or give --drop-attachments.")
 				if err != nil {

@@ -336,7 +336,9 @@ them is refused unless --drop-attachments is given.`,
 				if err != nil {
 					return documentRefusal(s, err)
 				}
-				dropped, err := keepsTheAttachments(firstNonEmpty(current.Value.BodySource, current.Value.Body), *input.Body, dropAttachments,
+				// A document of the archive, or one below an archived folder,
+				// takes no body at all.
+				dropped, err := a.guardOverFiles(s, current.Value.ProjectID, closedIf(current.Value.Archived), firstNonEmpty(current.Value.BodySource, current.Value.Body), *input.Body, dropAttachments,
 					"the document has attachments or mentions, and the new body would drop them",
 					"Change the bodySource from docs show --json and send it back with --body-format html, or give --drop-attachments.")
 				if err != nil {
@@ -523,22 +525,16 @@ that would drop them is refused unless --drop-attachments is given.`,
 			if err != nil {
 				return err
 			}
-			comments, err := a.commentsUnder(s, entry)
+			under, err := a.entryUnder(s, entry)
 			if err != nil {
 				return err
 			}
-			for _, current := range comments {
-				if current.ID != args[0] {
-					continue
-				}
-				dropped, err := keepsTheAttachments(firstNonEmpty(current.BodySource, current.Body), body, dropAttachments,
-					"the comment has attachments or mentions, and the new text would drop them",
-					"Change the bodySource of the comment from docs show --json and send it back with --format html, or give --drop-attachments.")
-				if err != nil {
-					return err
-				}
-				notices = append(notices, dropped...)
+			dropped, err := a.keepsTheAttachmentsOfAComment(s, under.projectID, a.closedToComments(s, under), under.comments, args[0], body, dropAttachments,
+				"Change the bodySource of the comment from docs show --json and send it back with --format html, or give --drop-attachments.")
+			if err != nil {
+				return err
 			}
+			notices = append(notices, dropped...)
 
 			comment, err := s.client.EditCommentOn(a.ctx, entry, args[0], body)
 			if err != nil {
@@ -706,22 +702,55 @@ func entryOfFlags(cmd *cobra.Command, documentID, uploadID string) (api.Commente
 	}
 }
 
-// commentsUnder reads the entry a comment hangs on, for the one thing a write
-// has to know beforehand: whether the text it replaces carries files or
-// mentions that Markdown cannot hold.
-func (a *app) commentsUnder(s *session, entry api.Commented) ([]api.Comment, error) {
+// commentedEntry is what a change of a comment has to know beforehand of the
+// entry it hangs on: whether the text it replaces carries files or mentions
+// that Markdown cannot hold, and whether Minka would take the change at all.
+type commentedEntry struct {
+	projectID string
+	toolID    string
+	folder    *api.FolderReference
+	archived  bool
+	comments  []api.Comment
+}
+
+func (a *app) entryUnder(s *session, entry api.Commented) (commentedEntry, error) {
 	if entry.Kind == api.CommentedUpload {
 		upload, err := s.client.FilesUploadOf(a.ctx, entry.ID)
 		if err != nil {
-			return nil, documentRefusal(s, err)
+			return commentedEntry{}, documentRefusal(s, err)
 		}
-		return upload.Value.Comments, nil
+		u := upload.Value
+		return commentedEntry{projectID: u.ProjectID, toolID: u.ToolID, folder: u.Folder, archived: u.Archived, comments: u.Comments}, nil
 	}
 	document, err := s.client.Document(a.ctx, entry.ID)
 	if err != nil {
-		return nil, documentRefusal(s, err)
+		return commentedEntry{}, documentRefusal(s, err)
 	}
-	return document.Value.Comments, nil
+	d := document.Value
+	return commentedEntry{projectID: d.ProjectID, toolID: d.ToolID, folder: d.Folder, archived: d.Archived, comments: d.Comments}, nil
+}
+
+// closedToComments says whether Minka refuses every change of a comment under
+// an entry. An entry of the archive is refused; one that lies there only
+// through a folder above it is not, because Minka asks the entry alone when a
+// comment is changed. The entry says archived for either, so where it stands
+// in a folder the folder is read to tell the two apart, and where both hold
+// the guard stays.
+func (a *app) closedToComments(s *session, entry commentedEntry) func() (bool, error) {
+	return func() (bool, error) {
+		if !entry.archived || entry.folder == nil {
+			return entry.archived, nil
+		}
+		folder, err := s.client.FilesEntriesOf(a.ctx, entry.toolID, entry.folder.ID)
+		if err != nil {
+			e := s.fail(err)
+			if e.Code == CodeNotFound {
+				e.Hint = "The folder the entry stands in is gone since the entry was read. Read it again with docs show."
+			}
+			return false, e
+		}
+		return !folder.Value.Archived, nil
+	}
 }
 
 // keepsTheAttachments refuses a text that would drop the files and mentions
@@ -735,6 +764,66 @@ func keepsTheAttachments(current, replacement string, allowed bool, message, hin
 		return nil, &Error{Code: CodeUsage, Message: message, Hint: hint}
 	}
 	return []string{"the attachments and mentions of the text were dropped"}, nil
+}
+
+// guardOverFiles holds a new text against the one it replaces, and stands
+// aside where Minka refuses the write whatever is sent: nothing can be lost
+// there, and Minka's refusal says what is really wrong where the guard's would
+// point at a flag that cannot help. What the read of the text shows is asked
+// through closed; whether the project is archived no such read says. Both are
+// asked only where the guard is about to refuse.
+func (a *app) guardOverFiles(s *session, projectID string, closed func() (bool, error), current, replacement string, allowed bool, message, hint string) ([]string, error) {
+	dropped, refusal := keepsTheAttachments(current, replacement, allowed, message, hint)
+	if refusal == nil {
+		return dropped, nil
+	}
+	refusedAnyway, err := closed()
+	if err != nil || refusedAnyway {
+		return nil, err
+	}
+	archived, err := s.client.Projects(a.ctx, true)
+	if err != nil {
+		return nil, s.fail(err)
+	}
+	for _, project := range archived.Value {
+		if project.ID == projectID && project.Status == "archived" {
+			return nil, nil
+		}
+	}
+	return nil, refusal
+}
+
+// closedIf is what a read has already said about whether the place a text
+// stands in takes any write.
+func closedIf(archived bool) func() (bool, error) {
+	return func() (bool, error) { return archived, nil }
+}
+
+// keepsTheAttachmentsOfAComment holds a new text against the comment it
+// replaces. Only its author changes a comment, and Minka refuses one of
+// somebody else whatever is sent, so there its answer comes and not the guard.
+// Whose the comment is gets asked only where the guard is about to refuse.
+func (a *app) keepsTheAttachmentsOfAComment(s *session, projectID string, closed func() (bool, error), comments []api.Comment, commentID, body string, allowed bool, hint string) ([]string, error) {
+	const message = "the comment has attachments or mentions, and the new text would drop them"
+	for _, current := range comments {
+		if current.ID != commentID {
+			continue
+		}
+		text := firstNonEmpty(current.BodySource, current.Body)
+		dropped, refusal := keepsTheAttachments(text, body, allowed, message, hint)
+		if refusal == nil {
+			return dropped, nil
+		}
+		me, err := a.meID(s)()
+		if err != nil {
+			return nil, err
+		}
+		if current.Author.ID != me {
+			return nil, nil
+		}
+		return a.guardOverFiles(s, projectID, closed, text, body, allowed, message, hint)
+	}
+	return nil, nil
 }
 
 func checkBodyFormat(cmd *cobra.Command, format string) error {

@@ -63,9 +63,11 @@ The posts are read with `posts tools`, `posts categories`, `posts list` (and
 `posts create`, `edit`, `pin`, `unpin`, `archive`, `unarchive` and `delete`;
 their comments with `posts comments list`, `create`, `edit`, `delete`, `react`
 and `unreact`. The rule the commands follow is [Posts](../stable/posts.md)
-(C-081, C-082). Drafts, taking a post out of the trash, reacting to a post
-itself and showing one to clients have no address in the API. None of it has
-been seen live: the whole feature is checked against the fake, see below.
+(C-081). The guard over files stands aside wherever Minka refuses a text
+anyway, for every text (C-082). Drafts, taking a post out of the trash,
+reacting to a post itself and showing one to clients have no address in the
+API. None of it has been seen live: the whole feature is checked against the
+fake, see below.
 
 `minka import basecamp` extracts the structure, the boards, the message
 boards, the chats, the check-ins, the to-dos, the forwarded mail and the
@@ -272,7 +274,8 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   command sends it.
 
 - Of the notes of a card: `cardNotesHasControlCharacters`, and `cardArchived`
-  for a card in its board's archive, which no write of the fake refuses with.
+  for a card in its board's archive, which the notes of the fake never
+  refuse with.
   Notes over 100000 characters are refused before sending, counted as the
   server counts them since it was brought into line. The fake refuses in the
   controller's order, the text before the guard, and reads a guard's time in
@@ -400,6 +403,10 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   fake API knows no organisations. Read in the Minka code.
 - That a foreign attachment silently disappears on saving: the fake does not
   remove it.
+- Of the writes on an archived card, only `cards edit` and `comments edit`
+  answer `cardArchived` in the fake, in the order `BoardApiController` asks:
+  the text first, then `projectArchived`, `cardArchived` and last the author
+  of a comment. The other writes on a card of the archive are 404 in the fake.
 - Unicode NFC for the content of a reaction: the server normalises, the fake
   does not.
 - That a write into an archived project answers 422 `projectArchived`: no
@@ -1008,11 +1015,12 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   empty, and the record is written and shows nothing. Waiting is what a file that
   never comes at all causes.
 
-- The guard over files stands aside where Minka refuses the write anyway on
-  posts alone (C-082). `docs comments edit` still runs it before Minka's
-  refusal of somebody else's comment and of an entry in the archive, and
-  `checkins answers edit` answers somebody else's answer with exit 2 of its
-  own. Aligning the two is carded by the coordination.
+- Minka changes one's own comment under a document or an upload that lies in
+  the archive only through a folder above it: `DbalCommentRepository::change`
+  asks the item and its tool, not `FolderChain`, while writing a new comment
+  there is refused (E-195). Read in the code, not seen live; the fake mirrors
+  it, and the guard over files stands there (C-082). Removing such a comment
+  goes through the same condition, and the fake still refuses that.
 - `editedAt` of a post is set by going into the trash and coming back out of
   it, so a post restored on the web says it was edited although nobody changed
   it (`DbalPostRepository::throwAway`, `restoreFromTrash`). Reported to Minka
