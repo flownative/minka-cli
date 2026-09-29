@@ -16,7 +16,10 @@ type todoList struct {
 	recording
 	ID     int64  `json:"id"`
 	Status string `json:"status"`
-	Title  string `json:"title"`
+	// InheritsStatus tells a group whose status is its list's rather than its
+	// own. A list of a tool has none to inherit.
+	InheritsStatus bool   `json:"inherits_status"`
+	Title          string `json:"title"`
 	// Description is the text of a list as Basecamp renders it; there is no
 	// stored form of it.
 	Description   string     `json:"description"`
@@ -47,7 +50,10 @@ type todo struct {
 	recording
 	ID     int64  `json:"id"`
 	Status string `json:"status"`
-	Title  string `json:"title"`
+	// InheritsStatus tells a to-do whose status is its list's or its group's
+	// rather than its own.
+	InheritsStatus bool   `json:"inherits_status"`
+	Title          string `json:"title"`
 	// Description is the notes of a to-do as Basecamp renders them; there is no
 	// stored form of them.
 	Description string     `json:"description"`
@@ -74,6 +80,18 @@ type todo struct {
 // to-do. The shelf is the list's alone: a group and a to-do know the trash and
 // nothing beyond it.
 var todoStatuses = map[string]bool{bundle.StatusActive: true, bundle.StatusTrashed: true}
+
+// bundleStatus is the status a group or a to-do carries in a bundle. Basecamp
+// puts everything standing in a list or a group on the shelf or in the trash
+// with it and says that it inherits the status. In Minka the list or the group
+// alone holds the shelf and the trash, and what stands in it follows, so an
+// inherited status is carried as in use; one of its own stays as it is.
+func bundleStatus(status string, inherited bool) string {
+	if inherited && (status == bundle.StatusArchived || status == bundle.StatusTrashed) {
+		return bundle.StatusActive
+	}
+	return status
+}
 
 // lostPlace is a list or a group the bundle does not carry. Whatever stood in it
 // falls with it, and a walk of its own counts what that was.
@@ -193,10 +211,18 @@ func (e *Extractor) extractTodosOfProject(ctx context.Context, w *bundle.Writer,
 		}
 	}
 	groupsGone := map[int64][]todoList{}
+	inheriting := map[int64][]todoList{}
 	var strays []todoList
 	for _, found := range groups {
 		if !carries[found.Parent.ID] {
 			strays = append(strays, found)
+			continue
+		}
+		// A group that takes its status from its list stands in the list, whose
+		// own walk of its groups decides where; this one only stands in for a group
+		// that walk does not name.
+		if found.InheritsStatus {
+			inheriting[found.Parent.ID] = append(inheriting[found.Parent.ID], found)
 			continue
 		}
 		if aSecondTime(met, found.ID) {
@@ -226,7 +252,7 @@ func (e *Extractor) extractTodosOfProject(ctx context.Context, w *bundle.Writer,
 			if err := e.writeTodoList(ctx, w, bucket, tool.id, found); err != nil {
 				return err
 			}
-			written, fell, err := e.writeTodoGroups(ctx, w, bucket, tool.id, found.ID, groupsGone[found.ID], met, projectID)
+			written, fell, err := e.writeTodoGroups(ctx, w, bucket, tool.id, found.ID, inheriting[found.ID], groupsGone[found.ID], met, projectID)
 			if err != nil {
 				return err
 			}
@@ -423,8 +449,9 @@ func (e *Extractor) shelvedTodoLists(ctx context.Context, bucket int64) ([]todoL
 }
 
 // writeTodoGroups adds the groups of one list: those in use as Basecamp lists
-// them, then the ones it has thrown away. A group goes to the end of its list,
-// so the order of the file is the order of the list. It hands back the groups it
+// them, then those taking their status from the list that the list did not name,
+// then the ones it has thrown away. A group goes to the end of its list, so the
+// order of the file is the order of the list. It hands back the groups it
 // wrote, for the to-dos standing in them, and the ones it left out, for whoever
 // counts what fell with them.
 //
@@ -432,17 +459,18 @@ func (e *Extractor) shelvedTodoLists(ctx context.Context, bucket int64) ([]todoL
 // a word a bundle has none for. Nothing else hangs on a group: the format has no
 // word for a comment, a reaction or a file of one, such a record would wait in
 // Minka for ever, so none is written and none is asked for.
-func (e *Extractor) writeTodoGroups(ctx context.Context, w *bundle.Writer, bucket, tool, list int64, gone []todoList, met map[int64]bool, projectID string) ([]todoList, []lostPlace, error) {
+func (e *Extractor) writeTodoGroups(ctx context.Context, w *bundle.Writer, bucket, tool, list int64, inheriting, gone []todoList, met map[int64]bool, projectID string) ([]todoList, []lostPlace, error) {
 	listed, err := getList[todoList](ctx, e.Source, fmt.Sprintf("buckets/%d/todolists/%d/groups.json", bucket, list))
 	if err != nil {
 		return nil, nil, err
 	}
-	groups := make([]todoList, 0, len(listed)+len(gone))
+	groups := make([]todoList, 0, len(listed)+len(inheriting)+len(gone))
 	var fell []lostPlace
-	for _, found := range listed {
+	for _, found := range append(listed, inheriting...) {
 		if aSecondTime(met, found.ID) {
 			continue
 		}
+		found.Status = bundleStatus(found.Status, found.InheritsStatus)
 		taken, err := e.metAmong(todoStatuses, "group", found.ID, found.Status, found.recording, "project", projectID)
 		if err != nil {
 			return nil, nil, err
@@ -603,7 +631,7 @@ func (e *Extractor) todosIn(ctx context.Context, bucket, in int64, shelved []tod
 		if aSecondTime(placed, one.ID) {
 			continue
 		}
-		taken, err := e.metAmong(todoStatuses, "to-do", one.ID, one.Status, one.recording, "project", sourceID(bucket))
+		taken, err := e.metAmong(todoStatuses, "to-do", one.ID, bundleStatus(one.Status, one.InheritsStatus), one.recording, "project", sourceID(bucket))
 		if err != nil {
 			return nil, err
 		}
@@ -659,6 +687,7 @@ func (e *Extractor) writeTodo(ctx context.Context, w *bundle.Writer, bucket, too
 		return err
 	}
 
+	status := bundleStatus(found.Status, found.InheritsStatus)
 	record := bundle.Todo{
 		Record:          origin,
 		ProjectSourceID: sourceID(bucket),
@@ -671,8 +700,11 @@ func (e *Extractor) writeTodo(ctx context.Context, w *bundle.Writer, bucket, too
 		NotifyWhenDone:  notified,
 		CompletedAt:     completedAt,
 		CompletedBy:     completedBy,
-		Status:          found.Status,
+		Status:          status,
 	}
+	// A to-do in the trash with its list or its group goes back with it in Minka
+	// and keeps whom it had there, as one in the trash of its own does, so the
+	// status the source says decides, not the one the bundle carries.
 	if record.Subscribers, err = e.subscribersOf(ctx, "to-do", bucket, found.ID, found.Status); err != nil {
 		return err
 	}
@@ -688,7 +720,7 @@ func (e *Extractor) writeTodo(ctx context.Context, w *bundle.Writer, bucket, too
 		return err
 	}
 	e.measure(bundle.Todos, notes, LongestBodyRecord{Record: "to-do", SourceID: origin.SourceID, In: "project", InSourceID: sourceID(bucket)})
-	e.todosByStatus[found.Status]++
+	e.todosByStatus[status]++
 	if repeats(found.Repetition) {
 		e.todosThatRepeat++
 	}

@@ -11,8 +11,10 @@ import (
 // these as well, and the account answers both the same way.
 type TodoList struct {
 	ID int64
-	// Status is "active" when empty. ShownStatus replaces what the list says
-	// about it, wherever it is listed.
+	// Status is the list's own, "active" when empty. A group standing in a list
+	// that is not in use says its list's status instead and that it inherits it,
+	// as Basecamp does. ShownStatus replaces what the list says about it,
+	// wherever it is listed.
 	Status      string
 	ShownStatus string
 	Title       string
@@ -41,6 +43,10 @@ type TodoList struct {
 	// Color is the colour of a group, "white" when empty, which is what every
 	// group of the account says unless somebody coloured it. A list says null.
 	Color string
+	// OnlyInItsList has the account leave a group out of the archived and
+	// trashed records of the project, so that a run meets it among the groups of
+	// its list alone.
+	OnlyInItsList bool
 	// Colorless has a group say null for its colour, which no group of the
 	// account was seen to do.
 	Colorless bool
@@ -177,7 +183,9 @@ func todoProject(ada, grace, edsger, former Person, tool func(int64, string, str
 // Todo is a to-do of a list or of one of its groups.
 type Todo struct {
 	ID int64
-	// Status is "active" when empty. ShownStatus replaces what the to-do says
+	// Status is the to-do's own, "active" when empty. A to-do standing in a list
+	// or a group that is not in use says that one's status instead and that it
+	// inherits it, as Basecamp does. ShownStatus replaces what the to-do says
 	// about it, wherever it is listed.
 	Status      string
 	ShownStatus string
@@ -240,9 +248,9 @@ func (a *Account) todos(path string, page int) ([]byte, bool) {
 					if list.status() != "active" {
 						continue
 					}
-					found = append(found, a.todoListJSON(p, tool.ID, "Todoset", list))
+					found = append(found, a.todoListJSON(p, tool.ID, "Todoset", list, ofItsOwn(list.status())))
 					if list.Twice {
-						found = append(found, a.todoListJSON(p, tool.ID, "Todoset", list))
+						found = append(found, a.todoListJSON(p, tool.ID, "Todoset", list, ofItsOwn(list.status())))
 					}
 				}
 				return a.pageOf(found, page), true
@@ -251,16 +259,16 @@ func (a *Account) todos(path string, page int) ([]byte, bool) {
 	case todoGroupsPattern.MatchString(path):
 		match := todoGroupsPattern.FindStringSubmatch(path)
 		if p := a.project(match[1]); p != nil {
-			if list, known := a.theTodoList(p, match[2]); known {
+			if list, at, known := a.theTodoList(p, match[2]); known {
 				var found []map[string]any
 				for i := range list.Groups {
 					group := &list.Groups[i]
 					if group.status() != "active" {
 						continue
 					}
-					found = append(found, a.todoListJSON(p, list.ID, "Todolist", group))
+					found = append(found, a.todoListJSON(p, list.ID, "Todolist", group, standingIn(group.status(), at)))
 					if group.Twice {
-						found = append(found, a.todoListJSON(p, list.ID, "Todolist", group))
+						found = append(found, a.todoListJSON(p, list.ID, "Todolist", group, standingIn(group.status(), at)))
 					}
 				}
 				return a.pageOf(found, page), true
@@ -273,20 +281,21 @@ func (a *Account) todos(path string, page int) ([]byte, bool) {
 			// A To-dos tool answers under this path as a list of it does, and
 			// hands out the to-dos hanging on itself.
 			if tool, known := a.theTodoset(p, match[2]); known {
-				return a.pageOf(a.todosInAPlace(p, tool.ID, "Todoset", tool.Todos, done), page), true
+				return a.pageOf(a.todosInAPlace(p, tool.ID, "Todoset", tool.Todos, ofItsOwn("active"), done), page), true
 			}
-			if list, known := a.theTodoList(p, match[2]); known {
-				return a.pageOf(a.todosInAPlace(p, list.ID, "Todolist", list.Todos, done), page), true
+			if list, at, known := a.theTodoList(p, match[2]); known {
+				return a.pageOf(a.todosInAPlace(p, list.ID, "Todolist", list.Todos, at, done), page), true
 			}
 		}
 	case todoItemsPattern.MatchString(path):
 		match := todoItemsPattern.FindStringSubmatch(path)
 		if p := a.project(match[1]); p != nil {
 			var found []map[string]any
-			a.eachTodoPlace(p, func(parentID int64, parentType string, todos []Todo) {
+			a.eachTodoPlace(p, func(parentID int64, parentType string, todos []Todo, at standing) {
 				for i := range todos {
-					if one := &todos[i]; one.status() == match[2] {
-						found = append(found, a.todoJSON(p, parentID, parentType, one))
+					one := &todos[i]
+					if its := standingIn(one.status(), at); its.status == match[2] {
+						found = append(found, a.todoJSON(p, parentID, parentType, one, its))
 					}
 				}
 			})
@@ -299,20 +308,22 @@ func (a *Account) todos(path string, page int) ([]byte, bool) {
 		if p := a.project(match[1]); p != nil {
 			var found []map[string]any
 			a.eachTodoList(p, func(tool *Tool, list *TodoList) {
-				if list.status() == match[2] {
-					found = append(found, a.todoListJSON(p, tool.ID, "Todoset", list))
+				at := ofItsOwn(list.status())
+				if at.status == match[2] {
+					found = append(found, a.todoListJSON(p, tool.ID, "Todoset", list, at))
 					if list.Twice {
-						found = append(found, a.todoListJSON(p, tool.ID, "Todoset", list))
+						found = append(found, a.todoListJSON(p, tool.ID, "Todoset", list, at))
 					}
 				}
 				for i := range list.Groups {
 					group := &list.Groups[i]
-					if group.status() != match[2] {
+					its := standingIn(group.status(), at)
+					if its.status != match[2] || group.OnlyInItsList {
 						continue
 					}
-					found = append(found, a.todoListJSON(p, list.ID, "Todolist", group))
+					found = append(found, a.todoListJSON(p, list.ID, "Todolist", group, its))
 					if group.Twice {
-						found = append(found, a.todoListJSON(p, list.ID, "Todolist", group))
+						found = append(found, a.todoListJSON(p, list.ID, "Todolist", group, its))
 					}
 				}
 			})
@@ -341,7 +352,7 @@ func (a *Account) eachTodoListAndGroup(p *Project, visit func(*TodoList)) {
 // eachTodo visits the to-dos of every list and group of a project, and those
 // hanging on a To-dos tool itself.
 func (a *Account) eachTodo(p *Project, visit func(*Todo)) {
-	a.eachTodoPlace(p, func(_ int64, _ string, todos []Todo) {
+	a.eachTodoPlace(p, func(_ int64, _ string, todos []Todo, _ standing) {
 		for i := range todos {
 			visit(&todos[i])
 		}
@@ -349,30 +360,38 @@ func (a *Account) eachTodo(p *Project, visit func(*Todo)) {
 }
 
 // eachTodoPlace visits every place of a project that holds to-dos, with what a
-// record standing there says it hangs on: the lists of its To-dos tools, the
-// groups of those lists, and the tools themselves, on which Basecamp lets a to-do
-// hang straight.
-func (a *Account) eachTodoPlace(p *Project, visit func(parentID int64, parentType string, todos []Todo)) {
+// record standing there says it hangs on and the status the place hands down:
+// the lists of its To-dos tools, the groups of those lists, and the tools
+// themselves, on which Basecamp lets a to-do hang straight.
+func (a *Account) eachTodoPlace(p *Project, visit func(parentID int64, parentType string, todos []Todo, at standing)) {
 	for t := range p.Dock {
 		if tool := &p.Dock[t]; tool.Type == "todosets" {
-			visit(tool.ID, "Todoset", tool.Todos)
+			visit(tool.ID, "Todoset", tool.Todos, ofItsOwn("active"))
 		}
 	}
-	a.eachTodoListAndGroup(p, func(list *TodoList) { visit(list.ID, "Todolist", list.Todos) })
+	a.eachTodoList(p, func(_ *Tool, list *TodoList) {
+		at := ofItsOwn(list.status())
+		visit(list.ID, "Todolist", list.Todos, at)
+		for i := range list.Groups {
+			group := &list.Groups[i]
+			visit(group.ID, "Todolist", group.Todos, standingIn(group.status(), at))
+		}
+	})
 }
 
 // todosInAPlace are the to-dos of one place as the account hands them out: those
 // that are open or those that are done, as Basecamp keeps the two apart.
-func (a *Account) todosInAPlace(p *Project, parentID int64, parentType string, todos []Todo, done bool) []map[string]any {
+func (a *Account) todosInAPlace(p *Project, parentID int64, parentType string, todos []Todo, at standing, done bool) []map[string]any {
 	var found []map[string]any
 	for i := range todos {
 		one := &todos[i]
 		if one.status() != "active" || (one.Completion != nil) != done {
 			continue
 		}
-		found = append(found, a.todoJSON(p, parentID, parentType, one))
+		its := standingIn(one.status(), at)
+		found = append(found, a.todoJSON(p, parentID, parentType, one, its))
 		if one.Twice {
-			found = append(found, a.todoJSON(p, parentID, parentType, one))
+			found = append(found, a.todoJSON(p, parentID, parentType, one, its))
 		}
 	}
 	return found
@@ -388,20 +407,42 @@ func (a *Account) theTodoset(p *Project, id string) (*Tool, bool) {
 	return nil, false
 }
 
-// theTodoList finds a list or a group of a project by its ID.
-func (a *Account) theTodoList(p *Project, id string) (*TodoList, bool) {
+// theTodoList finds a list or a group of a project by its ID, with the status
+// it hands down to what stands in it.
+func (a *Account) theTodoList(p *Project, id string) (*TodoList, standing, bool) {
 	var found *TodoList
+	var at standing
 	a.eachTodoList(p, func(_ *Tool, list *TodoList) {
 		if strconv.FormatInt(list.ID, 10) == id {
-			found = list
+			found, at = list, ofItsOwn(list.status())
 		}
 		for i := range list.Groups {
-			if strconv.FormatInt(list.Groups[i].ID, 10) == id {
-				found = &list.Groups[i]
+			if group := &list.Groups[i]; strconv.FormatInt(group.ID, 10) == id {
+				found, at = group, standingIn(group.status(), ofItsOwn(list.status()))
 			}
 		}
 	})
-	return found, found != nil
+	return found, at, found != nil
+}
+
+// standing is the status a record says it has and whether it says it inherits
+// it from the place it stands in.
+type standing struct {
+	status    string
+	inherited bool
+}
+
+func ofItsOwn(status string) standing { return standing{status: status} }
+
+// standingIn is what Basecamp says of a record standing in a place: in a place
+// that is not in use, the place's status, inherited; in a place in use, the
+// record's own. A record with a status of its own in a place that is not in use
+// says the place's as well here, which no live account has shown.
+func standingIn(own string, place standing) standing {
+	if place.status != "active" {
+		return standing{status: place.status, inherited: true}
+	}
+	return ofItsOwn(own)
 }
 
 // eachTodoList visits the lists of every To-dos tool of a project, those of
@@ -422,13 +463,13 @@ func (l *TodoList) status() string {
 	return l.Status
 }
 
-// shownStatus is what the list says about its status where it is listed, which a
-// test can make something a bundle has no word for.
-func (l *TodoList) shownStatus() string {
+// shownStatus is what the list says about its status where it is listed: what
+// it stands as, unless a test makes it something a bundle has no word for.
+func (l *TodoList) shownStatus(its standing) string {
 	if l.ShownStatus != "" {
 		return l.ShownStatus
 	}
-	return l.status()
+	return its.status
 }
 
 func (t *Todo) status() string {
@@ -438,13 +479,13 @@ func (t *Todo) status() string {
 	return t.Status
 }
 
-// shownStatus is what the to-do says about its status where it is listed, which
-// a test can make something a bundle has no word for.
-func (t *Todo) shownStatus() string {
+// shownStatus is what the to-do says about its status where it is listed: what
+// it stands as, unless a test makes it something a bundle has no word for.
+func (t *Todo) shownStatus(its standing) string {
 	if t.ShownStatus != "" {
 		return t.ShownStatus
 	}
-	return t.status()
+	return its.status
 }
 
 // Repetition is the schedule of a to-do that repeats. The account writes it as
@@ -511,7 +552,7 @@ func (t *Todo) day(value string) any {
 	return nil
 }
 
-func (a *Account) todoJSON(p *Project, parentID int64, parentType string, t *Todo) map[string]any {
+func (a *Account) todoJSON(p *Project, parentID int64, parentType string, t *Todo, its standing) map[string]any {
 	people := func(named []Person) []map[string]any {
 		all := []map[string]any{}
 		for _, one := range named {
@@ -520,7 +561,7 @@ func (a *Account) todoJSON(p *Project, parentID int64, parentType string, t *Tod
 		return all
 	}
 	answer := map[string]any{
-		"id": t.ID, "status": t.shownStatus(), "title": t.Title, "content": t.Title, "type": "Todo",
+		"id": t.ID, "status": t.shownStatus(its), "title": t.Title, "content": t.Title, "type": "Todo",
 		"description": t.Notes, "description_attachments": a.filesJSON(t.Files),
 		"parent":    map[string]any{"id": parentID, "type": parentType},
 		"starts_on": t.day(t.StartsOn), "due_on": t.day(t.DueOn),
@@ -528,7 +569,7 @@ func (a *Account) todoJSON(p *Project, parentID int64, parentType string, t *Tod
 		"completed": t.Completion != nil, "subtasks_count": t.Subtasks,
 		"comments_count": len(t.Comments), "comments_url": fmt.Sprintf("%sbuckets/%d/recordings/%d/comments.json", a.root(), p.ID, t.ID),
 		"boosts_count": len(t.Boosts), "boosts_url": fmt.Sprintf("%sbuckets/%d/recordings/%d/boosts.json", a.root(), p.ID, t.ID),
-		"created_at": t.CreatedAt, "updated_at": t.UpdatedAt,
+		"created_at": t.CreatedAt, "updated_at": t.UpdatedAt, "inherits_status": its.inherited,
 	}
 	if t.VisibleToClients != nil {
 		answer["visible_to_clients"] = *t.VisibleToClients
@@ -546,16 +587,16 @@ func (a *Account) todoJSON(p *Project, parentID int64, parentType string, t *Tod
 	return answer
 }
 
-func (a *Account) todoListJSON(p *Project, parentID int64, parentType string, l *TodoList) map[string]any {
+func (a *Account) todoListJSON(p *Project, parentID int64, parentType string, l *TodoList, its standing) map[string]any {
 	answer := map[string]any{
-		"id": l.ID, "status": l.shownStatus(), "title": l.Title, "name": l.Title, "type": "Todolist",
+		"id": l.ID, "status": l.shownStatus(its), "title": l.Title, "name": l.Title, "type": "Todolist",
 		"description": l.Description, "description_attachments": a.filesJSON(l.Files),
 		"parent":         map[string]any{"id": parentID, "type": parentType},
 		"comments_count": len(l.Comments), "comments_url": fmt.Sprintf("%sbuckets/%d/recordings/%d/comments.json", a.root(), p.ID, l.ID),
 		"boosts_count": len(l.Boosts), "boosts_url": fmt.Sprintf("%sbuckets/%d/recordings/%d/boosts.json", a.root(), p.ID, l.ID),
 		"todos_url":  fmt.Sprintf("%sbuckets/%d/todolists/%d/todos.json", a.root(), p.ID, l.ID),
 		"groups_url": fmt.Sprintf("%sbuckets/%d/todolists/%d/groups.json", a.root(), p.ID, l.ID),
-		"created_at": l.CreatedAt, "updated_at": l.UpdatedAt,
+		"created_at": l.CreatedAt, "updated_at": l.UpdatedAt, "inherits_status": its.inherited,
 	}
 	if l.VisibleToClients != nil {
 		answer["visible_to_clients"] = *l.VisibleToClients
