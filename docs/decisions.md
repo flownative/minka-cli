@@ -1484,3 +1484,14 @@ mark: were an own status under such a parent marked too (not seen live, see
 [Status](work-in-progress/status.md)), one trashed of its own would be in use.
 **Why:** In Minka the list or group alone holds the shelf and the trash, and
 restoring it restores all in it. **Implemented as:** `basecamp.bundleStatus`.
+
+<a id="c-088"></a>
+## C-088 — Without `--project` a run takes every project, archived ones too
+
+*Applies to: `import basecamp`, `--project`, `--active-only`*
+
+No `--project`: active and archived lists, ID order, a project in both lists
+walked once; `--active-only` drops the archived. `--project` is "exactly
+these", a usage error with `--active-only`. No trash, stars or hill charts.
+**Why:** Basecamp lists active projects alone, and Robert decided the archived
+ones go along. **Implemented as:** `basecamp.Extractor.ExtractEveryProject`.

@@ -7,11 +7,45 @@ thing the two sides share; Minka's applier reads the bundle, the CLI never
 writes history into Minka itself.
 
 ```
-minka import basecamp --project <id> [--project <id> …] --out <dir> [--dry-run]
+minka import basecamp [--project <id> … | --active-only] --out <dir> [--dry-run]
 ```
 
 The command talks to Basecamp only, and only reads there. It needs no Minka
 host and no token.
+
+## Which projects a run takes
+
+**Without `--project` a run takes every project the Basecamp identity can see,
+the active and the archived ones** (C-088). It reads `projects.json`, which
+holds the active projects alone, and `projects.json?status=archived`, each with
+all its pages, once the people of the account are read. Every project is then
+asked for by its ID, as a named one is, so an archived project comes with
+`status` `archived` the way `--project` has always brought it. A project met in
+both lists, as one that went on the shelf between the two requests is, is
+walked once. **The two lists are no snapshot:** a project taken off the shelf
+between them, or one that moves while their pages are walked, can be missed;
+the run notices a project met twice and walks it once, but not one met
+nowhere. `--active-only` leaves the archived list unasked.
+
+- `--project` names **exactly** the projects to take, whatever their status,
+  and is repeated for several; no list is read. Together with `--active-only`
+  it is a usage error: the one says "exactly these", the other "pick among all
+  of them", and a filter over named projects would drop a project somebody
+  named without a word.
+- **Projects in the trash are never taken** and never asked for, neither listed
+  nor counted: the trash is outside the selection, as a project nobody named is
+  outside a run with `--project`, and no report names what a run was not asked
+  to take.
+- The projects stand in the bundle **in the order of their IDs**, active and
+  archived mixed, whichever way they were chosen, so that two runs over the
+  same account write the same bytes.
+- An identity whose lists hold no project — with `--active-only`, no active one
+  — ends the run as `not_found` before anything is written; the `hint` names
+  `basecamp projects list --all`, with `--status archived` for the shelf. Only
+  a missing project carries that hint: anything else not found, a tool that
+  answers 404 among it, gets one that says to look up what the message names.
+- A listed ID is held to the same shape as a named one; anything else ends the
+  run as `api_error` before the project is asked for.
 
 ## Through the Basecamp CLI
 
@@ -35,7 +69,8 @@ The Basecamp CLI has to be installed and signed in.
   the account and is turned into a path; anything else is refused, because the
   Basecamp CLI signs every request it makes.
 - A project is named by its numeric ID of at most 18 digits. Anything else is
-  a usage error before a request goes out and before a directory is made.
+  a usage error before a request goes out and before a directory is made, and
+  so is `--project` together with `--active-only`.
 - The address of a project has to have the shape
   `https://<host>/<account>/projects/<id>.json`, and all projects of a run the
   same account: the account names the bundle, and its address is what every
@@ -184,8 +219,8 @@ would end up in a column nobody had; a boost that does not say
 whose it is, because `createdBy` takes `null` and a reaction with an empty one
 reads as the author of what it hangs on, which would lay it at the feet of
 somebody who never gave it; and the status of a **project** the run was given by
-name, because a run that was asked for that project has to say that it cannot
-have it.
+name or found in a list of the account, because a run that was asked for that
+project has to say that it cannot have it.
 
 A moment is a date, a time of day, a fraction of a second where there is one,
 and the zone it is meant in, with nothing around it: `2024-02-05T17:00:00.000Z`
@@ -235,7 +270,9 @@ and never a title, a name, a text or an address.
 The run sees what the identity sees that the Basecamp CLI is signed in as. The
 same holds for an unattended job, which needs such an identity of its own.
 
-- It may see the projects named. One it may not see is `not_found`.
+- It may see the projects named. One it may not see is `not_found`. Without
+  `--project` the run takes what Basecamp lists for the identity, so a project
+  it cannot see is missing from the bundle without a word.
 - It may see the e-mail addresses of other people. Basecamp masks them with
   `•` (U+2022) for an identity that may not, which is anybody who is neither of
   the account's own company nor an admin; only its own address comes through.
@@ -343,7 +380,7 @@ by being written earlier — the bundle is whole before Minka reads a line of it
 and Minka applies the kinds in an order of its own.
 
 - **People** are the ones a record of the bundle refers to, and nobody else:
-  the members of the projects named and whoever a record names: its creator,
+  the members of the projects of the run and whoever a record names: its creator,
   an assignee, who completed a card or a step, who gave a boost, who is
   mentioned in a text. The people list of an account is what somebody is
   looked up in, not what is written: most of an account has no place where
@@ -402,7 +439,10 @@ and Minka applies the kinds in an order of its own.
   asked for, which ends the run as it always did. The creator comes into the
   bundle like anybody a record names.
   The description is plain text there and HTML in the bundle: escaped, a
-  paragraph per block, a `<br>` per line break.
+  paragraph per block, a `<br>` per line break. `status` is the one the
+  project itself answers with: `active`, `archived` or `trashed`.
+  **A star is not carried** (C-088): whether somebody starred a project
+  (`starred`, `star_url`) is nobody's in Minka, and the run never reads it.
 - **Tools** are the dock entries that are switched on and that Minka has a
   counterpart for: `kanban_board` → `board`, `chat` → `chat`, `message_board`
   → `posts`, `questionnaire` → `checkins`, `todoset` → `todos`, `inbox` →
@@ -595,7 +635,9 @@ and Minka applies the kinds in an order of its own.
   `archived` or `trashed`; any other word leaves the list out, see What a
   bundle cannot carry. The description is the rendered text and goes the way
   every other text goes; a list without one comes with `description` `null`.
-  Comments and boosts hang on a list as they hang on a card.
+  Comments and boosts hang on a list as they hang on a card. **A hill chart is
+  not carried** (C-088): Minka has none, so the needle of a list
+  (`last_needle_*`, `previous_needle_position`) is never read.
 - **Groups** are the named headings of a list. Basecamp makes a group a
   to-do list of its own, and what a record hangs on is what tells the two
   apart. A group goes to the end of its list, so the order of the file is the
