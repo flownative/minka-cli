@@ -297,7 +297,7 @@ func (a *app) newCardsCreateCmd() *cobra.Command {
   minka cards create --board 0199... --column Doing --title "Review" --description - < notes.md`,
 		Args: requireArgs(),
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			if err := requireID(cmd, "--board", boardID); err != nil {
+			if err := requireID(cmd, "--board", &boardID); err != nil {
 				return err
 			}
 			if err := checkDescriptionFormat(cmd, descriptionFormat); err != nil {
@@ -529,7 +529,7 @@ takes a card up moves it first and says 'minka work start' afterwards.
 				neighbour = before
 			}
 			if neighbour != "" {
-				if err := requireID(cmd, neighbourCard, neighbour); err != nil {
+				if err := requireID(cmd, neighbourCard, &neighbour); err != nil {
 					return err
 				}
 				if strings.EqualFold(neighbour, args[0]) {
@@ -808,8 +808,9 @@ func (a *app) richTextHTML(what, flag, value, format string) (string, []string, 
 // resolveColumn finds a column of a board by ID, type or title. A value that
 // names a type and also the title of another column is ambiguous.
 func resolveColumn(board api.Board, value string) (api.Column, error) {
+	id, _ := asID(strings.TrimSpace(value))
 	for _, column := range board.Columns {
-		if column.ID == value {
+		if column.ID == id {
 			return column, nil
 		}
 	}

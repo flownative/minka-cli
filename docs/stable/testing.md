@@ -62,3 +62,14 @@ apply to it, see [Live check](../guides/live-check.md).
 - A rule that holds for every command of a kind is tested against a list the
   command tree is held against, so that a new command cannot go untested:
   every command is known to write into a project or not.
+- Which input takes an ID, the tree test tells by its name: a position whose
+  name ends in `Id`, a flag whose help says "ID", or a name on the list of
+  ID flags. A flag read by a lookup of its own that says none of this slips
+  past it. A position is checked where it is required; an optional one such
+  as `[<fooId>]` is not.
+- The list of ID flags is held against the code by a scan that finds a call
+  of `requireID` on one line with the flag name written out, and a map key of
+  such a name. A call split over lines, one with the name in a variable or on
+  another receiver escapes it: `todogroups move` passes its flag in a variable
+  and `cards move` passes `neighbourCard`, and both are covered only because
+  `--after` and `--before` are on the list.

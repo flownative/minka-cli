@@ -37,7 +37,7 @@ group: exit 9 (validation) with meta.apiCode todoListArchived.
 		Example: `  minka todogroups create --list 0199... --title "Stage" --json`,
 		Args:    requireArgs(),
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			if err := requireID(cmd, "--list", listID); err != nil {
+			if err := requireID(cmd, "--list", &listID); err != nil {
 				return err
 			}
 
@@ -139,11 +139,11 @@ exit 9 (validation) and meta.apiCode todoPlaceUnknown, and nothing moves.
 			if placements != 1 {
 				return usageErrorf(cmd, "say where the group goes: give exactly one of --top, --after and --before")
 			}
-			neighbour, flag := after, "--after"
+			neighbour, flag := &after, "--after"
 			if before != "" {
-				neighbour, flag = before, "--before"
+				neighbour, flag = &before, "--before"
 			}
-			if neighbour != "" {
+			if *neighbour != "" {
 				if err := requireID(cmd, flag, neighbour); err != nil {
 					return err
 				}

@@ -296,7 +296,7 @@ func (a *app) meID(s *session) func() (string, error) {
 // name. An ID that matches no candidate is passed on, so the server says why
 // it refuses it.
 func resolvePerson(value string, candidates []api.ProjectMember, me func() (string, error)) (api.ProjectMember, error) {
-	wanted := strings.TrimSpace(value)
+	wanted, _ := asID(strings.TrimSpace(value))
 	if strings.EqualFold(wanted, "me") {
 		id, err := me()
 		if err != nil {

@@ -88,13 +88,18 @@ give --project: the members of that project are looked up for the name.
   minka conversations with anke@example.com --project 0199...`,
 		Args: requireArgs("person"),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if projectID != "" {
+				if err := requireID(cmd, "--project", &projectID); err != nil {
+					return err
+				}
+			}
 			s, err := a.session()
 			if err != nil {
 				return err
 			}
 
-			personID := args[0]
-			if !uuidPattern.MatchString(personID) {
+			personID, isID := asID(args[0])
+			if !isID {
 				if projectID == "" {
 					return usageErrorf(cmd, "%q is no person ID: give the ID, or --project to look the name up among its members", args[0])
 				}

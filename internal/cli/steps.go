@@ -251,7 +251,7 @@ type namedLines struct {
 // ignoring case. An ID that is on no line is answered with the index -1, so
 // that the server gives its answer about it.
 func findLine(lines namedLines, value string) (int, string, error) {
-	wanted := strings.TrimSpace(value)
+	wanted, _ := asID(strings.TrimSpace(value))
 	if at := slices.Index(lines.ids, wanted); at >= 0 {
 		return at, wanted, nil
 	}

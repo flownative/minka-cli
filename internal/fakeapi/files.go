@@ -199,6 +199,15 @@ func (s *Server) addDocument(w http.ResponseWriter, r *http.Request, person *Per
 	if !ok {
 		return
 	}
+	// Every identifier is read before the audience is held against the list,
+	// and one that is none, such as one in capitals, is answered like
+	// somebody outside the project.
+	for _, personID := range notifyIDs {
+		if !uuidPattern.MatchString(personID) {
+			unprocessable(w, "personNotAProjectMember", "Only a member of the project can be told about a document.")
+			return
+		}
+	}
 	// A list the audience would not use is refused rather than dropped, and
 	// both refusals read the request alone, so they come before the write
 	// meets the project.

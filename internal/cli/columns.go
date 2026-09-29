@@ -33,12 +33,12 @@ such as "Doing".`,
   minka columns on-hold Doing --board 0199... --off`,
 		Args: requireArgs("column"),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			column := args[0]
+			column, isID := asID(args[0])
 			if boardID != "" {
-				if err := requireID(cmd, "--board", boardID); err != nil {
+				if err := requireID(cmd, "--board", &boardID); err != nil {
 					return err
 				}
-			} else if !uuidPattern.MatchString(column) {
+			} else if !isID {
 				return usageErrorf(cmd, "column %q is not an ID; give --board to name a column by its title", column)
 			}
 

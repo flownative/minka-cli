@@ -286,11 +286,11 @@ posts categories <projectId> lists them.`,
   minka posts create --tool 0199... --title "Setting up" --audience chosen --notify 0199... --body - < post.md`,
 		Args: requireArgs(),
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			if err := requireID(cmd, "--tool", toolID); err != nil {
+			if err := requireID(cmd, "--tool", &toolID); err != nil {
 				return err
 			}
 			if cmd.Flags().Changed("category") {
-				if err := requireID(cmd, "--category", categoryID); err != nil {
+				if err := requireID(cmd, "--category", &categoryID); err != nil {
 					return err
 				}
 			}
@@ -391,7 +391,7 @@ and projectArchived is the answer.`,
 				input.Title = &title
 			}
 			if cmd.Flags().Changed("category") {
-				if err := requireID(cmd, "--category", categoryID); err != nil {
+				if err := requireID(cmd, "--category", &categoryID); err != nil {
 					return err
 				}
 				input.CategoryID = &categoryID

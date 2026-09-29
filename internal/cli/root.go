@@ -38,7 +38,18 @@ const (
 // pattern kept narrower here could only fall behind.
 var shortIdentifierPattern = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9]{1,9}-[0-9A-Za-z]{1,12}$`)
 
+// uuidPattern is the shape of an ID in either case. Minka knows an ID only in
+// lowercase, so one somebody typed goes through asID before it is sent.
 var uuidPattern = regexp.MustCompile(`(?i)^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
+
+// asID reads a value as an ID in the one form Minka knows it by, lowercase.
+// Anything that is no ID comes back unchanged, with ok false.
+func asID(value string) (id string, ok bool) {
+	if !uuidPattern.MatchString(value) {
+		return value, false
+	}
+	return strings.ToLower(value), true
+}
 
 type app struct {
 	ctx    context.Context
@@ -248,7 +259,8 @@ func group(use, short string, children ...*cobra.Command) *cobra.Command {
 }
 
 // requireArgs checks the positional arguments. An argument whose name ends in
-// "Id" has to be an ID, so that nothing else reaches the path of a request.
+// "Id" has to be an ID, so that nothing else reaches the path of a request,
+// and is handed on to the command in the form Minka knows it by.
 func requireArgs(names ...string) cobra.PositionalArgs {
 	return func(cmd *cobra.Command, args []string) error {
 		if len(args) < len(names) {
@@ -259,7 +271,7 @@ func requireArgs(names ...string) cobra.PositionalArgs {
 		}
 		for i, name := range names {
 			if strings.HasSuffix(name, "Id") {
-				if err := requireID(cmd, name, args[i]); err != nil {
+				if err := requireID(cmd, name, &args[i]); err != nil {
 					return err
 				}
 			}
@@ -268,20 +280,22 @@ func requireArgs(names ...string) cobra.PositionalArgs {
 	}
 }
 
-// requireID keeps anything that is no ID out of the path of a request. A card
-// may also be named by its short identifier, which is looked up before the
-// command goes on with the ID.
-func requireID(cmd *cobra.Command, name, value string) error {
+// requireID keeps anything that is no ID out of the path of a request and
+// writes an ID in lowercase, the form Minka knows it by. A card may also be
+// named by its short identifier, which is looked up before the command goes on
+// with the ID.
+func requireID(cmd *cobra.Command, name string, value *string) error {
+	if id, ok := asID(*value); ok {
+		*value = id
+		return nil
+	}
 	if name == "cardId" || name == neighbourCard {
-		if uuidPattern.MatchString(value) || shortIdentifierPattern.MatchString(value) {
+		if shortIdentifierPattern.MatchString(*value) {
 			return nil
 		}
-		return usageErrorf(cmd, "%s %q is not an ID; a card is named by a UUID such as 0192f3a4-5b6c-4d7e-8f90-a1b2c3d4e5f6 or by its short identifier such as MNK-1A", name, value)
+		return usageErrorf(cmd, "%s %q is not an ID; a card is named by a UUID such as 0192f3a4-5b6c-4d7e-8f90-a1b2c3d4e5f6 or by its short identifier such as MNK-1A", name, *value)
 	}
-	if !uuidPattern.MatchString(value) {
-		return usageErrorf(cmd, "%s %q is not an ID; IDs are UUIDs such as 0192f3a4-5b6c-4d7e-8f90-a1b2c3d4e5f6", name, value)
-	}
-	return nil
+	return usageErrorf(cmd, "%s %q is not an ID; IDs are UUIDs such as 0192f3a4-5b6c-4d7e-8f90-a1b2c3d4e5f6", name, *value)
 }
 
 func userAgent() string {

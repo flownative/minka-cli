@@ -105,11 +105,15 @@ would reach instead of their own instance.
   taken off here rather than left to the library. A redirect that is refused
   is a refusal, not a failure of the network, and not retryable.
 - Every ID is checked locally as a UUID — one that is not ends with exit 1,
-  without a request going out — and additionally escaped in the path. A card
-  may be named by its short identifier instead, whose shape is checked the
-  same way; it is looked up once, and the command goes on with the UUID
-  (C-022). What rides in the query (file name, content of a reaction) is
-  escaped as well.
+  without a request going out — and additionally escaped in the path. An ID
+  typed in capitals is written in lowercase before it is compared or sent, in
+  the path, the query and the body alike: Minka knows an ID only in lowercase,
+  and one in capitals names nothing there — a person named so is refused as
+  no member, and a step or a subtask named so is not deleted, with a success
+  all the same (C-083). A card may be named by its short identifier instead,
+  whose shape is checked the same way; it is looked up once, in capitals,
+  and the command goes on with the UUID (C-022). What rides in the query (file
+  name, content of a reaction) is escaped as well.
 - What reaches the command line of the Basecamp CLI during an import is a
   path of the account, or the storage address of a file. minka builds that
   address: scheme, host, the account of the run and the place of every part

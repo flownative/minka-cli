@@ -194,7 +194,7 @@ and named nowhere; the command says so in a notice.`,
   minka checkins create --tool 0199... --title "What are you working on?" --rhythm weekly --weekday mon --time 09:00 --ask me`,
 		Args: requireArgs(),
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			if err := requireID(cmd, "--tool", toolID); err != nil {
+			if err := requireID(cmd, "--tool", &toolID); err != nil {
 				return err
 			}
 			days, err := weekdayNumbers(cmd, weekdays)
@@ -457,7 +457,7 @@ next one starts: --before <the last answerId>.`,
 				return usageErrorf(cmd, "--limit is 1 to %d, not %d: Minka serves no larger page and would cut one down without a word", api.CheckinAnswersPageMax, limit)
 			}
 			if before != "" {
-				if err := requireID(cmd, "--before", before); err != nil {
+				if err := requireID(cmd, "--before", &before); err != nil {
 					return err
 				}
 			}
@@ -743,7 +743,7 @@ func (a *app) peopleByIDOrMe(cmd *cobra.Command, s *session, values []string) ([
 			people = append(people, id)
 			continue
 		}
-		if err := requireID(cmd, "--ask", value); err != nil {
+		if err := requireID(cmd, "--ask", &value); err != nil {
 			return nil, &Error{
 				Code:    CodeUsage,
 				Message: fmt.Sprintf("--ask takes the ID of a person, or me; %q is neither", value),

@@ -168,7 +168,7 @@ func (a *app) newTodoListsCreateCmd() *cobra.Command {
   minka todolists create --tool 0199... --title "Setting up" --description - < plan.md`,
 		Args: requireArgs(),
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			if err := requireID(cmd, "--tool", toolID); err != nil {
+			if err := requireID(cmd, "--tool", &toolID); err != nil {
 				return err
 			}
 			if err := checkDescriptionFormat(cmd, descriptionFormat); err != nil {
