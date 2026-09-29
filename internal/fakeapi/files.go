@@ -135,7 +135,7 @@ func (s *Server) filesEntries(w http.ResponseWriter, r *http.Request, person *Pe
 		notFound(w)
 		return
 	}
-	folderID := r.URL.Query().Get("folderId")
+	folderID := strings.ToLower(r.URL.Query().Get("folderId"))
 	var folder *Folder
 	if folderID != "" {
 		if folder = folderIn(tool, folderID); folder == nil {
@@ -624,7 +624,7 @@ func (s *Server) editCommentOnEntry(w http.ResponseWriter, r *http.Request, pers
 
 func (s *Server) removeCommentOnEntry(w http.ResponseWriter, r *http.Request, person *Person) {
 	entry := s.entryOfTheRequest(r, person)
-	if entry == nil {
+	if entry == nil || !uuidPattern.MatchString(r.PathValue("commentId")) {
 		notFound(w)
 		return
 	}

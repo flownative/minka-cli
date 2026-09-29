@@ -38,11 +38,11 @@ const (
 // pattern kept narrower here could only fall behind.
 var shortIdentifierPattern = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9]{1,9}-[0-9A-Za-z]{1,12}$`)
 
-// uuidPattern is the shape of an ID in either case. Minka knows an ID only in
+// uuidPattern is the shape of an ID in either case. Minka keeps an ID in
 // lowercase, so one somebody typed goes through asID before it is sent.
 var uuidPattern = regexp.MustCompile(`(?i)^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
 
-// asID reads a value as an ID in the one form Minka knows it by, lowercase.
+// asID reads a value as an ID in the form Minka keeps it in, lowercase.
 // Anything that is no ID comes back unchanged, with ok false.
 func asID(value string) (id string, ok bool) {
 	if !uuidPattern.MatchString(value) {
@@ -281,7 +281,7 @@ func requireArgs(names ...string) cobra.PositionalArgs {
 }
 
 // requireID keeps anything that is no ID out of the path of a request and
-// writes an ID in lowercase, the form Minka knows it by. A card may also be
+// writes an ID in lowercase, the form Minka keeps it in. A card may also be
 // named by its short identifier, which is looked up before the command goes on
 // with the ID.
 func requireID(cmd *cobra.Command, name string, value *string) error {

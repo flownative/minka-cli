@@ -282,15 +282,37 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
 
 ## Checked against the fake only
 
-- An ID in capitals: that Minka names nothing by it is read in its code
-  (`IsUuid`, every controller under `Presentation/Api`), not seen live. The
-  fake answers alike wherever a command can send one — the 404, the refusal
-  of a person as no member, the unknown place, the step and the subtask that
-  are not deleted with a success — and reads the people to tell before the
-  audience, as Minka does. The CLI sends every ID in lowercase, so no command
-  reaches any of it; the one list Minka writes in lowercase itself is
-  `cardIds` of `me/work`. `replyTo` of a chat message is not mirrored: no
-  command sends it.
+- IDs in any case: that Minka writes an ID in lowercase before it reads it
+  (`AbstractApiController::readId`), in the address, the body and the query,
+  is read in its code on `main` (00bbcf39), not released and not seen live.
+  The fake does the same: every `…Id` of a route, the identifier fields of a
+  body alone or in a list, and the four queries that carry one — `before` of a
+  board's archive and of the answers, `personId` of the answers, `folderId` of
+  the entries, `after` of one's own to-dos. What Minka does not read so stays
+  as it is in the fake too: the name of a draft of a chat message, refused in
+  capitals, and the cursors of the posts and of the done to-dos. The CLI sends
+  every ID in lowercase all the same, which every Minka reads.
+- `replyTo` of a chat message: the fake refuses one that is no identifier, or
+  names no standing message of the chat, with `chatMessageReplyToUnknown`, the
+  first before an archived project and the second after it; it neither keeps
+  nor shows which message was answered. No command sends one. Read in the
+  Minka code: the controller refuses the first, and the repository asks the
+  second only after the counter of the chat, which an archived project does
+  not move.
+- A new chat message: the fake judges its body before it looks the chat up,
+  Minka the other way round, so a body it refuses sent to a chat the person
+  may not see is 422 in the fake and 404 in Minka. The reply is read after
+  the chat in both.
+- An address whose identifier is none: Minka answers 404 before it tells
+  anybody that a project is archived — for assignees, subscribers, steps and
+  subtasks, and for the removal of a comment under a card, a document or an
+  upload and of a chat message — and a removal of a step or a subtask named so
+  is 404 rather than 204; a subscriber named so was `personNotAProjectMember`
+  before. A step
+  of another card is 404 on a change and 204 on a removal, which takes nothing
+  off the other card. Read in the code, mirrored by the fake, not seen live,
+  and unreachable from the CLI, which checks every ID as a UUID before a
+  request.
 
 - Of the notes of a card: `cardNotesHasControlCharacters`, and `cardArchived`
   for a card in its board's archive, which the notes of the fake never

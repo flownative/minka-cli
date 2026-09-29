@@ -45,9 +45,48 @@ const (
 	maxChatMessageLength = 10000
 )
 
-// uuidPattern is the shape of an identifier as Minka reads one: lowercase
-// only. One in capitals names nothing there.
+// uuidPattern is the shape of an identifier as Minka keeps one: lowercase.
+// Where Minka reads one from a request, it writes it in lowercase first, so
+// the fake does too before it holds a value against this pattern.
 var uuidPattern = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
+
+// identifierWildcard finds the parts of a route that carry an identifier.
+var identifierWildcard = regexp.MustCompile(`\{([A-Za-z]+Id)\}`)
+
+// identifierFields are the fields of a body Minka reads an identifier from in
+// any case. The name a client gives a draft of a chat message is none of
+// them: Minka refuses it in capitals.
+var identifierFields = []string{
+	"assigneeId", "assigneeIds", "askedIds", "blobId", "cardIds", "categoryId", "columnId",
+	"folderId", "groupId", "listId", "nextCardId", "nextGroupId", "nextSubtaskId", "nextTodoId",
+	"notifiedIds", "notifyIds", "personId", "previousCardId", "previousGroupId",
+	"previousSubtaskId", "previousTodoId", "replyTo",
+}
+
+// identifiersOfTheAddressInAnyCase writes every identifier of the address in
+// lowercase, as Minka does before it looks for what one names.
+func identifiersOfTheAddressInAnyCase(r *http.Request) {
+	for _, match := range identifierWildcard.FindAllStringSubmatch(r.Pattern, -1) {
+		r.SetPathValue(match[1], strings.ToLower(r.PathValue(match[1])))
+	}
+}
+
+// identifiersOfTheBodyInAnyCase writes the identifiers of a body in lowercase,
+// alone or in a list; a value of another type is left for its field to refuse.
+func identifiersOfTheBodyInAnyCase(fields map[string]any) {
+	for _, name := range identifierFields {
+		switch value := fields[name].(type) {
+		case string:
+			fields[name] = strings.ToLower(value)
+		case []any:
+			for i, entry := range value {
+				if id, ok := entry.(string); ok {
+					value[i] = strings.ToLower(id)
+				}
+			}
+		}
+	}
+}
 
 // maxClientIDLength and clientIDPattern are the shape of the name one client
 // of an agent goes by.
@@ -947,6 +986,7 @@ func (s *Server) signedIn(answersInJSON bool, next handler) http.HandlerFunc {
 			return
 		}
 
+		identifiersOfTheAddressInAnyCase(r)
 		next(w, r, s.People[personID])
 	}
 }
@@ -989,10 +1029,7 @@ func (s *Server) noteAtWork(w http.ResponseWriter, r *http.Request, person *Pers
 	cards := []string{}
 	var leftOut []any
 	var leftOutIDs []string
-	for _, name := range named {
-		// A card written out by hand may arrive in capitals and names the
-		// same card.
-		id := strings.ToLower(name)
+	for _, id := range named {
 		if !uuidPattern.MatchString(id) {
 			continue
 		}
@@ -1239,7 +1276,7 @@ func (s *Server) archivedCards(w http.ResponseWriter, r *http.Request, person *P
 	}
 
 	var boundary *ArchivedCard
-	if before := r.URL.Query().Get("before"); before != "" {
+	if before := strings.ToLower(r.URL.Query().Get("before")); before != "" {
 		if uuidPattern.MatchString(before) {
 			boundary = s.inTheArchiveOf(board, before)
 		}
@@ -1931,7 +1968,7 @@ func (s *Server) shortIdentifierOrNotes(w http.ResponseWriter, r *http.Request, 
 		notFound(w)
 		return
 	}
-	r.SetPathValue("cardId", r.PathValue("first"))
+	r.SetPathValue("cardId", strings.ToLower(r.PathValue("first")))
 	s.cardNotes(w, r, person)
 }
 
@@ -2054,7 +2091,7 @@ func (s *Server) updateStep(w http.ResponseWriter, r *http.Request, person *Pers
 	}
 
 	board, column, card := s.visibleCard(r.PathValue("cardId"), person)
-	if card == nil {
+	if card == nil || !uuidPattern.MatchString(r.PathValue("stepId")) {
 		notFound(w)
 		return
 	}
@@ -2070,11 +2107,12 @@ func (s *Server) updateStep(w http.ResponseWriter, r *http.Request, person *Pers
 	writeJSON(w, http.StatusOK, s.cardResource(board, column, card))
 }
 
-// removeStep answers 204 for a step that is not on the card as well, but 404
-// for a card the person may not see.
+// removeStep answers 204 for a step that is not on the card as well, one of
+// another card included, but 404 for a card the person may not see and for an
+// address that names no step at all.
 func (s *Server) removeStep(w http.ResponseWriter, r *http.Request, person *Person) {
 	_, _, card := s.visibleCard(r.PathValue("cardId"), person)
-	if card == nil {
+	if card == nil || !uuidPattern.MatchString(r.PathValue("stepId")) {
 		notFound(w)
 		return
 	}
@@ -2171,7 +2209,7 @@ func (s *Server) conversations(w http.ResponseWriter, _ *http.Request, person *P
 // a person to talk to, everything else a conversation to put a file into.
 func (s *Server) beginOrUpload(w http.ResponseWriter, r *http.Request, person *Person) {
 	if r.PathValue("first") == "with" {
-		r.SetPathValue("personId", r.PathValue("second"))
+		r.SetPathValue("personId", strings.ToLower(r.PathValue("second")))
 		s.startConversation(w, r, person)
 		return
 	}
@@ -2179,7 +2217,7 @@ func (s *Server) beginOrUpload(w http.ResponseWriter, r *http.Request, person *P
 		notFound(w)
 		return
 	}
-	r.SetPathValue("conversationId", r.PathValue("first"))
+	r.SetPathValue("conversationId", strings.ToLower(r.PathValue("first")))
 	s.upload(w, r, person)
 }
 
@@ -2352,9 +2390,23 @@ func (s *Server) postMessage(w http.ResponseWriter, r *http.Request, person *Per
 		notFound(w)
 		return
 	}
+	replyTo, ok := stringField(w, fields, "replyTo")
+	if !ok {
+		return
+	}
+	if deref(replyTo) != "" && !uuidPattern.MatchString(*replyTo) {
+		replyToUnknown(w)
+		return
+	}
 	// Asked before a message sent earlier is looked for: in an archived
 	// project a refused write must not pass for one that went through.
 	if s.refusedAsArchived(w, s.projectOfChat(chat)) {
+		return
+	}
+	// Which message a reply answers is taken as it was named and not shown:
+	// no command sends one.
+	if deref(replyTo) != "" && !slices.ContainsFunc(chat.Messages, func(m *ChatMessage) bool { return m.ID == *replyTo && !m.Removed }) {
+		replyToUnknown(w)
 		return
 	}
 	if deref(clientMessageID) != "" {
@@ -2366,6 +2418,10 @@ func (s *Server) postMessage(w http.ResponseWriter, r *http.Request, person *Per
 		}
 	}
 	writeJSON(w, http.StatusCreated, s.chatMessageResource(chat, chat.post(person.ID, text, deref(clientMessageID), s.now)))
+}
+
+func replyToUnknown(w http.ResponseWriter) {
+	unprocessable(w, "chatMessageReplyToUnknown", "A reply has to answer a message of the same chat that still stands.")
 }
 
 // authoredMessage is the message of this chat that the person wrote and has
@@ -2415,7 +2471,7 @@ func (s *Server) editMessage(w http.ResponseWriter, r *http.Request, person *Per
 
 func (s *Server) removeMessage(w http.ResponseWriter, r *http.Request, person *Person) {
 	chat := s.visibleChat(r.PathValue("chatId"), person)
-	if chat == nil {
+	if chat == nil || !uuidPattern.MatchString(r.PathValue("messageId")) {
 		notFound(w)
 		return
 	}
@@ -2943,14 +2999,14 @@ func (s *Server) namedMember(board *Board, personID string, person *Person) bool
 
 func (s *Server) subscribeToCard(w http.ResponseWriter, r *http.Request, person *Person) {
 	board, column, card := s.visibleCard(r.PathValue("cardId"), person)
-	if card == nil {
+	personID := r.PathValue("personId")
+	if card == nil || !uuidPattern.MatchString(personID) {
 		notFound(w)
 		return
 	}
 	if s.refusedAsArchived(w, s.projectOfCard(r.PathValue("cardId"))) {
 		return
 	}
-	personID := r.PathValue("personId")
 	if !s.namedMember(board, personID, person) {
 		notAProjectMember(w)
 		return
@@ -2962,14 +3018,14 @@ func (s *Server) subscribeToCard(w http.ResponseWriter, r *http.Request, person 
 
 func (s *Server) unsubscribeFromCard(w http.ResponseWriter, r *http.Request, person *Person) {
 	board, _, card := s.visibleCard(r.PathValue("cardId"), person)
-	if card == nil {
+	personID := r.PathValue("personId")
+	if card == nil || !uuidPattern.MatchString(personID) {
 		notFound(w)
 		return
 	}
 	if s.refusedAsArchived(w, s.projectOfCard(r.PathValue("cardId"))) {
 		return
 	}
-	personID := r.PathValue("personId")
 	if !s.namedMember(board, personID, person) {
 		notAProjectMember(w)
 		return
@@ -3045,7 +3101,7 @@ func isCommentControl(r rune) bool {
 
 func (s *Server) removeComment(w http.ResponseWriter, r *http.Request, person *Person) {
 	_, _, card := s.visibleCard(r.PathValue("cardId"), person)
-	if card == nil {
+	if card == nil || !uuidPattern.MatchString(r.PathValue("commentId")) {
 		notFound(w)
 		return
 	}
@@ -3405,6 +3461,7 @@ func readBodyWith(w http.ResponseWriter, r *http.Request, keepNumbers bool) (map
 			return nil, false
 		}
 	}
+	identifiersOfTheBodyInAnyCase(fields)
 	return fields, true
 }
 

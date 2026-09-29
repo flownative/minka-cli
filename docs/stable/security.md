@@ -107,10 +107,14 @@ would reach instead of their own instance.
 - Every ID is checked locally as a UUID — one that is not ends with exit 1,
   without a request going out — and additionally escaped in the path. An ID
   typed in capitals is written in lowercase before it is compared or sent, in
-  the path, the query and the body alike: Minka knows an ID only in lowercase,
-  and one in capitals names nothing there — a person named so is refused as
-  no member, and a step or a subtask named so is not deleted, with a success
-  all the same (C-083). A card may be named by its short identifier instead,
+  the path, the query and the body alike. Lowercase is the form Minka keeps
+  an ID in. From Minka 00bbcf39 on, not yet released, it reads an ID in any
+  case and names the same thing by one in capitals; a released Minka reads no
+  other and names nothing by one in capitals — a person named so is refused
+  as no member, and a step or a subtask named so is not deleted, with a
+  success all the same. The name of a draft of a chat message is refused in
+  capitals by both (C-083). A card
+  may be named by its short identifier instead,
   whose shape is checked the same way; it is looked up once, in capitals,
   and the command goes on with the UUID (C-022). What rides in the query (file
   name, content of a reaction) is escaped as well.

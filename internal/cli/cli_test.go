@@ -1201,8 +1201,11 @@ func TestAConversationWithSomebodyIsBegunOnlyOnce(t *testing.T) {
 	if !strings.Contains(env.Hint, "organization") {
 		t.Errorf("hint %q", env.Hint)
 	}
-	_, r = e.runJSON("", "conversations", "with", e.fixture.Bruno.ID)
+	env, r = e.runJSON("", "conversations", "with", e.fixture.Bruno.ID)
 	expectCode(t, r, ExitNotFound)
+	if !strings.Contains(env.Hint, "yourself") {
+		t.Errorf("hint %q", env.Hint)
+	}
 }
 
 // The trash of a project says what was taken out of it, and what a long list
