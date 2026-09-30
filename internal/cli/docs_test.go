@@ -2,6 +2,9 @@ package cli
 
 import (
 	"encoding/json"
+	"fmt"
+	"net/http"
+	"slices"
 	"strings"
 	"testing"
 
@@ -200,15 +203,14 @@ func TestADocumentIsWrittenWhereItIsAskedFor(t *testing.T) {
 	}
 }
 
-// The CLI holds the audience as a word and a person as an ID, and nothing more:
-// which people go with which audience is left to Minka.
+// The CLI holds the audience as a word, and nothing more: which people go with
+// which audience is left to Minka.
 func TestSayingWhomADocumentReachesIsRequired(t *testing.T) {
 	f := newTestEnv(t).fixture
 
 	for name, args := range map[string][]string{
 		"no audience":              {"docs", "create", "--tool", f.Files.ID, "--title", "A page"},
 		"an audience that is none": {"docs", "create", "--tool", f.Files.ID, "--title", "A page", "--audience", "some"},
-		"notify by name":           {"docs", "create", "--tool", f.Files.ID, "--title", "A page", "--audience", "chosen", "--notify", "Anke"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			e := newTestEnv(t)
@@ -689,4 +691,67 @@ func crumbFor(t *testing.T, crumbs []Breadcrumb, action string) string {
 	}
 	t.Fatalf("no breadcrumb %q among %+v", action, crumbs)
 	return ""
+}
+
+// A person given by name or e-mail address for something new in a tool is
+// looked up among the members of the project the tool stands in, which the
+// tool is read for once; an ID and "me" need neither read.
+func TestThePeopleOfSomethingNewAreLookedUpInTheProjectOfItsTool(t *testing.T) {
+	for _, c := range []struct {
+		command string
+		tool    func(f *fakeapi.Fixture) string
+		args    func(f *fakeapi.Fixture, people ...string) []string
+		field   string
+	}{
+		{"docs create", func(f *fakeapi.Fixture) string { return "/api/v1/files-tools/" + f.Files.ID }, func(f *fakeapi.Fixture, people ...string) []string {
+			return append([]string{"docs", "create", "--tool", f.Files.ID, "--title", "A page", "--audience", "chosen"}, flagEach("--notify", people)...)
+		}, "notifyIds"},
+		{"posts create", func(f *fakeapi.Fixture) string { return "/api/v1/posts-tools/" + f.Posts.ID }, func(f *fakeapi.Fixture, people ...string) []string {
+			return append([]string{"posts", "create", "--tool", f.Posts.ID, "--title", "A post", "--body", "Words", "--audience", "chosen"}, flagEach("--notify", people)...)
+		}, "notifyIds"},
+		{"checkins create", func(f *fakeapi.Fixture) string { return "/api/v1/checkins/" + f.CheckinsTool.ID }, func(f *fakeapi.Fixture, people ...string) []string {
+			return append([]string{"checkins", "create", "--tool", f.CheckinsTool.ID, "--title", "Q", "--rhythm", "daily", "--weekday", "mon", "--time", "09:00"}, flagEach("--ask", people)...)
+		}, "askedIds"},
+	} {
+		t.Run(c.command+" by name and address", func(t *testing.T) {
+			e := newTestEnv(t)
+			f := e.fixture
+			runOK(t, e, c.args(f, "anke@example.com", "bruno")...)
+			if got := fmt.Sprint(e.lastWriteBody()[c.field]); got != fmt.Sprint([]any{f.Anke.ID, f.Bruno.ID}) {
+				t.Fatalf("%s %s", c.field, got)
+			}
+			if requestsTo(e, http.MethodGet, c.tool(f)) != 1 || requestsTo(e, http.MethodGet, "/api/v1/projects/"+f.Project.ID+"/people") != 1 {
+				t.Fatalf("the tool and its people were not read once each: %v", e.server.Requests())
+			}
+		})
+		t.Run(c.command+" by ID and me", func(t *testing.T) {
+			e := newTestEnv(t)
+			f := e.fixture
+			runOK(t, e, c.args(f, f.Anke.ID, "me")...)
+			if got := fmt.Sprint(e.lastWriteBody()[c.field]); got != fmt.Sprint([]any{f.Anke.ID, f.Bruno.ID}) {
+				t.Fatalf("%s %s", c.field, got)
+			}
+			if requestsTo(e, http.MethodGet, c.tool(f)) != 0 || requestsTo(e, http.MethodGet, "/api/v1/projects/"+f.Project.ID+"/people") != 0 {
+				t.Fatalf("an ID and me read the tool or its people: %v", e.server.Requests())
+			}
+		})
+		t.Run(c.command+" in a tool at no address", func(t *testing.T) {
+			e := newTestEnv(t)
+			args := c.args(e.fixture, "Anke")
+			args[slices.Index(args, "--tool")+1] = unknownID
+			_, r := e.runJSON("", args...)
+			expectCode(t, r, ExitNotFound)
+			if len(e.server.WritingRequests()) != 0 {
+				t.Fatal("the command wrote all the same")
+			}
+		})
+	}
+}
+
+func flagEach(flag string, values []string) []string {
+	var args []string
+	for _, value := range values {
+		args = append(args, flag, value)
+	}
+	return args
 }

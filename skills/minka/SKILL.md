@@ -194,10 +194,10 @@ minka uploads download <blobId> [--variant original|display] [-o <path>|-o -] [-
 minka docs tools <projectId> --json
 minka docs list <toolId> [--folder <folderId>] --json
 minka docs show <documentId> --json
-minka docs create --tool <toolId> --title "Title" --audience everybody|chosen|nobody [--notify <personId>]... [--folder <folderId>] [--body - < body.md] --json
+minka docs create --tool <toolId> --title "Title" --audience everybody|chosen|nobody [--notify <person>]... [--folder <folderId>] [--body - < body.md] --json
 minka docs edit <documentId> [--title "New"] [--body - < body.md] (--expect <updatedAt> | --force) --json
 minka docs uploads show <uploadId> --json
-minka docs uploads create <file> --tool <toolId> --project <projectId> [--folder <folderId>] [--title "Title"] [--description - < about.md] --json
+minka docs uploads create <file> --tool <toolId> [--folder <folderId>] [--title "Title"] [--description - < about.md] --json
 minka docs uploads create --blob <blobId> --tool <toolId> [--folder <folderId>] [--title "Title"] --json
 minka docs uploads edit <uploadId> [--title "New"] [--description - < about.md] (--expect <updatedAt> | --force) --json
 minka docs comments create (--document <documentId> | --upload <uploadId>) - --json < comment.md
@@ -243,7 +243,7 @@ minka todos series show-now <seriesId> --json
 minka checkins tools <projectId> --json
 minka checkins list <toolId> --json
 minka checkins show <questionId> --json
-minka checkins create --tool <toolId> --title "Question?" --rhythm daily|weekly|everyOtherWeek|monthly --weekday <day>... --time HH:MM --ask <personId|me>... --json
+minka checkins create --tool <toolId> --title "Question?" --rhythm daily|weekly|everyOtherWeek|monthly --weekday <day>... --time HH:MM --ask <person>... --json
 minka checkins edit <questionId> [--title "New"] [--rhythm <rhythm>] [--weekday <day>]... [--time HH:MM] [--ask <person>]... --json
 minka checkins pause <questionId> --json
 minka checkins resume <questionId> --json
@@ -257,7 +257,7 @@ minka posts categories <projectId> --json
 minka posts list <toolId> [--limit <n>] [--before <next>] --json
 minka posts list <toolId> --archived --json
 minka posts show <postId> --json
-minka posts create --tool <toolId> --title "Title" --body - --audience everybody|chosen|nobody [--notify <personId>]... [--category <categoryId>] --json < post.md
+minka posts create --tool <toolId> --title "Title" --body - --audience everybody|chosen|nobody [--notify <person>]... [--category <categoryId>] --json < post.md
 minka posts edit <postId> [--title "New"] [--body - < post.md] [--category <categoryId> | --no-category] --json
 minka posts pin <postId> --json
 minka posts unpin <postId> --json
@@ -853,14 +853,15 @@ with a description. Both take comments, and the comments take reactions.
 - `docs create --tool <toolId> --title "..." --audience ...` writes a
   **published** document; there are no drafts here. `--folder` puts it in a
   folder, and without `--body` it is a title and nothing else.
-- `--audience` is required: `everybody`, `chosen` with one `--notify <personId>`
+- `--audience` is required: `everybody`, `chosen` with one `--notify <person>`
   per person, or `nobody`. A word that is none of the three exits 1 before a
   request goes out; which people go with which audience is Minka's rule and the
   CLI keeps none of its own. `--notify` under any audience but `chosen` is exit 9
   `notifyIdsWithoutChosenAudience`, and `chosen` naming nobody is exit 9
   `notifyIdsMissing`. Both are **your input to change** — name people, or choose
   the audience that takes them — and the `hint` says which flag. `--notify`
-  takes an ID or `me`; `people list <projectId>` gives the IDs.
+  takes an ID, `me`, an e-mail address or a name; a name or an address is
+  looked up among the members of the project the tool stands in.
 - **`personCannotSeeIt` is not your input to fix.** The person you named exists,
   is a member of the project, and simply may not be told: they work with the
   project as a client, or are an agent working for a client. Such a person is
@@ -879,13 +880,14 @@ with a description. Both take comments, and the comments take reactions.
 
 ### Putting a file into a tool
 
-- `docs uploads create <file> --tool <toolId> --project <projectId>` puts a
-  file of this machine on top of the tool, or of `--folder <folderId>`. Minka
-  takes it in two requests — the file is stored in the project, then put into
-  the tool — and the command does both. `--project` is needed because Minka's
-  addresses do not say which project a tool is in; the tool is looked up in it
-  first, and a tool the project has not got exits 2 **before the file
-  travels**. `data` is the upload, as `docs uploads show` gives it.
+- `docs uploads create <file> --tool <toolId>` puts a file of this machine on
+  top of the tool, or of `--folder <folderId>`. Minka takes it in two requests
+  — the file is stored in the project of the tool, then put into the tool — and
+  the command does both. It reads the tool for its project first, so a tool you
+  cannot open exits 2 **before the file travels**. `data` is the upload, as
+  `docs uploads show` gives it. You need no `--project`: an old script that
+  still gives one keeps working where it names the tool's project, gets a
+  `notice` that it is no longer needed, and exits 2 where it names another.
 - A step that fails ends the run, and nothing after it goes out. Where the file
   was stored and the second step was refused, the error's `data` is the stored
   file and the `hint` names `--blob <blobId>`: **try again with `--blob`
@@ -904,8 +906,8 @@ with a description. Both take comments, and the comments take reactions.
 - **`fileUnknown` tells no cause apart.** The file may have been swept after
   standing in nothing, never stored, be of another project, or be somebody
   else's. With `--blob` the one remedy worth trying is to store it again:
-  give the file itself, with `--project`. Where the same run stored it a moment
-  ago it cannot have been swept, and the `hint` says so instead.
+  give the file itself in place of `--blob`. Where the same run stored it a
+  moment ago it cannot have been swept, and the `hint` says so instead.
 - **`fileInUse`**: the file of yours stands in an upload or a text already. A
   file goes into one place; give the file itself to store it anew.
 
@@ -1259,9 +1261,9 @@ reminders` lists what you were asked and have not answered.
   `--weekday` is `1` (Monday) to `7` or a name (`mon`, `monday`), repeatable or
   as `mon,wed,fri`. `--time` holds in the time zone of each person asked. The
   question starts on your today.
-- `--ask` on `checkins create` takes an ID or `me` only: a tool names no
-  project, so no name can be looked up; `minka people list <projectId>` gives
-  the IDs. Only members of the project who may see the question can be asked:
+- `--ask` on `checkins create` takes an ID, `me`, an e-mail address or a name;
+  a name or an address is looked up among the members of the project the tool
+  stands in. Only members of the project who may see the question can be asked:
   anybody else, a client of the project or an agent working for one included,
   is exit 9 `personNotAProjectMember`.
 - `checkins edit` changes only what you give; the start day never changes.
@@ -1355,7 +1357,7 @@ it may be filed under, and comments. `posts …` reads and writes them;
   **a post says something**: a body without a word and without a file is exit 9
   `postBodyMissing`. `--category <categoryId>` files it under a kind.
 - `--audience` and `--notify` work as for a document: `everybody`, `chosen`
-  with one `--notify <personId|me>` per person, or `nobody`; the hint of
+  with one `--notify <person>` per person, or `nobody`; the hint of
   `notifyIdsMissing` and `notifyIdsWithoutChosenAudience` says which flag to
   change. A person named more than once is told once.
 - **A post written here is shown to no client of the project.** Naming a client,

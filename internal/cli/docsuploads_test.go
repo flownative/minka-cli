@@ -14,7 +14,7 @@ import (
 // putFile runs docs uploads create with a file of this machine, into the tool
 // of the fixture.
 func putFile(e *testEnv, rest ...string) []string {
-	return slices.Concat([]string{"docs", "uploads", "create", aFileToUpload(e), "--tool", e.fixture.Files.ID, "--project", e.fixture.Project.ID}, rest)
+	return slices.Concat([]string{"docs", "uploads", "create", aFileToUpload(e), "--tool", e.fixture.Files.ID}, rest)
 }
 
 // storedFile is a file of Bruno's in the project of the fixture that stands
@@ -46,8 +46,8 @@ func projectUploads(e *testEnv) string {
 }
 
 // A file of this machine goes in with both requests in one run: the tool is
-// looked up in the project, the file stored there, and then put into the tool,
-// on top of it and named after the file.
+// read for its project, the file stored there, and then put into the tool, on
+// top of it and named after the file.
 func TestAFileIsPutIntoAToolInOneRun(t *testing.T) {
 	e := newTestEnv(t)
 
@@ -65,7 +65,7 @@ func TestAFileIsPutIntoAToolInOneRun(t *testing.T) {
 	for _, request := range e.server.Requests() {
 		sent = append(sent, request.Method+" "+request.Path)
 	}
-	want := []string{"GET /api/v1/projects/" + e.fixture.Project.ID + "/files", "POST " + projectUploads(e), "POST " + toolUploads(e)}
+	want := []string{"GET /api/v1/files-tools/" + e.fixture.Files.ID, "POST " + projectUploads(e), "POST " + toolUploads(e)}
 	if !slices.Equal(sent, want) {
 		t.Fatalf("requests %v, want %v", sent, want)
 	}
@@ -184,7 +184,7 @@ func TestAChangeOfAnUploadNamesNoFile(t *testing.T) {
 }
 
 // A step that fails ends the run: a file Minka did not store is put nowhere,
-// and a tool that is not in the project stores no file at all.
+// and a tool that is at no address stores no file at all.
 func TestNoStepIsTakenAfterOneThatFailed(t *testing.T) {
 	t.Run("the file was not stored", func(t *testing.T) {
 		e := newTestEnv(t)
@@ -192,7 +192,7 @@ func TestNoStepIsTakenAfterOneThatFailed(t *testing.T) {
 		if err := os.WriteFile(path, []byte("no picture at all"), 0o600); err != nil {
 			t.Fatal(err)
 		}
-		env, r := e.runJSON("", "docs", "uploads", "create", path, "--tool", e.fixture.Files.ID, "--project", e.fixture.Project.ID)
+		env, r := e.runJSON("", "docs", "uploads", "create", path, "--tool", e.fixture.Files.ID)
 		expectCode(t, r, ExitValidation)
 		if env.Meta["apiCode"] != "contentTypeMismatch" || !strings.Contains(env.Hint, "--content-type") {
 			t.Fatalf("apiCode %v, hint %q", env.Meta["apiCode"], env.Hint)
@@ -210,15 +210,60 @@ func TestNoStepIsTakenAfterOneThatFailed(t *testing.T) {
 			t.Fatalf("apiCode %v, requests %v", env.Meta["apiCode"], e.server.WritingRequests())
 		}
 	})
-	t.Run("the tool is not in the project", func(t *testing.T) {
+	t.Run("the tool is at no address", func(t *testing.T) {
 		e := newTestEnv(t)
-		env, r := e.runJSON("", "docs", "uploads", "create", aFileToUpload(e), "--tool", e.fixture.OtherFiles.ID, "--project", e.fixture.Project.ID)
+		env, r := e.runJSON("", "docs", "uploads", "create", aFileToUpload(e), "--tool", e.fixture.OtherFiles.ID)
 		expectCode(t, r, ExitNotFound)
-		if !strings.Contains(env.Hint, "minka docs tools "+e.fixture.Project.ID) {
+		if env.Hint != filesToolNotFoundHint {
 			t.Fatalf("hint %q", env.Hint)
 		}
 		if writes := e.server.WritingRequests(); len(writes) != 0 {
 			t.Fatalf("%d writes went out, the first to %s", len(writes), writes[0].Path)
+		}
+	})
+}
+
+// --project was once how the file found its project. A script that still
+// names it keeps working where it names the project the tool stands in, is
+// told that the flag is no longer needed, and is refused before the file
+// travels where it names another.
+func TestAProjectStillNamedIsHeldAgainstTheTool(t *testing.T) {
+	t.Run("the project of the tool", func(t *testing.T) {
+		e := newTestEnv(t)
+		env := runOK(t, e, putFile(e, "--project", strings.ToUpper(e.fixture.Project.ID))...)
+		if !strings.Contains(env.Notice, "--project is no longer needed") {
+			t.Fatalf("notice %q", env.Notice)
+		}
+		if requestsTo(e, http.MethodPost, projectUploads(e)) != 1 || requestsTo(e, http.MethodPost, toolUploads(e)) != 1 {
+			t.Fatalf("requests %v", e.server.WritingRequests())
+		}
+	})
+	t.Run("the project of the tool, and the second step refused", func(t *testing.T) {
+		e := newTestEnv(t)
+		env, r := e.runJSON("", putFile(e, "--project", e.fixture.Project.ID, "--folder", e.fixture.ArchivedFolder.ID)...)
+		expectCode(t, r, ExitValidation)
+		if !strings.Contains(env.Notice, "--project is no longer needed") {
+			t.Fatalf("notice %q", env.Notice)
+		}
+	})
+	t.Run("another project", func(t *testing.T) {
+		e := newTestEnv(t)
+		e.fixture.OtherProject.MemberIDs = append(e.fixture.OtherProject.MemberIDs, e.fixture.Bruno.ID)
+		env, r := e.runJSON("", putFile(e, "--project", e.fixture.OtherProject.ID)...)
+		expectCode(t, r, ExitNotFound)
+		if !strings.Contains(env.Error, "stands in project "+e.fixture.Project.ID) || !strings.Contains(env.Hint, "leave it out") {
+			t.Fatalf("error %q, hint %q: the project of the tool and the remedy are not named", env.Error, env.Hint)
+		}
+		if writes := e.server.WritingRequests(); len(writes) != 0 {
+			t.Fatalf("%d writes went out, the first to %s", len(writes), writes[0].Path)
+		}
+	})
+	t.Run("a project that is no ID", func(t *testing.T) {
+		e := newTestEnv(t)
+		_, r := e.runJSON("", putFile(e, "--project", "Test-Projekt")...)
+		expectCode(t, r, ExitUsage)
+		if len(e.server.Requests()) != 0 {
+			t.Fatal("a request went out")
 		}
 	})
 }
@@ -305,7 +350,6 @@ func TestAFileOrABlobIsGivenAndNeverBoth(t *testing.T) {
 		"blob with name":         {"docs", "uploads", "create", "--blob", storedBlobID, "--name", "x.txt", "--tool", "0192f3a4-5b6c-4d7e-8f90-a1b2c3d4e5f6"},
 		"blob with project":      {"docs", "uploads", "create", "--blob", storedBlobID, "--project", "0192f3a4-5b6c-4d7e-8f90-a1b2c3d4e5f7", "--tool", "0192f3a4-5b6c-4d7e-8f90-a1b2c3d4e5f6"},
 		"blob with content-type": {"docs", "uploads", "create", "--blob", storedBlobID, "--content-type", "text/plain", "--tool", "0192f3a4-5b6c-4d7e-8f90-a1b2c3d4e5f6"},
-		"file no project":        {"docs", "uploads", "create", "notes.txt", "--tool", "0192f3a4-5b6c-4d7e-8f90-a1b2c3d4e5f6"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			e := newTestEnv(t)

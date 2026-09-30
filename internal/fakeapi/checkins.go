@@ -105,6 +105,7 @@ type CheckinReminder struct {
 
 func (s *Server) registerCheckinsRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/projects/{projectId}/checkins", s.authenticated(s.checkinsTools))
+	mux.HandleFunc("GET /api/v1/checkins/{toolId}", s.authenticated(s.checkinsTool))
 	mux.HandleFunc("GET /api/v1/checkins/{toolId}/questions", s.authenticated(s.checkinQuestions))
 	mux.HandleFunc("POST /api/v1/checkins/{toolId}/questions", s.authenticated(s.addCheckinQuestion))
 	mux.HandleFunc("GET /api/v1/questions/{questionId}", s.authenticated(s.checkinQuestion))
@@ -133,6 +134,17 @@ func (s *Server) checkinsTools(w http.ResponseWriter, r *http.Request, person *P
 		}
 	}
 	writeJSON(w, http.StatusOK, tools)
+}
+
+// checkinsTool reads a tool by its identifier alone, with the project it
+// stands in. A tool no longer in use is read as well.
+func (s *Server) checkinsTool(w http.ResponseWriter, r *http.Request, person *Person) {
+	tool := s.visibleCheckinsTool(r.PathValue("toolId"), person)
+	if tool == nil {
+		notFound(w)
+		return
+	}
+	writeJSON(w, http.StatusOK, s.toolResource(tool.ID, tool.ProjectID, tool.Title, s.checkinsToolURL(tool)))
 }
 
 // checkinQuestions lists the questions of a tool out of the trash, the oldest

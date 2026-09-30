@@ -42,14 +42,15 @@ a CLI that refused what the server takes would be wrong about it.
 Minka takes a file into a tool in two steps: `POST projects/{id}/uploads`
 stores the bytes in the project, as `uploads create` does, and `POST
 files-tools/{id}/uploads` with the `blobId` of that answer puts the stored file
-on top of the tool or of a folder. `docs uploads create <file> --tool <toolId>
---project <projectId>` takes both in one run ([C-085](../decisions.md#c-085)):
+on top of the tool or of a folder. `docs uploads create <file> --tool <toolId>`
+takes both in one run ([C-085](../decisions.md#c-085)):
 
-1. It reads the tools of the project and stops with exit 2, before the file
-   travels, where the tool is not among them. Minka's addresses do not tie a
-   tool to its project, and a file stored in the wrong one is refused only
-   after it travelled.
-2. It stores the file. A refusal ends the run and nothing is put anywhere.
+1. It reads the tool, `GET files-tools/{id}`, for the project it stands in,
+   and stops with exit 2, before the file travels, where the tool is at no
+   address for the person of the token. A file stored in another project than
+   the tool's is refused only after it travelled.
+2. It stores the file in the project of the tool. A refusal ends the run and
+   nothing is put anywhere.
 3. It puts the stored file into the tool. Where Minka refuses that, the file
    stays stored and nothing carries it: the error's `data` is the stored file
    and the hint names `--blob <blobId>`, which takes this step alone.
@@ -58,6 +59,11 @@ on top of the tool or of a folder. `docs uploads create <file> --tool <toolId>
 file or one `uploads create --project` stored; `--project`, `--name` and
 `--content-type` are refused beside it. A file stands in one place: in a text
 or in an upload, never in two.
+
+`--project` is hidden and still taken ([C-092](../decisions.md#c-092)): the
+project it names has to be the tool's, or the run stops with exit 2 before the
+file travels, and a run it does not stop says in a `notice` that it is not
+needed, also where the second step is refused.
 
 A file nothing carries is kept for **at least** seven days. Minka's sweeper runs
 daily and when the service starts, so seven days are a floor and not a
@@ -158,9 +164,11 @@ with a hint naming the flag to change. One rule in one place: a second copy here
 would be a second thing to keep in step with a server that already answers it
 ([C-070](../decisions.md#c-070)).
 
-`--notify` takes the ID of a person, or `me`. A name is not looked up: which
-project a tool hangs in is not known before the document exists, and a name can
-only be matched against the members of a project.
+`--notify` takes the ID of a person, `me`, an e-mail address or a name. A name
+or an address is looked up among the members of the project the tool stands in:
+the tool is read for its project, and the members of the project once, and
+only where one is given. An ID and `me` go out without either read, and Minka
+says what it thinks of them ([C-070](../decisions.md#c-070)).
 
 A **client** of the project is a member, and being a member is not enough to be
 told. An agent whose principal is a client counts as a client. `--notify`
@@ -170,9 +178,8 @@ shown to clients (E-199): it is shown only where the tool is shown to clients
 say, and a new document at the top of the tool is shown to no client. Nothing
 is written then, and nothing about the request can be mended — the person is
 real, belongs to the project and may simply not hear of it, so the answer is to
-name somebody else. The CLI cannot tell a client apart and does not try: it
-does not know the project before the document exists, and which tools and
-folders a project shows its clients is decided in Minka on the web.
+name somebody else. The CLI does not try to tell a client apart: which tools
+and folders a project shows its clients is decided in Minka on the web.
 
 ## Two kinds of entry, one flag
 
@@ -214,7 +221,8 @@ often they are named.
 | Answer | Command | Exit |
 |---|---|---|
 | 404 | every read and write, for what is unknown, foreign, hidden from a client, in the trash, or a draft | 2 |
-| — | `docs uploads create <file>` with a tool the project of `--project` has not got, before the file travels | 2 |
+| 404 | `docs uploads create <file>` reading the tool, before the file travels; `docs create --notify` and `posts create --notify` reading it for a name | 2 |
+| — | `docs uploads create <file> --project` naming another project than the tool's, before the file travels | 2 |
 | 415 `unsupportedMediaType` | unreachable: every write of this CLI sends JSON | — |
 | 400 `malformedBody` | unreachable: a moment `--expect` lets through is one the server reads, and a `--blob` that is no ID exits 1 | — |
 | 409 `documentChanged` | `docs edit --expect` against a document written over since | 9 |

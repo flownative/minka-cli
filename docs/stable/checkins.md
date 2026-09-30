@@ -80,12 +80,13 @@ question is not shown to — stays asked whatever the set names, so the people
 read from `asked` and sent back take nobody off. `[]` is `questionNobodyAsked`,
 and so is a body that leaves the people out on a new question.
 
-`checkins create --ask` takes an ID or `me`: the ID of a tool names no project,
-so no name or address can be looked up, as for the people a new document
-reaches ([C-070](../decisions.md#c-070)). `checkins edit --ask` takes an ID,
-`me`, an e-mail address or a name and reads the question for its project where
-one of the last three is given. There is no `--no-ask`: a question asks
-somebody. A person named twice goes out twice.
+`checkins create --ask` takes an ID, `me`, an e-mail address or a name, and
+reads the tool, `GET checkins/{id}`, for its project where a name or an address
+is to be looked up among its members, as for the people a new document reaches
+([C-092](../decisions.md#c-092)). `checkins edit --ask` takes the same and
+reads the question for its project where one of the last three is given. There
+is no `--no-ask`: a question asks somebody. A person named twice goes out
+twice.
 
 Only a member who may see the question can be asked. A question set up through
 the API is shown to no client, so a client of the project, or an agent working
@@ -196,13 +197,16 @@ passed:
 - **An edit of an answer:** `nothingToChange` (unreachable), the answer (404,
   and 404 for somebody else's), the body, then `projectArchived`.
 
-The CLI changes this order where it reads before it writes: a question or an
-answer that is not there is then exit 2 before anything else. It reads the
-question for `checkins edit` where `--ask` names a person by name, address or
-`me`, and for `checkins answers list` where `--person` does; it reads the answer
-for every `checkins answers edit`. So `checkins edit <unknown> --title "" --ask
-me` is exit 2, where the same with an ID for the person is
-`questionTitleMissing`.
+The CLI changes this order where it reads before it writes: a tool, a question
+or an answer that is not there is then exit 2 before anything else. It reads
+the tool for `checkins create` where `--ask` names a person by name or address,
+the question for `checkins edit` where `--ask` names a person by name, address
+or `me`, and for `checkins answers list` where `--person` does; it reads the
+answer for every `checkins answers edit`. So `checkins edit <unknown> --title
+"" --ask me` is exit 2, where the same with an ID for the person is
+`questionTitleMissing`. Likewise `checkins create --title " " --ask <name>` is
+exit 2 for an unknown tool and exit 1 for a name nobody in the project has,
+both before `questionTitleMissing`.
 
 | Answer | Command | Exit |
 |---|---|---|

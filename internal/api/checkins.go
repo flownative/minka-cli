@@ -181,6 +181,11 @@ func (c *Client) CheckinsTools(ctx context.Context, projectID string) (Result[[]
 	return request[[]CheckinsTool](ctx, c, http.MethodGet, "/projects/"+url.PathEscape(projectID)+"/checkins", nil)
 }
 
+// CheckinsTool reads a Check-ins tool by its identifier alone.
+func (c *Client) CheckinsTool(ctx context.Context, toolID string) (Result[Tool], error) {
+	return request[Tool](ctx, c, http.MethodGet, checkinsToolPath(toolID), nil)
+}
+
 // CheckinQuestions lists the questions of a tool, the oldest first.
 func (c *Client) CheckinQuestions(ctx context.Context, toolID string) (Result[[]CheckinQuestion], error) {
 	return request[[]CheckinQuestion](ctx, c, http.MethodGet, checkinsToolPath(toolID)+"/questions", nil)

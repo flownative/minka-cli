@@ -234,6 +234,16 @@ type Chat struct {
 	AppURL      string `json:"appUrl"`
 }
 
+// Tool is a tool read by its identifier alone, so that whoever holds only the
+// tool learns the project it stands in.
+type Tool struct {
+	ID        string           `json:"id"`
+	ProjectID string           `json:"projectId"`
+	Project   ProjectReference `json:"project"`
+	Title     string           `json:"title"`
+	AppURL    string           `json:"appUrl"`
+}
+
 // ProjectReference and BoardReference say where a card hangs, which matters
 // for a list that crosses projects.
 type ProjectReference struct {

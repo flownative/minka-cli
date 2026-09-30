@@ -126,6 +126,11 @@ func (c *Client) PostsTools(ctx context.Context, projectID string) (Result[[]Pos
 	return request[[]PostsTool](ctx, c, http.MethodGet, "/projects/"+url.PathEscape(projectID)+"/posts", nil)
 }
 
+// PostsTool reads a Posts tool by its identifier alone.
+func (c *Client) PostsTool(ctx context.Context, toolID string) (Result[Tool], error) {
+	return request[Tool](ctx, c, http.MethodGet, postsToolPath(toolID), nil)
+}
+
 // PostCategories lists the kinds of post of a project, in the order its
 // members put them.
 func (c *Client) PostCategories(ctx context.Context, projectID string) (Result[[]PostCategory], error) {

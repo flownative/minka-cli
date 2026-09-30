@@ -171,20 +171,6 @@ func TestAWeekdayGoesOutAsANumberAndAWordThatIsNoneIsRefused(t *testing.T) {
 	}
 }
 
-// The ID of a tool names no project, so a new question takes a person by ID or
-// as me, and nothing is looked up.
-func TestANewQuestionAsksByIDOrMe(t *testing.T) {
-	e := newTestEnv(t)
-	f := e.fixture
-
-	requests := len(e.server.Requests())
-	env, r := e.runJSON("", "checkins", "create", "--tool", f.CheckinsTool.ID, "--title", "Q", "--ask", "anke@example.com")
-	expectCode(t, r, ExitUsage)
-	if !strings.Contains(env.Hint, "people list") || len(e.server.Requests()) != requests {
-		t.Fatalf("hint %q, %d requests", env.Hint, len(e.server.Requests())-requests)
-	}
-}
-
 // A client or an agent of one is refused like a stranger where the question is
 // not shown to clients, and nothing is written.
 func TestAClientTheQuestionIsNotShownToIsRefusedWhenNamed(t *testing.T) {
@@ -394,15 +380,16 @@ func TestTheRefusalsOfANewQuestionComeInMinkasOrder(t *testing.T) {
 		exit int
 		code string
 	}{
-		"a title before the tool":            {[]string{"checkins", "create", "--tool", unknownID, "--title", " ", "--ask", f.Stranger.ID}, ExitValidation, "questionTitleMissing"},
-		"the weekdays before the tool":       {[]string{"checkins", "create", "--tool", unknownID, "--title", "Q", "--time", "09:00"}, ExitValidation, apiCodeQuestionWeekdaysMissing},
-		"the time before the rhythm":         {[]string{"checkins", "create", "--tool", unknownID, "--title", "Q", "--weekday", "1", "--time", "25:00"}, ExitValidation, apiCodeQuestionTimeInvalid},
-		"no rhythm before the tool":          {[]string{"checkins", "create", "--tool", unknownID, "--title", "Q", "--weekday", "1", "--time", "09:00"}, ExitValidation, apiCodeQuestionScheduleInvalid},
-		"the tool before nobody":             {valid(unknownID), ExitNotFound, ""},
-		"the tool before a stranger":         {valid(f.OtherCheckinsTool.ID, "--ask", f.Stranger.ID), ExitNotFound, ""},
-		"nobody":                             {valid(f.CheckinsTool.ID), ExitValidation, apiCodeQuestionNobodyAsked},
-		"a stranger":                         {valid(f.CheckinsTool.ID, "--ask", f.Stranger.ID), ExitValidation, apiCodePersonNotAProjectMember},
-		"somebody that is no ID, before 404": {[]string{"checkins", "create", "--tool", f.CheckinsTool.ID, "--title", " ", "--ask", "Nele"}, ExitUsage, ""},
+		"a title before the tool":             {[]string{"checkins", "create", "--tool", unknownID, "--title", " ", "--ask", f.Stranger.ID}, ExitValidation, "questionTitleMissing"},
+		"the weekdays before the tool":        {[]string{"checkins", "create", "--tool", unknownID, "--title", "Q", "--time", "09:00"}, ExitValidation, apiCodeQuestionWeekdaysMissing},
+		"the time before the rhythm":          {[]string{"checkins", "create", "--tool", unknownID, "--title", "Q", "--weekday", "1", "--time", "25:00"}, ExitValidation, apiCodeQuestionTimeInvalid},
+		"no rhythm before the tool":           {[]string{"checkins", "create", "--tool", unknownID, "--title", "Q", "--weekday", "1", "--time", "09:00"}, ExitValidation, apiCodeQuestionScheduleInvalid},
+		"the tool before nobody":              {valid(unknownID), ExitNotFound, ""},
+		"the tool before a stranger":          {valid(f.OtherCheckinsTool.ID, "--ask", f.Stranger.ID), ExitNotFound, ""},
+		"nobody":                              {valid(f.CheckinsTool.ID), ExitValidation, apiCodeQuestionNobodyAsked},
+		"a stranger":                          {valid(f.CheckinsTool.ID, "--ask", f.Stranger.ID), ExitValidation, apiCodePersonNotAProjectMember},
+		"a name nobody has, before the title": {[]string{"checkins", "create", "--tool", f.CheckinsTool.ID, "--title", " ", "--ask", "Nobody"}, ExitUsage, ""},
+		"the tool before a name":              {[]string{"checkins", "create", "--tool", unknownID, "--title", " ", "--ask", "Anke"}, ExitNotFound, ""},
 	} {
 		env, r := e.runJSON("", c.args...)
 		if r.code != c.exit || c.code != "" && env.Meta["apiCode"] != c.code {

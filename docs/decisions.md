@@ -1139,6 +1139,10 @@ an account and call the run a success.
 <a id="c-070"></a>
 ## C-070 — Which people go with which audience is Minka's rule alone
 
+**Superseded in one point by [C-092](#c-092)**: `--notify` takes a name or an
+e-mail address as well, looked up among the members of the tool's project.
+Everything else below holds.
+
 *Applies to: `docs create --audience` and `--notify`*
 
 The CLI checks only that `--audience` is one of its three words and that a
@@ -1272,6 +1276,10 @@ Minka's own addresses split the same way: `checkins/…`, `questions/…`,
 <a id="c-078"></a>
 ## C-078 — A schedule goes out as given, and only a word that is no weekday stops here
 
+**Superseded in one point by [C-092](#c-092)**: `checkins create --ask` takes a
+name or an e-mail address as well, looked up among the members of the tool's
+project. Everything else below holds.
+
 *Applies to: `checkins create`, `checkins edit`*
 
 `--rhythm` is sent as the word given, `--weekday` as a number or as the number
@@ -1287,7 +1295,7 @@ the people and the weekdays as whole sets, and an empty set of people is always
 refused, so a flag for it would be a flag that never works. The ID of a tool
 names no project, so a new question cannot look up a name, as a new document
 cannot ([C-070](#c-070)).
-**Implemented as:** `cli.weekdayNumbers`, `cli.peopleByIDOrMe`,
+**Implemented as:** `cli.weekdayNumbers`, `cli.peopleOfATool`,
 `api.UpdateCheckinQuestionInput`, see [Check-ins](stable/checkins.md).
 
 <a id="c-079"></a>
@@ -1415,6 +1423,9 @@ a trashed, not found or forbidden record goes without it and ends 0.
 <a id="c-085"></a>
 ## C-085 — A file goes into a tool in one run, and a refused second step hands over what the first stored
 
+**Superseded in one point by [C-092](#c-092)**: the file finds its project
+through the tool, not through `--project`. Everything else below holds.
+
 *Applies to: `docs uploads create`, `docs uploads edit`*
 
 `docs uploads create <file>` looks the tool up in `--project`, stores the file
@@ -1427,9 +1438,8 @@ this run stored the file; `docs uploads edit` has no flag for the file.
 up to 100 MiB travelled and a retry would send them again, a file stored a
 moment ago cannot have been swept, and a flag for the file would promise a
 change Minka silently ignores.
-**Implemented as:** `cli.newDocsUploadsCreateCmd`, `cli.requireToolOfProject`,
-`cli.filesUploadRefusal`, `api.AddFilesUploadInput`, see
-[Docs & Files](stable/docs-and-files.md).
+**Implemented as:** `cli.newDocsUploadsCreateCmd`, `cli.filesUploadRefusal`,
+`api.AddFilesUploadInput`, see [Docs & Files](stable/docs-and-files.md).
 
 <a id="c-086"></a>
 ## C-086 — The colour of a group goes as it is named, and Minka is the one to refuse it
@@ -1520,3 +1530,18 @@ its element; `messages edit` has the guard too. `--json` keeps the served HTML.
 **Why:** The view is the editable text (C-008), and only a link showing its
 own address comes back from Markdown as the reference.
 **Implemented as:** `richtext.reference`, `richtext.Dropped`, `cli.keepsTheAttachments`.
+
+<a id="c-092"></a>
+## C-092 — A tool names its project, so nothing asks for one beside it
+
+*Applies to: `docs uploads create`, `docs create --notify`, `posts create
+--notify`, `checkins create --ask`*
+
+A file is stored in the project `GET files-tools/{id}` names; a hidden
+`--project` other than the tool's exits 2 before the file travels, a matching
+one draws a `notice`. `--notify` and `--ask` also take a name or an e-mail
+address, looked up among the members of the tool's project, read only for such.
+**Why:** the tool names its project, and a script giving `--project`, shipped
+from v0.19.0 on, keeps working and never stores the file anywhere else.
+**Implemented as:** `cli.projectOfFilesTool`, `cli.peopleOfATool`,
+`cli.newDocsUploadsCreateCmd`, see [Docs & Files](stable/docs-and-files.md).

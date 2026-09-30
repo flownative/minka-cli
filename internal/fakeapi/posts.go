@@ -98,6 +98,7 @@ type Post struct {
 func (s *Server) registerPostsRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/projects/{projectId}/posts", s.authenticated(s.postsTools))
 	mux.HandleFunc("GET /api/v1/projects/{projectId}/post-categories", s.authenticated(s.postCategories))
+	mux.HandleFunc("GET /api/v1/posts-tools/{toolId}", s.authenticated(s.postsTool))
 	mux.HandleFunc("GET /api/v1/posts-tools/{toolId}/posts", s.authenticated(s.postsPage))
 	mux.HandleFunc("POST /api/v1/posts-tools/{toolId}/posts", s.authenticated(s.addPost))
 	mux.HandleFunc("GET /api/v1/posts-tools/{toolId}/archive", s.authenticated(s.archivedPosts))
@@ -126,11 +127,22 @@ func (s *Server) postsTools(w http.ResponseWriter, r *http.Request, person *Pers
 	}
 	tools := []any{}
 	for _, tool := range s.PostsTools {
-		if tool.ProjectID == project.ID && !tool.Archived {
+		if tool.ProjectID == project.ID && !tool.Archived && (tool.ShownToClients || !s.isAClient(person.ID)) {
 			tools = append(tools, map[string]any{"id": tool.ID, "title": tool.Title, "appUrl": s.postsToolURL(tool)})
 		}
 	}
 	writeJSON(w, http.StatusOK, tools)
+}
+
+// postsTool reads a tool by its identifier alone, with the project it stands
+// in. A tool no longer in use is read as well.
+func (s *Server) postsTool(w http.ResponseWriter, r *http.Request, person *Person) {
+	tool := s.visiblePostsTool(r.PathValue("toolId"), person)
+	if tool == nil {
+		notFound(w)
+		return
+	}
+	writeJSON(w, http.StatusOK, s.toolResource(tool.ID, tool.ProjectID, tool.Title, s.postsToolURL(tool)))
 }
 
 // postCategories lists the kinds of post of a project in the order the
@@ -321,7 +333,7 @@ func (s *Server) archivedPosts(w http.ResponseWriter, r *http.Request, person *P
 	list := []any{}
 	for _, post := range archived {
 		list = append(list, map[string]any{
-			"id": post.ID, "title": post.Title, "category": s.categoryBadge(post.CategoryID),
+			"id": post.ID, "projectId": tool.ProjectID, "title": post.Title, "category": s.categoryBadge(post.CategoryID),
 			"archivedAt": timestampOrNil(nilIfZero(post.ArchivedAt)), "archivedBy": s.personReferenceOrNil(post.ArchivedByID),
 			"appUrl": s.postURL(tool, post),
 		})
@@ -830,9 +842,11 @@ func (s *Server) aMomentAfterEveryPin(tool *PostsTool) time.Time {
 	return moment
 }
 
+// visiblePostsTool finds a tool in a project the person is a member of, and
+// for a client only a tool the clients are let into.
 func (s *Server) visiblePostsTool(toolID string, person *Person) *PostsTool {
 	for _, tool := range s.PostsTools {
-		if tool.ID == toolID && s.visibleProject(tool.ProjectID, person) != nil {
+		if tool.ID == toolID && s.visibleProject(tool.ProjectID, person) != nil && (tool.ShownToClients || !s.isAClient(person.ID)) {
 			return tool
 		}
 	}
@@ -877,7 +891,7 @@ func (s *Server) postWithID(postID string, person *Person) (*PostsTool, *Post) {
 
 func (s *Server) postListItemResource(tool *PostsTool, post *Post) map[string]any {
 	return map[string]any{
-		"id": post.ID, "title": post.Title, "lead": postLeadOf(post.Body),
+		"id": post.ID, "projectId": tool.ProjectID, "title": post.Title, "lead": postLeadOf(post.Body),
 		"category": s.categoryBadge(post.CategoryID), "categoryId": nullable(post.CategoryID),
 		"pinned": post.PinnedAt != nil, "commentCount": len(post.Comments),
 		"createdAt": timestamp(post.CreatedAt), "creator": s.personReference(post.CreatorID),
