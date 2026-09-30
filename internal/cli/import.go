@@ -42,6 +42,12 @@ type importReport struct {
 	// PeopleLeftOut are the people of the account no record of the bundle
 	// refers to; counts.people is who was written.
 	PeopleLeftOut int `json:"peopleLeftOut"`
+	// Bots are the people of counts.people that are chatbots or integrations
+	// of the source, which Minka makes bots.
+	Bots int `json:"bots"`
+	// BotsAlsoNamedElsewhere are the IDs of the deleted chatbots that
+	// records other than lines of an integration name as well.
+	BotsAlsoNamedElsewhere []string `json:"botsAlsoNamedElsewhere"`
 	// CreatorProbesRefused are the dock entries asked for the creator of a
 	// project that Basecamp refused: they are passed over, and a project may
 	// come without a creator because of it.
@@ -521,10 +527,12 @@ it has been applied.`,
 				SkippedTools:   result.Skipped,
 				MissingFiles:   result.Missing,
 
-				InvalidAddresses:     result.InvalidAddresses,
-				AddressesUnquoted:    result.AddressesUnquoted,
-				PeopleLeftOut:        result.PeopleLeftOut,
-				CreatorProbesRefused: result.CreatorProbesRefused,
+				InvalidAddresses:       result.InvalidAddresses,
+				AddressesUnquoted:      result.AddressesUnquoted,
+				PeopleLeftOut:          result.PeopleLeftOut,
+				Bots:                   result.Bots,
+				BotsAlsoNamedElsewhere: result.BotsAlsoNamedElsewhere,
+				CreatorProbesRefused:   result.CreatorProbesRefused,
 
 				PeopleAsClients:              result.PeopleAsClients,
 				ClientMemberships:            result.ClientMemberships,
@@ -592,6 +600,9 @@ it has been applied.`,
 				RequestsRetried:       source.Retried(),
 			}
 			var notices []string
+			if count := len(report.BotsAlsoNamedElsewhere); count > 0 {
+				notices = append(notices, plural(count, "deleted person comes", "deleted people come")+" as a bot for a line of an integration, although other records name them too; Minka never turns a bot back into a human, so look at data.botsAlsoNamedElsewhere before the bundle is applied")
+			}
 			if count := len(report.InvalidAddresses); count > 0 {
 				notices = append(notices, plural(count, "person comes", "people come")+" without an e-mail address, and so without a login, because the one Basecamp holds is none; data.invalidAddresses names them by ID, and only the source can repair it")
 			}
@@ -857,6 +868,12 @@ func renderImportReport(w io.Writer, report importReport) {
 	fmt.Fprintf(w, "\nAvatars: %d, initials not distinguishable\n", report.Avatars.Count)
 
 	fmt.Fprintf(w, "People of the account nothing refers to, left out: %d\n", report.PeopleLeftOut)
+	if report.Bots > 0 {
+		fmt.Fprintf(w, "Chatbots and integrations among the people, written as bots: %d\n", report.Bots)
+	}
+	if count := len(report.BotsAlsoNamedElsewhere); count > 0 {
+		fmt.Fprintf(w, "Deleted people written as bots whom other records name too: %d (person %s)\n", count, strings.Join(report.BotsAlsoNamedElsewhere, ", "))
+	}
 	if count := len(report.InvalidAddresses); count > 0 {
 		fmt.Fprintf(w, "Invalid addresses: %d (person %s)\n", count, strings.Join(report.InvalidAddresses, ", "))
 	}

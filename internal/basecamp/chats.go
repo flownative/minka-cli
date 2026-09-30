@@ -36,7 +36,10 @@ type upload struct {
 	ByteSize    *int64 `json:"byte_size"`
 }
 
-const uploadLine = "Chat::Lines::Upload"
+const (
+	uploadLine      = "Chat::Lines::Upload"
+	integrationLine = "Chat::Lines::Integration"
+)
 
 // lineTypes are the kinds of line a bundle has a word for, by the names a
 // report counts them under. Basecamp hands out neither the lines somebody
@@ -44,10 +47,10 @@ const uploadLine = "Chat::Lines::Upload"
 // of its own that are in none of these: such a line is left out and reported,
 // and whoever adds a word here has seen what Basecamp sends under it.
 var lineTypes = map[string]string{
-	"Chat::Lines::Text":        "text",
-	"Chat::Lines::RichText":    "richText",
-	uploadLine:                 "upload",
-	"Chat::Lines::Integration": "integration",
+	"Chat::Lines::Text":     "text",
+	"Chat::Lines::RichText": "richText",
+	uploadLine:              "upload",
+	integrationLine:         "integration",
 }
 
 // extractChats adds the lines of every chat, chat by chat in the order of the
@@ -154,6 +157,9 @@ func (e *Extractor) extractChat(ctx context.Context, w *bundle.Writer, bucket, c
 		origin, err := e.record("line", found.ID, found.recording)
 		if err != nil {
 			return err
+		}
+		if found.Type == integrationLine && found.Creator != nil {
+			e.people.wroteForAnIntegration(found.Creator.ID)
 		}
 		err = w.Add(bundle.Messages, bundle.Message{
 			Record:          origin,

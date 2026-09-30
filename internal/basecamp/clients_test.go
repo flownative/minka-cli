@@ -200,6 +200,18 @@ func TestTheWordAboutClientsOfAToolIsReadFromTheToolAndNotFromTheDock(t *testing
 // theClient is the client of the client project whose company a test changes,
 // and theClientProject the project itself: a company a bundle cannot carry ends
 // a run, so the fake holds none by itself.
+// deletedClient is the client of whom Basecamp keeps a Tombstone.
+func deletedClient(t *testing.T, a *fakebasecamp.Account) *fakebasecamp.Person {
+	t.Helper()
+	for i := range a.People {
+		if a.People[i].ID == 110 && a.People[i].Kind == "Tombstone" && a.People[i].Client {
+			return &a.People[i]
+		}
+	}
+	t.Fatal("the account holds no deleted client 110")
+	return nil
+}
+
 func theClient(t *testing.T, a *fakebasecamp.Account) *fakebasecamp.Person {
 	t.Helper()
 	for i := range a.People {
@@ -232,11 +244,16 @@ func TestACompanyMinkaWouldRefuseEndsTheRun(t *testing.T) {
 		"with a name too long":                 {ID: 9284, Name: strings.Repeat("a", 201)},
 		"with a control character in its name": {ID: 9284, Name: "North\u0007wind"},
 	} {
-		for _, where := range []string{"person", "project"} {
+		// A client of whom Basecamp keeps a Tombstone may yet turn out a bot, so
+		// the company of theirs ends the run where the people are written.
+		for _, where := range []string{"person", "deleted person", "project"} {
 			account := fakebasecamp.New()
-			if where == "person" {
+			switch where {
+			case "person":
 				theClient(t, account).Company = &company
-			} else {
+			case "deleted person":
+				deletedClient(t, account).Company = &company
+			default:
 				theClientProject(t, account).ClientCompany = &company
 			}
 			extractor := basecamp.Extractor{Source: account, Avatars: account, Files: account,

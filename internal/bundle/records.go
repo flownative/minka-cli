@@ -157,6 +157,25 @@ type Person struct {
 	Company *CompanyOrNone `json:"company,omitempty"`
 }
 
+// Bot is a chatbot or an integration of the source, which a bundle carries
+// among its people with the kind bot. It has no field for an address, because
+// Minka ends a run over a bot with one, and none for client, of which Minka
+// reads nothing on a bot. Retired is said of a bot the source deleted alone.
+type Bot struct {
+	Record
+	Name    string  `json:"name"`
+	Avatar  *string `json:"avatar"`
+	Kind    botKind `json:"kind"`
+	Retired bool    `json:"retired,omitempty"`
+}
+
+// botKind is the kind of person a Bot is, which is the one it can be.
+type botKind struct{}
+
+func (botKind) MarshalJSON() ([]byte, error) {
+	return []byte(`"bot"`), nil
+}
+
 // Project is a project of the source. ClientAccess tells that it works with
 // clients and ClientCompany names the company it works with; the two stand
 // together or neither does, because a company without the access would say that

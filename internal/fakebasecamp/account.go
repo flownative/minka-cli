@@ -23,7 +23,9 @@ type Person struct {
 	Name string
 	// Kind is what Basecamp calls the personable type: "User" when empty,
 	// "Integration" for a bot, "Tombstone" for somebody who was deleted.
-	Kind     string
+	Kind string
+	// NoKind leaves the kind out of the answer altogether.
+	NoKind   bool
 	Email    string
 	NoAvatar bool
 	// TimeZone is the zone the person lives in, as Basecamp names it; it is
@@ -126,6 +128,12 @@ type Account struct {
 	// UsersOnly.
 	Bot     Person
 	Deleted Person
+	// DeletedBot is what is left of a chatbot that was deleted: a Tombstone
+	// like that of a user, with an address, in no chat until a test gives it
+	// a line. Unlike Deleted it is in no list of the account either, which
+	// leaves the counts of people left out as they were; a test that wants it
+	// there puts it there.
+	DeletedBot Person
 
 	// AlsoListedActive are projects the list of the active ones hands out as
 	// well as the list of their own status, as it does for a project that went
@@ -235,6 +243,8 @@ func New() *Account {
 		Former:   former,
 		Bot:      bot,
 		Deleted:  deleted,
+		DeletedBot: Person{ID: 803, Name: "xbuildrobot", Kind: "Tombstone", Email: "buildrobot@example.test",
+			CreatedAt: "2020-06-01T08:00:00.000Z", UpdatedAt: "2023-06-01T08:00:00.000Z"},
 		Projects: []Project{
 			{
 				ID: 7001, Name: "Example Project", Status: "active",
@@ -314,6 +324,9 @@ func (a *Account) person(p Person) map[string]any {
 		answer["personable_type"] = p.Kind
 	default:
 		answer["personable_type"], answer["tombstoned_at"] = p.Kind, p.UpdatedAt
+	}
+	if p.NoKind {
+		delete(answer, "personable_type")
 	}
 	return answer
 }

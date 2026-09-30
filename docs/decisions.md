@@ -1559,3 +1559,17 @@ names the client beside the outsider; one that is no JSON, an older Minka.
 so nothing unnamed can be overwritten and nothing is lost.
 **Implemented as:** `cli.newProjectsEditCmd`, `api.UpdateProjectInput`, see
 [Projects](stable/projects.md).
+
+<a id="c-094"></a>
+## C-094 — A chatbot comes as a bot, and a bot carries no address
+
+*Applies to: `import basecamp`, the people of a bundle, `bots` of the report*
+
+`Integration` is a bot, and so is a kind other than `User`, `Client` or none
+that wrote a `Chat::Lines::Integration` line the bundle carries: a deleted
+chatbot, with `retired: true`. A bot has no `email`, `client` or `company`.
+Such a Tombstone other records name too is in `botsAlsoNamedElsewhere`.
+**Why:** Minka makes it a bot, ends a run over one with an address, never turns
+it back; only lines tell a deleted chatbot from a deleted user.
+**Implemented as:** `basecamp.seenPerson.bot`, `bundle.Bot`, see
+[Importing from Basecamp](stable/import.md).

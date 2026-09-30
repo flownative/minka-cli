@@ -29,7 +29,10 @@ BASECAMP_PROFILE=flownative-robert ./bin/minka import basecamp \
 
 Without `--project` the run takes every project the identity sees, the
 archived ones included, which is the whole account and many times the time
-below; `--active-only` leaves the archived ones out. A dry run over
+below; `--active-only` leaves the archived ones out. A pick decides whom a
+deleted chatbot comes as: without the chat it wrote into, its Tombstone is a
+retired human with its address, and Minka keeps it one when a later run calls
+it a bot, see People in [Importing from Basecamp](../stable/import.md). A dry run over
 everything is the step before the first full run: it costs almost the whole
 walk, only the downloads are left out, and says how much a run would fetch. A
 single failure anywhere ends a full run with nothing written. A `not_found`

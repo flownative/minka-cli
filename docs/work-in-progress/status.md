@@ -252,6 +252,10 @@ references of that bundle resolve and its parts are the ones its manifest
 names. The files, the embeds, the references and the mentions have been run
 live for both projects: every file fetched, every embed written, every
 reference and every mention as the format asks, see below.
+Chatbots and integrations come as people of `kind: "bot"`, without an
+address or `client`, a deleted chatbot among them with `retired: true`
+(C-094); the run report counts them in `bots` and names in
+`botsAlsoNamedElsewhere` the deleted people who wrote as both.
 A run needs a Basecamp identity that may see the e-mail addresses of others,
 which is somebody of the account's own company or an admin. Under one that
 may not, masked addresses were seen live ending the run as `forbidden`. Only
@@ -648,11 +652,23 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   in a bundle that was checked reference by
   reference, its people against the kind Basecamp gives them: chats listed
   newest first in pages that grow, the four kinds of line, files dropped into
-  a chat, bots and deleted people as writers who come retired although an
-  admin's list holds them, boosts on lines, a line that says nothing left
-  out, posts with and without a category, archived posts, a second message
+  a chat, bots and deleted people as writers whom an admin's list holds as
+  well, boosts on lines, a line that says nothing left out, posts with and
+  without a category, archived posts, a second message
   board with categories no list holds, previews of links and pictures at a
   foreign address as links, and five parts of one chat each.
+- Of the bots of `import basecamp` (C-094): all of it. The rule rests on what
+  Minka's bots concept measured on 2026-09-26 — a chatbot's lines carry a
+  creator of `personable_type: "Integration"` with `email_address: null` and
+  the chatbot's own ID, and a deleted chatbot leaves a `Tombstone` — and on
+  nothing seen by a run of ours. Open for a read-only live check: whether a
+  deleted chatbot's `Tombstone` keeps an address, and which; whether any other
+  kind than `Integration` (a `Chatbot`, say) or a `User` writes
+  `Chat::Lines::Integration`; whether a chatbot shows up anywhere but as the
+  creator of a chat line — the account list for an admin, the people of a
+  project, a boost, a comment, a mention — and in what shape; whether a
+  deleted user's `Tombstone` can ever be the creator of such a line; and
+  whether an integration's person carries `client` or a `company`.
 - Of the to-dos of `import basecamp`: all of it. No extraction has met a To-dos
   tool live, so everything about them rests on the invented account and on
   reading: that a dock entry of a to-do set is called `todoset`, which is read
@@ -1224,6 +1240,9 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
 
 ## Next steps
 
+- Check the bots of `import basecamp` read-only against the live account, as
+  listed under Checked against the fake only, and a bundle with them through
+  Minka's applier.
 - The bundle with the posts and the chats waits for Minka's appliers of
   posts and of chat lines; what those runs find comes back through the
   coordination.

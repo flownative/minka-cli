@@ -1571,9 +1571,14 @@ this:
   was left out, per
   kind and whether it was switched on; `data.counts` is what the manifest
   says.
-- A person comes with `retired: true` unless Basecamp calls them a user: a
-  bot, somebody who was deleted and an outsider are authors and nothing more,
-  whichever identity ran the import.
+- A person comes with `retired: true` unless Basecamp calls them a user:
+  somebody who was deleted and an outsider are authors and nothing more,
+  whichever identity ran the import. A chatbot or integration, a deleted one
+  included, comes with `kind: "bot"` and without an address or `client`, a
+  deleted one with `retired: true`; `data.bots` counts them.
+  `data.botsAlsoNamedElsewhere` names deleted people who wrote as an
+  integration and as a person, and a `notice` says so: Minka never turns a bot
+  back into a human, so look at them before the bundle is applied.
 - What the source says about clients comes with the bundle: `client` on every
   person, `company` on a client alone, `clientAccess` and `clientCompany` on a
   project, and `visibleToClients` on a tool, a post, a to-do list, a check-in

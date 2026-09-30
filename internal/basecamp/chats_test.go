@@ -508,7 +508,7 @@ func TestWithoutANumberAPartHoldsTenThousandLines(t *testing.T) {
 
 // The list of an account holds every kind of person for an admin and users
 // alone for anybody else: the people of a bundle are the same under both.
-func TestABotAndSomebodyDeletedAreRetiredWhicheverListTheAccountShows(t *testing.T) {
+func TestABotAndSomebodyDeletedComeAlikeWhicheverListTheAccountShows(t *testing.T) {
 	var first string
 	// The list anybody else sees holds users alone: of the four it lacks, the bot
 	// and who was deleted are named by a record, so two people fewer are left out.
@@ -524,9 +524,10 @@ func TestABotAndSomebodyDeletedAreRetiredWhicheverListTheAccountShows(t *testing
 		dir, result := extract(t, account, talkProject)
 		people := records(t, dir, bundle.People)
 
-		// A bot has no address; of somebody deleted Basecamp keeps theirs.
+		// A bot has no address and no word about being retired or a client; of
+		// somebody deleted Basecamp keeps their address.
 		want := map[string]any{"sourceId": "801", "createdAt": "2021-06-01T08:00:00.000Z", "updatedAt": "2021-06-01T08:00:00.000Z", "createdBy": nil,
-			"name": "Build Robot", "email": nil, "avatar": "avatar-801", "retired": true, "client": false}
+			"name": "Build Robot", "avatar": "avatar-801", "kind": "bot"}
 		if got := recordWithID(t, people, "801"); !reflect.DeepEqual(got, want) {
 			t.Errorf("%s: the bot:\n got %v\nwant %v", view, got, want)
 		}
@@ -536,7 +537,10 @@ func TestABotAndSomebodyDeletedAreRetiredWhicheverListTheAccountShows(t *testing
 			t.Errorf("%s: somebody deleted:\n got %v\nwant %v", view, got, want)
 		}
 		for _, person := range people {
-			user := !slices.Contains([]any{"99", "801", "802"}, person["sourceId"])
+			if person["kind"] == "bot" {
+				continue
+			}
+			user := !slices.Contains([]any{"99", "802"}, person["sourceId"])
 			if person["retired"] == user {
 				t.Errorf("%s: person %v comes with retired %v", view, person["sourceId"], person["retired"])
 			}
