@@ -1545,3 +1545,17 @@ address, looked up among the members of the tool's project, read only for such.
 from v0.19.0 on, keeps working and never stores the file anywhere else.
 **Implemented as:** `cli.projectOfFilesTool`, `cli.peopleOfATool`,
 `cli.newDocsUploadsCreateCmd`, see [Docs & Files](stable/docs-and-files.md).
+
+<a id="c-093"></a>
+## C-093 — A project edit sends only the flags given, its description as plain text
+
+*Applies to: `projects edit`*
+
+Only `--name` and `--description` given are sent, without `--expect`; an edit
+with neither flag is a usage error before any request. The description goes
+out as typed (`-` for stdin), with no Markdown and no guard over files. A 404
+names the client beside the outsider; one that is no JSON, an older Minka.
+**Why:** Minka writes only the fields named and shows the description as text,
+so nothing unnamed can be overwritten and nothing is lost.
+**Implemented as:** `cli.newProjectsEditCmd`, `api.UpdateProjectInput`, see
+[Projects](stable/projects.md).

@@ -797,6 +797,7 @@ func New(t testing.TB) (*Server, *Fixture) {
 	mux.HandleFunc("GET /api/v1/me", s.authenticated(s.me))
 	mux.HandleFunc("PUT /api/v1/me/work", s.authenticated(s.noteAtWork))
 	mux.HandleFunc("GET /api/v1/projects", s.authenticated(s.projects))
+	mux.HandleFunc("PATCH /api/v1/projects/{projectId}", s.authenticated(s.editProject))
 	mux.HandleFunc("GET /api/v1/projects/{projectId}/boards", s.authenticated(s.boards))
 	mux.HandleFunc("GET /api/v1/boards/{boardId}", s.authenticated(s.board))
 	mux.HandleFunc("GET /api/v1/boards/{boardId}/archive", s.authenticated(s.archivedCards))
@@ -1176,10 +1177,81 @@ func (s *Server) projects(w http.ResponseWriter, r *http.Request, person *Person
 	list := []any{}
 	for _, p := range s.Projects {
 		if slices.Contains(p.MemberIDs, person.ID) && p.Archived == archived {
-			list = append(list, map[string]any{"id": p.ID, "name": p.Name, "description": p.Description, "status": projectStatus(p), "appUrl": s.URL + "/projects/" + p.ID})
+			list = append(list, s.projectResource(p))
 		}
 	}
 	writeJSON(w, http.StatusOK, list)
+}
+
+func (s *Server) projectResource(p *Project) map[string]any {
+	return map[string]any{"id": p.ID, "name": p.Name, "description": p.Description, "status": projectStatus(p), "appUrl": s.URL + "/projects/" + p.ID}
+}
+
+// editProject renames or describes a project. Everything about the body is
+// refused before the project is looked up; then an archived project answers
+// its member, a client included, and only then is a client told the same 404
+// as somebody outside the project, because only the team may write.
+func (s *Server) editProject(w http.ResponseWriter, r *http.Request, person *Person) {
+	fields, ok := readBody(w, r)
+	if !ok {
+		return
+	}
+	name, ok := stringField(w, fields, "name")
+	if !ok {
+		return
+	}
+	description, ok := stringField(w, fields, "description")
+	if !ok {
+		return
+	}
+	if name == nil && description == nil {
+		unprocessable(w, "nothingToChange", "The body names neither a name nor a description.")
+		return
+	}
+	if name != nil && !validProjectName(w, *name) {
+		return
+	}
+	if description != nil && utf8.RuneCountInString(phpTrim(*description)) > maxProjectDescriptionLength {
+		unprocessable(w, "projectDescriptionTooLong", "The description of a project is too long.")
+		return
+	}
+	project := s.visibleProject(r.PathValue("projectId"), person)
+	if s.refusedAsArchived(w, project) {
+		return
+	}
+	if project == nil || s.isAClient(person.ID) {
+		notFound(w)
+		return
+	}
+	if name != nil {
+		project.Name = phpTrim(*name)
+	}
+	if description != nil {
+		project.Description = phpTrim(*description)
+	}
+	writeJSON(w, http.StatusOK, s.projectResource(project))
+}
+
+// maxProjectNameLength and maxProjectDescriptionLength count characters, as
+// Minka does.
+const (
+	maxProjectNameLength        = 200
+	maxProjectDescriptionLength = 2000
+)
+
+func validProjectName(w http.ResponseWriter, name string) bool {
+	name = phpTrim(name)
+	switch {
+	case utf8.RuneCountInString(name) > maxProjectNameLength:
+		unprocessable(w, "projectNameTooLong", "The name of a project is too long.")
+	case strings.IndexFunc(name, unicode.IsControl) >= 0:
+		unprocessable(w, "projectNameHasControlCharacters", "The name of a project must not contain control characters.")
+	case name == "":
+		unprocessable(w, "projectNameMissing", "A project needs a name.")
+	default:
+		return true
+	}
+	return false
 }
 
 func projectStatus(p *Project) string {

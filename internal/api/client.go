@@ -218,6 +218,20 @@ func (c *Client) Projects(ctx context.Context, archived bool) (Result[[]Project]
 	return request[[]Project](ctx, c, http.MethodGet, path, nil)
 }
 
+// UpdateProjectInput names what a project is to be called or about. A field
+// left nil stays as it stands, even against a change made meanwhile; an empty
+// description clears it.
+type UpdateProjectInput struct {
+	Name        *string `json:"name,omitempty"`
+	Description *string `json:"description,omitempty"`
+}
+
+// UpdateProject renames or describes a project, and answers with it as the
+// list of projects shows it.
+func (c *Client) UpdateProject(ctx context.Context, projectID string, input UpdateProjectInput) (Result[Project], error) {
+	return request[Project](ctx, c, http.MethodPatch, "/projects/"+url.PathEscape(projectID), input)
+}
+
 func (c *Client) Boards(ctx context.Context, projectID string) (Result[[]BoardListItem], error) {
 	return request[[]BoardListItem](ctx, c, http.MethodGet, "/projects/"+url.PathEscape(projectID)+"/boards", nil)
 }

@@ -146,6 +146,7 @@ When you see it, run `minka skill install` and read the skill again.
 minka auth status --json
 minka me --json
 minka projects list [--archived] --json
+minka projects edit <projectId> [--name "New name"] [--description - < about.txt] --json
 minka boards list <projectId> --json
 minka boards show <boardId> --json
 minka boards archive <boardId> [--before <cardId>] [--limit <n>] [--all] --json
@@ -332,6 +333,17 @@ such as `Doing`.
   `--client-message-id` that was sent before the project was archived.
 - A host whose Minka does not know archived projects yet makes `projects list
   --archived` exit 7 rather than list projects in use as archived.
+- `projects edit <projectId>` renames a project (`--name`) or changes its
+  description (`--description`, `-` for stdin, `""` to clear it); at least one
+  of the two, or exit 1 before any request. What is not given stays, even if
+  somebody changed it meanwhile. The description is plain text: no Markdown is
+  converted, no mention or reference is made. The answer is the project as
+  `projects list` gives it. An empty name exits 9 with `projectNameMissing`;
+  `projectNameTooLong` (200 characters), `projectNameHasControlCharacters` and
+  `projectDescriptionTooLong` (2000) are the other refusals. Only the team may
+  edit: a client of the project gets exit 2 like an outsider. A host whose
+  Minka is too old for the command also exits 2, with a hint that says so.
+  Rename a project only when you were asked to.
 
 ## Boards
 
