@@ -485,9 +485,15 @@ func attachment(n *html.Node) string {
 // not open, in trash or never was: the server then sends only its kind and
 // identifier, and all three cases read alike.
 var unopenedTargets = map[string]string{
-	"card": "a card you cannot open",
-	"post": "a post you cannot open",
-	"chat": "a chat you cannot open",
+	"card":        "a card you cannot open",
+	"post":        "a post you cannot open",
+	"chat":        "a chat you cannot open",
+	"chatmessage": "a chat message you cannot open",
+	"todo":        "a to-do you cannot open",
+	"todolist":    "a to-do list you cannot open",
+	"document":    "a document you cannot open",
+	"upload":      "a file you cannot open",
+	"question":    "a question you cannot open",
 }
 
 // reference shows a reference to another record by its address, as an

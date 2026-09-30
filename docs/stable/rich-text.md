@@ -55,8 +55,10 @@ writes: `action-text-attachment`, `minka-embed` and `minka-ref`.
 
 ## References to another record
 
-Minka turns `#MNK-1`, `/go/card/MNK-1` and an address of its own card, post or
-chat into a `<minka-ref kind id>` when a text is saved, whichever way it comes
+Minka turns `#MNK-1`, `/go/card/MNK-1` and an address of its own card, post,
+chat, chat line (a chat's or a private conversation's address ending in
+`#chat-message-…`), to-do, to-do list, document, upload or check-in question
+into a `<minka-ref kind id>` when a text is saved, whichever way it comes
 in (Minka's E-205). The Markdown conversion has nothing to do for it but leave
 those names alone: `#MNK-1` stays text in every block, a bare address becomes
 a link whose words are that address (what Minka looks for), trailing
@@ -77,7 +79,22 @@ text of C-008 ([C-091](../decisions.md#c-091)):
 | `href` that is a web address (every kind, with or without `short-id`) | `<href>` |
 | `href` that cannot stand in angle brackets (defensive: Minka never serves one) | `[href](href)` |
 | no `href` but `title` or `short-id` (defensive: Minka never serves one) | `#MNK-1 Title` or `Title` as text |
-| only `kind` and `id` | `(a card you cannot open)`, the same for post and chat; `(a reference you cannot open)` for a kind the CLI does not know |
+| only `kind` and `id` | Minka's own words per kind, see below; `(a reference you cannot open)` for a kind the CLI does not know |
+
+The words for a target the reader cannot open are Minka's own, those of its
+`reference.unavailable.*` translations, in parentheses:
+
+| `kind` | Shown |
+|---|---|
+| `card` | `(a card you cannot open)` |
+| `post` | `(a post you cannot open)` |
+| `chat` | `(a chat you cannot open)` |
+| `chatmessage` | `(a chat message you cannot open)` |
+| `todo` | `(a to-do you cannot open)` |
+| `todolist` | `(a to-do list you cannot open)` |
+| `document` | `(a document you cannot open)` |
+| `upload` | `(a file you cannot open)` |
+| `question` | `(a question you cannot open)` |
 
 Sent back, `<href>` becomes a link that shows its own address, which Minka
 turns into the reference again. The title is left out, because a link with
