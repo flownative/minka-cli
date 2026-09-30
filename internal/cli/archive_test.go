@@ -34,6 +34,7 @@ func everyWrite(e *testEnv) map[string][]string {
 	entryComment := f.Document.Comments[len(f.Document.Comments)-1].ID
 
 	return map[string][]string{
+		"projects edit":     {"projects", "edit", f.Project.ID, "--name", "Renamed"},
 		"cards create":      {"cards", "create", "--board", f.Board.ID, "--title", "New"},
 		"cards edit":        {"cards", "edit", card, "--title", "Renamed"},
 		"cards move":        {"cards", "move", card, "--column", "not_now"},

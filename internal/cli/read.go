@@ -56,7 +56,7 @@ is the person the agent acts for.`,
 }
 
 func (a *app) newProjectsCmd() *cobra.Command {
-	return group("projects", "List projects", a.newProjectsListCmd())
+	return group("projects", "List projects, rename and describe them", a.newProjectsListCmd(), a.newProjectsEditCmd())
 }
 
 func (a *app) newProjectsListCmd() *cobra.Command {

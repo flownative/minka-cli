@@ -85,6 +85,13 @@ reacting to a post itself and showing one to clients have no address in the
 API. None of it has been seen live: the whole feature is checked against the
 fake, see below.
 
+A project is renamed and described with `projects edit`, which sends only
+`--name` and `--description` given, the description as plain text. The rule
+the command follows is [Projects](../stable/projects.md) (C-093). Minka's side
+(`PATCH /api/v1/projects/{projectId}`) is on its `main` and in no release yet,
+so the command is checked against Minka's code and tests and the fake only,
+see below.
+
 A reference to a card, a post or a chat in any text is read as its address,
 `<href>`, which comes back as the reference when the text is edited, or as
 `(a card you cannot open)` where the reader may not see the target (C-091);
@@ -320,6 +327,19 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   tool, a Check-ins tool or a chat, which Minka has, and models no Docs & Files
   or Posts tool in the trash and no project in the trash. The CLI reads the
   tools of Docs & Files, Posts and Check-ins.
+
+- `projects edit`: no request of it has gone to a real Minka, and none can
+  until a release carries the rename. Read in `ProjectsApiController::
+  updateProjectAction`, `DbalProjectRepository::rename` and `RenameProjectTest`
+  on Minka's `main`, and mirrored by the fake: the body before the project,
+  `projectArchived` for a member of an archived project, a client included,
+  and only then the same 404 for a client as for an outsider. A Minka
+  without the rename answers the address with a 404 page of text/html instead
+  of its JSON on `minka.flownative.com` and `dev.minka.flownative.com`,
+  measured read only with a GET; a PATCH meets the same missing route (v0.41
+  has no route for the address under any method). The CLI tells such a 404 apart from Minka's own
+  and says the host's Minka is older than this address. The fake keeps no
+  project in the trash, which Minka answers with 404 as well.
 
 - The status of what stands in a list or a group on the shelf or in the trash:
   seen live for an archived list, whose groups and to-dos come `archived` with

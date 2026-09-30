@@ -39,6 +39,10 @@ the documentation says what holds; how it came about is in git.
   every case it can meet, what the keepalive reports while one long tool call
   runs, how the hook is written — before any work on `work`, `heartbeat` or
   `hooks`.
+- [Projects](stable/projects.md): What a project carries, the edit that sends
+  only what was given and needs no guard, the description that is plain text,
+  the client who gets the same 404 as an outsider, the order of the refusals —
+  before any work on `projects`.
 - [The archive of a board](stable/archive.md): Why the page size is bounded in
   the CLI, what a walk of several pages promises and what it does not, how a
   cursor that has left the archive is worked around, the refusals of the two
