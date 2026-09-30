@@ -454,6 +454,10 @@ type Server struct {
 	// projects could be archived: no status, and the filter goes unnoticed.
 	IgnoresProjectStatus bool
 
+	// MessagesPerPage, where set, caps a page of a transcript below the 200
+	// Minka allows, so that a client cannot take the page size for granted.
+	MessagesPerPage int
+
 	// AnswersCardsWithoutID makes the lookup of a short identifier answer with
 	// a card that has no ID, which no Minka does: what a client does with an
 	// answer it cannot use must not depend on that.
@@ -2298,6 +2302,9 @@ func (s *Server) messages(w http.ResponseWriter, r *http.Request, person *Person
 			return
 		}
 		wanted = min(number, 200)
+	}
+	if s.MessagesPerPage > 0 {
+		wanted = min(wanted, s.MessagesPerPage)
 	}
 	last := func(messages []*ChatMessage) []*ChatMessage {
 		return messages[max(0, len(messages)-wanted):]

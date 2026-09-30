@@ -1507,3 +1507,16 @@ schedule but counts as coming without a series.
 **Why:** A missing series is named and can be made by hand; one on days nobody
 chose makes to-dos somebody has to find and throw away.
 **Implemented as:** `basecamp.repetitionOf`, see [Importing from Basecamp](stable/import.md).
+
+<a id="c-091"></a>
+## C-091 — A reference is shown by its address, so the view comes back as the reference
+
+*Applies to: `internal/richtext`, every `--styled` text, the guard over files*
+
+A visible `<minka-ref>` shows as `<href>`, whatever its kind, without title or
+`#MNK-1`; a hidden one as `(a card you cannot open)`. The guard counts a visible
+reference kept by its element, its address or `#short-id`, a hidden one only by
+its element; `messages edit` has the guard too. `--json` keeps the served HTML.
+**Why:** The view is the editable text (C-008), and only a link showing its
+own address comes back from Markdown as the reference.
+**Implemented as:** `richtext.reference`, `richtext.Dropped`, `cli.keepsTheAttachments`.

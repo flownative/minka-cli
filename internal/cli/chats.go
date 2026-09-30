@@ -311,6 +311,7 @@ a message whose sending failed can be sent again without appearing twice.`,
 
 func (a *app) newMessagesEditCmd() *cobra.Command {
 	var format string
+	var dropAttachments bool
 
 	cmd := &cobra.Command{
 		Use:   "edit <chatId> <messageId> <text|->",
@@ -318,7 +319,12 @@ func (a *app) newMessagesEditCmd() *cobra.Command {
 		Long: `Changes the text of a message. Only its author can. Sending the text it has
 already changes nothing.
 
-` + messageFormatHelp,
+` + messageFormatHelp + `
+
+Markdown cannot hold a file or a mention, and a reference to another record
+survives only as its address. A new text that would drop any of them is
+refused unless --drop-attachments is given; send the bodySource of the message
+back with --format html to keep them.`,
 		Args: requireArgs("chatId", "messageId", "text"),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if _, _, err := messageBody(cmd, "", format); err != nil {
@@ -336,6 +342,11 @@ already changes nothing.
 			if err != nil {
 				return err
 			}
+			dropped, err := a.keepsTheAttachmentsOfAMessage(s, args[0], args[1], body, format == "text", dropAttachments)
+			if err != nil {
+				return err
+			}
+			notices = append(notices, dropped...)
 			message, err := s.client.EditMessage(a.ctx, args[0], args[1], body)
 			if err != nil {
 				e := s.fail(err)
@@ -355,8 +366,92 @@ already changes nothing.
 		},
 	}
 	cmd.Flags().StringVar(&format, "format", "markdown", "Format of the text: markdown, text or html")
+	cmd.Flags().BoolVar(&dropAttachments, "drop-attachments", false, "Replace a message that has attachments, mentions or references, which drops them")
 
 	return cmd
+}
+
+// keepsTheAttachmentsOfAMessage holds a new text against the message it
+// replaces. No request reads a single message, so the transcript is read back
+// page by page until it turns up. Where the chat or the message is not there,
+// the message is somebody else's or stands in a chat of an archived project,
+// Minka refuses the edit whatever is sent, and its answer comes instead of the
+// guard's. Any other failure to read stops the edit: the guard cannot tell
+// what it would drop.
+func (a *app) keepsTheAttachmentsOfAMessage(s *session, chatID, messageID, body string, plainText, allowed bool) ([]string, error) {
+	const message = "the message has %s, and the new text would drop them"
+	const hint = "Change the bodySource of the message from messages list --json and send it back with --format html, or give --drop-attachments."
+	current, err := a.findMessage(s, chatID, messageID)
+	if err != nil {
+		if e := s.fail(err); e.Code != CodeNotFound {
+			return nil, e
+		}
+		return nil, nil
+	}
+	if current == nil || current.Removed {
+		return nil, nil
+	}
+	text := firstNonEmpty(current.BodySource, current.BodyHTML)
+	loss := richtext.Dropped(text, body)
+	if plainText {
+		loss = richtext.DroppedByText(text, body)
+	}
+	dropped, refusal := refusedLoss(loss, allowed, message, hint)
+	if refusal == nil {
+		return dropped, nil
+	}
+	me, err := a.meID(s)()
+	if err != nil {
+		return nil, err
+	}
+	if current.Author.ID != me {
+		return nil, nil
+	}
+	archived, err := s.client.Projects(a.ctx, true)
+	if err != nil {
+		return nil, s.fail(err)
+	}
+	for _, project := range archived.Value {
+		if project.Status != "archived" {
+			continue
+		}
+		chats, err := s.client.Chats(a.ctx, project.ID)
+		if err != nil {
+			return nil, s.fail(err)
+		}
+		for _, chat := range chats.Value {
+			if chat.ID == chatID {
+				return nil, nil
+			}
+		}
+	}
+	return nil, refusal
+}
+
+// findMessage reads the transcript of a chat backwards from its end until the
+// message turns up, or gives nil once a page comes back empty. How many
+// messages a page holds is the server's to decide.
+func (a *app) findMessage(s *session, chatID, messageID string) (*api.ChatMessage, error) {
+	limit := 200
+	query := api.MessagesQuery{Limit: &limit}
+	seen := map[int]bool{}
+	for {
+		page, err := s.client.Messages(a.ctx, chatID, query)
+		if err != nil {
+			return nil, err
+		}
+		for i := range page.Value {
+			if strings.EqualFold(page.Value[i].ID, messageID) {
+				return &page.Value[i], nil
+			}
+		}
+		if len(page.Value) == 0 || seen[page.Value[0].Seq] {
+			return nil, nil
+		}
+		before := page.Value[0].Seq
+		seen[before] = true
+		query.Before = &before
+	}
 }
 
 func (a *app) newMessagesDeleteCmd() *cobra.Command {

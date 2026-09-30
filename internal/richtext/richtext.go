@@ -5,7 +5,10 @@
 // fed back through the markdown package it gives the same elements again.
 // Text is escaped where Markdown would read it as markup, and a line break
 // becomes a hard break. It only has to cover the elements the server keeps in
-// a description.
+// a description. The exceptions are what a text carries rather than writes: a
+// file, a mention or an embed comes back as a link or as words, and a
+// reference to another record as its address, which the server turns into the
+// reference again, or as words where the reader cannot open its target.
 package richtext
 
 import (
@@ -95,6 +98,175 @@ func HasAttachments(served string) bool {
 	return false
 }
 
+// Loss is what of a text a replacement would drop.
+type Loss struct {
+	// Attachments: files, mentions or embeds, of which the replacement
+	// carries none.
+	Attachments bool
+	// References: a reference to another record that the replacement holds
+	// neither as the element nor in a form the server turns back into it.
+	References bool
+}
+
+// Any reports whether anything would be dropped.
+func (l Loss) Any() bool {
+	return l.Attachments || l.References
+}
+
+// String names what would be dropped, for a refusal or a notice.
+func (l Loss) String() string {
+	switch {
+	case l.Attachments && l.References:
+		return "attachments or mentions and references to other records"
+	case l.References:
+		return "references to other records"
+	default:
+		return "attachments or mentions"
+	}
+}
+
+// Dropped holds a replacement against the text it replaces. A file, a mention
+// or an embed only survives in a text that carries such elements itself. A
+// reference also survives as a link that shows its own address, or as
+// "#MNK-1" for a card with a short identifier, since the server turns both
+// back into it on saving. A reference whose target the reader may not open
+// has no address to be written by, so only the element keeps it.
+func Dropped(current, replacement string) Loss {
+	return dropped(current, contentsOf(replacement))
+}
+
+// DroppedByText is Dropped for a replacement sent as plain text, which the
+// server keeps as the characters it consists of: nothing in it is markup,
+// and every address and name stands in its words. A text that carries a tag
+// of a served element the server takes as HTML all the same, and so does
+// this.
+func DroppedByText(current, replacement string) Loss {
+	if CarriesMarkup(replacement) {
+		return Dropped(current, replacement)
+	}
+	has := contents{elements: map[string]bool{}, autolinks: map[string]bool{}}
+	has.addWords(replacement)
+	return dropped(current, has)
+}
+
+func dropped(current string, has contents) Loss {
+	had := contentsOf(current)
+	loss := Loss{Attachments: had.attachments && !has.attachments}
+	for _, ref := range had.references {
+		if !has.keeps(ref) {
+			loss.References = true
+		}
+	}
+	return loss
+}
+
+// addressInWords is where the server finds an address in the words of a
+// text; the punctuation of the sentence after it is not part of it.
+var addressInWords = regexp.MustCompile(`https?://[^\s<>"']+`)
+
+type servedReference struct {
+	kind, id, shortID, href string
+}
+
+type contents struct {
+	attachments bool
+	references  []servedReference
+	elements    map[string]bool
+	autolinks   map[string]bool
+	words       []string
+}
+
+// addWords takes the words of a text in: the addresses the server finds in
+// them, and what is left once they are gone, where a name glued to an address
+// would have been swallowed by it.
+func (c *contents) addWords(text string) {
+	for _, address := range addressInWords.FindAllString(text, -1) {
+		c.autolinks[withoutTrailingSlash(strings.TrimRight(address, ".,;:!?'\")]}"))] = true
+	}
+	c.words = append(c.words, addressInWords.ReplaceAllString(text, " "))
+}
+
+// withoutTrailingSlash compares addresses the way the server recognizes them:
+// one slash at the end makes no difference.
+func withoutTrailingSlash(address string) string {
+	return strings.TrimSuffix(strings.TrimSpace(address), "/")
+}
+
+func (c contents) keeps(ref servedReference) bool {
+	switch {
+	case c.elements[ref.kind+"/"+ref.id]:
+		return true
+	case ref.href != "" && c.autolinks[withoutTrailingSlash(ref.href)]:
+		return true
+	case ref.shortID != "":
+		name := regexp.MustCompile(`(?:^|[^\p{L}\p{N}#])#` + regexp.QuoteMeta(ref.shortID) + `(?:$|[^\p{L}\p{N}-])`)
+		return slices.ContainsFunc(c.words, name.MatchString)
+	}
+	return false
+}
+
+// contentsOf gathers what of a text Markdown cannot write: whether it carries
+// a file, a mention or an embed, its references, and the links, addresses and
+// words the server would read a reference from. Code, the words of any link
+// and what a browser never shows as text are no such place.
+func contentsOf(served string) contents {
+	c := contents{elements: map[string]bool{}, autolinks: map[string]bool{}}
+	if strings.TrimSpace(served) == "" {
+		return c
+	}
+	context := &html.Node{Type: html.ElementNode, Data: "body", DataAtom: atom.Body}
+	nodes, err := html.ParseFragment(strings.NewReader(served), context)
+	if err != nil {
+		c.attachments = true
+		return c
+	}
+	var visit func(*html.Node)
+	visit = func(n *html.Node) {
+		if n.Type == html.TextNode {
+			c.addWords(n.Data)
+			return
+		}
+		if n.Type != html.ElementNode {
+			return
+		}
+		switch {
+		case n.Data == "minka-ref":
+			ref := servedReference{
+				kind:    strings.TrimSpace(attribute(n, "kind")),
+				id:      strings.TrimSpace(attribute(n, "id")),
+				shortID: strings.TrimSpace(attribute(n, "short-id")),
+				href:    strings.TrimSpace(attribute(n, "href")),
+			}
+			c.references = append(c.references, ref)
+			c.elements[ref.kind+"/"+ref.id] = true
+			return
+		case n.Data == "img", n.Data == "action-text-attachment", n.Data == "minka-embed":
+			c.attachments = true
+			return
+		case n.Data == "a" && hasAttribute(n, "download"):
+			c.attachments = true
+			return
+		case n.Data == "figure" && strings.Contains(" "+attribute(n, "class")+" ", " attachment "):
+			c.attachments = true
+		case n.Data == "a":
+			href := withoutTrailingSlash(attribute(n, "href"))
+			if href != "" && withoutTrailingSlash(textContent(n)) == href {
+				c.autolinks[href] = true
+			}
+			return
+		case n.Data == "code", n.Data == "pre", n.Data == "script", n.Data == "style", n.Data == "textarea", n.Data == "template":
+			return
+		}
+		for _, child := range children(n) {
+			visit(child)
+		}
+	}
+	for _, n := range nodes {
+		visit(n)
+	}
+	return c
+}
+
 func hasAttribute(n *html.Node, name string) bool {
 	for _, attr := range n.Attr {
 		if attr.Key == name {
@@ -157,7 +329,7 @@ func blockParts(nodes []*html.Node) []part {
 			}
 			continue
 		}
-		run.WriteString(inline(n))
+		appendInline(&run, inline(n))
 	}
 	flush()
 
@@ -249,6 +421,8 @@ func inline(n *html.Node) string {
 		return wrapInline(content, "~~")
 	case "action-text-attachment":
 		return attachment(n)
+	case "minka-ref":
+		return reference(n)
 	case "img":
 		// A picture Minka serves for an attachment. Markdown can show it, but
 		// the Markdown conversion sends an image back as a link.
@@ -307,6 +481,55 @@ func attachment(n *html.Node) string {
 	}
 }
 
+// unopenedTargets are the words for a reference whose target the reader may
+// not open, in trash or never was: the server then sends only its kind and
+// identifier, and all three cases read alike.
+var unopenedTargets = map[string]string{
+	"card": "a card you cannot open",
+	"post": "a post you cannot open",
+	"chat": "a chat you cannot open",
+}
+
+// reference shows a reference to another record by its address, as an
+// autolink: sent back, the link that shows its own address is what the server
+// turns into the reference again, and a card's short identifier can be read in
+// it. Titles are left out, because words of their own would make the server
+// keep a mere link. A target the reader may not open comes with nothing but
+// its kind and identifier, and the view says so rather than leaving a gap in
+// the sentence; it cannot come back from Markdown.
+func reference(n *html.Node) string {
+	href := strings.TrimSpace(attribute(n, "href"))
+	switch {
+	case href != "" && isAutolinkable(href):
+		return "<" + href + ">"
+	case href != "":
+		return "[" + escapeText(href) + "](" + linkDestination(href) + ")"
+	}
+	// Minka always sends an address with a title; without one only the words
+	// that were sent are left.
+	var label []string
+	if shortID := strings.TrimSpace(attribute(n, "short-id")); shortID != "" {
+		label = append(label, "#"+shortID)
+	}
+	if title := strings.TrimSpace(whitespace.ReplaceAllString(attribute(n, "title"), " ")); title != "" {
+		label = append(label, title)
+	}
+	if len(label) > 0 {
+		return escapeText(strings.Join(label, " "))
+	}
+	words, known := unopenedTargets[attribute(n, "kind")]
+	if !known {
+		words = "a reference you cannot open"
+	}
+	return "(" + words + ")"
+}
+
+// isAutolinkable reports whether an address can stand between angle brackets
+// and come back as a link to itself.
+func isAutolinkable(href string) bool {
+	return (strings.HasPrefix(href, "https://") || strings.HasPrefix(href, "http://")) && !strings.ContainsAny(href, " <>\t\n")
+}
+
 // table renders a table as a Markdown table. The first row is the header,
 // which is how the editor writes a table as well.
 func table(n *html.Node) string {
@@ -361,9 +584,23 @@ func table(n *html.Node) string {
 func inlineChildren(n *html.Node) string {
 	var out strings.Builder
 	for _, child := range children(n) {
-		out.WriteString(inline(child))
+		appendInline(&out, inline(child))
 	}
 	return out.String()
+}
+
+// appendInline adds a piece of inline Markdown. An exclamation mark of the
+// text before a link would turn the link into an image, so it gets escaped.
+func appendInline(out *strings.Builder, piece string) {
+	before := out.String()
+	if strings.HasPrefix(piece, "[") && strings.HasSuffix(before, "!") {
+		backslashes := len(before) - 1 - len(strings.TrimRight(before[:len(before)-1], `\`))
+		if backslashes%2 == 0 {
+			out.Reset()
+			out.WriteString(before[:len(before)-1] + `\!`)
+		}
+	}
+	out.WriteString(piece)
 }
 
 // wrapInline puts markers around content. Spaces at its edges go outside the

@@ -665,7 +665,7 @@ command reads the answer first to know.`,
 			}
 			// An answer lies in no archive of its own; only its project closes it.
 			dropped, err := a.guardOverFiles(s, current.Value.ProjectID, closedIf(false), firstNonEmpty(current.Value.BodySource, current.Value.Body), body, dropAttachments,
-				"the answer has attachments or mentions, and the new text would drop them",
+				"the answer has %s, and the new text would drop them",
 				"Change bodySource from checkins answers show --json and send it back with --format html, or give --drop-attachments.")
 			if err != nil {
 				return err
@@ -682,7 +682,7 @@ command reads the answer first to know.`,
 		},
 	}
 	cmd.Flags().StringVar(&format, "format", "markdown", "Format of the text: markdown or html")
-	cmd.Flags().BoolVar(&dropAttachments, "drop-attachments", false, "Replace an answer that has attachments or mentions, which drops them")
+	cmd.Flags().BoolVar(&dropAttachments, "drop-attachments", false, "Replace an answer that has attachments, mentions or references, which drops them")
 
 	return cmd
 }

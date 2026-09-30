@@ -316,7 +316,7 @@ todoListArchived.`,
 				}
 				// A to-do of a list in the archive takes no notes at all.
 				dropped, err := a.guardOverFiles(s, todo.ProjectID, closedIf(todo.ListArchived), firstNonEmpty(todo.NotesSource, todo.Notes), *input.Notes, dropAttachments,
-					"the notes have attachments or mentions, and the new notes would drop them",
+					"the notes have %s, and the new notes would drop them",
 					"Change notesSource from todos show --json and send it back with --notes-format html, or give --drop-attachments.")
 				if err != nil {
 					return err
@@ -351,7 +351,7 @@ todoListArchived.`,
 	flags.StringVar(&title, "title", "", "New title; an empty one is refused, a title cannot be removed")
 	flags.StringVar(&notes, "notes", "", "New notes, - to read them from stdin, empty to remove them")
 	flags.StringVar(&notesFormat, "notes-format", "markdown", "Format of the notes: markdown or html")
-	flags.BoolVar(&dropAttachments, "drop-attachments", false, "Replace notes that have attachments or mentions, which drops them")
+	flags.BoolVar(&dropAttachments, "drop-attachments", false, "Replace notes that have attachments, mentions or references, which drops them")
 	flags.StringVar(&startsOn, "starts-on", "", "Day the to-do starts as YYYY-MM-DD, empty to take it off")
 	flags.StringVar(&due, "due", "", "Day the to-do is due as YYYY-MM-DD, empty to take it off")
 	flags.StringArrayVar(&assignees, "assignee", nil, "Person to be assigned, the whole set (repeatable)")

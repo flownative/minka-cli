@@ -174,7 +174,7 @@ that would drop them is refused unless --drop-attachments is given.`,
 		},
 	}
 	cmd.Flags().StringVar(&format, "format", "markdown", "Format of the text: markdown or html")
-	cmd.Flags().BoolVar(&dropAttachments, "drop-attachments", false, "Replace a comment that has attachments or mentions, which drops them")
+	cmd.Flags().BoolVar(&dropAttachments, "drop-attachments", false, "Replace a comment that has attachments, mentions or references, which drops them")
 
 	return cmd
 }

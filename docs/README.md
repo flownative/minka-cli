@@ -17,7 +17,8 @@ the documentation says what holds; how it came about is in git.
   client, which check happens before a request — before any work on sign-in,
   client or IDs.
 - [Rich text in both directions](stable/rich-text.md): Markdown to HTML and
-  back, the allowlist of the server, sources, files and mentions — before any
+  back, the allowlist of the server, sources, files, mentions and references
+  to other records — before any
   work on descriptions, comments or messages.
 - [First steps](stable/first-steps.md): What `setup` asks and in which order,
   why it needs a terminal, what `doctor` checks and why it always exits 0 —

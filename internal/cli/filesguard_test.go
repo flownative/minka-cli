@@ -148,6 +148,20 @@ func TestTheGuardOverFilesStandsAsideWhereMinkaRefusesTheWrite(t *testing.T) {
 			e.fixture.Project.Archived = true
 			return []string{"todolists", "edit", e.fixture.TodoList.ID, "--description", "Plain"}
 		}, ExitValidation, apiCodeProjectArchived},
+		"an own message in a chat of an archived project": {func(e *testEnv) []string {
+			chat := e.fixture.Chat
+			chat.Messages[0].BodyHTML = withMention
+			e.fixture.Project.Archived = true
+			return []string{"messages", "edit", chat.ID, chat.Messages[0].ID, "Plain"}
+		}, ExitValidation, apiCodeProjectArchived},
+		"a message in a chat that is not there": {func(e *testEnv) []string {
+			return []string{"messages", "edit", "0192f3a4-5b6c-4d7e-8f90-a1b2c3d4e5ff", e.fixture.Chat.Messages[0].ID, "Plain"}
+		}, ExitNotFound, ""},
+		"a message of somebody else": {func(e *testEnv) []string {
+			chat := e.fixture.Chat
+			chat.Messages[1].BodyHTML = withMention
+			return []string{"messages", "edit", chat.ID, chat.Messages[1].ID, "Plain"}
+		}, ExitNotFound, ""},
 	} {
 		t.Run(name, func(t *testing.T) {
 			e := newTestEnv(t)

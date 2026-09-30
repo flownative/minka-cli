@@ -136,3 +136,30 @@ func TestKeepLineBreaksKeepsEveryLine(t *testing.T) {
 		t.Errorf("without: %q", got)
 	}
 }
+
+// Minka turns "#MNK-1" in the words, and an address of its own that stands in
+// the words or as a link showing that address, into a reference on saving. A
+// link with words of its own and anything in code stay as written. The
+// conversion has to leave each of them in the form Minka looks for, in every
+// place a name can stand.
+func TestNamesAndAddressesReachMinkaInTheFormItTurnsIntoReferences(t *testing.T) {
+	const address = "https://minka.example/go/card/MNK-1"
+	const link = `<a href="` + address + `">` + address + `</a>`
+	for source, want := range map[string]string{
+		"#MNK-1 is done":                 "<p>#MNK-1 is done</p>",
+		"See #MNK-1, #AB-2a.":            "<p>See #MNK-1, #AB-2a.</p>",
+		"## About #MNK-1":                "<h2>About #MNK-1</h2>",
+		"- #MNK-1\n- " + address + ".":   "<ul>\n<li>#MNK-1</li>\n<li>" + link + ".</li>\n</ul>",
+		"> #MNK-1 and " + address:        "<blockquote>\n<p>#MNK-1 and " + link + "</p>\n</blockquote>",
+		"1. **#MNK-1**":                  "<ol>\n<li><strong>#MNK-1</strong></li>\n</ol>",
+		"(" + address + ")":              "<p>(" + link + ")</p>",
+		"<" + address + ">":              "<p>" + link + "</p>",
+		"[the card](" + address + ")":    `<p><a href="` + address + `">the card</a></p>`,
+		"`#MNK-1` and `" + address + "`": "<p><code>#MNK-1</code> and <code>" + address + "</code></p>",
+		"https://minka.example/projects/p/boards/b/cards/c?x=1&y=2#f, ok": `<p><a href="https://minka.example/projects/p/boards/b/cards/c?x=1&amp;y=2#f">https://minka.example/projects/p/boards/b/cards/c?x=1&amp;y=2#f</a>, ok</p>`,
+	} {
+		if got := ToHTML(source); got.HTML != want || len(got.Warnings) != 0 {
+			t.Errorf("%q\n got: %q %v\nwant: %q", source, got.HTML, got.Warnings, want)
+		}
+	}
+}

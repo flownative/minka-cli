@@ -420,7 +420,7 @@ and projectArchived is the answer.`,
 				}
 				// A post in the archive takes no body at all.
 				dropped, err := a.guardOverFiles(s, current.Value.ProjectID, closedIf(current.Value.Archived), firstNonEmpty(current.Value.BodySource, current.Value.Body), *input.Body, dropAttachments,
-					"the post has attachments or mentions, and the new body would drop them",
+					"the post has %s, and the new body would drop them",
 					"Change the bodySource from posts show --json and send it back with --body-format html, or give --drop-attachments.")
 				if err != nil {
 					return err
@@ -446,7 +446,7 @@ and projectArchived is the answer.`,
 	flags.StringVar(&bodyFormat, "body-format", "markdown", "Format of the body: markdown or html")
 	flags.StringVar(&categoryID, "category", "", "ID of the kind to file the post under")
 	flags.BoolVar(&noCategory, "no-category", false, "Take the kind off the post")
-	flags.BoolVar(&dropAttachments, "drop-attachments", false, "Replace a body that has attachments or mentions, which drops them")
+	flags.BoolVar(&dropAttachments, "drop-attachments", false, "Replace a body that has attachments, mentions or references, which drops them")
 
 	return cmd
 }
@@ -701,7 +701,7 @@ and projectArchived is the answer.`,
 		},
 	}
 	cmd.Flags().StringVar(&format, "format", "markdown", "Format of the text: markdown or html")
-	cmd.Flags().BoolVar(&dropAttachments, "drop-attachments", false, "Replace a comment that has attachments or mentions, which drops them")
+	cmd.Flags().BoolVar(&dropAttachments, "drop-attachments", false, "Replace a comment that has attachments, mentions or references, which drops them")
 
 	return cmd
 }
