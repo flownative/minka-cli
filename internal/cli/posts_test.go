@@ -232,7 +232,6 @@ func TestWhatIsNoAudienceNoIDAndNoKindStopsBeforeARequest(t *testing.T) {
 	for name, args := range map[string][]string{
 		"no audience":              {"posts", "create", "--tool", f.Posts.ID, "--title", "A post", "--body", "Words"},
 		"an audience that is none": {"posts", "create", "--tool", f.Posts.ID, "--title", "A post", "--body", "Words", "--audience", "some"},
-		"notify by name":           {"posts", "create", "--tool", f.Posts.ID, "--title", "A post", "--body", "Words", "--audience", "chosen", "--notify", "Anke"},
 		"a kind that is no ID":     {"posts", "create", "--tool", f.Posts.ID, "--title", "A post", "--body", "Words", "--audience", "nobody", "--category", "Announcement"},
 		"two kinds on an edit":     {"posts", "edit", f.Post.ID, "--category", f.Heartbeat.ID, "--no-category"},
 		"nothing to change":        {"posts", "edit", f.Post.ID},

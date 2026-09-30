@@ -184,14 +184,13 @@ zone, and asks nobody at once: the first reminders follow the schedule.
 
 ` + scheduleHelp + `
 
---ask names a person to be asked, by ID or as me, and can be given more than
-once. A name or an e-mail address cannot be looked up here, because the ID of
-a tool names no project; minka people list <projectId> gives the IDs. Only
-members of the project who may see the question can be asked. A question set
-up here is shown to no client, so naming a client of the project, or an agent
-working for one, is refused with personNotAProjectMember and nothing is
-written.`,
-		Example: `  minka checkins create --tool 0199... --title "What did you do today?" --rhythm daily --weekday mon,tue,wed,thu,fri --time 17:00 --ask me --ask 0199...
+--ask names a person to be asked and can be given more than once.
+` + personHelp + ` A name or an e-mail address is looked up among the members
+of the project the tool stands in. Only members of the project who may see the
+question can be asked. A question set up here is shown to no client, so naming
+a client of the project, or an agent working for one, is refused with
+personNotAProjectMember and nothing is written.`,
+		Example: `  minka checkins create --tool 0199... --title "What did you do today?" --rhythm daily --weekday mon,tue,wed,thu,fri --time 17:00 --ask me --ask anke@example.com
   minka checkins create --tool 0199... --title "What are you working on?" --rhythm weekly --weekday mon --time 09:00 --ask me`,
 		Args: requireArgs(),
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -207,7 +206,13 @@ written.`,
 			if err != nil {
 				return err
 			}
-			askedIDs, err := a.peopleByIDOrMe(cmd, s, asked)
+			askedIDs, err := a.peopleOfATool(s, func() (string, error) {
+				tool, err := s.client.CheckinsTool(a.ctx, toolID)
+				if err != nil {
+					return "", toolRefusal(s, err, checkinsToolNotFoundHint)
+				}
+				return tool.Value.ProjectID, nil
+			}, asked)
 			if err != nil {
 				return err
 			}
@@ -232,7 +237,7 @@ written.`,
 	flags.StringVar(&rhythm, "rhythm", "", "How often: daily, weekly, everyOtherWeek or monthly")
 	flags.StringSliceVar(&weekdays, "weekday", nil, "Weekday it is asked on: 1 (Monday) to 7, or a name such as mon (repeatable)")
 	flags.StringVar(&timeOfDay, "time", "", "Time of day it is asked at, HH:MM on the 24-hour clock")
-	flags.StringArrayVar(&asked, "ask", nil, "Person to be asked: ID or me (repeatable)")
+	flags.StringArrayVar(&asked, "ask", nil, "Person to be asked: ID, me, e-mail address or name (repeatable)")
 
 	return cmd
 }
@@ -729,32 +734,6 @@ func weekdayNumbers(cmd *cobra.Command, flag string, values []string) ([]int, er
 		days = append(days, number)
 	}
 	return days, nil
-}
-
-// peopleByIDOrMe is the people a new question asks. Only the identifier and
-// "me" are read here: the ID of a tool names no project, and a name can only
-// be looked up among the members of one.
-func (a *app) peopleByIDOrMe(cmd *cobra.Command, s *session, values []string) ([]string, error) {
-	var people []string
-	for _, value := range values {
-		if strings.EqualFold(strings.TrimSpace(value), "me") {
-			id, err := a.meID(s)()
-			if err != nil {
-				return nil, err
-			}
-			people = append(people, id)
-			continue
-		}
-		if err := requireID(cmd, "--ask", &value); err != nil {
-			return nil, &Error{
-				Code:    CodeUsage,
-				Message: fmt.Sprintf("--ask takes the ID of a person, or me; %q is neither", value),
-				Hint:    "minka people list <projectId> gives the ID of every member of the project.",
-			}
-		}
-		people = append(people, value)
-	}
-	return people, nil
 }
 
 // askedNotices say who was named to be asked and is not among the people the

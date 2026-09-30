@@ -91,6 +91,7 @@ type FilesUpload struct {
 
 func (s *Server) registerFilesRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/projects/{projectId}/files", s.authenticated(s.filesTools))
+	mux.HandleFunc("GET /api/v1/files-tools/{toolId}", s.authenticated(s.filesTool))
 	mux.HandleFunc("GET /api/v1/files-tools/{toolId}/entries", s.authenticated(s.filesEntries))
 	mux.HandleFunc("POST /api/v1/files-tools/{toolId}/documents", s.authenticated(s.addDocument))
 	mux.HandleFunc("GET /api/v1/documents/{documentId}", s.authenticated(s.document))
@@ -119,11 +120,22 @@ func (s *Server) filesTools(w http.ResponseWriter, r *http.Request, person *Pers
 
 	tools := []any{}
 	for _, tool := range s.FilesTools {
-		if tool.ProjectID == project.ID {
+		if tool.ProjectID == project.ID && (tool.ShownToClients || !s.isAClient(person.ID)) {
 			tools = append(tools, map[string]any{"id": tool.ID, "title": tool.Title, "appUrl": s.filesToolURL(tool)})
 		}
 	}
 	writeJSON(w, http.StatusOK, tools)
+}
+
+// filesTool reads a tool by its identifier alone, with the project it stands
+// in.
+func (s *Server) filesTool(w http.ResponseWriter, r *http.Request, person *Person) {
+	tool := s.visibleFilesTool(r.PathValue("toolId"), person)
+	if tool == nil {
+		notFound(w)
+		return
+	}
+	writeJSON(w, http.StatusOK, s.toolResource(tool.ID, tool.ProjectID, tool.Title, s.filesToolURL(tool)))
 }
 
 // filesEntries lists what stands at the top of a tool, or in one of its
@@ -891,9 +903,11 @@ func (s *Server) projectWithID(projectID string) *Project {
 	return nil
 }
 
+// visibleFilesTool finds a tool in a project the person is a member of, and
+// for a client only a tool the clients are let into.
 func (s *Server) visibleFilesTool(toolID string, person *Person) *FilesTool {
 	for _, tool := range s.FilesTools {
-		if tool.ID == toolID && s.visibleProject(tool.ProjectID, person) != nil {
+		if tool.ID == toolID && s.visibleProject(tool.ProjectID, person) != nil && (tool.ShownToClients || !s.isAClient(person.ID)) {
 			return tool
 		}
 	}
@@ -993,7 +1007,7 @@ func (s *Server) entriesResource(tool *FilesTool, folder *Folder) map[string]any
 			continue
 		}
 		folders = append(folders, map[string]any{
-			"id": entry.ID, "title": entry.Title, "entryCount": entriesIn(tool, entry.ID),
+			"id": entry.ID, "projectId": tool.ProjectID, "title": entry.Title, "entryCount": entriesIn(tool, entry.ID),
 			"createdAt": timestamp(entry.CreatedAt), "creator": s.personReference(entry.CreatorID),
 			"appUrl": s.filesToolURL(tool) + "/folders/" + entry.ID,
 		})
@@ -1005,7 +1019,7 @@ func (s *Server) entriesResource(tool *FilesTool, folder *Folder) map[string]any
 			continue
 		}
 		documents = append(documents, map[string]any{
-			"id": document.ID, "title": document.Title, "lead": leadOf(document.Body),
+			"id": document.ID, "projectId": tool.ProjectID, "title": document.Title, "lead": leadOf(document.Body),
 			"commentCount": len(document.Comments), "archived": archived,
 			"createdAt": timestamp(document.CreatedAt), "updatedAt": timestamp(document.UpdatedAt),
 			"creator": s.personReference(document.CreatorID), "appUrl": s.documentURL(tool, document),
@@ -1018,7 +1032,7 @@ func (s *Server) entriesResource(tool *FilesTool, folder *Folder) map[string]any
 			continue
 		}
 		uploads = append(uploads, map[string]any{
-			"id": upload.ID, "title": upload.Title, "file": s.attachmentResource(upload.BlobID),
+			"id": upload.ID, "projectId": tool.ProjectID, "title": upload.Title, "file": s.attachmentResource(upload.BlobID),
 			"commentCount": len(upload.Comments), "archived": archived,
 			"createdAt": timestamp(upload.CreatedAt), "updatedAt": timestamp(upload.UpdatedAt),
 			"creator": s.personReference(upload.CreatorID), "appUrl": s.filesUploadURL(tool, upload),
@@ -1165,6 +1179,12 @@ func (s *Server) projectReference(projectID string) any {
 		return nil
 	}
 	return map[string]any{"id": project.ID, "name": project.Name}
+}
+
+// toolResource is a tool as its own address answers it: with the project it
+// stands in, so that whoever holds only the tool learns its project.
+func (s *Server) toolResource(id, projectID, title, appURL string) map[string]any {
+	return map[string]any{"id": id, "projectId": projectID, "project": s.projectReference(projectID), "title": title, "appUrl": appURL}
 }
 
 func (s *Server) filesToolURL(tool *FilesTool) string {

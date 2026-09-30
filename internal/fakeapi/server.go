@@ -832,6 +832,7 @@ func New(t testing.TB) (*Server, *Fixture) {
 	mux.HandleFunc("GET /api/v1/projects/{projectId}/chats", s.authenticated(s.chats))
 	mux.HandleFunc("GET /api/v1/messages", s.authenticated(s.conversations))
 	mux.HandleFunc("POST /api/v1/messages/{first}/{second}", s.authenticated(s.beginOrUpload))
+	mux.HandleFunc("GET /api/v1/chats/{chatId}", s.authenticated(s.chat))
 	mux.HandleFunc("GET /api/v1/chats/{chatId}/messages", s.authenticated(s.messages))
 	mux.HandleFunc("POST /api/v1/chats/{chatId}/messages", s.authenticated(s.postMessage))
 	mux.HandleFunc("PATCH /api/v1/chats/{chatId}/messages/{messageId}", s.authenticated(s.editMessage))
@@ -1351,7 +1352,7 @@ func (s *Server) inTheArchiveOf(board *Board, cardID string) *ArchivedCard {
 
 func (s *Server) archivedCardResource(board *Board, archived *ArchivedCard) map[string]any {
 	return map[string]any{
-		"id": archived.Card.ID, "shortId": nullable(archived.Card.ShortID), "title": archived.Card.Title,
+		"id": archived.Card.ID, "projectId": board.ProjectID, "shortId": nullable(archived.Card.ShortID), "title": archived.Card.Title,
 		"archivedAt": timestampOrNil(nilIfZero(archived.At)), "archivedBy": s.personReferenceOrNil(archived.ByID),
 		"appUrl": s.cardURL(board, archived.Card),
 	}
@@ -2172,6 +2173,21 @@ func (s *Server) chats(w http.ResponseWriter, r *http.Request, person *Person) {
 		}
 	}
 	writeJSON(w, http.StatusOK, list)
+}
+
+// chat reads a chat of a project by its identifier alone, with the project it
+// stands in. A private conversation belongs to no project and is not at this
+// address, although it answers at the ones below it.
+func (s *Server) chat(w http.ResponseWriter, r *http.Request, person *Person) {
+	chat := s.visibleChat(r.PathValue("chatId"), person)
+	if chat == nil || chat.isConversation() {
+		notFound(w)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"id": chat.ID, "projectId": chat.ProjectID, "project": s.projectReference(chat.ProjectID),
+		"name": chat.Name, "appUrl": s.URL + "/projects/" + chat.ProjectID + "/chats/" + chat.ID,
+	})
 }
 
 // visibleChat finds a chat of a project the person is a member of, or a

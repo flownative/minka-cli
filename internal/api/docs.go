@@ -190,6 +190,11 @@ func (c *Client) FilesTools(ctx context.Context, projectID string) (Result[[]Fil
 	return request[[]FilesTool](ctx, c, http.MethodGet, "/projects/"+url.PathEscape(projectID)+"/files", nil)
 }
 
+// FilesTool reads a Docs & Files tool by its identifier alone.
+func (c *Client) FilesTool(ctx context.Context, toolID string) (Result[Tool], error) {
+	return request[Tool](ctx, c, http.MethodGet, "/files-tools/"+url.PathEscape(toolID), nil)
+}
+
 // FilesEntriesOf reads one folder of a tool, or the top of it where the
 // folder is empty. It reaches one folder deep: what stands in a folder below
 // is read by asking again with that folder.

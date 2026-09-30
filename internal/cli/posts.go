@@ -313,7 +313,14 @@ posts categories <projectId> lists them.`,
 			if err != nil {
 				return err
 			}
-			if input.NotifyIDs, err = a.notifiedPeople(cmd, s, notify); err != nil {
+			input.NotifyIDs, err = a.peopleOfATool(s, func() (string, error) {
+				tool, err := s.client.PostsTool(a.ctx, toolID)
+				if err != nil {
+					return "", toolRefusal(s, err, postsToolNotFoundHint)
+				}
+				return tool.Value.ProjectID, nil
+			}, notify)
+			if err != nil {
 				return err
 			}
 
@@ -340,7 +347,7 @@ posts categories <projectId> lists them.`,
 	flags.StringVar(&bodyFormat, "body-format", "markdown", "Format of the body: markdown or html")
 	flags.StringVar(&categoryID, "category", "", "ID of the kind the post is filed under")
 	flags.StringVar(&audience, "audience", "", "Whom the post reaches: everybody, chosen or nobody")
-	flags.StringArrayVar(&notify, "notify", nil, "Person to tell about the post, with --audience chosen; can be given more than once")
+	flags.StringArrayVar(&notify, "notify", nil, "Person to tell about the post, with --audience chosen: ID, me, e-mail address or name (repeatable)")
 
 	return cmd
 }

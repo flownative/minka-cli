@@ -126,6 +126,7 @@ type Subtask struct {
 
 func (s *Server) registerTodosRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/projects/{projectId}/todos", s.authenticated(s.todosTools))
+	mux.HandleFunc("GET /api/v1/todos-tools/{toolId}", s.authenticated(s.todosTool))
 	mux.HandleFunc("GET /api/v1/todos-tools/{toolId}/lists", s.authenticated(s.todoListsInUse))
 	mux.HandleFunc("POST /api/v1/todos-tools/{toolId}/lists", s.authenticated(s.addTodoList))
 	mux.HandleFunc("GET /api/v1/todos-tools/{toolId}/archive", s.authenticated(s.archivedTodoLists))
@@ -158,6 +159,17 @@ func (s *Server) todosTools(w http.ResponseWriter, r *http.Request, person *Pers
 		}
 	}
 	writeJSON(w, http.StatusOK, tools)
+}
+
+// todosTool reads a tool by its identifier alone, with the project it stands
+// in. A tool no longer in use is read as well.
+func (s *Server) todosTool(w http.ResponseWriter, r *http.Request, person *Person) {
+	tool := s.visibleTodosTool(r.PathValue("toolId"), person)
+	if tool == nil {
+		notFound(w)
+		return
+	}
+	writeJSON(w, http.StatusOK, s.toolResource(tool.ID, tool.ProjectID, tool.Title, s.todosToolURL(tool)))
 }
 
 // todoListsInUse lists the lists on the page of a tool, in their order and
@@ -653,7 +665,7 @@ func (s *Server) openTodoLines(tool *TodosTool, list *TodoList, groupID string) 
 func (s *Server) todoListItemResource(tool *TodosTool, list *TodoList) map[string]any {
 	open, done := openAndDone(list)
 	return map[string]any{
-		"id": list.ID, "title": list.Title, "description": list.Description, "archived": list.Archived,
+		"id": list.ID, "projectId": tool.ProjectID, "title": list.Title, "description": list.Description, "archived": list.Archived,
 		"openCount": open, "completedCount": done, "appUrl": s.todoListURL(tool, list),
 	}
 }

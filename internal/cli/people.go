@@ -280,6 +280,42 @@ func (a *app) resolveMembers(s *session, board *api.Board, values []string) ([]a
 	return resolved, nil
 }
 
+// peopleOfATool turns the people given for something new in a tool into IDs.
+// An ID and "me" need no read of the project; a name or an e-mail address is
+// looked up among the members of the project the tool stands in, which the
+// tool is read for once, and only then.
+func (a *app) peopleOfATool(s *session, projectOfTool func() (string, error), values []string) ([]string, error) {
+	me := a.meID(s)
+	members := newProjectPeople(a, s, projectOfTool)
+	var ids []string
+	for _, value := range values {
+		if strings.EqualFold(strings.TrimSpace(value), "me") {
+			id, err := me()
+			if err != nil {
+				return nil, err
+			}
+			ids = append(ids, id)
+			continue
+		}
+		resolved, err := members.resolve([]string{value})
+		if err != nil {
+			return nil, err
+		}
+		ids = append(ids, resolved...)
+	}
+	return ids, nil
+}
+
+// toolRefusal is a tool Minka did not answer for, with the hint of its kind
+// where it is not found.
+func toolRefusal(s *session, err error, notFoundHint string) *Error {
+	e := s.fail(err)
+	if e.Code == CodeNotFound {
+		e.Hint = notFoundHint
+	}
+	return e
+}
+
 // meID returns a lookup of the ID of the person of the token, which asks the
 // server only when "me" is used.
 func (a *app) meID(s *session) func() (string, error) {

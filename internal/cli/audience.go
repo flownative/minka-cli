@@ -1,11 +1,6 @@
 package cli
 
-import (
-	"fmt"
-	"strings"
-
-	"github.com/spf13/cobra"
-)
+import "github.com/spf13/cobra"
 
 // What Minka answers a new document or post whose audience and people do not
 // go together, or that names somebody who cannot be told.
@@ -24,8 +19,9 @@ one --notify per person, or "nobody". It is required. --notify belongs to
 notifyIdsWithoutChosenAudience and "chosen" without a name with
 notifyIdsMissing; this command sends what it is given and leaves the rule
 to Minka.
-A person is given by ID, or as "me"; minka people list <projectId> gives the
-IDs. A person named more than once is told once.`
+` + personHelp + ` A name or an e-mail address
+is looked up among the members of the project the tool stands in. A person
+named more than once is told once.`
 
 // checkAudience holds the one word a new document or post cannot be written
 // without. Which people go with which audience is the server's rule and is
@@ -38,33 +34,6 @@ func checkAudience(cmd *cobra.Command, what, audience string) error {
 		return usageErrorf(cmd, "--audience is everybody, chosen or nobody, not %q", audience)
 	}
 	return nil
-}
-
-// notifiedPeople is the people a new document or post tells about itself. Only
-// the identifier and "me" are read here: which project a tool hangs in is not
-// known before what is written in it exists, and a name can only be looked up
-// among the members of a project.
-func (a *app) notifiedPeople(cmd *cobra.Command, s *session, notify []string) ([]string, error) {
-	var people []string
-	for _, value := range notify {
-		if strings.EqualFold(strings.TrimSpace(value), "me") {
-			id, err := a.meID(s)()
-			if err != nil {
-				return nil, err
-			}
-			people = append(people, id)
-			continue
-		}
-		if err := requireID(cmd, "--notify", &value); err != nil {
-			return nil, &Error{
-				Code:    CodeUsage,
-				Message: fmt.Sprintf("--notify takes the ID of a person, or me; %q is neither", value),
-				Hint:    "minka people list <projectId> gives the ID of every member of the project.",
-			}
-		}
-		people = append(people, value)
-	}
-	return people, nil
 }
 
 // audienceHint says what to change where Minka refused the people a request

@@ -55,6 +55,8 @@ is written then, and sending it again changes nothing: name somebody else.`
 
 const documentNotFoundHint = "There is no such document, it is a draft, it belongs to a project you are not a member of, or you are a client of the project and it is not shown to you."
 
+const filesToolNotFoundHint = "There is no such Docs & Files tool, it belongs to a project you are not a member of, or you are a client of the project and it is not shown to you."
+
 const uploadNotFoundHint = "There is no such upload, it belongs to a project you are not a member of, or you are a client of the project and it is not shown to you."
 
 func (a *app) newDocsCmd() *cobra.Command {
@@ -232,7 +234,8 @@ func (a *app) newDocsCreateCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if input.NotifyIDs, err = a.notifiedPeople(cmd, s, notify); err != nil {
+			input.NotifyIDs, err = a.peopleOfATool(s, a.projectOfFilesTool(s, toolID), notify)
+			if err != nil {
 				return err
 			}
 
@@ -261,7 +264,7 @@ func (a *app) newDocsCreateCmd() *cobra.Command {
 	flags.StringVar(&bodyFormat, "body-format", "markdown", "Format of the body: markdown or html")
 	flags.StringVar(&folderID, "folder", "", "ID of the folder to write in; the top of the tool without it")
 	flags.StringVar(&audience, "audience", "", "Whom the document reaches: everybody, chosen or nobody")
-	flags.StringArrayVar(&notify, "notify", nil, "Person to tell about the document, with --audience chosen; can be given more than once")
+	flags.StringArrayVar(&notify, "notify", nil, "Person to tell about the document, with --audience chosen: ID, me, e-mail address or name (repeatable)")
 
 	return cmd
 }
@@ -433,23 +436,23 @@ func (a *app) newDocsUploadsCreateCmd() *cobra.Command {
 	var toolID, projectID, blobID, folderID, title, description, descriptionFormat, name, contentType string
 
 	cmd := &cobra.Command{
-		Use:   "create [<file>] --tool <toolId> (--project <projectId> | --blob <blobId>)",
+		Use:   "create (<file> | --blob <blobId>) --tool <toolId>",
 		Short: "Put a file into a Docs & Files tool",
 		Long: `Puts a file on top of a Docs & Files tool, or of the folder --folder names, as an
 upload of its own.
 
-Minka takes it in two requests: the file is stored in the project first, and
-then put into the tool. Given a file, the command does both, and --project
-names the project of the tool, since Minka's addresses do not say which one it
-is; the tool is looked up in it before the file travels. A step that fails
-ends the run, and nothing after it is sent.
+Minka takes it in two requests: the file is stored in the project of the tool
+first, and then put into the tool. Given a file, the command does both, and
+reads the tool for its project before the file travels, so a tool that is not
+there costs no transfer. A step that fails ends the run, and nothing after it
+is sent.
 
 Where the file was stored and the second step was refused, the error hands
 over the stored file under "data": give --blob <blobId> with its id in place
 of the file to try again without sending it anew. --blob also takes a file
-stored earlier with "uploads create --project". A file goes into one place
-only: one that stands in an upload or a text already is refused with
-fileInUse.
+stored earlier in the project of the tool with "uploads create --project". A
+file goes into one place only: one that stands in an upload or a text already
+is refused with fileInUse.
 
 ` + unattachedFileHelp + `
 
@@ -459,8 +462,8 @@ Without --title the upload is named after the file. A title cannot be empty:
 ` + uploadDescriptionHelp + `
 
 ` + mediaTypeHelp,
-		Example: `  minka docs uploads create site-plan.pdf --tool 0199... --project 0199...
-  minka docs uploads create shot.png --tool 0199... --project 0199... --folder 0199... --title "The stage" --description - < about.md
+		Example: `  minka docs uploads create site-plan.pdf --tool 0199...
+  minka docs uploads create shot.png --tool 0199... --folder 0199... --title "The stage" --description - < about.md
   minka docs uploads create --blob 0199... --tool 0199...`,
 		Args: func(cmd *cobra.Command, args []string) error {
 			if len(args) > 1 {
@@ -478,8 +481,10 @@ Without --title the upload is named after the file. A title cannot be empty:
 			case storing == flags.Changed("blob"):
 				return usageErrorf(cmd, "give a file or --blob, not both and not neither")
 			case storing:
-				if err := requireID(cmd, "--project", &projectID); err != nil {
-					return err
+				if flags.Changed("project") {
+					if err := requireID(cmd, "--project", &projectID); err != nil {
+						return err
+					}
 				}
 			default:
 				if err := requireID(cmd, "--blob", &blobID); err != nil {
@@ -536,10 +541,21 @@ Without --title the upload is named after the file. A title cannot be empty:
 			}
 			var stored *api.Result[api.Upload]
 			if storing {
-				if err := a.requireToolOfProject(s, projectID, toolID); err != nil {
+				projectOfTool, err := a.projectOfFilesTool(s, toolID)()
+				if err != nil {
 					return err
 				}
-				uploaded, err := s.client.UploadToProject(a.ctx, projectID, file.filename, file.mediaType, file.content, file.size)
+				if projectID != "" {
+					if projectID != projectOfTool {
+						return &Error{
+							Code:    CodeNotFound,
+							Message: "the Docs & Files tool " + toolID + " stands in project " + projectOfTool + ", not in " + projectID + ", nothing was sent",
+							Hint:    "--project is no longer needed: leave it out, and the file is stored where the tool stands.",
+						}
+					}
+					notices = append(notices, "--project is no longer needed: the file is stored in the project the tool stands in")
+				}
+				uploaded, err := s.client.UploadToProject(a.ctx, projectOfTool, file.filename, file.mediaType, file.content, file.size)
 				if err != nil {
 					return storeRefusal(s, err)
 				}
@@ -549,7 +565,9 @@ Without --title the upload is named after the file. A title cannot be empty:
 
 			upload, err := s.client.AddFilesUpload(a.ctx, toolID, input)
 			if err != nil {
-				return filesUploadRefusal(s, err, toolID, blobID, stored)
+				e := filesUploadRefusal(s, err, toolID, blobID, stored)
+				e.Notices = notices
+				return e
 			}
 
 			summary := fmt.Sprintf("Put %s into %s as upload %s", upload.Value.File.Filename, upload.Value.Tool.Title, upload.Value.Title)
@@ -567,7 +585,11 @@ Without --title the upload is named after the file. A title cannot be empty:
 
 	flags := cmd.Flags()
 	flags.StringVar(&toolID, "tool", "", "ID of the Docs & Files tool the file goes into")
-	flags.StringVar(&projectID, "project", "", "ID of the project of the tool, where the file is stored")
+	// A project named beside the tool is held against the tool's own, so a
+	// script that names one keeps working and never stores the file anywhere
+	// else.
+	flags.StringVar(&projectID, "project", "", "ID of the project of the tool; no longer needed, and checked where given")
+	_ = flags.MarkHidden("project")
 	flags.StringVar(&blobID, "blob", "", "ID of a file stored already, in place of a file of this machine")
 	flags.StringVar(&folderID, "folder", "", "ID of the folder to put it in; the top of the tool without it")
 	flags.StringVar(&title, "title", "", "Title of the upload; the name of the file without it")
@@ -582,27 +604,14 @@ Without --title the upload is named after the file. A title cannot be empty:
 // left.
 const phpWhitespace = " \t\n\r\x00\x0b"
 
-// requireToolOfProject makes sure the tool is one of the project before the
-// file is stored there. Minka's addresses do not tie a tool to its project,
-// and a file stored in another project would travel only to be refused.
-func (a *app) requireToolOfProject(s *session, projectID, toolID string) error {
-	tools, err := s.client.FilesTools(a.ctx, projectID)
-	if err != nil {
-		e := s.fail(err)
-		if e.Code == CodeNotFound {
-			e.Hint = "There is no such project, or you are not a member of it."
+// projectOfFilesTool reads a tool for the project it stands in.
+func (a *app) projectOfFilesTool(s *session, toolID string) func() (string, error) {
+	return func() (string, error) {
+		tool, err := s.client.FilesTool(a.ctx, toolID)
+		if err != nil {
+			return "", toolRefusal(s, err, filesToolNotFoundHint)
 		}
-		return e
-	}
-	for _, tool := range tools.Value {
-		if tool.ID == toolID {
-			return nil
-		}
-	}
-	return &Error{
-		Code:    CodeNotFound,
-		Message: "the project has no Docs & Files tool " + toolID + " that you can see, nothing was sent",
-		Hint:    "List the tools of the project with: minka docs tools " + projectID,
+		return tool.Value.ProjectID, nil
 	}
 }
 
@@ -614,15 +623,15 @@ func filesUploadRefusal(s *session, err error, toolID, blobID string, stored *ap
 	e := documentRefusal(s, err)
 	switch {
 	case e.Code == CodeNotFound:
-		e.Hint = "There is no such Docs & Files tool, it belongs to a project you are not a member of, or you are a client of the project and it is not shown to you."
+		e.Hint = filesToolNotFoundHint
 	case e.APICode == apiCodeFileUnknown && stored != nil:
 		e.Hint = "The file was stored in this same run, so it has not been swept, and storing it again is not the remedy. Minka says no more about why it did not take it: check that the tool is still there with minka docs list " + toolID + ", and try once more with --blob " + blobID + "."
 	case e.APICode == apiCodeFileUnknown:
-		e.Hint = "Minka tells no cause apart: the file may have been swept after standing in nothing (such a file is kept for at least seven days and may go any time after), never have been stored, belong to another project, or be somebody else's. The one remedy worth trying is to store it again: give the file itself in place of --blob, with --project."
+		e.Hint = "Minka tells no cause apart: the file may have been swept after standing in nothing (such a file is kept for at least seven days and may go any time after), never have been stored, belong to another project, or be somebody else's. The one remedy worth trying is to store it again: give the file itself in place of --blob."
 	case e.APICode == apiCodeFileInUse && stored != nil:
 		e.Hint = "The file stands in an upload or a text already, and a file goes into one place only, so naming it again cannot help. Running the command again stores the file anew."
 	case e.APICode == apiCodeFileInUse:
-		e.Hint = "The file stands in an upload or a text already, and a file goes into one place only. Give the file itself in place of --blob, with --project, to store it anew."
+		e.Hint = "The file stands in an upload or a text already, and a file goes into one place only. Give the file itself in place of --blob to store it anew."
 	}
 	if stored == nil {
 		return e
@@ -1528,7 +1537,7 @@ func entriesBreadcrumbs(toolID string, entries api.FilesEntries) []Breadcrumb {
 		Description: "Write a document here",
 	}, Breadcrumb{
 		Action:      "put-file",
-		Cmd:         "minka docs uploads create <file> --tool " + toolID + " --project <projectId>",
+		Cmd:         "minka docs uploads create <file> --tool " + toolID,
 		Description: "Put a file here",
 	})
 }

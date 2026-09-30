@@ -85,7 +85,9 @@ is `postCategoryUnknown`, which the CLI never sends ([C-013](../decisions.md#c-0
 words; `chosen` without a `--notify` is `notifyIdsMissing`, a `--notify` under
 another audience `notifyIdsWithoutChosenAudience`, both with the hint that
 names the flag. The writer is always told. `everybody` tells every member of
-the project.
+the project. `--notify` takes an ID, `me`, an e-mail address or a name, and
+reads the tool, `GET posts-tools/{id}`, for its project only where a name or an
+address is to be looked up among its members.
 
 **A post is shown to no client.** Whether a client sees a post is the post's
 own switch together with its tool's, and neither the API nor the web sets the
@@ -219,7 +221,9 @@ and is unreachable from here.
 The CLI changes this order where it reads or refuses before it writes. An ID
 that is no UUID — of a post, a tool, a kind, a comment, a person — is exit 1
 without a request ([C-013](../decisions.md#c-013)). `--notify me` reads the
-person of the token. `posts edit --body` and `posts comments edit` read the
+person of the token; a `--notify` by name or address reads the tool and the
+members of its project, so an unknown tool is then exit 2 before anything
+else. `posts edit --body` and `posts comments edit` read the
 post, which is 404 first as Minka's own order has it; `posts comments edit`
 reads the person of the token as well where the comment carries files or
 mentions, and both read the archived projects where their guard is about to

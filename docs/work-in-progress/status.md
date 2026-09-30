@@ -28,9 +28,13 @@ The Docs & Files of a project are read with `docs tools`, `docs list`,
 document, `docs uploads create` puts a file into a tool — both requests Minka
 takes it in, in one run, or the second alone with `--blob` — and `docs uploads
 edit` changes the title and the description of an upload; `docs comments …`
-write under a document or an upload. The rule the commands follow is
-[Docs & Files](../stable/docs-and-files.md) (C-067, C-068, C-085). Everything
-the API does not offer — replacing the file of an upload, deleting, archiving
+write under a document or an upload. The tool names its project, so a file
+finds its project through the tool, and `--notify` of `docs create` and `posts
+create` and `--ask` of `checkins create` take names and e-mail addresses
+looked up there; `--project` of `docs uploads create` is hidden and checked
+(C-092). The rule the commands follow is
+[Docs & Files](../stable/docs-and-files.md) (C-067, C-068, C-085, C-092).
+Everything the API does not offer — replacing the file of an upload, deleting, archiving
 and moving an entry, folders, the archive of a tool, drafts — is named there
 and nowhere pretended. None of it has been seen live: the whole feature is
 checked against the fake, see below.
@@ -304,6 +308,18 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
 (account Bruno, local instance) gets revoked then.
 
 ## Checked against the fake only
+
+- A tool by its identifier alone (`GET files-tools/{id}`, `posts-tools/{id}`,
+  `todos-tools/{id}`, `checkins/{id}` and `chats/{id}`, each with `projectId`
+  and `project`) and `projectId` on the lines of the entries of a tool, of the
+  posts and the archive of a Posts tool, of the lists and the archive of a
+  To-dos tool and of the archive of a board: read in the controllers and
+  resources of v0.41.0+1, not seen live. The fake answers 404 for a tool of
+  another kind, of a project one is no member of, and, for a Docs & Files or a
+  Posts tool, one a client is not shown. It has no client switch on a To-dos
+  tool, a Check-ins tool or a chat, which Minka has, and models no Docs & Files
+  or Posts tool in the trash and no project in the trash. The CLI reads the
+  tools of Docs & Files, Posts and Check-ins.
 
 - The status of what stands in a list or a group on the shelf or in the trash:
   seen live for an archived list, whose groups and to-dos come `archived` with
@@ -1283,8 +1299,10 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   taken off twice. Look at `isOverdue` and at the cursor near midnight in a time
   zone that is not UTC, which the fake cannot show.
 - Check the uploads of a Docs & Files tool live, as the
-  [live check](../guides/live-check.md) says: a file put in with both steps and
-  one with `--blob` after `uploads create --project`, a title left out, one
+  [live check](../guides/live-check.md) says: a file put in with both steps, the
+  tool read for its project, one with the hidden `--project` of the tool and its
+  notice and one naming another project refused before the file travels, one
+  with `--blob` after `uploads create --project`, a title left out, one
   refused as empty before the file travels, a folder of the archive refused
   after the file was stored and the retry with `--blob`, `fileInUse` for the
   same blob twice, `fileUnknown` for a blob of another project, a description
