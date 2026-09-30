@@ -212,6 +212,13 @@ type Result struct {
 	// PeopleLeftOut counts the people of the account nothing in the bundle
 	// refers to, who are therefore not in it.
 	PeopleLeftOut int
+	// Bots counts the people of the bundle that are chatbots or integrations of
+	// the source, the deleted ones among them.
+	Bots int
+	// BotsAlsoNamedElsewhere are the IDs of the bots Basecamp deleted that records
+	// other than lines of an integration name as well: perhaps a deleted user
+	// who once wrote as an integration.
+	BotsAlsoNamedElsewhere []string
 	// CreatorProbesRefused counts the dock entries asked for the creator of a
 	// project that Basecamp refused the identity. They are passed over, so a
 	// project may come without a creator it would otherwise have.
@@ -358,6 +365,7 @@ type Extractor struct {
 	addressesUnquoted int
 
 	peopleAsClients              int
+	bots                         int
 	clientMemberships            int
 	visibilityLeftToTheContainer int
 	// talks are the message boards, chats and questionnaires of the projects
@@ -494,6 +502,7 @@ func (e *Extractor) extract(ctx context.Context, w *bundle.Writer, pick func(con
 	e.missing = []MissingFile{}
 	e.creatorProbesRefused, e.addressesUnquoted = 0, 0
 	e.peopleAsClients, e.clientMemberships, e.visibilityLeftToTheContainer = 0, 0, 0
+	e.bots = 0
 	e.account, e.apiRoot = "", ""
 	e.cardsByStatus = everyStatus()
 	e.cardsOnHold, e.cardsLeftOut, e.commentsTrashed, e.bodies = 0, 0, 0, BodyCounts{}
@@ -589,14 +598,16 @@ func (e *Extractor) extract(ctx context.Context, w *bundle.Writer, pick func(con
 		}
 	}
 	return Result{
-		SourceInstance:       e.account,
-		Skipped:              e.skippedTools(),
-		Avatars:              avatars,
-		Missing:              e.missing,
-		InvalidAddresses:     e.people.invalidAddresses(),
-		AddressesUnquoted:    e.people.unquotedAddresses() + e.addressesUnquoted,
-		PeopleLeftOut:        e.people.leftOut(),
-		CreatorProbesRefused: e.creatorProbesRefused,
+		SourceInstance:         e.account,
+		Skipped:                e.skippedTools(),
+		Avatars:                avatars,
+		Missing:                e.missing,
+		InvalidAddresses:       e.people.invalidAddresses(),
+		AddressesUnquoted:      e.people.unquotedAddresses() + e.addressesUnquoted,
+		PeopleLeftOut:          e.people.leftOut(),
+		Bots:                   e.bots,
+		BotsAlsoNamedElsewhere: e.people.botsAlsoNamedElsewhere(),
+		CreatorProbesRefused:   e.creatorProbesRefused,
 
 		PeopleAsClients:              e.peopleAsClients,
 		ClientMemberships:            e.clientMemberships,
@@ -1058,15 +1069,15 @@ func (e *Extractor) relativePath(what, address string) (string, error) {
 }
 
 // writePeople adds everybody the run has seen, each with their avatar.
+//
+// A bot comes as a bot, without the address Basecamp may still keep of a
+// deleted one: Minka ends the run over a bot with an address.
 func (e *Extractor) writePeople(ctx context.Context, w *bundle.Writer) (int, error) {
 	avatars := 0
 	for _, seen := range e.people.sorted() {
 		id := sourceID(seen.ID)
-		record := bundle.Person{
-			Record:  bundle.Record{SourceID: id, CreatedAt: seen.CreatedAt, UpdatedAt: seen.UpdatedAt},
-			Name:    seen.Name,
-			Retired: seen.retired(),
-		}
+		origin := bundle.Record{SourceID: id, CreatedAt: seen.CreatedAt, UpdatedAt: seen.UpdatedAt}
+		record := bundle.Person{Record: origin, Name: seen.Name, Retired: seen.retired()}
 		if seen.EmailAddress != "" {
 			record.Email = &seen.EmailAddress
 		}
@@ -1076,6 +1087,17 @@ func (e *Extractor) writePeople(ctx context.Context, w *bundle.Writer) (int, err
 		if record.Client {
 			e.peopleAsClients++
 			record.Company = seen.company
+			if record.Company == nil {
+				company, err := companyOf("person", seen.ID, seen.Company)
+				if err != nil {
+					return 0, err
+				}
+				record.Company = company
+			}
+		}
+		bot := seen.bot()
+		if bot {
+			e.bots++
 		}
 
 		if seen.AvatarURL != "" {
@@ -1097,7 +1119,12 @@ func (e *Extractor) writePeople(ctx context.Context, w *bundle.Writer) (int, err
 			}
 		}
 
-		if err := w.Add(bundle.People, record); err != nil {
+		var written any = record
+		if bot {
+			// Only a bot Basecamp deleted says it is retired.
+			written = bundle.Bot{Record: origin, Name: record.Name, Avatar: record.Avatar, Retired: seen.botByItsLines()}
+		}
+		if err := w.Add(bundle.People, written); err != nil {
 			return 0, err
 		}
 	}

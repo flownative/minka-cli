@@ -402,9 +402,37 @@ and Minka applies the kinds in an order of its own.
   What the account's list says about somebody wins over what a record says;
   somebody the list does not hold comes as the record shows them. An empty
   e-mail address becomes `null`, and so does one that is none, see above.
+  A **chatbot or an integration** of Basecamp comes with `kind: "bot"`
+  (C-094), which Minka makes a bot in service that the organization's owner
+  answers for. Basecamp makes one person of a chatbot, whichever chats it
+  writes into, and calls it `Integration`; of a chatbot it deleted it keeps a
+  `Tombstone`, as of a deleted user. So a bot is whoever Basecamp calls
+  `Integration`, and whoever is neither a `User` nor a `Client` nor of a kind
+  Basecamp does not say and wrote a line of type `Chat::Lines::Integration`
+  that the bundle carries; a line that says nothing is none. A user, a client
+  and somebody of no kind stay people whatever line names them. A bot's record
+  carries `name`, `avatar` and `kind`, and `retired: true` for a deleted
+  chatbot alone: **never an e-mail address**, because Minka ends the run over a
+  bot with one, whatever address Basecamp keeps of a deleted chatbot; and no
+  `client` or `company`, of which Minka reads nothing on a bot. An address left
+  off a bot is neither in `invalidAddresses` nor counted in
+  `addressesUnquoted`, a bot is never counted among the clients, and the
+  company of a deleted chatbot is not looked at. `bots` in the report counts
+  the bots of `counts.people`. Every other person carries no `kind`, which
+  Minka reads as `human`.
+  **Two risks the rule carries.** A deleted user whose Tombstone once wrote a
+  line of an integration becomes a bot as well, and Minka never turns a bot
+  back into a human: `botsAlsoNamedElsewhere` names, by ID, every bot of a
+  Tombstone that another record names too — a text, a card, a mention, a
+  boost — and a `notice` says so. And the rule sees only the chats of the run:
+  a run whose projects leave out the chat a deleted chatbot wrote into writes
+  its Tombstone as a retired human with its address, and a later run that
+  carries the chat writes it as a bot, which Minka then keeps a human and only
+  warns about. A deleted chatbot comes as a bot only in a run that holds its
+  lines.
   `retired` follows the kind of person Basecamp names (`personable_type`),
   not the list: a `User`, and a `Client`, comes with `retired: false`, and
-  every other kind with `retired: true`, a bot (`Integration`), what is left
+  every other kind that is no bot with `retired: true`, what is left
   of somebody who was deleted (`Tombstone`), a `DummyUser`, an `Outsider` and
   a kind nobody knows yet, wherever somebody comes from. The list says
   nothing here, because it depends on who asks: for an admin it holds every
@@ -412,9 +440,8 @@ and Minka applies the kinds in an order of its own.
   people. Only of somebody whose kind Basecamp does not say does the list
   decide: in the list or a member of a project is not retired, named by a
   record alone is. A bot and somebody deleted cannot be asked for one by one.
-  A bot comes with `email: null` as Basecamp gives it, somebody deleted and
-  an outsider with the address Basecamp keeps, which is held to the same
-  rules as every address.
+  Somebody deleted and an outsider come with the address Basecamp keeps,
+  which is held to the same rules as every address.
   A person carries `createdAt` and `updatedAt` like any record: somebody of
   whom Basecamp says neither ends the run as `api_error`, named by ID, where
   a record first refers to them.
@@ -1602,8 +1629,9 @@ A name and a company are personal data.
   and `filesBytesExpected`, the sum of the sizes Basecamp gives them. It does
   not look at what a run could take over. It needs no `--out`; given one, it
   checks it the way the real run does, so the refusal shows beforehand.
-- The report carries `counts` as the manifest has them, `avatars`,
-  `skippedTools`, `missingFiles`, `creatorProbesRefused`, `cardsByStatus`,
+- The report carries `counts` as the manifest has them, `avatars`, `bots`,
+  `botsAlsoNamedElsewhere`, `skippedTools`, `missingFiles`,
+  `creatorProbesRefused`, `cardsByStatus`,
   `cardsOnHold`, `cardsLeftOut`, `commentsTrashed`, `postsByStatus`,
   `postsLeftOut`, `postsWithEmptyBody`, `messagesByType` (`text`, `richText`,
   `upload`, `integration`), `messagesWithEmptyBody`, `uploadLinesLeftOut`,

@@ -25,7 +25,7 @@ type registry struct {
 	account  map[int64]person
 	referred map[int64]*seenPerson
 	invalid  map[int64]bool
-	unquoted int
+	unquoted map[int64]bool
 }
 
 type seenPerson struct {
@@ -36,6 +36,43 @@ type seenPerson struct {
 	// company is what the bundle carries for a client, read where they come
 	// in. Nobody else has one: Minka reads a company on a client alone.
 	company *bundle.CompanyOrNone
+	// named counts the records that name the person, and integrationLines
+	// those of them that are lines an integration posted.
+	named            int
+	integrationLines int
+}
+
+// integration is the kind of person Basecamp gives a chatbot: one person per
+// chatbot of the account, whichever chats it writes into.
+const integration = "Integration"
+
+// bot tells whether somebody is a chatbot or an integration of the source,
+// which a bundle carries as a person of kind bot. Basecamp says so of a
+// chatbot it still has. Of one that was deleted it keeps what it keeps of a
+// deleted user, a Tombstone, and only the lines it wrote tell the two apart:
+// whoever is neither a user nor a client and wrote a line of an integration
+// was one. A user or a client stays a person whatever line names them, and so
+// does somebody whose kind Basecamp does not say.
+func (s seenPerson) bot() bool {
+	return s.PersonableType == integration || (s.botByItsLines() && s.integrationLines > 0)
+}
+
+// botByItsLines tells that only the lines somebody wrote can say whether they
+// are a bot: their kind is none that decides it by itself. Such a bot is one
+// Basecamp deleted.
+func (s seenPerson) botByItsLines() bool {
+	switch s.PersonableType {
+	case integration, "User", "Client", "":
+		return false
+	}
+	return true
+}
+
+// alsoNamedElsewhere tells of a bot its lines made one that a record other
+// than a line of an integration names as well. That may be a deleted user who
+// once wrote as an integration, and Minka never turns a bot back into a human.
+func (s seenPerson) alsoNamedElsewhere() bool {
+	return s.botByItsLines() && s.bot() && s.named > s.integrationLines
 }
 
 // retired tells whether somebody comes as an author and nothing more. The
@@ -60,12 +97,14 @@ func (s seenPerson) retired() bool {
 // word client keeps somebody the import finds here by their address out of the
 // projects, and a kind of person Basecamp made before the flag existed is no
 // reason to put a client among the people of a project.
+//
+// A bot is never a client: Minka reads nothing of the word on a bot.
 func (s seenPerson) aClient() bool {
-	return s.Client || s.PersonableType == "Client"
+	return !s.bot() && (s.Client || s.PersonableType == "Client")
 }
 
 func newRegistry() *registry {
-	return &registry{account: map[int64]person{}, referred: map[int64]*seenPerson{}, invalid: map[int64]bool{}}
+	return &registry{account: map[int64]person{}, referred: map[int64]*seenPerson{}, invalid: map[int64]bool{}, unquoted: map[int64]bool{}}
 }
 
 // sourceProblemShare is the share of addresses that are none above which the
@@ -121,6 +160,7 @@ func (r *registry) refer(named *person, present bool) (*string, error) {
 	id := sourceID(named.ID)
 	if seen, known := r.referred[named.ID]; known {
 		seen.listed = seen.listed || present
+		seen.named++
 		return &id, nil
 	}
 
@@ -148,13 +188,15 @@ func (r *registry) refer(named *person, present bool) (*string, error) {
 		case !anAddress:
 			r.invalid[p.ID] = true
 		case unquoted:
-			r.unquoted++
+			r.unquoted[p.ID] = true
 		}
 	}
-	seen := &seenPerson{person: p, listed: listed || present}
+	seen := &seenPerson{person: p, listed: listed || present, named: 1}
 	// A company a bundle cannot carry ends the run: said here, where the client
-	// comes in, and not at the end of a run of hours.
-	if seen.aClient() {
+	// comes in, and not at the end of a run of hours. Of somebody whose lines
+	// may yet make them a bot, who is then no client, it is said where the
+	// people are written.
+	if seen.aClient() && !seen.botByItsLines() {
 		company, err := companyOf("person", p.ID, p.Company)
 		if err != nil {
 			return nil, err
@@ -176,6 +218,27 @@ func (r *registry) referByID(id int64) (*string, string, error) {
 	}
 	reference, err := r.refer(&p, false)
 	return reference, p.Name, err
+}
+
+// wroteForAnIntegration notes that a line of an integration names somebody the
+// bundle carries as its author, which is what tells a deleted chatbot from a
+// deleted user.
+func (r *registry) wroteForAnIntegration(id int64) {
+	if seen, referred := r.referred[id]; referred {
+		seen.integrationLines++
+	}
+}
+
+// botsAlsoNamedElsewhere names, by ID and in the order of the IDs, the bots
+// their lines made ones that other records name as well.
+func (r *registry) botsAlsoNamedElsewhere() []string {
+	names := []string{}
+	for _, seen := range r.sorted() {
+		if seen.alsoNamedElsewhere() {
+			names = append(names, sourceID(seen.ID))
+		}
+	}
+	return names
 }
 
 // known is what the bundle holds about somebody a record has already brought
@@ -252,11 +315,14 @@ func (r *registry) leftOut() int {
 }
 
 // invalidAddresses names, by ID and in the order of the IDs, who came into
-// the bundle without an address because theirs was none.
+// the bundle without an address because theirs was none. A bot is none of
+// them: it comes without an address whatever the source keeps.
 func (r *registry) invalidAddresses() []string {
 	ids := make([]int64, 0, len(r.invalid))
 	for id := range r.invalid {
-		ids = append(ids, id)
+		if !r.referred[id].bot() {
+			ids = append(ids, id)
+		}
 	}
 	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
 	names := make([]string, len(ids))
@@ -267,9 +333,16 @@ func (r *registry) invalidAddresses() []string {
 }
 
 // unquotedAddresses counts the people whose address came inside a pair of
-// quotation marks that the run took off, one for each of them.
+// quotation marks that the run took off, one for each of them. A bot's address
+// is not written, so nothing came off it.
 func (r *registry) unquotedAddresses() int {
-	return r.unquoted
+	count := 0
+	for id := range r.unquoted {
+		if !r.referred[id].bot() {
+			count++
+		}
+	}
+	return count
 }
 
 // mask is the character Basecamp puts in the place of what an identity may

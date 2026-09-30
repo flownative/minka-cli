@@ -109,9 +109,10 @@ func TestImportBasecampWritesABundleAndReportsWhatItHolds(t *testing.T) {
 			map[string]any{"kind": "todoset", "enabled": false, "count": float64(1)},
 			map[string]any{"kind": "vault", "enabled": false, "count": float64(1)},
 		},
-		"missingFiles": []any{}, "invalidAddresses": []any{}, "addressesUnquoted": float64(0), "peopleLeftOut": float64(8),
-		"creatorProbesRefused": float64(0),
-		"peopleAsClients":      float64(0), "clientMemberships": float64(0),
+		"missingFiles": []any{}, "invalidAddresses": []any{}, "addressesUnquoted": float64(0), "peopleLeftOut": float64(8), "bots": float64(0),
+		"botsAlsoNamedElsewhere": []any{},
+		"creatorProbesRefused":   float64(0),
+		"peopleAsClients":        float64(0), "clientMemberships": float64(0),
 		"visibilityLeftToTheContainer": float64(0),
 		"cardsByStatus":                map[string]any{"active": float64(0), "archived": float64(0), "trashed": float64(0)},
 		"cardsOnHold":                  float64(0), "cardsLeftOut": float64(0), "commentsTrashed": float64(0),
@@ -1197,7 +1198,8 @@ func TestImportBasecampReportsThePostsAndTheChatsOfAProject(t *testing.T) {
 		"parts":         map[string]any{"messages": parts},
 		"postsByStatus": map[string]any{"active": float64(4), "archived": float64(1), "trashed": float64(1)},
 		"postsLeftOut":  float64(1), "postsWithEmptyBody": float64(1),
-		"messagesByType":     map[string]any{"text": float64(3), "richText": float64(2), "upload": float64(2), "integration": float64(1)},
+		"messagesByType": map[string]any{"text": float64(3), "richText": float64(2), "upload": float64(2), "integration": float64(1)},
+		"bots":           float64(1), "botsAlsoNamedElsewhere": []any{},
 		"uploadLinesLeftOut": float64(1), "messagesWithEmptyBody": float64(1), "picturesLinked": float64(1),
 		"recordsLeftOut": []any{map[string]any{"record": "line", "field": "type", "value": fakebasecamp.UnknownLine,
 			"in": "chat", "inSourceId": "9033", "leftOut": float64(2)}},
@@ -1254,6 +1256,7 @@ func TestImportBasecampReportsThePostsAndTheChatsOfAProject(t *testing.T) {
 		"Posts: 4 active, 1 archived, 1 trashed; 1 of them without a text",
 		"posts of a message board that is not extracted, left out: 1",
 		"Messages: 3 text, 2 rich text, 2 upload, 1 integration",
+		"Chatbots and integrations among the people, written as bots: 1",
 		"Lines that say nothing, left out: 1",
 		"Messages are written in 2 parts, messages-0001.jsonl to messages-0002.jsonl",
 		"Lines that were files Basecamp names none of, left out: 1",
@@ -2432,5 +2435,31 @@ func TestARunWithoutAClientSaysNothingAboutThem(t *testing.T) {
 		if strings.Contains(r.stdout, line) {
 			t.Errorf("a run without a client says %q:\n%s", line, r.stdout)
 		}
+	}
+}
+
+// Somebody deleted who wrote as a person and as an integration comes as a bot,
+// which Minka never turns back: the report names them and says so.
+func TestImportBasecampNamesADeletedPersonWhoAlsoWroteAsAnIntegration(t *testing.T) {
+	e := newImportEnv(t)
+	at := "2023-04-20T10:01:00.000Z"
+	e.account.Projects[3].Dock[4].Lines = []fakebasecamp.Line{{ID: 9826, Type: fakebasecamp.IntegrationLine,
+		Creator: &e.account.Deleted, CreatedAt: at, UpdatedAt: at, Content: `Deployed on the way out`}}
+	out := filepath.Join(t.TempDir(), "bundle")
+
+	env, r := e.runJSON("import", "basecamp", "--project", "7004", "--out", out)
+	expectCode(t, r, ExitOK)
+	data := decode(t, env.Data)
+	if got := data["botsAlsoNamedElsewhere"]; !reflect.DeepEqual(got, []any{"802"}) || data["bots"] != float64(2) {
+		t.Errorf("bots %v, named as people too %v", data["bots"], got)
+	}
+	if !strings.Contains(env.Notice, "1 deleted person comes as a bot for a line of an integration, although other records name them too") {
+		t.Errorf("notice %q", env.Notice)
+	}
+
+	r = e.run("import", "basecamp", "--project", "7004", "--out", out, "--styled")
+	expectCode(t, r, ExitOK)
+	if !strings.Contains(r.stdout, "Deleted people written as bots whom other records name too: 1 (person 802)") {
+		t.Errorf("the text lacks the deleted person:\n%s", r.stdout)
 	}
 }
