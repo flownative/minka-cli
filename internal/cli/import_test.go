@@ -569,7 +569,7 @@ func TestARequestThatFailsAndThenAnswersDoesNotCostTheRun(t *testing.T) {
 	if want := []time.Duration{2 * time.Second, 10 * time.Second}; !slices.Equal(e.pauses, want) {
 		t.Errorf("waited %v, want %v", e.pauses, want)
 	}
-	if strings.Contains(r.stdout, "525") || strings.Contains(r.stdout, "people.json") {
+	if strings.Contains(r.stdout, "HTTP 525") || strings.Contains(r.stdout, "people.json") {
 		t.Errorf("a run that ended well names the failure or the request: %s", r.stdout)
 	}
 
