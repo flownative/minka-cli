@@ -51,9 +51,7 @@ Somebody named has to be able to see the document. A client of the project,
 or an agent working for one, is told only about a document in a folder shown to
 clients, in a tool shown to clients; the topmost folder decides for everything
 below it. Naming them anywhere else is refused with personCannotSeeIt. Nothing
-is written then, and sending it again changes nothing: name somebody else.
-
-` + namedTwiceHelp
+is written then, and sending it again changes nothing: name somebody else.`
 
 const documentNotFoundHint = "There is no such document, it is a draft, it belongs to a project you are not a member of, or you are a client of the project and it is not shown to you."
 

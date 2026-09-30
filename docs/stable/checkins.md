@@ -23,9 +23,10 @@ shape: `projectId`, `toolId`, `project` and `tool` as references, `title`,
 
 **`asked` is not the set of the people asked.** It names only those who are
 still members of the project and may see the question, in the order of their
-names. A person who left stays asked unseen until the next edit that names no
-people, which takes them off for good; a client of the project the question is
-not shown to can be asked and is named nowhere. An agent that stepped down
+names. A person who left the project, and a client asked before the question
+was hidden from clients, stay asked unseen, and no edit takes them off. A
+client the question is not shown to cannot be named to be asked (see
+[The people](#writing-a-question)). An agent that stepped down
 stays a member of the projects that were archived then, and is listed there.
 The API cannot show a question to clients: that is set on the web.
 
@@ -70,15 +71,14 @@ asked on several days refuses `rhythm: weekly` without a weekday, with
 `questionScheduleInvalid`. `nothingToChange` is unreachable: an edit without a
 flag is a usage error here.
 
-**The people.** `askedIds` is the whole set: whoever is not named again is
+**The people.** An edit that leaves `askedIds` out leaves the people asked as
+they are, also on a question that shows nobody. `askedIds` is the whole set over
+the people the question shows in `asked`: whoever of them is not named again is
 asked no longer (and stays subscribed), and a person named twice is asked once.
-`[]` is `questionNobodyAsked`, and so is a body that leaves the people out on a
-new question. **An edit that leaves the people out does not keep them**: Minka
-writes back the people it shows in `asked`, so a client the question is not
-shown to is asked no longer, and neither is a member who left the project, who
-is not asked again on coming back. A question that shows nobody — everybody
-asked left, or cannot see it — refuses every edit with `questionNobodyAsked`
-until the people are named. The hint says so. This is reported to Minka.
+Whoever `asked` does not show — a member who left the project, a client the
+question is not shown to — stays asked whatever the set names, so the people
+read from `asked` and sent back take nobody off. `[]` is `questionNobodyAsked`,
+and so is a body that leaves the people out on a new question.
 
 `checkins create --ask` takes an ID or `me`: the ID of a tool names no project,
 so no name or address can be looked up, as for the people a new document
@@ -87,8 +87,12 @@ reaches ([C-070](../decisions.md#c-070)). `checkins edit --ask` takes an ID,
 one of the last three is given. There is no `--no-ask`: a question asks
 somebody. A person named twice goes out twice.
 
-Where somebody named is not among `asked` in the answer, a `notice` names them:
-it is the only word about a client who is asked and shown nothing. Where an
+Only a member who may see the question can be asked. A question set up through
+the API is shown to no client, so a client of the project, or an agent working
+for one, named with `--ask` is refused with `personNotAProjectMember`, on a new
+question and on an edit alike, and nothing is written. Should somebody named
+still be missing from `asked` in the answer, a `notice` names them as named but
+not asked. Where an
 edit gives the rhythm or the weekdays and the question is asked every other
 week afterwards, a `notice` names the first day of its weeks and the two after
 it — also where it was asked every other week before — and says that another
@@ -205,8 +209,8 @@ me` is exit 2, where the same with an ID for the person is
 | 404 | every command, for a tool, question or answer that is unknown, foreign or in the trash; `answers edit` for somebody else's answer | 2 |
 | 422 `questionTitleMissing`, `questionTitleTooLong`, `questionTitleHasControlCharacters` | `checkins create` (before the tool), `checkins edit` (before the question) | 9 |
 | 422 `questionWeekdaysMissing`, `questionTimeInvalid`, `questionScheduleInvalid` | `checkins create` (before the tool), `checkins edit` (after the question) | 9 |
-| 422 `questionNobodyAsked` | `checkins create` without `--ask`, `checkins edit` of a question that shows nobody | 9 |
-| 422 `personNotAProjectMember` | `checkins create`, `checkins edit` | 9 |
+| 422 `questionNobodyAsked` | `checkins create` without `--ask`; unreachable on `checkins edit`, which sends no empty set | 9 |
+| 422 `personNotAProjectMember` | `checkins create`, `checkins edit` naming somebody outside the project, or a client of it or an agent of one where the question is not shown to clients | 9 |
 | 422 `answerDayNotADate` | `checkins answers create --asked-for` (before the question), `checkins answers list --on` (after it) | 9 |
 | 422 `answerDayNotAsked` | `checkins answers create --asked-for`, before `projectArchived` | 9 |
 | 422 `answerMissing`, `answerTooLong`, `answerNotReadable` | `checkins answers create`, `checkins answers edit` | 9 |
