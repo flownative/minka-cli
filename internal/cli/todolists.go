@@ -276,7 +276,7 @@ A list in the archive takes no change: exit 9 with todoListArchived.`,
 				}
 				// A list of the archive takes no description at all.
 				dropped, err := a.guardOverFiles(s, current.Value.ProjectID, closedIf(current.Value.Archived), firstNonEmpty(current.Value.DescriptionSource, current.Value.Description), *input.Description, dropAttachments,
-					"the description has attachments or mentions, and the new description would drop them",
+					"the description has %s, and the new description would drop them",
 					"Change descriptionSource from todolists show --json and send it back with --description-format html, or give --drop-attachments.")
 				if err != nil {
 					return err
@@ -304,7 +304,7 @@ A list in the archive takes no change: exit 9 with todoListArchived.`,
 	flags.StringVar(&title, "title", "", "New title; an empty one is refused, a title cannot be removed")
 	flags.StringVar(&description, "description", "", "New description, - to read it from stdin, empty to remove it")
 	flags.StringVar(&descriptionFormat, "description-format", "markdown", "Format of the description: markdown or html")
-	flags.BoolVar(&dropAttachments, "drop-attachments", false, "Replace a description that has attachments or mentions, which drops them")
+	flags.BoolVar(&dropAttachments, "drop-attachments", false, "Replace a description that has attachments, mentions or references, which drops them")
 
 	return cmd
 }

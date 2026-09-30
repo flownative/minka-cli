@@ -81,6 +81,17 @@ reacting to a post itself and showing one to clients have no address in the
 API. None of it has been seen live: the whole feature is checked against the
 fake, see below.
 
+A reference to a card, a post or a chat in any text is read as its address,
+`<href>`, which comes back as the reference when the text is edited, or as
+`(a card you cannot open)` where the reader may not see the target (C-091);
+the guard over files counts references, `messages edit` included, `--json`
+keeps the served HTML with title and short identifier, and the skill tells
+agents to name a card as `#MNK-1` or by its URL. Minka's side
+is on its `main` and in no release yet, so production sends no `<minka-ref>`
+with its additions: the rendering is checked against Minka's code and tests
+only, and the fake stores rich text as sent and makes no references of its
+own.
+
 `minka import basecamp` extracts the structure, the boards, the message
 boards, the chats, the check-ins, the to-dos, the forwarded mail and the
 Docs & Files of Basecamp

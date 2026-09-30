@@ -45,6 +45,9 @@ when stdout is not a terminal, so an agent gets structured output by default.
   and `minka cards notes set <card> - --expect <updatedAt>` at every milestone,
   so that the next session can take the card over. Comments are the other
   thing — the conversation with people.
+- Name cards with `#MNK-1` or their URL, other entries with their URL, never
+  only as text. Minka turns such a name into a reference that links both ways;
+  a title alone links nothing.
 - `minka cards done` is safe to repeat: a card already in Done is left alone.
 - `minka cards delete` moves a card to the trash. Repeating it changes
   nothing on the server, but a card in the trash reads like one that never
@@ -593,6 +596,11 @@ What the two commands do:
   again then writes nothing new, and a failed send is `retryable`.
 - `messages edit` and `messages delete` only work on your own messages;
   somebody else's exits 2. Deleting twice succeeds.
+- `messages edit` refuses a new text that would drop a file, a mention or a
+  reference of the message, like `comments edit`, unless `--drop-attachments`
+  is given; send its `bodySource` back with `--format html` to keep them. It
+  reads the transcript back until it finds the message, since no request reads
+  one message alone.
 - `chats mark-read <chatId>` marks the chat read up to `--seq`, which is the
   highest `seq` you have seen and not that of the last message of a list;
   without it, up to the highest among the latest messages. The mark only grows.
@@ -646,10 +654,10 @@ What the two commands do:
   the source as `<action-text-attachment>` elements with fresh signatures and
   their `url`, `filename` and `content-type`. `cards show --styled` shows a
   picture as a Markdown image, a file as a link and a mention as `@Name`.
-- Markdown cannot hold files or mentions, nor the two further elements a text
-  carries: `<minka-embed>` for an address Minka drew as a card, `<minka-ref>`
-  for a reference to another record. To change a description that has any of
-  them, take `descriptionSource` from `minka cards show <cardId> --quiet`,
+- Markdown cannot hold files or mentions, nor `<minka-embed>` for an address
+  Minka drew as a card; a `<minka-ref>` it holds only as its address (see
+  "Pointing at a card, a post or a chat"). To change a description that has any
+  of them, take `descriptionSource` from `minka cards show <cardId> --quiet`,
   change it and send it back with `cards edit --description - --description-format html`.
   A new description that would drop them is refused (exit 1) unless
   `--drop-attachments` is given — the refusal calls them all attachments,
@@ -708,6 +716,31 @@ printf '%s please have a look' "$MARKUP" | minka comments create <cardId> - --fo
   texts of that project, one of a conversation in that conversation. Anywhere
   else the server drops it while saving, without an error.
 - `cards show --styled` and `messages list --styled` show a mention as `@Name`.
+
+## Pointing at a card, a post or a chat
+
+- Write `#MNK-1` for a card with a short identifier, or paste the address of a
+  card, a post or a chat of the same Minka — in the words or as `<address>`.
+  On saving, Minka turns each into a `<minka-ref>` for every way in: Markdown,
+  HTML, comments, messages. `MNK-1` without `#`, anything in code, a link with
+  words of its own (`[the card](…)`), an address of another host and a target
+  you cannot see stay as written.
+- Every answer adds what the reader needs to the element: `title`, `short-id`
+  for a card that has one, and `href`. `--json` hands the text over exactly as
+  served; sending it back as HTML is safe, because saving keeps only `kind` and
+  `id`.
+- `--styled` shows a visible reference as its address, `<https://…>`, for
+  every kind, so the text stays editable: sent back as Markdown, a link showing
+  its own address becomes the reference again. A card's short identifier reads
+  in `/go/card/MNK-1`; the title is not shown — take it from `--json`, where
+  every reference carries `title` and `short-id`. A target you cannot open, one
+  in the trash or one that does not exist reads `(a card you cannot open)` (or
+  post, chat).
+- The guard against dropping counts references: a new text keeps a visible one
+  when it holds its address (in the words or as `<address>`), `#MNK-1` for a
+  card, or the element itself. A hidden one is kept only by the element, so an
+  edit of its view is refused (exit 1) unless `--drop-attachments` is given;
+  send the source back as HTML instead.
 
 ## Uploads
 

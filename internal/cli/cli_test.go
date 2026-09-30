@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -3327,5 +3328,162 @@ func TestACommentWithAttachmentsIsNotReplacedUnlessAsked(t *testing.T) {
 	expectCode(t, r, ExitOK)
 	if !strings.Contains(env.Notice, "attachments") {
 		t.Errorf("notice %q", env.Notice)
+	}
+}
+
+const (
+	aVisibleReference = `<minka-ref kind="card" id="0192f3a4-5b6c-4d7e-8f90-a1b2c3d4e5f0" title="Zelt *neu*" short-id="MNK-1" href="https://minka.example/go/card/MNK-1"></minka-ref>`
+	aHiddenReference  = `<minka-ref kind="post" id="0192f3a4-5b6c-4d7e-8f90-a1b2c3d4e5f1"></minka-ref>`
+)
+
+// A reference is shown by its address, while --json hands over the text
+// exactly as the server served it, with the title and short identifier the
+// view leaves out.
+func TestAReferenceIsShownByItsAddressAndKeptAsServedInJSON(t *testing.T) {
+	e := newTestEnv(t)
+	served := "<p>See " + aVisibleReference + " and " + aHiddenReference + "</p>"
+	e.fixture.CardInTriage.Description = served
+
+	r := e.run("", "cards", "show", e.fixture.CardInTriage.ID, "--styled")
+	expectCode(t, r, ExitOK)
+	if want := "See <https://minka.example/go/card/MNK-1> and (a post you cannot open)"; !strings.Contains(r.stdout, want) {
+		t.Errorf("styled output does not show %q:\n%s", want, r.stdout)
+	}
+
+	env, r := e.runJSON("", "cards", "show", e.fixture.CardInTriage.ID)
+	expectCode(t, r, ExitOK)
+	var card struct {
+		Description       string `json:"description"`
+		DescriptionSource string `json:"descriptionSource"`
+	}
+	if err := json.Unmarshal(env.Data, &card); err != nil {
+		t.Fatal(err)
+	}
+	if card.Description != served || card.DescriptionSource != served {
+		t.Errorf("JSON changed the text:\n description:       %q\n descriptionSource: %q", card.Description, card.DescriptionSource)
+	}
+	for _, attribute := range []string{`title="Zelt *neu*"`, `short-id="MNK-1"`, `href="https://minka.example/go/card/MNK-1"`} {
+		if !strings.Contains(card.DescriptionSource, attribute) {
+			t.Errorf("JSON lacks %s", attribute)
+		}
+	}
+}
+
+// The view of a text, edited and sent back, keeps a visible reference: its
+// address is what Minka turns into the reference again. A hidden one has no
+// address to be written by and counts as lost.
+func TestTheGuardKeepsAReferenceByItsAddressAndNotAHiddenOne(t *testing.T) {
+	for name, c := range map[string]struct {
+		stored, markdown string
+		kept             bool
+	}{
+		"visible, edited in its view": {"<p>See " + aVisibleReference + ".</p>", "See <https://minka.example/go/card/MNK-1>. More.", true},
+		"visible, named as #MNK-1":    {"<p>See " + aVisibleReference + ".</p>", "See #MNK-1 now.", true},
+		"visible, address in words":   {"<p>See " + aVisibleReference + ".</p>", "See https://minka.example/go/card/MNK-1.", true},
+		"visible, given words":        {"<p>See " + aVisibleReference + ".</p>", "See [the card](https://minka.example/go/card/MNK-1).", false},
+		"visible, dropped":            {"<p>See " + aVisibleReference + ".</p>", "Nothing to see.", false},
+		"hidden, edited in its view":  {"<p>See " + aHiddenReference + "</p>", "See (a post you cannot open) now", false},
+	} {
+		t.Run(name, func(t *testing.T) {
+			e := newTestEnv(t)
+			card := e.fixture.CardInTriage
+			card.Description = c.stored
+			env, r := e.runJSON("", "cards", "edit", card.ID, "--description", c.markdown)
+			if c.kept {
+				expectCode(t, r, ExitOK)
+				if env.Notice != "" {
+					t.Errorf("notice %q", env.Notice)
+				}
+				return
+			}
+			expectCode(t, r, ExitUsage)
+			if !strings.Contains(env.Error, "references to other records") || strings.Contains(env.Error, "attachments") {
+				t.Errorf("refusal %q does not name the references alone", env.Error)
+			}
+			if !strings.Contains(env.Hint, "--drop-attachments") || !strings.Contains(env.Hint, "<https://") {
+				t.Errorf("hint %q", env.Hint)
+			}
+			if patchesIn(e.server.WritingRequests()) != 0 {
+				t.Fatal("the description was sent")
+			}
+			env, r = e.runJSON("", "cards", "edit", card.ID, "--description", c.markdown, "--drop-attachments")
+			expectCode(t, r, ExitOK)
+			if env.Notice != "the references to other records of the text were dropped" {
+				t.Errorf("notice %q", env.Notice)
+			}
+		})
+	}
+}
+
+// A message is guarded like every other text, although no request reads it
+// alone: the guard finds it in the transcript, also pages back.
+func TestAMessageEditKeepsWhatMarkdownCannotHold(t *testing.T) {
+	for name, c := range map[string]struct {
+		stored, text, lost string
+		olderMessages      int
+		perPage            int
+	}{
+		"a hidden reference":                               {"<p>See " + aHiddenReference + "</p>", "See (a post you cannot open)", "references to other records", 0, 0},
+		"a visible reference, dropped":                     {"<p>See " + aVisibleReference + "</p>", "See nothing", "references to other records", 0, 0},
+		"a visible reference, kept":                        {"<p>See " + aVisibleReference + "</p>", "See <https://minka.example/go/card/MNK-1>", "", 0, 0},
+		"a mention":                                        {"<p>" + aMention + " look</p>", "look", "attachments or mentions", 0, 0},
+		"a mention and a reference":                        {"<p>" + aMention + aVisibleReference + "</p>", "look", "attachments or mentions and references to other records", 0, 0},
+		"a mention two pages back":                         {"<p>" + aMention + " look</p>", "look", "attachments or mentions", 450, 0},
+		"a mention behind pages smaller than asked for":    {"<p>" + aMention + " look</p>", "look", "attachments or mentions", 250, 100},
+		"a reference kept in plain text":                   {"<p>See " + aVisibleReference + "</p>", "See https://minka.example/go/card/MNK-1", "", 0, 0},
+		"a reference kept in plain text in angle brackets": {"<p>See " + aVisibleReference + "</p>", "See <https://minka.example/go/card/MNK-1> now", "", 0, 0},
+	} {
+		t.Run(name, func(t *testing.T) {
+			e := newTestEnv(t)
+			chat := e.fixture.Chat
+			own := chat.Messages[0]
+			own.BodyHTML = c.stored
+			e.server.MessagesPerPage = c.perPage
+			for i := range c.olderMessages {
+				chat.Messages = append(chat.Messages, &fakeapi.ChatMessage{
+					ID: fmt.Sprintf("0192f3a4-5b6c-4d7e-8f90-%012d", i), Seq: 100 + i, ChangeSeq: 100 + i,
+					AuthorID: e.fixture.Anke.ID, BodyText: "x", BodyHTML: "<p>x</p>", CreatedAt: own.CreatedAt.Add(time.Duration(i+1) * time.Second),
+				})
+			}
+			format := []string{}
+			if strings.Contains(name, "plain text") {
+				format = []string{"--format", "text"}
+			}
+			env, r := e.runJSON("", slices.Concat([]string{"messages", "edit", chat.ID, own.ID, c.text}, format)...)
+			if c.lost == "" {
+				expectCode(t, r, ExitOK)
+				if env.Notice != "" {
+					t.Errorf("notice %q", env.Notice)
+				}
+				return
+			}
+			expectCode(t, r, ExitUsage)
+			if want := "the message has " + c.lost + ", and the new text would drop them"; env.Error != want {
+				t.Errorf("refusal %q, want %q", env.Error, want)
+			}
+			if patchesIn(e.server.WritingRequests()) != 0 {
+				t.Fatal("the message was sent")
+			}
+			env, r = e.runJSON("", "messages", "edit", chat.ID, own.ID, c.text, "--drop-attachments")
+			expectCode(t, r, ExitOK)
+			if env.Notice != "the "+c.lost+" of the text were dropped" {
+				t.Errorf("notice %q", env.Notice)
+			}
+		})
+	}
+}
+
+// A transcript that cannot be read leaves the guard blind, so the edit stops
+// there instead of going out and maybe dropping what it cannot see.
+func TestAMessageEditStopsWhereTheTranscriptCannotBeRead(t *testing.T) {
+	e := newTestEnv(t)
+	chat := e.fixture.Chat
+	own := chat.Messages[0]
+	own.BodyHTML = "<p>See " + aHiddenReference + "</p>"
+	e.server.FailNextWith(http.StatusBadGateway)
+	_, r := e.runJSON("", "messages", "edit", chat.ID, own.ID, "See (a post you cannot open)", "--drop-attachments")
+	expectCode(t, r, ExitAPI)
+	if patchesIn(e.server.WritingRequests()) != 0 {
+		t.Fatal("the message was sent although the guard could not read it")
 	}
 }

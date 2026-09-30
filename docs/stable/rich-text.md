@@ -53,6 +53,48 @@ closing angle bracket. `a<i und b<s` stays plain text. Beside the elements
 Markdown writes, the server keeps three that a text carries rather than
 writes: `action-text-attachment`, `minka-embed` and `minka-ref`.
 
+## References to another record
+
+Minka turns `#MNK-1`, `/go/card/MNK-1` and an address of its own card, post or
+chat into a `<minka-ref kind id>` when a text is saved, whichever way it comes
+in (Minka's E-205). The Markdown conversion has nothing to do for it but leave
+those names alone: `#MNK-1` stays text in every block, a bare address becomes
+a link whose words are that address (what Minka looks for), trailing
+punctuation stays outside, and code stays code. A link with words of its own
+is kept as a link by Minka, not turned into a reference.
+
+Every answer of the API adds `title`, `short-id` (only for a card whose board
+shows short identifiers) and an absolute `href` for the reader; a target the
+reader cannot open, one in the trash and one that does not exist keep only
+`kind` and `id`, alike on purpose. Saving drops the additions, so a text sent
+back as read is safe. `--json` carries the text exactly as served.
+
+`internal/richtext` shows a reference so that the view stays the editable
+text of C-008 ([C-091](../decisions.md#c-091)):
+
+| Served | Shown |
+|---|---|
+| `href` that is a web address (every kind, with or without `short-id`) | `<href>` |
+| `href` that cannot stand in angle brackets (defensive: Minka never serves one) | `[href](href)` |
+| no `href` but `title` or `short-id` (defensive: Minka never serves one) | `#MNK-1 Title` or `Title` as text |
+| only `kind` and `id` | `(a card you cannot open)`, the same for post and chat; `(a reference you cannot open)` for a kind the CLI does not know |
+
+Sent back, `<href>` becomes a link that shows its own address, which Minka
+turns into the reference again. The title is left out, because a link with
+words of its own stays a link; a card's short identifier reads in
+`/go/card/MNK-1`, and `--json` carries title and short identifier for whoever
+wants them. A bare `#MNK-1` is not shown either: a letter, a digit or a `-`
+that touches it keeps Minka from reading it. An exclamation mark right before
+any link is escaped, so the link does not turn into an image.
+
+`richtext.Dropped` holds a new text against the old one for the guard below. A
+visible reference counts as kept where the new text holds the element, its
+`href` as a link showing its own address or as an address in the words
+(one trailing slash and sentence punctuation aside), or `#` and its
+`short-id` standing free and not glued to an address; code and the words of a link with words of its own do not
+count. A hidden reference has nothing to be written by and counts as kept only
+as the element.
+
 ## HTML that carries no markup is kept as characters, not refused
 
 `RichText::fromUntrustedValue` asks that question **before** it cleans
@@ -75,11 +117,18 @@ are `action-text-attachment` elements with a freshly signed handle.
 
 - What is shown is always the source: an image as a Markdown image, a file as
   a link, a mention as `@Name`. The plain text next to a message has neither.
-- Markdown can hold none of it: not a file, not a mention, and not the two
-  further elements a text carries — `minka-embed` for an address the server
-  drew as a card, `minka-ref` for a reference to another record. A new text
-  that would lose any of them is refused; `--drop-attachments` allows it
-  explicitly, and the refusal calls them all attachments, after the flag.
+- Markdown can hold neither a file nor a mention, nor `minka-embed` for an
+  address the server drew as a card; a reference it holds only as the address
+  above. A new text that would lose any of them is refused, in every command
+  that replaces a text, `messages edit` included; `--drop-attachments` allows
+  it explicitly. The refusal and the notice of a drop say whether attachments
+  or mentions, references to other records or both were lost. `messages edit`
+  finds the message by reading the transcript back from its end, since no
+  request reads one message alone; where the chat or the message is not there
+  Minka's answer comes, any other failure to read stops the edit. A text sent
+  with `--format text` is held against the old one as the characters it is,
+  unless it carries a tag of a served element (`CarriesMarkup`): Minka then
+  takes it as HTML, and so does the guard.
   Sending the source back as HTML keeps them. Where Minka refuses the write
   whatever is sent — an archived project, a text of the archive, a comment of
   somebody else — the guard stands aside and Minka's refusal is the answer

@@ -95,6 +95,129 @@ func TestTextWithoutMarkupStaysText(t *testing.T) {
 	}
 }
 
+// Every shape a reference comes in, as Minka serves it for the reader: kind
+// and identifier stored, title, short identifier and address added on the way
+// out, nothing beyond kind and identifier for a target the reader cannot open.
+func TestReferencesAreShownByTheirAddress(t *testing.T) {
+	const card = `<minka-ref kind="card" id="01a0" title="Kassenprüfung" short-id="MNK-1" href="https://minka.example/go/card/MNK-1"></minka-ref>`
+	const cardLink = "<https://minka.example/go/card/MNK-1>"
+	tests := []struct {
+		name string
+		html string
+		want string
+	}{
+		{"card with a short identifier", "<p>See " + card + ".</p>", "See " + cardLink + "."},
+		{"card on a board without short identifiers", `<p><minka-ref kind="card" id="01a0" title="Zelt" href="https://minka.example/projects/p/boards/b/cards/01a0"></minka-ref></p>`, "<https://minka.example/projects/p/boards/b/cards/01a0>"},
+		{"post", `<p><minka-ref kind="post" id="01a0" title="Zeltverleih" href="https://minka.example/projects/p/posts/t/01a0"></minka-ref></p>`, "<https://minka.example/projects/p/posts/t/01a0>"},
+		{"chat", `<p><minka-ref kind="chat" id="01a0" title="Allgemein" href="https://minka.example/projects/p/chats/c"></minka-ref></p>`, "<https://minka.example/projects/p/chats/c>"},
+		{"card the reader cannot open", `<p>Siehe <minka-ref kind="card" id="01a0"></minka-ref></p>`, "Siehe (a card you cannot open)"},
+		{"post the reader cannot open", `<p><minka-ref kind="post" id="01a0"></minka-ref></p>`, "(a post you cannot open)"},
+		{"chat the reader cannot open", `<p><minka-ref kind="chat" id="01a0"></minka-ref></p>`, "(a chat you cannot open)"},
+		{"kind the CLI does not know yet, visible", `<p><minka-ref kind="todo" id="01a0" title="Kaufen" href="https://minka.example/t/1"></minka-ref></p>`, "<https://minka.example/t/1>"},
+		{"kind the CLI does not know yet, hidden", `<p><minka-ref kind="todo" id="01a0"></minka-ref></p>`, "(a reference you cannot open)"},
+		{"title with Markdown characters stays out of the view", "<p><minka-ref kind=\"card\" id=\"01a0\" title=\"*Zelt* [neu] &lt;b&gt; a`b` &quot;q&quot;\" short-id=\"MNK-1\" href=\"https://minka.example/go/card/MNK-1\"></minka-ref></p>", cardLink},
+		{"no address", `<p>See <minka-ref kind="card" id="01a0" title="*Zelt*" short-id="MNK-1"></minka-ref></p>`, "See #MNK-1 \\*Zelt\\*"},
+		{"no address at the start of a line", `<p><minka-ref kind="card" id="01a0" title="Zelt" short-id="MNK-1"></minka-ref> is done</p>`, "\\#MNK-1 Zelt is done"},
+		{"address that is no web address", `<p><minka-ref kind="post" id="01a0" title="P" href="/projects/p/posts/t/1"></minka-ref></p>`, "[/projects/p/posts/t/1](/projects/p/posts/t/1)"},
+		{"address with a space", `<p><minka-ref kind="post" id="01a0" title="P" href="https://minka.example/a b"></minka-ref></p>`, "[https://minka.example/a b](<https://minka.example/a b>)"},
+		{"in a list", "<ul><li>" + card + "</li><li><minka-ref kind=\"card\" id=\"01a1\"></minka-ref></li></ul>", "- " + cardLink + "\n- (a card you cannot open)"},
+		{"in a heading", "<h2>About " + card + "</h2>", "## About " + cardLink},
+		{"in a quote", "<blockquote><p>" + card + "</p></blockquote>", "> " + cardLink},
+		{"in a table", "<figure class=\"lexxy-content__table-wrapper\"><table><tbody><tr><th>a</th></tr><tr><td>" + card + "</td></tr></tbody></table></figure>", "| a |\n| --- |\n| " + cardLink + " |"},
+		{"in emphasis", "<p><strong>" + card + "</strong></p>", "**" + cardLink + "**"},
+		{"two in a sentence", "<p>" + card + " and <minka-ref kind=\"chat\" id=\"01a2\" title=\"Allgemein\" href=\"https://minka.example/c\"></minka-ref></p>", cardLink + " and <https://minka.example/c>"},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := ToMarkdown(test.html); got != test.want {
+				t.Errorf("\n got: %q\nwant: %q", got, test.want)
+			}
+		})
+	}
+}
+
+// The view of a visible reference, sent back, is a link that shows its own
+// address, which is what Minka turns into the reference again.
+func TestAReferenceComesBackAsALinkShowingItsAddress(t *testing.T) {
+	served := `<p>See <minka-ref kind="card" id="01a0" title="*Zelt*" short-id="MNK-1" href="https://minka.example/go/card/MNK-1"></minka-ref>.</p>`
+	want := `<p>See <a href="https://minka.example/go/card/MNK-1">https://minka.example/go/card/MNK-1</a>.</p>`
+	back := markdown.ToHTML(ToMarkdown(served)).HTML
+	if back != want {
+		t.Errorf("\n got: %q\nwant: %q", back, want)
+	}
+	if loss := Dropped(served, back); loss.Any() {
+		t.Errorf("the reference counts as lost after its own view came back: %+v", loss)
+	}
+}
+
+// An exclamation mark before a link would make the link an image.
+func TestAnExclamationMarkBeforeALinkStaysText(t *testing.T) {
+	for served, want := range map[string]string{
+		`<p>Look!<a href="https://example.com">site</a></p>`:                  `Look\![site](https://example.com)`,
+		`<p>a\!<a href="https://example.com">site</a></p>`:                    `a\\\![site](https://example.com)`,
+		`<p>Look!<minka-ref kind="post" id="1" href="/p"></minka-ref></p>`:    `Look\![/p](/p)`,
+		`<p>Look! <a href="https://example.com">site</a></p>`:                 `Look! [site](https://example.com)`,
+		`<p>Look!<strong><a href="https://example.com">site</a></strong></p>`: `Look!**[site](https://example.com)**`,
+	} {
+		got := ToMarkdown(served)
+		if got != want {
+			t.Errorf("%s\n got: %q\nwant: %q", served, got, want)
+		}
+		if back := markdown.ToHTML(got).HTML; strings.Contains(back, "<img") || !strings.Contains(back, "!") {
+			t.Errorf("%s came back as %q", served, back)
+		}
+	}
+}
+
+func TestDropped(t *testing.T) {
+	const visible = `<minka-ref kind="card" id="01a0" title="Zelt" short-id="MNK-1" href="https://minka.example/go/card/MNK-1"></minka-ref>`
+	const visibleWithoutShortID = `<minka-ref kind="post" id="01a1" title="P" href="https://minka.example/projects/p/posts/t/01a1"></minka-ref>`
+	const hidden = `<minka-ref kind="card" id="01a2"></minka-ref>`
+	const file = `<action-text-attachment sgid="x" content-type="application/pdf"></action-text-attachment>`
+	const cardLink = `<a href="https://minka.example/go/card/MNK-1">https://minka.example/go/card/MNK-1</a>`
+	tests := []struct {
+		name                    string
+		current, replacement    string
+		attachments, references bool
+	}{
+		{"nothing to lose", "<p>a</p>", "<p>b</p>", false, false},
+		{"reference kept as the element", "<p>" + visible + "</p>", `<p><minka-ref kind="card" id="01a0"></minka-ref> new</p>`, false, false},
+		{"reference kept as a link showing its address", "<p>" + visible + "</p>", "<p>new " + cardLink + "</p>", false, false},
+		{"reference kept with a trailing slash", "<p>" + visible + "</p>", `<p><a href="https://minka.example/go/card/MNK-1/">https://minka.example/go/card/MNK-1</a></p>`, false, false},
+		{"reference kept as its short identifier", "<p>" + visible + "</p>", "<p>see #MNK-1.</p>", false, false},
+		{"reference kept as its address in the words", "<p>" + visible + "</p>", "<p>see https://minka.example/go/card/MNK-1.</p>", false, false},
+		{"reference kept as its address in plain text", "<p>" + visible + "</p>", "see (https://minka.example/go/card/MNK-1/)", false, false},
+		{"reference lost", "<p>" + visible + "</p>", "<p>gone</p>", false, true},
+		{"reference lost to a longer address in the words", "<p>" + visible + "</p>", "<p>https://minka.example/go/card/MNK-12</p>", false, true},
+		{"reference lost to a short identifier glued to an address", "<p>" + visible + "</p>", "<p>https://foreign.example/#MNK-1 and https://foreign.example/?q=#MNK-1</p>", false, true},
+		{"reference lost to a link with a short identifier as its words", "<p>" + visible + "</p>", `<p><a href="https://elsewhere.example">#MNK-1</a></p>`, false, true},
+		{"reference lost to a link with the address as its words", "<p>" + visible + "</p>", `<p><a href="https://elsewhere.example">https://minka.example/go/card/MNK-1</a></p>`, false, true},
+		{"reference lost to text no browser shows", "<p>" + visible + "</p>", "<p>x</p><script>#MNK-1</script><style>#MNK-1 {}</style><textarea>#MNK-1</textarea>", false, true},
+		{"reference lost to an address with two slashes at its end", "<p>" + visible + "</p>", "<p>https://minka.example/go/card/MNK-1//</p>", false, true},
+		{"reference lost to a link with words of its own", "<p>" + visible + "</p>", `<p><a href="https://minka.example/go/card/MNK-1">the card</a></p>`, false, true},
+		{"reference lost to code", "<p>" + visible + "</p>", "<p><code>#MNK-1</code> <code>https://minka.example/go/card/MNK-1</code></p>", false, true},
+		{"reference lost to a short identifier something touches", "<p>" + visible + "</p>", "<p>#MNK-12 x#MNK-1 #MNK-1-2 ##MNK-1x</p>", false, true},
+		{"reference lost to another address", "<p>" + visible + "</p>", `<p><a href="https://minka.example/go/card/MNK-2">https://minka.example/go/card/MNK-2</a></p>`, false, true},
+		{"reference without short identifier kept by its address", "<p>" + visibleWithoutShortID + "</p>", `<p><a href="https://minka.example/projects/p/posts/t/01a1">https://minka.example/projects/p/posts/t/01a1</a></p>`, false, false},
+		{"hidden reference lost to its words", "<p>" + hidden + "</p>", "<p>(a card you cannot open)</p>", false, true},
+		{"hidden reference kept as the element", "<p>" + hidden + "</p>", "<p>" + hidden + " new</p>", false, false},
+		{"one of two references lost", "<p>" + visible + " " + visibleWithoutShortID + "</p>", "<p>" + cardLink + "</p>", false, true},
+		{"file lost", "<p>" + file + "</p>", "<p>x</p>", true, false},
+		{"file lost although a reference stays", "<p>" + file + visible + "</p>", "<p>" + cardLink + "</p>", true, false},
+		{"file kept, reference lost", "<p>" + file + visible + "</p>", "<p>" + file + "</p>", false, true},
+		{"both lost", "<p>" + file + visible + "</p>", "<p>x</p>", true, true},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got := Dropped(test.current, test.replacement)
+			if got.Attachments != test.attachments || got.References != test.references {
+				t.Errorf("got %+v, want attachments %v, references %v", got, test.attachments, test.references)
+			}
+		})
+	}
+}
+
 func TestCarriesMarkup(t *testing.T) {
 	for value, want := range map[string]bool{
 		"<p>text</p>":                true,
@@ -139,6 +262,33 @@ func TestHasAttachments(t *testing.T) {
 	} {
 		if got := HasAttachments(served); got != want {
 			t.Errorf("HasAttachments(%q) = %v", served, got)
+		}
+	}
+}
+
+// Plain text is kept as the characters it consists of, so an address in angle
+// brackets is an address in the words. A text with a tag of a served element
+// in it the server takes as HTML, code and links and elements included.
+func TestDroppedByText(t *testing.T) {
+	const visible = `<minka-ref kind="card" id="01a0" title="Zelt" short-id="MNK-1" href="https://minka.example/go/card/MNK-1"></minka-ref>`
+	const hidden = `<minka-ref kind="card" id="01a2"></minka-ref>`
+	for _, test := range []struct {
+		current, text string
+		lost          bool
+	}{
+		{"<p>" + visible + "</p>", "See <https://minka.example/go/card/MNK-1> now", false},
+		{"<p>" + visible + "</p>", "See #MNK-1 now", false},
+		{"<p>" + visible + "</p>", "See https://foreign.example/#MNK-1", true},
+		{"<p>" + visible + "</p>", "See <code>#MNK-1</code>", true},
+		{"<p>" + visible + "</p>", `<a href="https://x.example">https://minka.example/go/card/MNK-1</a>`, true},
+		{"<p>" + visible + "</p>", "<pre>#MNK-1</pre>", true},
+		{"<p>" + visible + "</p>", `See <a href="https://minka.example/go/card/MNK-1">https://minka.example/go/card/MNK-1</a>`, false},
+		{"<p>" + hidden + "</p>", "See " + hidden + " now", false},
+		{"<p>" + visible + "</p>", "a<i und b<s #MNK-1", false},
+		{"<p>" + hidden + "</p>", "&lt;minka-ref kind=\"card\" id=\"01a2\">", true},
+	} {
+		if got := DroppedByText(test.current, test.text); got.References != test.lost {
+			t.Errorf("%q: references lost %v, want %v", test.text, got.References, test.lost)
 		}
 	}
 }

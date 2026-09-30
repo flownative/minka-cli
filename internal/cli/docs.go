@@ -340,7 +340,7 @@ them is refused unless --drop-attachments is given.`,
 				// A document of the archive, or one below an archived folder,
 				// takes no body at all.
 				dropped, err := a.guardOverFiles(s, current.Value.ProjectID, closedIf(current.Value.Archived), firstNonEmpty(current.Value.BodySource, current.Value.Body), *input.Body, dropAttachments,
-					"the document has attachments or mentions, and the new body would drop them",
+					"the document has %s, and the new body would drop them",
 					"Change the bodySource from docs show --json and send it back with --body-format html, or give --drop-attachments.")
 				if err != nil {
 					return err
@@ -376,7 +376,7 @@ them is refused unless --drop-attachments is given.`,
 	flags.StringVar(&bodyFormat, "body-format", "markdown", "Format of the body: markdown or html")
 	flags.StringVar(&expect, "expect", "", "The updatedAt of the document you read")
 	flags.BoolVar(&force, "force", false, "Write over the document whatever stands")
-	flags.BoolVar(&dropAttachments, "drop-attachments", false, "Replace a body that has attachments or mentions, which drops them")
+	flags.BoolVar(&dropAttachments, "drop-attachments", false, "Replace a body that has attachments, mentions or references, which drops them")
 
 	return cmd
 }
@@ -710,7 +710,7 @@ html. A new description that would drop them is refused unless
 					return uploadRefusal(s, err)
 				}
 				dropped, err := a.guardOverFiles(s, current.Value.ProjectID, closedIf(current.Value.Archived), firstNonEmpty(current.Value.DescriptionSource, current.Value.Description), *input.Description, dropAttachments,
-					"the upload has attachments or mentions in its description, and the new one would drop them",
+					"the upload has %s in its description, and the new one would drop them",
 					"Change the descriptionSource from docs uploads show --json and send it back with --description-format html, or give --drop-attachments.")
 				if err != nil {
 					return err
@@ -746,7 +746,7 @@ html. A new description that would drop them is refused unless
 	flags.StringVar(&descriptionFormat, "description-format", "markdown", "Format of the description: markdown or html")
 	flags.StringVar(&expect, "expect", "", "The updatedAt of the upload you read")
 	flags.BoolVar(&force, "force", false, "Write over the upload whatever stands")
-	flags.BoolVar(&dropAttachments, "drop-attachments", false, "Replace a description that has attachments or mentions, which drops them")
+	flags.BoolVar(&dropAttachments, "drop-attachments", false, "Replace a description that has attachments, mentions or references, which drops them")
 
 	return cmd
 }
@@ -893,7 +893,7 @@ that would drop them is refused unless --drop-attachments is given.`,
 	}
 	addEntryFlags(cmd, &documentID, &uploadID)
 	cmd.Flags().StringVar(&format, "format", "markdown", "Format of the text: markdown or html")
-	cmd.Flags().BoolVar(&dropAttachments, "drop-attachments", false, "Replace a comment that has attachments or mentions, which drops them")
+	cmd.Flags().BoolVar(&dropAttachments, "drop-attachments", false, "Replace a comment that has attachments, mentions or references, which drops them")
 
 	return cmd
 }
@@ -1093,17 +1093,28 @@ func (a *app) closedToComments(s *session, entry commentedEntry) func() (bool, e
 	}
 }
 
-// keepsTheAttachments refuses a text that would drop the files and mentions
-// of the one it replaces, unless that was asked for. Markdown cannot hold
-// them, so only a text that carries them keeps them.
+// keepsTheAttachments refuses a text that would drop the files, mentions or
+// references of the one it replaces, unless that was asked for. Markdown
+// cannot hold a file or a mention, so only a text that carries them keeps
+// them; a reference it keeps as the address its view shows. The message names
+// what would be lost where it says %s.
 func keepsTheAttachments(current, replacement string, allowed bool, message, hint string) ([]string, error) {
-	if !richtext.HasAttachments(current) || richtext.HasAttachments(replacement) {
+	return refusedLoss(richtext.Dropped(current, replacement), allowed, message, hint)
+}
+
+// refusedLoss turns what a new text would drop into the refusal, or into the
+// notice where dropping was asked for.
+func refusedLoss(loss richtext.Loss, allowed bool, message, hint string) ([]string, error) {
+	if !loss.Any() {
 		return nil, nil
 	}
 	if !allowed {
-		return nil, &Error{Code: CodeUsage, Message: message, Hint: hint}
+		if loss.References {
+			hint += " A reference is kept by writing its address as <https://…> or a card as #MNK-1; one you cannot open only by sending the source back."
+		}
+		return nil, &Error{Code: CodeUsage, Message: fmt.Sprintf(message, loss), Hint: hint}
 	}
-	return []string{"the attachments and mentions of the text were dropped"}, nil
+	return []string{"the " + loss.String() + " of the text were dropped"}, nil
 }
 
 // guardOverFiles holds a new text against the one it replaces, and stands
@@ -1144,7 +1155,7 @@ func closedIf(archived bool) func() (bool, error) {
 // somebody else whatever is sent, so there its answer comes and not the guard.
 // Whose the comment is gets asked only where the guard is about to refuse.
 func (a *app) keepsTheAttachmentsOfAComment(s *session, projectID string, closed func() (bool, error), comments []api.Comment, commentID, body string, allowed bool, hint string) ([]string, error) {
-	const message = "the comment has attachments or mentions, and the new text would drop them"
+	const message = "the comment has %s, and the new text would drop them"
 	for _, current := range comments {
 		if current.ID != commentID {
 			continue
