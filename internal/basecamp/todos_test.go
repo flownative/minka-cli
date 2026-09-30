@@ -547,9 +547,11 @@ func TestTheToDosOfAListComeInItsOrderWithTheirDaysAndPeople(t *testing.T) {
 	want := []map[string]any{
 		{"sourceId": "9429", "createdAt": "2025-04-03T08:00:00.000Z", "updatedAt": "2025-04-03T08:00:00.000Z", "createdBy": "102",
 			"projectSourceId": "7008", "toolSourceId": "9080", "listSourceId": "9402", "groupSourceId": "9416",
-			"title": "Think about it", "notes": nil, "startsOn": nil, "dueOn": nil,
+			"title": "Think about it", "notes": nil, "startsOn": nil, "dueOn": "2025-04-08",
 			"assignees": []any{}, "notifyWhenDone": []any{},
-			"completedAt": nil, "completedBy": nil, "status": "active", "subscribers": []any{}},
+			"completedAt": nil, "completedBy": nil, "status": "active", "subscribers": []any{},
+			"repetition": map[string]any{"rhythm": "monthlyOnWeekday", "weekday": float64(2), "instance": float64(2),
+				"interval": float64(1), "startsOn": "2025-04-08", "endsOn": nil}},
 		{"sourceId": "9421", "createdAt": "2025-04-02T08:00:00.000Z", "updatedAt": "2025-04-02T08:00:00.000Z", "createdBy": "101",
 			"projectSourceId": "7008", "toolSourceId": "9080", "listSourceId": "9401", "groupSourceId": nil,
 			"title": "Print the invitations", "notes": notes, "startsOn": "2025-04-20", "dueOn": "2025-05-01",
@@ -583,9 +585,11 @@ func TestTheToDosOfAListComeInItsOrderWithTheirDaysAndPeople(t *testing.T) {
 			"completedAt": nil, "completedBy": nil, "status": "active"},
 		{"sourceId": "9427", "createdAt": "2025-04-02T22:00:00.000Z", "updatedAt": "2025-04-02T22:00:00.000Z", "createdBy": "102",
 			"projectSourceId": "7008", "toolSourceId": "9081", "listSourceId": "9405", "groupSourceId": nil,
-			"title": "Water the plants", "notes": nil, "startsOn": nil, "dueOn": nil,
+			"title": "Water the plants", "notes": nil, "startsOn": nil, "dueOn": "2025-04-07",
 			"assignees": []any{}, "notifyWhenDone": []any{},
-			"completedAt": nil, "completedBy": nil, "status": "active", "subscribers": []any{}},
+			"completedAt": nil, "completedBy": nil, "status": "active", "subscribers": []any{},
+			"repetition": map[string]any{"rhythm": "weekly", "weekdays": []any{float64(1)},
+				"interval": float64(1), "startsOn": "2025-04-07", "endsOn": nil}},
 	}
 	if got := records(t, dir, bundle.Todos); !reflect.DeepEqual(got, want) {
 		t.Errorf("to-dos:\n got %v\nwant %v", got, want)
@@ -1203,60 +1207,6 @@ func TestAToDoStandingInNoListIsLeftOutCountedAndNamed(t *testing.T) {
 	for _, id := range []string{"9431", "9432"} {
 		if got := asked(account, "recordings/"+id+"/"); len(got) > 0 {
 			t.Errorf("a run asked for what hangs on the to-do it left out: %v", got)
-		}
-	}
-}
-
-// Minka has no repeating to-do, so one that comes again at the source is carried
-// as an ordinary to-do and its schedule stays behind. The number is all that is
-// left of it, and without it nobody could tell a year later that anything had
-// been there.
-func TestAToDoThatComesAgainIsCarriedWithoutItsSchedule(t *testing.T) {
-	account := fakebasecamp.New()
-
-	// Read from what the account answers: the key is there on the to-do that comes
-	// again, with every field Basecamp holds in it, and there is no such key at all
-	// on one that comes once, which is the only thing that tells the two apart.
-	repeating := todosTheAccountShows(t, account, 7008, 9405, false)
-	if len(repeating) != 1 || repeating[0]["id"].(float64) != 9427 {
-		t.Fatalf("the account holds %v in the list of the second tool, and the test needs the to-do that comes again", repeating)
-	}
-	schedule, said := repeating[0]["repetition_schedule"]
-	if !said {
-		t.Fatal("the account sends no schedule at all, so the safeguard is held by nothing")
-	}
-	var fields []string
-	for field := range schedule.(map[string]any) {
-		fields = append(fields, field)
-	}
-	slices.Sort(fields)
-	want := []string{"days", "duration", "end_date", "frequency", "hour", "minute", "month_interval", "start_date", "week_instance", "week_interval"}
-	if !slices.Equal(fields, want) {
-		t.Fatalf("the account sends a schedule of %v, want the %v Basecamp holds", fields, want)
-	}
-	for _, one := range todosTheAccountShows(t, account, 7008, 9401, false) {
-		if _, said := one["repetition_schedule"]; said {
-			t.Fatalf("the account sends a schedule for to-do %v, which comes once: then the key is no test", one["id"])
-		}
-	}
-
-	dir, result := extract(t, account, todoProject)
-
-	if result.TodosThatRepeat != 2 {
-		t.Errorf("to-dos that come again: %d, want the two the account holds", result.TodosThatRepeat)
-	}
-	// The to-do itself is carried, as any other is, and nothing of the schedule
-	// with it.
-	if written := sourceIDs(records(t, dir, bundle.Todos)); !slices.Contains(written, "9427") {
-		t.Errorf("the to-do that comes again is in no bundle, though a bundle carries it as any other: %v", written)
-	}
-	lines, err := os.ReadFile(filepath.Join(dir, "todos.jsonl"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, said := range []string{"repetition", "every_week", "every_month", "week_interval"} {
-		if strings.Contains(string(lines), said) {
-			t.Errorf("a to-do of the bundle says %q, and the format has no word for a schedule", said)
 		}
 	}
 }

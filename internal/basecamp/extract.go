@@ -283,11 +283,13 @@ type Result struct {
 	// how many there were: a bundle carries none.
 	TodosWithSubtasks int
 	SubtasksLeftOut   int
-	// TodosThatRepeat counts the to-dos of the bundle that come again at the
-	// source. A bundle has no word for a schedule, so such a to-do is carried as
-	// any other and its schedule stays behind; the number is all that is left of
-	// it.
-	TodosThatRepeat int
+	// TodosThatRepeat counts the to-dos of the bundle that carry a schedule at
+	// the source, and TodosWithASeries the open ones the bundle carries with
+	// one: Minka brings a done one without its series. RepetitionsNotMapped names each part of a schedule the bundle does
+	// not carry with the to-dos that held it.
+	TodosThatRepeat      int
+	TodosWithASeries     int
+	RepetitionsNotMapped []RepetitionNotMapped
 	// QuestionsLeftOut are the questions left out because Minka has no words
 	// for their schedule, each with the field that made it impossible.
 	QuestionsLeftOut []ImpossibleQuestion
@@ -391,6 +393,9 @@ type Extractor struct {
 	todosWithSubtasks int
 	subtasksLeftOut   int
 	todosThatRepeat   int
+	todosWithASeries  int
+
+	repetitionsNotMapped []RepetitionNotMapped
 
 	forwards    ForwardCounts
 	docs        DocsCounts
@@ -508,6 +513,7 @@ func (e *Extractor) extract(ctx context.Context, w *bundle.Writer, pick func(con
 	e.todosWithoutAList = []TodoWithoutAList{}
 	e.todosNotDone, e.todosWithPeople = 0, 0
 	e.todosWithSubtasks, e.subtasksLeftOut, e.todosThatRepeat = 0, 0, 0
+	e.todosWithASeries, e.repetitionsNotMapped = 0, []RepetitionNotMapped{}
 	e.forwards = ForwardCounts{
 		ByStatus:              map[string]int{bundle.StatusActive: 0, bundle.StatusTrashed: 0},
 		WithoutAnAddress:      []string{},
@@ -618,6 +624,9 @@ func (e *Extractor) extract(ctx context.Context, w *bundle.Writer, pick func(con
 		TodosWithSubtasks: e.todosWithSubtasks,
 		SubtasksLeftOut:   e.subtasksLeftOut,
 		TodosThatRepeat:   e.todosThatRepeat,
+		TodosWithASeries:  e.todosWithASeries,
+
+		RepetitionsNotMapped: e.repetitionsNotMapped,
 
 		QuestionsLeftOut:    e.questionsLeftOut,
 		AnchorsInferred:     e.anchorsInferred,

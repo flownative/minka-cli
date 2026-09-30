@@ -68,9 +68,8 @@ type todo struct {
 	// SubtasksCount is how many subtasks the to-do has. A bundle carries none,
 	// so the number is all that is left of them.
 	SubtasksCount int `json:"subtasks_count"`
-	// Repetition is the schedule of a to-do that repeats, which a bundle has no
-	// word for: nothing of it is read, and that the source sent it at all is all
-	// a run does with it.
+	// Repetition is the schedule of a to-do that repeats, read on its own so
+	// that one of a shape nobody expected costs the series and not the run.
 	Repetition    json.RawMessage `json:"repetition_schedule"`
 	CommentsCount int             `json:"comments_count"`
 	BoostsCount   int             `json:"boosts_count"`
@@ -327,7 +326,7 @@ func (e *Extractor) noteATodoWithoutAList(id, bucket int64) {
 
 // repeats tells whether the source says the to-do comes again. Basecamp leaves
 // the key out where nothing repeats rather than sending an empty one, so the key
-// being there is the whole test; nothing of what it holds is read.
+// being there is the whole test.
 func repeats(schedule json.RawMessage) bool {
 	said := strings.TrimSpace(string(schedule))
 	return said != "" && said != "null"
@@ -651,8 +650,11 @@ func (e *Extractor) todosIn(ctx context.Context, bucket, in int64, shelved []tod
 // Subtasks are not carried: the format has no word for them, so all that is left
 // of them is how many there were. A to-do that had them is poorer in Minka than
 // at the source, which is what the report says.
-// A schedule is not carried either: one that comes again at the source comes here
-// as a to-do that comes once, and how many there were is all that is left of it.
+//
+// A to-do that repeats carries its schedule, and becomes the current occurrence
+// of a series in Minka. Every occurrence at the source is a to-do of its own, and
+// only the newest carries the schedule, so the older ones come as to-dos that do
+// not repeat, as they are at the source.
 func (e *Extractor) writeTodo(ctx context.Context, w *bundle.Writer, bucket, tool, list int64, group *int64, found todo) error {
 	title, err := itemTitle("to-do", found.ID, found.Title)
 	if err != nil {
@@ -712,6 +714,14 @@ func (e *Extractor) writeTodo(ctx context.Context, w *bundle.Writer, bucket, too
 		named := sourceID(*group)
 		record.GroupSourceID = &named
 	}
+	if repeats(found.Repetition) {
+		dueDay := dueOn
+		// One day alone is the day the to-do is due, whichever field holds it.
+		if dueDay == nil {
+			dueDay = startsOn
+		}
+		record.Repetition, record.RepetitionNotMapped = repetitionOf(found.Repetition, dueDay)
+	}
 	// A to-do without notes has none.
 	if notes != "" {
 		record.Notes = &notes
@@ -723,6 +733,12 @@ func (e *Extractor) writeTodo(ctx context.Context, w *bundle.Writer, bucket, too
 	e.todosByStatus[status]++
 	if repeats(found.Repetition) {
 		e.todosThatRepeat++
+		// Minka brings a to-do done at the source without its series.
+		seriesComes := record.Repetition != nil && completedAt == nil
+		if seriesComes {
+			e.todosWithASeries++
+		}
+		e.noteRepetitionNotMapped(found.ID, record.RepetitionNotMapped, seriesComes)
 	}
 	if completedAt == nil {
 		e.todosNotDone++

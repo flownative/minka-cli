@@ -190,7 +190,15 @@ says no word a bundle has none for (C-060): it stands in no list and no group,
 and a bundle holds a to-do in a list alone. It is counted in `todosLeftOut` and
 named in `todosWithoutAList` with its identifier and its project, which is what
 somebody needs to find it at the source and move it into a list, after which a
-later run carries it. Nothing of it is asked for and nothing hangs on it.
+later run carries it. Nothing of it is asked for and nothing hangs on it, and a
+schedule it carries stays behind with it: its series comes with the run after
+it has been moved.
+
+**A part of a to-do's schedule a series cannot hold** leaves the to-do in the
+bundle and costs the series or the part (C-090): the to-do comes as one that
+does not repeat, or, for a time of day, with a series that leaves the time off.
+`repetitionsNotMapped` names each part with its to-dos, see To-dos under What a
+bundle holds so far.
 
 **Two things of a forwarded mail are neither** (C-056): what a mail calls
 itself and whom it says it came from are nobody's to repair at the source, so a
@@ -702,11 +710,52 @@ and Minka applies the kinds in an order of its own.
   not carried:** the format has no word for them, so all that is left of
   them is how many there were, counted in `todosWithSubtasks` and
   `subtasksLeftOut` and asked for never.
-  **A schedule is not carried either:** a to-do that comes again at the source
-  comes here as an ordinary to-do, because Minka has no repeating one, and
-  `todosThatRepeat` counts the ones a bundle carries. Basecamp leaves the key of
-  a schedule out altogether where nothing repeats, so that the key is there is
-  the whole test, and nothing in it is read.
+  **A to-do that repeats carries its schedule** in `repetition`, which Minka
+  makes a series of with the to-do as its current occurrence (C-090). Basecamp
+  leaves the key `repetition_schedule` out altogether where nothing repeats, so
+  that the key is there is the test. Every occurrence at the source is a to-do
+  of its own and only the newest carries the schedule: an older one, open or
+  done, comes as a to-do that does not repeat, as it is at the source, and
+  nothing ties it to the series. A done to-do that still carries one carries it
+  into the bundle too; Minka brings it without a series and says so.
+  `todosThatRepeat` counts the to-dos with a schedule, `todosWithASeries` the
+  open ones carried with one; a part a done one leaves off is named as costing
+  the series.
+
+  | Basecamp | `repetition` |
+  |---|---|
+  | `every_week`, `days`, `week_interval` | `weekly`, `weekdays`, `interval` |
+  | `every_month`, `week_instance` 1–4, one weekday in `days` | `monthlyOnWeekday`, `instance`, `weekday` |
+  | `every_month` without `week_instance`, `days` empty or the first day's | `monthlyOnDay`, `day` of the first day |
+  | `custom_month`, `month_interval` | as `every_month`, `interval` from `month_interval` |
+  | `every_day_of_month`, one day in `days` | `monthlyOnDay`, `day` |
+  | `every_year` | `yearly`, `month` and `day` of the first day |
+  | `start_date` | `startsOn`, left out where Basecamp names none |
+  | `end_date` | `endsOn`, `null` where Basecamp names none |
+
+  Weekdays are mapped as for questions: 1 to 6 stay, only Sunday's 0 becomes
+  7, each once and in order. `interval` is always written for the weekly and
+  the monthly rhythms, 1 where Basecamp names none. The first day is
+  `start_date`, and the to-do's due day where the schedule names none — the
+  due day being `due_on`, or `starts_on` where that is the one day given.
+  **What does not fit is named in `repetitionNotMapped`** by Basecamp's field
+  and never holds the to-do back. An `hour` or a `minute` other than 0 is left
+  off, and the series still comes on the same days. Everything else takes the
+  series with it, and the to-do comes as one that does not repeat: a
+  `duration`; a `frequency` nobody knows; `days` that are empty, outside the
+  week or the month, more than one on a monthly rhythm, one on `every_month`
+  without `week_instance` that is not the first day's day of the month — the
+  run does not guess which of the two is meant — or any on `every_year`; a `week_instance` outside 1 to 4 — how Basecamp says "the
+  last" was never seen, so none is guessed — or one on a rhythm without an
+  n-th weekday; an interval outside 1 to 99, and a `week_interval` or a
+  `month_interval` other than 1 on a rhythm that counts in the other; a
+  `start_date` or `end_date` of another shape than `YYYY-MM-DD`; an `end_date`
+  before the first day; `due_on` for a to-do without a due day; and
+  `repetition_schedule` for a schedule of a shape nobody expected, such as a
+  number that is text. `repetitionsNotMapped` in the report names each part,
+  apart for the to-dos whose series comes without it (`seriesComes`) and those
+  that come without one, with how many to-dos held it and their identifiers;
+  the text names ten per part, as Minka's own report does.
 - **Forwards** are the mails somebody forwarded into a project, one record per
   mail of every inbox that is switched on. Basecamp lists the mails of an
   inbox itself and hands out **no** list of the archived and the trashed ones
@@ -1569,7 +1618,8 @@ A name and a company are personal data.
   `todos`), `todoPlacesLeftOut` (`record`, `sourceId`, `groups`, `todos`),
   `todosWithoutAList` (`sourceId`, `projectSourceId`),
   `todosNotDone`, `todosWithPeople`, `todosWithSubtasks`, `subtasksLeftOut`,
-  `todosThatRepeat`,
+  `todosThatRepeat`, `todosWithASeries`, `repetitionsNotMapped` (`part`,
+  `seriesComes`, `todos`, `sourceIds`),
   `questionsLeftOut`, `anchorsInferred`, `nobodyAsked`, `askedLeftOut`
   (`notInTheProject`, `clients`,
   `retired`, `withoutAnAddress`), `answersWithoutABody`, `answersWithoutADay`,

@@ -97,7 +97,7 @@ chat and some 10,000 lines each, of each questionnaire its questions with the
 schedule Minka has words for and their answers with what hangs on them, of
 each to-do set its lists, the ones in use from the bottom up because Minka puts
 every new list on top, with their groups and their to-dos in the order of the
-list and what
+list, a to-do that repeats with its schedule (C-090), and what
 hangs on a list and a to-do, of each inbox its forwarded mail with the
 answers by mail, the comments and the boosts of each, and of each Docs & Files
 tool its folders, documents and uploads with the comments, the boosts and the
@@ -638,6 +638,22 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   every to-do set of it, switched off or not. Where **every** To-dos tool of a
   project is switched off, the project is passed over whole and not even those
   are counted.
+- Of the schedules of to-dos in `import basecamp` (C-090): the mapping rests on
+  the twelve schedules measured read-only on 2026-09-30 and on Minka's format,
+  and no run has carried one yet. The fake sends them in the measured shape:
+  all ten keys, `days` a list, `hour` and `minute` 0, the key missing on a
+  to-do without one. What the account was seen to hold: `every_week` with one
+  weekday, `every_month` with `week_instance` 1 or 2 and one weekday,
+  `every_day_of_month` with one day, `custom_month` with `week_instance` 1 and
+  `month_interval` 2 or 6, `every_year` with empty `days`; `start_date` equal
+  to `due_on`; `week_interval`, `end_date` and `duration` always `null`. Never
+  seen, and read by the extractor from the format alone: how Basecamp says
+  "the last" weekday of a month (so a `week_instance` outside 1 to 4 costs the
+  series), `every_month` without `week_instance`, a `week_interval` or an
+  `end_date` that is set, a time of day other than 0, and what `month_interval`
+  says on a rhythm other than `custom_month`. The recurring to-do on a to-do
+  set itself (10298510137) stays left out with its schedule until somebody
+  moves it into a list.
 - Of the forwarded mail of `import basecamp`: no extraction has met an inbox
   live, and the shape of the source is measured all the same, read-only and
   without a run. Measured: that a dock entry of an inbox is
@@ -1220,7 +1236,8 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   place the account no longer has answers when it is asked for what fell with it.
   Two shapes were measured at the account and have still never come through a
   run: how the six to-dos that stand in no list read in `todosWithoutAList`, and
-  the twelve schedules in `todosThatRepeat`.
+  how the twelve schedules read in `repetition`, `todosWithASeries` and
+  `repetitionsNotMapped`.
   Then check the bundle record by record, as the boards and the chats were
   checked.
 - Write the bundle of the whole account, once Robert or Shaun has allowed its

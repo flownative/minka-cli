@@ -1509,3 +1509,17 @@ one Minka ignored a notice. `show-now` answers `{series, todoId}` from
 `Location`; no day is computed. **Why:** echoed details pin what Minka lets
 follow a new first day. **Implemented as:** `cli.scheduleFlags`,
 `cli.newTodoSeriesEditCmd`, `api.ScheduleInput`.
+
+<a id="c-090"></a>
+## C-090 — What of a to-do's schedule does not fit costs its series, a time of day only itself
+
+*Applies to: `import basecamp`, `repetition` and `repetitionNotMapped` of to-dos*
+
+`repetition_schedule` maps as Minka's format says. An `hour` or `minute` other
+than 0 is left off the series; every other part that does not fit
+(`week_instance` `-1`, a `days` entry the first day contradicts, …) leaves the
+to-do without a series, named by Basecamp's field. A done to-do carries its
+schedule but counts as coming without a series.
+**Why:** A missing series is named and can be made by hand; one on days nobody
+chose makes to-dos somebody has to find and throw away.
+**Implemented as:** `basecamp.repetitionOf`, see [Importing from Basecamp](stable/import.md).

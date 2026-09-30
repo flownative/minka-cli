@@ -127,9 +127,13 @@ type importReport struct {
 	// many there were: a bundle carries none.
 	TodosWithSubtasks int `json:"todosWithSubtasks"`
 	SubtasksLeftOut   int `json:"subtasksLeftOut"`
-	// TodosThatRepeat are the to-dos that come again at the source and are
-	// carried as ordinary ones: a bundle has no word for a schedule.
-	TodosThatRepeat int `json:"todosThatRepeat"`
+	// TodosThatRepeat are the to-dos that carry a schedule at the source and
+	// TodosWithASeries the open ones among them the bundle carries with one.
+	// RepetitionsNotMapped names each part of a schedule the bundle does not
+	// carry, whether the series comes without it, and the to-dos that held it.
+	TodosThatRepeat      int                            `json:"todosThatRepeat"`
+	TodosWithASeries     int                            `json:"todosWithASeries"`
+	RepetitionsNotMapped []basecamp.RepetitionNotMapped `json:"repetitionsNotMapped"`
 	// QuestionsLeftOut are the questions left out because Minka has no words
 	// for their schedule, each with the field that made it impossible.
 	// AnchorsInferred are the questions asked every other week whose startsOn
@@ -248,9 +252,14 @@ hangs on a group, which the format has no word for. A to-do carries its notes,
 its days, whom it is assigned to, who is told when it is done and the tick the
 source put on it, and it is never said to be older than that tick. Subtasks are
 not carried at all: todosWithSubtasks and subtasksLeftOut count what fell away.
-A to-do that comes again at the source comes here as an ordinary to-do, because
-Minka has no repeating one: the schedule stays behind and todosThatRepeat says how
-many there were.
+A to-do that repeats at the source carries its schedule and becomes the current
+occurrence of a series in Minka; only the newest occurrence at the source has
+one, so the older ones come as to-dos that do not repeat. todosThatRepeat counts
+the to-dos with a schedule and todosWithASeries the open ones carried with one;
+Minka brings a done one without its series. A part of
+a schedule Minka has no word for is named in repetitionsNotMapped with its
+to-dos: a time of day is left off and the series still comes, anything else
+leaves the to-do to come without repeating.
 Two things a later run cannot repair, which the report says with a notice each:
 it leaves the people of a to-do as they stand in Minka (todosWithPeople), and it
 reopens nothing it once ticked off (todosNotDone).
@@ -561,6 +570,9 @@ it has been applied.`,
 				TodosWithSubtasks: result.TodosWithSubtasks,
 				SubtasksLeftOut:   result.SubtasksLeftOut,
 				TodosThatRepeat:   result.TodosThatRepeat,
+				TodosWithASeries:  result.TodosWithASeries,
+
+				RepetitionsNotMapped: result.RepetitionsNotMapped,
 
 				QuestionsLeftOut:    result.QuestionsLeftOut,
 				AnchorsInferred:     result.AnchorsInferred,
@@ -673,10 +685,15 @@ it has been applied.`,
 					"to-do hangs on a To-dos tool itself and stands in no list of it, which a bundle has no place for: it is left out, and data.todosWithoutAList names it with its project, so that somebody can move it into a list at the source and a later run carries it",
 					"to-dos hang on To-dos tools themselves and stand in no list of them, which a bundle has no place for: they are left out, and data.todosWithoutAList names each with its project, so that somebody can move them into lists at the source and a later run carries them"))
 			}
-			if count := report.TodosThatRepeat; count > 0 {
+			if count := todosRepeatingWithoutASeries(report); count > 0 {
 				notices = append(notices, plural(count,
-					"to-do comes again at the source and is carried as an ordinary one, because Minka has no repeating to-do: the schedule stays behind, and the to-do keeps the days it has",
-					"to-dos come again at the source and are carried as ordinary ones, because Minka has no repeating to-do: their schedules stay behind, and the to-dos keep the days they have"))
+					"to-do repeats at the source by a schedule Minka has no words for, so it comes as one that does not repeat; data.repetitionsNotMapped names it under each part of the schedule that did not fit",
+					"to-dos repeat at the source by schedules Minka has no words for, so they come as ones that do not repeat; data.repetitionsNotMapped names each under every part of its schedule that did not fit"))
+			}
+			if count := todosWhoseSeriesLeavesAPartOut(report); count > 0 {
+				notices = append(notices, plural(count,
+					"to-do comes with a series that leaves a part of its schedule out, such as a time of day, which Minka's series have no word for; data.repetitionsNotMapped names it with the part",
+					"to-dos come with series that leave a part of their schedules out, such as a time of day, which Minka's series have no word for; data.repetitionsNotMapped names each with the part"))
 			}
 			if count := report.SubtasksLeftOut; count > 0 {
 				notices = append(notices, plural(count,
@@ -1019,6 +1036,36 @@ func renderCheckins(w io.Writer, report importReport) {
 	fmt.Fprintf(w, "Answers Basecamp names no day for, dated by when they were written: %d\n", report.AnswersWithoutADay)
 }
 
+// namedPerRepetitionPart is how many to-dos a line of the text names for a part
+// of a schedule the bundle does not carry, as many as Minka's own report does;
+// the report as JSON names them all.
+const namedPerRepetitionPart = 10
+
+// todosRepeatingWithoutASeries counts the to-dos that repeat at the source and
+// come without a series, each once, whatever number of parts left it out.
+func todosRepeatingWithoutASeries(report importReport) int {
+	return todosNamedUnder(report, false)
+}
+
+// todosWhoseSeriesLeavesAPartOut counts the to-dos whose series comes without a
+// part of their schedule, each once.
+func todosWhoseSeriesLeavesAPartOut(report importReport) int {
+	return todosNamedUnder(report, true)
+}
+
+func todosNamedUnder(report importReport, seriesComes bool) int {
+	named := map[string]bool{}
+	for _, part := range report.RepetitionsNotMapped {
+		if part.SeriesComes != seriesComes {
+			continue
+		}
+		for _, id := range part.SourceIDs {
+			named[id] = true
+		}
+	}
+	return len(named)
+}
+
 // renderTodos says what became of the to-do lists a run met. A run that met no
 // To-dos tool says nothing about them.
 func renderTodos(w io.Writer, report importReport) {
@@ -1031,7 +1078,20 @@ func renderTodos(w io.Writer, report importReport) {
 	fmt.Fprintf(w, "To-dos: %d active, %d trashed; %d of them still open, %d carrying people\n",
 		report.TodosByStatus[bundle.StatusActive], report.TodosByStatus[bundle.StatusTrashed], report.TodosNotDone, report.TodosWithPeople)
 	fmt.Fprintf(w, "To-dos that had subtasks: %d, with %d subtasks a bundle has no word for\n", report.TodosWithSubtasks, report.SubtasksLeftOut)
-	fmt.Fprintf(w, "To-dos that come again at the source, carried as ordinary ones: %d\n", report.TodosThatRepeat)
+	fmt.Fprintf(w, "To-dos that repeat at the source: %d, %d of them carried with their series\n", report.TodosThatRepeat, report.TodosWithASeries)
+	for _, part := range report.RepetitionsNotMapped {
+		became := "the to-do comes without repeating"
+		if part.SeriesComes {
+			became = "the series comes without it"
+		}
+		named := part.SourceIDs
+		more := ""
+		if len(named) > namedPerRepetitionPart {
+			more = fmt.Sprintf(" and %d more", len(named)-namedPerRepetitionPart)
+			named = named[:namedPerRepetitionPart]
+		}
+		fmt.Fprintf(w, "  %s of a schedule, not mapped, %s: %d — %s%s\n", part.Part, became, part.Todos, strings.Join(named, ", "), more)
+	}
 	left := report.TodosLeftOut
 	fmt.Fprintf(w, "Left out of the To-dos tools: %d lists, %d groups, %d to-dos\n", left.Lists, left.Groups, left.Todos)
 	for _, place := range report.TodoPlacesLeftOut {

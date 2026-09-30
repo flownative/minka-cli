@@ -136,10 +136,10 @@ func todoProject(ada, grace, edsger, former Person, tool func(int64, string, str
 	// another list would be seen naming it.
 	later := TodoList{ID: 9402, Title: "Later", Creator: &grace, CreatedAt: at(1, 9), UpdatedAt: at(1, 9),
 		Groups: []TodoList{{ID: 9416, Title: "Some day", Colorless: true, Creator: &grace, CreatedAt: at(1, 19), UpdatedAt: at(1, 19), Todos: []Todo{
-			// Repeating in a rhythm of another kind, so that nothing hangs on
-			// which one a schedule names.
-			{ID: 9429, Title: "Think about it", Creator: &grace, CreatedAt: at(3, 8), UpdatedAt: at(3, 8),
-				Repetition: &Repetition{Frequency: "every_month", Days: []int{1}, StartDate: "2025-04-01", MonthInterval: interval(1)}},
+			// Repeating in a rhythm of another kind: the second Tuesday of every
+			// month, as the account writes it.
+			{ID: 9429, Title: "Think about it", Creator: &grace, CreatedAt: at(3, 8), UpdatedAt: at(3, 8), DueOn: "2025-04-08",
+				Repetition: &Repetition{Frequency: "every_month", Days: []int{2}, WeekInstance: interval(2), StartDate: "2025-04-08"}},
 		}}}}
 	finished := TodoList{ID: 9403, Status: "archived", Title: "Finished", Creator: &ada, CreatedAt: at(1, 10), UpdatedAt: at(3, 10)}
 	dropped := TodoList{ID: 9404, Status: "trashed", Title: "Dropped", Creator: &ada, CreatedAt: at(1, 11), UpdatedAt: at(3, 11)}
@@ -159,11 +159,10 @@ func todoProject(ada, grace, edsger, former Person, tool func(int64, string, str
 
 	chores := tool(9081, "todoset", "todosets", "Chores", true, 2, &grace)
 	chores.CreatedAt, chores.UpdatedAt = at(1, 7), at(3, 12)
-	// A to-do that repeats: a bundle has no word for a schedule, so the to-do
-	// comes as any other and the schedule stays behind.
+	// A to-do that repeats every Monday, as the account writes it.
 	chores.TodoLists = []TodoList{{ID: 9405, Title: "Every week", Creator: &grace, CreatedAt: at(1, 12), UpdatedAt: at(1, 12),
-		Todos: []Todo{{ID: 9427, Title: "Water the plants", Creator: &grace, CreatedAt: at(2, 22), UpdatedAt: at(2, 22),
-			Repetition: &Repetition{Frequency: "every_week", Days: []int{1}, StartDate: "2025-04-07", WeekInterval: interval(1)}}}}}
+		Todos: []Todo{{ID: 9427, Title: "Water the plants", Creator: &grace, CreatedAt: at(2, 22), UpdatedAt: at(2, 22), DueOn: "2025-04-07",
+			Repetition: &Repetition{Frequency: "every_week", Days: []int{1}, StartDate: "2025-04-07"}}}}}
 
 	retired := tool(9082, "todoset", "todosets", "Old to-dos", false, 0, &ada)
 	retired.TodoLists = []TodoList{
@@ -205,8 +204,10 @@ type Todo struct {
 	// none.
 	Subtasks int
 	// Repetition is the schedule of a to-do that repeats; a to-do that repeats
-	// nothing carries none.
-	Repetition *Repetition
+	// nothing carries none. OddRepetition is sent in its place as it stands, for
+	// a schedule of a shape the account was never seen to send.
+	Repetition    *Repetition
+	OddRepetition map[string]any
 	// EmptyDays has the account send the days as empty text rather than leaving
 	// them out, the way a source writes a field it has nothing for.
 	EmptyDays bool
@@ -489,23 +490,28 @@ func (t *Todo) shownStatus(its standing) string {
 }
 
 // Repetition is the schedule of a to-do that repeats. The account writes it as
-// Basecamp does: all ten keys of a schedule, and empty the ones the rhythm has no
-// use for. A to-do that repeats nothing carries **no such key at all**, which is
-// the only thing that tells the two apart.
+// Basecamp does: all ten keys of a schedule, null the ones the rhythm has no use
+// for, and the days as a list, empty for every_year. Only the newest occurrence
+// of a series carries one; a to-do that repeats nothing, an older occurrence and
+// a done one carry **no such key at all**, which is the only thing that tells
+// them apart.
 type Repetition struct {
 	// Frequency is the rhythm: every_day_of_month, every_month, every_week,
-	// every_year or custom_month.
+	// every_year or custom_month, as the account was seen to hold them.
 	Frequency string
-	// Days are the days the rhythm names, of the week or of the month.
+	// Days are the days the rhythm names: weekdays with Sunday 0 for
+	// every_week, every_month and custom_month, the day of the month for
+	// every_day_of_month.
 	Days []int
-	// StartDate and EndDate are days of the shape YYYY-MM-DD; a schedule that
-	// does not run out has no end.
+	// StartDate and EndDate are days of the shape YYYY-MM-DD, the start the
+	// to-do's due day; a schedule that does not run out has no end, and none
+	// was seen with one.
 	StartDate string
 	EndDate   string
-	// Hour and Minute are the time of day it comes at, Duration how long it
-	// runs, and the three intervals what the rhythm counts in. A run reads none
-	// of them, so what a frequency fills and what it leaves empty is the
-	// fixture's to say.
+	// Hour and Minute are the time of day it comes at, 0 where nil, as every
+	// schedule of the account says. Duration and WeekInterval were only ever
+	// seen null, WeekInstance is the n-th weekday of the month and
+	// MonthInterval counts the months of custom_month.
 	Hour, Minute, Duration, MonthInterval, WeekInstance, WeekInterval *int
 }
 
@@ -521,9 +527,15 @@ func repetitionJSON(r *Repetition) map[string]any {
 		}
 		return *value
 	}
-	days := any(nil)
-	if len(r.Days) > 0 {
-		days = r.Days
+	days := r.Days
+	if days == nil {
+		days = []int{}
+	}
+	timeOfDay := func(value *int) int {
+		if value == nil {
+			return 0
+		}
+		return *value
 	}
 	day := func(value string) any {
 		if value == "" {
@@ -534,7 +546,7 @@ func repetitionJSON(r *Repetition) map[string]any {
 	return map[string]any{
 		"frequency": r.Frequency, "days": days,
 		"start_date": day(r.StartDate), "end_date": day(r.EndDate),
-		"hour": number(r.Hour), "minute": number(r.Minute), "duration": number(r.Duration),
+		"hour": timeOfDay(r.Hour), "minute": timeOfDay(r.Minute), "duration": number(r.Duration),
 		"month_interval": number(r.MonthInterval), "week_instance": number(r.WeekInstance),
 		"week_interval": number(r.WeekInterval),
 	}
@@ -583,6 +595,9 @@ func (a *Account) todoJSON(p *Project, parentID int64, parentType string, t *Tod
 	// A to-do that repeats nothing comes without the key, not with an empty one.
 	if t.Repetition != nil {
 		answer["repetition_schedule"] = repetitionJSON(t.Repetition)
+	}
+	if t.OddRepetition != nil {
+		answer["repetition_schedule"] = t.OddRepetition
 	}
 	return answer
 }
