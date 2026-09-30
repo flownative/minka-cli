@@ -35,7 +35,7 @@ const answerNotFoundHint = "There is no such answer, it or its question is in th
 
 const answerWriterHint = "There is no such answer, it or its question is in the trash, or somebody else wrote it: only its writer can change an answer, and an answer of somebody else is answered as if it were not there."
 
-const askedPeopleHint = "Only members of the project can be asked. The members are listed by: minka people list <projectId>"
+const askedPeopleHint = "Only members of the project who may see the question can be asked, and a question set up here is shown to no client: a client of the project, or an agent working for one, is refused like a stranger. The members are listed by: minka people list <projectId>"
 
 const scheduleHelp = `--rhythm is one of Minka's four words: daily (on each weekday given),
 weekly, everyOtherWeek and monthly (on the first of the weekday in a month),
@@ -165,7 +165,7 @@ with "checkins answers list <questionId>".`,
 			}
 			question, err := s.client.CheckinQuestion(a.ctx, args[0])
 			if err != nil {
-				return questionRefusal(s, err, false)
+				return questionRefusal(s, err)
 			}
 			return a.ok(questionSuccess(question, questionSummary(question.Value), nil, true))
 		},
@@ -187,9 +187,10 @@ zone, and asks nobody at once: the first reminders follow the schedule.
 --ask names a person to be asked, by ID or as me, and can be given more than
 once. A name or an e-mail address cannot be looked up here, because the ID of
 a tool names no project; minka people list <projectId> gives the IDs. Only
-members of the project can be asked. Minka lists as asked only the members who
-may see the question, so a client of the project it is not shown to is asked
-and named nowhere; the command says so in a notice.`,
+members of the project who may see the question can be asked. A question set
+up here is shown to no client, so naming a client of the project, or an agent
+working for one, is refused with personNotAProjectMember and nothing is
+written.`,
 		Example: `  minka checkins create --tool 0199... --title "What did you do today?" --rhythm daily --weekday mon,tue,wed,thu,fri --time 17:00 --ask me --ask 0199...
   minka checkins create --tool 0199... --title "What are you working on?" --rhythm weekly --weekday mon --time 09:00 --ask me`,
 		Args: requireArgs(),
@@ -213,7 +214,7 @@ and named nowhere; the command says so in a notice.`,
 			input := api.CreateCheckinQuestionInput{Title: title, Rhythm: rhythm, Weekdays: days, TimeOfDay: timeOfDay, AskedIDs: askedIDs}
 			question, err := s.client.CreateCheckinQuestion(a.ctx, toolID, input)
 			if err != nil {
-				e := questionRefusal(s, err, false)
+				e := questionRefusal(s, err)
 				if e.Code == CodeNotFound {
 					e.Hint = checkinsToolNotFoundHint
 				}
@@ -256,11 +257,11 @@ daily question asked on several days needs one --weekday to become weekly.
 again are taken off. ` + personHelp + ` Nobody can be taken off without
 somebody else being named: a question asks at least one person.
 
-An edit that names nobody writes back the people Minka shows as asked, so
-whoever it does not show is asked no longer: a client the question is not
-shown to, and a member who left the project, who is not asked again on coming
-back. A question that shows nobody at all takes no change until --ask names
-somebody: exit 9 with questionNobodyAsked.`,
+An edit without --ask leaves the people asked as they are. --ask takes off
+only whom Minka shows as asked and who is not named again; whoever it does not
+show stays asked, a member who left the project and a client the question is
+not shown to. So the people read from minka checkins show and named back take
+nobody off.`,
 		Example: `  minka checkins edit 0199... --title "What did you get done today?"
   minka checkins edit 0199... --rhythm weekly --weekday fri --time 16:00
   minka checkins edit 0199... --ask me --ask anke@example.com`,
@@ -297,7 +298,7 @@ somebody: exit 9 with questionNobodyAsked.`,
 				people := newProjectPeople(a, s, func() (string, error) {
 					question, err := s.client.CheckinQuestion(a.ctx, args[0])
 					if err != nil {
-						return "", questionRefusal(s, err, false)
+						return "", questionRefusal(s, err)
 					}
 					return question.Value.ProjectID, nil
 				})
@@ -309,7 +310,7 @@ somebody: exit 9 with questionNobodyAsked.`,
 
 			question, err := s.client.UpdateCheckinQuestion(a.ctx, args[0], input)
 			if err != nil {
-				return questionRefusal(s, err, input.AskedIDs == nil)
+				return questionRefusal(s, err)
 			}
 
 			notices := askedNotices(askedIDs, question.Value)
@@ -359,7 +360,7 @@ afterwards.`,
 				question, err = s.client.ResumeCheckinQuestion(a.ctx, args[0])
 			}
 			if err != nil {
-				return questionRefusal(s, err, false)
+				return questionRefusal(s, err)
 			}
 
 			summary := "Question " + question.Value.Title + " is asked again"
@@ -471,7 +472,7 @@ next one starts: --before <the last answerId>.`,
 				people := newProjectPeople(a, s, func() (string, error) {
 					question, err := s.client.CheckinQuestion(a.ctx, args[0])
 					if err != nil {
-						return "", questionRefusal(s, err, false)
+						return "", questionRefusal(s, err)
 					}
 					return question.Value.ProjectID, nil
 				})
@@ -484,7 +485,7 @@ next one starts: --before <the last answerId>.`,
 
 			answers, err := s.client.CheckinAnswers(a.ctx, args[0], query)
 			if err != nil {
-				e := questionRefusal(s, err, false)
+				e := questionRefusal(s, err)
 				switch e.APICode {
 				case apiCodeAnswerDayNotADate:
 					e.Hint = "--on is a day written as YYYY-MM-DD."
@@ -595,7 +596,7 @@ the day comes back as groupOn and stays with the answer for good.
 			}
 			answer, err := s.client.CreateCheckinAnswer(a.ctx, args[0], api.CreateCheckinAnswerInput{Body: body, AskedFor: askedFor})
 			if err != nil {
-				return questionRefusal(s, err, false)
+				return questionRefusal(s, err)
 			}
 
 			summary := fmt.Sprintf("Answered %s for %s", answer.Value.Question.Title, answer.Value.GroupOn)
@@ -757,9 +758,9 @@ func (a *app) peopleByIDOrMe(cmd *cobra.Command, s *session, values []string) ([
 }
 
 // askedNotices say who was named to be asked and is not among the people the
-// question shows as asked. Minka shows only the members who may see a
-// question and answers the write with the same success, so this is the only
-// word about it.
+// question shows as asked afterwards. Minka refuses whom it cannot ask, so
+// nobody named should be missing; should Minka ever take such a write, the
+// success alone would not say that somebody named is not asked.
 func askedNotices(named []string, question api.CheckinQuestion) []string {
 	var missing []string
 	for _, id := range named {
@@ -771,21 +772,17 @@ func askedNotices(named []string, question api.CheckinQuestion) []string {
 	if len(missing) == 0 {
 		return nil
 	}
-	return []string{fmt.Sprintf("%s named but not shown among the people asked: Minka lists as asked only the members who may see the question, so a client of the project it is not shown to is asked and named nowhere", strings.Join(missing, ", "))}
+	return []string{fmt.Sprintf("%s named but not among the people asked afterwards: Minka does not ask them", strings.Join(missing, ", "))}
 }
 
 // questionRefusal classifies a failed request about a question or its answers.
-// namedNobody says that an edit named no people, which makes an empty set of
-// people a matter of whom Minka shows rather than of what was sent.
-func questionRefusal(s *session, err error, namedNobody bool) *Error {
+func questionRefusal(s *session, err error) *Error {
 	e := s.fail(err)
 	switch {
 	case e.Code == CodeNotFound:
 		e.Hint = questionNotFoundHint
 	case e.APICode == apiCodePersonNotAProjectMember:
 		e.Hint = askedPeopleHint
-	case e.APICode == apiCodeQuestionNobodyAsked && namedNobody:
-		e.Hint = "The edit names nobody, so Minka writes back the people it shows as asked, and it shows nobody: they have left the project or may not see the question. Name who is to be asked with --ask."
 	case e.APICode == apiCodeQuestionNobodyAsked:
 		e.Hint = "A question asks at least one member of the project: name one with --ask."
 	case e.APICode == apiCodeQuestionWeekdaysMissing:

@@ -205,13 +205,11 @@ at all, and whether the document is shown to them. So of one person
 `personNotAProjectMember` comes before `personCannotSeeIt`, and of a list the
 first name that is refused decides which of the two the answer is.
 
-Minka puts each person on the document's list as it meets them, and one it
-finds there already counts as one it could not put there. So **a person named
-twice is refused with `personNotAProjectMember`**, at the second naming,
-although they are a member. The writer is on the list from the start and is
-passed over, however often they are named. The CLI sends `--notify` as given
-and does not merge repetitions: the hint of `personNotAProjectMember` names
-this case beside the stranger.
+Minka puts each person on the document's list as it meets them and passes over
+whoever is on it already, the writer from the start. So **a person named twice
+is told once**, and the CLI sends `--notify` as given without merging
+repetitions. Somebody outside the project is `personNotAProjectMember` however
+often they are named.
 
 | Answer | Command | Exit |
 |---|---|---|
@@ -230,7 +228,7 @@ this case beside the stranger.
 | 422 `documentBodyTooLong`, `documentBodyNotReadable` | `docs create`, `docs edit` | 9 |
 | 422 `documentAudienceMissing` | unreachable: the audience is held here | — |
 | 422 `notifyIdsMissing`, `notifyIdsWithoutChosenAudience` | `docs create --audience` and `--notify` that do not go together | 9 |
-| 422 `personNotAProjectMember` | `docs create --notify` naming somebody outside the project, or somebody other than the writer twice | 9 |
+| 422 `personNotAProjectMember` | `docs create --notify` naming somebody outside the project | 9 |
 | 422 `personCannotSeeIt` | `docs create --notify` naming a client of the project or an agent of one, for a document the clients of it are not shown | 9 |
 | 422 `folderUnknown`, `folderArchived` | `docs create --folder`, `docs uploads create --folder` | 9 |
 | 422 `documentArchived`, `uploadArchived` | every write on an archived entry, or under one, comments included — but a change of one's own comment under an entry that lies in the archive only through a folder above it is written | 9 |

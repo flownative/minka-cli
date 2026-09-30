@@ -839,9 +839,7 @@ with a description. Both take comments, and the comments take reactions.
   Minka on the web. The people are met one at a time in the order you gave them,
   and of one person `personNotAProjectMember` is answered before this, so a list
   holding both is answered for whichever name comes first.
-- **Name each person once.** Minka refuses a person named twice with exit 9
-  `personNotAProjectMember`, although they are a member; naming yourself more
-  than once is harmless.
+- A person named more than once is told once.
 - `docs edit <documentId>` changes the title, the body or both. `--body ""`
   empties the body. **`--title ""` does not empty the title:** a document needs
   one, so it exits 9 with `documentTitleMissing`. A title can only be replaced.
@@ -1202,8 +1200,8 @@ reminders` lists what you were asked and have not answered.
   <questionId>` one question with `schedule` (`rhythm`, `weekdays`, `timeOfDay`,
   `startsOn`), `paused` and `asked`.
 - `asked` names only the people asked **who are still members and may see the
-  question**, in the order of their names. A client of the project the question
-  is not shown to can be asked and is named nowhere.
+  question**, in the order of their names. Whoever it does not show stays
+  asked unseen, and no edit takes them off.
 - `checkins answers list <questionId>` lists the answers, the newest day
   first: `groupOn` is the day an answer belongs to. `--person` (ID, `me`,
   address or name) and `--on <day>` narrow them. A bare array, a page at a
@@ -1230,8 +1228,9 @@ reminders` lists what you were asked and have not answered.
   question starts on your today.
 - `--ask` on `checkins create` takes an ID or `me` only: a tool names no
   project, so no name can be looked up; `minka people list <projectId>` gives
-  the IDs. Only members of the project can be asked: anybody else is exit 9
-  `personNotAProjectMember`.
+  the IDs. Only members of the project who may see the question can be asked:
+  anybody else, a client of the project or an agent working for one included,
+  is exit 9 `personNotAProjectMember`.
 - `checkins edit` changes only what you give; the start day never changes.
   **`--weekday` and `--ask` are the whole set.** The weekdays not given are the
   question's own, so `--rhythm weekly` on a question asked Monday to Friday
@@ -1240,12 +1239,15 @@ reminders` lists what you were asked and have not answered.
   into the other set of weeks; an edit of the rhythm or the weekday of such a
   question names the first three of its dates, counted from `startsOn`, in the
   `notice`; for an older question those lie in the past.
-- An edit that names nobody writes back the people Minka shows as asked, so a
-  client it does not show is asked no longer, and neither is a member who left
-  the project, who is not asked again on coming back. A question that shows
-  nobody is exit 9 `questionNobodyAsked` until `--ask` names somebody.
-- A person named but not shown among `asked` afterwards is named in the
-  `notice`; the exit code does not say it.
+- An edit without `--ask` leaves the people asked as they are. `--ask` takes
+  off only people shown in `asked` and not named again: a member who left the
+  project and a client the question is not shown to stay asked, so the people
+  read from `checkins show` and named back take nobody off.
+- Only a member who may see the question can be asked. A question set up here
+  is shown to no client, so naming a client of the project, or an agent
+  working for one, is exit 9 `personNotAProjectMember` and nothing is written.
+  Should somebody named still be missing from `asked`, the `notice` names them
+  as not asked.
 - `checkins pause` and `checkins resume` succeed twice as well. The days a
   question was paused are not asked afterwards.
 
@@ -1322,8 +1324,7 @@ it may be filed under, and comments. `posts …` reads and writes them;
 - `--audience` and `--notify` work as for a document: `everybody`, `chosen`
   with one `--notify <personId|me>` per person, or `nobody`; the hint of
   `notifyIdsMissing` and `notifyIdsWithoutChosenAudience` says which flag to
-  change. **Name each person once**: a person named twice is exit 9
-  `personNotAProjectMember`.
+  change. A person named more than once is told once.
 - **A post written here is shown to no client of the project.** Naming a client,
   or an agent working for one, is always exit 9 `personCannotSeeIt`: nothing
   was written, the same request is refused again, and the only way on is to

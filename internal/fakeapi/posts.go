@@ -420,9 +420,8 @@ func (s *Server) addPost(w http.ResponseWriter, r *http.Request, person *Person)
 // peopleAPostTells is the list a new post tells about itself: the writer, and
 // then whom the audience names. Of the people chosen, each is met in turn and
 // asked first whether they belong to the project and then whether the post is
-// shown to them. The writer is on the list already and is passed over;
-// anybody else named a second time finds themselves on it too, and Minka reads
-// that as somebody it could not put there.
+// shown to them. Whoever is on the list already, the writer from the start, is
+// passed over, so a person named twice is told once.
 func (s *Server) peopleAPostTells(w http.ResponseWriter, writer *Person, tool *PostsTool, post *Post, audience string, chosen []string) ([]string, bool) {
 	project := s.projectWithID(tool.ProjectID)
 	told := []string{writer.ID}
@@ -435,10 +434,10 @@ func (s *Server) peopleAPostTells(w http.ResponseWriter, writer *Person, tool *P
 		}
 	case "chosen":
 		for _, personID := range chosen {
-			if personID == writer.ID {
+			if slices.Contains(told, personID) {
 				continue
 			}
-			if !slices.Contains(project.MemberIDs, personID) || slices.Contains(told, personID) {
+			if !slices.Contains(project.MemberIDs, personID) {
 				unprocessable(w, "personNotAProjectMember", "Only a member of the project can be told about a post.")
 				return nil, false
 			}

@@ -359,18 +359,26 @@ func TestAClientIsNeverToldAboutANewPost(t *testing.T) {
 	runOK(t, e, newPost(e, "--audience", "everybody")...)
 }
 
-// Minka finds somebody named a second time already on the list and answers as
-// for somebody it could not put there, as it does for a document.
-func TestSomebodyNamedTwiceOnAPostIsRefusedAsNoMember(t *testing.T) {
+// A member named twice is told once, and the repetition goes out as given.
+// Somebody outside the project is refused however often they are named.
+func TestSomebodyNamedTwiceOnAPostIsToldOnce(t *testing.T) {
 	e := newTestEnv(t)
 	f := e.fixture
 
-	env, r := e.runJSON("", newPost(e, "--audience", "chosen", "--notify", f.Anke.ID, "--notify", f.Anke.ID)...)
+	env := runOK(t, e, newPost(e, "--audience", "chosen", "--notify", f.Anke.ID, "--notify", "me", "--notify", f.Anke.ID, "--notify", "me")...)
+	if notify := anyStrings(e.lastWriteBody()["notifyIds"]); !slices.Equal(notify, []string{f.Anke.ID, f.Bruno.ID, f.Anke.ID, f.Bruno.ID}) {
+		t.Fatalf("notifyIds %v", notify)
+	}
+	written := postWithID(f.Posts, decode(t, env.Data)["id"].(string))
+	if !slices.Equal(written.SubscriberIDs, []string{f.Bruno.ID, f.Anke.ID}) {
+		t.Fatalf("told %v, want the writer and Anke once each", written.SubscriberIDs)
+	}
+
+	env, r := e.runJSON("", newPost(e, "--audience", "chosen", "--notify", f.Anke.ID, "--notify", f.Anke.ID, "--notify", f.Stranger.ID)...)
 	expectCode(t, r, ExitValidation)
-	if env.Meta["apiCode"] != apiCodePersonNotAProjectMember || !strings.Contains(env.Hint, "named twice") {
+	if env.Meta["apiCode"] != apiCodePersonNotAProjectMember || strings.Contains(env.Hint, "twice") {
 		t.Fatalf("apiCode %v, hint %q", env.Meta["apiCode"], env.Hint)
 	}
-	runOK(t, e, newPost(e, "--audience", "chosen", "--notify", "me", "--notify", "me", "--notify", f.Anke.ID)...)
 }
 
 func TestAnEditSendsOnlyWhatIsGivenAndTakesAKindOff(t *testing.T) {

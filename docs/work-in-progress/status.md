@@ -56,10 +56,10 @@ A to-do with a due day is made to repeat with `todos repeat`, and its series is
 read with `todos series list` and `todos series show`, and written with `todos
 series edit`, `stop`, `resume` and `show-now`; `todos show` and `todolists show`
 name the series of an occurrence. The rule the commands follow is
-[Repeating to-dos](../stable/todo-series.md) (C-089). The API is on Minka's
-`main` and in no release yet: none of it has been seen live, and the whole
-feature is checked against the fake until a Minka release carries it, see
-below.
+[Repeating to-dos](../stable/todo-series.md) (C-089). The API came with Minka
+v0.41.0: a read-only `todos series list` has answered on `minka.flownative.com`,
+and everything else, every write above all, is checked against the fake only,
+see below.
 
 The check-ins are read with `checkins tools`, `checkins list`, `checkins show`
 and `checkins reminders`, and written with `checkins create`, `edit`, `pause`
@@ -281,8 +281,9 @@ listed below.
 
 Coordination of the API: the Minka session `minka-ca`. It reports changes,
 which are checked against the Minka code; deviations go back to it. Minka
-v0.37.0 runs on `minka.flownative.com` and on `dev.minka.flownative.com`, as
-Shaun confirmed on 2026-09-28.
+v0.41.0 runs on `minka.flownative.com`, the instance this CLI talks to, since
+2026-09-30; v0.37.0 ran on both instances on 2026-09-28, and which version
+`dev.minka.flownative.com` runs now has not been asked again.
 
 Versions are released by publishing a release in GitHub and installed through
 the Homebrew tap; `setup`, `doctor` and the skill inside the binary cover the
@@ -365,9 +366,10 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   clients are shown — that client signs in nowhere, so the fake never has to
   answer as one. The fake also carries whether the tool is shown to clients,
   that the topmost folder decides, that an agent of a client counts as a
-  client, and that a person named twice is refused as no member. The last is
-  read from `DbalItemSubscriptionRepository::enrol` and has not been seen
-  anywhere, and it is a quirk the coordination passes on to Minka.
+  client, and that a person named twice is told once. The last is read from
+  `PeopleAPostTells::enrolEachOf` at v0.41.0, which passes over whoever is on
+  the list already (MNK-5P; before, the second naming was refused as no
+  member), and has not been seen live.
 - Putting a file into a tool and changing an upload were read in
   `FilesApiController::addUploadAction` and `updateUploadAction`,
   `BlobQueryService::findStoredBlob` and `isOwnFileInUse`, `AddUploadHandler`,
@@ -400,8 +402,9 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   a group write meets a list archived after the group was found, which is the
   one way to `todoListArchived` on a group and which no command can steer
   into.
-- Everything of `todos repeat` and `todos series`: the API is on Minka's `main`
-  (bef86f70) and in no release, and no request of it has gone to a real Minka.
+- Everything of `todos repeat` and `todos series` but one read: the API came
+  with Minka v0.41.0, a read-only `todos series list` has answered on
+  `minka.flownative.com`, and no write of it has gone to a real Minka.
   The fake mirrors what was read in `TodoSeriesApiController`,
   `RepetitionScheduleFields`, `RepetitionSchedule`, `TodoSeriesQueryService`,
   the series handlers, `DbalTodoSeriesRepository` and `ApiTodoSeriesTest`: the
@@ -441,11 +444,15 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   `CheckinSchedule`, `TimeOfDay` and `ApiCheckinsTest`: the order the
   controller refuses in, the schedule kept with its weekdays sorted and taken
   once and its time with two digits, `asked` naming only the members who may
-  see the question in the order of their names, the edit that names nobody
-  writing back whom Minka shows, pausing and resuming twice, an archived
-  project refusing both whatever the state, the page of answers without an
-  end and cut at 100, a boundary in the trash still marking where a page ends,
-  the day of an answer without `askedFor` as the latest asking by the
+  see the question in the order of their names, an edit without people leaving
+  them as they are and one with people taking off only whom Minka shows as
+  asked (MNK-5R, read at v0.41.0 in `CheckinsApiController::updateQuestionAction`
+  and `DbalCheckinQuestionRepository::askOnly`, not seen live), a client the
+  question is not shown to refused as no member when named (read at v0.41.0 in
+  `PeopleACheckinAsks::askOnly`, not seen live), pausing and resuming twice,
+  an archived project refusing both whatever the state, the page of answers
+  without an end and cut at 100, a boundary in the trash still marking where a
+  page ends, the day of an answer without `askedFor` as the latest asking by the
   schedule, and the reminders as the latest day per question, open until an
   answer on that day or later, at most 100. What it does not mirror: the time
   zone of the person asked and of the writer, in which Minka decides the start
@@ -466,8 +473,8 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   behind the values of a post and not the post, the silent cut above 100, the
   archive ordered by its moment, a pin that keeps its place and survives the
   archive, the trash from the list and from the archive, a new post shown to no
-  client, and a person named twice refused as no member. That last one is the
-  code path of documents and has not been seen anywhere either. What it does
+  client, and a person named twice told once. That last one is the code path
+  of documents and has not been seen live either. What it does
   not mirror: the time zone of the reader, in which Minka writes the moments of
   a cursor — the fake takes UTC and the cursor stays opaque to the CLI; the
   plain text a `lead` is cut from, which the fake takes as the body without its
@@ -1160,11 +1167,6 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   it, so a post restored on the web says it was edited although nobody changed
   it (`DbalPostRepository::throwAway`, `restoreFromTrash`). Reported to Minka
   by the coordination.
-- An edit of a check-in question that names no people makes Minka write back
-  only the people it shows as asked: a client the question is not shown to and
-  a member who left are asked no longer, and one who comes back is not asked
-  again. It was read in `updateQuestionAction` and is reported to Minka; the CLI
-  says so in its help and its docs.
 
 ## Open in the API
 
@@ -1201,7 +1203,7 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   archived from the trash, and a comment under it written, reacted to and
   refused in the archive.
 - Check the check-ins live, as the [live check](../guides/live-check.md) says:
-  a question set up with `--ask me` and a client, the notice about the client,
+  a question set up with `--ask me` and a client refused as no member,
   `asked` in the order of the names, `startsOn` in a time zone that is not UTC
   near midnight, an edit to every other week and its notice, pause and resume
   twice, an answer without `--asked-for` and the day it lands on, one for a

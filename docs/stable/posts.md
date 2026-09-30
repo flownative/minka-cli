@@ -100,13 +100,10 @@ to) and cannot open it.
 The people are met one at a time in the order given, each asked first whether
 they belong to the project and then whether the post is shown to them, so the
 first name refused decides between `personNotAProjectMember` and
-`personCannotSeeIt`. **A person named twice is refused as no member**: the
-list writes nobody twice and reads the second naming as somebody it could not
-put there. That is the same code path as for a document
-(`DbalItemSubscriptionRepository::enrol` with `ON CONFLICT DO NOTHING`, called
-by `PeopleAPostTells::enrolEachOf`), so the defect Minka carries for documents
-holds for posts unchanged. The CLI sends `--notify` as given and the hint of
-`personNotAProjectMember` names the case.
+`personCannotSeeIt`. **A person named twice is told once**: the list passes
+over whoever is on it already, the writer from the start. That is the same code
+path as for a document (`PeopleAPostTells::enrolEachOf`). The CLI sends
+`--notify` as given.
 
 ## Changing a post
 
@@ -237,7 +234,7 @@ edit, and before the text of a comment; it never comes before
 | 422 `postBodyMissing`, `postBodyTooLong`, `postBodyNotReadable` | `posts create`, `posts edit` | 9 |
 | 422 `postCategoryUnknown` | `--category` naming a kind the project does not offer | 9 |
 | 422 `notifyIdsMissing`, `notifyIdsWithoutChosenAudience` | `posts create --audience` and `--notify` that do not go together | 9 |
-| 422 `personNotAProjectMember` | `posts create --notify` naming somebody outside the project, or somebody other than the writer twice | 9 |
+| 422 `personNotAProjectMember` | `posts create --notify` naming somebody outside the project | 9 |
 | 422 `personCannotSeeIt` | `posts create --notify` naming a client or an agent of one | 9 |
 | 422 `postArchived` | every write but delete on a post of the archive, comments included | 9 |
 | 422 `postNotArchived` | `posts unarchive` of a post among the posts | 9 |

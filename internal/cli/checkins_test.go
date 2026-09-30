@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/flownative/minka-cli/internal/api"
 	"github.com/flownative/minka-cli/internal/fakeapi"
 )
 
@@ -184,31 +185,36 @@ func TestANewQuestionAsksByIDOrMe(t *testing.T) {
 	}
 }
 
-// Minka lists as asked only the members who may see a question, and answers a
-// write that names somebody else with the same success. The notice is the only
-// word about it, whether the person was asked before the write or not.
-func TestSomebodyNamedAndNotShownAsAskedIsSaid(t *testing.T) {
+// A client or an agent of one is refused like a stranger where the question is
+// not shown to clients, and nothing is written.
+func TestAClientTheQuestionIsNotShownToIsRefusedWhenNamed(t *testing.T) {
 	e := newTestEnv(t)
 	f := e.fixture
+	agent := &fakeapi.Person{ID: "0192f3a4-5b6c-4d7e-8f90-a1b2c3d4e503", Name: "Claude (Nele)", Email: "claude-nele@agents.invalid", PrincipalID: f.Client.ID}
+	e.server.People[agent.ID] = agent
+	f.Project.MemberIDs = append(f.Project.MemberIDs, agent.ID)
+	questions := len(f.CheckinsTool.Questions)
 
-	env, r := e.runJSON("", "checkins", "create", "--tool", f.CheckinsTool.ID, "--title", "Q", "--rhythm", "weekly", "--weekday", "mon",
-		"--time", "09:00", "--ask", f.Client.ID, "--ask", "me")
-	expectCode(t, r, ExitOK)
-	if !strings.Contains(env.Notice, f.Client.ID) || strings.Contains(env.Notice, f.Bruno.ID) || !strings.Contains(env.Notice, "client") {
-		t.Fatalf("notice %q", env.Notice)
+	for _, person := range []string{f.Client.ID, agent.ID} {
+		env, r := e.runJSON("", "checkins", "create", "--tool", f.CheckinsTool.ID, "--title", "Q", "--rhythm", "weekly", "--weekday", "mon",
+			"--time", "09:00", "--ask", person, "--ask", "me")
+		expectCode(t, r, ExitValidation)
+		if env.Meta["apiCode"] != apiCodePersonNotAProjectMember || !strings.Contains(env.Hint, "agent") {
+			t.Fatalf("apiCode %v, hint %q", env.Meta["apiCode"], env.Hint)
+		}
+	}
+	if len(f.CheckinsTool.Questions) != questions {
+		t.Fatal("a question refused was set up")
 	}
 
-	// The client is asked by the daily question already.
-	env, r = e.runJSON("", "checkins", "edit", f.DailyQuestion.ID, "--ask", "Nele", "--ask", "anke@example.com")
-	expectCode(t, r, ExitOK)
-	if !strings.Contains(env.Notice, f.Client.ID) || strings.Contains(env.Notice, f.Anke.ID) {
-		t.Fatalf("notice %q", env.Notice)
-	}
-	if people := stringsIn(e.lastWriteBody()["askedIds"]); !slices.Equal(people, []string{f.Client.ID, f.Anke.ID}) {
-		t.Fatalf("sent %v", people)
+	before := slices.Clone(f.DailyQuestion.AskedIDs)
+	env, r := e.runJSON("", "checkins", "edit", f.DailyQuestion.ID, "--ask", "Nele", "--ask", "anke@example.com")
+	expectCode(t, r, ExitValidation)
+	if env.Meta["apiCode"] != apiCodePersonNotAProjectMember || !slices.Equal(f.DailyQuestion.AskedIDs, before) {
+		t.Fatalf("apiCode %v, asked %v", env.Meta["apiCode"], f.DailyQuestion.AskedIDs)
 	}
 
-	// Once the question is shown to clients, nothing is left to say.
+	// Once the question is shown to clients, the client is asked.
 	f.DailyQuestion.ShownToClients = true
 	env = runOK(t, e, "checkins", "edit", f.DailyQuestion.ID, "--ask", f.Client.ID)
 	if env.Notice != "" || !slices.Equal(idsOf(t, decode(t, env.Data), "asked"), []string{f.Client.ID}) {
@@ -259,23 +265,59 @@ func TestARhythmWithoutAWeekdayIsHeldAgainstTheQuestionsOwn(t *testing.T) {
 	}
 }
 
-// An edit that names nobody writes back the people Minka shows as asked; a
-// question that shows nobody refuses it, and the hint names --ask.
-func TestAnEditOfAQuestionThatShowsNobodyAskedSaysWhy(t *testing.T) {
+// An edit without --ask leaves the people asked as they are, also on a
+// question that shows nobody; an empty set is refused on a new question.
+func TestAnEditWithoutPeopleKeepsWhoIsAsked(t *testing.T) {
 	e := newTestEnv(t)
 	f := e.fixture
-	f.WeeklyQuestion.AskedIDs = []string{f.Client.ID}
+	f.WeeklyQuestion.AskedIDs = []string{f.Client.ID, f.Stranger.ID}
 
-	env, r := e.runJSON("", "checkins", "edit", f.WeeklyQuestion.ID, "--title", "Renamed")
-	expectCode(t, r, ExitValidation)
-	if env.Meta["apiCode"] != apiCodeQuestionNobodyAsked || !strings.Contains(env.Hint, "names nobody") || !strings.Contains(env.Hint, "--ask") {
-		t.Fatalf("apiCode %v, hint %q", env.Meta["apiCode"], env.Hint)
+	runOK(t, e, "checkins", "edit", f.WeeklyQuestion.ID, "--title", "Renamed")
+	if _, named := e.lastWriteBody()["askedIds"]; named {
+		t.Fatalf("an edit without --ask sent the people: %v", e.lastWriteBody())
+	}
+	if !slices.Equal(f.WeeklyQuestion.AskedIDs, []string{f.Client.ID, f.Stranger.ID}) || f.WeeklyQuestion.Title != "Renamed" {
+		t.Fatalf("question %+v", f.WeeklyQuestion)
+	}
+	before := slices.Clone(f.DailyQuestion.AskedIDs)
+	runOK(t, e, "checkins", "edit", f.DailyQuestion.ID, "--time", "08:00")
+	if !slices.Equal(f.DailyQuestion.AskedIDs, before) {
+		t.Fatalf("asked %v, was %v", f.DailyQuestion.AskedIDs, before)
 	}
 
-	env, r = e.runJSON("", "checkins", "create", "--tool", f.CheckinsTool.ID, "--title", "Q", "--rhythm", "daily", "--weekday", "1", "--time", "09:00")
+	env, r := e.runJSON("", "checkins", "create", "--tool", f.CheckinsTool.ID, "--title", "Q", "--rhythm", "daily", "--weekday", "1", "--time", "09:00")
 	expectCode(t, r, ExitValidation)
-	if env.Meta["apiCode"] != apiCodeQuestionNobodyAsked || strings.Contains(env.Hint, "names nobody") {
+	if env.Meta["apiCode"] != apiCodeQuestionNobodyAsked || !strings.Contains(env.Hint, "--ask") {
 		t.Fatalf("apiCode %v, hint %q", env.Meta["apiCode"], env.Hint)
+	}
+}
+
+// --ask takes off only whom Minka shows as asked, so the people read from a
+// question and named back take nobody off: not a member who left the project,
+// and not a client the question is not shown to.
+func TestThePeopleShownAndNamedBackTakeNobodyOff(t *testing.T) {
+	e := newTestEnv(t)
+	f := e.fixture
+	f.DailyQuestion.AskedIDs = append(f.DailyQuestion.AskedIDs, f.Stranger.ID)
+
+	shown := idsOf(t, decode(t, runOK(t, e, "checkins", "show", f.DailyQuestion.ID).Data), "asked")
+	if slices.Contains(shown, f.Client.ID) || slices.Contains(shown, f.Stranger.ID) {
+		t.Fatalf("shown as asked: %v", shown)
+	}
+	var back []string
+	for _, id := range shown {
+		back = append(back, "--ask", id)
+	}
+	runOK(t, e, append([]string{"checkins", "edit", f.DailyQuestion.ID}, back...)...)
+	for _, id := range []string{f.Anke.ID, f.Bruno.ID, f.Client.ID, f.Stranger.ID} {
+		if !slices.Contains(f.DailyQuestion.AskedIDs, id) {
+			t.Fatalf("%s taken off: %v", id, f.DailyQuestion.AskedIDs)
+		}
+	}
+
+	runOK(t, e, "checkins", "edit", f.DailyQuestion.ID, "--ask", f.Anke.ID)
+	if slices.Contains(f.DailyQuestion.AskedIDs, f.Bruno.ID) || !slices.Contains(f.DailyQuestion.AskedIDs, f.Client.ID) || !slices.Contains(f.DailyQuestion.AskedIDs, f.Stranger.ID) {
+		t.Fatalf("asked %v, want Bruno alone taken off", f.DailyQuestion.AskedIDs)
 	}
 }
 
@@ -895,8 +937,8 @@ func TestSomebodyElsesAnswerWithFilesIsNotFoundBeforeTheGuard(t *testing.T) {
 	}
 }
 
-// Nobody asked and a body that says nothing come before the archived project,
-// on an edit as on a new question and a new answer.
+// A body that says nothing comes before the archived project, and an edit of
+// a question that shows nobody meets the archive like any other.
 func TestWhatIsWrongWithAnEditComesBeforeTheArchivedProject(t *testing.T) {
 	e := newTestEnv(t)
 	f := e.fixture
@@ -907,7 +949,7 @@ func TestWhatIsWrongWithAnEditComesBeforeTheArchivedProject(t *testing.T) {
 		args []string
 		code string
 	}{
-		"an edit of a question that shows nobody": {[]string{"checkins", "edit", f.WeeklyQuestion.ID, "--title", "Renamed"}, apiCodeQuestionNobodyAsked},
+		"an edit of a question that shows nobody": {[]string{"checkins", "edit", f.WeeklyQuestion.ID, "--title", "Renamed"}, apiCodeProjectArchived},
 		"an answer changed to nothing":            {[]string{"checkins", "answers", "edit", f.BrunosAnswer.ID, "<p> </p>", "--format", "html"}, apiCodeAnswerMissing},
 	} {
 		env, r := e.runJSON("", c.args...)
@@ -918,14 +960,17 @@ func TestWhatIsWrongWithAnEditComesBeforeTheArchivedProject(t *testing.T) {
 	}
 }
 
-// Somebody named twice and not shown is named once.
-func TestSomebodyNamedTwiceAndNotShownIsNamedOnce(t *testing.T) {
-	e := newTestEnv(t)
-	f := e.fixture
+// Should Minka ever take a write and not show somebody named as asked, the
+// notice names them once, however often they were named, and nobody shown.
+func TestSomebodyNamedAndNotAskedIsNamedOnce(t *testing.T) {
+	question := api.CheckinQuestion{Asked: []api.PersonReference{{ID: "id-shown"}}}
 
-	env := runOK(t, e, "checkins", "edit", f.DailyQuestion.ID, "--ask", f.Client.ID, "--ask", "me", "--ask", f.Client.ID)
-	if n := strings.Count(env.Notice, f.Client.ID); n != 1 {
-		t.Fatalf("the client is named %d times: %q", n, env.Notice)
+	notices := askedNotices([]string{"id-missing", "id-shown", "id-missing"}, question)
+	if len(notices) != 1 || strings.Count(notices[0], "id-missing") != 1 || strings.Contains(notices[0], "id-shown") || !strings.Contains(notices[0], "not ask") {
+		t.Fatalf("notices %q", notices)
+	}
+	if notices := askedNotices([]string{"id-shown"}, question); notices != nil {
+		t.Fatalf("notices %q for somebody shown", notices)
 	}
 }
 

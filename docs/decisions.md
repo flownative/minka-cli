@@ -1141,21 +1141,12 @@ an account and call the run a success.
 
 *Applies to: `docs create --audience` and `--notify`*
 
-The CLI checks that `--audience` is one of its three words and that a
-`--notify` is an ID or `me`, and nothing more. `chosen` without a name and
-names under another audience go out as they are given; Minka answers them with
-`notifyIdsMissing` and `notifyIdsWithoutChosenAudience`, exit 9, and the hint
-names the flag to change. `personCannotSeeIt` is exit 9 as well, not
-retryable, and its hint says that only another name gets the document written.
-A person named twice is sent twice, and the hint of the
-`personNotAProjectMember` Minka answers with names that case.
+The CLI checks only that `--audience` is one of its three words and that a
+`--notify` is an ID or `me`; everything else goes out as given and Minka
+answers it, exit 9, with a hint that names what to change.
 
-**Why:** the CLI refused both mismatches itself while Minka had not yet
-answered them. Now that it does, a second copy of the rule would be a second
-thing to keep in step with the server, and the round trip it saved is the only
-cost of leaving it out. Whether a named person may be told cannot be judged
-here at all: the CLI does not know the project before the document exists, nor
-which folder its clients are shown.
+**Why:** a second copy of Minka's rule would be a second thing to keep in step,
+and whether a named person may be told cannot be judged here at all.
 **Implemented as:** `cli.checkAudience`, `cli.audienceHint`, `cli.documentRefusal`, see
 [Docs & Files](stable/docs-and-files.md).
 
@@ -1324,20 +1315,13 @@ cut.
 
 *Applies to: `checkins create`, `checkins edit`*
 
-Where somebody named with `--ask` is not among `asked` in the answer, a
-`notice` names them. Where an edit gives the rhythm or the weekdays and the
-question is asked every other week afterwards, a `notice` names the first day
-of its weeks and the two after it. Weekdays Minka sorts and takes once, and a
-time it writes with two digits, draw nothing.
+A `notice` names whoever `--ask` named and `asked` does not show, as not
+asked, and the first three days of a question asked every other week after an
+edit of its rhythm or weekdays. Sorted weekdays and a two-digit time draw
+nothing.
 
-**Why:** Minka lists as asked only the members who may see the question and
-answers a write naming a client it is not shown to with the same success, so
-the notice is the only word about somebody asked and shown nothing — as the
-notice of [C-075](#c-075) is about a day. Every other week counts from the
-first of the weekday on or after the start, which no edit moves, so the weekday
-of an edit decides which of the two sets of weeks is asked, and nothing in the
-answer says which. A sorted list and `09:00` for `9:00` lose nothing, and a
-notice about them would teach whoever reads the notices to stop.
+**Why:** a success alone does not say who is left out or which weeks are
+asked, and a notice about mere form would teach whoever reads them to stop.
 **Implemented as:** `cli.askedNotices`, `cli.fortnightNotice`, see
 [Check-ins](stable/checkins.md).
 

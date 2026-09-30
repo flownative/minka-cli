@@ -51,9 +51,7 @@ or on the web is shown to no client of the project, so naming a client, or an
 agent working for one, is always refused with personCannotSeeIt. Nothing is
 written then, and sending it again changes nothing: name somebody else.
 "everybody" refuses nobody: it puts the clients of the project on the list of
-the post, and they are not notified of it and cannot open it.
-
-` + namedTwiceHelp
+the post, and they are not notified of it and cannot open it.`
 
 func (a *app) newPostsCmd() *cobra.Command {
 	return group("posts", "Read and write the posts of a Posts tool, pin, archive and comment on them",

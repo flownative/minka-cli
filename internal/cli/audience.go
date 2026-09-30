@@ -25,10 +25,7 @@ notifyIdsWithoutChosenAudience and "chosen" without a name with
 notifyIdsMissing; this command sends what it is given and leaves the rule
 to Minka.
 A person is given by ID, or as "me"; minka people list <projectId> gives the
-IDs.`
-
-const namedTwiceHelp = `Minka refuses a person named twice as one who is not a member of the project
-(personNotAProjectMember); you yourself may be named as often as you like.`
+IDs. A person named more than once is told once.`
 
 // checkAudience holds the one word a new document or post cannot be written
 // without. Which people go with which audience is the server's rule and is
@@ -80,7 +77,7 @@ func audienceHint(apiCode string) (string, bool) {
 	case apiCodeNotifyIDsWithoutChosenAudience:
 		return "Only --audience chosen tells the people a request names. Leave the named people out, or say --audience chosen to tell them.", true
 	case apiCodePersonNotAProjectMember:
-		return "Somebody named with --notify is not a member of the project, or somebody other than you is named twice, which Minka refuses the same way. minka people list <projectId> gives the members.", true
+		return "Somebody named with --notify is not a member of the project. minka people list <projectId> gives the members.", true
 	}
 	return "", false
 }

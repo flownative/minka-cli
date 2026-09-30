@@ -75,7 +75,8 @@ type CheckinQuestion struct {
 	Trashed   bool
 
 	// ShownToClients says whether the clients of the project see the question;
-	// a client it is not shown to is asked and named nowhere.
+	// a client it is not shown to cannot be named to be asked, and one asked
+	// before is named nowhere.
 	ShownToClients bool
 
 	Answers   []*CheckinAnswer
@@ -188,7 +189,8 @@ func (s *Server) addCheckinQuestion(w http.ResponseWriter, r *http.Request, pers
 	if s.refusedAsArchived(w, s.projectWithID(tool.ProjectID)) {
 		return
 	}
-	if !s.allAsked(w, tool, body.askedIDs) {
+	// A question set up through the API is shown to no client.
+	if !s.allAsked(w, tool, &CheckinQuestion{}, body.askedIDs) {
 		return
 	}
 
@@ -211,9 +213,9 @@ func (s *Server) checkinQuestion(w http.ResponseWriter, r *http.Request, person 
 }
 
 // updateCheckinQuestion changes what the body names and keeps the rest, the
-// start day always. Where the body names no people, the server writes the
-// people it shows as asked back as the whole set: whoever it does not show is
-// no longer asked, and a question that shows nobody takes no change at all.
+// start day always, and the people asked where the body names none. Named
+// people are the whole set only over whom the question shows as asked: a
+// member who left and a client it is not shown to stay as they are.
 func (s *Server) updateCheckinQuestion(w http.ResponseWriter, r *http.Request, person *Person) {
 	fields, ok := readBodyWith(w, r, true)
 	if !ok {
@@ -250,25 +252,25 @@ func (s *Server) updateCheckinQuestion(w http.ResponseWriter, r *http.Request, p
 		return
 	}
 	asked := body.askedIDs
-	if asked == nil {
-		asked = s.shownAsAsked(tool, question)
-	}
-	if len(asked) == 0 {
+	if asked != nil && len(asked) == 0 {
 		nobodyAsked(w)
 		return
 	}
 	if s.refusedAsArchived(w, s.projectWithID(tool.ProjectID)) {
 		return
 	}
-	if !s.allAsked(w, tool, asked) {
+	if !s.allAsked(w, tool, question, asked) {
 		return
 	}
+	offered := s.shownAsAsked(tool, question)
 
 	if body.title != nil {
 		question.Title = phpTrim(*body.title)
 	}
 	question.Rhythm, question.Weekdays, question.TimeOfDay = rhythm, days, timeOfDay
-	question.AskedIDs = changedPeople(question.AskedIDs, asked)
+	if asked != nil {
+		question.AskedIDs = askedOnly(question.AskedIDs, asked, offered)
+	}
 	writeJSON(w, http.StatusOK, s.checkinQuestionResource(tool, question))
 }
 
@@ -604,17 +606,32 @@ func storedAnswer(w http.ResponseWriter, value string) (string, bool) {
 	return stored, true
 }
 
-// allAsked refuses the write where somebody named is no member of the project.
-// A client is a member and is asked like anybody else.
-func (s *Server) allAsked(w http.ResponseWriter, tool *CheckinsTool, ids []string) bool {
+// allAsked refuses the write where somebody named is no member of the project
+// or may not see the question, which a client of the project may not where the
+// question is not shown to clients. Minka answers both alike.
+func (s *Server) allAsked(w http.ResponseWriter, tool *CheckinsTool, question *CheckinQuestion, ids []string) bool {
 	project := s.projectWithID(tool.ProjectID)
 	for _, id := range ids {
-		if !slices.Contains(project.MemberIDs, id) {
+		if !slices.Contains(project.MemberIDs, id) || !s.seesQuestion(s.People[id], question) {
 			notAskable(w)
 			return false
 		}
 	}
 	return true
+}
+
+// askedOnly takes off of the people asked whoever was offered and is not named
+// again, and adds whoever is named and not asked yet.
+func askedOnly(carried, named, offered []string) []string {
+	kept := slices.DeleteFunc(slices.Clone(carried), func(id string) bool {
+		return slices.Contains(offered, id) && !slices.Contains(named, id)
+	})
+	for _, id := range named {
+		if !slices.Contains(kept, id) {
+			kept = append(kept, id)
+		}
+	}
+	return kept
 }
 
 func notAskable(w http.ResponseWriter) {
@@ -644,9 +661,10 @@ func (s *Server) shownAsAsked(tool *CheckinsTool, question *CheckinQuestion) []s
 	return asked
 }
 
-// seesQuestion is false for a client the question is not shown to.
+// seesQuestion is false for a client the question is not shown to, and for an
+// agent working for one.
 func (s *Server) seesQuestion(person *Person, question *CheckinQuestion) bool {
-	return !person.Client || question.ShownToClients
+	return !s.isAClient(person.ID) || question.ShownToClients
 }
 
 // dayAnAnswerBelongsTo is the day of the latest asking of a question at or
