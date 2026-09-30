@@ -92,9 +92,11 @@ the command follows is [Projects](../stable/projects.md) (C-093). Minka's side
 so the command is checked against Minka's code and tests and the fake only,
 see below.
 
-A reference to a card, a post or a chat in any text is read as its address,
+A reference to a card, a post, a chat, a chat message, a to-do, a to-do list,
+a document, an upload or a question in any text is read as its address,
 `<href>`, which comes back as the reference when the text is edited, or as
-`(a card you cannot open)` where the reader may not see the target (C-091);
+`(a card you cannot open)` and its like where the reader may not see the
+target (C-091);
 the guard over files counts references, `messages edit` included, `--json`
 keeps the served HTML with title and short identifier, and the skill tells
 agents to name a card as `#MNK-1` or by its URL. Minka's side

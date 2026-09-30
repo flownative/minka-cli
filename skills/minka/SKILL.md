@@ -668,7 +668,7 @@ What the two commands do:
   picture as a Markdown image, a file as a link and a mention as `@Name`.
 - Markdown cannot hold files or mentions, nor `<minka-embed>` for an address
   Minka drew as a card; a `<minka-ref>` it holds only as its address (see
-  "Pointing at a card, a post or a chat"). To change a description that has any
+  "Pointing at a card or another record"). To change a description that has any
   of them, take `descriptionSource` from `minka cards show <cardId> --quiet`,
   change it and send it back with `cards edit --description - --description-format html`.
   A new description that would drop them is refused (exit 1) unless
@@ -729,10 +729,15 @@ printf '%s please have a look' "$MARKUP" | minka comments create <cardId> - --fo
   else the server drops it while saving, without an error.
 - `cards show --styled` and `messages list --styled` show a mention as `@Name`.
 
-## Pointing at a card, a post or a chat
+## Pointing at a card or another record
 
 - Write `#MNK-1` for a card with a short identifier, or paste the address of a
-  card, a post or a chat of the same Minka — in the words or as `<address>`.
+  card, a post, a chat, a chat line (a chat's address ending in
+  `#chat-message-…`), a to-do, a to-do list, a document, an upload or a
+  check-in question of the same Minka — in the words or as `<address>`. A line
+  of a private conversation counts as well
+  (`/messages/<id>#chat-message-…`); the conversation's address alone
+  (`/messages/<id>`) is no reference.
   On saving, Minka turns each into a `<minka-ref>` for every way in: Markdown,
   HTML, comments, messages. `MNK-1` without `#`, anything in code, a link with
   words of its own (`[the card](…)`), an address of another host and a target
@@ -746,8 +751,9 @@ printf '%s please have a look' "$MARKUP" | minka comments create <cardId> - --fo
   its own address becomes the reference again. A card's short identifier reads
   in `/go/card/MNK-1`; the title is not shown — take it from `--json`, where
   every reference carries `title` and `short-id`. A target you cannot open, one
-  in the trash or one that does not exist reads `(a card you cannot open)` (or
-  post, chat).
+  in the trash or one that does not exist reads `(a card you cannot open)`, and
+  likewise a post, chat, chat message, to-do, to-do list, document, file
+  (`upload`) or question; any other kind reads `(a reference you cannot open)`.
 - The guard against dropping counts references: a new text keeps a visible one
   when it holds its address (in the words or as `<address>`), `#MNK-1` for a
   card, or the element itself. A hidden one is kept only by the element, so an
