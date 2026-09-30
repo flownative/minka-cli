@@ -136,10 +136,18 @@ stands aside in the same places.
 `docs comments edit` reads the entry first, for the files and mentions a
 comment of one's own may carry. A comment of somebody else, one under an entry
 of the archive and one in an archived project Minka refuses whatever is sent,
-so there the request goes out. **An own comment under an entry that lies in the
-archive only through a folder above it is changed** — Minka's statement asks
-the entry, not its folders — so there the guard stands; the entry says
-`archived` for both cases, and the command reads the folder to tell them apart.
+so there the request goes out. Under an entry that lies in the archive only
+through a folder above it, a Minka that asks the folders refuses every write on
+a comment as well — a change, a removal, a reaction and taking one back — with
+`documentArchived` or `uploadArchived`; **a Minka whose statement asks the entry
+alone changes and removes one's own comment there**, v0.41.0 among them. So
+there the guard stands: the entry says `archived` for both cases, and the
+command reads the folder to tell them apart; where both the entry and its
+folder are archived the guard stays as well. Against a Minka that refuses, this
+costs more than a request: such an edit reads the entry, the person of the
+token, the folder and the archived projects — the last two only for the guard —
+and exits 1, and only a second run with `--drop-attachments` reaches Minka's
+422. The price is paid for the files a Minka that writes there would lose.
 
 The round trip is safe: the `updatedAt` a read hands over is the column the
 write is held against. What it cannot do is notice a change made **in the same
@@ -239,7 +247,7 @@ often they are named.
 | 422 `personNotAProjectMember` | `docs create --notify` naming somebody outside the project | 9 |
 | 422 `personCannotSeeIt` | `docs create --notify` naming a client of the project or an agent of one, for a document the clients of it are not shown | 9 |
 | 422 `folderUnknown`, `folderArchived` | `docs create --folder`, `docs uploads create --folder` | 9 |
-| 422 `documentArchived`, `uploadArchived` | every write on an archived entry, or under one, comments included — but a change of one's own comment under an entry that lies in the archive only through a folder above it is written | 9 |
+| 422 `documentArchived`, `uploadArchived` | every write on an archived entry, or under one, comments and their reactions included, and a folder above the entry counts — but v0.41.0 changes and removes one's own comment below an archived folder | 9 |
 | 422 `projectArchived` | every write; on `docs edit`, `docs uploads edit` and the comments before the codes above but after the title, the description and the moment of `--expect`; on `docs create` after the title, the body, the folder, the audience and `notifyIdsMissing` / `notifyIdsWithoutChosenAudience`, and before `personNotAProjectMember` and `personCannotSeeIt`; on `docs uploads create` with a file when storing it, after the whole transfer, and with `--blob` before `fileUnknown` and again before `fileInUse` | 9 |
 | 404 `variantNotAvailable` | `uploads download --variant` of the file of an upload, as for any file | 2 |
 | 422 the comment codes | `docs comments …`, as under a card | 9 |

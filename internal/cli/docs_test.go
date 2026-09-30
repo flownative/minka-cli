@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/flownative/minka-cli/internal/fakeapi"
 )
@@ -544,6 +545,50 @@ func TestAnArchivedEntryIsReadAndTakesNoWrite(t *testing.T) {
 				t.Fatalf("hint %q", env.Hint)
 			}
 		})
+	}
+}
+
+// Below an archived folder the comments of an entry take no write at all, and
+// the hint says so of the comment, naming the folder as a reason, where the
+// one of the entry speaks only of writing on it.
+func TestTheCommentsBelowAnArchivedFolderTakeNoChange(t *testing.T) {
+	e := newTestEnv(t)
+	f := e.fixture
+	f.FilesUpload.FolderID = f.ArchivedFolder.ID
+	upload, uploadComment := f.FilesUpload.ID, f.FilesUpload.Comments[0].ID
+	document := f.DocumentBelowTheArchivedFolder
+	mine := &fakeapi.Comment{ID: "0192f3a4-5b6c-4d7e-8f90-a1b2c3d4e531", AuthorID: f.Bruno.ID, Body: "<p>Thanks</p>", CreatedAt: time.Now(),
+		Reactions: []*fakeapi.Reaction{{Content: "👍", PersonIDs: []string{f.Bruno.ID}}}}
+	document.Comments = append(document.Comments, mine)
+
+	for name, one := range map[string]struct {
+		args []string
+		code string
+	}{
+		"a change on a document":              {[]string{"docs", "comments", "edit", "--document", document.ID, mine.ID, "Not after all"}, apiCodeDocumentArchived},
+		"a removal on a document":             {[]string{"docs", "comments", "delete", "--document", document.ID, mine.ID}, apiCodeDocumentArchived},
+		"a reaction on a document":            {[]string{"docs", "comments", "react", "--document", document.ID, mine.ID, "🎉"}, apiCodeDocumentArchived},
+		"a reaction taken back on a document": {[]string{"docs", "comments", "unreact", "--document", document.ID, mine.ID, "👍"}, apiCodeDocumentArchived},
+		"a change on an upload":               {[]string{"docs", "comments", "edit", "--upload", upload, uploadComment, "Not after all"}, apiCodeUploadArchived},
+		"a removal on an upload":              {[]string{"docs", "comments", "delete", "--upload", upload, uploadComment}, apiCodeUploadArchived},
+		"a reaction on an upload":             {[]string{"docs", "comments", "react", "--upload", upload, uploadComment, "🎉"}, apiCodeUploadArchived},
+		"a reaction taken back on an upload":  {[]string{"docs", "comments", "unreact", "--upload", upload, uploadComment, "👍"}, apiCodeUploadArchived},
+	} {
+		t.Run(name, func(t *testing.T) {
+			env, r := e.runJSON("", one.args...)
+			expectCode(t, r, ExitValidation)
+			if env.Meta["apiCode"] != one.code {
+				t.Fatalf("apiCode %v, want %s", env.Meta["apiCode"], one.code)
+			}
+			for _, word := range []string{"folder", "changed, removed or reacted to"} {
+				if !strings.Contains(env.Hint, word) {
+					t.Fatalf("hint %q does not say %q", env.Hint, word)
+				}
+			}
+		})
+	}
+	if mine.Body != "<p>Thanks</p>" || len(document.Comments) != 1 || len(mine.Reactions) != 1 {
+		t.Fatalf("the comment changed: %q, %d comments, %d reactions", mine.Body, len(document.Comments), len(mine.Reactions))
 	}
 }
 

@@ -1222,12 +1222,18 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   empty, and the record is written and shows nothing. Waiting is what a file that
   never comes at all causes.
 
-- Minka changes one's own comment under a document or an upload that lies in
-  the archive only through a folder above it: `DbalCommentRepository::change`
-  asks the item and its tool, not `FolderChain`, while writing a new comment
-  there is refused (E-195). Read in the code, not seen live; the fake mirrors
-  it, and the guard over files stands there (C-082). Removing such a comment
-  goes through the same condition, and the fake still refuses that.
+- Below an archived folder, Minka's `main` refuses changing and removing a
+  comment of a document or an upload with `documentArchived` or
+  `uploadArchived` (`DbalCommentRepository::underAnItemInUse` asks
+  `FolderChain`, E-195), as it refuses a new comment and a reaction on one.
+  No release carries it yet: v0.41.0, which `minka.flownative.com` runs, and
+  v0.42.0 change and remove one's own comment there. The fake follows `main`,
+  checked in the order of `FilesApiController` and
+  `AbstractCommentsApiController` (the body before the entry, the reaction
+  before the comment, the archive before the author), not seen live. The
+  CLI keeps reading the folder before a comment edit that would drop files
+  (C-082), because against v0.41.0 the guard is all that holds them; once the
+  instance runs a Minka with the refusal, that read can go.
 - `editedAt` of a post is set by going into the trash and coming back out of
   it, so a post restored on the web says it was edited although nobody changed
   it (`DbalPostRepository::throwAway`, `restoreFromTrash`). Reported to Minka
