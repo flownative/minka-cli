@@ -362,6 +362,40 @@ type Todo struct {
 
 	// Subscribers are what they are on a Card.
 	Subscribers *[]string `json:"subscribers,omitempty"`
+
+	// Repetition is the schedule of the series the to-do becomes the current
+	// occurrence of, nil for one that comes once. RepetitionNotMapped names
+	// each part of the source's schedule the bundle does not carry, in the
+	// source's own word: with a Repetition beside it the series comes without
+	// that part, without one the to-do comes as one that does not repeat.
+	Repetition          *Repetition `json:"repetition,omitempty"`
+	RepetitionNotMapped []string    `json:"repetitionNotMapped,omitempty"`
+}
+
+// The five rhythms a to-do series repeats in.
+const (
+	RepeatsDaily            = "daily"
+	RepeatsWeekly           = "weekly"
+	RepeatsMonthlyOnDay     = "monthlyOnDay"
+	RepeatsMonthlyOnWeekday = "monthlyOnWeekday"
+	RepeatsYearly           = "yearly"
+)
+
+// Repetition is the schedule of a to-do series in the shape Minka's API takes.
+// A field its rhythm does not use is left out. Weekdays count from 1 for Monday
+// to 7 for Sunday; Interval counts weeks or months; Instance is which of the
+// Weekday's days in the month, 1 to 4. StartsOn is nil where the to-do's due
+// day is the first day, and EndsOn nil for a series that does not run out.
+type Repetition struct {
+	Rhythm   string  `json:"rhythm"`
+	Weekdays []int   `json:"weekdays,omitempty"`
+	Interval int     `json:"interval,omitempty"`
+	Day      int     `json:"day,omitempty"`
+	Weekday  int     `json:"weekday,omitempty"`
+	Instance int     `json:"instance,omitempty"`
+	Month    int     `json:"month,omitempty"`
+	StartsOn *string `json:"startsOn,omitempty"`
+	EndsOn   *string `json:"endsOn"`
 }
 
 // Forward is a mail somebody forwarded into a project. Title is the subject,
