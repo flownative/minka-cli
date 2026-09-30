@@ -603,7 +603,7 @@ func (s *Server) editCommentOnEntry(w http.ResponseWriter, r *http.Request, pers
 		return
 	}
 	entry := s.entryOfTheRequest(r, person)
-	if entry == nil {
+	if entry == nil || !uuidPattern.MatchString(r.PathValue("commentId")) {
 		notFound(w)
 		return
 	}
@@ -615,15 +615,16 @@ func (s *Server) editCommentOnEntry(w http.ResponseWriter, r *http.Request, pers
 	if !ok {
 		return
 	}
-	// Minka's statement changes a comment of the writer under an entry that is
-	// itself in use, and does not look at the folders above it: an own comment
-	// below an archived folder is written. Why a refused write wrote nothing is
-	// asked only afterwards, and there a folder above counts.
+	// Minka's statement changes a comment of the writer under an entry in use,
+	// with no folder above it in the archive, and asks why only where it
+	// changed nothing: somebody else's comment under an archived entry is
+	// answered as the archive.
+	if s.refusedAsClosed(w, entry) {
+		return
+	}
 	comment := ownCommentOf(*entry.comments, r.PathValue("commentId"), person)
-	if project := s.projectWithID(entry.tool.ProjectID); comment == nil || entry.archived || project != nil && project.Archived {
-		if !s.refusedAsClosed(w, entry) {
-			notFound(w)
-		}
+	if comment == nil {
+		notFound(w)
 		return
 	}
 
@@ -654,15 +655,29 @@ func (s *Server) removeCommentOnEntry(w http.ResponseWriter, r *http.Request, pe
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// reactToCommentOnEntry reads the body before it looks for the entry, and the
+// reaction before it looks for the comment, as the controller does.
 func (s *Server) reactToCommentOnEntry(w http.ResponseWriter, r *http.Request, person *Person) {
+	fields, ok := readBody(w, r)
+	if !ok {
+		return
+	}
 	entry := s.entryOfTheRequest(r, person)
-	comment := commentIn(entry, r.PathValue("commentId"))
-	if comment == nil {
+	if entry == nil || !uuidPattern.MatchString(r.PathValue("commentId")) {
 		notFound(w)
 		return
 	}
-	content, ok := reactionContent(w, r)
+	value, ok := stringField(w, fields, "content")
 	if !ok {
+		return
+	}
+	content, ok := validReaction(w, deref(value))
+	if !ok {
+		return
+	}
+	comment := commentIn(entry, r.PathValue("commentId"))
+	if comment == nil {
+		notFound(w)
 		return
 	}
 	if s.refusedAsClosed(w, entry) {
@@ -675,6 +690,14 @@ func (s *Server) reactToCommentOnEntry(w http.ResponseWriter, r *http.Request, p
 
 func (s *Server) unreactFromCommentOnEntry(w http.ResponseWriter, r *http.Request, person *Person) {
 	entry := s.entryOfTheRequest(r, person)
+	if entry == nil || !uuidPattern.MatchString(r.PathValue("commentId")) {
+		notFound(w)
+		return
+	}
+	content, ok := validReaction(w, r.URL.Query().Get("content"))
+	if !ok {
+		return
+	}
 	comment := commentIn(entry, r.PathValue("commentId"))
 	if comment == nil {
 		notFound(w)
@@ -684,7 +707,7 @@ func (s *Server) unreactFromCommentOnEntry(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	unreactFrom(&comment.Reactions, r.URL.Query().Get("content"), person.ID)
+	unreactFrom(&comment.Reactions, content, person.ID)
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(http.StatusNoContent)
 }

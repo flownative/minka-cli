@@ -988,8 +988,11 @@ command's `notice` is the only warning you will ever get.
 - The text is Markdown by default, as for a card. Only the author can change or
   remove a comment; somebody else's answers exit 2.
 - A document or an upload inside an archived folder shows `archived: true`,
-  yet **your own comment on it can still be changed**, and there a text that
-  drops files or mentions is refused unless `--drop-attachments` is given.
+  and its comments take no write: a new one, a change, a removal, a reaction
+  and taking one back exit 9 with `documentArchived` or `uploadArchived`. An
+  older Minka (v0.41.0) still changes and removes **your own comment** there,
+  so `docs comments edit` refuses a text that drops files or mentions unless
+  `--drop-attachments` is given, and a newer one then answers exit 9.
 - Reactions live on the comments alone. A document and an upload themselves
   take none through the API, although the web offers it.
 

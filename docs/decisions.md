@@ -1356,39 +1356,16 @@ the same tool, which `todolists list --archived` already reads that way
 <a id="c-082"></a>
 ## C-082 — The guard over files stands only where the write could land
 
-*Applies to: every text the CLI replaces — `cards edit --description`,
-`comments edit`, `posts edit --body`, `posts comments edit`, `docs edit --body`,
-`docs uploads edit --description`, `docs comments edit`, `todolists edit
---description`, `todos edit --notes` and `checkins answers edit`*
+*Applies to: every text the CLI replaces, comments and answers included*
 
-The guard that refuses a text dropping the files and mentions of the one it
-replaces asks only where Minka would take the write: not in an archived
-project, not for a card, a post, a document or an upload of the archive, not
-for a document below an archived folder, not for a list of the archive or a
-to-do in one, and not for a comment of somebody else. There the request goes
-out and Minka's refusal is the answer.
-
-Two places keep a word of this side. A comment of one's own under a document or
-an upload that lies in the archive only through a folder above it keeps the
-guard, because Minka changes that comment: its statement asks the entry and not
-the folders above it. The entry says `archived` for both, so there the folder
-is read to tell the two apart, and where both are archived the guard stays. And
-an answer of somebody else with files is answered here with exit 2, because
-Minka answers it as not there before it asks anything else, the archived
-project included.
-
-**Why:** Where Minka refuses whatever is sent, nothing can be lost, and a guard
-that answered first would put a usage error with a `--drop-attachments` hint
-in front of the one refusal that says what is really wrong, and the flag would
-only lead on to it. The text the command reads says whether it is archived;
-whether its project is, it does not, so the archived projects — and the folder
-of an entry — are read only where the guard is about to refuse. Where the two
-readings disagree the guard stays: a hint too many costs a second request, a
-guard too few costs the files. One window stays open: a text taken out of the
-archive between the read and the write is written without the guard.
+The guard over files refuses only where Minka would take the write; where Minka
+refuses whatever is sent, the request goes out and its refusal is the answer.
+One's own comment below an archived folder keeps the guard, since v0.41.0
+changes it there. **Why:** a guard in front of a certain refusal points at a
+flag that only leads on to it, and a guard too few costs the files.
 **Implemented as:** `cli.guardOverFiles`, `cli.keepsTheAttachmentsOfAComment`,
-`cli.closedToComments`, see [Rich text](stable/rich-text.md),
-[Posts](stable/posts.md) and [Docs & Files](stable/docs-and-files.md).
+`cli.closedToComments`, see [Rich text](stable/rich-text.md) and
+[Docs & Files](stable/docs-and-files.md).
 
 <a id="c-083"></a>
 ## C-083 — An ID goes out in lowercase

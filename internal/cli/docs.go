@@ -1080,11 +1080,14 @@ func (a *app) entryUnder(s *session, entry api.Commented) (commentedEntry, error
 }
 
 // closedToComments says whether Minka refuses every change of a comment under
-// an entry. An entry of the archive is refused; one that lies there only
-// through a folder above it is not, because Minka asks the entry alone when a
-// comment is changed. The entry says archived for either, so where it stands
-// in a folder the folder is read to tell the two apart, and where both hold
-// the guard stays.
+// an entry. An entry of the archive is refused by every Minka; one that lies
+// there only through a folder above it is refused only by a Minka that asks
+// the folders as well, and one that asks the entry alone changes the comment,
+// which loses its files. The entry says archived for either, so where it
+// stands in a folder the folder is read to tell the two apart, and below an
+// archived folder the guard stays. Against a Minka that refuses there, that
+// costs the read of the folder and of the archived projects and a second run
+// with the flag to reach the refusal; a guard too few costs the files.
 func (a *app) closedToComments(s *session, entry commentedEntry) func() (bool, error) {
 	return func() (bool, error) {
 		if !entry.archived || entry.folder == nil {
@@ -1284,10 +1287,16 @@ func documentRefusal(s *session, err error) *Error {
 
 // commentRefusal is a refusal of a write on one comment. An address that has
 // nothing may be the entry, the comment or its author, and a document says
-// which of them it is not.
+// which of them it is not. An archived entry closes its comments to every
+// write, not only to new ones.
 func commentRefusal(s *session, err error) *Error {
 	e := documentRefusal(s, err)
-	if e.Code == CodeNotFound {
+	switch {
+	case e.APICode == apiCodeDocumentArchived:
+		e.Hint = "The document, or a folder above it, lies in the archive. Its comments can be read, but not changed, removed or reacted to until it is brought back in Minka on the web."
+	case e.APICode == apiCodeUploadArchived:
+		e.Hint = "The upload, or a folder above it, lies in the archive. Its comments can be read, but not changed, removed or reacted to until it is brought back in Minka on the web."
+	case e.Code == CodeNotFound:
 		e.Hint = "The document or upload does not exist or is not visible to you, the comment was removed, or somebody else wrote it: only the author can change or remove a comment."
 	}
 	return e

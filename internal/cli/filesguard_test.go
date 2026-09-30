@@ -183,24 +183,43 @@ func TestTheGuardOverFilesStandsAsideWhereMinkaRefusesTheWrite(t *testing.T) {
 	}
 }
 
-// Minka changes an own comment under a document that lies in the archive only
-// through a folder above it, so the files of that comment can be lost and the
-// guard stands there.
+// A Minka that asks the entry alone changes an own comment under an entry that
+// lies in the archive only through a folder above it, so the files of that
+// comment can be lost and the guard stands there. The fake asks the folders
+// as well, so what gets through with --drop-attachments is its refusal.
 func TestTheGuardOverFilesStandsBelowAnArchivedFolder(t *testing.T) {
-	e := newTestEnv(t)
-	document := e.fixture.DocumentBelowTheArchivedFolder
-	mine := &fakeapi.Comment{ID: "0192f3a4-5b6c-4d7e-8f90-a1b2c3d4e523", AuthorID: e.fixture.Bruno.ID, Body: "<div>" + aMention + "</div>", CreatedAt: time.Now()}
-	document.Comments = append(document.Comments, mine)
+	withMention := "<div>" + aMention + "</div>"
+	for name, prepare := range map[string]func(e *testEnv) ([]string, string, *fakeapi.Comment){
+		"a document": func(e *testEnv) ([]string, string, *fakeapi.Comment) {
+			document := e.fixture.DocumentBelowTheArchivedFolder
+			mine := &fakeapi.Comment{ID: "0192f3a4-5b6c-4d7e-8f90-a1b2c3d4e523", AuthorID: e.fixture.Bruno.ID, Body: withMention, CreatedAt: time.Now()}
+			document.Comments = append(document.Comments, mine)
+			return []string{"--document", document.ID, mine.ID}, apiCodeDocumentArchived, mine
+		},
+		"an upload": func(e *testEnv) ([]string, string, *fakeapi.Comment) {
+			upload := e.fixture.FilesUpload
+			upload.FolderID = e.fixture.ArchivedFolder.ID
+			upload.Comments[0].Body = withMention
+			return []string{"--upload", upload.ID, upload.Comments[0].ID}, apiCodeUploadArchived, upload.Comments[0]
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			e := newTestEnv(t)
+			target, code, mine := prepare(e)
+			args := slices.Concat([]string{"docs", "comments", "edit"}, target, []string{"Plain"})
 
-	env, r := e.runJSON("", "docs", "comments", "edit", "--document", document.ID, mine.ID, "Plain")
-	expectCode(t, r, ExitUsage)
-	if !strings.Contains(env.Hint, "--drop-attachments") || len(e.server.WritingRequests()) != 0 {
-		t.Fatalf("hint %q, %d writes", env.Hint, len(e.server.WritingRequests()))
-	}
+			env, r := e.runJSON("", args...)
+			expectCode(t, r, ExitUsage)
+			if !strings.Contains(env.Hint, "--drop-attachments") || len(e.server.WritingRequests()) != 0 {
+				t.Fatalf("hint %q, %d writes", env.Hint, len(e.server.WritingRequests()))
+			}
 
-	dropped := runOK(t, e, "docs", "comments", "edit", "--document", document.ID, mine.ID, "Plain", "--drop-attachments")
-	if !strings.Contains(dropped.Notice, "dropped") || mine.Body != "<p>Plain</p>" {
-		t.Fatalf("notice %q, comment %q", dropped.Notice, mine.Body)
+			env, r = e.runJSON("", slices.Concat(args, []string{"--drop-attachments"})...)
+			expectCode(t, r, ExitValidation)
+			if env.Meta["apiCode"] != code || patchesIn(e.server.WritingRequests()) != 1 || mine.Body != withMention {
+				t.Fatalf("apiCode %v, %d changes sent, comment %q", env.Meta["apiCode"], patchesIn(e.server.WritingRequests()), mine.Body)
+			}
+		})
 	}
 }
 
@@ -227,12 +246,6 @@ func TestTheGuardOverFilesStandsOnDocumentsInUse(t *testing.T) {
 		},
 		"an own comment on an upload": func(e *testEnv) ([]string, func() string) {
 			upload := e.fixture.FilesUpload
-			upload.Comments[0].Body = withMention
-			return []string{"docs", "comments", "edit", "--upload", upload.ID, upload.Comments[0].ID, "Plain"}, func() string { return upload.Comments[0].Body }
-		},
-		"an own comment on an upload below an archived folder": func(e *testEnv) ([]string, func() string) {
-			upload := e.fixture.FilesUpload
-			upload.FolderID = e.fixture.ArchivedFolder.ID
 			upload.Comments[0].Body = withMention
 			return []string{"docs", "comments", "edit", "--upload", upload.ID, upload.Comments[0].ID, "Plain"}, func() string { return upload.Comments[0].Body }
 		},

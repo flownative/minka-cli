@@ -149,7 +149,11 @@ are `action-text-attachment` elements with a freshly signed handle.
   Sending the source back as HTML keeps them. Where Minka refuses the write
   whatever is sent — an archived project, a text of the archive, a comment of
   somebody else — the guard stands aside and Minka's refusal is the answer
-  ([C-082](../decisions.md#c-082)).
+  ([C-082](../decisions.md#c-082)). The text the command reads says whether
+  it is archived; whether its project is, it does not, so the archived
+  projects are read only where the guard is about to refuse. Where the
+  readings disagree the guard stays. A text taken out of the archive between
+  the read and the write is written without the guard.
 - A handle is valid only within its circle — project or conversation. In a
   text elsewhere the server silently removes it on saving, which is why the
   help and the SKILL.md advise reading the text back afterwards.
