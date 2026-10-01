@@ -55,9 +55,10 @@ writes: `action-text-attachment`, `minka-embed` and `minka-ref`.
 
 ## References to another record
 
-Minka turns `#MNK-1`, `/go/card/MNK-1` and an address of its own card, post,
-chat, chat line (a chat's or a private conversation's address ending in
-`#chat-message-…`), to-do, to-do list, document, upload or check-in question
+Minka turns `#MNK-1`, `/go/card/MNK-1`, `/go/item/<id>`, `/go/line/<id>` and
+an address of its own card, post, chat, chat line (a chat's or a private
+conversation's address ending in `#chat-message-…`), to-do, to-do list,
+document, upload or check-in question
 into a `<minka-ref kind id>` when a text is saved, whichever way it comes
 in (Minka's E-205). The Markdown conversion has nothing to do for it but leave
 those names alone: `#MNK-1` stays text in every block, a bare address becomes
