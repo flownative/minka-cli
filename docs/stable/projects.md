@@ -43,27 +43,24 @@ The answer is the project as `GET projects` lists it.
 ## Who may, and the order of the refusals
 
 Only the **team** of a project renames it. A **client** of the project is
-refused in the very statement that writes, with the same 404 as somebody who is
-not in the project, byte for byte; the hint of the 404 names both.
+refused with the same 404 as somebody who is not in the project, byte for
+byte; the hint of the 404 names both.
 
 Minka checks, in this order:
 
-1. The body: 415 `unsupportedMediaType`, 400 `malformedBody` (not JSON, not an
+1. The project: an address that is no identifier, a project the person is not
+   a member of and a project the person is a **client** of are 404.
+2. The body: 415 `unsupportedMediaType`, 400 `malformedBody` (not JSON, not an
    object, a field that is no string).
-2. 422 `nothingToChange`, when neither field is named.
-3. The name: `projectNameTooLong`, `projectNameHasControlCharacters`,
+3. 422 `nothingToChange`, when neither field is named.
+4. The name: `projectNameTooLong`, `projectNameHasControlCharacters`,
    `projectNameMissing`.
-4. The description: `projectDescriptionTooLong`.
-5. The project: an address that is no identifier is 404; a project the person
-   is a **member** of and which is archived is 422 `projectArchived` — a
-   client included, who learns it there although a write would be refused
-   anyway.
-6. A project in use the person is on the team of, else 404.
+5. The description: `projectDescriptionTooLong`.
+6. An archived project is 422 `projectArchived`.
 
-So everything about the body is refused before the project is looked up, and
-somebody outside a project gets a 422 for a description that is too long. The
-CLI reaches none of the 400 and 415 cases, and none of an address that is no
-identifier: it checks every ID before a request.
+So somebody outside a project, and a client of it, learn nothing but the 404,
+whatever the body says. The CLI reaches none of the 400 and 415 cases, and
+none of an address that is no identifier: it checks every ID before a request.
 
 A Minka older than this address answers with a 404 page of its web, which is
 no JSON, instead of the 404 of its API. `projects edit` tells the two apart by

@@ -322,6 +322,19 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
 
 ## Checked against the fake only
 
+- The order of the refusals follows Minka's `main`, which is in no release
+  yet: the address is looked up before the fields of the body and before the
+  archive, and a comment, a chat message, a step or the subtask of a move
+  under it as well, so whoever cannot see what an address names, or names one
+  that is not there, gets 404 whatever the body says. Only where the
+  controller reads the body first — a comment on a card, and a comment
+  written, changed or reacted to under a post, a document or an upload — is a
+  body that cannot be read (400, 415) refused before the address. An argument
+  of the web's forms, in the query or in a body Flow parses, is 400 before
+  everything. A release before that answers a refusal of
+  the body first, which no command depends on: the CLI keys on codes, not on
+  their order. Read in the controllers, not seen live.
+
 - A tool by its identifier alone (`GET files-tools/{id}`, `posts-tools/{id}`,
   `todos-tools/{id}`, `checkins/{id}` and `chats/{id}`, each with `projectId`
   and `project`) and `projectId` on the lines of the entries of a tool, of the
@@ -337,9 +350,9 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
 - `projects edit`: no request of it has gone to a real Minka, and none can
   until a release carries the rename. Read in `ProjectsApiController::
   updateProjectAction`, `DbalProjectRepository::rename` and `RenameProjectTest`
-  on Minka's `main`, and mirrored by the fake: the body before the project,
-  `projectArchived` for a member of an archived project, a client included,
-  and only then the same 404 for a client as for an outsider. A Minka
+  on Minka's `main`, and mirrored by the fake: the same 404 for a client as
+  for an outsider before anything about the body, then the body, then
+  `projectArchived`. A Minka
   without the rename answers the address with a 404 page of text/html instead
   of its JSON on `minka.flownative.com` and `dev.minka.flownative.com`,
   measured read only with a GET; a PATCH meets the same missing route (v0.41
@@ -371,10 +384,6 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   Minka code: the controller refuses the first, and the repository asks the
   second only after the counter of the chat, which an archived project does
   not move.
-- A new chat message: the fake judges its body before it looks the chat up,
-  Minka the other way round, so a body it refuses sent to a chat the person
-  may not see is 422 in the fake and 404 in Minka. The reply is read after
-  the chat in both.
 - An address whose identifier is none: Minka answers 404 before it tells
   anybody that a project is archived — for assignees, subscribers, steps and
   subtasks, and for the removal of a comment under a card, a document or an
@@ -387,8 +396,8 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   request.
 
 - Of the notes of a card: `cardNotesHasControlCharacters`, and `cardArchived`
-  for a card in its board's archive, which the notes of the fake never
-  refuse with.
+  for a card in its board's archive, which the fake gives after the body and
+  before the same text counts as no change.
   Notes over 100000 characters are refused before sending, counted as the
   server counts them since it was brought into line. The fake refuses in the
   controller's order, the text before the guard, and reads a guard's time in
@@ -441,9 +450,9 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
 - Everything of `todolists` and `todogroups`: no request of it has gone to a
   real Minka. The fake mirrors what was read in `TodosApiController`, the
   `TodoQueryService`, the handlers and `DbalTodoRepository`: the order the
-  controller refuses in — the title of a new list before its tool, the
-  description after it, `nothingToChange` before the list is looked up, a
-  neighbour that is no identifier before the group is — the project before the
+  controller refuses in — the tool, the list or the group before the body, the
+  title before the description, a neighbour that is no identifier before the
+  archive — the project before the
   archive of the list, the group of an archived list at no address, the
   archive ordered by the moment of archiving, a list coming back to its place,
   a trashed group taking its to-dos out of every count, and a tool no longer in
@@ -477,8 +486,8 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   mirrors what was read in `TodosApiController`, the `TodoQueryService`, the
   `AssignedTodoQueryService`, the to-do and subtask handlers,
   `DbalTodoRepository`, `DbalTodoSubtaskRepository` and `ApiTodosTest`: the
-  order the controller refuses in, the days of a new to-do before its list and
-  those of an edit after the to-do, a day alone as the due day, the people as a
+  order the controller refuses in, the list or the to-do before the body and
+  the subtask of a move as well, a day alone as the due day, the people as a
   whole set with who stays keeping their place, the moves by place and
   neighbour, a done to-do ticked off again answered like one ticked off now,
   the cursor of the done to-dos behind a moment and not a to-do, and one's own
@@ -577,10 +586,11 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   fake API knows no organisations. Read in the Minka code.
 - That a foreign attachment silently disappears on saving: the fake does not
   remove it.
-- Of the writes on an archived card, only `cards edit` and `comments edit`
-  answer `cardArchived` in the fake, in the order `BoardApiController` asks:
-  the text first, then `projectArchived`, `cardArchived` and last the author
-  of a comment. The other writes on a card of the archive are 404 in the fake.
+- Every write on an archived card answers `cardArchived` in the fake, the
+  ways of Minka's `ApiArchivedCardTest` and the notes, in the order
+  `BoardApiController` asks: a comment or a step under the card first, then
+  the body, then `projectArchived`, `cardArchived` and last the author of a
+  comment.
 - Unicode NFC for the content of a reaction: the server normalises, the fake
   does not.
 - That a write into an archived project answers 422 `projectArchived`: no
@@ -1042,11 +1052,9 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
 - The fake API knows a card in the archive of its board: it says `archived`, is
   read at its own address, stands in no list, goes into the trash from the
   archive and comes back onto the board, and it is left out of a set at work
-  with 200 and `leftOut` while everything else of the set is noted. What it does
-  not mirror is the refusal of a write on such a card: every write answers as an
-  address that has nothing instead of 422 `cardArchived`, and the order in which
-  a move refuses — an archived card before a column without the area on hold —
-  is read in the Minka code alone.
+  with 200 and `leftOut` while everything else of the set is noted, and every
+  write on it is 422 `cardArchived`, a move before a column without the area on
+  hold. All of it read in the Minka code.
 - Of the archive of a board, all of it. No page, no walk and neither write has
   been seen live; everything rests on the Minka code —
   `BoardApiController::archivedCardsAction`,
@@ -1229,8 +1237,8 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   No release carries it yet: v0.41.0, which `minka.flownative.com` runs, and
   v0.42.0 change and remove one's own comment there. The fake follows `main`,
   checked in the order of `FilesApiController` and
-  `AbstractCommentsApiController` (the body before the entry, the reaction
-  before the comment, the archive before the author), not seen live. The
+  `AbstractCommentsApiController` (the body before the entry, the comment
+  before the fields, the archive before the author), not seen live. The
   CLI keeps reading the folder before a comment edit that would drop files
   (C-082), because against v0.41.0 the guard is all that holds them; once the
   instance runs a Minka with the refusal, that read can go.

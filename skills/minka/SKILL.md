@@ -1166,15 +1166,11 @@ one optional assignee and one optional due day.
 A to-do of a list in the archive is read and takes **no write** at all — no
 change, no move, no subtask, not even a tick: exit 9 `todoListArchived`, and
 the `hint` names `todolists unarchive`. No to-do moves into an archived list
-either. What Minka says, in this order: what is wrong with the request itself
-(a title, a line of a subtask, the days of a new to-do; the days of an edit
-only after the to-do is found), then exit 2 for a list or a to-do that is not
-there, then `projectArchived`, then `todoListArchived`, then the place
-(`todoPlaceUnknown`) or the people (`personNotAProjectMember`). Where the CLI
-reads first, a list or to-do that is not there is exit 2 before anything else:
-`todos create` and `todos subtasks create` naming a person by name, address or
-`me`, every other subtask command, and a `todos edit` that changes the notes,
-names a person that way, or gives a due day without a start.
+either. What Minka says, in this order: exit 2 for a list or a to-do that is
+not there, whatever the request says, then what is wrong with the request
+itself (a title, a line of a subtask, the days), then `projectArchived`, then
+`todoListArchived`, then the place (`todoPlaceUnknown`) or the people
+(`personNotAProjectMember`).
 
 ### Codes of this part
 
@@ -1325,19 +1321,16 @@ reminders` lists what you were asked and have not answered.
 
 ### The order of the refusals
 
-What Minka says, in this order. For a new question: the wording, then the
-weekdays, the time and the rhythm, then exit 2 for a tool that is not there,
-then `questionNobodyAsked`, then `projectArchived`, then
-`personNotAProjectMember`. For an edit: the wording, then exit 2, then the
-schedule, then `questionNobodyAsked`, `projectArchived` and
-`personNotAProjectMember`. For an answer: `answerDayNotADate`, then exit 2,
-then the text (`answerTooLong`, `answerNotReadable`, `answerMissing`), then
-`answerDayNotAsked`, then `projectArchived`. Pausing or resuming a question of
-an archived project is `projectArchived` whatever state it is in. Where the CLI
-reads first, a question that is not there is exit 2 before anything else:
-`checkins edit` naming a person by name, address or `me`, and `checkins
-answers list --person` given that way; `checkins answers edit` reads the
-answer always.
+What Minka says, in this order. First exit 2 for a tool, a question or an
+answer that is not there, somebody else's answer included, whatever the
+request says. For a new question then the wording, the weekdays, the time and
+the rhythm, then `questionNobodyAsked`, then `projectArchived`, then
+`personNotAProjectMember`. For an edit the wording, the schedule, then
+`questionNobodyAsked`, `projectArchived` and `personNotAProjectMember`. For an
+answer `answerDayNotADate`, then the text (`answerTooLong`,
+`answerNotReadable`, `answerMissing`), then `answerDayNotAsked`, then
+`projectArchived`. Pausing or resuming a question of an archived project is
+`projectArchived` whatever state it is in.
 
 ### Codes of this part
 

@@ -157,36 +157,33 @@ unarchive`.
 Minka checks in this order, and each step comes only where the one before it
 passed:
 
-1. What is wrong with the body. For a to-do: a field of the wrong type (400,
+1. The list or the to-do: 404, whatever the body says. For a move of a subtask
+   the subtask as well.
+2. What is wrong with the body. For a to-do: a field of the wrong type (400,
    unreachable from here), an identifier of a person or of a place that is
    none (`personNotAProjectMember`, `todoPlaceUnknown`, which the CLI never
-   sends), then `nothingToChange`, the title, and the days of a **new** to-do.
-   For a subtask: `nothingToChange`, the line, then an identifier of a person
-   that is none, then the day. A neighbour of a move that is no identifier comes
-   before everything else.
-2. The list or the to-do, and the subtask: 404.
-3. The days of an **edit**, which are read against the to-do found, then the
-   notes.
+   sends), then `nothingToChange`, the title, and the days, those of an
+   **edit** read against the to-do found. For a subtask: `nothingToChange`,
+   the line, then an identifier of a person that is none, then the day.
+3. For an edit of a subtask, the subtask: 404. Then the notes of a to-do.
 4. After the statement refused, why it did: `projectArchived`, then
    `todoListArchived` for the list of the to-do or the list it was to go to, then
    `todoPlaceUnknown` for a group, a list or a neighbour, and
    `personNotAProjectMember` for a person who is no member.
 
-The CLI changes this order where it reads before it writes: a list or a to-do
-that is not there is then exit 2 before anything else. It reads the list for
-`todos create`, and the to-do for `todos subtasks create`, where a person is
-named by name, address or `me`; the to-do for every other subtask command; and
-the to-do for `todos edit` where it changes the notes, names a person that way,
-or gives a due day without a start. So `todos create --list <unknown> --title
-" " --assignee me` is exit 2, where the same with an ID for the person is
-`todoTitleMissing`.
+Where the CLI reads before it writes, a list or a to-do that is not there is
+exit 2 as well, and no write is sent. It reads the list for `todos create`, and
+the to-do for `todos subtasks create`, where a person is named by name, address
+or `me`; the to-do for every other subtask command; and the to-do for `todos
+edit` where it changes the notes, names a person that way, or gives a due day
+without a start.
 
 | Answer | Command | Exit |
 |---|---|---|
-| 404 | every read and write, for a list or to-do that is unknown, foreign, in the trash or in a group, list or tool in the trash; `subtasks edit`, `complete`, `reopen` and `move` for a subtask that is not on the to-do; before every 422 where the CLI reads first | 2 |
-| 422 `todoTitleMissing`, `todoTitleTooLong`, `todoTitleHasControlCharacters` | `todos create`, `todos edit`; before an unknown list or to-do unless the CLI reads first | 9 |
+| 404 | every read and write, for a list or to-do that is unknown, foreign, in the trash or in a group, list or tool in the trash, before every 422; `subtasks edit`, `complete`, `reopen` and `move` for a subtask that is not on the to-do | 2 |
+| 422 `todoTitleMissing`, `todoTitleTooLong`, `todoTitleHasControlCharacters` | `todos create`, `todos edit` | 9 |
 | 422 `todoNotesTooLong`, `todoNotesNotReadable` | `todos create`, `todos edit` | 9 |
-| 422 `todoDatesNotADate`, `todoDatesOutOfOrder` | `todos create` (before the list), `todos edit` (after the to-do) | 9 |
+| 422 `todoDatesNotADate`, `todoDatesOutOfOrder` | `todos create`, `todos edit` | 9 |
 | 422 `subtaskMissing`, `subtaskTooLong`, `subtaskHasControlCharacters`, `subtaskDueNotADate` | `todos subtasks create`, `todos subtasks edit` | 9 |
 | 422 `personNotAProjectMember` | `todos create`, `todos edit`, `todos subtasks create`, `todos subtasks edit` | 9 |
 | 422 `todoPlaceUnknown` | `todos create --group`, `todos move`, `todos subtasks move` | 9 |

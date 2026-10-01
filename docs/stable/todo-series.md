@@ -129,7 +129,9 @@ written; with `--force`, or over a series written since, it cannot tell.
 
 ## The order of the refusals
 
-What Minka says, in this order: first the **type of every field** (400) —
+What Minka says, in this order: first exit 2 for a list or series not there
+or not readable, the same for a stranger and for a client the list is hidden
+from, whatever the body says. Then the **type of every field** (400) —
 also a `todoId` or `expectedUpdatedAt` that is no string, and an
 `expectedUpdatedAt` that is no point in time — before any value, in the order
 the controller reads them: `todoId`, `leadDays`, `schedule` on `repeat`; title,
@@ -139,10 +141,9 @@ of 999 beside `schedule: 5`. Then each value on its own (422), in the same
 order: a `todoId` that is no identifier (`todoToRepeatUnknown`), the title, a
 person that is no identifier (`personNotAProjectMember`), the days and the
 ranges and names of the schedule, the lead, and on an edit `nothingToChange`.
-Then exit 2 for a list or series not there or not readable, the same for a
-stranger and for a client the list is hidden from. Then, for `repeat`, the
-to-do (`todoToRepeatUnknown`, `todoRepeatsAlready`, `todoSeriesNeedsDueDay`);
-for `repeat` and an edit, the days in order and a schedule that cannot hold
+Then, for `repeat`, the to-do (`todoToRepeatUnknown`, `todoRepeatsAlready`,
+`todoSeriesNeedsDueDay`); for `repeat` and an edit, the days in order and a
+schedule that cannot hold
 (`todoSeriesDatesOutOfOrder`, `todoSeriesScheduleInvalid`). Then
 `projectArchived`, then `todoListArchived`. After those, on an edit: a body
 that changes nothing is answered 200, and only then come `todoSeriesChanged`

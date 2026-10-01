@@ -41,11 +41,16 @@ func (s *Server) registerTodoItemRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/me/todos", s.authenticated(s.myTodos))
 }
 
-// addTodo puts a to-do at the end of a list, or of one of its groups. What the
-// body says is held before the list is looked up, the notes after it, and
-// only after the write refused does the server ask why: the project, the
-// archive of the list, the group, the people, in that order.
+// addTodo puts a to-do at the end of a list, or of one of its groups. Once the
+// list is found, what the body says is held, the notes last, and only after
+// the write refused does the server ask why: the project, the archive of the
+// list, the group, the people, in that order.
 func (s *Server) addTodo(w http.ResponseWriter, r *http.Request, person *Person) {
+	tool, list := s.visibleTodoList(r.PathValue("listId"), person)
+	if list == nil {
+		notFound(w)
+		return
+	}
 	fields, ok := readBody(w, r)
 	if !ok {
 		return
@@ -71,11 +76,6 @@ func (s *Server) addTodo(w http.ResponseWriter, r *http.Request, person *Person)
 	}
 	start, due, ok := todoDates(w, deref(startsOn), deref(dueOn))
 	if !ok {
-		return
-	}
-	tool, list := s.visibleTodoList(r.PathValue("listId"), person)
-	if list == nil {
-		notFound(w)
 		return
 	}
 	stored, ok := storedTodoNotes(w, deref(notes))
@@ -111,6 +111,11 @@ func (s *Server) todo(w http.ResponseWriter, r *http.Request, person *Person) {
 // alone is the due day. A list of people is the whole set the to-do is to
 // carry: who stays keeps their place, who is new comes behind.
 func (s *Server) updateTodo(w http.ResponseWriter, r *http.Request, person *Person) {
+	tool, list, todo := s.visibleTodo(r.PathValue("todoId"), person)
+	if todo == nil {
+		notFound(w)
+		return
+	}
 	fields, ok := readBody(w, r)
 	if !ok {
 		return
@@ -137,11 +142,6 @@ func (s *Server) updateTodo(w http.ResponseWriter, r *http.Request, person *Pers
 		return
 	}
 	if title != nil && !validTodoTitle(w, "todo", "a to-do", *title) {
-		return
-	}
-	tool, list, todo := s.visibleTodo(r.PathValue("todoId"), person)
-	if todo == nil {
-		notFound(w)
 		return
 	}
 	start, due := todo.StartsOn, todo.DueOn
@@ -224,6 +224,11 @@ func (s *Server) reopenTodo(w http.ResponseWriter, r *http.Request, person *Pers
 // null is none. A neighbour has to stand in the list and the group the to-do
 // goes to.
 func (s *Server) moveTodo(w http.ResponseWriter, r *http.Request, person *Person) {
+	tool, list, todo := s.visibleTodo(r.PathValue("todoId"), person)
+	if todo == nil {
+		notFound(w)
+		return
+	}
 	fields, ok := readBody(w, r)
 	if !ok {
 		return
@@ -242,11 +247,6 @@ func (s *Server) moveTodo(w http.ResponseWriter, r *http.Request, person *Person
 	}
 	next, ok4 := todoPlaceField(w, fields, "nextTodoId")
 	if !ok4 {
-		return
-	}
-	tool, list, todo := s.visibleTodo(r.PathValue("todoId"), person)
-	if todo == nil {
-		notFound(w)
 		return
 	}
 	targetListID := list.ID
@@ -352,8 +352,13 @@ func (s *Server) completedTodos(w http.ResponseWriter, r *http.Request, person *
 }
 
 // addSubtask puts a subtask at the end of a to-do. Its line, its person and its
-// day are held before the to-do is looked up.
+// day are held before the archive is asked.
 func (s *Server) addSubtask(w http.ResponseWriter, r *http.Request, person *Person) {
+	tool, list, todo := s.visibleTodo(r.PathValue("todoId"), person)
+	if todo == nil {
+		notFound(w)
+		return
+	}
 	fields, ok := readBody(w, r)
 	if !ok {
 		return
@@ -378,11 +383,6 @@ func (s *Server) addSubtask(w http.ResponseWriter, r *http.Request, person *Pers
 	if !ok {
 		return
 	}
-	tool, list, todo := s.visibleTodo(r.PathValue("todoId"), person)
-	if todo == nil {
-		notFound(w)
-		return
-	}
 	if s.refusedAsNothingWritten(w, tool, list) || assigneeID != "" && !s.allMembers(w, tool, []string{assigneeID}) {
 		return
 	}
@@ -393,9 +393,15 @@ func (s *Server) addSubtask(w http.ResponseWriter, r *http.Request, person *Pers
 
 // updateSubtask changes any of line, assignee, day and whether it is done.
 // What the body leaves out stays, and null takes the assignee or the day off.
-// Asking for what the subtask says already writes nothing, which an archived
-// project or list answers the way it answers a write.
+// The to-do is looked up before the body, the subtask only after it. Asking
+// for what the subtask says already writes nothing, which an archived project
+// or list answers the way it answers a write.
 func (s *Server) updateSubtask(w http.ResponseWriter, r *http.Request, person *Person) {
+	tool, list, todo := s.visibleTodo(r.PathValue("todoId"), person)
+	if todo == nil {
+		notFound(w)
+		return
+	}
 	fields, ok := readBody(w, r)
 	if !ok {
 		return
@@ -433,11 +439,6 @@ func (s *Server) updateSubtask(w http.ResponseWriter, r *http.Request, person *P
 	if !ok {
 		return
 	}
-	tool, list, todo := s.visibleTodo(r.PathValue("todoId"), person)
-	if todo == nil {
-		notFound(w)
-		return
-	}
 	subtask := subtaskOf(todo, r.PathValue("subtaskId"))
 	if subtask == nil {
 		notFound(w)
@@ -467,8 +468,19 @@ func (s *Server) updateSubtask(w http.ResponseWriter, r *http.Request, person *P
 
 // moveSubtask puts a subtask behind "previousSubtaskId", or in front of
 // "nextSubtaskId", or at the top where neither is named. A neighbour has to be
-// another subtask of the same to-do.
+// another subtask of the same to-do. The to-do and the subtask are looked up
+// before the body.
 func (s *Server) moveSubtask(w http.ResponseWriter, r *http.Request, person *Person) {
+	tool, list, todo := s.visibleTodo(r.PathValue("todoId"), person)
+	if todo == nil {
+		notFound(w)
+		return
+	}
+	subtask := subtaskOf(todo, r.PathValue("subtaskId"))
+	if subtask == nil {
+		notFound(w)
+		return
+	}
 	fields, ok := readBody(w, r)
 	if !ok {
 		return
@@ -479,16 +491,6 @@ func (s *Server) moveSubtask(w http.ResponseWriter, r *http.Request, person *Per
 	}
 	next, ok2 := todoPlaceField(w, fields, "nextSubtaskId")
 	if !ok2 {
-		return
-	}
-	tool, list, todo := s.visibleTodo(r.PathValue("todoId"), person)
-	if todo == nil {
-		notFound(w)
-		return
-	}
-	subtask := subtaskOf(todo, r.PathValue("subtaskId"))
-	if subtask == nil {
-		notFound(w)
 		return
 	}
 	for _, neighbour := range []*string{previous, next} {

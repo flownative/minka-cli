@@ -125,7 +125,8 @@ func TestAnIdentifierInCapitalsNamesWhatItNamesInLowercase(t *testing.T) {
 
 // Minka answers an address whose identifier is none with the 404 of an
 // address that names nothing, before it asks whether the project is archived:
-// only an identifier that could name something learns that the project is.
+// only an identifier that could name something learns that the project is,
+// and of a comment, a message or a step only one that is there.
 func TestAnAddressThatNamesNoIdentifierIsNotFoundBeforeTheArchive(t *testing.T) {
 	s, f := New(t)
 	f.CardInTriage.Steps = []*Step{{ID: newID(), Title: "Check"}}
@@ -151,16 +152,25 @@ func TestAnAddressThatNamesNoIdentifierIsNotFoundBeforeTheArchive(t *testing.T) 
 		}
 	}
 
-	// An identifier that names nothing on the card is asked about the archive.
+	// A comment, a message or a step that is not there is looked for before
+	// the archive, and is not found.
 	for _, p := range []struct{ method, path, body string }{
 		{"DELETE", "/api/v1/cards/" + card + "/comments/" + newID(), ""},
 		{"DELETE", "/api/v1/documents/" + document + "/comments/" + newID(), ""},
 		{"DELETE", "/api/v1/files-uploads/" + upload + "/comments/" + newID(), ""},
 		{"DELETE", "/api/v1/chats/" + chat + "/messages/" + newID(), ""},
+		{"PATCH", "/api/v1/cards/" + card + "/steps/" + newID(), `{"completed":true}`},
+	} {
+		if got, _ := answerTo(t, s, f.Token, p.method, p.path, p.body); got != "404" {
+			t.Errorf("%s %s: %s, want 404", p.method, p.path, got)
+		}
+	}
+
+	// Any other identifier that names nothing is asked about the archive.
+	for _, p := range []struct{ method, path, body string }{
 		{"DELETE", "/api/v1/cards/" + card + "/assignees/" + newID(), ""},
 		{"POST", "/api/v1/cards/" + card + "/subscribers/" + newID(), ""},
 		{"DELETE", "/api/v1/cards/" + card + "/subscribers/" + newID(), ""},
-		{"PATCH", "/api/v1/cards/" + card + "/steps/" + newID(), `{"completed":true}`},
 		{"DELETE", "/api/v1/cards/" + card + "/steps/" + newID(), ""},
 		{"DELETE", "/api/v1/todos/" + todo + "/subtasks/" + newID(), ""},
 	} {

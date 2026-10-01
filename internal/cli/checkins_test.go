@@ -365,8 +365,8 @@ func TestPausingAndResumingSucceedTwice(t *testing.T) {
 	}
 }
 
-// Minka holds the body of a question before it looks for the tool, and asks
-// whom the question asks only after it found it: nobody, then the archived
+// Minka looks for the tool before it holds the body of a question, and asks
+// whom the question asks only after the body: nobody, then the archived
 // project, then a stranger.
 func TestTheRefusalsOfANewQuestionComeInMinkasOrder(t *testing.T) {
 	e := newTestEnv(t)
@@ -380,10 +380,12 @@ func TestTheRefusalsOfANewQuestionComeInMinkasOrder(t *testing.T) {
 		exit int
 		code string
 	}{
-		"a title before the tool":             {[]string{"checkins", "create", "--tool", unknownID, "--title", " ", "--ask", f.Stranger.ID}, ExitValidation, "questionTitleMissing"},
-		"the weekdays before the tool":        {[]string{"checkins", "create", "--tool", unknownID, "--title", "Q", "--time", "09:00"}, ExitValidation, apiCodeQuestionWeekdaysMissing},
-		"the time before the rhythm":          {[]string{"checkins", "create", "--tool", unknownID, "--title", "Q", "--weekday", "1", "--time", "25:00"}, ExitValidation, apiCodeQuestionTimeInvalid},
-		"no rhythm before the tool":           {[]string{"checkins", "create", "--tool", unknownID, "--title", "Q", "--weekday", "1", "--time", "09:00"}, ExitValidation, apiCodeQuestionScheduleInvalid},
+		"the tool before a title":             {[]string{"checkins", "create", "--tool", unknownID, "--title", " ", "--ask", f.Stranger.ID}, ExitNotFound, ""},
+		"the tool before the weekdays":        {[]string{"checkins", "create", "--tool", unknownID, "--title", "Q", "--time", "09:00"}, ExitNotFound, ""},
+		"a title before nobody":               {[]string{"checkins", "create", "--tool", f.CheckinsTool.ID, "--title", " ", "--ask", f.Stranger.ID}, ExitValidation, "questionTitleMissing"},
+		"the weekdays before nobody":          {[]string{"checkins", "create", "--tool", f.CheckinsTool.ID, "--title", "Q", "--time", "09:00"}, ExitValidation, apiCodeQuestionWeekdaysMissing},
+		"the time before the rhythm":          {[]string{"checkins", "create", "--tool", f.CheckinsTool.ID, "--title", "Q", "--weekday", "1", "--time", "25:00"}, ExitValidation, apiCodeQuestionTimeInvalid},
+		"no rhythm before nobody":             {[]string{"checkins", "create", "--tool", f.CheckinsTool.ID, "--title", "Q", "--weekday", "1", "--time", "09:00"}, ExitValidation, apiCodeQuestionScheduleInvalid},
 		"the tool before nobody":              {valid(unknownID), ExitNotFound, ""},
 		"the tool before a stranger":          {valid(f.OtherCheckinsTool.ID, "--ask", f.Stranger.ID), ExitNotFound, ""},
 		"nobody":                              {valid(f.CheckinsTool.ID), ExitValidation, apiCodeQuestionNobodyAsked},
@@ -419,9 +421,9 @@ func TestTheRefusalsOfANewQuestionComeInMinkasOrder(t *testing.T) {
 	}
 }
 
-// An edit is held against the question it finds: the wording before it, the
-// schedule after it, and where it names somebody by name, address or as me the
-// question is read first, so that one not there answers first.
+// An edit is held against the question it finds, so a question not there
+// answers first; where the edit names somebody by name, address or as me the
+// question is read before anything is sent.
 func TestTheRefusalsOfAnEditComeInMinkasOrderOrAfterTheRead(t *testing.T) {
 	e := newTestEnv(t)
 	f := e.fixture
@@ -431,7 +433,8 @@ func TestTheRefusalsOfAnEditComeInMinkasOrderOrAfterTheRead(t *testing.T) {
 		exit int
 		code string
 	}{
-		"the wording before the question":  {[]string{"checkins", "edit", unknownID, "--title", ""}, ExitValidation, "questionTitleMissing"},
+		"the question before the wording":  {[]string{"checkins", "edit", unknownID, "--title", ""}, ExitNotFound, ""},
+		"the wording":                      {[]string{"checkins", "edit", f.DailyQuestion.ID, "--title", ""}, ExitValidation, "questionTitleMissing"},
 		"the question before the schedule": {[]string{"checkins", "edit", unknownID, "--rhythm", "fortnightly"}, ExitNotFound, ""},
 		"the question before nobody":       {[]string{"checkins", "edit", unknownID, "--ask", unknownID}, ExitNotFound, ""},
 		"read first for me":                {[]string{"checkins", "edit", unknownID, "--title", "", "--ask", "me"}, ExitNotFound, ""},
@@ -666,8 +669,8 @@ func TestAnAnswerBelongsToTheDayAskedFor(t *testing.T) {
 	runOK(t, e, "checkins", "answers", "create", f.PausedQuestion.ID, "A good month", "--asked-for", "2026-09-04")
 }
 
-// Minka holds the day of an answer before it looks for the question, the body
-// after it, and whether the day was asked only then, before the archive.
+// Minka looks for the question before it holds the day of an answer, the body
+// after the day, and whether the day was asked only then, before the archive.
 func TestTheRefusalsOfAnAnswerComeInMinkasOrder(t *testing.T) {
 	e := newTestEnv(t)
 	f := e.fixture
@@ -677,7 +680,8 @@ func TestTheRefusalsOfAnAnswerComeInMinkasOrder(t *testing.T) {
 		exit int
 		code string
 	}{
-		"the day before the question":  {[]string{"checkins", "answers", "create", unknownID, "Hello", "--asked-for", "tomorrow"}, ExitValidation, apiCodeAnswerDayNotADate},
+		"the question before the day":  {[]string{"checkins", "answers", "create", unknownID, "Hello", "--asked-for", "tomorrow"}, ExitNotFound, ""},
+		"the day before the body":      {[]string{"checkins", "answers", "create", f.WeeklyQuestion.ID, "", "--asked-for", "tomorrow"}, ExitValidation, apiCodeAnswerDayNotADate},
 		"the question before the body": {[]string{"checkins", "answers", "create", unknownID, ""}, ExitNotFound, ""},
 		"nothing said":                 {[]string{"checkins", "answers", "create", f.WeeklyQuestion.ID, "", "--asked-for", "2026-09-08"}, ExitValidation, apiCodeAnswerMissing},
 		"a day not asked":              {[]string{"checkins", "answers", "create", f.WeeklyQuestion.ID, "Hello", "--asked-for", "2026-09-08"}, ExitValidation, apiCodeAnswerDayNotAsked},

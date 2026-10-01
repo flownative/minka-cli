@@ -207,8 +207,10 @@ func TestADescriptionInHTMLWithoutMarkupIsSaidOutLoud(t *testing.T) {
 func TestStartingAListIsRefusedWhereTheServerRefusesIt(t *testing.T) {
 	e := newTestEnv(t)
 
-	// The title is held before the tool is looked up.
-	env, r := e.runJSON("", "todolists", "create", "--tool", "01990000-0000-4000-8000-000000000000", "--title", " ")
+	// The tool is looked up before the title is held.
+	_, r := e.runJSON("", "todolists", "create", "--tool", "01990000-0000-4000-8000-000000000000", "--title", " ")
+	expectCode(t, r, ExitNotFound)
+	env, r := e.runJSON("", "todolists", "create", "--tool", e.fixture.Todos.ID, "--title", " ")
 	expectCode(t, r, ExitValidation)
 	if env.Meta["apiCode"] != "todoListTitleMissing" {
 		t.Fatalf("apiCode %v", env.Meta["apiCode"])
@@ -598,24 +600,36 @@ func TestAGroupIsNotMovedNextToItself(t *testing.T) {
 	}
 }
 
-// The title is held before the list or the group is looked up, so an empty one
-// is refused as empty wherever it is aimed.
-func TestATitleIsRefusedBeforeWhatItIsFor(t *testing.T) {
+// The list or the group is looked up before the title is held, so an empty
+// title aimed at nothing is not found, and one aimed at a list or a group
+// that is there is refused as empty.
+func TestATitleIsRefusedAfterWhatItIsFor(t *testing.T) {
 	e := newTestEnv(t)
+	f := e.fixture
 	unknown := "01990000-0000-4000-8000-000000000000"
 
 	for name, c := range map[string]struct {
 		args []string
 		code string
 	}{
-		"a list changed":  {[]string{"todolists", "edit", unknown, "--title", ""}, "todoListTitleMissing"},
-		"a group added":   {[]string{"todogroups", "create", "--list", unknown, "--title", ""}, "todoGroupTitleMissing"},
-		"a group renamed": {[]string{"todogroups", "edit", unknown, "--title", ""}, "todoGroupTitleMissing"},
+		"a list changed":  {[]string{"todolists", "edit", f.TodoList.ID, "--title", ""}, "todoListTitleMissing"},
+		"a group added":   {[]string{"todogroups", "create", "--list", f.TodoList.ID, "--title", ""}, "todoGroupTitleMissing"},
+		"a group renamed": {[]string{"todogroups", "edit", f.StageGroup.ID, "--title", ""}, "todoGroupTitleMissing"},
 	} {
 		env, r := e.runJSON("", c.args...)
 		expectCode(t, r, ExitValidation)
 		if env.Meta["apiCode"] != c.code {
 			t.Fatalf("%s: apiCode %v, want %s", name, env.Meta["apiCode"], c.code)
+		}
+	}
+	for name, args := range map[string][]string{
+		"a list changed":  {"todolists", "edit", unknown, "--title", ""},
+		"a group added":   {"todogroups", "create", "--list", unknown, "--title", ""},
+		"a group renamed": {"todogroups", "edit", unknown, "--title", ""},
+	} {
+		_, r := e.runJSON("", args...)
+		if r.code != ExitNotFound {
+			t.Fatalf("%s aimed at nothing: exit %d, want %d", name, r.code, ExitNotFound)
 		}
 	}
 }

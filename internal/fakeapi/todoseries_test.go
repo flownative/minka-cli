@@ -392,41 +392,53 @@ func TestAnEditOverAVersionNotReadIsRefusedWithTheSeriesAsItStands(t *testing.T)
 	}
 }
 
-// The body is checked in full before the series is looked for: every case
-// below is aimed at a series that does not exist.
-func TestABodyIsCheckedBeforeTheSeriesIsLookedFor(t *testing.T) {
+// The series is looked for before its body, and then the body is checked in
+// full: every case of the first table is aimed at the series of the fixture
+// and refused before anything is written, and all of them are not found at a
+// series that does not exist.
+func TestTheSeriesIsLookedForBeforeItsBodyIsChecked(t *testing.T) {
 	s, f := New(t)
+	series := "/todo-series/" + f.Series.ID
 	invented := "/todo-series/01990000-0000-4000-8000-000000000000"
-	for body, want := range map[string]string{
-		`{"schedule": "weekly"}`:                                    "400 malformedBody",
-		`{"schedule": null}`:                                        "400 malformedBody",
-		`{"assigneeIds": null}`:                                     "400 malformedBody",
-		`{"notifiedIds": [5]}`:                                      "400 malformedBody",
-		`{"schedule": {"interval": 1.0}}`:                           "400 malformedBody",
-		`{"schedule": {"weekdays": [1, "2"]}}`:                      "400 malformedBody",
-		`{"leadDays": "7"}`:                                         "400 malformedBody",
-		`{"title": "Kasse", "expectedUpdatedAt": 5}`:                "400 malformedBody",
-		`{"leadDays": null}`:                                        "422 todoSeriesLeadDaysInvalid",
-		`{"title": null}`:                                           "422 todoTitleMissing",
-		`{"schedule": {}}`:                                          "422 nothingToChange",
-		`{"schedule": {"rhythm": null}}`:                            "422 nothingToChange",
-		`{"expectedUpdatedAt": "2026-09-13T14:02:11.123456Z"}`:      "422 nothingToChange",
-		`{"schedule": {"rhythm": "daily", "interval": 0}}`:          "422 todoSeriesScheduleInvalid",
-		`{"schedule": {"rhythm": "yearly", "interval": 500}}`:       "422 todoSeriesScheduleInvalid",
-		`{"schedule": {"weekday": 8}}`:                              "422 todoSeriesScheduleInvalid",
-		`{"schedule": {"instance": 5}}`:                             "422 todoSeriesScheduleInvalid",
-		`{"schedule": {"endsOn": "2030-02-30"}}`:                    "422 todoSeriesDatesNotADate",
-		`{"schedule": {"startsOn": ""}}`:                            "422 todoSeriesDatesNotADate",
-		`{"assigneeIds": ["somebody"]}`:                             "422 personNotAProjectMember",
-		`{"schedule": {"rhythm": "weekly", "weekdays": []}}`:        "404",
-		`{"schedule": {"rhythm": "yearly", "month": 4, "day": 31}}`: "404",
-		`{"title": "Kasse"}`:                                        "404",
-	} {
-		if got := callSeries(t, s, f.Token, http.MethodPatch, invented, body).got; got != want {
+	refusals := map[string]string{
+		`{"schedule": "weekly"}`:                               "400 malformedBody",
+		`{"schedule": null}`:                                   "400 malformedBody",
+		`{"assigneeIds": null}`:                                "400 malformedBody",
+		`{"notifiedIds": [5]}`:                                 "400 malformedBody",
+		`{"schedule": {"interval": 1.0}}`:                      "400 malformedBody",
+		`{"schedule": {"weekdays": [1, "2"]}}`:                 "400 malformedBody",
+		`{"leadDays": "7"}`:                                    "400 malformedBody",
+		`{"title": "Kasse", "expectedUpdatedAt": 5}`:           "400 malformedBody",
+		`{"leadDays": null}`:                                   "422 todoSeriesLeadDaysInvalid",
+		`{"title": null}`:                                      "422 todoTitleMissing",
+		`{"schedule": {}}`:                                     "422 nothingToChange",
+		`{"schedule": {"rhythm": null}}`:                       "422 nothingToChange",
+		`{"expectedUpdatedAt": "2026-09-13T14:02:11.123456Z"}`: "422 nothingToChange",
+		`{"schedule": {"rhythm": "daily", "interval": 0}}`:     "422 todoSeriesScheduleInvalid",
+		`{"schedule": {"rhythm": "yearly", "interval": 500}}`:  "422 todoSeriesScheduleInvalid",
+		`{"schedule": {"weekday": 8}}`:                         "422 todoSeriesScheduleInvalid",
+		`{"schedule": {"instance": 5}}`:                        "422 todoSeriesScheduleInvalid",
+		`{"schedule": {"endsOn": "2030-02-30"}}`:               "422 todoSeriesDatesNotADate",
+		`{"schedule": {"startsOn": ""}}`:                       "422 todoSeriesDatesNotADate",
+		`{"assigneeIds": ["somebody"]}`:                        "422 personNotAProjectMember",
+	}
+	title, updatedAt := f.Series.Title, f.Series.UpdatedAt
+	for body, want := range refusals {
+		if got := callSeries(t, s, f.Token, http.MethodPatch, series, body).got; got != want {
 			t.Errorf("%s: %s, want %s", body, got, want)
 		}
 	}
-	if got := callSeries(t, s, f.Token, http.MethodPost, "/todo-lists/01990000-0000-4000-8000-000000000000/series", map[string]any{"todoId": f.LooseTodo.ID, "leadDays": "7"}).got; got != "400 malformedBody" {
+	if f.Series.Title != title || !f.Series.UpdatedAt.Equal(updatedAt) {
+		t.Errorf("a refused change was written: %q at %v", f.Series.Title, f.Series.UpdatedAt)
+	}
+	refusals[`{"title": "Kasse"}`] = "404"
+	refusals[`{`] = "404"
+	for body := range refusals {
+		if got := callSeries(t, s, f.Token, http.MethodPatch, invented, body).got; got != "404" {
+			t.Errorf("%s at a series that is not there: %s, want 404", body, got)
+		}
+	}
+	if got := callSeries(t, s, f.Token, http.MethodPost, "/todo-lists/01990000-0000-4000-8000-000000000000/series", map[string]any{"todoId": f.LooseTodo.ID, "leadDays": "7"}).got; got != "404" {
 		t.Errorf("lead days as text at a list that is not there: %s", got)
 	}
 	// The type of every field is held before any value: a 400 of a later
@@ -438,10 +450,10 @@ func TestABodyIsCheckedBeforeTheSeriesIsLookedFor(t *testing.T) {
 		{http.MethodPost, "/todo-lists/" + f.TodoList.ID + "/series", map[string]any{"todoId": "none", "leadDays": "7"}},
 		{http.MethodPost, "/todo-lists/" + f.TodoList.ID + "/series", map[string]any{"schedule": map[string]any{"interval": "two"}}},
 		{http.MethodPost, "/todo-lists/" + f.TodoList.ID + "/series", map[string]any{"todoId": f.LooseTodo.ID, "leadDays": 999, "schedule": map[string]any{"weekdays": "Monday"}}},
-		{http.MethodPatch, invented, map[string]any{"title": "", "assigneeIds": "Anke"}},
-		{http.MethodPatch, invented, map[string]any{"assigneeIds": []string{"none"}, "notifiedIds": []int{1}}},
-		{http.MethodPatch, invented, map[string]any{"schedule": map[string]any{"interval": 0}, "expectedUpdatedAt": "yesterday"}},
-		{http.MethodPatch, invented, map[string]any{"leadDays": 999, "schedule": map[string]any{"day": "1"}}},
+		{http.MethodPatch, series, map[string]any{"title": "", "assigneeIds": "Anke"}},
+		{http.MethodPatch, series, map[string]any{"assigneeIds": []string{"none"}, "notifiedIds": []int{1}}},
+		{http.MethodPatch, series, map[string]any{"schedule": map[string]any{"interval": 0}, "expectedUpdatedAt": "yesterday"}},
+		{http.MethodPatch, series, map[string]any{"leadDays": 999, "schedule": map[string]any{"day": "1"}}},
 	} {
 		if got := callSeries(t, s, f.Token, c.method, c.path, c.body).got; got != "400 malformedBody" {
 			t.Errorf("%s %v: %s", c.method, c.body, got)
@@ -455,16 +467,18 @@ func TestABodyIsCheckedBeforeTheSeriesIsLookedFor(t *testing.T) {
 		t.Errorf("lead days of null: %s", got)
 	}
 
-	request, _ := http.NewRequest(http.MethodPatch, s.URL+"/api/v1"+invented, strings.NewReader("title=Kasse"))
-	request.Header.Set("Authorization", "Bearer "+f.Token)
-	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	response, err := http.DefaultClient.Do(request)
-	if err != nil {
-		t.Fatal(err)
-	}
-	_ = response.Body.Close()
-	if response.StatusCode != http.StatusUnsupportedMediaType {
-		t.Errorf("a form: %d", response.StatusCode)
+	for path, want := range map[string]int{series: http.StatusUnsupportedMediaType, invented: http.StatusNotFound} {
+		request, _ := http.NewRequest(http.MethodPatch, s.URL+"/api/v1"+path, strings.NewReader("title=Kasse"))
+		request.Header.Set("Authorization", "Bearer "+f.Token)
+		request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		response, err := http.DefaultClient.Do(request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = response.Body.Close()
+		if response.StatusCode != want {
+			t.Errorf("a form at %s: %d, want %d", path, response.StatusCode, want)
+		}
 	}
 }
 

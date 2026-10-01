@@ -33,9 +33,9 @@ func groupAnswerTo(t *testing.T, url, token, method, path, body string) (int, st
 	return response.StatusCode, code, answer["color"]
 }
 
-// Minka reads the body of a new group in a fixed order: the type of the title,
-// the title, the type of the colour, the colour, and only then the list. So a
-// bad colour aimed at a list that does not exist is refused as a bad colour.
+// Minka looks the list up first and then reads the body of a new group in a
+// fixed order: the type of the title, the title, the type of the colour, the
+// colour. So whatever is aimed at a list that does not exist is not found.
 func TestANewGroupIsRefusedInTheOrderMinkaChecks(t *testing.T) {
 	server, fixture := New(t)
 	unknown := "/todo-lists/01990000-0000-4000-8000-000000000000/groups"
@@ -46,12 +46,15 @@ func TestANewGroupIsRefusedInTheOrderMinkaChecks(t *testing.T) {
 		status     int
 		code       string
 	}{
-		{unknown, `{"title": 5, "color": 5}`, http.StatusBadRequest, "malformedBody"},
-		{unknown, `{"title": "", "color": 5}`, http.StatusUnprocessableEntity, "todoGroupTitleMissing"},
-		{unknown, `{"title": "Light", "color": 5}`, http.StatusBadRequest, "malformedBody"},
-		{unknown, `{"title": "Light", "color": ""}`, http.StatusUnprocessableEntity, "todoGroupColorUnknown"},
-		{unknown, `{"title": "Light", "color": "teal"}`, http.StatusUnprocessableEntity, "todoGroupColorUnknown"},
+		{known, `{"title": 5, "color": 5}`, http.StatusBadRequest, "malformedBody"},
+		{known, `{"title": "", "color": 5}`, http.StatusUnprocessableEntity, "todoGroupTitleMissing"},
+		{known, `{"title": "Light", "color": 5}`, http.StatusBadRequest, "malformedBody"},
+		{known, `{"title": "Light", "color": ""}`, http.StatusUnprocessableEntity, "todoGroupColorUnknown"},
+		{known, `{"title": "Light", "color": "teal"}`, http.StatusUnprocessableEntity, "todoGroupColorUnknown"},
 		{known, `{"title": "Light", "color": "Red"}`, http.StatusUnprocessableEntity, "todoGroupColorUnknown"},
+		{unknown, `{"title": 5, "color": 5}`, http.StatusNotFound, ""},
+		{unknown, `{"title": "Light", "color": "teal"}`, http.StatusNotFound, ""},
+		{unknown, `{`, http.StatusNotFound, ""},
 		{unknown, `{"title": "Light", "color": "red"}`, http.StatusNotFound, ""},
 	} {
 		status, code, _ := groupAnswerTo(t, server.URL, fixture.Token, http.MethodPost, c.path, c.body)
@@ -83,9 +86,9 @@ func TestANewGroupCarriesItsColourAndWhiteIsNone(t *testing.T) {
 	}
 }
 
-// An edit checks the title before whether anything is to change at all, and a
-// colour of null is something to change. Title and colour are written together
-// or not at all, and a bad colour is refused before the group is looked up.
+// An edit looks the group up first, and checks the title before whether
+// anything is to change at all; a colour of null is something to change.
+// Title and colour are written together or not at all.
 func TestAnEditOfAGroupIsRefusedInTheOrderMinkaChecksAndWritesAllOrNothing(t *testing.T) {
 	server, fixture := New(t)
 	stage := "/todo-groups/" + fixture.StageGroup.ID
@@ -96,13 +99,16 @@ func TestAnEditOfAGroupIsRefusedInTheOrderMinkaChecksAndWritesAllOrNothing(t *te
 		status     int
 		code       string
 	}{
-		{unknown, `{"title": 5}`, http.StatusBadRequest, "malformedBody"},
-		{unknown, `{}`, http.StatusUnprocessableEntity, "nothingToChange"},
+		{stage, `{"title": 5}`, http.StatusBadRequest, "malformedBody"},
+		{stage, `{}`, http.StatusUnprocessableEntity, "nothingToChange"},
 		{stage, `{"title": null}`, http.StatusUnprocessableEntity, "nothingToChange"},
 		{stage, `{"title": "", "color": "blue"}`, http.StatusUnprocessableEntity, "todoGroupTitleMissing"},
 		{stage, `{"title": "Renamed", "color": "teal"}`, http.StatusUnprocessableEntity, "todoGroupColorUnknown"},
 		{stage, `{"title": "Renamed", "color": 5}`, http.StatusBadRequest, "malformedBody"},
-		{unknown, `{"color": ""}`, http.StatusUnprocessableEntity, "todoGroupColorUnknown"},
+		{stage, `{"color": ""}`, http.StatusUnprocessableEntity, "todoGroupColorUnknown"},
+		{unknown, `{"title": 5}`, http.StatusNotFound, ""},
+		{unknown, `{}`, http.StatusNotFound, ""},
+		{unknown, `{"color": ""}`, http.StatusNotFound, ""},
 		{unknown, `{"color": "green"}`, http.StatusNotFound, ""},
 		{unknown, `{"color": null}`, http.StatusNotFound, ""},
 	} {

@@ -165,10 +165,15 @@ func (s *Server) checkinQuestions(w http.ResponseWriter, r *http.Request, person
 }
 
 // addCheckinQuestion sets up a question that starts on the writer's today. The
-// body is read field by field, the wording and the schedule are held before
-// the tool is looked up, and nobody asked, the archived project and a stranger
-// among the people only after it, in that order.
+// tool is looked up first, then the body is read field by field, the wording
+// and the schedule held, and nobody asked, the archived project and a stranger
+// among the people come last, in that order.
 func (s *Server) addCheckinQuestion(w http.ResponseWriter, r *http.Request, person *Person) {
+	tool := s.visibleCheckinsTool(r.PathValue("toolId"), person)
+	if tool == nil {
+		notFound(w)
+		return
+	}
 	fields, ok := readBodyWith(w, r, true)
 	if !ok {
 		return
@@ -187,11 +192,6 @@ func (s *Server) addCheckinQuestion(w http.ResponseWriter, r *http.Request, pers
 	today := s.now.UTC().Format("2006-01-02")
 	rhythm, days, timeOfDay, ok := checkinSchedule(w, deref(body.rhythm), weekdays, deref(body.timeOfDay))
 	if !ok {
-		return
-	}
-	tool := s.visibleCheckinsTool(r.PathValue("toolId"), person)
-	if tool == nil {
-		notFound(w)
 		return
 	}
 	if len(body.askedIDs) == 0 {
@@ -229,6 +229,11 @@ func (s *Server) checkinQuestion(w http.ResponseWriter, r *http.Request, person 
 // people are the whole set only over whom the question shows as asked: a
 // member who left and a client it is not shown to stay as they are.
 func (s *Server) updateCheckinQuestion(w http.ResponseWriter, r *http.Request, person *Person) {
+	tool, question := s.visibleCheckinQuestion(r.PathValue("questionId"), person)
+	if question == nil {
+		notFound(w)
+		return
+	}
 	fields, ok := readBodyWith(w, r, true)
 	if !ok {
 		return
@@ -242,11 +247,6 @@ func (s *Server) updateCheckinQuestion(w http.ResponseWriter, r *http.Request, p
 		return
 	}
 	if body.title != nil && !validTodoTitle(w, "question", "a question", *body.title) {
-		return
-	}
-	tool, question := s.visibleCheckinQuestion(r.PathValue("questionId"), person)
-	if question == nil {
-		notFound(w)
 		return
 	}
 	rhythm, weekdays, timeOfDay := question.Rhythm, question.Weekdays, question.TimeOfDay
@@ -367,9 +367,14 @@ func (s *Server) checkinAnswers(w http.ResponseWriter, r *http.Request, person *
 
 // addCheckinAnswer answers a question for the day named in "askedFor", which
 // has to be one the question was put to the writer for, or else for the day of
-// its latest asking. What the day looks like is held before the question is
-// looked up, the body after it, and whether the day was asked only then.
+// its latest asking. Once the question is found, what the day looks like is
+// held before the body, and whether the day was asked only then.
 func (s *Server) addCheckinAnswer(w http.ResponseWriter, r *http.Request, person *Person) {
+	tool, question := s.visibleCheckinQuestion(r.PathValue("questionId"), person)
+	if question == nil {
+		notFound(w)
+		return
+	}
 	fields, ok := readBody(w, r)
 	if !ok {
 		return
@@ -381,11 +386,6 @@ func (s *Server) addCheckinAnswer(w http.ResponseWriter, r *http.Request, person
 	}
 	if askedFor != nil && !isAnswerDay(*askedFor) {
 		unprocessable(w, "answerDayNotADate", "The day asked for is written as YYYY-MM-DD.")
-		return
-	}
-	tool, question := s.visibleCheckinQuestion(r.PathValue("questionId"), person)
-	if question == nil {
-		notFound(w)
 		return
 	}
 	body, ok := storedAnswer(w, deref(bodyValue))
@@ -420,9 +420,15 @@ func (s *Server) checkinAnswer(w http.ResponseWriter, r *http.Request, person *P
 }
 
 // updateCheckinAnswer gives an answer a new body. Only its writer may, and
-// anybody else is answered as if it were not there; the same body again is no
-// error and changes nothing. The day an answer belongs to never changes.
+// anybody else is answered as if it were not there, before anything about the
+// body; the same body again is no error and changes nothing. The day an
+// answer belongs to never changes.
 func (s *Server) updateCheckinAnswer(w http.ResponseWriter, r *http.Request, person *Person) {
+	tool, question, answer := s.visibleCheckinAnswer(r.PathValue("answerId"), person)
+	if answer == nil || answer.AuthorID != person.ID {
+		notFound(w)
+		return
+	}
 	fields, ok := readBody(w, r)
 	if !ok {
 		return
@@ -433,11 +439,6 @@ func (s *Server) updateCheckinAnswer(w http.ResponseWriter, r *http.Request, per
 	}
 	if bodyValue == nil {
 		unprocessable(w, "nothingToChange", "The body names no new text for the answer.")
-		return
-	}
-	tool, question, answer := s.visibleCheckinAnswer(r.PathValue("answerId"), person)
-	if answer == nil || answer.AuthorID != person.ID {
-		notFound(w)
 		return
 	}
 	body, ok := storedAnswer(w, *bodyValue)

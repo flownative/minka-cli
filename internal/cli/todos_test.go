@@ -667,28 +667,38 @@ func TestAGroupThatIsNotThereTakesNoNewTodo(t *testing.T) {
 	}
 }
 
-// What is wrong with what the command says is refused before the list or the
-// to-do is looked up, except the days of an edit, which Minka reads only
-// against the to-do it found.
-func TestWhatIsWrongWithTheRequestIsSaidBeforeWhatItIsFor(t *testing.T) {
+// The list or the to-do is looked up before what is wrong with what the
+// command says is refused: aimed at nothing, each of these is not found, and
+// aimed at a list or a to-do that is there, each is refused for what it says.
+func TestWhatIsWrongWithTheRequestIsSaidAfterWhatItIsFor(t *testing.T) {
 	e := newTestEnv(t)
+	f := e.fixture
 
 	for name, c := range map[string]struct {
-		args []string
-		exit int
+		args func(list, todo string) []string
 		code string
 	}{
-		"create without a title":        {[]string{"todos", "create", "--list", unknownID, "--title", " "}, ExitValidation, "todoTitleMissing"},
-		"create with no day":            {[]string{"todos", "create", "--list", unknownID, "--title", "A", "--due", "tomorrow"}, ExitValidation, "todoDatesNotADate"},
-		"create with the days reversed": {[]string{"todos", "create", "--list", unknownID, "--title", "A", "--starts-on", "2026-10-05", "--due", "2026-10-01"}, ExitValidation, "todoDatesOutOfOrder"},
-		"edit without a title":          {[]string{"todos", "edit", unknownID, "--title", ""}, ExitValidation, "todoTitleMissing"},
-		"edit with no day":              {[]string{"todos", "edit", unknownID, "--due", "tomorrow"}, ExitNotFound, ""},
-		"subtask without a text":        {[]string{"todos", "subtasks", "create", unknownID, " "}, ExitValidation, "subtaskMissing"},
-		"subtask with no day":           {[]string{"todos", "subtasks", "create", unknownID, "Cables", "--due", "31.10."}, ExitValidation, "subtaskDueNotADate"},
+		"create without a title": {func(list, _ string) []string { return []string{"todos", "create", "--list", list, "--title", " "} }, "todoTitleMissing"},
+		"create with no day": {func(list, _ string) []string {
+			return []string{"todos", "create", "--list", list, "--title", "A", "--due", "tomorrow"}
+		}, "todoDatesNotADate"},
+		"create with the days reversed": {func(list, _ string) []string {
+			return []string{"todos", "create", "--list", list, "--title", "A", "--starts-on", "2026-10-05", "--due", "2026-10-01"}
+		}, "todoDatesOutOfOrder"},
+		"edit without a title":   {func(_, todo string) []string { return []string{"todos", "edit", todo, "--title", ""} }, "todoTitleMissing"},
+		"edit with no day":       {func(_, todo string) []string { return []string{"todos", "edit", todo, "--due", "tomorrow"} }, "todoDatesNotADate"},
+		"subtask without a text": {func(_, todo string) []string { return []string{"todos", "subtasks", "create", todo, " "} }, "subtaskMissing"},
+		"subtask with no day": {func(_, todo string) []string {
+			return []string{"todos", "subtasks", "create", todo, "Cables", "--due", "31.10."}
+		}, "subtaskDueNotADate"},
 	} {
-		env, r := e.runJSON("", c.args...)
-		expectCode(t, r, c.exit)
-		if c.code != "" && env.Meta["apiCode"] != c.code {
+		_, r := e.runJSON("", c.args(unknownID, unknownID)...)
+		if r.code != ExitNotFound {
+			t.Fatalf("%s aimed at nothing: exit %d, want %d", name, r.code, ExitNotFound)
+		}
+		env, r := e.runJSON("", c.args(f.TodoList.ID, f.LooseTodo.ID)...)
+		expectCode(t, r, ExitValidation)
+		if env.Meta["apiCode"] != c.code {
 			t.Fatalf("%s: apiCode %v, want %s", name, env.Meta["apiCode"], c.code)
 		}
 	}
@@ -723,8 +733,14 @@ func TestAReadBeforeTheWriteFindsNothingFirst(t *testing.T) {
 		}
 	}
 
-	// Named by ID, nobody is looked for, and Minka's order holds.
-	env, r := e.runJSON("", "todos", "create", "--list", unknownID, "--title", " ", "--assignee", e.fixture.Anke.ID)
+	// Named by ID, nobody is looked for, and Minka's order holds: the list
+	// first, then the title.
+	_, r := e.runJSON("", "todos", "create", "--list", unknownID, "--title", " ", "--assignee", e.fixture.Anke.ID)
+	expectCode(t, r, ExitNotFound)
+	if n := len(e.server.WritingRequests()); n != 1 {
+		t.Fatalf("%d writes, want the one sent", n)
+	}
+	env, r := e.runJSON("", "todos", "create", "--list", e.fixture.TodoList.ID, "--title", " ", "--assignee", e.fixture.Anke.ID)
 	expectCode(t, r, ExitValidation)
 	if env.Meta["apiCode"] != "todoTitleMissing" {
 		t.Fatalf("apiCode %v", env.Meta["apiCode"])
