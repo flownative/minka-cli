@@ -327,9 +327,10 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   archive, and a comment, a chat message, a step or the subtask of a move
   under it as well, so whoever cannot see what an address names, or names one
   that is not there, gets 404 whatever the body says. Only where the
-  controller reads the body first — a comment on a card, and a comment
-  written, changed or reacted to under a post, a document or an upload — is a
-  body that cannot be read (400, 415) refused before the address. An argument
+  controller reads the body first — writing a comment on a card, creating or
+  changing a post, a document or an upload, and a comment written, changed or
+  reacted to under one of them — is a body that cannot be read (400, 415)
+  refused before the address. An argument
   of the web's forms, in the query or in a body Flow parses, is 400 before
   everything. A release before that answers a refusal of
   the body first, which no command depends on: the CLI keys on codes, not on
