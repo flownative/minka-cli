@@ -194,6 +194,7 @@ func TestWhatMakesNoEventIsRefusedWithItsCase(t *testing.T) {
 		`{"title": "x", "startsAt": "2035-10-05T09:00:00+15:00", "endsAt": "2035-10-05T10:00:00Z"}`: "422 eventTimeNotReadable",
 		`{"title": "x", "startsAt": "0000-06-01T00:00:00Z", "endsAt": "2035-10-05T10:00:00Z"}`:      "422 eventTimeNotReadable",
 		`{"title": "x", "startsAt": "0001-01-01T00:00:00+14:00", "endsAt": "2035-10-05T10:00:00Z"}`: "422 eventTimeNotReadable",
+		`{"title": "x", "startsAt": "0000-06-01T00:00:00Z", "endsAt": "0000-05-01T00:00:00Z"}`:      "422 eventTimeNotReadable",
 		`{"title": "x", "startsAt": "2035-02-30T09:00:00Z", "endsAt": "2035-10-05T10:00:00Z"}`:      "422 eventTimeNotReadable",
 		`{"title": "x", "firstDay": "2035-02-30"}`:                                                  "422 eventTimeNotReadable",
 		`{"title": "x", "firstDay": "2035-10-05", "lastDay": "2035-10-04"}`:                         "422 eventEndsBeforeItStarts",

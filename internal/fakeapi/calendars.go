@@ -475,12 +475,12 @@ func readEventTime(w http.ResponseWriter, f eventFields) (eventTime, bool) {
 		eventTimeNotReadable(w)
 		return eventTime{}, false
 	}
-	if endsAt.Before(startsAt) {
-		eventEndsBeforeItStarts(w)
-		return eventTime{}, false
-	}
 	if startsAt.Year() < 1 {
 		eventTimeNotReadable(w)
+		return eventTime{}, false
+	}
+	if endsAt.Before(startsAt) {
+		eventEndsBeforeItStarts(w)
 		return eventTime{}, false
 	}
 	return eventTime{startsAt: &startsAt, endsAt: &endsAt}, true

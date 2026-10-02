@@ -84,14 +84,15 @@ machine.
 `--starts-at` and `--ends-at` together, each ISO 8601 with seconds and an
 **offset** (`+02:00`, `+0200` or `Z`, at most fourteen hours, a fraction of up
 to six digits), the start in the year 1 or later once told in UTC, the end
-not before the start; or `--first-day` and optionally `--last-day`. Minka
-refuses moments and days at once (`eventTimeAmbiguous`) and one moment alone
-(`eventTimeMissing`); the CLI refuses both as a usage error before anything
-goes out, and a `create` without any time as well. An `edit` that names any of
-the four flags names the whole time anew, and may turn a timed event into an
-all-day one and back. The CLI passes a moment on as it was typed and assumes
-no zone for one without an offset: Minka refuses it with
-`eventTimeNotReadable`.
+not before the start, asked in this order, so a start before the year 1 is
+`eventTimeNotReadable` whatever the end; or `--first-day` and optionally
+`--last-day`. Minka refuses moments and days at once (`eventTimeAmbiguous`)
+and one moment alone (`eventTimeMissing`); the CLI refuses both as a usage
+error before anything goes out, and a `create` without any time as well. An
+`edit` that names any of the four flags names the whole time anew, and may
+turn a timed event into an all-day one and back. The CLI passes a moment on
+as it was typed and assumes no zone for one without an offset: Minka refuses
+it with `eventTimeNotReadable`.
 
 **The other fields.** `--title` is required on `create`; an empty one is
 `eventTitleMissing`. `--description` is Markdown converted to HTML here, or
