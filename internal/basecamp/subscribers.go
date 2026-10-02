@@ -154,7 +154,7 @@ func (e *Extractor) subscribersOf(ctx context.Context, what string, bucket, id i
 	if status == bundle.StatusTrashed {
 		return nil, nil
 	}
-	named, err := handedTo(ctx, e.Source, bucket, id)
+	named, err := handedTo(ctx, e.source, bucket, id)
 	var failed *Error
 	if errors.As(err, &failed) && (failed.Kind == NotFound || failed.Kind == Forbidden) {
 		why := SubscribersNotFound

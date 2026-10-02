@@ -165,6 +165,9 @@ type importReport struct {
 	// Docs says what became of the Docs & Files a run met, beside counts.folders,
 	// counts.documents and counts.uploads.
 	Docs basecamp.DocsCounts `json:"docs"`
+	// Calendars says what became of the calendars, beside counts.events, and is
+	// there only where the run was asked to bring them.
+	Calendars *basecamp.CalendarCounts `json:"calendars,omitempty"`
 	// Subscribers says who follows a post, a card, a to-do, a document or an
 	// upload: how many records carry the list, whom the lists leave off and
 	// which records the source would not say it of.
@@ -202,9 +205,10 @@ func (a *app) newImportBasecampCmd() *cobra.Command {
 	var activeOnly bool
 	var out string
 	var dryRun bool
+	var calendars bool
 
 	cmd := &cobra.Command{
-		Use:   "basecamp [--project <id> … | --active-only] --out <dir> [--dry-run]",
+		Use:   "basecamp [--project <id> … | --active-only] --out <dir> [--calendars] [--dry-run]",
 		Short: "Extract projects of a Basecamp account into an import bundle",
 		Long: `Extracts projects of a Basecamp account into an import bundle, the directory
 Minka's applier reads foreign history from.
@@ -239,6 +243,22 @@ each to-do set its lists with their groups and to-dos, of each inbox its
 forwarded mail with the answers by mail, the comments and the boosts of each,
 and of each Docs & Files tool its folders, documents and uploads with the
 comments, the boosts and the files of each.
+
+--calendars brings the calendar of each project as well, Basecamp's Schedule,
+as a tool of the kind calendar with its entries as events. Only a Minka whose
+import applies events takes such a bundle, any other stops at the first
+calendar, so without the flag a calendar is skipped like a kind Minka has
+nothing for and the report says nothing of calendars. A timed event carries
+its two moments as the source gives them, an all-day one its first and its last
+day, and an entry the source says the other way round is left out and named
+(calendars.calendars[].allDayInInstants, timedInDays). An entry that repeats is
+one event with its schedule, proven against its first day and the zone of
+whoever made it; a part that does not fit is named in repetitionNotMapped and
+the event comes once. An entry on the shelf or drafted is left out and counted
+in recordsLeftOut. A single day of a series is never asked for, because
+Basecamp makes a record of the day where somebody asks; the comments written
+under one are counted from the list of every comment of the project
+(calendars.commentsUnderSingleDays) and not carried.
 
 The lists of a to-do set that are in use stand in the bundle from the bottom up,
 because Minka puts every new list on top of its tool; the ones the source has put
@@ -497,7 +517,7 @@ it has been applied.`,
 			// Every request of the run goes through the one source that asks
 			// again, whatever kind it is of and whether anything is written.
 			source := basecamp.NewRetrying(a.basecampSource, a.retryPause)
-			extractor := basecamp.Extractor{Source: source, Avatars: a.avatarFetcher, Files: a.basecampFiles, Now: a.now}
+			extractor := basecamp.Extractor{Source: source, Avatars: a.avatarFetcher, Files: a.basecampFiles, Now: a.now, Calendars: calendars}
 			var result basecamp.Result
 			var err error
 			if len(projects) > 0 {
@@ -598,6 +618,9 @@ it has been applied.`,
 				LongestBody:           result.LongestBody,
 				LongestBodyRecords:    result.LongestBodyRecords,
 				RequestsRetried:       source.Retried(),
+			}
+			if calendars {
+				report.Calendars = &result.Calendars
 			}
 			var notices []string
 			if count := len(report.BotsAlsoNamedElsewhere); count > 0 {
@@ -801,6 +824,7 @@ it has been applied.`,
 					"folder or Docs & Files tool is left out with what stood in it, which is left out with it; data.docs.placesLeftOut names it with how many folders, documents and uploads fell with it",
 					"folders or Docs & Files tools are left out with what stood in them, which is left out with them; data.docs.placesLeftOut names each with how many folders, documents and uploads fell with it"))
 			}
+			notices = append(notices, calendarNotices(report)...)
 			if count := recordsLeftOut(report); count > 0 {
 				notices = append(notices, plural(count,
 					"record is left out, because the source describes it with a word a bundle has none for; data.recordsLeftOut names the kind of record, the word and where it stood, and a later run brings it once a bundle has a word for it",
@@ -842,13 +866,14 @@ it has been applied.`,
 	cmd.Flags().BoolVar(&activeOnly, "active-only", false, "Without --project, extract the active projects and leave the archived ones out")
 	cmd.Flags().StringVar(&out, "out", "", "Directory of the bundle; an earlier bundle there is replaced")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Walk Basecamp and show the counts, write nothing")
+	cmd.Flags().BoolVar(&calendars, "calendars", false, "Bring the calendars and their events too, for a Minka whose import applies events")
 	return cmd
 }
 
 // measuredKinds are the kinds whose longest text a run measures, in the order
 // the report names them.
 var measuredKinds = []bundle.Kind{bundle.Cards, bundle.Comments, bundle.Posts, bundle.Messages, bundle.Answers, bundle.TodoLists, bundle.Todos,
-	bundle.Forwards, bundle.ForwardReplies, bundle.Documents, bundle.Uploads}
+	bundle.Forwards, bundle.ForwardReplies, bundle.Documents, bundle.Uploads, bundle.Events}
 
 func renderImportReport(w io.Writer, report importReport) {
 	if report.DryRun {
@@ -915,6 +940,7 @@ func renderImportReport(w io.Writer, report importReport) {
 	renderTodos(w, report)
 	renderForwards(w, report)
 	renderDocs(w, report)
+	renderCalendars(w, report)
 	renderSubscribers(w, report)
 	fmt.Fprintf(w, "In the texts: %s referred to, %s Basecamp lists nothing for dropped, %s, %s, %s\n",
 		plural(report.FilesInBodies, "file", "files"), plural(report.FilesDropped, "file", "files"),

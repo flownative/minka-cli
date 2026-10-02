@@ -64,6 +64,18 @@ The Basecamp CLI has to be installed and signed in.
   that grows by exactly a page between two requests looks the same and ends
   the run as well, and the message says both. A page is read into its records
   when it arrives and let go of; of the page before it a digest is kept.
+- **A run only reads, and an address that would write is never asked for**
+  (C-097). Basecamp answers a single day of a series of a calendar,
+  `…/schedule_entries/{id}/occurrences/{YYYYMMDD}.json`, by making a recording
+  of that day the first time somebody asks, and the entry of a series,
+  `…/schedule_entries/{id}.json`, answers with such a day. Seen read-only: a
+  day first asked for came back with a new, high identifier and kept it on
+  every later read; that the read made it is reasoned from that. Every
+  request of a run therefore passes one guard (`readsOnly`) that refuses any
+  path with `schedule_entries/` in it before it is asked, whatever part of the
+  run asks — a dock entry or a body that names such an address included — and
+  ends the run as `api_error`. No part of the extractor needs one: a calendar
+  is read from its lists alone.
 - Only paths of the account reach the Basecamp CLI. Where an answer names an
   absolute address, as a dock entry does, it has to lie under the address of
   the account and is turned into a path; anything else is refused, because the
@@ -158,7 +170,9 @@ to-do whose status is neither `active` nor `trashed`, the shelf among them,
 because a bundle gives neither of the two a shelf, a forwarded mail of a status
 that is none of the three, an answer by mail that says anything but `active`,
 because a bundle gives an answer no status at all, and a folder, a document or
-an upload of Docs & Files whose status is none of the three. A shelf a group or
+an upload of Docs & Files whose status is none of the three, and an entry of a
+calendar whose status is neither `active` nor `trashed`, the shelf and a draft
+among them, because an event has no shelf in Minka. A shelf a group or
 a to-do only inherits from its list or its group leaves nothing out, see Groups
 under What a bundle holds so far (C-087).
 `recordsLeftOut` names each
@@ -371,15 +385,17 @@ to-dos, the forwarded mail and the Docs & Files: `manifest.json`,
 `messages.jsonl` or its
 parts, `comments.jsonl`, `reactions.jsonl`, `attachments.jsonl` and `files/`
 with the avatars and the files of texts, chats, answers, lists, to-dos, mails,
-documents and uploads. A file of a kind the projects have nothing of is missing.
+documents and uploads. With `--calendars` the calendars come as well, with
+`events.jsonl` and the files of their descriptions (C-096). A file of a kind
+the projects have nothing of is missing.
 
 The walk goes kind by kind across the projects of a run (C-028): the projects
 with their tools and boards, then the message boards of all projects, then
 the chats, then the questionnaires, then the To-dos tools, then the
-inboxes, and last the Docs & Files tools. So comments and
+inboxes, then the Docs & Files tools, and last the calendars. So comments and
 reactions stand in the order of what they hang on: those of cards, those of
 posts, those of lines, those of answers, those of lists and of to-dos, those of
-mails, those of documents and of uploads. Where a kind stands in that order
+mails, those of documents and of uploads, those of events. Where a kind stands in that order
 decides one thing and no more: which record of a file the bytes are fetched for,
 so a file that hangs in a card and in a document alike is fetched for the card
 and the document's record shares it (C-066). Every owner of a file has a record
@@ -482,9 +498,12 @@ and Minka applies the kinds in an order of its own.
   counterpart for: `kanban_board` → `board`, `chat` → `chat`, `message_board`
   → `posts`, `questionnaire` → `checkins`, `todoset` → `todos`, `inbox` →
   `forwards`, several of a
-  kind where a project has several. Creator and
+  kind where a project has several, and with `--calendars` `schedule` →
+  `calendar`, which carries `includeDueDates` from `include_due_assignments`
+  (C-096). Creator and
   timestamps come from the tool itself. Every other entry is counted as
-  skipped, per kind and whether it was switched on, and shown in the report.
+  skipped, per kind and whether it was switched on, and shown in the report;
+  so is a `schedule` of a run without `--calendars`.
 - **Columns** are the lists of a card table: `Kanban::Triage` → `triage`,
   `Kanban::NotNowColumn` → `notnow`, `Kanban::Column` → `work`,
   `Kanban::DoneColumn` → `done`. They are written in the order of a board:
@@ -983,16 +1002,109 @@ and Minka applies the kinds in an order of its own.
   Such a run counts an upload a real run leaves out, which is the way round that
   promises nothing. What it does see is what a guard of the run itself refuses,
   and it says so before anybody spends an hour.
+- **Events** are the entries of a calendar, `events.jsonl`, and come only with
+  `--calendars` (C-096): Minka refuses a tool of the kind `calendar` until its
+  import applies events, so a bundle without the flag holds neither the tool
+  nor its entries. Every field is taken from the list of the calendar,
+  `buckets/{bucket}/schedules/{id}/entries.json`, asked three times: plain for
+  the entries in use, with `?status=trashed` for those in the trash, and with
+  `?status=archived` only to count what is left out. An entry of any status
+  but `active` and `trashed` — on the shelf, drafted, or a word nobody knows —
+  is left out and counted in `recordsLeftOut` as an `event` in its calendar,
+  whichever list names it, and nothing that hangs on it is asked for. An entry
+  met twice is written once. Events stand in the order they were made in, by
+  `created_at` and then by ID; the order decides nothing.
+
+  `title` is `summary`, held as every title is; `description` is the rendered
+  text with its files, `null` where it says nothing; `participants` are the
+  people the source names, in the order of their IDs and each once, and Minka
+  leaves off whoever is no member of the project; `joinUrl` and `highlighted`
+  are taken where the source names them (never seen); `visibleToClients` is the
+  entry's own word. A **timed** entry carries `startsAt` and `endsAt`, the two
+  moments as Basecamp gives them; an **all-day** one carries `startsOn` and
+  `endsOn`, its first and its last day as Basecamp gives them, the last day
+  included (measured: a one-day entry says the same day twice, Monday to Friday
+  says `2018-12-24` and `2018-12-28`). The run never makes a day of a moment or
+  a moment of a day: an all-day entry said in moments, or a timed one said in
+  days, is left out and named in `calendars.calendars[].allDayInInstants` or
+  `timedInDays`, because either turned into the other moves the event by a day
+  for somebody. A time that is neither, one of each, and an end before the start
+  end the run. Comments, boosts and the files of the description hang on an
+  event, `parentKind` and `targetKind` `event`, an entry in the trash included;
+  who follows an entry is asked as for every record, and not for one in the
+  trash (C-084).
+
+  **An entry that repeats is one event with its schedule** (Minka's E-228).
+  Basecamp lists a series once, with `recurrence_schedule` and the times of its
+  first day; an entry that does not repeat has no such key (measured). The
+  schedule has the shape and the rhythms by the month and by the year of a
+  to-do's (`repetitionOf` and the event's mapping share them), and these of its
+  own:
+
+  | Basecamp | `repetition` |
+  |---|---|
+  | `every_day`, `days` empty or not | `daily`, `weekdays` 1 to 7 or from `days` |
+  | `every_weekday` | `daily`, `weekdays` 1 to 5 |
+  | `every_week` | `weekly`, `weekdays` from `days`, `interval` 1 |
+  | `every_other_week` | `weekly`, `weekdays` from `days`, `interval` 2 (sampled, `week_interval` `null`) |
+  | `custom_week`, `week_interval` | `weekly`, `weekdays` from `days`, `interval` |
+  | `start_date`, `end_date` | `startsOn`, `endsOn` (`null` for no end) |
+  | `time_zone` of the entry's `creator` | `timeZone`, for a timed entry |
+
+  A weekly rhythm with no `days` takes the weekday of `start_date`. `hour`,
+  `minute` and `duration` are not written: they are the record's two moments.
+  The schedule is **held against the record** before it is written, because
+  Minka refuses a series that does not fall on the event's first day: a timed
+  entry's `starts_at`, read in the creator's zone, lies on `start_date` at
+  `hour`:`minute` (measured once: `hour` 18 in `Europe/Berlin` with `starts_at`
+  `16:00Z` in summer), and `duration` is `ends_at` minus `starts_at` in seconds
+  (measured once: 1800); an all-day entry's `starts_at` is `start_date`, and its
+  `duration`, where there is one, is a whole number of days (unsampled). The
+  first day is one of the schedule's days: its weekday on a daily or weekly
+  rhythm, its day of the month, its weekday and week of the month on
+  `monthlyOnWeekday`. A zone is one PHP's `DateTimeZone` takes, the older names
+  such as `Europe/Kiev` and `US/Pacific` among them (`zoneNamesMinkaTakes`, the
+  list of PHP 8.5 for `ALL_WITH_BC`); an offset, an abbreviation such as
+  `CEST`, a name of another case and none at all are no zone.
+
+  **What does not fit is named in `repetitionNotMapped`** by Basecamp's field,
+  each once, and the event comes once at its listed time, never held back: an
+  occurrence on a day the source never had would be shown to everybody on it. The
+  parts are `time_zone` for a creator without a zone or with one that is none;
+  `hour` where the clock time or the day does not hold in the zone, which is
+  also how a list that names a later day than the first is caught; `duration`;
+  `start_date` where there is none, it has another shape, or an all-day entry
+  starts on another day; `end_date` for one of another shape or before the
+  start; `days` for several weekdays on a rhythm of every other or every n-th
+  week (where Basecamp's week turns is unmeasured), several days on a monthly
+  rhythm, a day of the month or a weekday the first day does not fall on;
+  `week_instance` for -1, which is Basecamp's last week and not the last such
+  weekday, for one outside 1 to 4 and for one the first day does not lie in;
+  `frequency` for one nobody knows; and `recurrence_schedule` for a schedule of
+  a shape nobody expected. `calendars.calendars[]` counts per calendar the
+  events written and the trashed ones among them, those that repeat
+  (`thatRepeat`) and those with their series (`withASeries`), names each part
+  with how many events held it and the first ten of them, and counts the
+  descriptions longer than Minka holds, which Minka passes over on every run.
+
+  **Single days are never read**, see the guard above. A comment written under
+  one day of a series hangs on that day's own recording, and a bundle has no
+  place for it: where a project has a series, the run reads the list of every
+  comment of the project, `projects/recordings.json?type=Comment&bucket=…`,
+  and counts those whose parent is a `Schedule::Entry::Occurrence` in
+  `calendars.commentsUnderSingleDays`, with the days they hang on (unsampled:
+  whether that list names them has not been seen). The comments, boosts and
+  followers asked for are always the entry's own.
 - **Comments** are those of cards, of posts, of answers, of to-do lists, of
-  to-dos, of forwarded mail, of documents and of uploads, `parentKind`
-  `card`, `post`, `answer`, `todolist`, `todo`, `forward`, `document` or
-  `upload`, per parent oldest first, by `created_at` and then by ID: the applier reads
+  to-dos, of forwarded mail, of documents, of uploads and of events, `parentKind`
+  `card`, `post`, `answer`, `todolist`, `todo`, `forward`, `document`,
+  `upload` or `event`, per parent oldest first, by `created_at` and then by ID: the applier reads
   the order of the comments of a parent from the file. Basecamp hands out the
   rendered text of a comment only. A comment in the trash is left out with
   its boosts and counted (`commentsTrashed`); any other comes, the archived
   comment of an archived card as well.
 - **Subscribers** are whom the source says follow a post, a card, a to-do, a
-  document or an upload (C-084). They come from
+  document, an upload or an event (C-084). They come from
   `buckets/{bucket}/recordings/{id}/subscription.json`, one request per record,
   in a dry run as well. Measured read-only: it answers every one of the five
   kinds and a question alike, with `count`, `subscribed`, `subscribers` and
@@ -1049,7 +1161,8 @@ and Minka applies the kinds in an order of its own.
 - **Reactions** are the boosts of a card (`targetKind` `card`), of a post
   (`post`), of an answer (`answer`), of a to-do list (`todolist`), of a to-do
   (`todo`), of a forwarded mail (`forward`), of a document (`document`), of an
-  upload (`upload`), of a comment (`comment`) and of a line (`message`), with
+  upload (`upload`), of an event (`event`), of a comment (`comment`) and of a
+  line (`message`), with
   `content` as it is, a text of some words included: what Minka takes for a reaction is
   the applier's to decide. The boosts of a card or a post stand before those
   of its comments. A boost has one time, which is both `createdAt` and

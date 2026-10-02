@@ -73,7 +73,7 @@ func (e *Extractor) extractPosts(ctx context.Context, w *bundle.Writer, bucket i
 
 	for _, board := range boards {
 		extracted[board] = true
-		listed, err := getList[message](ctx, e.Source, fmt.Sprintf("buckets/%d/message_boards/%d/messages.json", bucket, board))
+		listed, err := getList[message](ctx, e.source, fmt.Sprintf("buckets/%d/message_boards/%d/messages.json", bucket, board))
 		if err != nil {
 			return err
 		}
@@ -84,7 +84,7 @@ func (e *Extractor) extractPosts(ctx context.Context, w *bundle.Writer, bucket i
 		}
 	}
 	for _, status := range []string{bundle.StatusArchived, bundle.StatusTrashed} {
-		listed, err := getList[message](ctx, e.Source, fmt.Sprintf("projects/recordings.json?type=Message&bucket=%d&status=%s", bucket, status))
+		listed, err := getList[message](ctx, e.source, fmt.Sprintf("projects/recordings.json?type=Message&bucket=%d&status=%s", bucket, status))
 		if err != nil {
 			return err
 		}
@@ -134,7 +134,7 @@ func (e *Extractor) extractPosts(ctx context.Context, w *bundle.Writer, bucket i
 // The list has no pages and answers any page with all of it, so it is read
 // once, without a page.
 func (e *Extractor) writeCategories(ctx context.Context, w *bundle.Writer, bucket int64, posts []message) error {
-	listed, err := getOne[[]category](ctx, e.Source, fmt.Sprintf("buckets/%d/categories.json", bucket))
+	listed, err := getOne[[]category](ctx, e.source, fmt.Sprintf("buckets/%d/categories.json", bucket))
 	if err != nil {
 		return err
 	}

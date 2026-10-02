@@ -128,7 +128,7 @@ func (e *Extractor) extractCheckins(ctx context.Context, w *bundle.Writer) error
 // questionnaire lists the questions it asks; a walk is no snapshot, so a
 // question met twice is written once.
 func (e *Extractor) extractQuestions(ctx context.Context, w *bundle.Writer, bucket, tool int64) error {
-	listed, err := getList[question](ctx, e.Source, fmt.Sprintf("buckets/%d/questionnaires/%d/questions.json", bucket, tool))
+	listed, err := getList[question](ctx, e.source, fmt.Sprintf("buckets/%d/questionnaires/%d/questions.json", bucket, tool))
 	if err != nil {
 		return err
 	}
@@ -440,7 +440,7 @@ func lastDayAnswered(answers []answered) (time.Time, bool) {
 // They come in the order of their IDs and each once, however Basecamp lists
 // them: two runs over an unchanged account write the same bytes.
 func (e *Extractor) askedOf(ctx context.Context, bucket, question int64) ([]string, int, error) {
-	named, err := handedTo(ctx, e.Source, bucket, question)
+	named, err := handedTo(ctx, e.source, bucket, question)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -463,7 +463,7 @@ func (e *Extractor) answersOf(ctx context.Context, found question, in string) ([
 	if err != nil {
 		return nil, err
 	}
-	listed, err := getList[answer](ctx, e.Source, path)
+	listed, err := getList[answer](ctx, e.source, path)
 	if err != nil {
 		return nil, err
 	}

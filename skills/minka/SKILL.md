@@ -289,7 +289,7 @@ minka work list --json
 minka heartbeat --json
 minka hooks install [--file <path>] [--command <command line>] --json
 minka hooks status [--file <path>] --json
-minka import basecamp [--project <basecampProjectId>... | --active-only] (--out <dir> | --dry-run) --json
+minka import basecamp [--project <basecampProjectId>... | --active-only] (--out <dir> | --dry-run) [--calendars] --json
 ```
 
 `<column>` is a column ID, a type (`triage`, `not_now`, `done`) or a title
@@ -1633,6 +1633,22 @@ this:
   clients that word was the one thing which would have. It is named rather than
   counted because the only thing to do about it is to compare it against the
   source. No output ever names a person or a company.
+- `--calendars` brings the calendar of each project (Basecamp's Schedule) as a
+  tool of `kind` `calendar` and its entries as events. Only use it for a Minka
+  whose import applies events: any other stops at the first calendar, which is
+  why a run without it skips the calendar like a kind Minka has nothing for and
+  says nothing of calendars. A timed event carries its two moments, an all-day
+  one its first and last day; an entry that repeats is one event with its
+  schedule. `data.calendars.calendars[]` counts per calendar what was written,
+  the trashed ones, those that repeat and those that come with their series,
+  names in `repetitionNotMapped` each part of a schedule that did not fit (the
+  event then comes once), and in `allDayInInstants` and `timedInDays` the
+  entries left out because the source says their days in moments or the other
+  way round. `data.calendars.commentsUnderSingleDays` counts the comments
+  written under one day of a series, which a bundle has no place for. An entry
+  on the shelf or drafted is in `data.recordsLeftOut`. A run never asks for a
+  single day of a series: Basecamp makes a record of the day where somebody
+  does.
 - `data.cardsByStatus` splits the cards, `data.cardsOnHold` counts those set
   aside within their column, `data.cardsLeftOut` the archived and trashed
   cards whose column is in no extracted board, `data.commentsTrashed` the

@@ -38,7 +38,7 @@ func visibleToClientsOf(origin recording) *bool {
 // out would be imported in the open under a folder clients see, and what a client
 // has seen cannot be taken back.
 var visibilityOfItsOwn = map[string]bool{"tool": true, "post": true, "to-do list": true, "question": true,
-	"folder": true, "document": true, "upload": true}
+	"folder": true, "document": true, "upload": true, "event": true}
 
 // clientsOf is what a bundle says of the clients of a project: whether it works
 // with them, and which company. Both stand or neither does, because Minka reads

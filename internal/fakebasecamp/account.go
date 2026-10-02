@@ -107,6 +107,11 @@ type Tool struct {
 	Folders   []Folder
 	Documents []Document
 	Uploads   []UploadedFile
+	// Entries are the entries of a calendar, whatever their status, in the
+	// order the account lists them; IncludeDueAssignments is what the calendar
+	// says of showing the days things are due, and nothing where it is nil.
+	Entries               []Entry
+	IncludeDueAssignments *bool
 	// VisibleToClients is what the recording of the tool says about clients; the
 	// dock entry says nothing of it either way.
 	VisibleToClients *bool
@@ -184,6 +189,9 @@ type Account struct {
 
 	Requests       []string
 	AvatarRequests []string
+	// ReadsThatWrite are the requests the account answered by making a record
+	// of a single day of a series, as Basecamp does.
+	ReadsThatWrite []string
 	// Downloads are the addresses files were asked for at, and UploadDownloads
 	// the "<project>/<upload>" of every file of a Docs & Files tool that was asked
 	// for by its identifiers.
@@ -350,6 +358,9 @@ var (
 
 func (a *Account) Get(_ context.Context, path string) ([]byte, error) {
 	a.Requests = append(a.Requests, path)
+	if answer, writes := a.readThatWrites(path); writes {
+		return answer, nil
+	}
 
 	page := 0
 	if match := pagePattern.FindStringSubmatch(path); match != nil {
@@ -410,6 +421,9 @@ func (a *Account) Get(_ context.Context, path string) ([]byte, error) {
 					if tool.Type == "card_tables" {
 						answer["lists"] = a.listsJSON(p, tool.Lists)
 					}
+					if tool.Type == "schedules" {
+						a.calendarJSON(p, tool, answer)
+					}
 					return encode(answer), nil
 				}
 			}
@@ -434,6 +448,9 @@ func (a *Account) Get(_ context.Context, path string) ([]byte, error) {
 			return answer, nil
 		}
 		if answer, known := a.docs(path, page); known {
+			return answer, nil
+		}
+		if answer, known := a.calendars(path, page); known {
 			return answer, nil
 		}
 	}

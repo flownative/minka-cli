@@ -154,7 +154,7 @@ func (e *Extractor) extractTodosOfProject(ctx context.Context, w *bundle.Writer,
 		tools = append(tools, tool)
 		byTool[id] = tool
 
-		listed, err := getList[todoList](ctx, e.Source, fmt.Sprintf("buckets/%d/todosets/%d/todolists.json", bucket, id))
+		listed, err := getList[todoList](ctx, e.source, fmt.Sprintf("buckets/%d/todosets/%d/todolists.json", bucket, id))
 		if err != nil {
 			return err
 		}
@@ -295,7 +295,7 @@ func (e *Extractor) extractTodosOfProject(ctx context.Context, w *bundle.Writer,
 func (e *Extractor) leaveOutTheTodosWithoutAList(ctx context.Context, t talk, shelved []todo, placed map[int64]bool) error {
 	for _, tool := range t.todosets {
 		for _, path := range todosOfAPlace(t.bucket, tool) {
-			inIt, err := getList[todo](ctx, e.Source, path)
+			inIt, err := getList[todo](ctx, e.source, path)
 			if err != nil {
 				return err
 			}
@@ -381,7 +381,7 @@ func (e *Extractor) countWhatFellWithAPlace(ctx context.Context, bucket int64, l
 
 		if place.aList {
 			e.todosLeftOut.Lists++
-			inIt, _, err := listedUnlessItIsGone[todoList](ctx, e.Source, fmt.Sprintf("buckets/%d/todolists/%d/groups.json", bucket, place.id), false)
+			inIt, _, err := listedUnlessItIsGone[todoList](ctx, e.source, fmt.Sprintf("buckets/%d/todolists/%d/groups.json", bucket, place.id), false)
 			if err != nil {
 				return err
 			}
@@ -397,7 +397,7 @@ func (e *Extractor) countWhatFellWithAPlace(ctx context.Context, bucket int64, l
 		}
 
 		for _, path := range todosOfAPlace(bucket, place.id) {
-			inIt, _, err := listedUnlessItIsGone[todo](ctx, e.Source, path, false)
+			inIt, _, err := listedUnlessItIsGone[todo](ctx, e.source, path, false)
 			if err != nil {
 				return err
 			}
@@ -438,7 +438,7 @@ func todosOfAPlace(bucket, in int64) []string {
 func (e *Extractor) shelvedTodoLists(ctx context.Context, bucket int64) ([]todoList, error) {
 	var shelved []todoList
 	for _, status := range []string{bundle.StatusArchived, bundle.StatusTrashed} {
-		listed, err := getList[todoList](ctx, e.Source, fmt.Sprintf("projects/recordings.json?type=Todolist&bucket=%d&status=%s", bucket, status))
+		listed, err := getList[todoList](ctx, e.source, fmt.Sprintf("projects/recordings.json?type=Todolist&bucket=%d&status=%s", bucket, status))
 		if err != nil {
 			return nil, err
 		}
@@ -459,7 +459,7 @@ func (e *Extractor) shelvedTodoLists(ctx context.Context, bucket int64) ([]todoL
 // word for a comment, a reaction or a file of one, such a record would wait in
 // Minka for ever, so none is written and none is asked for.
 func (e *Extractor) writeTodoGroups(ctx context.Context, w *bundle.Writer, bucket, tool, list int64, inheriting, gone []todoList, met map[int64]bool, projectID string) ([]todoList, []lostPlace, error) {
-	listed, err := getList[todoList](ctx, e.Source, fmt.Sprintf("buckets/%d/todolists/%d/groups.json", bucket, list))
+	listed, err := getList[todoList](ctx, e.source, fmt.Sprintf("buckets/%d/todolists/%d/groups.json", bucket, list))
 	if err != nil {
 		return nil, nil, err
 	}
@@ -561,7 +561,7 @@ func (e *Extractor) writeTodoList(ctx context.Context, w *bundle.Writer, bucket,
 func (e *Extractor) shelvedTodos(ctx context.Context, bucket int64) ([]todo, error) {
 	var shelved []todo
 	for _, status := range []string{bundle.StatusArchived, bundle.StatusTrashed} {
-		listed, err := getList[todo](ctx, e.Source, fmt.Sprintf("projects/recordings.json?type=Todo&bucket=%d&status=%s", bucket, status))
+		listed, err := getList[todo](ctx, e.source, fmt.Sprintf("projects/recordings.json?type=Todo&bucket=%d&status=%s", bucket, status))
 		if err != nil {
 			return nil, err
 		}
@@ -613,7 +613,7 @@ func (e *Extractor) writeTodos(ctx context.Context, w *bundle.Writer, bucket, to
 func (e *Extractor) todosIn(ctx context.Context, bucket, in int64, shelved []todo, placed map[int64]bool) ([]todo, error) {
 	var found []todo
 	for _, path := range todosOfAPlace(bucket, in) {
-		listed, err := getList[todo](ctx, e.Source, path)
+		listed, err := getList[todo](ctx, e.source, path)
 		if err != nil {
 			return nil, err
 		}
