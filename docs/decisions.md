@@ -1562,3 +1562,16 @@ argument, cut exactly as `posts comments` ([C-081](#c-081)).
 whoever reads a to-do or a list with `show` finds its comments one word away.
 **Implemented as:** `cli.newItemCommentsCmd` with `todoComments` and
 `todoListComments`, see [To-dos and subtasks](stable/todos.md).
+
+<a id="c-098"></a>
+## C-098 — Calendars and their events are `events`, the calendars `events tools`
+
+*Applies to: `events …`*
+
+One group, cut like `posts`: `tools <projectId>`, `list <toolId>` with
+`--from` and `--to` both required, `show`, `create --tool`, `edit`,
+`delete`. Time flags mirror Minka's fields; `--repeat` sends a schedule,
+`--no-repeat` null, and `--time-zone` without a schedule is a usage error.
+**Why:** every tool reads `<group> tools`, and a flag Minka ignores must not
+pass without a word. **Implemented as:** `cli.newEventsCmd`, `cli.eventFlags`,
+`api.EventInput`, see [Calendars and events](stable/calendar.md).
