@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"net/http"
 	"strings"
 	"text/tabwriter"
 
@@ -66,7 +65,7 @@ func (a *app) newPostsCmd() *cobra.Command {
 		a.newPostsArchiveCmd(),
 		a.newPostsUnarchiveCmd(),
 		a.newPostsDeleteCmd(),
-		a.newPostCommentsCmd(),
+		a.newItemCommentsCmd(postComments),
 	)
 }
 
@@ -553,255 +552,20 @@ of the archive.`,
 	}
 }
 
-func (a *app) newPostCommentsCmd() *cobra.Command {
-	return group("comments", "Read, write, change, remove and react to comments on a post",
-		a.newPostCommentsListCmd(),
-		a.newPostCommentsCreateCmd(),
-		a.newPostCommentsEditCmd(),
-		a.newPostCommentsDeleteCmd(),
-		a.newPostCommentsReactCmd(),
-		a.newPostCommentsUnreactCmd(),
-	)
-}
-
-func (a *app) newPostCommentsListCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "list <postId>",
-		Short: "List the comments on a post, the oldest first",
-		Long: `Lists every comment on a post, the oldest first, with its reactions. Nothing is
-paged. posts show carries the same comments together with the post.`,
-		Args: requireArgs("postId"),
-		RunE: func(_ *cobra.Command, args []string) error {
-			s, err := a.session()
-			if err != nil {
-				return err
-			}
-			comments, err := s.client.CommentsOn(a.ctx, postItem(args[0]))
-			if err != nil {
-				return postRefusal(s, err)
-			}
-			return a.ok(success{
-				data:        comments.Raw,
-				summary:     plural(len(comments.Value), "comment", "comments"),
-				breadcrumbs: postCommentBreadcrumbs(args[0]),
-				text: func(w io.Writer) {
-					if len(comments.Value) == 0 {
-						fmt.Fprintln(w, "No comments.")
-						return
-					}
-					renderEntryComments(w, comments.Value)
-				},
-			})
-		},
-	}
-}
-
-func (a *app) newPostCommentsCreateCmd() *cobra.Command {
-	var format string
-
-	cmd := &cobra.Command{
-		Use:   "create <postId> <text|->",
-		Short: "Comment on a post",
-		Long:  "Writes a comment on a post.\n\n" + commentFormatHelp,
-		Example: `  minka posts comments create 0199... "Looks right to me"
-  minka posts comments create 0199... - < comment.md`,
-		Args: requireArgs("postId", "text"),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			if _, _, err := commentBody(cmd, "", format); err != nil {
-				return err
-			}
-			text, err := a.readValue("the comment", args[1])
-			if err != nil {
-				return err
-			}
-			body, notices, err := commentBody(cmd, text, format)
-			if err != nil {
-				return err
-			}
-
-			s, err := a.session()
-			if err != nil {
-				return err
-			}
-			comment, err := s.client.WriteCommentOn(a.ctx, postItem(args[0]), body)
-			if err != nil {
-				return postRefusal(s, err)
-			}
-
-			summary := "Commented on post " + args[0]
-			return a.ok(success{
-				data:        comment.Raw,
-				summary:     summary,
-				notices:     notices,
-				breadcrumbs: postCommentBreadcrumbs(args[0]),
-				text:        func(w io.Writer) { fmt.Fprintf(w, "%s.\n", summary) },
-			})
-		},
-	}
-	cmd.Flags().StringVar(&format, "format", "markdown", "Format of the text: markdown or html")
-
-	return cmd
-}
-
-func (a *app) newPostCommentsEditCmd() *cobra.Command {
-	var format string
-	var dropAttachments bool
-
-	cmd := &cobra.Command{
-		Use:   "edit <postId> <commentId> <text|->",
-		Short: "Change a comment you wrote on a post",
-		Long: "Changes the text of a comment. Only its author can.\n\n" + commentFormatHelp + `
-
-Files and mentions stand in a comment as action-text-attachment elements, which
-Markdown cannot hold. To keep them, take the bodySource of the comment from
-posts show --json, change it and send it back with --format html. A new text
-that would drop them from a comment of yours is refused unless
---drop-attachments is given; the command reads the post first to know, and
-where the comment carries files or mentions, the person of the token to know
-whose it is. Where it is about to refuse, it reads the archived projects as
-well: in an archived project Minka refuses any text, so the request goes out
-and projectArchived is the answer.`,
-		Example: `  minka posts comments edit 0199... 0199... "Looks right after all"`,
-		Args:    requireArgs("postId", "commentId", "text"),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			if _, _, err := commentBody(cmd, "", format); err != nil {
-				return err
-			}
-			text, err := a.readValue("the comment", args[2])
-			if err != nil {
-				return err
-			}
-			body, notices, err := commentBody(cmd, text, format)
-			if err != nil {
-				return err
-			}
-
-			s, err := a.session()
-			if err != nil {
-				return err
-			}
-			post, err := s.client.Post(a.ctx, args[0])
-			if err != nil {
-				return postRefusal(s, err)
-			}
-			// A comment under a post of the archive takes no text at all.
-			dropped, err := a.keepsTheAttachmentsOfAComment(s, post.Value.ProjectID, closedIf(post.Value.Archived), post.Value.Comments, args[1], body, dropAttachments,
-				"Change the bodySource of the comment from posts show --json and send it back with --format html, or give --drop-attachments.")
-			if err != nil {
-				return err
-			}
-			notices = append(notices, dropped...)
-
-			comment, err := s.client.EditCommentOn(a.ctx, postItem(args[0]), args[1], body)
-			if err != nil {
-				return postCommentRefusal(s, err)
-			}
-
-			summary := fmt.Sprintf("Changed comment %s on post %s", args[1], args[0])
-			return a.ok(success{
-				data:        comment.Raw,
-				summary:     summary,
-				notices:     notices,
-				breadcrumbs: postCommentBreadcrumbs(args[0]),
-				text:        func(w io.Writer) { fmt.Fprintf(w, "%s.\n", summary) },
-			})
-		},
-	}
-	cmd.Flags().StringVar(&format, "format", "markdown", "Format of the text: markdown or html")
-	cmd.Flags().BoolVar(&dropAttachments, "drop-attachments", false, "Replace a comment that has attachments, mentions or references, which drops them")
-
-	return cmd
-}
-
-func (a *app) newPostCommentsDeleteCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "delete <postId> <commentId>",
-		Short: "Remove a comment you wrote on a post",
-		Long: `Removes a comment. Only its author can. A removed comment is gone, not marked:
-removing it again exits with 2 (not_found), like a comment that never existed.`,
-		Args: requireArgs("postId", "commentId"),
-		RunE: func(_ *cobra.Command, args []string) error {
-			s, err := a.session()
-			if err != nil {
-				return err
-			}
-			if err := s.client.DeleteCommentOn(a.ctx, postItem(args[0]), args[1]); err != nil {
-				return postCommentRefusal(s, err)
-			}
-
-			summary := fmt.Sprintf("Removed comment %s from post %s", args[1], args[0])
-			return a.ok(success{
-				data:        map[string]any{"postId": args[0], "commentId": args[1], "deleted": true},
-				summary:     summary,
-				breadcrumbs: postCommentBreadcrumbs(args[0]),
-				text:        func(w io.Writer) { fmt.Fprintf(w, "%s.\n", summary) },
-			})
-		},
-	}
-}
-
-func (a *app) newPostCommentsReactCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "react <postId> <commentId> <content>",
-		Short: "React to a comment on a post",
-		Long: "Leaves a reaction on a comment.\n\n" + reactionHelp + `
-
-Only the comments take reactions through the API. A post itself does not,
+// postComments are the comments under a post. A post of the archive takes no
+// text at all.
+var postComments = commentedKind{
+	parent: "posts", noun: "post", arg: "postId", kind: api.CommentedPost,
+	read: func(a *app, s *session, id string) (commentedItem, error) {
+		post, err := s.client.Post(a.ctx, id)
+		if err != nil {
+			return commentedItem{}, err
+		}
+		return commentedItem{projectID: post.Value.ProjectID, closed: closedIf(post.Value.Archived), comments: post.Value.Comments}, nil
+	},
+	refusal: func(s *session, err error, _ string) *Error { return postRefusal(s, err) },
+	reactHelp: `Only the comments take reactions through the API. A post itself does not,
 although the web offers it.`,
-		Example: `  minka posts comments react 0199... 0199... 👍`,
-		Args:    requireArgs("postId", "commentId", "content"),
-		RunE: func(_ *cobra.Command, args []string) error {
-			s, err := a.session()
-			if err != nil {
-				return err
-			}
-			comment, err := s.client.ReactToCommentOn(a.ctx, postItem(args[0]), args[1], args[2])
-			if err != nil {
-				return reactionError(postReactionRefusal(s, err))
-			}
-
-			summary := fmt.Sprintf("Reacted %s to comment %s", args[2], args[1])
-			if comment.StatusCode == http.StatusOK {
-				summary = fmt.Sprintf("You had reacted %s to comment %s already", args[2], args[1])
-			}
-			return a.ok(success{
-				data:        comment.Raw,
-				summary:     summary,
-				breadcrumbs: postCommentBreadcrumbs(args[0]),
-				text:        func(w io.Writer) { fmt.Fprintf(w, "%s.\n", summary) },
-			})
-		},
-	}
-}
-
-func (a *app) newPostCommentsUnreactCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "unreact <postId> <commentId> <content>",
-		Short: "Take a reaction off a comment on a post",
-		Long:  "Takes a reaction off a comment.\n\n" + reactionHelp,
-		Args:  requireArgs("postId", "commentId", "content"),
-		RunE: func(_ *cobra.Command, args []string) error {
-			s, err := a.session()
-			if err != nil {
-				return err
-			}
-			if err := s.client.UnreactFromCommentOn(a.ctx, postItem(args[0]), args[1], args[2]); err != nil {
-				return reactionError(postReactionRefusal(s, err))
-			}
-
-			summary := fmt.Sprintf("Took %s off comment %s", args[2], args[1])
-			return a.ok(success{
-				data:        map[string]any{"postId": args[0], "commentId": args[1], "content": args[2]},
-				summary:     summary,
-				breadcrumbs: postCommentBreadcrumbs(args[0]),
-				text:        func(w io.Writer) { fmt.Fprintf(w, "%s.\n", summary) },
-			})
-		},
-	}
-}
-
-func postItem(postID string) api.Commented {
-	return api.Commented{Kind: api.CommentedPost, ID: postID}
 }
 
 // postBody reads and converts the body of a post. Markdown is converted here
@@ -865,26 +629,6 @@ func postsToolRefusal(s *session, err error) *Error {
 	return e
 }
 
-// postCommentRefusal is a refusal of a write on one comment. An address that
-// has nothing may be the post, the comment or its author.
-func postCommentRefusal(s *session, err error) *Error {
-	e := postRefusal(s, err)
-	if e.Code == CodeNotFound {
-		e.Hint = "The post does not exist or is not visible to you, the comment was removed or hangs under another post, or somebody else wrote it: only the author can change or remove a comment."
-	}
-	return e
-}
-
-// postReactionRefusal is a refusal of a reaction on a comment, which anybody
-// may leave: an address that has nothing is the post or the comment.
-func postReactionRefusal(s *session, err error) *Error {
-	e := postRefusal(s, err)
-	if e.Code == CodeNotFound {
-		e.Hint = "The post does not exist or is not visible to you, or the comment was removed or hangs under another post. The comments of a post: minka posts comments list <postId>"
-	}
-	return e
-}
-
 func postSummary(post api.Post) string {
 	if post.Archived {
 		return "Post " + post.Title + " in the archive of " + post.Tool.Title
@@ -908,10 +652,6 @@ func postSuccess(post api.Result[api.Post], summary string, notices []string, te
 	}
 	crumbs = append(crumbs, Breadcrumb{Action: "list", Cmd: "minka posts list " + p.ToolID, Description: "List the posts beside it"})
 	return success{data: post.Raw, summary: summary, notices: notices, breadcrumbs: crumbs, text: text}
-}
-
-func postCommentBreadcrumbs(postID string) []Breadcrumb {
-	return []Breadcrumb{{Action: "show", Cmd: "minka posts show " + postID, Description: "Read the post with its comments"}}
 }
 
 func renderPostsTools(w io.Writer, tools []api.PostsTool) {

@@ -100,15 +100,8 @@ func (s *Server) registerFilesRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/files-uploads/{uploadId}", s.authenticated(s.filesUpload))
 	mux.HandleFunc("PATCH /api/v1/files-uploads/{uploadId}", s.authenticated(s.updateFilesUpload))
 
-	for _, entry := range []string{"documents/{documentId}", "files-uploads/{uploadId}"} {
-		under := "/api/v1/" + entry + "/comments"
-		mux.HandleFunc("GET "+under, s.authenticated(s.commentsOnEntry))
-		mux.HandleFunc("POST "+under, s.authenticated(s.writeCommentOnEntry))
-		mux.HandleFunc("PATCH "+under+"/{commentId}", s.authenticated(s.editCommentOnEntry))
-		mux.HandleFunc("DELETE "+under+"/{commentId}", s.authenticated(s.removeCommentOnEntry))
-		mux.HandleFunc("POST "+under+"/{commentId}/reactions", s.authenticated(s.reactToCommentOnEntry))
-		mux.HandleFunc("DELETE "+under+"/{commentId}/reactions", s.authenticated(s.unreactFromCommentOnEntry))
-	}
+	s.registerCommentRoutes(mux, "documents/{documentId}")
+	s.registerCommentRoutes(mux, "files-uploads/{uploadId}")
 }
 
 func (s *Server) filesTools(w http.ResponseWriter, r *http.Request, person *Person) {
@@ -525,206 +518,6 @@ func storedDescription(w http.ResponseWriter, value string) (string, bool) {
 	return storedRichText(w, "uploadDescriptionTooLong", "The description of an upload is too long.", maxUploadDescriptionLength, value)
 }
 
-// commentedEntry is what the comments under a document and under an upload
-// have in common: where they stand, whether anything may be written on them,
-// and how the entry answers for itself.
-type commentedEntry struct {
-	tool     *FilesTool
-	folderID string
-	archived bool
-	kind     string // "document" or "upload", which is what a refusal names
-	comments *[]*Comment
-}
-
-// entryOfTheRequest finds the document or the upload an address names. Which
-// of the two it is the address says, and an identifier of one is nothing at
-// the address of the other.
-func (s *Server) entryOfTheRequest(r *http.Request, person *Person) *commentedEntry {
-	if documentID := r.PathValue("documentId"); documentID != "" {
-		tool, document := s.visibleDocument(documentID, person)
-		if document == nil {
-			return nil
-		}
-		return &commentedEntry{tool: tool, folderID: document.FolderID, archived: document.Archived, kind: "document", comments: &document.Comments}
-	}
-	tool, upload := s.visibleFilesUpload(r.PathValue("uploadId"), person)
-	if upload == nil {
-		return nil
-	}
-	return &commentedEntry{tool: tool, folderID: upload.FolderID, archived: upload.Archived, kind: "upload", comments: &upload.Comments}
-}
-
-// refusedAsClosed says why nothing was written under an entry: the project
-// archived, or the entry itself or a folder above it.
-func (s *Server) refusedAsClosed(w http.ResponseWriter, entry *commentedEntry) bool {
-	return s.refusedAsArchived(w, s.projectWithID(entry.tool.ProjectID)) ||
-		s.refusedAsAnArchivedEntry(w, entry.tool, entry.folderID, entry.archived, entry.kind)
-}
-
-func (s *Server) commentsOnEntry(w http.ResponseWriter, r *http.Request, person *Person) {
-	entry := s.entryOfTheRequest(r, person)
-	if entry == nil {
-		notFound(w)
-		return
-	}
-	writeJSON(w, http.StatusOK, s.commentResources(entry))
-}
-
-func (s *Server) writeCommentOnEntry(w http.ResponseWriter, r *http.Request, person *Person) {
-	fields, ok := readBody(w, r)
-	if !ok {
-		return
-	}
-	entry := s.entryOfTheRequest(r, person)
-	if entry == nil {
-		notFound(w)
-		return
-	}
-	body, ok := stringField(w, fields, "body")
-	if !ok {
-		return
-	}
-	text, ok := commentText(w, deref(body))
-	if !ok {
-		return
-	}
-	if s.refusedAsClosed(w, entry) {
-		return
-	}
-
-	comment := &Comment{ID: newID(), AuthorID: person.ID, Body: text, CreatedAt: s.now}
-	*entry.comments = append(*entry.comments, comment)
-	writeJSON(w, http.StatusCreated, s.commentResource(entry.tool.ProjectID, comment))
-}
-
-func (s *Server) editCommentOnEntry(w http.ResponseWriter, r *http.Request, person *Person) {
-	fields, ok := readBody(w, r)
-	if !ok {
-		return
-	}
-	entry := s.entryOfTheRequest(r, person)
-	if commentIn(entry, r.PathValue("commentId")) == nil {
-		notFound(w)
-		return
-	}
-	body, ok := stringField(w, fields, "body")
-	if !ok {
-		return
-	}
-	text, ok := commentText(w, deref(body))
-	if !ok {
-		return
-	}
-	// Minka's statement changes a comment of the writer under an entry in use,
-	// with no folder above it in the archive, and asks why only where it
-	// changed nothing: somebody else's comment under an archived entry is
-	// answered as the archive.
-	if s.refusedAsClosed(w, entry) {
-		return
-	}
-	comment := ownCommentOf(*entry.comments, r.PathValue("commentId"), person)
-	if comment == nil {
-		notFound(w)
-		return
-	}
-
-	if comment.Body != text {
-		now := s.now
-		comment.Body, comment.EditedAt = text, &now
-	}
-	writeJSON(w, http.StatusOK, s.commentResource(entry.tool.ProjectID, comment))
-}
-
-func (s *Server) removeCommentOnEntry(w http.ResponseWriter, r *http.Request, person *Person) {
-	entry := s.entryOfTheRequest(r, person)
-	if commentIn(entry, r.PathValue("commentId")) == nil {
-		notFound(w)
-		return
-	}
-	if s.refusedAsClosed(w, entry) {
-		return
-	}
-	comment := ownCommentOf(*entry.comments, r.PathValue("commentId"), person)
-	if comment == nil {
-		notFound(w)
-		return
-	}
-
-	*entry.comments = slices.DeleteFunc(*entry.comments, func(c *Comment) bool { return c == comment })
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.WriteHeader(http.StatusNoContent)
-}
-
-// reactToCommentOnEntry reads the body before it looks for the entry, and
-// looks for the comment before it reads the reaction, as the controller does.
-func (s *Server) reactToCommentOnEntry(w http.ResponseWriter, r *http.Request, person *Person) {
-	fields, ok := readBody(w, r)
-	if !ok {
-		return
-	}
-	entry := s.entryOfTheRequest(r, person)
-	comment := commentIn(entry, r.PathValue("commentId"))
-	if comment == nil {
-		notFound(w)
-		return
-	}
-	value, ok := stringField(w, fields, "content")
-	if !ok {
-		return
-	}
-	content, ok := validReaction(w, deref(value))
-	if !ok {
-		return
-	}
-	if s.refusedAsClosed(w, entry) {
-		return
-	}
-
-	status := reactTo(&comment.Reactions, content, person.ID)
-	writeJSON(w, status, s.commentResource(entry.tool.ProjectID, comment))
-}
-
-func (s *Server) unreactFromCommentOnEntry(w http.ResponseWriter, r *http.Request, person *Person) {
-	entry := s.entryOfTheRequest(r, person)
-	comment := commentIn(entry, r.PathValue("commentId"))
-	if comment == nil {
-		notFound(w)
-		return
-	}
-	content, ok := validReaction(w, r.URL.Query().Get("content"))
-	if !ok {
-		return
-	}
-	if s.refusedAsClosed(w, entry) {
-		return
-	}
-
-	unreactFrom(&comment.Reactions, content, person.ID)
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.WriteHeader(http.StatusNoContent)
-}
-
-func commentIn(entry *commentedEntry, commentID string) *Comment {
-	if entry == nil {
-		return nil
-	}
-	for _, comment := range *entry.comments {
-		if comment.ID == commentID {
-			return comment
-		}
-	}
-	return nil
-}
-
-func ownCommentOf(comments []*Comment, commentID string, person *Person) *Comment {
-	for _, comment := range comments {
-		if comment.ID == commentID && comment.AuthorID == person.ID {
-			return comment
-		}
-	}
-	return nil
-}
-
 // commentText is a comment as the server keeps it, or the refusal it draws.
 func commentText(w http.ResponseWriter, body string) (string, bool) {
 	text := phpTrim(body)
@@ -1108,7 +901,7 @@ func (s *Server) documentResource(tool *FilesTool, document *Document) map[strin
 		"commentCount": len(document.Comments),
 		"createdAt":    timestamp(document.CreatedAt), "editedAt": editedAt(document.CreatedAt, document.UpdatedAt),
 		"updatedAt": timestamp(document.UpdatedAt), "creator": s.personReference(document.CreatorID),
-		"comments": s.commentResources(&commentedEntry{tool: tool, comments: &document.Comments}),
+		"comments": s.commentResources(tool.ProjectID, document.Comments),
 		"appUrl":   s.documentURL(tool, document),
 	}
 }
@@ -1125,17 +918,9 @@ func (s *Server) filesUploadResource(tool *FilesTool, upload *FilesUpload) map[s
 		"commentCount": len(upload.Comments),
 		"createdAt":    timestamp(upload.CreatedAt), "editedAt": editedAt(upload.CreatedAt, upload.UpdatedAt),
 		"updatedAt": timestamp(upload.UpdatedAt), "creator": s.personReference(upload.CreatorID),
-		"comments": s.commentResources(&commentedEntry{tool: tool, comments: &upload.Comments}),
+		"comments": s.commentResources(tool.ProjectID, upload.Comments),
 		"appUrl":   s.filesUploadURL(tool, upload),
 	}
-}
-
-func (s *Server) commentResources(entry *commentedEntry) []any {
-	comments := []any{}
-	for _, comment := range *entry.comments {
-		comments = append(comments, s.commentResource(entry.tool.ProjectID, comment))
-	}
-	return comments
 }
 
 // editedAt is the moment somebody wrote over an entry, and nothing while

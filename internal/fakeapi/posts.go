@@ -110,13 +110,7 @@ func (s *Server) registerPostsRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/v1/posts/{postId}/archive", s.authenticated(s.archivePost))
 	mux.HandleFunc("POST /api/v1/posts/{postId}/unarchive", s.authenticated(s.unarchivePost))
 
-	under := "/api/v1/posts/{postId}/comments"
-	mux.HandleFunc("GET "+under, s.authenticated(s.commentsOnPost))
-	mux.HandleFunc("POST "+under, s.authenticated(s.writeCommentOnPost))
-	mux.HandleFunc("PATCH "+under+"/{commentId}", s.authenticated(s.editCommentOnPost))
-	mux.HandleFunc("DELETE "+under+"/{commentId}", s.authenticated(s.removeCommentOnPost))
-	mux.HandleFunc("POST "+under+"/{commentId}/reactions", s.authenticated(s.reactToCommentOnPost))
-	mux.HandleFunc("DELETE "+under+"/{commentId}/reactions", s.authenticated(s.unreactFromCommentOnPost))
+	s.registerCommentRoutes(mux, "posts/{postId}")
 }
 
 func (s *Server) postsTools(w http.ResponseWriter, r *http.Request, person *Person) {
@@ -604,160 +598,6 @@ func (s *Server) unarchivePost(w http.ResponseWriter, r *http.Request, person *P
 	writeJSON(w, http.StatusOK, s.postResource(tool, post))
 }
 
-func (s *Server) commentsOnPost(w http.ResponseWriter, r *http.Request, person *Person) {
-	tool, post := s.visiblePost(r.PathValue("postId"), person)
-	if post == nil {
-		notFound(w)
-		return
-	}
-	writeJSON(w, http.StatusOK, s.postCommentResources(tool, post))
-}
-
-func (s *Server) writeCommentOnPost(w http.ResponseWriter, r *http.Request, person *Person) {
-	fields, ok := readBody(w, r)
-	if !ok {
-		return
-	}
-	tool, post := s.visiblePost(r.PathValue("postId"), person)
-	if post == nil {
-		notFound(w)
-		return
-	}
-	body, ok := stringField(w, fields, "body")
-	if !ok {
-		return
-	}
-	text, ok := commentText(w, deref(body))
-	if !ok {
-		return
-	}
-	if s.refusedAsAClosedPost(w, tool, post) {
-		return
-	}
-	comment := &Comment{ID: newID(), AuthorID: person.ID, Body: text, CreatedAt: s.now}
-	post.Comments = append(post.Comments, comment)
-	writeJSON(w, http.StatusCreated, s.commentResource(tool.ProjectID, comment))
-}
-
-// editCommentOnPost changes a comment of the person asking. A comment that is
-// not under the post is 404 before anything else about the request but a body
-// that cannot be read. The statement finds nothing for somebody else's comment
-// and for one under a post that takes no change, and why is asked afterwards:
-// the project and the post first, so that somebody else's comment under an
-// archived post is answered as the archive.
-func (s *Server) editCommentOnPost(w http.ResponseWriter, r *http.Request, person *Person) {
-	fields, ok := readBody(w, r)
-	if !ok {
-		return
-	}
-	tool, post := s.visiblePost(r.PathValue("postId"), person)
-	if post == nil || commentAmong(post.Comments, r.PathValue("commentId")) == nil {
-		notFound(w)
-		return
-	}
-	body, ok := stringField(w, fields, "body")
-	if !ok {
-		return
-	}
-	text, ok := commentText(w, deref(body))
-	if !ok {
-		return
-	}
-	comment := ownCommentOf(post.Comments, r.PathValue("commentId"), person)
-	if comment == nil || post.Archived || s.projectWithID(tool.ProjectID).Archived {
-		if !s.refusedAsAClosedPost(w, tool, post) {
-			notFound(w)
-		}
-		return
-	}
-	// The same text again is a write as well: the moment moves on.
-	now := s.now
-	comment.Body, comment.EditedAt = text, &now
-	writeJSON(w, http.StatusOK, s.commentResource(tool.ProjectID, comment))
-}
-
-func (s *Server) removeCommentOnPost(w http.ResponseWriter, r *http.Request, person *Person) {
-	tool, post := s.visiblePost(r.PathValue("postId"), person)
-	if post == nil || commentAmong(post.Comments, r.PathValue("commentId")) == nil {
-		notFound(w)
-		return
-	}
-	comment := ownCommentOf(post.Comments, r.PathValue("commentId"), person)
-	if comment == nil || post.Archived || s.projectWithID(tool.ProjectID).Archived {
-		if !s.refusedAsAClosedPost(w, tool, post) {
-			notFound(w)
-		}
-		return
-	}
-	post.Comments = slices.DeleteFunc(post.Comments, func(c *Comment) bool { return c == comment })
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.WriteHeader(http.StatusNoContent)
-}
-
-// reactToCommentOnPost reads the body before it looks for the post, and looks
-// for the comment before it reads the reaction, as the controller does.
-func (s *Server) reactToCommentOnPost(w http.ResponseWriter, r *http.Request, person *Person) {
-	fields, ok := readBody(w, r)
-	if !ok {
-		return
-	}
-	tool, post := s.visiblePost(r.PathValue("postId"), person)
-	if post == nil {
-		notFound(w)
-		return
-	}
-	comment := commentAmong(post.Comments, r.PathValue("commentId"))
-	if comment == nil {
-		notFound(w)
-		return
-	}
-	value, ok := stringField(w, fields, "content")
-	if !ok {
-		return
-	}
-	content, ok := validReaction(w, deref(value))
-	if !ok {
-		return
-	}
-	if s.refusedAsAClosedPost(w, tool, post) {
-		return
-	}
-	status := reactTo(&comment.Reactions, content, person.ID)
-	writeJSON(w, status, s.commentResource(tool.ProjectID, comment))
-}
-
-func (s *Server) unreactFromCommentOnPost(w http.ResponseWriter, r *http.Request, person *Person) {
-	tool, post := s.visiblePost(r.PathValue("postId"), person)
-	if post == nil {
-		notFound(w)
-		return
-	}
-	comment := commentAmong(post.Comments, r.PathValue("commentId"))
-	if comment == nil {
-		notFound(w)
-		return
-	}
-	content, ok := validReaction(w, r.URL.Query().Get("content"))
-	if !ok {
-		return
-	}
-	if s.refusedAsAClosedPost(w, tool, post) {
-		return
-	}
-	unreactFrom(&comment.Reactions, content, person.ID)
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.WriteHeader(http.StatusNoContent)
-}
-
-func commentAmong(comments []*Comment, commentID string) *Comment {
-	for _, comment := range comments {
-		if comment.ID == commentID {
-			return comment
-		}
-	}
-	return nil
-}
-
 // refusedAsAClosedPost says why nothing was written on a post: the project is
 // archived, or the post itself is.
 func (s *Server) refusedAsAClosedPost(w http.ResponseWriter, tool *PostsTool, post *Post) bool {
@@ -918,17 +758,9 @@ func (s *Server) postResource(tool *PostsTool, post *Post) map[string]any {
 		"archived": post.Archived, "pinned": post.PinnedAt != nil, "commentCount": len(post.Comments),
 		"createdAt": timestamp(post.CreatedAt), "editedAt": editedAt(post.CreatedAt, post.UpdatedAt),
 		"creator":  s.personReference(post.CreatorID),
-		"comments": s.postCommentResources(tool, post),
+		"comments": s.commentResources(tool.ProjectID, post.Comments),
 		"appUrl":   s.postURL(tool, post),
 	}
-}
-
-func (s *Server) postCommentResources(tool *PostsTool, post *Post) []any {
-	comments := []any{}
-	for _, comment := range post.Comments {
-		comments = append(comments, s.commentResource(tool.ProjectID, comment))
-	}
-	return comments
 }
 
 // postLeadOf is the first words of a body without markup, cut where the count

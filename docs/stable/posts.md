@@ -161,7 +161,9 @@ The comments under a post have addresses of their own —
 `posts/{postId}/comments…` — in the shape of the comments of a card, and take
 the same codes and reactions. `posts comments` names the post as the first
 argument, as `comments` names a card, since one kind of item hangs there.
-`api.Commented` carries the post as it carries a document and an upload.
+`api.Commented` carries the post as it carries a document, an upload, a to-do
+and a to-do list, and the commands are the ones `todos comments` and
+`todolists comments` are built from.
 
 `posts comments edit` reads the post first, for the files and mentions a
 comment of one's own may carry, and where the comment carries them it reads the

@@ -1351,7 +1351,7 @@ post takes the first position there as the card does under `comments` and no
 flag has to say which kind it is ([C-010](#c-010)). The archive is a list of
 the same tool, which `todolists list --archived` already reads that way
 ([C-071](#c-071)). **Implemented as:** `cli.newPostsCmd`,
-`cli.newPostCommentsCmd`, `api.Commented`, see [Posts](stable/posts.md).
+`cli.newItemCommentsCmd`, `api.Commented`, see [Posts](stable/posts.md).
 
 <a id="c-082"></a>
 ## C-082 — The guard over files stands only where the write could land
@@ -1550,3 +1550,15 @@ Such a Tombstone other records name too is in `botsAlsoNamedElsewhere`.
 it back; only lines tell a deleted chatbot from a deleted user.
 **Implemented as:** `basecamp.seenPerson.bot`, `bundle.Bot`, see
 [Importing from Basecamp](stable/import.md).
+
+<a id="c-095"></a>
+## C-095 — The comments of a to-do are `todos comments`, those of a list `todolists comments`
+
+*Applies to: the comments under a to-do and under a to-do list*
+
+Each stands below the command of its item, with the item as the first
+argument, cut exactly as `posts comments` ([C-081](#c-081)).
+**Why:** One kind of item hangs under each, so no flag has to say which, and
+whoever reads a to-do or a list with `show` finds its comments one word away.
+**Implemented as:** `cli.newItemCommentsCmd` with `todoComments` and
+`todoListComments`, see [To-dos and subtasks](stable/todos.md).

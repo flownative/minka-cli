@@ -6,10 +6,11 @@ stands in its list directly or in one group of it.
 
 `todolists tools`, `todolists list` and `todolists show` read; `todolists
 create`, `edit`, `archive`, `unarchive` and `delete` write a list; `todogroups
-create`, `edit`, `move` and `delete` write a group. The to-dos themselves and
-their subtasks have commands of their own, under `todos`, which is why the lists
-and the groups are not called that ([C-071](../decisions.md#c-071)); they follow
-[To-dos and subtasks](todos.md).
+create`, `edit`, `move` and `delete` write a group; `todolists comments …`
+reads and writes the comments under a list, as [To-dos and subtasks](todos.md)
+says for both. The to-dos themselves and their subtasks have commands of their
+own, under `todos`, which is why the lists and the groups are not called that
+([C-071](../decisions.md#c-071)); they follow [To-dos and subtasks](todos.md).
 
 ## What a read hands over
 
