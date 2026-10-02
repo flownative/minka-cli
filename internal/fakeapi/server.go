@@ -627,7 +627,7 @@ type Fixture struct {
 	CalendarOutOfUse *CalendarTool  // no longer in use: not listed, read and written at its address
 	OtherCalendar    *CalendarTool  // of the project that belongs to somebody else
 	WeeklyEvent      *CalendarEvent // Mondays at 10:00 in Berlin from 19 October 2026, with Anke taking part
-	OnceEvent        *CalendarEvent // on 21 October 2026, by Anke, with two comments
+	OnceEvent        *CalendarEvent // on 21 October 2026, by Anke, with a comment of Anke's and then one of Bruno's
 	AllDayEvent      *CalendarEvent // 20 to 22 October 2026, highlighted
 	OtherEvent       *CalendarEvent
 }
@@ -834,7 +834,11 @@ func New(t testing.TB) (*Server, *Fixture) {
 	}
 	onceEvent := &CalendarEvent{
 		ID: newID(), Title: "Acceptance", StartsAt: moment("2026-10-21T12:00:00Z"), EndsAt: moment("2026-10-21T13:00:00Z"),
-		CommentCount: 2, CreatedAt: s.now, CreatorID: anke.ID,
+		Comments: []*Comment{
+			{ID: newID(), AuthorID: anke.ID, Body: "<p>The room is <strong>booked</strong>.</p>", CreatedAt: at("2026-10-01", "09:00")},
+			{ID: newID(), AuthorID: bruno.ID, Body: "<p>I bring the projector.</p>", CreatedAt: at("2026-10-01", "10:00")},
+		},
+		CreatedAt: s.now, CreatorID: anke.ID,
 	}
 	allDayEvent := &CalendarEvent{
 		ID: newID(), Title: "Trade fair", FirstDay: "2026-10-20", LastDay: "2026-10-22", Highlighted: true,

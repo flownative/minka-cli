@@ -3,21 +3,21 @@
 A calendar of a project holds **events**: one-off, all-day or repeating.
 `events tools` lists the calendars of a project, `events list` and `events
 show` read, `events create`, `edit` and `delete` write
-([C-098](../decisions.md#c-098)).
+([C-098](../decisions.md#c-098)), and `events comments` reads and writes the
+comments under an event ([C-095](../decisions.md#c-095)).
 
 Everything here was read in Minka's code — `CalendarApiController`,
 `ReadsRepetitionSchedule`, its resources, `CalendarEventQueryService`,
 `EventOccurrences`, `EventRepetition`, `EventTime`, `JoinLink`, `TimeZone`,
-the event handlers, `EventParticipants`, `DbalCalendarEventRepository` and
-`ApiEventsTest` — and only the refusals of an address that names nothing have
-been seen live.
+the event handlers, `EventParticipants`, `DbalCalendarEventRepository`,
+`ApiEventsTest`, `EventCommentsApiController` and `ApiEventCommentsTest` — and
+only the refusals of an address that names nothing have been seen live.
 
 ## What is not there
 
-Taking an event **out of the trash**, the **comments** and reactions under an
-event, **showing an event to clients** or hiding it, renaming or removing a
-calendar, and changing or leaving out a **single occurrence** of a series are
-web only. `commentCount` counts the comments read there.
+Taking an event **out of the trash**, **showing an event to clients** or
+hiding it, renaming or removing a calendar, and changing or leaving out a
+**single occurrence** of a series are web only.
 
 ## What a read hands over
 
@@ -177,6 +177,35 @@ nothing, and only then the people, one at a time in the order given
 (`personNotAProjectMember`, `personCannotSeeIt`). Reading stays open in an
 archived project.
 
+## Comments
+
+The comments under an event have addresses of their own —
+`events/{eventId}/comments…` — in the shape of the comments under a to-do, with
+the same codes and reactions, answered by `EventCommentsApiController` on the
+base the controllers of to-dos, posts and Docs & Files share. `events comments`
+names the event as the first argument and is built from the same commands as
+`todos comments`. A series has its comments **on the event as a whole**: an
+occurrence has no identifier of its own, and none of its own comments.
+
+**`events show` carries no comments**, only `commentCount`. `events comments
+list` reads them, and `events comments edit` reads the event and its comments
+first, for the files and mentions a comment of one's own may carry; the guard
+stands aside in an archived project ([C-082](../decisions.md#c-082)).
+
+The event is looked up as for any other request: an event in the trash, one of
+a project the person is no member of, and for a client one not shown to
+clients or in a calendar hidden from them answer 404 at all six addresses. A
+calendar no longer in use takes comments. Minka reads the
+body before it looks for the event on a write, a change and a reaction, so a
+body that is no JSON (400) or of another type (415) answers before the 404 —
+unreachable from here. Then: the event (404), a comment that is no identifier
+or not under this event (404), the text (`commentMissing`, `commentTooLong`,
+`commentHasControlCharacters`, `commentNotReadable`) or the reaction
+(`reactionMissing`, `reactionTooLong`, `reactionHasControlCharacters`), then
+`projectArchived`, and last the 404 of a comment that is not one's own. In an
+archived project every write is `projectArchived`, somebody else's comment
+included; reading stays open.
+
 ## Codes
 
 `eventsSpanNotADay`, `eventsSpanOutOfOrder`, `eventsSpanTooLong`,
@@ -188,5 +217,6 @@ archived project.
 `eventRepetitionDatesOutOfOrder`, `eventRepetitionTimeZoneUnknown`,
 `eventRepetitionDoesNotFit`, `eventRepetitionKeepsItsFirstDay`,
 `personNotAProjectMember`, `personCannotSeeIt`, `projectArchived` and
-`nothingToChange` (422), all exit 9, each with a hint that says what can be
+`nothingToChange` (422), and under the comments those of a comment and a
+reaction, all exit 9, each with a hint that says what can be
 done.

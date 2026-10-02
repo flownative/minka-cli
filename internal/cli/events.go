@@ -93,7 +93,27 @@ func (a *app) newEventsCmd() *cobra.Command {
 		a.newEventsCreateCmd(),
 		a.newEventsEditCmd(),
 		a.newEventsDeleteCmd(),
+		a.newItemCommentsCmd(eventComments),
 	)
+}
+
+// eventComments are the comments under an event, a series included: they are
+// on the event as a whole. Only the archive of its project closes an event to
+// them, and events show carries only their number.
+var eventComments = commentedKind{
+	parent: "events", noun: "event", aNoun: "an event", arg: "eventId", kind: api.CommentedEvent, showOmitsComments: true,
+	read: func(a *app, s *session, id string) (commentedItem, error) {
+		event, err := s.client.Event(a.ctx, id)
+		if err != nil {
+			return commentedItem{}, err
+		}
+		comments, err := s.client.CommentsOn(a.ctx, api.Commented{Kind: api.CommentedEvent, ID: id})
+		if err != nil {
+			return commentedItem{}, err
+		}
+		return commentedItem{projectID: event.Value.ProjectID, closed: closedIf(false), comments: comments.Value}, nil
+	},
+	refusal: func(s *session, err error, _ string) *Error { return eventRefusal(s, err, eventNotFoundHint) },
 }
 
 func (a *app) newEventsToolsCmd() *cobra.Command {
@@ -191,7 +211,8 @@ description is converted to Markdown and the times to the local time of this
 machine; in JSON the description is the HTML the server stores and the
 moments are in UTC.
 
-commentCount counts comments that are read and written on the web only.`,
+commentCount counts the comments, which "events comments list" reads; they
+are on the event as a whole, a series included.`,
 		Args: requireArgs("eventId"),
 		RunE: func(_ *cobra.Command, args []string) error {
 			s, err := a.session()
@@ -605,6 +626,7 @@ func eventSuccess(event api.Result[api.Event], summary string, notices []string,
 	e := event.Value
 	crumbs := []Breadcrumb{
 		{Action: "show", Cmd: "minka events show " + e.ID, Description: "Read the event with its description"},
+		{Action: "comments", Cmd: "minka events comments list " + e.ID, Description: "Read the comments on the event"},
 		{Action: "edit", Cmd: "minka events edit " + e.ID + " --title <title>", Description: "Change the event"},
 		{Action: "delete", Cmd: "minka events delete " + e.ID, Description: "Move the event to the trash"},
 		{Action: "list", Cmd: "minka events list " + e.ToolID + " --from YYYY-MM-DD --to YYYY-MM-DD", Description: "List the events of its calendar between two days"},
@@ -699,7 +721,7 @@ func renderEvent(w io.Writer, event api.Event) {
 		fmt.Fprintf(w, "Taking part: %s\n", assigneeNames(event.Participants))
 	}
 	if event.CommentCount > 0 {
-		fmt.Fprintf(w, "Comments: %d, read on the web\n", event.CommentCount)
+		fmt.Fprintf(w, "Comments: %d, read with minka events comments list %s\n", event.CommentCount, event.ID)
 	}
 	fmt.Fprintf(w, "Created: %s by %s\nURL: %s\n", formatTime(event.CreatedAt), event.Creator.Name, event.AppURL)
 	if description := richtext.ToMarkdown(firstNonEmpty(event.DescriptionSource, event.Description)); description != "" {

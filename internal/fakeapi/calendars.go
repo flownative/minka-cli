@@ -77,11 +77,11 @@ type CalendarEvent struct {
 	ShownToClients bool
 	Trashed        bool
 
-	// CommentCount stands for comments the API neither reads nor writes on
-	// an event.
-	CommentCount int
-	CreatedAt    time.Time
-	CreatorID    string
+	// Comments are on the event as a whole: a series has no comments of a
+	// single occurrence.
+	Comments  []*Comment
+	CreatedAt time.Time
+	CreatorID string
 }
 
 // EventRepetition is how an event repeats: its schedule, and for a timed
@@ -113,6 +113,7 @@ func (s *Server) registerCalendarRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/events/{eventId}", s.authenticated(s.event))
 	mux.HandleFunc("PATCH /api/v1/events/{eventId}", s.authenticated(s.updateEvent))
 	mux.HandleFunc("DELETE /api/v1/events/{eventId}", s.authenticated(s.removeEvent))
+	s.registerCommentRoutes(mux, "events/{eventId}")
 }
 
 // calendars lists the calendars of a project that are in use, in the order
@@ -871,7 +872,7 @@ func (s *Server) eventFieldsOfBothForms(tool *CalendarTool, event *CalendarEvent
 	for name, value := range map[string]any{
 		"id": event.ID, "projectId": tool.ProjectID, "title": event.Title, "allDay": event.FirstDay != "",
 		"schedule": schedule, "timeZone": zone, "joinUrl": nullable(event.JoinURL), "highlighted": event.Highlighted,
-		"participants": participants, "commentCount": event.CommentCount, "appUrl": s.eventURL(tool, event),
+		"participants": participants, "commentCount": len(event.Comments), "appUrl": s.eventURL(tool, event),
 	} {
 		fields[name] = value
 	}

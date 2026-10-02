@@ -17,10 +17,11 @@ const (
 	CommentedPost     CommentedKind = "post"
 	CommentedTodo     CommentedKind = "todo"
 	CommentedTodoList CommentedKind = "todoList"
+	CommentedEvent    CommentedKind = "event"
 )
 
 // Commented names one item the comments hang on: a document or an upload of a
-// Docs & Files tool, a post, a to-do or a to-do list.
+// Docs & Files tool, a post, a to-do, a to-do list or an event.
 type Commented struct {
 	Kind CommentedKind
 	ID   string
@@ -36,6 +37,8 @@ func (c Commented) path() string {
 		return "/todos/" + url.PathEscape(c.ID)
 	case CommentedTodoList:
 		return "/todo-lists/" + url.PathEscape(c.ID)
+	case CommentedEvent:
+		return "/events/" + url.PathEscape(c.ID)
 	}
 	return "/documents/" + url.PathEscape(c.ID)
 }
