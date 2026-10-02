@@ -34,7 +34,7 @@ so Markdown sent that way stands on the list afterwards as "# Heading". The
 command says so in a notice, and nothing else ever will.`
 
 func (a *app) newTodoListsCmd() *cobra.Command {
-	return group("todolists", "Read, start, change, archive and trash the to-do lists of a To-dos tool",
+	return group("todolists", "Read, start, change, archive, trash and comment on the to-do lists of a To-dos tool",
 		a.newTodoListsToolsCmd(),
 		a.newTodoListsListCmd(),
 		a.newTodoListsShowCmd(),
@@ -43,7 +43,22 @@ func (a *app) newTodoListsCmd() *cobra.Command {
 		a.newTodoListsArchiveCmd(),
 		a.newTodoListsUnarchiveCmd(),
 		a.newTodoListsDeleteCmd(),
+		a.newItemCommentsCmd(todoListComments),
 	)
+}
+
+// todoListComments are the comments under a to-do list. A list in the archive
+// takes no text at all.
+var todoListComments = commentedKind{
+	parent: "todolists", noun: "to-do list", arg: "listId", kind: api.CommentedTodoList,
+	read: func(a *app, s *session, id string) (commentedItem, error) {
+		list, err := s.client.TodoList(a.ctx, id)
+		if err != nil {
+			return commentedItem{}, err
+		}
+		return commentedItem{projectID: list.Value.ProjectID, closed: closedIf(list.Value.Archived), comments: list.Value.Comments}, nil
+	},
+	refusal: todoListRefusal,
 }
 
 func (a *app) newTodoListsToolsCmd() *cobra.Command {
@@ -550,6 +565,7 @@ func todoListBreadcrumbs(list api.TodoList) []Breadcrumb {
 		{Action: "show", Cmd: "minka todolists show " + list.ID, Description: "Read the list with its groups and open to-dos"},
 		{Action: "group", Cmd: "minka todogroups create --list " + list.ID + " --title <title>", Description: "Add a group at the end of the list"},
 		{Action: "edit", Cmd: "minka todolists edit " + list.ID + " --description -", Description: "Change the title or the description"},
+		{Action: "comment", Cmd: "minka todolists comments create " + list.ID + " <text|->", Description: "Comment on the list"},
 		{Action: "series", Cmd: "minka todos series list " + list.ID, Description: "List the series that repeat to-dos of the list"},
 		{Action: "lists", Cmd: "minka todolists list " + list.ToolID, Description: "List the lists of the tool"},
 	}

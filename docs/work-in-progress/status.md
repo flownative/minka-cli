@@ -44,17 +44,24 @@ and `todolists show`, and written with `todolists create`, `edit`, `archive`,
 `unarchive` and `delete`; the groups of a list with `todogroups create`, `edit`,
 `move` and `delete`, a group with its colour (`--color`, C-086). The rule the
 commands follow is [To-do lists and groups](../stable/todo-lists.md) (C-071,
-C-072). The comments
-under a list and under a to-do wait for commands of their own. None of it has
-been seen live: the whole feature is checked against the fake, see below.
+C-072). None of it has been seen live: the whole feature is checked against
+the fake, see below.
 
 The to-dos are read with `todos show`, `todos completed` for the done ones of a
 list and `todos mine` for one's own across all projects, and written with
 `todos create`, `edit`, `complete`, `reopen`, `move` and `delete`; their
 subtasks with `todos subtasks list`, `create`, `edit`, `complete`, `reopen`,
 `move` and `delete`. The rule the commands follow is
-[To-dos and subtasks](../stable/todos.md) (C-073 to C-076). None of it has been
-seen live: the whole feature is checked against the fake, see below.
+[To-dos and subtasks](../stable/todos.md) (C-073 to C-076).
+
+The comments under a to-do and under a list are read and written with `todos
+comments` and `todolists comments` (`list`, `create`, `edit`, `delete`, `react`,
+`unreact`), built from the same commands as `posts comments` (C-095). The API
+is in production from Minka v0.29.0 on; the commands are checked against Minka's
+code and tests and the fake only.
+
+None of the to-dos has been seen live: the whole feature is checked against
+the fake, see below.
 
 A to-do with a due day is made to repeat with `todos repeat`, and its series is
 read with `todos series list` and `todos series show`, and written with `todos
@@ -547,8 +554,18 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   client is never read as one. `postAudienceMissing` and a `notifyIds` entry
   that is no identifier are mirrored and unreachable. A comment on a post
   written again with the same text moves its `editedAt` in Minka
-  (`DbalCommentRepository::change`) and in the fake; the comments under a card
-  and a document in the fake still keep it.
+  (`DbalCommentRepository::change`) and in the fake, under a document, an
+  upload, a to-do and a list as well; the comments under a card in the fake
+  still keep it.
+- The comments under a to-do and under a list: no request of them has gone to
+  a real Minka. The fake mirrors `TodoCommentsApiController`,
+  `AbstractCommentsApiController`, `DbalCommentRepository`, `CommentableItem`
+  and `ApiTodoCommentsTest`, through the same handlers as the comments under a
+  post or a document: the body before the item, the item and the comment under
+  it before the text or the reaction, `projectArchived` and `todoListArchived`
+  before the author, `todoListArchived` for every write under an archived list
+  and under its to-dos. What it does not mirror: the cleaning of a comment
+  against the files of its project and the people a mention tells.
 - The `subscribers` of posts, cards, to-dos, documents and uploads: no
   extraction has read one live. What `recordings/{id}/subscription.json`
   answers was **measured** read-only by the coordination, some 40
@@ -1274,9 +1291,6 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   tile that stays alight through a tool call of five minutes, the word in
   `heartbeat --json`, the tile going out with `work stop`, no keepalive left
   behind afterwards — and, at some point, a machine that really slept.
-- Commands for the comments under a to-do and under a list
-  (`…/todos/{todoId}/comments`, `…/todo-lists/{listId}/comments`): released,
-  with the shapes of the comments of a card (E-190).
 - Of the ninety-odd addresses the API offers, a good part have no command.
 - Check the posts live, as the [live check](../guides/live-check.md) says: a
   post sent out to `chosen` with `--notify me` and the same person twice, a

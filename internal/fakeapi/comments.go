@@ -5,8 +5,8 @@ import (
 	"slices"
 )
 
-// commentedItem is what the comments under a post, a document and an upload
-// have in common: the project they are written in, why
+// commentedItem is what the comments under a post, a document, an upload, a
+// to-do and a to-do list have in common: the project they are written in, why
 // a write under the item wrote nothing, and the comments themselves.
 type commentedItem struct {
 	projectID string
@@ -54,6 +54,20 @@ func (s *Server) itemOfTheRequest(r *http.Request, person *Person) *commentedIte
 		}
 		return &commentedItem{projectID: tool.ProjectID, comments: &upload.Comments,
 			refusedAsClosed: s.refusedAsAClosedEntry(tool, upload.FolderID, upload.Archived, "upload")}
+	case r.PathValue("todoId") != "":
+		tool, list, todo := s.visibleTodo(r.PathValue("todoId"), person)
+		if todo == nil {
+			return nil
+		}
+		return &commentedItem{projectID: tool.ProjectID, comments: &todo.Comments,
+			refusedAsClosed: func(w http.ResponseWriter) bool { return s.refusedAsNothingWritten(w, tool, list) }}
+	case r.PathValue("listId") != "":
+		tool, list := s.visibleTodoList(r.PathValue("listId"), person)
+		if list == nil {
+			return nil
+		}
+		return &commentedItem{projectID: tool.ProjectID, comments: &list.Comments,
+			refusedAsClosed: func(w http.ResponseWriter) bool { return s.refusedAsNothingWritten(w, tool, list) }}
 	}
 	return nil
 }

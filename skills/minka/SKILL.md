@@ -214,6 +214,12 @@ minka todolists edit <listId> [--title "New"] [--description - < body.md] --json
 minka todolists archive <listId> --json
 minka todolists unarchive <listId> --json
 minka todolists delete <listId> --json
+minka todolists comments list <listId> --json
+minka todolists comments create <listId> - --json < comment.md
+minka todolists comments edit <listId> <commentId> - [--format html] --json < comment.md
+minka todolists comments delete <listId> <commentId> --json
+minka todolists comments react <listId> <commentId> 👍 --json
+minka todolists comments unreact <listId> <commentId> 👍 --json
 minka todogroups create --list <listId> --title "Title" [--color <colour>] --json
 minka todogroups edit <groupId> [--title "New"] [--color <colour>] --json
 minka todogroups move <groupId> (--top | --after <groupId> | --before <groupId>) --json
@@ -241,6 +247,12 @@ minka todos series edit <seriesId> (--expect <updatedAt> | --force) [--title "Ne
 minka todos series stop <seriesId> --json
 minka todos series resume <seriesId> --json
 minka todos series show-now <seriesId> --json
+minka todos comments list <todoId> --json
+minka todos comments create <todoId> - --json < comment.md
+minka todos comments edit <todoId> <commentId> - [--format html] --json < comment.md
+minka todos comments delete <todoId> <commentId> --json
+minka todos comments react <todoId> <commentId> 👍 --json
+minka todos comments unreact <todoId> <commentId> 👍 --json
 minka checkins tools <projectId> --json
 minka checkins list <toolId> --json
 minka checkins show <questionId> --json
@@ -1060,6 +1072,10 @@ themselves and their subtasks are `todos …`, see the next part.
 - `todolists archive` and `todolists unarchive` move a list in and out of the
   archive of its tool; it comes back to the place it had. `todolists delete`
   puts a list into the trash from either place, its groups and to-dos with it.
+- `todolists comments create|edit|delete|react|unreact <listId> …` work as
+  under a card, and `todolists comments list <listId>` reads them, the oldest
+  first. Only the author changes or removes a comment; somebody else's is
+  exit 2.
 - `todogroups create --list <listId> --title "..."` adds a group **at the end**
   of the list, with the colour `--color` names or none. `todogroups edit
   <groupId>` changes the title, the colour or both, and needs at least one of
@@ -1078,19 +1094,19 @@ themselves and their subtasks are `todos …`, see the next part.
 ### The archive of a list
 
 A list in the archive is read and takes **no write** — no change, no new
-group — until it is back: exit 9 `todoListArchived`, and the `hint` names the
-`todolists unarchive` to run. Its **groups are at no address at all**: every
-`todogroups` command on one exits 2, as if it did not exist. Archiving a list
-twice is `todoListArchived`, bringing back one in use `todoListNotArchived`. In
-an archived project `projectArchived` comes before those three and before
-`todoPlaceUnknown`, but after what is wrong with the request itself: a title
-or a description Minka refuses is answered as such, and a list or a group that
-is not there is exit 2.
+group, no comment, no reaction — until it is back: exit 9 `todoListArchived`,
+and the `hint` names the `todolists unarchive` to run. Its **groups are at no
+address at all**: every `todogroups` command on one exits 2, as if it did not
+exist. Archiving a list twice is `todoListArchived`, bringing back one in use
+`todoListNotArchived`. In an archived project `projectArchived` comes before
+those three and before `todoPlaceUnknown`, but after what is wrong with the
+request itself: a title or a description Minka refuses is answered as such,
+and a list or a group that is not there is exit 2.
 
 ### What does not exist here
 
 Moving or copying a list into another tool or project, restoring from the
-trash, and comments on a list are not offered by this CLI.
+trash are not offered by this CLI.
 
 ### Codes of this part
 
@@ -1160,17 +1176,25 @@ one optional assignee and one optional due day.
   `complete` and `reopen` succeed twice; `move` needs exactly one of `--top`,
   `--after` and `--before`; `delete` succeeds for one that is gone already.
   A subtask has no trash.
+- `todos comments create|edit|delete|react|unreact <todoId> …` work as under a
+  card, and `todos comments list <todoId>` reads them, the oldest first. A done
+  to-do takes comments as an open one does. Only the author changes or removes
+  a comment; somebody else's is exit 2. `todos comments edit` and `todolists
+  comments edit` read the to-do or the list first, for the files and mentions
+  a comment of yours may carry.
 
 ### The archive, and the order of the refusals
 
 A to-do of a list in the archive is read and takes **no write** at all — no
-change, no move, no subtask, not even a tick: exit 9 `todoListArchived`, and
-the `hint` names `todolists unarchive`. No to-do moves into an archived list
-either. What Minka says, in this order: exit 2 for a list or a to-do that is
-not there, whatever the request says, then what is wrong with the request
-itself (a title, a line of a subtask, the days), then `projectArchived`, then
-`todoListArchived`, then the place (`todoPlaceUnknown`) or the people
-(`personNotAProjectMember`).
+change, no move, no subtask, no comment or reaction, not even a tick: exit 9
+`todoListArchived`, and the `hint` names `todolists unarchive`. No to-do
+moves into an archived list either. What Minka says, in this order: exit 2 for
+a list or a to-do that is not there, whatever the request says, then what is
+wrong with the request itself (a title, a line of a subtask, the days), then
+`projectArchived`, then `todoListArchived`, then the place
+(`todoPlaceUnknown`) or the people (`personNotAProjectMember`). Somebody else's
+comment is exit 2 only after all of these: under an archived list it is
+`todoListArchived` as well.
 
 ### Codes of this part
 

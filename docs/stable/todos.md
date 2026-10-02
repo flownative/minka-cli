@@ -5,7 +5,9 @@ A **to-do** stands in a list of a To-dos tool, directly or in one group of it
 due day, **assignees**, the people **told when it is done**, and **subtasks**:
 lines of work that are no items of their own, each with one optional assignee
 and one optional due day. `todos …` reads and writes the to-dos, `todos subtasks
-…` the subtasks ([C-071](../decisions.md#c-071)).
+…` the subtasks ([C-071](../decisions.md#c-071)), and `todos comments …` and
+`todolists comments …` the comments under a to-do and under a list
+([C-095](../decisions.md#c-095)).
 
 ## What a read hands over
 
@@ -147,6 +149,44 @@ that is gone already.
 from 1 or by its text, which needs the to-do, so every subtask command but
 `create` reads it first. An ID that is on no subtask goes out as it is.
 
+## Comments
+
+The comments under a to-do and under a list have addresses of their own —
+`todos/{todoId}/comments…` and `todo-lists/{listId}/comments…` — in the shape
+of the comments of a card, with the same codes and reactions. They are
+answered by a controller of their own, `TodoCommentsApiController`, on the
+base the controllers of posts and of Docs & Files share,
+`AbstractCommentsApiController` (read in Minka's code and
+`ApiTodoCommentsTest`, not seen live). A comment has no
+`appUrl` of its own. `todos comments` and `todolists comments` name the item
+as the first argument and are built from the same commands as `posts
+comments`. `todos show` and `todolists show` carry the comments as well,
+oldest first.
+
+A **done** to-do takes comments as an open one does: Minka asks only whether
+the item and its tool are in use. Only the author changes or removes a
+comment; somebody else's is 404 like one that never was. Minka writes a comment
+and its `editedAt` again whatever the text, so the same text sent again says it
+was edited now.
+
+**An archived list takes no word**, neither under itself nor under its to-dos:
+writing, changing, removing, reacting and taking a reaction off are all
+`todoListArchived`, somebody else's comment included. Reading stays open.
+
+`todos comments edit` and `todolists comments edit` read the to-do or the list
+first, for the files and mentions a comment of one's own may carry, and the
+guard stands aside where Minka refuses any text: under an archived list and in
+an archived project ([C-082](../decisions.md#c-082)).
+
+Minka reads the body before it looks for the item on a write, a change and a
+reaction, so a body that is no JSON (400) or of another type (415) answers
+before the 404 — unreachable from here. Then: the to-do or the list (404), a
+comment that is no identifier or not under this item (404), the text
+(`commentMissing`, `commentTooLong`, `commentHasControlCharacters`,
+`commentNotReadable`) or the reaction (`reactionMissing`, `reactionTooLong`,
+`reactionHasControlCharacters`), then `projectArchived`, `todoListArchived`,
+and last the 404 of a comment that is not one's own.
+
 ## The archive of the list, and the order of the refusals
 
 **A to-do of an archived list takes no write at all** — no change, no tick, no
@@ -180,14 +220,15 @@ without a start.
 
 | Answer | Command | Exit |
 |---|---|---|
-| 404 | every read and write, for a list or to-do that is unknown, foreign, in the trash or in a group, list or tool in the trash, before every 422; `subtasks edit`, `complete`, `reopen` and `move` for a subtask that is not on the to-do | 2 |
+| 404 | every read and write, for a list or to-do that is unknown, foreign, in the trash or in a group, list or tool in the trash, before every 422; `subtasks edit`, `complete`, `reopen` and `move` for a subtask that is not on the to-do; a comment not under the item, or not one's own after every 422 | 2 |
 | 422 `todoTitleMissing`, `todoTitleTooLong`, `todoTitleHasControlCharacters` | `todos create`, `todos edit` | 9 |
 | 422 `todoNotesTooLong`, `todoNotesNotReadable` | `todos create`, `todos edit` | 9 |
 | 422 `todoDatesNotADate`, `todoDatesOutOfOrder` | `todos create`, `todos edit` | 9 |
 | 422 `subtaskMissing`, `subtaskTooLong`, `subtaskHasControlCharacters`, `subtaskDueNotADate` | `todos subtasks create`, `todos subtasks edit` | 9 |
 | 422 `personNotAProjectMember` | `todos create`, `todos edit`, `todos subtasks create`, `todos subtasks edit` | 9 |
 | 422 `todoPlaceUnknown` | `todos create --group`, `todos move`, `todos subtasks move` | 9 |
-| 422 `todoListArchived` | every write on a to-do of an archived list, `todos create` into one and `todos move` into one | 9 |
+| 422 `todoListArchived` | every write on a to-do of an archived list, comments included, `todos create` into one and `todos move` into one; every `todolists comments` write on an archived list | 9 |
+| 422 the comment and reaction codes | `todos comments …`, `todolists comments …`, as under a card | 9 |
 | 422 `projectArchived` | every write, before `todoListArchived`, `todoPlaceUnknown` and `personNotAProjectMember`; also a tick on a to-do that is done already and a subtask taken off that is not there | 9 |
 | 422 `todosLimitNotANumber`, `completedTodosBeforeUnknown` | `todos completed` | 9 |
 | 422 `todosAfterUnknown` | `todos mine --after` | 9 |

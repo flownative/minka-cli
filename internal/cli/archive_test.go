@@ -29,9 +29,13 @@ func everyWrite(e *testEnv) map[string][]string {
 	expectCode(e.t, e.run("", "cards", "delete", f.CardInTriage.ID, "--json"), ExitOK)
 	expectCode(e.t, e.run("", "docs", "comments", "create", "--document", document, "A comment", "--json"), ExitOK)
 	expectCode(e.t, e.run("", "posts", "comments", "create", f.Post.ID, "A comment", "--json"), ExitOK)
+	expectCode(e.t, e.run("", "todos", "comments", "create", f.LooseTodo.ID, "A comment", "--json"), ExitOK)
+	expectCode(e.t, e.run("", "todolists", "comments", "create", f.TodoList.ID, "A comment", "--json"), ExitOK)
 	comment := f.CardInDoing.Comments[len(f.CardInDoing.Comments)-1].ID
 	postComment := f.Post.Comments[len(f.Post.Comments)-1].ID
 	entryComment := f.Document.Comments[len(f.Document.Comments)-1].ID
+	todoComment := f.LooseTodo.Comments[len(f.LooseTodo.Comments)-1].ID
+	listComment := f.TodoList.Comments[len(f.TodoList.Comments)-1].ID
 
 	return map[string][]string{
 		"projects edit":     {"projects", "edit", f.Project.ID, "--name", "Renamed"},
@@ -79,10 +83,17 @@ func everyWrite(e *testEnv) map[string][]string {
 		"todolists archive":   {"todolists", "archive", f.TodoList.ID},
 		"todolists unarchive": {"todolists", "unarchive", f.ArchivedList.ID},
 		"todolists delete":    {"todolists", "delete", f.TodoList.ID},
-		"todogroups create":   {"todogroups", "create", "--list", f.TodoList.ID, "--title", "A new group"},
-		"todogroups edit":     {"todogroups", "edit", f.StageGroup.ID, "--title", "Renamed"},
-		"todogroups move":     {"todogroups", "move", f.KitchenGroup.ID, "--top"},
-		"todogroups delete":   {"todogroups", "delete", f.StageGroup.ID},
+
+		"todolists comments create":  {"todolists", "comments", "create", f.TodoList.ID, "Another comment"},
+		"todolists comments edit":    {"todolists", "comments", "edit", f.TodoList.ID, listComment, "Other words"},
+		"todolists comments delete":  {"todolists", "comments", "delete", f.TodoList.ID, listComment},
+		"todolists comments react":   {"todolists", "comments", "react", f.TodoList.ID, listComment, "👍"},
+		"todolists comments unreact": {"todolists", "comments", "unreact", f.TodoList.ID, listComment, "👍"},
+
+		"todogroups create": {"todogroups", "create", "--list", f.TodoList.ID, "--title", "A new group"},
+		"todogroups edit":   {"todogroups", "edit", f.StageGroup.ID, "--title", "Renamed"},
+		"todogroups move":   {"todogroups", "move", f.KitchenGroup.ID, "--top"},
+		"todogroups delete": {"todogroups", "delete", f.StageGroup.ID},
 
 		"todos create":            {"todos", "create", "--list", f.TodoList.ID, "--title", "A new to-do"},
 		"todos edit":              {"todos", "edit", f.LooseTodo.ID, "--title", "Renamed"},
@@ -101,6 +112,11 @@ func everyWrite(e *testEnv) map[string][]string {
 		"todos series stop":       {"todos", "series", "stop", f.Series.ID},
 		"todos series resume":     {"todos", "series", "resume", f.Series.ID},
 		"todos series show-now":   {"todos", "series", "show-now", f.Series.ID},
+		"todos comments create":   {"todos", "comments", "create", f.LooseTodo.ID, "Another comment"},
+		"todos comments edit":     {"todos", "comments", "edit", f.LooseTodo.ID, todoComment, "Other words"},
+		"todos comments delete":   {"todos", "comments", "delete", f.LooseTodo.ID, todoComment},
+		"todos comments react":    {"todos", "comments", "react", f.LooseTodo.ID, todoComment, "👍"},
+		"todos comments unreact":  {"todos", "comments", "unreact", f.LooseTodo.ID, todoComment, "👍"},
 
 		"checkins create": {"checkins", "create", "--tool", f.CheckinsTool.ID, "--title", "New", "--rhythm", "daily",
 			"--weekday", "mon", "--time", "09:00", "--ask", f.Anke.ID},
@@ -135,8 +151,9 @@ var notAWriteIntoAProject = []string{
 	"projects list", "boards list", "boards show", "boards archive", "people list", "trash list",
 	"cards mine", "cards show", "cards notes show", "steps list", "chats list", "messages list",
 	"docs tools", "docs list", "docs show", "docs uploads show",
-	"todolists tools", "todolists list", "todolists show",
+	"todolists tools", "todolists list", "todolists show", "todolists comments list",
 	"todos mine", "todos show", "todos completed", "todos subtasks list", "todos series list", "todos series show",
+	"todos comments list",
 	"checkins tools", "checkins list", "checkins show", "checkins reminders",
 	"checkins answers list", "checkins answers show",
 	"posts tools", "posts categories", "posts list", "posts show", "posts comments list",

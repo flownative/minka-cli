@@ -139,6 +139,8 @@ func (s *Server) registerTodosRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("PATCH /api/v1/todo-groups/{groupId}", s.authenticated(s.editTodoGroup))
 	mux.HandleFunc("DELETE /api/v1/todo-groups/{groupId}", s.authenticated(s.removeTodoGroup))
 	mux.HandleFunc("POST /api/v1/todo-groups/{groupId}/moves", s.authenticated(s.moveTodoGroup))
+	s.registerCommentRoutes(mux, "todo-lists/{listId}")
+	s.registerCommentRoutes(mux, "todos/{todoId}")
 	s.registerTodoItemRoutes(mux)
 	s.registerTodoSeriesRoutes(mux)
 }

@@ -31,6 +31,9 @@ type commentedItem struct {
 	projectID string
 	closed    func() (bool, error)
 	comments  []api.Comment
+	// refusal classifies a failed write with what the read learnt, such as
+	// the list a to-do stands in; nil leaves it to the kind.
+	refusal func(s *session, err error) *Error
 }
 
 func (k commentedKind) item(id string) api.Commented {
@@ -44,7 +47,10 @@ func (k commentedKind) example(rest string) string {
 // commentRefusal names the author on a 404, since only the author changes or
 // removes a comment and Minka answers somebody else's as one that never was.
 func (k commentedKind) commentRefusal(s *session, err error, id string) *Error {
-	e := k.refusal(s, err, id)
+	return k.namingTheAuthor(k.refusal(s, err, id))
+}
+
+func (k commentedKind) namingTheAuthor(e *Error) *Error {
 	if e.Code == CodeNotFound {
 		e.Hint = fmt.Sprintf("The %s does not exist or is not visible to you, the comment was removed or hangs under another %s, or somebody else wrote it: only the author can change or remove a comment.", k.noun, k.noun)
 	}
@@ -80,8 +86,8 @@ func (a *app) newItemCommentsListCmd(k commentedKind) *cobra.Command {
 	return &cobra.Command{
 		Use:   "list <" + k.arg + ">",
 		Short: "List the comments on a " + k.noun + ", the oldest first",
-		Long: fmt.Sprintf(`Lists every comment on a %s, the oldest first, with its reactions. Nothing is
-paged. %s show carries the same comments together with the %s.`, k.noun, k.parent, k.noun),
+		Long: fmt.Sprintf(`Lists every comment on a %s, the oldest first, with its reactions.
+Nothing is paged. %s show carries the same comments together with the %s.`, k.noun, k.parent, k.noun),
 		Args: requireArgs(k.arg),
 		RunE: func(_ *cobra.Command, args []string) error {
 			s, err := a.session()
@@ -204,6 +210,9 @@ and projectArchived is the answer.`, k.parent, k.noun),
 			notices = append(notices, dropped...)
 
 			comment, err := s.client.EditCommentOn(a.ctx, k.item(args[0]), args[1], body)
+			if err != nil && under.refusal != nil {
+				return k.namingTheAuthor(under.refusal(s, err))
+			}
 			if err != nil {
 				return k.commentRefusal(s, err, args[0])
 			}

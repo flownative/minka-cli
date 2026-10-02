@@ -40,7 +40,7 @@ const todoPeopleFlagsHelp = `--assignee and --notify-when-done name a member of 
 be given more than once. ` + personHelp
 
 func (a *app) newTodosCmd() *cobra.Command {
-	return group("todos", "Show, add, change, tick off, move, trash and repeat to-dos, and their subtasks",
+	return group("todos", "Show, add, change, tick off, move, trash and repeat to-dos, their subtasks and their comments",
 		a.newTodosMineCmd(),
 		a.newTodosShowCmd(),
 		a.newTodosCompletedCmd(),
@@ -52,8 +52,25 @@ func (a *app) newTodosCmd() *cobra.Command {
 		a.newTodosDeleteCmd(),
 		a.newTodosRepeatCmd(),
 		a.newSubtasksCmd(),
+		a.newItemCommentsCmd(todoComments),
 		a.newTodoSeriesCmd(),
 	)
+}
+
+// todoComments are the comments under a to-do. A to-do of an archived list
+// takes no text at all.
+var todoComments = commentedKind{
+	parent: "todos", noun: "to-do", arg: "todoId", kind: api.CommentedTodo,
+	read: func(a *app, s *session, id string) (commentedItem, error) {
+		todo, err := s.client.Todo(a.ctx, id)
+		if err != nil {
+			return commentedItem{}, err
+		}
+		archived := "The list of the to-do lies in the archive of its tool: the to-do can be read, and nothing about it changes until the list is back: minka todolists unarchive " + todo.Value.ListID
+		return commentedItem{projectID: todo.Value.ProjectID, closed: closedIf(todo.Value.ListArchived), comments: todo.Value.Comments,
+			refusal: func(s *session, err error) *Error { return todoRefusal(s, err, todoHints{archived: archived}) }}, nil
+	},
+	refusal: func(s *session, err error, _ string) *Error { return todoRefusal(s, err, todoHints{}) },
 }
 
 func (a *app) newTodosShowCmd() *cobra.Command {
@@ -797,6 +814,7 @@ func todoBreadcrumbs(todo api.Todo) []Breadcrumb {
 	}
 	return append(crumbs,
 		Breadcrumb{Action: "subtask", Cmd: "minka todos subtasks create " + todo.ID + " <text>", Description: "Add a subtask"},
+		Breadcrumb{Action: "comment", Cmd: "minka todos comments create " + todo.ID + " <text|->", Description: "Comment on the to-do"},
 		Breadcrumb{Action: "list", Cmd: "minka todolists show " + todo.ListID, Description: "Read the list of the to-do"},
 	)
 }

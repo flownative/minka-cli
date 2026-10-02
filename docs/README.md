@@ -56,12 +56,12 @@ the documentation says what holds; how it came about is in git.
 - [To-do lists and groups](stable/todo-lists.md): What a read of a list hands
   over and what it only counts, the colour of a group and why white is none,
   the archive a list goes quiet in and the group that is then at no address,
-  why a group move names its place, the refusals —
+  why a group move names its place, the refusals, the comments under a list —
   before any work on `todolists` or `todogroups`.
 - [To-dos and subtasks](stable/todos.md): What a to-do carries, the days Minka
   keeps otherwise than they were sent, the people given as a whole set, where a
-  to-do may move, the two pages and the one that has no end, the order of the
-  refusals — before any work on `todos`.
+  to-do may move, the two pages and the one that has no end, the comments under
+  a to-do and a list, the order of the refusals — before any work on `todos`.
 - [Repeating to-dos](stable/todo-series.md): What a series is and hands
   over, the days only Minka works out, the flags of a schedule and the detail a
   rhythm ignores, the edit that sends only what was given and its guard, the
