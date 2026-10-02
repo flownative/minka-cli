@@ -555,8 +555,7 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   that is no identifier are mirrored and unreachable. A comment on a post
   written again with the same text moves its `editedAt` in Minka
   (`DbalCommentRepository::change`) and in the fake, under a document, an
-  upload, a to-do and a list as well; the comments under a card in the fake
-  still keep it.
+  upload, a to-do, a list and a card as well.
 - The comments under a to-do and under a list: no request of them has gone to
   a real Minka. The fake mirrors `TodoCommentsApiController`,
   `AbstractCommentsApiController`, `DbalCommentRepository`, `CommentableItem`
