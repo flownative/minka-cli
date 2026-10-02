@@ -7,7 +7,6 @@ import (
 	"slices"
 	"strings"
 	"time"
-	"unicode"
 	"unicode/utf8"
 
 	"github.com/flownative/minka-cli/internal/richtext"
@@ -176,7 +175,7 @@ func (s *Server) addDocument(w http.ResponseWriter, r *http.Request, person *Per
 	if !ok {
 		return
 	}
-	if !validEntryTitle(w, "document", deref(title)) {
+	if !validTitle(w, "document", "a document", deref(title)) {
 		return
 	}
 	body, ok := stringField(w, fields, "body")
@@ -261,7 +260,7 @@ func (s *Server) updateDocument(w http.ResponseWriter, r *http.Request, person *
 	if !ok {
 		return
 	}
-	if title != nil && !validEntryTitle(w, "document", *title) {
+	if title != nil && !validTitle(w, "document", "a document", *title) {
 		return
 	}
 	newTitle := document.Title
@@ -353,7 +352,7 @@ func (s *Server) addFilesUpload(w http.ResponseWriter, r *http.Request, person *
 	}
 	newTitle := titleOfFile(file.Filename)
 	if title != nil {
-		if !validEntryTitle(w, "upload", *title) {
+		if !validTitle(w, "upload", "an upload", *title) {
 			return
 		}
 		newTitle = phpTrim(*title)
@@ -418,7 +417,7 @@ func (s *Server) updateFilesUpload(w http.ResponseWriter, r *http.Request, perso
 	if !ok {
 		return
 	}
-	if title != nil && !validEntryTitle(w, "upload", *title) {
+	if title != nil && !validTitle(w, "upload", "an upload", *title) {
 		return
 	}
 	newTitle := upload.Title
@@ -532,23 +531,6 @@ func commentText(w http.ResponseWriter, body string) (string, bool) {
 		return text, true
 	}
 	return "", false
-}
-
-// validEntryTitle holds a title against what the server keeps, and names the
-// kind of entry in the refusal, as the controller does.
-func validEntryTitle(w http.ResponseWriter, kind, title string) bool {
-	title = phpTrim(title)
-	switch {
-	case utf8.RuneCountInString(title) > maxTitleLength:
-		unprocessable(w, kind+"TitleTooLong", "The title of a "+kind+" is too long.")
-	case strings.IndexFunc(title, unicode.IsControl) >= 0:
-		unprocessable(w, kind+"TitleHasControlCharacters", "The title of a "+kind+" must not contain control characters.")
-	case title == "":
-		unprocessable(w, kind+"TitleMissing", "A "+kind+" needs a title.")
-	default:
-		return true
-	}
-	return false
 }
 
 // storedBody is a long text as the server keeps it. A value without a single

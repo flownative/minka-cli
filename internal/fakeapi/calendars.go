@@ -217,7 +217,7 @@ func (s *Server) addEvent(w http.ResponseWriter, r *http.Request, person *Person
 		return
 	}
 
-	if !validTodoTitle(w, "event", "an event", deref(fields.title)) {
+	if !validTitle(w, "event", "an event", deref(fields.title)) {
 		return
 	}
 	when, ok := readEventTime(w, fields)
@@ -281,7 +281,7 @@ func (s *Server) updateEvent(w http.ResponseWriter, r *http.Request, person *Per
 		return
 	}
 
-	if fields.title != nil && !validTodoTitle(w, "event", "an event", *fields.title) {
+	if fields.title != nil && !validTitle(w, "event", "an event", *fields.title) {
 		return
 	}
 	when := event.time()

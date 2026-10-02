@@ -247,3 +247,22 @@ func TestAnUploadIsNamedAfterItsFileWithinTheLengthOfATitle(t *testing.T) {
 		}
 	}
 }
+
+// A refused title names the entry with its article, as Minka's messages do.
+func TestATitleRefusalNamesTheEntryWithItsArticle(t *testing.T) {
+	s, f := New(t)
+	upload, document := "/api/v1/files-uploads/"+f.FilesUpload.ID, "/api/v1/documents/"+f.Document.ID
+	long := strings.Repeat("a", maxTitleLength+1)
+	for _, c := range []struct{ path, body, want string }{
+		{upload, `{"title":""}`, "An upload needs a title."},
+		{upload, `{"title":"` + long + `"}`, "The title of an upload is too long."},
+		{upload, `{"title":"a\u0007b"}`, "The title of an upload must not contain control characters."},
+		{document, `{"title":""}`, "A document needs a title."},
+		{document, `{"title":"` + long + `"}`, "The title of a document is too long."},
+	} {
+		_, answer := answerTo(t, s, f.Token, http.MethodPatch, c.path, c.body)
+		if message := answer["error"].(map[string]any)["message"]; message != c.want {
+			t.Errorf("%s %s: %v, want %q", c.path, c.body, message, c.want)
+		}
+	}
+}

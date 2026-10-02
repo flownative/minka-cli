@@ -71,7 +71,7 @@ func (s *Server) addTodo(w http.ResponseWriter, r *http.Request, person *Person)
 		return
 	}
 	groupID, ok := todoPlaceField(w, fields, "groupId")
-	if !ok || !validTodoTitle(w, "todo", "a to-do", deref(title)) {
+	if !ok || !validTitle(w, "todo", "a to-do", deref(title)) {
 		return
 	}
 	start, due, ok := todoDates(w, deref(startsOn), deref(dueOn))
@@ -141,7 +141,7 @@ func (s *Server) updateTodo(w http.ResponseWriter, r *http.Request, person *Pers
 		unprocessable(w, "nothingToChange", "The body names neither a title nor notes nor days nor people.")
 		return
 	}
-	if title != nil && !validTodoTitle(w, "todo", "a to-do", *title) {
+	if title != nil && !validTitle(w, "todo", "a to-do", *title) {
 		return
 	}
 	start, due := todo.StartsOn, todo.DueOn

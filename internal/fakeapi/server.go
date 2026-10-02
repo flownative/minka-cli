@@ -1700,7 +1700,7 @@ func (s *Server) addCard(w http.ResponseWriter, r *http.Request, person *Person)
 	title, ok1 := stringField(w, fields, "title")
 	columnID, ok2 := stringField(w, fields, "columnId")
 	description, ok3 := stringField(w, fields, "description")
-	if !ok1 || !ok2 || !ok3 || !validTitle(w, deref(title)) {
+	if !ok1 || !ok2 || !ok3 || !validTitle(w, "card", "a card", deref(title)) {
 		return
 	}
 	dueOn, ok := stringField(w, fields, "dueOn")
@@ -1779,7 +1779,7 @@ func (s *Server) updateCard(w http.ResponseWriter, r *http.Request, person *Pers
 		unprocessable(w, "nothingToChange", "The body names neither a title nor a description nor a due date.")
 		return
 	}
-	if title != nil && !validTitle(w, *title) {
+	if title != nil && !validTitle(w, "card", "a card", *title) {
 		return
 	}
 	dueOn, ok := stringField(w, fields, "dueOn")
@@ -3732,21 +3732,6 @@ func booleanField(w http.ResponseWriter, fields map[string]any, name string) (*b
 		return nil, false
 	}
 	return &b, true
-}
-
-func validTitle(w http.ResponseWriter, title string) bool {
-	title = phpTrim(title)
-	switch {
-	case utf8.RuneCountInString(title) > maxTitleLength:
-		unprocessable(w, "cardTitleTooLong", "The title of a card is too long.")
-	case strings.IndexFunc(title, unicode.IsControl) >= 0:
-		unprocessable(w, "cardTitleHasControlCharacters", "The title of a card must not contain control characters.")
-	case title == "":
-		unprocessable(w, "cardTitleMissing", "A card needs a title.")
-	default:
-		return true
-	}
-	return false
 }
 
 // validDescription checks the length of what was sent. The server counts the

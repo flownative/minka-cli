@@ -234,7 +234,7 @@ func (s *Server) addTodoList(w http.ResponseWriter, r *http.Request, person *Per
 	if !ok {
 		return
 	}
-	if !validTodoTitle(w, "todoList", "a list", deref(title)) {
+	if !validTitle(w, "todoList", "a list", deref(title)) {
 		return
 	}
 	stored, ok := storedTodoListDescription(w, deref(description))
@@ -284,7 +284,7 @@ func (s *Server) updateTodoList(w http.ResponseWriter, r *http.Request, person *
 		unprocessable(w, "nothingToChange", "The body names neither a title nor a description.")
 		return
 	}
-	if title != nil && !validTodoTitle(w, "todoList", "a list", *title) {
+	if title != nil && !validTitle(w, "todoList", "a list", *title) {
 		return
 	}
 	stored := list.Description
@@ -372,7 +372,7 @@ func (s *Server) addTodoGroup(w http.ResponseWriter, r *http.Request, person *Pe
 	if !ok {
 		return
 	}
-	if !validTodoTitle(w, "todoGroup", "a group", deref(title)) {
+	if !validTitle(w, "todoGroup", "a group", deref(title)) {
 		return
 	}
 	color, ok := todoGroupColor(w, fields)
@@ -409,7 +409,7 @@ func (s *Server) editTodoGroup(w http.ResponseWriter, r *http.Request, person *P
 		unprocessable(w, "nothingToChange", "The body names neither a new title nor a color for the group.")
 		return
 	}
-	if title != nil && !validTodoTitle(w, "todoGroup", "a group", *title) {
+	if title != nil && !validTitle(w, "todoGroup", "a group", *title) {
 		return
 	}
 	color, ok := todoGroupColor(w, fields)
@@ -527,9 +527,9 @@ func todoPlaceUnknown(w http.ResponseWriter) {
 	unprocessable(w, "todoPlaceUnknown", "The list, group or neighbours named are not in this To-dos tool; taking something into another tool is done on the web.")
 }
 
-// validTodoTitle holds the title of a list or a group against what the server
-// keeps, and names the case after what carries it.
-func validTodoTitle(w http.ResponseWriter, thing, aThing, title string) bool {
+// validTitle holds a title against what the server keeps, and names the
+// case after what carries it and the message after the same with its article.
+func validTitle(w http.ResponseWriter, thing, aThing, title string) bool {
 	title = phpTrim(title)
 	switch {
 	case utf8.RuneCountInString(title) > maxTitleLength:
