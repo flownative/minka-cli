@@ -93,7 +93,7 @@ type scheduleFlags struct {
 	interval, day, month, leadDays              int
 }
 
-func (f *scheduleFlags) register(cmd *cobra.Command, withStart bool) {
+func (f *scheduleFlags) register(cmd *cobra.Command, withStart, withLead bool) {
 	flags := cmd.Flags()
 	flags.StringVar(&f.rhythm, "rhythm", "", "daily, weekly, monthlyOnDay, monthlyOnWeekday or yearly")
 	flags.StringSliceVar(&f.weekdays, "weekdays", nil, "Weekdays of a daily or weekly series: 1 (Monday) to 7 or names such as mon (repeatable)")
@@ -106,7 +106,9 @@ func (f *scheduleFlags) register(cmd *cobra.Command, withStart bool) {
 		flags.StringVar(&f.startsOn, "starts-on", "", "First day of the series as YYYY-MM-DD")
 	}
 	flags.StringVar(&f.endsOn, "ends-on", "", "Last day an occurrence may fall on as YYYY-MM-DD, empty to take the end off")
-	flags.IntVar(&f.leadDays, "lead-days", 0, "Days before its day an occurrence appears in the list, 0 to 366")
+	if withLead {
+		flags.IntVar(&f.leadDays, "lead-days", 0, "Days before its day an occurrence appears in the list, 0 to 366")
+	}
 }
 
 // input turns the flags given into the schedule and the lead that go out,
@@ -211,12 +213,12 @@ func detailsUnusedBy(rhythm string, in api.ScheduleInput) []string {
 
 // ignoredDetailsNotice says which details the rhythm Minka answered with does
 // not use, for a write that named no rhythm: Minka ignores them without a word.
-func ignoredDetailsNotice(in api.ScheduleInput, series api.TodoSeries) []string {
+func ignoredDetailsNotice(in api.ScheduleInput, schedule api.RepetitionSchedule) []string {
 	if in.Rhythm != nil {
 		return nil
 	}
-	if unused := detailsUnusedBy(series.Schedule.Rhythm, in); len(unused) > 0 {
-		return []string{fmt.Sprintf("Minka ignored %s: a %s series does not use it", strings.Join(unused, " and "), series.Schedule.Rhythm)}
+	if unused := detailsUnusedBy(schedule.Rhythm, in); len(unused) > 0 {
+		return []string{fmt.Sprintf("Minka ignored %s: a %s series does not use it", strings.Join(unused, " and "), schedule.Rhythm)}
 	}
 	return nil
 }
@@ -275,7 +277,7 @@ an occurrence already todoRepeatsAlready.`,
 			return a.ok(success{
 				data:        series.Raw,
 				summary:     summary,
-				notices:     ignoredDetailsNotice(in, series.Value),
+				notices:     ignoredDetailsNotice(in, series.Value.Schedule),
 				breadcrumbs: todoSeriesBreadcrumbs(series.Value),
 				text: func(w io.Writer) {
 					fmt.Fprintf(w, "%s.\nSeries: %s\n%s\n", summary, series.Value.ID, nextOccurrenceLine(series.Value))
@@ -283,7 +285,7 @@ an occurrence already todoRepeatsAlready.`,
 			})
 		},
 	}
-	schedule.register(cmd, false)
+	schedule.register(cmd, false, true)
 	return cmd
 }
 
@@ -459,7 +461,7 @@ and kept otherwise.`,
 			}
 
 			summary := "Changed series " + series.Value.Title + ": repeats " + describeRepetition(series.Value.Schedule)
-			notices := ignoredDetailsNotice(in, series.Value)
+			notices := ignoredDetailsNotice(in, series.Value.Schedule)
 			// A write that asks for what stands already writes nothing, so the
 			// moment read is still the series' own.
 			if guard != nil && sameMoment(*guard, series.Value.UpdatedAt) {
@@ -478,7 +480,7 @@ and kept otherwise.`,
 		},
 	}
 
-	schedule.register(cmd, true)
+	schedule.register(cmd, true, true)
 	flags := cmd.Flags()
 	flags.StringVar(&title, "title", "", "New title of the occurrences; an empty one is refused")
 	flags.StringArrayVar(&assignees, "assignee", nil, "Person to be assigned, the whole set (repeatable)")
