@@ -322,11 +322,19 @@ func TestAClientReadsAndWritesOnlyWhatIsShownToClients(t *testing.T) {
 	}
 }
 
+// Those who take part keep their place, and the newcomers of one request
+// follow. Minka promises no order among them; its read sorts people put on
+// at the same moment by their identifier, and so does the fake. They are
+// named here against that order, so that the order named cannot pass for it.
 func TestParticipantsKeepTheirPlaceAndNewcomersFollow(t *testing.T) {
 	s, f := New(t)
-	answer := callSeries(t, s, f.Token, http.MethodPatch, "/events/"+f.WeeklyEvent.ID, map[string]any{"participantIds": []string{f.Bruno.ID, f.Anke.ID, f.Bruno.ID}})
-	if got := idsOf(t, answer.body["participants"]); !reflect.DeepEqual(got, []string{f.Anke.ID, f.Bruno.ID}) {
-		t.Errorf("participants %v, want Anke first, then Bruno once", got)
+	later, earlier := f.Bruno.ID, f.Agent.ID
+	if later < earlier {
+		later, earlier = earlier, later
+	}
+	answer := callSeries(t, s, f.Token, http.MethodPatch, "/events/"+f.WeeklyEvent.ID, map[string]any{"participantIds": []string{later, f.Anke.ID, earlier, later}})
+	if got := idsOf(t, answer.body["participants"]); !reflect.DeepEqual(got, []string{f.Anke.ID, earlier, later}) {
+		t.Errorf("participants %v, want Anke first, then the newcomers once each by their identifier", got)
 	}
 	if answer := callSeries(t, s, f.Token, http.MethodPatch, "/events/"+f.WeeklyEvent.ID, map[string]any{"participantIds": []string{f.Stranger.ID}}); answer.got != "422 personNotAProjectMember" {
 		t.Errorf("a stranger: %s", answer.got)
@@ -487,6 +495,29 @@ func TestAnIntervalReachesUpTo99(t *testing.T) {
 		})
 		if answer.got != want {
 			t.Errorf("interval %d: %s, want %s", interval, answer.got, want)
+		}
+	}
+}
+
+// Minka trims the days, the link and the zone of an event before it reads
+// them, and neither the moments nor the days of a schedule.
+func TestOnlyTheDaysTheLinkAndTheZoneOfAnEventAreTrimmed(t *testing.T) {
+	s, f := New(t)
+	allDay := callSeries(t, s, f.Token, http.MethodPost, eventsOf(f), `{"title": "x", "firstDay": " 2035-10-05 ", "lastDay": "\t2035-10-06\n", "joinUrl": " https://meet.example.com/x "}`)
+	if allDay.got != "201" || allDay.body["firstDay"] != "2035-10-05" || allDay.body["lastDay"] != "2035-10-06" || allDay.body["joinUrl"] != "https://meet.example.com/x" {
+		t.Errorf("trimmed fields: %s %s", allDay.got, allDay.raw)
+	}
+	moments := `"startsAt": "2035-10-05T09:00:00Z", "endsAt": "2035-10-05T10:00:00Z"`
+	if zone := callSeries(t, s, f.Token, http.MethodPost, eventsOf(f), `{"title": "x", "schedule": {}, "timeZone": " Europe/Berlin ", `+moments+`}`); zone.got != "201" || zone.body["timeZone"] != "Europe/Berlin" {
+		t.Errorf("a trimmed zone: %s %s", zone.got, zone.raw)
+	}
+	for body, want := range map[string]string{
+		`{"title": "x", "startsAt": " 2035-10-05T09:00:00Z", "endsAt": "2035-10-05T10:00:00Z"}`: "422 eventTimeNotReadable",
+		`{"title": "x", "schedule": {"endsOn": " 2035-12-01 "}, ` + moments + `}`:               "422 eventRepetitionDatesNotADate",
+		`{"title": "x", "schedule": {"startsOn": " 2035-10-05 "}, ` + moments + `}`:             "422 eventRepetitionDatesNotADate",
+	} {
+		if answer := callSeries(t, s, f.Token, http.MethodPost, eventsOf(f), body); answer.got != want {
+			t.Errorf("%s: %s, want %s", body, answer.got, want)
 		}
 	}
 }

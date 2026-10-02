@@ -664,19 +664,21 @@ func firstDayIn(when eventTime, zone string) string {
 }
 
 // participantsAfter is who takes part once the people named are the whole
-// set: those on it already keep their place, the others follow in the order
-// named. Each newcomer is asked whether they belong to the project and then
-// whether the event is shown to them.
+// set: those on it already keep their place, and the newcomers follow. Each
+// newcomer is asked, in the order named, whether they belong to the project
+// and then whether the event is shown to them. Minka promises no order among
+// the newcomers of one request; they come in the order of their identifiers,
+// as its read sorts people put on at the same moment.
 func (s *Server) participantsAfter(w http.ResponseWriter, tool *CalendarTool, event *CalendarEvent, named []string) ([]string, bool) {
 	project := s.projectWithID(tool.ProjectID)
-	var participants []string
+	var participants, newcomers []string
 	for _, id := range event.ParticipantIDs {
 		if slices.Contains(named, id) {
 			participants = append(participants, id)
 		}
 	}
 	for _, id := range named {
-		if slices.Contains(participants, id) {
+		if slices.Contains(participants, id) || slices.Contains(newcomers, id) {
 			continue
 		}
 		if !slices.Contains(project.MemberIDs, id) {
@@ -687,8 +689,10 @@ func (s *Server) participantsAfter(w http.ResponseWriter, tool *CalendarTool, ev
 			unprocessable(w, "personCannotSeeIt", "Somebody chosen is a client of the project, and this event is not shown to clients.")
 			return nil, false
 		}
-		participants = append(participants, id)
+		newcomers = append(newcomers, id)
 	}
+	slices.Sort(newcomers)
+	participants = append(participants, newcomers...)
 	if participants == nil {
 		participants = []string{}
 	}

@@ -30,7 +30,8 @@ given by name.
 `GET events/{eventId}` answers the event: `id`, `projectId`, `toolId`,
 `project`, `tool`, `title`, `allDay`, the time, `schedule`, `timeZone`,
 `description`, `descriptionSource`, `attachments`, `joinUrl`, `highlighted`,
-`participants` (in the order they were put on), `commentCount`, `createdAt`,
+`participants` (in the order they were put on, those of one write among
+themselves in no promised order), `commentCount`, `createdAt`,
 `creator` and `appUrl`. There is **no `updatedAt`**.
 
 - **The time.** A timed event carries `startsAt` and `endsAt`, moments in UTC
@@ -105,11 +106,11 @@ address starting with `http://` or `https://`, at most 2000 characters;
 looked up among the members of the project, which `create` reads the calendar
 and `edit` the event for, and only where a name or an address is given. On an
 edit it is the **whole set**: whoever takes part and is not named again is
-taken off, those named again keep their place and newcomers follow in the
-order given; `--no-participants` sends `[]`. Only a member of the project the
-event is shown to can take part: what the team adds is shown to no client, so
-a client named is `personCannotSeeIt`, and somebody outside the project
-`personNotAProjectMember`.
+taken off, those named again keep their place and newcomers follow, among
+themselves in no order Minka promises; `--no-participants` sends `[]`. Only
+a member of the project the event is shown to can take part: what the team
+adds is shown to no client, so a client named is `personCannotSeeIt`, and
+somebody outside the project `personNotAProjectMember`.
 
 **No guard.** A change takes no `expectedUpdatedAt` and the event carries no
 `updatedAt`: the last write wins. A change that asks for what stands already

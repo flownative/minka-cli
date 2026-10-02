@@ -455,8 +455,8 @@ stay, else from the first day. --no-repeat stops the repetition: the event
 stays where its first occurrence is. A single occurrence cannot be changed.
 
 --participant gives the WHOLE set of people: whoever takes part and is not
-named again is taken off, the others keep their place and newcomers follow in
-the order given. --no-participants takes everybody off. ` + personHelp + `
+named again is taken off, the others keep their place and newcomers follow,
+among themselves in no promised order. --no-participants takes everybody off. ` + personHelp + `
 
 Files and mentions stand in a description as action-text-attachment elements,
 which Markdown cannot hold. To keep them, take descriptionSource from events
