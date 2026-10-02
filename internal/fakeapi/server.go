@@ -21,6 +21,7 @@ import (
 	"mime"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -999,6 +1000,10 @@ func (s *Server) signedIn(answersInJSON bool, next handler) http.HandlerFunc {
 			return
 		}
 
+		if carriesArgumentsOfWebForms(r) {
+			malformed(w, "The body carries form arguments of the web.")
+			return
+		}
 		identifiersOfTheAddressInAnyCase(r)
 		next(w, r, s.People[personID])
 	}
@@ -1187,11 +1192,15 @@ func (s *Server) projectResource(p *Project) map[string]any {
 	return map[string]any{"id": p.ID, "name": p.Name, "description": p.Description, "status": projectStatus(p), "appUrl": s.URL + "/projects/" + p.ID}
 }
 
-// editProject renames or describes a project. Everything about the body is
-// refused before the project is looked up; then an archived project answers
-// its member, a client included, and only then is a client told the same 404
-// as somebody outside the project, because only the team may write.
+// editProject renames or describes a project. Only the team may write, so a
+// client is told the same 404 as somebody outside the project, before anything
+// about the body; an archived project answers last.
 func (s *Server) editProject(w http.ResponseWriter, r *http.Request, person *Person) {
+	project := s.visibleProject(r.PathValue("projectId"), person)
+	if project == nil || s.isAClient(person.ID) {
+		notFound(w)
+		return
+	}
 	fields, ok := readBody(w, r)
 	if !ok {
 		return
@@ -1215,12 +1224,7 @@ func (s *Server) editProject(w http.ResponseWriter, r *http.Request, person *Per
 		unprocessable(w, "projectDescriptionTooLong", "The description of a project is too long.")
 		return
 	}
-	project := s.visibleProject(r.PathValue("projectId"), person)
 	if s.refusedAsArchived(w, project) {
-		return
-	}
-	if project == nil || s.isAClient(person.ID) {
-		notFound(w)
 		return
 	}
 	if name != nil {
@@ -1625,6 +1629,11 @@ func (s *Server) cardByShortIdentifier(w http.ResponseWriter, r *http.Request, p
 }
 
 func (s *Server) addCard(w http.ResponseWriter, r *http.Request, person *Person) {
+	board := s.visibleBoard(r.PathValue("boardId"), person)
+	if board == nil {
+		notFound(w)
+		return
+	}
 	fields, ok := readBody(w, r)
 	if !ok {
 		return
@@ -1632,7 +1641,7 @@ func (s *Server) addCard(w http.ResponseWriter, r *http.Request, person *Person)
 	title, ok1 := stringField(w, fields, "title")
 	columnID, ok2 := stringField(w, fields, "columnId")
 	description, ok3 := stringField(w, fields, "description")
-	if !ok1 || !ok2 || !ok3 || !validTitle(w, deref(title)) || (description != nil && !validDescription(w, *description)) {
+	if !ok1 || !ok2 || !ok3 || !validTitle(w, deref(title)) {
 		return
 	}
 	dueOn, ok := stringField(w, fields, "dueOn")
@@ -1649,10 +1658,7 @@ func (s *Server) addCard(w http.ResponseWriter, r *http.Request, person *Person)
 			return
 		}
 	}
-
-	board := s.visibleBoard(r.PathValue("boardId"), person)
-	if board == nil {
-		notFound(w)
+	if description != nil && !validDescription(w, *description) {
 		return
 	}
 	if s.refusedAsArchived(w, s.projectOf(board)) {
@@ -1691,7 +1697,14 @@ func (s *Server) addCard(w http.ResponseWriter, r *http.Request, person *Person)
 	writeJSON(w, http.StatusCreated, s.cardResource(board, column, card))
 }
 
+// updateCard finds a card of the archive as well: why nothing was written on
+// it is asked after the body, as the server does.
 func (s *Server) updateCard(w http.ResponseWriter, r *http.Request, person *Person) {
+	board, column, card, archived := s.cardToWrite(r.PathValue("cardId"), person)
+	if card == nil {
+		notFound(w)
+		return
+	}
 	fields, ok := readBody(w, r)
 	if !ok {
 		return
@@ -1714,26 +1727,10 @@ func (s *Server) updateCard(w http.ResponseWriter, r *http.Request, person *Pers
 	if !ok || !validDueDate(w, dueOn) {
 		return
 	}
-
-	// A card of the archive is found as well: why nothing was written on it is
-	// asked after the description, as the server does.
-	board, column, card := s.visibleCard(r.PathValue("cardId"), person)
-	onItsBoard := card != nil
-	if card == nil {
-		board, column, card = s.visibleArchivedCard(r.PathValue("cardId"), person)
-	}
-	if card == nil {
-		notFound(w)
-		return
-	}
 	if description != nil && !validDescription(w, *description) {
 		return
 	}
-	if s.refusedAsArchived(w, s.projectOf(board)) {
-		return
-	}
-	if !onItsBoard {
-		unprocessable(w, "cardArchived", "This card is archived. Nothing is written on it until it is back on its board.")
+	if s.refusedAsAClosedCard(w, board, archived) {
 		return
 	}
 	if title != nil {
@@ -1749,6 +1746,11 @@ func (s *Server) updateCard(w http.ResponseWriter, r *http.Request, person *Pers
 }
 
 func (s *Server) moveCard(w http.ResponseWriter, r *http.Request, person *Person) {
+	board, from, card, archived := s.cardToWrite(r.PathValue("cardId"), person)
+	if card == nil {
+		notFound(w)
+		return
+	}
 	fields, ok := readBody(w, r)
 	if !ok {
 		return
@@ -1774,12 +1776,7 @@ func (s *Server) moveCard(w http.ResponseWriter, r *http.Request, person *Person
 		return
 	}
 
-	board, from, card := s.visibleCard(r.PathValue("cardId"), person)
-	if card == nil {
-		notFound(w)
-		return
-	}
-	if s.refusedAsArchived(w, s.projectOfCard(r.PathValue("cardId"))) {
+	if s.refusedAsAClosedCard(w, board, archived) {
 		return
 	}
 	var to *Column
@@ -1853,6 +1850,11 @@ func placeInArea(cards []*Card, onHold bool, position, previousID, nextID *strin
 // order they stood on hold. Triage, Not now and Done name their refusal,
 // on and off alike.
 func (s *Server) setColumnOnHold(w http.ResponseWriter, r *http.Request, person *Person) {
+	board, column := s.visibleColumn(r.PathValue("columnId"), person)
+	if column == nil {
+		notFound(w)
+		return
+	}
 	fields, ok := readBody(w, r)
 	if !ok {
 		return
@@ -1863,12 +1865,6 @@ func (s *Server) setColumnOnHold(w http.ResponseWriter, r *http.Request, person 
 	}
 	if enabled == nil {
 		unprocessable(w, "onHoldEnabledMissing", "Say whether the column is to have an area for the cards on hold.")
-		return
-	}
-
-	board, column := s.visibleColumn(r.PathValue("columnId"), person)
-	if column == nil {
-		notFound(w)
 		return
 	}
 	if s.refusedAsArchived(w, s.projectOf(board)) {
@@ -1943,9 +1939,14 @@ func (s *Server) writePeople(w http.ResponseWriter, circle string, memberIDs []s
 	writeJSON(w, http.StatusOK, list)
 }
 
-// assignCard checks the body before it looks up the card, as the server does:
-// a person that is no ID is refused like a person outside the project.
+// assignCard refuses a person that is no ID like a person outside the
+// project, before it asks why nothing may be written on the card.
 func (s *Server) assignCard(w http.ResponseWriter, r *http.Request, person *Person) {
+	board, column, card, archived := s.cardToWrite(r.PathValue("cardId"), person)
+	if card == nil {
+		notFound(w)
+		return
+	}
 	fields, ok := readBody(w, r)
 	if !ok {
 		return
@@ -1962,13 +1963,7 @@ func (s *Server) assignCard(w http.ResponseWriter, r *http.Request, person *Pers
 		notAProjectMember(w)
 		return
 	}
-
-	board, column, card := s.visibleCard(r.PathValue("cardId"), person)
-	if card == nil {
-		notFound(w)
-		return
-	}
-	if s.refusedAsArchived(w, s.projectOfCard(r.PathValue("cardId"))) {
+	if s.refusedAsAClosedCard(w, board, archived) {
 		return
 	}
 	if project := s.visibleProject(board.ProjectID, person); !slices.Contains(project.MemberIDs, *personID) {
@@ -1988,13 +1983,13 @@ func (s *Server) assignCard(w http.ResponseWriter, r *http.Request, person *Pers
 // unassignCard takes somebody off a card without asking about membership, so
 // a person who left the project can still be taken off.
 func (s *Server) unassignCard(w http.ResponseWriter, r *http.Request, person *Person) {
-	_, _, card := s.visibleCard(r.PathValue("cardId"), person)
+	board, _, card, archived := s.cardToWrite(r.PathValue("cardId"), person)
 	personID := r.PathValue("personId")
 	if card == nil || !uuidPattern.MatchString(personID) {
 		notFound(w)
 		return
 	}
-	if s.refusedAsArchived(w, s.projectOfCard(r.PathValue("cardId"))) {
+	if s.refusedAsAClosedCard(w, board, archived) {
 		return
 	}
 	card.AssigneeIDs = slices.DeleteFunc(card.AssigneeIDs, func(id string) bool { return id == personID })
@@ -2003,9 +1998,13 @@ func (s *Server) unassignCard(w http.ResponseWriter, r *http.Request, person *Pe
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// addStep puts a step at the end of the list. The line is checked before the
-// card is looked up, in the order the server checks it.
+// addStep puts a step at the end of the list.
 func (s *Server) addStep(w http.ResponseWriter, r *http.Request, person *Person) {
+	board, column, card, archived := s.cardToWrite(r.PathValue("cardId"), person)
+	if card == nil {
+		notFound(w)
+		return
+	}
 	fields, ok := readBody(w, r)
 	if !ok {
 		return
@@ -2026,13 +2025,7 @@ func (s *Server) addStep(w http.ResponseWriter, r *http.Request, person *Person)
 		unprocessable(w, "stepMissing", "A step needs a line of text.")
 		return
 	}
-
-	board, column, card := s.visibleCard(r.PathValue("cardId"), person)
-	if card == nil {
-		notFound(w)
-		return
-	}
-	if s.refusedAsArchived(w, s.projectOfCard(r.PathValue("cardId"))) {
+	if s.refusedAsAClosedCard(w, board, archived) {
 		return
 	}
 	card.Steps = append(card.Steps, &Step{ID: newID(), Title: text})
@@ -2057,7 +2050,7 @@ func (s *Server) shortIdentifierOrNotes(w http.ResponseWriter, r *http.Request, 
 }
 
 func (s *Server) cardNotes(w http.ResponseWriter, r *http.Request, person *Person) {
-	board, _, card := s.visibleCard(r.PathValue("cardId"), person)
+	board, _, card, _ := s.cardToWrite(r.PathValue("cardId"), person)
 	if card == nil {
 		notFound(w)
 		return
@@ -2070,6 +2063,11 @@ func (s *Server) cardNotes(w http.ResponseWriter, r *http.Request, person *Perso
 // that say the sent text already are no conflict, and notes nobody has
 // written yet are created whatever was expected.
 func (s *Server) writeCardNotes(w http.ResponseWriter, r *http.Request, person *Person) {
+	board, _, card, archived := s.cardToWrite(r.PathValue("cardId"), person)
+	if card == nil {
+		notFound(w)
+		return
+	}
 	fields, ok := readBody(w, r)
 	if !ok {
 		return
@@ -2106,13 +2104,7 @@ func (s *Server) writeCardNotes(w http.ResponseWriter, r *http.Request, person *
 		}
 		expectedAt = &at
 	}
-
-	board, _, card := s.visibleCard(r.PathValue("cardId"), person)
-	if card == nil {
-		notFound(w)
-		return
-	}
-	if s.refusedAsArchived(w, s.projectOfCard(card.ID)) {
+	if s.refusedAsAClosedCard(w, board, archived) {
 		return
 	}
 	// The text the notes hold already is no write and no conflict, and that
@@ -2163,7 +2155,19 @@ func (s *Server) notesResource(board *Board, card *Card) map[string]any {
 	}
 }
 
+// updateStep looks for the step on the card before it reads the body, so a
+// step that is not there is 404 even on a card that takes no write.
 func (s *Server) updateStep(w http.ResponseWriter, r *http.Request, person *Person) {
+	board, column, card, archived := s.cardToWrite(r.PathValue("cardId"), person)
+	if card == nil {
+		notFound(w)
+		return
+	}
+	index := slices.IndexFunc(card.Steps, func(step *Step) bool { return step.ID == r.PathValue("stepId") })
+	if index < 0 {
+		notFound(w)
+		return
+	}
 	fields, ok := readBody(w, r)
 	if !ok {
 		return
@@ -2173,18 +2177,7 @@ func (s *Server) updateStep(w http.ResponseWriter, r *http.Request, person *Pers
 		unprocessable(w, "stepCompletedMissing", `Changing a step needs the field "completed" as true or false.`)
 		return
 	}
-
-	board, column, card := s.visibleCard(r.PathValue("cardId"), person)
-	if card == nil || !uuidPattern.MatchString(r.PathValue("stepId")) {
-		notFound(w)
-		return
-	}
-	if s.refusedAsArchived(w, s.projectOfCard(r.PathValue("cardId"))) {
-		return
-	}
-	index := slices.IndexFunc(card.Steps, func(step *Step) bool { return step.ID == r.PathValue("stepId") })
-	if index < 0 {
-		notFound(w)
+	if s.refusedAsAClosedCard(w, board, archived) {
 		return
 	}
 	card.Steps[index].Completed = completed
@@ -2192,15 +2185,16 @@ func (s *Server) updateStep(w http.ResponseWriter, r *http.Request, person *Pers
 }
 
 // removeStep answers 204 for a step that is not on the card as well, one of
-// another card included, but 404 for a card the person may not see and for an
-// address that names no step at all.
+// another card included, unless nothing may be written on the card at all;
+// it is 404 for a card the person may not see and for an address that names
+// no step at all.
 func (s *Server) removeStep(w http.ResponseWriter, r *http.Request, person *Person) {
-	_, _, card := s.visibleCard(r.PathValue("cardId"), person)
+	board, _, card, archived := s.cardToWrite(r.PathValue("cardId"), person)
 	if card == nil || !uuidPattern.MatchString(r.PathValue("stepId")) {
 		notFound(w)
 		return
 	}
-	if s.refusedAsArchived(w, s.projectOfCard(r.PathValue("cardId"))) {
+	if s.refusedAsAClosedCard(w, board, archived) {
 		return
 	}
 	card.Steps = slices.DeleteFunc(card.Steps, func(step *Step) bool { return step.ID == r.PathValue("stepId") })
@@ -2466,16 +2460,13 @@ func validChatText(w http.ResponseWriter, text string) bool {
 }
 
 func (s *Server) postMessage(w http.ResponseWriter, r *http.Request, person *Person) {
+	chat := s.visibleChat(r.PathValue("chatId"), person)
+	if chat == nil {
+		notFound(w)
+		return
+	}
 	fields, ok := readBody(w, r)
 	if !ok {
-		return
-	}
-	body, ok := stringField(w, fields, "body")
-	if !ok {
-		return
-	}
-	text := phpTrim(deref(body))
-	if !validChatText(w, text) {
 		return
 	}
 	clientMessageID, ok := stringField(w, fields, "clientMessageId")
@@ -2486,10 +2477,12 @@ func (s *Server) postMessage(w http.ResponseWriter, r *http.Request, person *Per
 		unprocessable(w, "chatMessageDraftNotAnIdentifier", "The name of the draft has to be a UUID.")
 		return
 	}
-
-	chat := s.visibleChat(r.PathValue("chatId"), person)
-	if chat == nil {
-		notFound(w)
+	body, ok := stringField(w, fields, "body")
+	if !ok {
+		return
+	}
+	text := phpTrim(deref(body))
+	if !validChatText(w, text) {
 		return
 	}
 	replyTo, ok := stringField(w, fields, "replyTo")
@@ -2537,7 +2530,15 @@ func authoredMessage(chat *Chat, messageID string, person *Person) *ChatMessage 
 	return nil
 }
 
+// editMessage looks for the message in the chat before it reads the body: a
+// message of another chat is 404 also in an archived project, and so is
+// somebody else's or a removed one once the archive has been asked.
 func (s *Server) editMessage(w http.ResponseWriter, r *http.Request, person *Person) {
+	chat, _ := s.messageOfChat(r, person)
+	if chat == nil {
+		notFound(w)
+		return
+	}
 	fields, ok := readBody(w, r)
 	if !ok {
 		return
@@ -2548,11 +2549,6 @@ func (s *Server) editMessage(w http.ResponseWriter, r *http.Request, person *Per
 	}
 	text := phpTrim(deref(body))
 	if !validChatText(w, text) {
-		return
-	}
-	chat := s.visibleChat(r.PathValue("chatId"), person)
-	if chat == nil {
-		notFound(w)
 		return
 	}
 	if s.refusedAsArchived(w, s.projectOfChat(chat)) {
@@ -2571,9 +2567,11 @@ func (s *Server) editMessage(w http.ResponseWriter, r *http.Request, person *Per
 	writeJSON(w, http.StatusOK, s.chatMessageResource(chat, message))
 }
 
+// removeMessage answers 404 for a message that is not in the chat before it
+// asks about the archive, as the server does once its write found nothing.
 func (s *Server) removeMessage(w http.ResponseWriter, r *http.Request, person *Person) {
-	chat := s.visibleChat(r.PathValue("chatId"), person)
-	if chat == nil || !uuidPattern.MatchString(r.PathValue("messageId")) {
+	chat, _ := s.messageOfChat(r, person)
+	if chat == nil {
 		notFound(w)
 		return
 	}
@@ -2596,6 +2594,11 @@ func (s *Server) removeMessage(w http.ResponseWriter, r *http.Request, person *P
 // markChatRead keeps the highest mark and never one beyond the counter of the
 // chat, so that a number from elsewhere cannot silence the chat for good.
 func (s *Server) markChatRead(w http.ResponseWriter, r *http.Request, person *Person) {
+	chat := s.visibleChat(r.PathValue("chatId"), person)
+	if chat == nil {
+		notFound(w)
+		return
+	}
 	fields, ok := readBody(w, r)
 	if !ok {
 		return
@@ -2603,11 +2606,6 @@ func (s *Server) markChatRead(w http.ResponseWriter, r *http.Request, person *Pe
 	value, isNumber := fields["seq"].(float64)
 	if !isNumber || value < 0 || value != math.Trunc(value) {
 		unprocessable(w, "chatReadSeqMissing", "The number a chat has been read up to has to be a whole number of at least zero.")
-		return
-	}
-	chat := s.visibleChat(r.PathValue("chatId"), person)
-	if chat == nil {
-		notFound(w)
 		return
 	}
 	seq := min(int(value), chat.lastSeq)
@@ -2622,9 +2620,10 @@ const maxReactionLength = 20
 
 // reactToComment and the three that follow it are the two ways to react and
 // the two ways to take a reaction away. Both texts behave the same, so the
-// work is in reactTo and unreactFrom.
+// work is in reactTo and unreactFrom. The comment or the message is looked
+// for before the body, and the reaction is read before the archive is asked.
 func (s *Server) reactToComment(w http.ResponseWriter, r *http.Request, person *Person) {
-	board, _, card := s.visibleCard(r.PathValue("cardId"), person)
+	board, _, card, archived := s.cardToWrite(r.PathValue("cardId"), person)
 	comment := commentOf(card, r.PathValue("commentId"))
 	if comment == nil {
 		notFound(w)
@@ -2634,7 +2633,7 @@ func (s *Server) reactToComment(w http.ResponseWriter, r *http.Request, person *
 	if !ok {
 		return
 	}
-	if s.refusedAsArchived(w, s.projectOfCard(r.PathValue("cardId"))) {
+	if s.refusedAsAClosedCard(w, board, archived) {
 		return
 	}
 	status := reactTo(&comment.Reactions, content, person.ID)
@@ -2642,23 +2641,27 @@ func (s *Server) reactToComment(w http.ResponseWriter, r *http.Request, person *
 }
 
 func (s *Server) unreactFromComment(w http.ResponseWriter, r *http.Request, person *Person) {
-	_, _, card := s.visibleCard(r.PathValue("cardId"), person)
+	board, _, card, archived := s.cardToWrite(r.PathValue("cardId"), person)
 	comment := commentOf(card, r.PathValue("commentId"))
 	if comment == nil {
 		notFound(w)
 		return
 	}
-	if s.refusedAsArchived(w, s.projectOfCard(r.PathValue("cardId"))) {
+	content, ok := validReaction(w, r.URL.Query().Get("content"))
+	if !ok {
 		return
 	}
-	unreactFrom(&comment.Reactions, r.URL.Query().Get("content"), person.ID)
+	if s.refusedAsAClosedCard(w, board, archived) {
+		return
+	}
+	unreactFrom(&comment.Reactions, content, person.ID)
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(http.StatusNoContent)
 }
 
 func (s *Server) reactToMessage(w http.ResponseWriter, r *http.Request, person *Person) {
-	message := s.messageOfChat(r, person)
-	if message == nil {
+	chat, message := s.messageOfChat(r, person)
+	if chat == nil {
 		notFound(w)
 		return
 	}
@@ -2666,8 +2669,11 @@ func (s *Server) reactToMessage(w http.ResponseWriter, r *http.Request, person *
 	if !ok {
 		return
 	}
-	chat := s.visibleChat(r.PathValue("chatId"), person)
 	if s.refusedAsArchived(w, s.projectOfChat(chat)) {
+		return
+	}
+	if message.Removed {
+		notFound(w)
 		return
 	}
 	status := reactTo(&message.Reactions, content, person.ID)
@@ -2678,35 +2684,44 @@ func (s *Server) reactToMessage(w http.ResponseWriter, r *http.Request, person *
 }
 
 func (s *Server) unreactFromMessage(w http.ResponseWriter, r *http.Request, person *Person) {
-	message := s.messageOfChat(r, person)
-	if message == nil {
+	chat, message := s.messageOfChat(r, person)
+	if chat == nil {
 		notFound(w)
 		return
 	}
-	chat := s.visibleChat(r.PathValue("chatId"), person)
+	content, ok := validReaction(w, r.URL.Query().Get("content"))
+	if !ok {
+		return
+	}
 	if s.refusedAsArchived(w, s.projectOfChat(chat)) {
 		return
 	}
-	if unreactFrom(&message.Reactions, r.URL.Query().Get("content"), person.ID) {
+	if message.Removed {
+		notFound(w)
+		return
+	}
+	if unreactFrom(&message.Reactions, content, person.ID) {
 		chat.noteChange(message)
 	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// messageOfChat is the message of the chat the address names. A message that
-// belongs to another chat is as unreachable as one that is not there.
-func (s *Server) messageOfChat(r *http.Request, person *Person) *ChatMessage {
+// messageOfChat is the chat of the address with the message it names, a
+// removed one included; both are nil where the chat holds no such message. A
+// message that belongs to another chat is as unreachable as one that is not
+// there.
+func (s *Server) messageOfChat(r *http.Request, person *Person) (*Chat, *ChatMessage) {
 	chat := s.visibleChat(r.PathValue("chatId"), person)
 	if chat == nil {
-		return nil
+		return nil, nil
 	}
 	for _, message := range chat.Messages {
-		if message.ID == r.PathValue("messageId") && !message.Removed {
-			return message
+		if message.ID == r.PathValue("messageId") {
+			return chat, message
 		}
 	}
-	return nil
+	return nil, nil
 }
 
 func commentOf(card *Card, commentID string) *Comment {
@@ -3100,13 +3115,13 @@ func (s *Server) namedMember(board *Board, personID string, person *Person) bool
 }
 
 func (s *Server) subscribeToCard(w http.ResponseWriter, r *http.Request, person *Person) {
-	board, column, card := s.visibleCard(r.PathValue("cardId"), person)
+	board, column, card, archived := s.cardToWrite(r.PathValue("cardId"), person)
 	personID := r.PathValue("personId")
 	if card == nil || !uuidPattern.MatchString(personID) {
 		notFound(w)
 		return
 	}
-	if s.refusedAsArchived(w, s.projectOfCard(r.PathValue("cardId"))) {
+	if s.refusedAsAClosedCard(w, board, archived) {
 		return
 	}
 	if !s.namedMember(board, personID, person) {
@@ -3119,13 +3134,13 @@ func (s *Server) subscribeToCard(w http.ResponseWriter, r *http.Request, person 
 }
 
 func (s *Server) unsubscribeFromCard(w http.ResponseWriter, r *http.Request, person *Person) {
-	board, _, card := s.visibleCard(r.PathValue("cardId"), person)
+	board, _, card, archived := s.cardToWrite(r.PathValue("cardId"), person)
 	personID := r.PathValue("personId")
 	if card == nil || !uuidPattern.MatchString(personID) {
 		notFound(w)
 		return
 	}
-	if s.refusedAsArchived(w, s.projectOfCard(r.PathValue("cardId"))) {
+	if s.refusedAsAClosedCard(w, board, archived) {
 		return
 	}
 	if !s.namedMember(board, personID, person) {
@@ -3151,21 +3166,18 @@ func ownComment(card *Card, commentID string, person *Person) *Comment {
 	return nil
 }
 
-// editComment checks the text once the card is found, and asks why nothing
-// was written only then, in the order the server does: the project, the
-// archive of the board, and last the comment, which only its author changes.
+// editComment looks for the comment under the card before it reads the body,
+// and asks why nothing was written only after the text, in the order the
+// server does: the project, the archive of the board, and last whose comment
+// it is, which only its author changes.
 func (s *Server) editComment(w http.ResponseWriter, r *http.Request, person *Person) {
-	fields, ok := readBody(w, r)
-	if !ok {
+	board, _, card, archived := s.cardToWrite(r.PathValue("cardId"), person)
+	if commentOf(card, r.PathValue("commentId")) == nil {
+		notFound(w)
 		return
 	}
-	board, _, card := s.visibleCard(r.PathValue("cardId"), person)
-	onItsBoard := card != nil
-	if card == nil {
-		board, _, card = s.visibleArchivedCard(r.PathValue("cardId"), person)
-	}
-	if card == nil {
-		notFound(w)
+	fields, ok := readBody(w, r)
+	if !ok {
 		return
 	}
 	body, ok := stringField(w, fields, "body")
@@ -3176,11 +3188,7 @@ func (s *Server) editComment(w http.ResponseWriter, r *http.Request, person *Per
 	if !ok {
 		return
 	}
-	if s.refusedAsArchived(w, s.projectOf(board)) {
-		return
-	}
-	if !onItsBoard {
-		unprocessable(w, "cardArchived", "This card is archived. Nothing is written on it until it is back on its board.")
+	if s.refusedAsAClosedCard(w, board, archived) {
 		return
 	}
 	comment := ownComment(card, r.PathValue("commentId"), person)
@@ -3202,12 +3210,12 @@ func isCommentControl(r rune) bool {
 }
 
 func (s *Server) removeComment(w http.ResponseWriter, r *http.Request, person *Person) {
-	_, _, card := s.visibleCard(r.PathValue("cardId"), person)
-	if card == nil || !uuidPattern.MatchString(r.PathValue("commentId")) {
+	board, _, card, archived := s.cardToWrite(r.PathValue("cardId"), person)
+	if commentOf(card, r.PathValue("commentId")) == nil {
 		notFound(w)
 		return
 	}
-	if s.refusedAsArchived(w, s.projectOfCard(r.PathValue("cardId"))) {
+	if s.refusedAsAClosedCard(w, board, archived) {
 		return
 	}
 	comment := ownComment(card, r.PathValue("commentId"), person)
@@ -3341,9 +3349,16 @@ func (s *Server) boardOfColumn(column *Column) *Board {
 	return nil
 }
 
+// writeComment reads the body before it looks the card up, as the server
+// does, but holds the text only against a card it found.
 func (s *Server) writeComment(w http.ResponseWriter, r *http.Request, person *Person) {
 	fields, ok := readBody(w, r)
 	if !ok {
+		return
+	}
+	board, _, card, archived := s.cardToWrite(r.PathValue("cardId"), person)
+	if card == nil {
+		notFound(w)
 		return
 	}
 	body, ok := stringField(w, fields, "body")
@@ -3364,13 +3379,7 @@ func (s *Server) writeComment(w http.ResponseWriter, r *http.Request, person *Pe
 		unprocessable(w, "commentMissing", "A comment needs a body.")
 		return
 	}
-
-	board, _, card := s.visibleCard(r.PathValue("cardId"), person)
-	if card == nil {
-		notFound(w)
-		return
-	}
-	if s.refusedAsArchived(w, s.projectOfCard(r.PathValue("cardId"))) {
+	if s.refusedAsAClosedCard(w, board, archived) {
 		return
 	}
 	comment := &Comment{ID: newID(), AuthorID: person.ID, Body: text, CreatedAt: s.now}
@@ -3434,6 +3443,29 @@ func (s *Server) inTheArchive(id string) *ArchivedCard {
 		}
 	}
 	return nil
+}
+
+// cardToWrite finds a card the way a write looks it up: on its board or in
+// the archive of its board, which a write learns of only after the project.
+func (s *Server) cardToWrite(id string, person *Person) (board *Board, column *Column, card *Card, archived bool) {
+	if board, column, card = s.visibleCard(id, person); card != nil {
+		return board, column, card, false
+	}
+	board, column, card = s.visibleArchivedCard(id, person)
+	return board, column, card, card != nil
+}
+
+// refusedAsAClosedCard says why a write on a card wrote nothing: the project
+// is archived, or the card lies in the archive of its board.
+func (s *Server) refusedAsAClosedCard(w http.ResponseWriter, board *Board, archived bool) bool {
+	if s.refusedAsArchived(w, s.projectOf(board)) {
+		return true
+	}
+	if archived {
+		unprocessable(w, "cardArchived", "This card is archived. Nothing is written on it until it is back on its board.")
+		return true
+	}
+	return false
 }
 
 func (s *Server) visibleCard(id string, person *Person) (*Board, *Column, *Card) {
@@ -3557,15 +3589,65 @@ func readBodyWith(w http.ResponseWriter, r *http.Request, keepNumbers bool) (map
 		malformed(w, "The body is not a JSON object.")
 		return nil, false
 	}
-	for name := range fields {
-		if strings.HasPrefix(name, "__") {
-			malformed(w, "The body carries form arguments of the web.")
-			return nil, false
-		}
-	}
 	identifiersOfTheBodyInAnyCase(fields)
 	return fields, true
 }
+
+// carriesArgumentsOfWebForms says whether a request names an argument the web
+// reserves for its forms, one whose name starts with two underscores. The
+// server refuses such a request before it looks at the address, for any
+// method. It takes its arguments from the query and from the body as Flow
+// parses it: a body of a JSON media type as JSON, one of any other subtype
+// as a form, one without a media type not at all, and the bytes of an upload
+// not at all. A body is peeked at here and left to be read again. An XML
+// body, which Flow reads as well, is not looked into: no address takes one.
+func carriesArgumentsOfWebForms(r *http.Request) bool {
+	for name := range r.URL.Query() {
+		if strings.HasPrefix(name, "__") {
+			return true
+		}
+	}
+	if r.Body == nil || takesTheBytesOfAFile(r) {
+		return false
+	}
+	content, _ := io.ReadAll(r.Body)
+	r.Body = io.NopCloser(bytes.NewReader(content))
+	_, subtype, _ := strings.Cut(strings.ToLower(strings.TrimSpace(strings.SplitN(r.Header.Get("Content-Type"), ";", 2)[0])), "/")
+	var names []string
+	switch subtype {
+	case "":
+		return false
+	case "json", "x-json", "javascript", "x-javascript":
+		var fields map[string]json.RawMessage
+		if json.Unmarshal(content, &fields) != nil {
+			return false
+		}
+		for name := range fields {
+			names = append(names, name)
+		}
+	case "xml":
+		return false
+	default:
+		fields, _ := url.ParseQuery(string(content))
+		for name := range fields {
+			names = append(names, name)
+		}
+	}
+	for _, name := range names {
+		if strings.HasPrefix(name, "__") {
+			return true
+		}
+	}
+	return false
+}
+
+// takesTheBytesOfAFile says whether a request carries the bytes of an upload,
+// whose body the server keeps out of its parsing.
+func takesTheBytesOfAFile(r *http.Request) bool {
+	return r.Method == http.MethodPost && uploadPath.MatchString(r.URL.Path)
+}
+
+var uploadPath = regexp.MustCompile(`^/api/v1/(projects|messages)/[^/]+/uploads$`)
 
 func stringField(w http.ResponseWriter, fields map[string]any, name string) (*string, bool) {
 	value, present := fields[name]

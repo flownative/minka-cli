@@ -6,8 +6,9 @@ import (
 	"testing"
 )
 
-// The order is the order of Minka's checks: the body, then whether the project
-// is archived for a member, then the team.
+// The order is the order of Minka's checks: the team, so that a client is told
+// what an outsider is told before anything about the body, then the body,
+// then whether the project is archived.
 func TestAProjectEditRefusesInTheOrderOfMinka(t *testing.T) {
 	s, f := New(t)
 	s.Tokens["minka_pat_client"] = f.Client.ID
@@ -26,9 +27,15 @@ func TestAProjectEditRefusesInTheOrderOfMinka(t *testing.T) {
 		{"an empty name", f.Token, map[string]any{"name": " "}, false, "422 projectNameMissing"},
 		{"a name of two lines", f.Token, map[string]any{"name": "A\nB"}, false, "422 projectNameHasControlCharacters"},
 		{"a name too long", f.Token, map[string]any{"name": strings.Repeat("ä", 201)}, false, "422 projectNameTooLong"},
-		{"a description too long, from outside", f.StrangerToken, tooLong, false, "422 projectDescriptionTooLong"},
-		{"a description too long, from a client", "minka_pat_client", tooLong, false, "422 projectDescriptionTooLong"},
-		{"a client of an archived project", "minka_pat_client", map[string]any{"name": "X"}, true, "422 projectArchived"},
+		{"a description too long", f.Token, tooLong, false, "422 projectDescriptionTooLong"},
+		{"a body that is no JSON", f.Token, `{`, false, "400 malformedBody"},
+		{"a description too long, from outside", f.StrangerToken, tooLong, false, "404"},
+		{"a description too long, from a client", "minka_pat_client", tooLong, false, "404"},
+		{"a body that is no JSON, from outside", f.StrangerToken, `{`, false, "404"},
+		{"a body that is no JSON, from a client", "minka_pat_client", `{`, false, "404"},
+		{"an empty name for an archived project", f.Token, map[string]any{"name": " "}, true, "422 projectNameMissing"},
+		{"a member of an archived project", f.Token, map[string]any{"name": "X"}, true, "422 projectArchived"},
+		{"a client of an archived project", "minka_pat_client", map[string]any{"name": "X"}, true, "404"},
 		{"somebody outside an archived project", f.StrangerToken, map[string]any{"name": "X"}, true, "404"},
 		{"a client", "minka_pat_client", map[string]any{"name": "X"}, false, "404"},
 		{"somebody outside", f.StrangerToken, map[string]any{"name": "X"}, false, "404"},

@@ -639,18 +639,19 @@ func (s *Server) writeCommentOnPost(w http.ResponseWriter, r *http.Request, pers
 	writeJSON(w, http.StatusCreated, s.commentResource(tool.ProjectID, comment))
 }
 
-// editCommentOnPost changes a comment of the person asking. The statement
-// finds nothing for somebody else's comment and for one under a post that
-// takes no change, and why is asked afterwards: the project and the post
-// first, so that somebody else's comment under an archived post is answered as
-// the archive.
+// editCommentOnPost changes a comment of the person asking. A comment that is
+// not under the post is 404 before anything else about the request but a body
+// that cannot be read. The statement finds nothing for somebody else's comment
+// and for one under a post that takes no change, and why is asked afterwards:
+// the project and the post first, so that somebody else's comment under an
+// archived post is answered as the archive.
 func (s *Server) editCommentOnPost(w http.ResponseWriter, r *http.Request, person *Person) {
 	fields, ok := readBody(w, r)
 	if !ok {
 		return
 	}
 	tool, post := s.visiblePost(r.PathValue("postId"), person)
-	if post == nil || !uuidPattern.MatchString(r.PathValue("commentId")) {
+	if post == nil || commentAmong(post.Comments, r.PathValue("commentId")) == nil {
 		notFound(w)
 		return
 	}
@@ -677,7 +678,7 @@ func (s *Server) editCommentOnPost(w http.ResponseWriter, r *http.Request, perso
 
 func (s *Server) removeCommentOnPost(w http.ResponseWriter, r *http.Request, person *Person) {
 	tool, post := s.visiblePost(r.PathValue("postId"), person)
-	if post == nil || !uuidPattern.MatchString(r.PathValue("commentId")) {
+	if post == nil || commentAmong(post.Comments, r.PathValue("commentId")) == nil {
 		notFound(w)
 		return
 	}
@@ -693,21 +694,29 @@ func (s *Server) removeCommentOnPost(w http.ResponseWriter, r *http.Request, per
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// reactToCommentOnPost reads the reaction before it looks for the comment, as
-// the controller does.
+// reactToCommentOnPost reads the body before it looks for the post, and looks
+// for the comment before it reads the reaction, as the controller does.
 func (s *Server) reactToCommentOnPost(w http.ResponseWriter, r *http.Request, person *Person) {
-	tool, post := s.visiblePost(r.PathValue("postId"), person)
-	if post == nil || !uuidPattern.MatchString(r.PathValue("commentId")) {
-		notFound(w)
+	fields, ok := readBody(w, r)
+	if !ok {
 		return
 	}
-	content, ok := reactionContent(w, r)
-	if !ok {
+	tool, post := s.visiblePost(r.PathValue("postId"), person)
+	if post == nil {
+		notFound(w)
 		return
 	}
 	comment := commentAmong(post.Comments, r.PathValue("commentId"))
 	if comment == nil {
 		notFound(w)
+		return
+	}
+	value, ok := stringField(w, fields, "content")
+	if !ok {
+		return
+	}
+	content, ok := validReaction(w, deref(value))
+	if !ok {
 		return
 	}
 	if s.refusedAsAClosedPost(w, tool, post) {
@@ -719,17 +728,17 @@ func (s *Server) reactToCommentOnPost(w http.ResponseWriter, r *http.Request, pe
 
 func (s *Server) unreactFromCommentOnPost(w http.ResponseWriter, r *http.Request, person *Person) {
 	tool, post := s.visiblePost(r.PathValue("postId"), person)
-	if post == nil || !uuidPattern.MatchString(r.PathValue("commentId")) {
+	if post == nil {
 		notFound(w)
-		return
-	}
-	content, ok := validReaction(w, r.URL.Query().Get("content"))
-	if !ok {
 		return
 	}
 	comment := commentAmong(post.Comments, r.PathValue("commentId"))
 	if comment == nil {
 		notFound(w)
+		return
+	}
+	content, ok := validReaction(w, r.URL.Query().Get("content"))
+	if !ok {
 		return
 	}
 	if s.refusedAsAClosedPost(w, tool, post) {

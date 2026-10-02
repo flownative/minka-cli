@@ -603,7 +603,7 @@ func (s *Server) editCommentOnEntry(w http.ResponseWriter, r *http.Request, pers
 		return
 	}
 	entry := s.entryOfTheRequest(r, person)
-	if entry == nil || !uuidPattern.MatchString(r.PathValue("commentId")) {
+	if commentIn(entry, r.PathValue("commentId")) == nil {
 		notFound(w)
 		return
 	}
@@ -637,7 +637,7 @@ func (s *Server) editCommentOnEntry(w http.ResponseWriter, r *http.Request, pers
 
 func (s *Server) removeCommentOnEntry(w http.ResponseWriter, r *http.Request, person *Person) {
 	entry := s.entryOfTheRequest(r, person)
-	if entry == nil || !uuidPattern.MatchString(r.PathValue("commentId")) {
+	if commentIn(entry, r.PathValue("commentId")) == nil {
 		notFound(w)
 		return
 	}
@@ -655,15 +655,16 @@ func (s *Server) removeCommentOnEntry(w http.ResponseWriter, r *http.Request, pe
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// reactToCommentOnEntry reads the body before it looks for the entry, and the
-// reaction before it looks for the comment, as the controller does.
+// reactToCommentOnEntry reads the body before it looks for the entry, and
+// looks for the comment before it reads the reaction, as the controller does.
 func (s *Server) reactToCommentOnEntry(w http.ResponseWriter, r *http.Request, person *Person) {
 	fields, ok := readBody(w, r)
 	if !ok {
 		return
 	}
 	entry := s.entryOfTheRequest(r, person)
-	if entry == nil || !uuidPattern.MatchString(r.PathValue("commentId")) {
+	comment := commentIn(entry, r.PathValue("commentId"))
+	if comment == nil {
 		notFound(w)
 		return
 	}
@@ -673,11 +674,6 @@ func (s *Server) reactToCommentOnEntry(w http.ResponseWriter, r *http.Request, p
 	}
 	content, ok := validReaction(w, deref(value))
 	if !ok {
-		return
-	}
-	comment := commentIn(entry, r.PathValue("commentId"))
-	if comment == nil {
-		notFound(w)
 		return
 	}
 	if s.refusedAsClosed(w, entry) {
@@ -690,17 +686,13 @@ func (s *Server) reactToCommentOnEntry(w http.ResponseWriter, r *http.Request, p
 
 func (s *Server) unreactFromCommentOnEntry(w http.ResponseWriter, r *http.Request, person *Person) {
 	entry := s.entryOfTheRequest(r, person)
-	if entry == nil || !uuidPattern.MatchString(r.PathValue("commentId")) {
+	comment := commentIn(entry, r.PathValue("commentId"))
+	if comment == nil {
 		notFound(w)
 		return
 	}
 	content, ok := validReaction(w, r.URL.Query().Get("content"))
 	if !ok {
-		return
-	}
-	comment := commentIn(entry, r.PathValue("commentId"))
-	if comment == nil {
-		notFound(w)
 		return
 	}
 	if s.refusedAsClosed(w, entry) {

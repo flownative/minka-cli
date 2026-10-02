@@ -188,10 +188,10 @@ func TestCommentsBelowAnArchivedFolderAreRefusedAsOnAnArchivedEntry(t *testing.T
 }
 
 // Under an archived entry a comment is asked for in the order of the
-// controller: a body that is no JSON first, then the address, then what the
-// request says, then the archive, which answers for somebody else's comment
-// and one never written as well. A reaction looks for its comment before it
-// asks the archive.
+// controller: a body that is no JSON first, then the address with the comment
+// under it, then what the request says, then the archive, which answers for
+// somebody else's comment as well. A comment never written is not found
+// before anything the request says is looked at.
 func TestACommentUnderAnArchivedEntryIsRefusedInTheOrderMinkaAsks(t *testing.T) {
 	s, f := New(t)
 	document := f.DocumentBelowTheArchivedFolder
@@ -201,15 +201,21 @@ func TestACommentUnderAnArchivedEntryIsRefusedInTheOrderMinkaAsks(t *testing.T) 
 
 	for _, c := range []struct{ name, method, path, body, want string }{
 		{"a change of an ID that is none", http.MethodPatch, entry + "nonsense", `{"body":""}`, "404"},
+		{"a change that is no JSON of a comment never written", http.MethodPatch, entry + newID(), `{`, "400 malformedBody"},
+		{"an empty change of a comment never written", http.MethodPatch, entry + newID(), `{"body":""}`, "404"},
 		{"an empty change", http.MethodPatch, entry + others.ID, `{"body":""}`, "422 commentMissing"},
 		{"a change of somebody else's comment", http.MethodPatch, entry + others.ID, `{"body":"Mine now"}`, "422 documentArchived"},
-		{"a change of a comment never written", http.MethodPatch, entry + newID(), `{"body":"Mine now"}`, "422 documentArchived"},
+		{"a change of a comment never written", http.MethodPatch, entry + newID(), `{"body":"Mine now"}`, "404"},
 		{"a removal of somebody else's comment", http.MethodDelete, entry + others.ID, ``, "422 documentArchived"},
+		{"a removal of a comment never written", http.MethodDelete, entry + newID(), ``, "404"},
 		{"a reaction that is no JSON on an entry never written", http.MethodPost, "/api/v1/documents/" + newID() + "/comments/" + newID() + "/reactions", `{`, "400 malformedBody"},
 		{"a reaction on an ID that is none", http.MethodPost, entry + "nonsense/reactions", `{"content":""}`, "404"},
-		{"an empty reaction on a comment never written", http.MethodPost, entry + newID() + "/reactions", `{"content":""}`, "422 reactionMissing"},
+		{"an empty reaction on a comment never written", http.MethodPost, entry + newID() + "/reactions", `{"content":""}`, "404"},
+		{"an empty reaction", http.MethodPost, entry + others.ID + "/reactions", `{"content":""}`, "422 reactionMissing"},
 		{"a reaction on a comment never written", http.MethodPost, entry + newID() + "/reactions", `{"content":"🎉"}`, "404"},
-		{"an empty reaction taken back", http.MethodDelete, entry + newID() + "/reactions?content=", ``, "422 reactionMissing"},
+		{"a reaction", http.MethodPost, entry + others.ID + "/reactions", `{"content":"🎉"}`, "422 documentArchived"},
+		{"an empty reaction taken back from a comment never written", http.MethodDelete, entry + newID() + "/reactions?content=", ``, "404"},
+		{"an empty reaction taken back", http.MethodDelete, entry + others.ID + "/reactions?content=", ``, "422 reactionMissing"},
 		{"a reaction taken back from a comment never written", http.MethodDelete, entry + newID() + "/reactions?content=x", ``, "404"},
 	} {
 		if got, _ := answerTo(t, s, f.Token, c.method, c.path, c.body); got != c.want {

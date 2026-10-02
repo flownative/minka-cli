@@ -55,9 +55,9 @@ take `"color": null` as well, which the CLI never sends.
 
 The CLI sends what is typed and refuses nothing itself (C-086): a name in
 capitals, an unknown one and the empty one given as `--color ""` go to Minka,
-which answers 422 `todoGroupColorUnknown`, and the hint names the eleven. A
-colour is refused before the list or the group is looked up, so a bad one
-aimed at a list or a group that is not there is still `todoGroupColorUnknown`.
+which answers 422 `todoGroupColorUnknown`, and the hint names the eleven. The
+list or the group is looked up first, so a bad colour aimed at one that is not
+there is 404.
 
 ## The description, and the refusal that never comes
 
@@ -111,24 +111,24 @@ does not name.
 A neighbour has to be **another** group of the **same** list, out of the trash.
 Anything else, the group itself included, is 422 `todoPlaceUnknown` from Minka,
 and nothing moves; in an archived project it is `projectArchived` instead. A
-neighbour that is no identifier at all is `todoPlaceUnknown` before the group
-is even looked up, which the CLI never sends: `--after` and `--before` take an
+neighbour that is no identifier at all is `todoPlaceUnknown` before the
+archive is asked, which the CLI never sends: `--after` and `--before` take an
 ID.
 
 ## The refusals
 
-The writes check in the controller's order: the body and the title first, then
-the colour of a group, then whether the list or the group is there, then the
-description, and only after the statement refused why it did — the project,
-then the archive of the list.
+The writes check in the controller's order: whether the tool, the list or the
+group is there first, then the body and the title, then the colour of a group
+or the description of a list, and only after the statement refused why it
+did — the project, then the archive of the list.
 
 | Answer | Command | Exit |
 |---|---|---|
-| 404 | every read and write, for what is unknown, foreign, in the trash, hidden from a client, and every `todogroups` command on a group of an archived list | 2 |
-| 422 `todoListTitleMissing`, `todoListTitleTooLong`, `todoListTitleHasControlCharacters` | `todolists create`, `todolists edit`; on `create` before an unknown tool | 9 |
+| 404 | every read and write, for what is unknown, foreign, in the trash, hidden from a client, and every `todogroups` command on a group of an archived list; before every 422 | 2 |
+| 422 `todoListTitleMissing`, `todoListTitleTooLong`, `todoListTitleHasControlCharacters` | `todolists create`, `todolists edit` | 9 |
 | 422 `todoListDescriptionTooLong`, `todoListDescriptionNotReadable` | `todolists create`, `todolists edit` | 9 |
 | 422 `todoGroupTitleMissing`, `todoGroupTitleTooLong`, `todoGroupTitleHasControlCharacters` | `todogroups create`, `todogroups edit` | 9 |
-| 422 `todoGroupColorUnknown` | `todogroups create`, `todogroups edit`, after the title and before an unknown list or group | 9 |
+| 422 `todoGroupColorUnknown` | `todogroups create`, `todogroups edit`, after the title | 9 |
 | 422 `todoListArchived` | every write on an archived list but `unarchive` and `delete`, `todogroups create` on one included | 9 |
 | 422 `todoListNotArchived` | `todolists unarchive` on a list in use | 9 |
 | 422 `todoPlaceUnknown` | `todogroups move` next to a group of another list or one in the trash | 9 |

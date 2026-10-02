@@ -178,44 +178,42 @@ running one as well, and the same body of an answer again.
 Minka checks in this order, and each step comes only where the one before it
 passed:
 
-- **A new question:** a field of the wrong type (400, unreachable from here),
-  an identifier of a person that is none (`personNotAProjectMember`), the
-  wording, then the schedule — no weekday (`questionWeekdaysMissing`), the time
-  (`questionTimeInvalid`), the rhythm and the weekdays
-  (`questionScheduleInvalid`) — then the tool (404), then nobody asked, then
+- **A new question:** the tool (404), then a field of the wrong type (400,
+  unreachable from here), an identifier of a person that is none
+  (`personNotAProjectMember`), the wording, then the schedule — no weekday
+  (`questionWeekdaysMissing`), the time (`questionTimeInvalid`), the rhythm
+  and the weekdays (`questionScheduleInvalid`) — then nobody asked, then
   `projectArchived`, then a person who is no member.
-- **An edit:** the fields, `nothingToChange`, the wording, then the question
-  (404), then the schedule held against the question's own, then nobody asked,
+- **An edit:** the question (404), then the fields, `nothingToChange`, the
+  wording, the schedule held against the question's own, then nobody asked,
   `projectArchived` and a person who is no member.
 - **Pause and resume:** the question (404), then `projectArchived`.
 - **A page of answers:** the question (404), then `on`
   (`answerDayNotADate`), `limit` (`answersLimitNotANumber`, unreachable from
   here), a `personId` that is no identifier (404), then `before`.
-- **An answer:** `askedFor` that is no day (`answerDayNotADate`), then the
-  question (404), then the body (`answerTooLong`, `answerNotReadable`,
+- **An answer:** the question (404), then `askedFor` that is no day
+  (`answerDayNotADate`), then the body (`answerTooLong`, `answerNotReadable`,
   `answerMissing`), then `answerDayNotAsked`, then `projectArchived`.
-- **An edit of an answer:** `nothingToChange` (unreachable), the answer (404,
-  and 404 for somebody else's), the body, then `projectArchived`.
+- **An edit of an answer:** the answer (404, and 404 for somebody else's),
+  then `nothingToChange` (unreachable), the body, then `projectArchived`.
 
-The CLI changes this order where it reads before it writes: a tool, a question
-or an answer that is not there is then exit 2 before anything else. It reads
-the tool for `checkins create` where `--ask` names a person by name or address,
-the question for `checkins edit` where `--ask` names a person by name, address
-or `me`, and for `checkins answers list` where `--person` does; it reads the
-answer for every `checkins answers edit`. So `checkins edit <unknown> --title
-"" --ask me` is exit 2, where the same with an ID for the person is
-`questionTitleMissing`. Likewise `checkins create --title " " --ask <name>` is
+Where the CLI reads before it writes, a tool, a question or an answer that is
+not there is exit 2 as well, and no write is sent. It reads the tool for
+`checkins create` where `--ask` names a person by name or address, the question
+for `checkins edit` where `--ask` names a person by name, address or `me`, and
+for `checkins answers list` where `--person` does; it reads the answer for
+every `checkins answers edit`. So `checkins create --title " " --ask <name>` is
 exit 2 for an unknown tool and exit 1 for a name nobody in the project has,
 both before `questionTitleMissing`.
 
 | Answer | Command | Exit |
 |---|---|---|
-| 404 | every command, for a tool, question or answer that is unknown, foreign or in the trash; `answers edit` for somebody else's answer | 2 |
-| 422 `questionTitleMissing`, `questionTitleTooLong`, `questionTitleHasControlCharacters` | `checkins create` (before the tool), `checkins edit` (before the question) | 9 |
-| 422 `questionWeekdaysMissing`, `questionTimeInvalid`, `questionScheduleInvalid` | `checkins create` (before the tool), `checkins edit` (after the question) | 9 |
+| 404 | every command, for a tool, question or answer that is unknown, foreign or in the trash, before every 422; `answers edit` for somebody else's answer | 2 |
+| 422 `questionTitleMissing`, `questionTitleTooLong`, `questionTitleHasControlCharacters` | `checkins create`, `checkins edit` | 9 |
+| 422 `questionWeekdaysMissing`, `questionTimeInvalid`, `questionScheduleInvalid` | `checkins create`, `checkins edit` | 9 |
 | 422 `questionNobodyAsked` | `checkins create` without `--ask`; unreachable on `checkins edit`, which sends no empty set | 9 |
 | 422 `personNotAProjectMember` | `checkins create`, `checkins edit` naming somebody outside the project, or a client of it or an agent of one where the question is not shown to clients | 9 |
-| 422 `answerDayNotADate` | `checkins answers create --asked-for` (before the question), `checkins answers list --on` (after it) | 9 |
+| 422 `answerDayNotADate` | `checkins answers create --asked-for`, `checkins answers list --on` | 9 |
 | 422 `answerDayNotAsked` | `checkins answers create --asked-for`, before `projectArchived` | 9 |
 | 422 `answerMissing`, `answerTooLong`, `answerNotReadable` | `checkins answers create`, `checkins answers edit` | 9 |
 | 422 `answersBeforeUnknown` | `checkins answers list --before` | 9 |

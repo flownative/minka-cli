@@ -213,8 +213,13 @@ func (s *Server) archivedTodoLists(w http.ResponseWriter, r *http.Request, perso
 }
 
 // addTodoList starts a list on top of a tool. The title is held before the
-// tool is looked up, and the description after it, as the controller does.
+// description, as the controller does.
 func (s *Server) addTodoList(w http.ResponseWriter, r *http.Request, person *Person) {
+	tool := s.visibleTodosTool(r.PathValue("toolId"), person)
+	if tool == nil {
+		notFound(w)
+		return
+	}
 	fields, ok := readBody(w, r)
 	if !ok {
 		return
@@ -228,11 +233,6 @@ func (s *Server) addTodoList(w http.ResponseWriter, r *http.Request, person *Per
 		return
 	}
 	if !validTodoTitle(w, "todoList", "a list", deref(title)) {
-		return
-	}
-	tool := s.visibleTodosTool(r.PathValue("toolId"), person)
-	if tool == nil {
-		notFound(w)
 		return
 	}
 	stored, ok := storedTodoListDescription(w, deref(description))
@@ -261,6 +261,11 @@ func (s *Server) todoList(w http.ResponseWriter, r *http.Request, person *Person
 // updateTodoList changes the title, the description or both. What the body
 // leaves out, or sets to null, stays; an empty description empties it.
 func (s *Server) updateTodoList(w http.ResponseWriter, r *http.Request, person *Person) {
+	tool, list := s.visibleTodoList(r.PathValue("listId"), person)
+	if list == nil {
+		notFound(w)
+		return
+	}
 	fields, ok := readBody(w, r)
 	if !ok {
 		return
@@ -278,11 +283,6 @@ func (s *Server) updateTodoList(w http.ResponseWriter, r *http.Request, person *
 		return
 	}
 	if title != nil && !validTodoTitle(w, "todoList", "a list", *title) {
-		return
-	}
-	tool, list := s.visibleTodoList(r.PathValue("listId"), person)
-	if list == nil {
-		notFound(w)
 		return
 	}
 	stored := list.Description
@@ -357,6 +357,11 @@ func (s *Server) removeTodoList(w http.ResponseWriter, r *http.Request, person *
 
 // addTodoGroup adds a group at the end of a list.
 func (s *Server) addTodoGroup(w http.ResponseWriter, r *http.Request, person *Person) {
+	tool, list := s.visibleTodoList(r.PathValue("listId"), person)
+	if list == nil {
+		notFound(w)
+		return
+	}
 	fields, ok := readBody(w, r)
 	if !ok {
 		return
@@ -372,11 +377,6 @@ func (s *Server) addTodoGroup(w http.ResponseWriter, r *http.Request, person *Pe
 	if !ok {
 		return
 	}
-	tool, list := s.visibleTodoList(r.PathValue("listId"), person)
-	if list == nil {
-		notFound(w)
-		return
-	}
 	if s.refusedAsNothingWritten(w, tool, list) {
 		return
 	}
@@ -389,6 +389,11 @@ func (s *Server) addTodoGroup(w http.ResponseWriter, r *http.Request, person *Pe
 // editTodoGroup gives a group a new title, a new colour or both, together or
 // not at all. A colour of null counts as named: it takes the colour away.
 func (s *Server) editTodoGroup(w http.ResponseWriter, r *http.Request, person *Person) {
+	tool, list, group := s.visibleTodoGroup(r.PathValue("groupId"), person)
+	if group == nil {
+		notFound(w)
+		return
+	}
 	fields, ok := readBody(w, r)
 	if !ok {
 		return
@@ -409,11 +414,6 @@ func (s *Server) editTodoGroup(w http.ResponseWriter, r *http.Request, person *P
 	if !ok {
 		return
 	}
-	tool, list, group := s.visibleTodoGroup(r.PathValue("groupId"), person)
-	if group == nil {
-		notFound(w)
-		return
-	}
 	if s.refusedAsArchived(w, s.projectWithID(tool.ProjectID)) {
 		return
 	}
@@ -429,8 +429,13 @@ func (s *Server) editTodoGroup(w http.ResponseWriter, r *http.Request, person *P
 // moveTodoGroup puts a group behind "previousGroupId", or where that is not
 // named in front of "nextGroupId", or where neither is named at the top of
 // its list. A neighbour has to be another group of the same list; one that is
-// no identifier at all is refused before the group is even looked up.
+// no identifier at all is refused before the archive is asked.
 func (s *Server) moveTodoGroup(w http.ResponseWriter, r *http.Request, person *Person) {
+	tool, list, group := s.visibleTodoGroup(r.PathValue("groupId"), person)
+	if group == nil {
+		notFound(w)
+		return
+	}
 	fields, ok := readBody(w, r)
 	if !ok {
 		return
@@ -448,11 +453,6 @@ func (s *Server) moveTodoGroup(w http.ResponseWriter, r *http.Request, person *P
 			todoPlaceUnknown(w)
 			return
 		}
-	}
-	tool, list, group := s.visibleTodoGroup(r.PathValue("groupId"), person)
-	if group == nil {
-		notFound(w)
-		return
 	}
 	for _, neighbour := range []*string{previous, next} {
 		if neighbour != nil && (*neighbour == group.ID || groupOf(list, *neighbour) == nil) {

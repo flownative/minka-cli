@@ -63,11 +63,16 @@ func (s *Server) todoSeriesOfList(w http.ResponseWriter, r *http.Request, person
 }
 
 // repeatTodo makes a to-do of the list the first occurrence of a new series,
-// starting on its due day. The body is read in full before the list is looked
-// for, the type of every field before any value; what the to-do and its days
-// allow is asked after, and the archived project and list only once the write
-// refused.
+// starting on its due day. The list is looked for first, then the body is
+// read in full, the type of every field before any value; what the to-do and
+// its days allow is asked after, and the archived project and list only once
+// the write refused.
 func (s *Server) repeatTodo(w http.ResponseWriter, r *http.Request, person *Person) {
+	tool, list := s.visibleTodoList(r.PathValue("listId"), person)
+	if list == nil {
+		notFound(w)
+		return
+	}
 	fields, ok := readBodyWith(w, r, true)
 	if !ok {
 		return
@@ -99,11 +104,6 @@ func (s *Server) repeatTodo(w http.ResponseWriter, r *http.Request, person *Pers
 	if schedule == nil {
 		schedule = &scheduleFields{}
 	} else if !validScheduleValues(w, *schedule) {
-		return
-	}
-	tool, list := s.visibleTodoList(r.PathValue("listId"), person)
-	if list == nil {
-		notFound(w)
 		return
 	}
 	todo := activeTodoOf(list, *todoID)
@@ -149,11 +149,16 @@ func (s *Server) todoSeries(w http.ResponseWriter, r *http.Request, person *Pers
 // What the body leaves out stays, the people it names none of included. With
 // "expectedUpdatedAt" a series written since is answered 409 with the series
 // as it stands; without it the last write wins. A body that changes nothing
-// writes nothing and meets no conflict. The body is checked in full before
-// the series is looked for, the type of every field before any value, and the
-// archived project and list, the guard and the people only once the write
+// writes nothing and meets no conflict. The series is looked for first, then
+// the body is checked in full, the type of every field before any value, and
+// the archived project and list, the guard and the people only once the write
 // refused, in that order.
 func (s *Server) updateTodoSeries(w http.ResponseWriter, r *http.Request, person *Person) {
+	tool, list, series := s.visibleTodoSeries(r.PathValue("seriesId"), person)
+	if series == nil {
+		notFound(w)
+		return
+	}
 	fields, ok := readBodyWith(w, r, true)
 	if !ok {
 		return
@@ -198,11 +203,6 @@ func (s *Server) updateTodoSeries(w http.ResponseWriter, r *http.Request, person
 	}
 	if title == nil && assigneeIDs == nil && notifiedIDs == nil && (schedule == nil || schedule.isEmpty()) && leadDays == nil {
 		unprocessable(w, "nothingToChange", "The body names neither a title nor people nor a schedule nor lead days.")
-		return
-	}
-	tool, list, series := s.visibleTodoSeries(r.PathValue("seriesId"), person)
-	if series == nil {
-		notFound(w)
 		return
 	}
 	repetition := series.Schedule
