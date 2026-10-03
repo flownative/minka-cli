@@ -41,12 +41,14 @@ func (a *app) newHooksCmd() *cobra.Command {
 
 func (a *app) newHooksInstallCmd() *cobra.Command {
 	var file, command string
+	var withTheMod bool
 	cmd := &cobra.Command{
 		Use:   "install",
 		Short: "Write the hook that runs minka heartbeat after every tool call",
 		Long: `Writes a hook into the settings of Claude Code.
 
-Without --file that is ~/.claude/settings.json, where it holds for every
+Without --file that is ~/.claude/settings.json, or settings.json in
+$CLAUDE_CONFIG_DIR where that is set, where it holds for every
 project, which is where it belongs: every session on the machine reports its
 own cards through it, whatever project it was started in.
 
@@ -64,11 +66,27 @@ carries the entry to add by hand.
 
 The entry names the minka that writes it by its full path, so the hook does
 not depend on what is on the PATH of whoever starts the agent. --command
-writes another one.`,
+writes another one.
+
+--mod installs the mod instead: code that runs inside the Claude Code process
+and runs minka heartbeat after every tool call and every thirty seconds, for as
+long as that process runs. A session with the mod needs no keepalive, so its
+cards go dark three minutes after its process ended, where the hook leaves them
+alight for up to half an hour. minka writes the mod beside its configuration
+and runs 'claude plugin marketplace add' and 'claude plugin install' for it;
+running the install again writes the mod of this minka. The hook may stay: it
+reports nothing twice.`,
 		Example: `  minka hooks install
+  minka hooks install --mod
   minka hooks install --file .claude/settings.local.json`,
 		Args: requireArgs(),
-		RunE: func(*cobra.Command, []string) error {
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			if withTheMod {
+				if file != "" || command != "" {
+					return usageErrorf(cmd, "--mod is installed for every project and runs this minka, so it takes neither --file nor --command")
+				}
+				return a.installTheMod()
+			}
 			path, err := a.settingsPath(file)
 			if err != nil {
 				return err
@@ -98,8 +116,9 @@ writes another one.`,
 			return a.ok(hookSuccess(path, hookInstalled, command, "Wrote the hook to "+path))
 		},
 	}
-	cmd.Flags().StringVar(&file, "file", "", "Settings file to write into (default: ~/.claude/settings.json)")
+	cmd.Flags().StringVar(&file, "file", "", "Settings file to write into (default: ~/.claude/settings.json, or the one in $CLAUDE_CONFIG_DIR)")
 	cmd.Flags().StringVar(&command, "command", "", "Command line the hook runs (default: this minka and 'heartbeat')")
+	cmd.Flags().BoolVar(&withTheMod, "mod", false, "Install the mod that reports from inside the Claude Code process instead of the hook")
 	return cmd
 }
 
@@ -107,8 +126,12 @@ func (a *app) newHooksStatusCmd() *cobra.Command {
 	var file string
 	cmd := &cobra.Command{
 		Use:   "status",
-		Short: "Tell whether the hook reports what you are working on",
-		Args:  requireArgs(),
+		Short: "Tell whether the hook or the mod reports what you are working on",
+		Long: `Tells whether the settings of Claude Code carry the hook, and in 'mod'
+whether the mod of 'minka hooks install --mod' is written and loaded: 'state'
+is current where it is what this minka writes, stale where another minka wrote
+it, and 'enabled' says whether the settings tell Claude Code to load it.`,
+		Args: requireArgs(),
 		RunE: func(*cobra.Command, []string) error {
 			path, err := a.settingsPath(file)
 			if err != nil {
@@ -127,14 +150,27 @@ func (a *app) newHooksStatusCmd() *cobra.Command {
 			if found != "" {
 				state, summary = hookCurrent, "The hook in "+path+" runs "+found
 			}
-			s := hookSuccess(path, state, found, summary)
-			if state != hookCurrent {
-				s.breadcrumbs = []Breadcrumb{{Action: "install", Cmd: "minka hooks install", Description: "Write the hook"}}
+			modState, modSummary, err := a.modStatus(settings)
+			if err != nil {
+				return err
+			}
+			s := hookSuccess(path, state, found, summary+". "+modSummary)
+			s.data.(map[string]any)["mod"] = modState
+			hookText := s.text
+			s.text = func(w io.Writer) {
+				hookText(w)
+				fmt.Fprintf(w, "%s: %s\n", modState["path"], modState["state"])
+			}
+			if modState["state"] != modCurrent || modState["enabled"] != true {
+				s.breadcrumbs = append(s.breadcrumbs, Breadcrumb{Action: "install", Cmd: "minka hooks install --mod", Description: "Write the mod and install it in Claude Code"})
+			}
+			if state != hookCurrent && modState["enabled"] != true {
+				s.breadcrumbs = append(s.breadcrumbs, Breadcrumb{Action: "install", Cmd: "minka hooks install", Description: "Write the hook"})
 			}
 			return a.ok(s)
 		},
 	}
-	cmd.Flags().StringVar(&file, "file", "", "Settings file to look into (default: ~/.claude/settings.json)")
+	cmd.Flags().StringVar(&file, "file", "", "Settings file to look into (default: ~/.claude/settings.json, or the one in $CLAUDE_CONFIG_DIR)")
 	return cmd
 }
 
@@ -144,7 +180,7 @@ func hookSuccess(path, state, command, summary string) success {
 		summary: summary,
 		text:    func(w io.Writer) { fmt.Fprintf(w, "%s: %s\n", path, state) },
 	}
-	if command != "" && !theProgramIsThere(command) {
+	if command != "" && !theCommandIsThere(command) {
 		s.notices = append(s.notices, "the hook runs "+command+", and there is no such program; it reports nothing and says nothing about it")
 	}
 	if tree := workingTreeOf(path); tree != "" {
@@ -154,16 +190,21 @@ func hookSuccess(path, state, command, summary string) success {
 	return s
 }
 
-// theProgramIsThere says whether the command of a hook can be run at all. A
-// binary that moved leaves a hook that fails after every tool call without a
+// theCommandIsThere says whether the command line of a hook can be run at all.
+// A binary that moved leaves a hook that fails after every tool call without a
 // word, and a status that says the hook is there would be the last place
 // anybody looks.
-func theProgramIsThere(command string) bool {
+func theCommandIsThere(command string) bool {
 	words := strings.Fields(command)
 	if len(words) == 0 {
 		return false
 	}
-	program := strings.Trim(words[0], `"'`)
+	return theProgramIsThere(strings.Trim(words[0], `"'`))
+}
+
+// theProgramIsThere says whether a program, named by its path or found on the
+// PATH, can be run. A path is taken whole, spaces and all.
+func theProgramIsThere(program string) bool {
 	if !strings.ContainsRune(program, filepath.Separator) {
 		_, err := exec.LookPath(program)
 		return err == nil
@@ -189,7 +230,8 @@ func workingTreeOf(path string) string {
 }
 
 // settingsPath is the settings file a command works on: the one named, or the
-// one Claude Code reads for every project.
+// one Claude Code reads for every project, which lies in $CLAUDE_CONFIG_DIR
+// where that is set.
 func (a *app) settingsPath(named string) (string, error) {
 	if named != "" {
 		absolute, err := filepath.Abs(named)
@@ -197,6 +239,13 @@ func (a *app) settingsPath(named string) (string, error) {
 			return "", &Error{Code: CodeConfig, Message: err.Error()}
 		}
 		return absolute, nil
+	}
+	if dir := a.getenv("CLAUDE_CONFIG_DIR"); dir != "" {
+		absolute, err := filepath.Abs(dir)
+		if err != nil {
+			return "", &Error{Code: CodeConfig, Message: err.Error()}
+		}
+		return filepath.Join(absolute, "settings.json"), nil
 	}
 	home := a.getenv("HOME")
 	if home == "" {
@@ -212,11 +261,7 @@ func (a *app) settingsPath(named string) (string, error) {
 // path it was started from. A hook that cannot find its command fails after
 // every tool call and says nothing about it.
 func (a *app) heartbeatCommand() string {
-	binary, err := os.Executable()
-	if err != nil {
-		return "minka heartbeat"
-	}
-	return binary + " heartbeat"
+	return a.minkaProgram() + " heartbeat"
 }
 
 // readSettings reads the settings, an empty set where there is no file yet. A

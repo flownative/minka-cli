@@ -581,6 +581,8 @@ keep a card alight for a working day with nobody left to stop it.
 `work.HoldKeepalive`, see
 [Saying what you are working on](stable/at-work.md).
 
+*A session whose process runs the mod is left to the mod: [C-105](#c-105).*
+
 <a id="c-044"></a>
 ## C-044 — A host is read, or it is no host
 
@@ -1688,3 +1690,19 @@ signed place on `storage.basecamp.com` without it; both are held to one shape fi
 serves the current one for a version's address and ends well, and `api get`
 cannot hand out bytes. **Implemented as:** `basecamp.Downloader.DownloadVersion`,
 `Extractor.earlierFilesOf`, see [Importing](stable/import.md).
+
+<a id="c-105"></a>
+## C-105 — A mod in the Claude Code process reports its session, and the keepalive leaves it
+
+*Applies to: `hooks install --mod`, `hooks status`, `heartbeat --from-mod --idle`, the keepalive*
+
+`--mod` writes the mod to `<config dir>/claude-mod` and has `claude plugin`
+install it, which writes `enabledPlugins` and `extraKnownMarketplaces` into
+Claude Code's `settings.json` and its `plugins/` files: Claude Code's own writer
+on an explicit opt-in, so C-039 holds. The mod runs `heartbeat --session <id>
+--from-mod` on every step and every 30 s, `--idle` while no tool call runs. Its
+list is marked; the keepalive neither reports it nor is started for it.
+**Why:** only the process knows it has ended, so a crashed session goes dark
+three minutes after its last beat instead of 25 + 3. **Implemented as:**
+`mod.Files`, `cli.app.installTheMod`, `work.List.Mod`,
+`cli.app.claimTheSignal`, `cli.app.reportEverySessionAtWork`, see [Saying what you are working on](stable/at-work.md).

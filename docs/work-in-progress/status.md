@@ -370,6 +370,12 @@ beat of the session, and no further. That process is at no work itself and stops
 on an empty list, on twenty-five minutes in which nothing else was at the store,
 or on a clock that jumped. A typed command waits up to 30 seconds for the lock
 on the list, the claim of a beat not at all.
+`hooks install --mod` installs a Claude Code mod instead (C-105): it beats from
+inside the process after every step and every thirty seconds, `--idle` while no
+tool call runs, and the keepalive leaves its session alone, so a session that
+crashed goes dark three minutes after its last beat. The settings hook may stay
+beside it. Nobody has installed it into a real Claude Code yet; see below for
+what is measured.
 The list, the refusals, the throttle and the hook are seen live, and the
 report with them: on `minka.flownative.com`, where this CLI is signed in as an
 agent, `work start`, `heartbeat` and `work stop` get through, and the hook
@@ -1314,6 +1320,25 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   same `CLAUDE_CODE_SESSION_ID`. Claude Code's documentation names no such
   variable, only `session_id` in the input of a hook; should the variable go,
   every session falls back to the list of no session.
+- The mod (C-105) is measured in throwaway runs of Claude Code 2.1.288, with the
+  mod loaded by `--plugin-dir` and a wrapper in place of minka that logged what
+  it was given: `$.session.id()` is the `CLAUDE_CODE_SESSION_ID` the Bash tool
+  sees, what `$.process.run` starts carries neither that variable nor
+  `CLAUDECODE`, the timer beats during a Bash call of seventy seconds, the
+  tool calls of a subagent reach the mod of the parent with `agentId` set and
+  its Bash sees the parent's session, a subagent's turn ends without a start,
+  and a run that is not awaited still runs. `hooks install --mod` ran against a
+  Claude Code configuration of its own (`CLAUDE_CONFIG_DIR`): both `claude
+  plugin` commands answer exit 0 the second time too, the settings carry
+  `enabledPlugins` and the marketplace as a `directory` source, and a file
+  changed in the directory after the install was loaded by the next session,
+  so the plugin loads in place. `claude plugin validate --strict` and the mod's
+  own tests (`claude plugin test`) run in `make check` wherever `claude` is on
+  the PATH, and are skipped where it is not, which is CI. Not seen: the mod in
+  an installed, signed-in Claude Code over a working day, a tile that goes dark
+  three minutes after a session was killed, what `/clear` does to the session
+  a beat names, and `session.start` after `/resume`, which the documentation
+  says does not come.
 - Of saying what one is working on, what is left: a tile that lights up and one
   that goes quiet. The signal itself got through on `minka.flownative.com`,
   which knows this CLI as an agent, and the hook has reported out of a real

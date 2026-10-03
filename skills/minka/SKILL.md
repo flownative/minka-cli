@@ -39,7 +39,7 @@ when stdout is not a terminal, so an agent gets structured output by default.
 - Say what you have in hand: `minka work start <card>` when you begin on a
   card and `minka work stop <card>` when you are done with it. It shows on the
   board only while `minka heartbeat` keeps reporting it, which
-  `minka hooks install` sets up once and for all.
+  `minka hooks install --mod` or `minka hooks install` sets up once and for all.
 - Take a card up from its back: `minka cards notes show <card>` before you
   begin, because whoever was on it before left the state of the work there,
   and `minka cards notes set <card> - --expect <updatedAt>` at every milestone,
@@ -321,7 +321,7 @@ minka work start <card> [--session <id>] --json
 minka work stop [<card>] [--all] [--session <id>] --json
 minka work list [--session <id>] --json
 minka heartbeat [--session <id>] --json
-minka hooks install [--file <path>] [--command <command line>] --json
+minka hooks install [--mod | --file <path> [--command <command line>]] --json
 minka hooks status [--file <path>] --json
 minka import basecamp [--project <basecampProjectId>... | --active-only] (--out <dir> | --dry-run) [--calendars] [--upload-versions] --json
 ```
@@ -1685,6 +1685,17 @@ this:
   `not installed`. Other hooks in the file are kept, and a settings file this
   command does not understand is refused (exit 1) with the entry to add by hand
   in `hint`.
+- `minka hooks install --mod` installs the mod instead, for every project: it
+  runs inside the Claude Code process and beats after every step and every
+  thirty seconds, so a session's cards go dark three minutes after its process
+  ended instead of up to half an hour. It needs `claude` on the PATH; without
+  it, the command exits 1 and `hint` holds the two `claude plugin` commands to
+  run. It takes effect in sessions started afterwards. `minka hooks status
+  --json` says in `data.mod.state` (`current`, `stale`, `not installed`) and
+  `data.mod.enabled` what became of it. `--from-mod` and `--idle` of `minka
+  heartbeat` are the mod's own business — never pass them yourself. Removing
+  the mod is `claude plugin uninstall minka-heartbeat@minka-cli` and `claude
+  plugin marketplace remove minka-cli`.
 - Leave the default alone unless you are asked otherwise. A hook for one project
   reports that project's sessions and no others. If you do write one for a
   project, take `--file .claude/settings.local.json`, never
@@ -1749,9 +1760,12 @@ this:
   `started`, is `already reporting`, or was `not started` and why.
 - Never write the store yourself.
 - Minka forgets a card three minutes after the last signal, so a session that
-  ends without `work stop` goes quiet by itself: at most twenty-five minutes
-  later where the process above was reporting for it, because nothing tells
-  that process a session ended. Other sessions never extend that.
+  ends without `work stop` goes quiet by itself: three minutes after its last
+  beat where the mod reports it, and up to twenty-five minutes later where the
+  process above was reporting for it, because nothing tells that process a
+  session ended. Other sessions never extend that. A session with the mod that
+  sits idle, with no tool call running, keeps its cards alight for twenty-five
+  minutes after its last step, not for as long as Claude Code stays open.
 - The list gives a card up eight hours after your session was last at it. Your
   heartbeat says so for the cards you started, so a card you keep working on is
   kept however long the work lasts. A card started outside a session — by a

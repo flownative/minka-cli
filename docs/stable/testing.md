@@ -8,6 +8,13 @@ that `go.mod` is tidy, build the binary and scan for known vulnerabilities
 with `govulncheck`. Actions are pinned to a commit, and a workflow holds no
 more permissions than its job needs.
 
+The Claude Code mod in `mod/` has tests of its own, in TypeScript, which
+`claude plugin test` runs with Claude Code's test kit and a clock the test
+moves. `make check` runs them, and `claude plugin validate --strict` on the
+files as minka writes them, wherever `claude` is on the PATH; elsewhere, as in
+CI, that test is skipped, and the Go side holds the files against the
+repository and the arguments the mod passes against what `heartbeat` takes.
+
 ## Against the fake API, not against an instance
 
 `internal/fakeapi` mirrors the contract of `/api/v1`: the same paths, status

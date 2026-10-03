@@ -1,0 +1,14 @@
+{
+  "name": "minka-cli",
+  "description": "What the minka CLI adds to Claude Code, written out by minka hooks install --mod",
+  "owner": {
+    "name": "Flownative"
+  },
+  "plugins": [
+    {
+      "name": "minka-heartbeat",
+      "source": "./minka-heartbeat",
+      "description": "Keeps the cards a session is working on alight on the Minka board for as long as its Claude Code process runs"
+    }
+  ]
+}
