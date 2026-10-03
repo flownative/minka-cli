@@ -8,8 +8,9 @@ import (
 	"github.com/flownative/minka-cli/internal/fakeapi"
 )
 
-// commentedThings are the to-do and the list of the fixture, each with the
-// command its comments stand under and the key that names it in an answer.
+// commentedThings are the to-do, the list and an event of the fixture, each
+// with the command its comments stand under and the key that names it in an
+// answer.
 func commentedThings(f *fakeapi.Fixture) map[string]struct {
 	command, arg, id string
 	comments         *[]*fakeapi.Comment
@@ -18,12 +19,13 @@ func commentedThings(f *fakeapi.Fixture) map[string]struct {
 		command, arg, id string
 		comments         *[]*fakeapi.Comment
 	}{
-		"a to-do": {"todos", "todoId", f.LooseTodo.ID, &f.LooseTodo.Comments},
-		"a list":  {"todolists", "listId", f.TodoList.ID, &f.TodoList.Comments},
+		"a to-do":  {"todos", "todoId", f.LooseTodo.ID, &f.LooseTodo.Comments},
+		"a list":   {"todolists", "listId", f.TodoList.ID, &f.TodoList.Comments},
+		"an event": {"events", "eventId", f.OnceEvent.ID, &f.OnceEvent.Comments},
 	}
 }
 
-func TestACommentOnAToDoOrAListIsReadWrittenChangedReactedToAndTakenBack(t *testing.T) {
+func TestACommentOnAToDoAListOrAnEventIsReadWrittenChangedReactedToAndTakenBack(t *testing.T) {
 	for name := range commentedThings(newTestEnv(t).fixture) {
 		t.Run(name, func(t *testing.T) {
 			e := newTestEnv(t)

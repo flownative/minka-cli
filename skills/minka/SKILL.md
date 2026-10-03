@@ -289,6 +289,12 @@ minka events show <eventId> --json
 minka events create --tool <toolId> --title "Title" (--starts-at <moment> --ends-at <moment> | --first-day YYYY-MM-DD [--last-day YYYY-MM-DD]) [--repeat] [--rhythm <rhythm> ...] [--time-zone <zone>] [--participant <person>]... [--description - < event.md] [--join-url <url>] [--highlighted] --json
 minka events edit <eventId> [--title "New"] [<time>] [--repeat [<details>] | --no-repeat] [--participant <person>... | --no-participants] [--description -] [--join-url <url>] [--highlighted=false] --json
 minka events delete <eventId> --json
+minka events comments list <eventId> --json
+minka events comments create <eventId> - --json < comment.md
+minka events comments edit <eventId> <commentId> - [--format html] --json < comment.md
+minka events comments delete <eventId> <commentId> --json
+minka events comments react <eventId> <commentId> 👍 --json
+minka events comments unreact <eventId> <commentId> 👍 --json
 minka work start <card> --json
 minka work stop [<card>] [--all] --json
 minka work list --json
@@ -1455,8 +1461,7 @@ and reaction codes a card knows, all exit 9.
 
 A calendar holds **events**: one-off, all-day or repeating. `events …` reads
 and writes them; `events tools <projectId>` lists the calendars in use. There
-are no comments, no reactions and no way back out of the trash through the
-API; `commentCount` counts comments read on the web.
+is no way back out of the trash through the API.
 
 ### Reading
 
@@ -1488,8 +1493,8 @@ API; `commentCount` counts comments read on the web.
   `--instance`, `--month`, `--ends-on` work as for `todos repeat`. The details
   must fall on the first day of the event (`eventRepetitionDoesNotFit`). A
   timed series keeps its clock time in `--time-zone` (an IANA name such as
-  `Europe/Berlin`; `CET` and `+02:00` are refused), else in the zone it has,
-  else in yours.
+  `Europe/Berlin`, with its capitals; `CET` and `Europe/Kiev` are taken,
+  `+02:00` is refused), else in the zone it has, else in yours.
 - `events edit` sends only what was given. **Without `--repeat` or a detail, a
   series keeps its first day:** moving it is exit 9
   `eventRepetitionKeepsItsFirstDay`; give the new time **with** `--repeat` (and
@@ -1503,6 +1508,20 @@ API; `commentCount` counts comments read on the web.
   unless `--drop-attachments` is given.
 - `events delete` puts an event into the trash, a series with all its days; a
   client only an event of their own.
+
+### Comments
+
+- `events comments create|edit|delete|react|unreact <eventId> …` work as under
+  a card, and `events comments list <eventId>` reads them, the oldest first.
+  **`events show` carries only `commentCount`**: the comments, with their
+  `bodySource`, come from `events comments list`.
+- A series has its comments **on the event as a whole**, never on one
+  occurrence. A calendar no longer in use takes comments; an event in the
+  trash is exit 2; in an archived project every write is exit 9
+  `projectArchived`, reading stays open.
+- Only the author changes or removes a comment; somebody else's is exit 2.
+  `events comments edit` reads the event and its comments first, for the
+  files and mentions a comment of yours may carry.
 
 ### The order of the refusals
 

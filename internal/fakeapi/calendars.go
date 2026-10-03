@@ -1,10 +1,10 @@
 package fakeapi
 
 import (
+	_ "embed"
+	"encoding/json"
 	"net/http"
 	"net/url"
-	"os"
-	"path/filepath"
 	"regexp"
 	"slices"
 	"strconv"
@@ -29,9 +29,21 @@ var eventTimeFields = []string{"startsAt", "endsAt", "firstDay", "lastDay"}
 // fraction of up to six digits and an offset of at most fourteen hours.
 var eventMoment = regexp.MustCompile(`^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,6}))?(Z|([+-])((?:0\d|1[0-3])):?([0-5]\d)|([+-])14:?00)$`)
 
-// zoneRegions are the regions whose zones PHP lists, beside UTC. A name of
-// the backward table, such as CET or US/Eastern, is not listed there.
-var zoneRegions = []string{"Africa/", "America/", "Antarctica/", "Arctic/", "Asia/", "Atlantic/", "Australia/", "Europe/", "Indian/", "Pacific/"}
+// phpZones are the names of the zones PHP lists with ALL_WITH_BC. To
+// regenerate phpzones.json with the PHP Minka runs on:
+//
+//	php -r 'echo json_encode(DateTimeZone::listIdentifiers(DateTimeZone::ALL_WITH_BC), JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES), "\n";' > phpzones.json
+//
+//go:embed phpzones.json
+var phpZonesJSON []byte
+
+var phpZones = func() []string {
+	var zones []string
+	if err := json.Unmarshal(phpZonesJSON, &zones); err != nil {
+		panic(err)
+	}
+	return zones
+}()
 
 // eventRefusals are the codes of a schedule of an event.
 var eventRefusals = scheduleRefusals{prefix: "eventRepetition", outOfOrder: "A series ends on or after the first day of its event."}
@@ -77,11 +89,11 @@ type CalendarEvent struct {
 	ShownToClients bool
 	Trashed        bool
 
-	// CommentCount stands for comments the API neither reads nor writes on
-	// an event.
-	CommentCount int
-	CreatedAt    time.Time
-	CreatorID    string
+	// Comments are on the event as a whole: a series has no comments of a
+	// single occurrence.
+	Comments  []*Comment
+	CreatedAt time.Time
+	CreatorID string
 }
 
 // EventRepetition is how an event repeats: its schedule, and for a timed
@@ -113,6 +125,7 @@ func (s *Server) registerCalendarRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/events/{eventId}", s.authenticated(s.event))
 	mux.HandleFunc("PATCH /api/v1/events/{eventId}", s.authenticated(s.updateEvent))
 	mux.HandleFunc("DELETE /api/v1/events/{eventId}", s.authenticated(s.removeEvent))
+	s.registerCommentRoutes(mux, "events/{eventId}")
 }
 
 // calendars lists the calendars of a project that are in use, in the order
@@ -216,7 +229,7 @@ func (s *Server) addEvent(w http.ResponseWriter, r *http.Request, person *Person
 		return
 	}
 
-	if !validTodoTitle(w, "event", "an event", deref(fields.title)) {
+	if !validTitle(w, "event", "an event", deref(fields.title)) {
 		return
 	}
 	when, ok := readEventTime(w, fields)
@@ -280,7 +293,7 @@ func (s *Server) updateEvent(w http.ResponseWriter, r *http.Request, person *Per
 		return
 	}
 
-	if fields.title != nil && !validTodoTitle(w, "event", "an event", *fields.title) {
+	if fields.title != nil && !validTitle(w, "event", "an event", *fields.title) {
 		return
 	}
 	when := event.time()
@@ -474,12 +487,12 @@ func readEventTime(w http.ResponseWriter, f eventFields) (eventTime, bool) {
 		eventTimeNotReadable(w)
 		return eventTime{}, false
 	}
-	if endsAt.Before(startsAt) {
-		eventEndsBeforeItStarts(w)
-		return eventTime{}, false
-	}
 	if startsAt.Year() < 1 {
 		eventTimeNotReadable(w)
+		return eventTime{}, false
+	}
+	if endsAt.Before(startsAt) {
+		eventEndsBeforeItStarts(w)
 		return eventTime{}, false
 	}
 	return eventTime{startsAt: &startsAt, endsAt: &endsAt}, true
@@ -598,33 +611,11 @@ func (s *Server) zoneOfARepetition(w http.ResponseWriter, writer *Person, named 
 	return name, true
 }
 
-// isAListedZone says whether PHP lists a zone of this name. What the fake
-// knows of the list is its regions; a name of the backward table inside one,
-// such as Europe/Kiev, passes here and is refused there.
+// isAListedZone says whether PHP lists a zone of this name, the names of
+// the backward table such as CET and Europe/Kiev included. PHP holds a name
+// to its list exactly, capitals and all.
 func isAListedZone(name string) bool {
-	if _, err := time.LoadLocation(name); err != nil || name == "" || name == "Local" || !spelledAsStored(name) {
-		return false
-	}
-	return name == "UTC" || slices.ContainsFunc(zoneRegions, func(region string) bool { return strings.HasPrefix(name, region) })
-}
-
-// spelledAsStored says whether a zone is written in the capitals of its file
-// in the zone database of the system. PHP holds a name to its list exactly,
-// and a file system that ignores case loads Europe/berlin all the same. A
-// system without the database loads from the copy built in, which is exact.
-func spelledAsStored(name string) bool {
-	dir := "/usr/share/zoneinfo"
-	if _, err := os.Stat(dir); err != nil {
-		return true
-	}
-	for _, part := range strings.Split(name, "/") {
-		entries, err := os.ReadDir(dir)
-		if err != nil || !slices.ContainsFunc(entries, func(entry os.DirEntry) bool { return entry.Name() == part }) {
-			return false
-		}
-		dir = filepath.Join(dir, part)
-	}
-	return true
+	return slices.Contains(phpZones, name)
 }
 
 // fits says whether the repetition starts on the first day of the event and
@@ -663,19 +654,21 @@ func firstDayIn(when eventTime, zone string) string {
 }
 
 // participantsAfter is who takes part once the people named are the whole
-// set: those on it already keep their place, the others follow in the order
-// named. Each newcomer is asked whether they belong to the project and then
-// whether the event is shown to them.
+// set: those on it already keep their place, and the newcomers follow. Each
+// newcomer is asked, in the order named, whether they belong to the project
+// and then whether the event is shown to them. Minka promises no order among
+// the newcomers of one request; they come in the order of their identifiers,
+// as its read sorts people put on at the same moment.
 func (s *Server) participantsAfter(w http.ResponseWriter, tool *CalendarTool, event *CalendarEvent, named []string) ([]string, bool) {
 	project := s.projectWithID(tool.ProjectID)
-	var participants []string
+	var participants, newcomers []string
 	for _, id := range event.ParticipantIDs {
 		if slices.Contains(named, id) {
 			participants = append(participants, id)
 		}
 	}
 	for _, id := range named {
-		if slices.Contains(participants, id) {
+		if slices.Contains(participants, id) || slices.Contains(newcomers, id) {
 			continue
 		}
 		if !slices.Contains(project.MemberIDs, id) {
@@ -686,8 +679,10 @@ func (s *Server) participantsAfter(w http.ResponseWriter, tool *CalendarTool, ev
 			unprocessable(w, "personCannotSeeIt", "Somebody chosen is a client of the project, and this event is not shown to clients.")
 			return nil, false
 		}
-		participants = append(participants, id)
+		newcomers = append(newcomers, id)
 	}
+	slices.Sort(newcomers)
+	participants = append(participants, newcomers...)
 	if participants == nil {
 		participants = []string{}
 	}
@@ -871,7 +866,7 @@ func (s *Server) eventFieldsOfBothForms(tool *CalendarTool, event *CalendarEvent
 	for name, value := range map[string]any{
 		"id": event.ID, "projectId": tool.ProjectID, "title": event.Title, "allDay": event.FirstDay != "",
 		"schedule": schedule, "timeZone": zone, "joinUrl": nullable(event.JoinURL), "highlighted": event.Highlighted,
-		"participants": participants, "commentCount": event.CommentCount, "appUrl": s.eventURL(tool, event),
+		"participants": participants, "commentCount": len(event.Comments), "appUrl": s.eventURL(tool, event),
 	} {
 		fields[name] = value
 	}

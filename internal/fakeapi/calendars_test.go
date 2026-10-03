@@ -194,6 +194,7 @@ func TestWhatMakesNoEventIsRefusedWithItsCase(t *testing.T) {
 		`{"title": "x", "startsAt": "2035-10-05T09:00:00+15:00", "endsAt": "2035-10-05T10:00:00Z"}`: "422 eventTimeNotReadable",
 		`{"title": "x", "startsAt": "0000-06-01T00:00:00Z", "endsAt": "2035-10-05T10:00:00Z"}`:      "422 eventTimeNotReadable",
 		`{"title": "x", "startsAt": "0001-01-01T00:00:00+14:00", "endsAt": "2035-10-05T10:00:00Z"}`: "422 eventTimeNotReadable",
+		`{"title": "x", "startsAt": "0000-06-01T00:00:00Z", "endsAt": "0000-05-01T00:00:00Z"}`:      "422 eventTimeNotReadable",
 		`{"title": "x", "startsAt": "2035-02-30T09:00:00Z", "endsAt": "2035-10-05T10:00:00Z"}`:      "422 eventTimeNotReadable",
 		`{"title": "x", "firstDay": "2035-02-30"}`:                                                  "422 eventTimeNotReadable",
 		`{"title": "x", "firstDay": "2035-10-05", "lastDay": "2035-10-04"}`:                         "422 eventEndsBeforeItStarts",
@@ -205,7 +206,7 @@ func TestWhatMakesNoEventIsRefusedWithItsCase(t *testing.T) {
 		`{"title": "x", "schedule": {"endsOn": "2035-10-04"}, ` + moments + `}`:                     "422 eventRepetitionDatesOutOfOrder",
 		`{"title": "x", "schedule": {"rhythm": "weekly", "weekdays": [2]}, ` + moments + `}`:        "422 eventRepetitionDoesNotFit",
 		`{"title": "x", "schedule": {"rhythm": "daily"}, "timeZone": "+02:00", ` + moments + `}`:    "422 eventRepetitionTimeZoneUnknown",
-		`{"title": "x", "schedule": {"rhythm": "daily"}, "timeZone": "CET", ` + moments + `}`:       "422 eventRepetitionTimeZoneUnknown",
+		`{"title": "x", "schedule": {"rhythm": "daily"}, "timeZone": "Mars/Base", ` + moments + `}`: "422 eventRepetitionTimeZoneUnknown",
 		`{"title": "x", "schedule": "weekly", ` + moments + `}`:                                     "400 malformedBody",
 		`{"title": "x", "participantIds": "nobody", ` + moments + `}`:                               "400 malformedBody",
 	} {
@@ -293,7 +294,19 @@ func TestAClientReadsAndWritesOnlyWhatIsShownToClients(t *testing.T) {
 	if answer := callSeries(t, s, client, http.MethodGet, span, nil); answer.raw != NotFoundBody {
 		t.Errorf("a calendar hidden from clients: %s %s", answer.got, answer.raw)
 	}
+	calendars := "/projects/" + f.Project.ID + "/calendars"
+	if answer := callSeries(t, s, client, http.MethodGet, calendars, nil); strings.TrimSpace(answer.raw) != "[]" {
+		t.Errorf("a client is told of a calendar hidden from them: %s", answer.raw)
+	}
+	f.OnceEvent.ShownToClients = true
+	if answer := callSeries(t, s, f.Token, http.MethodPatch, "/events/"+f.OnceEvent.ID, map[string]any{"participantIds": []string{f.Client.ID}}); answer.got != "422 personCannotSeeIt" {
+		t.Errorf("a client on an event shown to clients in a calendar hidden from them: %s", answer.got)
+	}
+	f.OnceEvent.ShownToClients = false
 	f.Calendar.ShownToClients = true
+	if answer := callSeries(t, s, client, http.MethodGet, calendars, nil); !strings.Contains(answer.raw, f.Calendar.ID) {
+		t.Errorf("the calendars a client is shown: %s", answer.raw)
+	}
 	if ids := idsOf(t, callSeries(t, s, client, http.MethodGet, span, nil).body["events"]); len(ids) != 0 {
 		t.Errorf("the team's events are hidden from clients: %v", ids)
 	}
@@ -321,11 +334,19 @@ func TestAClientReadsAndWritesOnlyWhatIsShownToClients(t *testing.T) {
 	}
 }
 
+// Those who take part keep their place, and the newcomers of one request
+// follow. Minka promises no order among them; its read sorts people put on
+// at the same moment by their identifier, and so does the fake. They are
+// named here against that order, so that the order named cannot pass for it.
 func TestParticipantsKeepTheirPlaceAndNewcomersFollow(t *testing.T) {
 	s, f := New(t)
-	answer := callSeries(t, s, f.Token, http.MethodPatch, "/events/"+f.WeeklyEvent.ID, map[string]any{"participantIds": []string{f.Bruno.ID, f.Anke.ID, f.Bruno.ID}})
-	if got := idsOf(t, answer.body["participants"]); !reflect.DeepEqual(got, []string{f.Anke.ID, f.Bruno.ID}) {
-		t.Errorf("participants %v, want Anke first, then Bruno once", got)
+	later, earlier := f.Bruno.ID, f.Agent.ID
+	if later < earlier {
+		later, earlier = earlier, later
+	}
+	answer := callSeries(t, s, f.Token, http.MethodPatch, "/events/"+f.WeeklyEvent.ID, map[string]any{"participantIds": []string{later, f.Anke.ID, earlier, later}})
+	if got := idsOf(t, answer.body["participants"]); !reflect.DeepEqual(got, []string{f.Anke.ID, earlier, later}) {
+		t.Errorf("participants %v, want Anke first, then the newcomers once each by their identifier", got)
 	}
 	if answer := callSeries(t, s, f.Token, http.MethodPatch, "/events/"+f.WeeklyEvent.ID, map[string]any{"participantIds": []string{f.Stranger.ID}}); answer.got != "422 personNotAProjectMember" {
 		t.Errorf("a stranger: %s", answer.got)
@@ -448,15 +469,20 @@ func TestATitleOfAnEventIsRefusedInMinkasWords(t *testing.T) {
 	}
 }
 
-// PHP holds a zone to its list exactly, whatever the file system ignores.
-func TestAZoneIsReadInItsOwnCapitals(t *testing.T) {
+// A zone is one of PHP's list, the names of the backward table included and
+// kept as given, and held to it exactly, whatever the file system ignores.
+func TestAZoneIsOneOfPHPsListInItsOwnCapitals(t *testing.T) {
 	s, f := New(t)
-	for zone, want := range map[string]string{"Europe/berlin": "422 eventRepetitionTimeZoneUnknown", "europe/Berlin": "422 eventRepetitionTimeZoneUnknown", "Europe/Berlin": "201"} {
+	for zone, want := range map[string]string{
+		"Europe/Berlin": "201", "CET": "201", "Europe/Kiev": "201", "US/Pacific": "201",
+		"Europe/berlin": "422 eventRepetitionTimeZoneUnknown", "europe/Berlin": "422 eventRepetitionTimeZoneUnknown",
+		"Mars/Base": "422 eventRepetitionTimeZoneUnknown", "+02:00": "422 eventRepetitionTimeZoneUnknown",
+	} {
 		answer := callSeries(t, s, f.Token, http.MethodPost, eventsOf(f), map[string]any{
 			"title": "x", "startsAt": "2035-10-05T09:00:00Z", "endsAt": "2035-10-05T10:00:00Z", "schedule": map[string]any{}, "timeZone": zone,
 		})
-		if answer.got != want {
-			t.Errorf("%s: %s, want %s", zone, answer.got, want)
+		if answer.got != want || want == "201" && answer.body["timeZone"] != zone {
+			t.Errorf("%s: %s, want %s: %s", zone, answer.got, want, answer.raw)
 		}
 	}
 }
@@ -486,6 +512,29 @@ func TestAnIntervalReachesUpTo99(t *testing.T) {
 		})
 		if answer.got != want {
 			t.Errorf("interval %d: %s, want %s", interval, answer.got, want)
+		}
+	}
+}
+
+// Minka trims the days, the link and the zone of an event before it reads
+// them, and neither the moments nor the days of a schedule.
+func TestOnlyTheDaysTheLinkAndTheZoneOfAnEventAreTrimmed(t *testing.T) {
+	s, f := New(t)
+	allDay := callSeries(t, s, f.Token, http.MethodPost, eventsOf(f), `{"title": "x", "firstDay": " 2035-10-05 ", "lastDay": "\t2035-10-06\n", "joinUrl": " https://meet.example.com/x "}`)
+	if allDay.got != "201" || allDay.body["firstDay"] != "2035-10-05" || allDay.body["lastDay"] != "2035-10-06" || allDay.body["joinUrl"] != "https://meet.example.com/x" {
+		t.Errorf("trimmed fields: %s %s", allDay.got, allDay.raw)
+	}
+	moments := `"startsAt": "2035-10-05T09:00:00Z", "endsAt": "2035-10-05T10:00:00Z"`
+	if zone := callSeries(t, s, f.Token, http.MethodPost, eventsOf(f), `{"title": "x", "schedule": {}, "timeZone": " Europe/Berlin ", `+moments+`}`); zone.got != "201" || zone.body["timeZone"] != "Europe/Berlin" {
+		t.Errorf("a trimmed zone: %s %s", zone.got, zone.raw)
+	}
+	for body, want := range map[string]string{
+		`{"title": "x", "startsAt": " 2035-10-05T09:00:00Z", "endsAt": "2035-10-05T10:00:00Z"}`: "422 eventTimeNotReadable",
+		`{"title": "x", "schedule": {"endsOn": " 2035-12-01 "}, ` + moments + `}`:               "422 eventRepetitionDatesNotADate",
+		`{"title": "x", "schedule": {"startsOn": " 2035-10-05 "}, ` + moments + `}`:             "422 eventRepetitionDatesNotADate",
+	} {
+		if answer := callSeries(t, s, f.Token, http.MethodPost, eventsOf(f), body); answer.got != want {
+			t.Errorf("%s: %s, want %s", body, answer.got, want)
 		}
 	}
 }

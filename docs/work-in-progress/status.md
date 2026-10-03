@@ -94,10 +94,11 @@ fake, see below.
 
 The calendars of a project are listed with `events tools`, their events read
 with `events list` (a span of days, with the occurrences of every series in
-it) and `events show`, and written with `events create`, `edit` and `delete`.
-The rule the commands follow is [Calendars and events](../stable/calendar.md)
-(C-098). Taking an event out of the trash, the comments under an event and
-showing one to clients have no address in the API. Minka's side is on its
+it) and `events show`, and written with `events create`, `edit` and `delete`;
+their comments with `events comments list`, `create`, `edit`, `delete`,
+`react` and `unreact`. The rule the commands follow is [Calendars and
+events](../stable/calendar.md) (C-098, C-095). Taking an event out of the
+trash and showing one to clients have no address in the API. Minka's side is on its
 `main` and in no release yet, so production gets it with the next Minka
 release; the commands are checked against Minka's code and tests and the fake,
 and live only in what a read of addresses that name nothing shows, see below.
@@ -593,14 +594,22 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   twice where the clocks go back from 03:00 to 02:00, as in
   `Africa/Casablanca` on the day Ramadan time starts, which PHP takes the
   second time for 02:00 to 02:45 and the fake the first; PHP's list of time
-  zones,
-  which the fake approaches by its regions, so a name of the backward table
-  inside one, such as `Europe/Kiev`, passes the fake and is refused by Minka,
-  and the exact capitals of a zone are held only where the system keeps its
-  zone database under `/usr/share/zoneinfo`; PHP's check of a URL, which the
+  zones, which the fake holds as a snapshot taken with PHP 8.5
+  (`internal/fakeapi/phpzones.json`), so a zone a later PHP adds or drops
+  differs until it is taken again; PHP's check of a URL, which the
   fake approaches by a host it demands; the cleaning of a description
   against its project and `eventDescriptionNotReadable`; whom a write tells
   and that the writer follows the event; and a calendar in the trash.
+- The comments under an event: no request of them has gone to a real Minka,
+  and production has none of them yet. The fake mirrors
+  `EventCommentsApiController` and `ApiEventCommentsTest` through the
+  handlers of the comments under a to-do: the body before the event, the
+  event and the comment under it before the text or the reaction,
+  `projectArchived` before the author, 404 at all six addresses for an event
+  in the trash and for a client on one not shown to clients, and comments
+  under an event of a calendar out of use. What it does not mirror: the
+  cleaning of a comment against the files of its project and the people a
+  mention tells.
 - The comments under a to-do and under a list: no request of them has gone to
   a real Minka. The fake mirrors `TodoCommentsApiController`,
   `AbstractCommentsApiController`, `DbalCommentRepository`, `CommentableItem`
@@ -1340,7 +1349,9 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   [live check](../guides/live-check.md) names a place to write them: a timed
   series across a change of summer time listed in a span, a series moved with
   and without `--repeat`, stopped with `--no-repeat`, a zone such as `CET`
-  refused, a client named and refused, and an event put into the trash.
+  taken and one such as `europe/Berlin` refused, a client named and refused,
+  an event put into the trash, and a comment under a series written, reacted
+  to and refused in an archived project.
 - Check the posts live, as the [live check](../guides/live-check.md) says: a
   post sent out to `chosen` with `--notify me` and the same person twice, a
   client named and refused, a page of two with `next` and the page behind it,

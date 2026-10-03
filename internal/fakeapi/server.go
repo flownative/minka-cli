@@ -457,8 +457,8 @@ type Server struct {
 	PostCategories []*PostCategory
 
 	// TimeZone is the installation's zone, which reads the days of whoever
-	// set none of their own. It may be a name PHP reads and does not list,
-	// such as CET.
+	// set none of their own. It may be a name of the backward table, such as
+	// CET.
 	TimeZone string
 
 	// IgnoresProjectStatus makes the server answer like a Minka from before
@@ -627,7 +627,7 @@ type Fixture struct {
 	CalendarOutOfUse *CalendarTool  // no longer in use: not listed, read and written at its address
 	OtherCalendar    *CalendarTool  // of the project that belongs to somebody else
 	WeeklyEvent      *CalendarEvent // Mondays at 10:00 in Berlin from 19 October 2026, with Anke taking part
-	OnceEvent        *CalendarEvent // on 21 October 2026, by Anke, with two comments
+	OnceEvent        *CalendarEvent // on 21 October 2026, by Anke, with a comment of Anke's and then one of Bruno's
 	AllDayEvent      *CalendarEvent // 20 to 22 October 2026, highlighted
 	OtherEvent       *CalendarEvent
 }
@@ -834,7 +834,11 @@ func New(t testing.TB) (*Server, *Fixture) {
 	}
 	onceEvent := &CalendarEvent{
 		ID: newID(), Title: "Acceptance", StartsAt: moment("2026-10-21T12:00:00Z"), EndsAt: moment("2026-10-21T13:00:00Z"),
-		CommentCount: 2, CreatedAt: s.now, CreatorID: anke.ID,
+		Comments: []*Comment{
+			{ID: newID(), AuthorID: anke.ID, Body: "<p>The room is <strong>booked</strong>.</p>", CreatedAt: at("2026-10-01", "09:00")},
+			{ID: newID(), AuthorID: bruno.ID, Body: "<p>I bring the projector.</p>", CreatedAt: at("2026-10-01", "10:00")},
+		},
+		CreatedAt: s.now, CreatorID: anke.ID,
 	}
 	allDayEvent := &CalendarEvent{
 		ID: newID(), Title: "Trade fair", FirstDay: "2026-10-20", LastDay: "2026-10-22", Highlighted: true,
@@ -1696,7 +1700,7 @@ func (s *Server) addCard(w http.ResponseWriter, r *http.Request, person *Person)
 	title, ok1 := stringField(w, fields, "title")
 	columnID, ok2 := stringField(w, fields, "columnId")
 	description, ok3 := stringField(w, fields, "description")
-	if !ok1 || !ok2 || !ok3 || !validTitle(w, deref(title)) {
+	if !ok1 || !ok2 || !ok3 || !validTitle(w, "card", "a card", deref(title)) {
 		return
 	}
 	dueOn, ok := stringField(w, fields, "dueOn")
@@ -1775,7 +1779,7 @@ func (s *Server) updateCard(w http.ResponseWriter, r *http.Request, person *Pers
 		unprocessable(w, "nothingToChange", "The body names neither a title nor a description nor a due date.")
 		return
 	}
-	if title != nil && !validTitle(w, *title) {
+	if title != nil && !validTitle(w, "card", "a card", *title) {
 		return
 	}
 	dueOn, ok := stringField(w, fields, "dueOn")
@@ -3728,21 +3732,6 @@ func booleanField(w http.ResponseWriter, fields map[string]any, name string) (*b
 		return nil, false
 	}
 	return &b, true
-}
-
-func validTitle(w http.ResponseWriter, title string) bool {
-	title = phpTrim(title)
-	switch {
-	case utf8.RuneCountInString(title) > maxTitleLength:
-		unprocessable(w, "cardTitleTooLong", "The title of a card is too long.")
-	case strings.IndexFunc(title, unicode.IsControl) >= 0:
-		unprocessable(w, "cardTitleHasControlCharacters", "The title of a card must not contain control characters.")
-	case title == "":
-		unprocessable(w, "cardTitleMissing", "A card needs a title.")
-	default:
-		return true
-	}
-	return false
 }
 
 // validDescription checks the length of what was sent. The server counts the

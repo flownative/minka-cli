@@ -188,7 +188,7 @@ func (s *Server) updateTodoSeries(w http.ResponseWriter, r *http.Request, person
 		return
 	}
 
-	if namesTitle && !validTodoTitle(w, "todo", "a to-do", deref(title)) {
+	if namesTitle && !validTitle(w, "todo", "a to-do", deref(title)) {
 		return
 	}
 	if !seriesPeopleIdentifiers(w, assigneeIDs) || !seriesPeopleIdentifiers(w, notifiedIDs) {

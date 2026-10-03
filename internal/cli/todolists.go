@@ -50,7 +50,7 @@ func (a *app) newTodoListsCmd() *cobra.Command {
 // todoListComments are the comments under a to-do list. A list in the archive
 // takes no text at all.
 var todoListComments = commentedKind{
-	parent: "todolists", noun: "to-do list", arg: "listId", kind: api.CommentedTodoList,
+	parent: "todolists", noun: "to-do list", aNoun: "a to-do list", arg: "listId", kind: api.CommentedTodoList,
 	read: func(a *app, s *session, id string) (commentedItem, error) {
 		list, err := s.client.TodoList(a.ctx, id)
 		if err != nil {

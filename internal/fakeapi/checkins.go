@@ -182,7 +182,7 @@ func (s *Server) addCheckinQuestion(w http.ResponseWriter, r *http.Request, pers
 	if !ok {
 		return
 	}
-	if !validTodoTitle(w, "question", "a question", deref(body.title)) {
+	if !validTitle(w, "question", "a question", deref(body.title)) {
 		return
 	}
 	weekdays := body.weekdays
@@ -246,7 +246,7 @@ func (s *Server) updateCheckinQuestion(w http.ResponseWriter, r *http.Request, p
 		unprocessable(w, "nothingToChange", "The body names neither a title nor a schedule nor the people asked.")
 		return
 	}
-	if body.title != nil && !validTodoTitle(w, "question", "a question", *body.title) {
+	if body.title != nil && !validTitle(w, "question", "a question", *body.title) {
 		return
 	}
 	rhythm, weekdays, timeOfDay := question.Rhythm, question.Weekdays, question.TimeOfDay

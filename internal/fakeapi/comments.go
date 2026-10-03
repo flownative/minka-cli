@@ -6,8 +6,9 @@ import (
 )
 
 // commentedItem is what the comments under a post, a document, an upload, a
-// to-do and a to-do list have in common: the project they are written in, why
-// a write under the item wrote nothing, and the comments themselves.
+// to-do, a to-do list and an event have in common: the project they are
+// written in, why a write under the item wrote nothing, and the comments
+// themselves.
 type commentedItem struct {
 	projectID string
 	// refusedAsClosed answers a write the item takes no more, with the code of
@@ -68,6 +69,15 @@ func (s *Server) itemOfTheRequest(r *http.Request, person *Person) *commentedIte
 		}
 		return &commentedItem{projectID: tool.ProjectID, comments: &list.Comments,
 			refusedAsClosed: func(w http.ResponseWriter) bool { return s.refusedAsNothingWritten(w, tool, list) }}
+	case r.PathValue("eventId") != "":
+		// An event takes comments in a calendar out of use as well; only the
+		// archive of its project closes it.
+		tool, event := s.visibleEvent(r.PathValue("eventId"), person)
+		if event == nil {
+			return nil
+		}
+		return &commentedItem{projectID: tool.ProjectID, comments: &event.Comments,
+			refusedAsClosed: func(w http.ResponseWriter) bool { return s.refusedAsArchived(w, s.projectWithID(tool.ProjectID)) }}
 	}
 	return nil
 }

@@ -3,21 +3,21 @@
 A calendar of a project holds **events**: one-off, all-day or repeating.
 `events tools` lists the calendars of a project, `events list` and `events
 show` read, `events create`, `edit` and `delete` write
-([C-098](../decisions.md#c-098)).
+([C-098](../decisions.md#c-098)), and `events comments` reads and writes the
+comments under an event ([C-095](../decisions.md#c-095)).
 
 Everything here was read in Minka's code — `CalendarApiController`,
 `ReadsRepetitionSchedule`, its resources, `CalendarEventQueryService`,
 `EventOccurrences`, `EventRepetition`, `EventTime`, `JoinLink`, `TimeZone`,
-the event handlers, `EventParticipants`, `DbalCalendarEventRepository` and
-`ApiEventsTest` — and only the refusals of an address that names nothing have
-been seen live.
+the event handlers, `EventParticipants`, `DbalCalendarEventRepository`,
+`ApiEventsTest`, `EventCommentsApiController` and `ApiEventCommentsTest` — and
+only the refusals of an address that names nothing have been seen live.
 
 ## What is not there
 
-Taking an event **out of the trash**, the **comments** and reactions under an
-event, **showing an event to clients** or hiding it, renaming or removing a
-calendar, and changing or leaving out a **single occurrence** of a series are
-web only. `commentCount` counts the comments read there.
+Taking an event **out of the trash**, **showing an event to clients** or
+hiding it, renaming or removing a calendar, and changing or leaving out a
+**single occurrence** of a series are web only.
 
 ## What a read hands over
 
@@ -30,7 +30,8 @@ given by name.
 `GET events/{eventId}` answers the event: `id`, `projectId`, `toolId`,
 `project`, `tool`, `title`, `allDay`, the time, `schedule`, `timeZone`,
 `description`, `descriptionSource`, `attachments`, `joinUrl`, `highlighted`,
-`participants` (in the order they were put on), `commentCount`, `createdAt`,
+`participants` (in the order they were put on, those of one write among
+themselves in no promised order), `commentCount`, `createdAt`,
 `creator` and `appUrl`. There is **no `updatedAt`**.
 
 - **The time.** A timed event carries `startsAt` and `endsAt`, moments in UTC
@@ -58,8 +59,8 @@ themselves are Minka's to judge (`eventsSpanNotADay`, `eventsSpanOutOfOrder`,
 - **Whose days.** `from` and `to` are days of the person of the token: the zone
   of their preferences, else the installation's, which the top-level
   `timeZone` names. A query cannot name another zone. The installation may keep
-  a zone PHP reads but does not list, such as `CET`; the span is read in it all
-  the same.
+  a name of the backward table, such as `CET`; the span is read in it all the
+  same.
 - **Every event stands in the span once**, a series too, with `occurrences`:
   the times it takes place at in the span, each shaped like the time of an
   event, in the order they start, and never empty. An event without an
@@ -84,14 +85,15 @@ machine.
 `--starts-at` and `--ends-at` together, each ISO 8601 with seconds and an
 **offset** (`+02:00`, `+0200` or `Z`, at most fourteen hours, a fraction of up
 to six digits), the start in the year 1 or later once told in UTC, the end
-not before the start; or `--first-day` and optionally `--last-day`. Minka
-refuses moments and days at once (`eventTimeAmbiguous`) and one moment alone
-(`eventTimeMissing`); the CLI refuses both as a usage error before anything
-goes out, and a `create` without any time as well. An `edit` that names any of
-the four flags names the whole time anew, and may turn a timed event into an
-all-day one and back. The CLI passes a moment on as it was typed and assumes
-no zone for one without an offset: Minka refuses it with
-`eventTimeNotReadable`.
+not before the start, asked in this order, so a start before the year 1 is
+`eventTimeNotReadable` whatever the end; or `--first-day` and optionally
+`--last-day`. Minka refuses moments and days at once (`eventTimeAmbiguous`)
+and one moment alone (`eventTimeMissing`); the CLI refuses both as a usage
+error before anything goes out, and a `create` without any time as well. An
+`edit` that names any of the four flags names the whole time anew, and may
+turn a timed event into an all-day one and back. The CLI passes a moment on
+as it was typed and assumes no zone for one without an offset: Minka refuses
+it with `eventTimeNotReadable`.
 
 **The other fields.** `--title` is required on `create`; an empty one is
 `eventTitleMissing`. `--description` is Markdown converted to HTML here, or
@@ -104,11 +106,11 @@ address starting with `http://` or `https://`, at most 2000 characters;
 looked up among the members of the project, which `create` reads the calendar
 and `edit` the event for, and only where a name or an address is given. On an
 edit it is the **whole set**: whoever takes part and is not named again is
-taken off, those named again keep their place and newcomers follow in the
-order given; `--no-participants` sends `[]`. Only a member of the project the
-event is shown to can take part: what the team adds is shown to no client, so
-a client named is `personCannotSeeIt`, and somebody outside the project
-`personNotAProjectMember`.
+taken off, those named again keep their place and newcomers follow, among
+themselves in no order Minka promises; `--no-participants` sends `[]`. Only
+a member of the project the event is shown to can take part: what the team
+adds is shown to no client, so a client named is `personCannotSeeIt`, and
+somebody outside the project `personNotAProjectMember`.
 
 **No guard.** A change takes no `expectedUpdatedAt` and the event carries no
 `updatedAt`: the last write wins. A change that asks for what stands already
@@ -129,9 +131,12 @@ does not fall on it is `eventRepetitionDoesNotFit`. A daily series falls on
 Monday to Friday unless `--weekdays` says otherwise.
 
 `--time-zone` names the IANA zone a timed series keeps its clock time in. Left
-out, it is the zone the series has, else the writer's own; an offset such as
-`+02:00`, a name of the backward table such as `CET`, and a writer whose own
-zone is no IANA zone are `eventRepetitionTimeZoneUnknown`. Minka reads it only
+out, it is the zone the series has, else the writer's own. Minka takes every
+name PHP lists, the backward table included: `CET`, `GMT`, `Europe/Kiev` and
+`US/Pacific` are kept as given. A name is held to that list exactly, capitals
+and all, so `europe/Berlin`, a name that is none such as `Mars/Base`, an offset
+such as `+02:00`, and a writer whose own zone is none of the list are
+`eventRepetitionTimeZoneUnknown`. Minka reads it only
 together with a schedule and ignores it for an all-day event, so the CLI
 refuses `--time-zone` without `--repeat` or a detail, and beside `--first-day`,
 as a usage error, and says in a `notice` when the event Minka answered with is
@@ -177,6 +182,35 @@ nothing, and only then the people, one at a time in the order given
 (`personNotAProjectMember`, `personCannotSeeIt`). Reading stays open in an
 archived project.
 
+## Comments
+
+The comments under an event have addresses of their own —
+`events/{eventId}/comments…` — in the shape of the comments under a to-do, with
+the same codes and reactions, answered by `EventCommentsApiController` on the
+base the controllers of to-dos, posts and Docs & Files share. `events comments`
+names the event as the first argument and is built from the same commands as
+`todos comments`. A series has its comments **on the event as a whole**: an
+occurrence has no identifier of its own, and none of its own comments.
+
+**`events show` carries no comments**, only `commentCount`. `events comments
+list` reads them, and `events comments edit` reads the event and its comments
+first, for the files and mentions a comment of one's own may carry; the guard
+stands aside in an archived project ([C-082](../decisions.md#c-082)).
+
+The event is looked up as for any other request: an event in the trash, one of
+a project the person is no member of, and for a client one not shown to
+clients or in a calendar hidden from them answer 404 at all six addresses. A
+calendar no longer in use takes comments. Minka reads the
+body before it looks for the event on a write, a change and a reaction, so a
+body that is no JSON (400) or of another type (415) answers before the 404 —
+unreachable from here. Then: the event (404), a comment that is no identifier
+or not under this event (404), the text (`commentMissing`, `commentTooLong`,
+`commentHasControlCharacters`, `commentNotReadable`) or the reaction
+(`reactionMissing`, `reactionTooLong`, `reactionHasControlCharacters`), then
+`projectArchived`, and last the 404 of a comment that is not one's own. In an
+archived project every write is `projectArchived`, somebody else's comment
+included; reading stays open.
+
 ## Codes
 
 `eventsSpanNotADay`, `eventsSpanOutOfOrder`, `eventsSpanTooLong`,
@@ -188,5 +222,6 @@ archived project.
 `eventRepetitionDatesOutOfOrder`, `eventRepetitionTimeZoneUnknown`,
 `eventRepetitionDoesNotFit`, `eventRepetitionKeepsItsFirstDay`,
 `personNotAProjectMember`, `personCannotSeeIt`, `projectArchived` and
-`nothingToChange` (422), all exit 9, each with a hint that says what can be
+`nothingToChange` (422), and under the comments those of a comment and a
+reaction, all exit 9, each with a hint that says what can be
 done.
