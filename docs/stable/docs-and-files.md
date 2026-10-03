@@ -6,8 +6,10 @@ description. Both take comments, and the comments take reactions.
 
 `docs tools`, `docs list`, `docs show` and `docs uploads show` read; `docs
 create` and `docs edit` write a document; `docs uploads create` puts a file into
-a tool and `docs uploads edit` changes an upload; `docs comments …` write under
-either kind of entry.
+a tool and `docs uploads edit` changes an upload; `docs versions list` and
+`show` read the versions of a document, `docs uploads versions list` the files
+of an upload, and `docs uploads versions create` gives an upload another file;
+`docs comments …` write under either kind of entry.
 
 ## What is not there, and why nothing pretends otherwise
 
@@ -15,10 +17,12 @@ The API offers no delete, trash, archive, unarchive or move of a document or
 an upload, no creating, renaming or deleting of a folder, no reading of a
 tool's archive and no reading of a draft — a draft is 404 for everybody, its
 author included. Reactions reach the comments alone, although the web offers
-them on an entry as well. The file of an upload cannot be replaced: Minka
-ignores a `blobId` sent with a change, so `docs uploads edit` has no flag for
-it ([C-085](../decisions.md#c-085)). The CLI writes only into folders that
-already exist.
+them on an entry as well. A change never replaces the file of an upload: Minka
+ignores a `blobId` sent with it, so `docs uploads edit` has no flag for it
+([C-085](../decisions.md#c-085)); another file goes in as a new version. Making
+an earlier version of a document the current one, giving an upload an earlier
+file back by its version and the marked differences between two versions have
+no address either. The CLI writes only into folders that already exist.
 
 ## The body, and the refusal that never comes
 
@@ -90,6 +94,70 @@ run stored the file a moment before, it cannot have been swept, and the hint
 says that storing it again is not the remedy. `fileInUse` is a file of one's
 own that stands in an upload or a text already; of somebody else's Minka says
 `fileUnknown`.
+
+## Versions
+
+`docs versions list <documentId>` and `docs uploads versions list <uploadId>`
+read what Minka keeps of every write: the versions of a document, and the
+files an upload showed. Both come oldest first, unpaged, the newest marked
+`current` — for an upload the file it shows now. `docs versions show
+<documentId> <versionId>` reads one version of a document: its title, its body
+as `docs show` renders a body, and the files that body names. A version is
+reached only through its document, so the command takes both IDs. Minka
+hands out a version's body only as it stores it, where a file carries no name
+and no address, so a file in it reads as `[attachment]` and shows only in the
+list of files. `author` is
+`null` for a version written before Minka kept who wrote it.
+
+**The versions are the team's alone.** A client of the project meets 404 at
+every one of these addresses, also where the document or upload itself is shown
+to it, and at an earlier file of an upload it did not store itself. The hint of a 404 says so. A
+document or upload in the archive, below an archived folder or in an archived
+project is read with its versions; one in the trash is not found.
+
+### Another file for an upload
+
+`docs uploads versions create <uploadId> (<file> | --blob <blobId>)` gives an
+upload another file, as the web's "Replace with a new version" does
+([C-099](../decisions.md#c-099)). The title and the description stay, and the
+file it showed stays as an earlier version. It takes the two requests of a new
+upload, with the same hand-over:
+
+1. Given a file, it reads the upload for its project and then its versions,
+   and stops with exit 2 before the file travels where either is at no
+   address: the second read is what tells a client, who may read the upload
+   and give it nothing. An upload the first read says is `archived` — itself
+   or through a folder above it — stops the run with exit 9 before the file
+   travels, where Minka would refuse it with `uploadArchived` only after the
+   transfer and leave the stored file standing in nothing.
+2. It stores the file in the project of the upload. A refusal ends the run.
+3. It sends the stored file to `POST files-uploads/{id}/versions`. Where Minka
+   refuses that, the error's `data` is the stored file and the hint names
+   `--blob <blobId>`, which takes this step alone.
+
+`--blob` naming the file the upload shows already is answered 200 and writes
+nothing; the command says so in its summary and a `notice`, and adds no
+version. An earlier file of the same upload stands in it, so it is
+`fileInUse`: an upload gets an earlier file back only by downloading it and
+giving it as a file, which stores its bytes anew.
+
+`--expect <updatedAt>` is optional, and `--force` does not exist here. Without
+an expectation Minka expects the upload as the request found it, so a title or
+description changed in the meantime is never written over, and a file given in
+the meantime stays as a version: nothing is lost. With one, a change since the
+read is refused as by `docs uploads edit`, with the upload under `data` and a
+hint that names both the `--expect` to send next and, where this run stored the
+file, `--blob`. The shape of `--expect` is held as for every entry, and
+`--expect none` is refused.
+
+Minka refuses in this order: a body it cannot read; the upload (404, a client
+included); `expectedUpdatedAt` and `blobId` that are no moment or no
+identifier (400); a file the project does not know (`projectArchived` in an
+archived project, else `fileUnknown`); then what the write meets —
+`projectArchived`, `uploadArchived` for the upload or a folder above it, the
+file it shows already (200, whatever the expectation), `uploadChanged`, and
+last whether the file may be taken: somebody else's is `fileUnknown`, one's
+own that stands anywhere `fileInUse`.
 
 ## The title of a document, which is not a value one clears
 
@@ -238,7 +306,11 @@ often they are named.
 | 422 `uploadTitleMissing`, `uploadTitleTooLong`, `uploadTitleHasControlCharacters` | `docs uploads edit`; of `docs uploads create`, all but an empty title, which exits 1 before anything goes out | 9 |
 | 422 `uploadDescriptionTooLong`, `uploadDescriptionNotReadable` | `docs uploads create`, `docs uploads edit` | 9 |
 | 422 `fileUnknown` | `docs uploads create`, for a file swept, never stored, of another project or somebody else's — one answer for all | 9 |
-| 422 `fileInUse` | `docs uploads create --blob` naming a file of one's own that stands in an upload or a text | 9 |
+| 422 `fileInUse` | `docs uploads create --blob` naming a file of one's own that stands in an upload or a text; `docs uploads versions create --blob` naming one that stands in an upload, a text or an earlier version, of the same upload included | 9 |
+| 404 | `docs versions list`, `docs versions show`, `docs uploads versions list` and `docs uploads versions create`, also for a client of the project shown the entry; a version of another document | 2 |
+| 409 `uploadChanged` | `docs uploads versions create --expect` against an upload written over since | 9 |
+| 422 `fileUnknown` | `docs uploads versions create`, as for `docs uploads create` | 9 |
+| 422 `uploadArchived` | `docs uploads versions create --blob` for an upload of the archive or below an archived folder; with a file the command exits 9 itself before the file travels | 9 |
 | 422 `contentTypeMismatch`, 413 `tooLarge` | `docs uploads create <file>`, storing it, as `uploads create` | 9 |
 | 422 `documentTitleMissing`, `documentTitleTooLong`, `documentTitleHasControlCharacters` | `docs create`, `docs edit` | 9 |
 | 422 `documentBodyTooLong`, `documentBodyNotReadable` | `docs create`, `docs edit` | 9 |

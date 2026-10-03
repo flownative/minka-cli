@@ -3061,7 +3061,9 @@ func (s *Server) visibleUpload(blobID string, person *Person) *Upload {
 			}
 			return nil
 		}
-		if s.visibleProject(upload.Circle, person) != nil {
+		// An earlier file of an upload is the team's alone, as the versions
+		// that name it are, but whoever stored a file may always fetch it.
+		if s.visibleProject(upload.Circle, person) != nil && (!s.isAClient(person.ID) || upload.UploaderID == person.ID || !s.isAnEarlierFile(upload.ID)) {
 			return upload
 		}
 		return nil

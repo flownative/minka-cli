@@ -66,6 +66,7 @@ func (a *app) newDocsCmd() *cobra.Command {
 		a.newDocsShowCmd(),
 		a.newDocsCreateCmd(),
 		a.newDocsEditCmd(),
+		a.newDocsVersionsCmd(),
 		a.newDocsUploadsCmd(),
 		a.newDocsCommentsCmd(),
 	)
@@ -389,6 +390,7 @@ func (a *app) newDocsUploadsCmd() *cobra.Command {
 		a.newDocsUploadsShowCmd(),
 		a.newDocsUploadsCreateCmd(),
 		a.newDocsUploadsEditCmd(),
+		a.newDocsUploadsVersionsCmd(),
 	)
 }
 
@@ -402,8 +404,9 @@ was said about it and everything said under it.
 The bytes are fetched with "uploads download <blobId>", where <blobId> is
 file.id of this upload — not its own ID, which names the entry.
 
-updatedAt is what docs uploads edit --expect takes. The file of an upload is
-never replaced here: Minka offers no way to do it.`,
+updatedAt is what docs uploads edit --expect takes. Another file is given with
+docs uploads versions create, and the files it showed are listed with docs
+uploads versions list.`,
 		Args: requireArgs("uploadId"),
 		RunE: func(_ *cobra.Command, args []string) error {
 			s, err := a.session()
@@ -633,6 +636,12 @@ func filesUploadRefusal(s *session, err error, toolID, blobID string, stored *ap
 	case e.APICode == apiCodeFileInUse:
 		e.Hint = "The file stands in an upload or a text already, and a file goes into one place only. Give the file itself in place of --blob to store it anew."
 	}
+	return handOverTheStoredFile(e, blobID, stored)
+}
+
+// handOverTheStoredFile makes the file this run stored the data of a refused
+// second step, and names --blob where naming the file again can help.
+func handOverTheStoredFile(e *Error, blobID string, stored *api.Result[api.Upload]) *Error {
 	if stored == nil {
 		return e
 	}
@@ -655,8 +664,9 @@ func (a *app) newDocsUploadsEditCmd() *cobra.Command {
 		Use:   "edit <uploadId>",
 		Short: "Change the title or the description of an upload",
 		Long: `Changes the title, the description or both. What is not given stays as it is.
-The file of an upload stays whatever is sent: Minka offers no way to replace
-it, so this command has no flag for it.
+The file of an upload stays whatever is sent: Minka ignores a file sent with a
+change, so this command has no flag for it. docs uploads versions create gives
+an upload another file.
 
 --description "" empties the description. --title "" does not empty the title:
 an upload needs one, so an empty title exits 9 (validation) with meta.apiCode
@@ -1244,10 +1254,16 @@ func entryGuard(cmd *cobra.Command, kind, show, expect string, force bool) (*str
 			Hint:    show + " gives the updatedAt for --expect.",
 		}
 	case expect == expectNone:
+		hint := show + " gives the updatedAt to copy."
+		// A command that writes without an expectation by leaving --expect out
+		// has no --force to name.
+		if cmd.Flags().Lookup("force") != nil {
+			hint = show + " gives the updatedAt to copy; --force writes over whatever stands."
+		}
 		return nil, &Error{
 			Code:    CodeUsage,
-			Message: fmt.Sprintf("--expect none belongs to the notes of a card, where it means that nobody has written any; a %s always has an updatedAt", kind),
-			Hint:    show + " gives the updatedAt to copy; --force writes over whatever stands.",
+			Message: fmt.Sprintf("--expect none belongs to the notes of a card, where it means that nobody has written any; %s %s always has an updatedAt", articleOf(kind), kind),
+			Hint:    hint,
 		}
 	case !isATimeMinkaReads(expect):
 		return nil, &Error{
@@ -1257,6 +1273,14 @@ func entryGuard(cmd *cobra.Command, kind, show, expect string, force bool) (*str
 		}
 	}
 	return &expect, nil
+}
+
+// articleOf is the indefinite article that goes before a word.
+func articleOf(word string) string {
+	if strings.ContainsRune("aeiou", rune(word[0])) {
+		return "an"
+	}
+	return "a"
 }
 
 // documentRefusal classifies a failed request about a Docs & Files tool. Each
@@ -1555,6 +1579,7 @@ func documentBreadcrumbs(document api.Document) []Breadcrumb {
 	return []Breadcrumb{
 		{Action: "edit", Cmd: "minka docs edit " + document.ID + " --body - --expect " + document.UpdatedAt, Description: "Write over the document, unless somebody wrote since"},
 		{Action: "comment", Cmd: "minka docs comments create --document " + document.ID + " <text|->", Description: "Comment on the document"},
+		{Action: "versions", Cmd: "minka docs versions list " + document.ID, Description: "List the earlier versions of the document"},
 		{Action: "folder", Cmd: "minka docs list " + document.ToolID + folderFlagOf(document.Folder), Description: "List what stands beside it"},
 	}
 }
@@ -1564,6 +1589,7 @@ func uploadBreadcrumbs(upload api.FilesUpload) []Breadcrumb {
 		{Action: "edit", Cmd: "minka docs uploads edit " + upload.ID + " --description - --expect " + upload.UpdatedAt, Description: "Write over the upload, unless somebody wrote since"},
 		{Action: "download", Cmd: "minka uploads download " + upload.File.ID, Description: "Fetch the bytes of the file"},
 		{Action: "comment", Cmd: "minka docs comments create --upload " + upload.ID + " <text|->", Description: "Comment on the upload"},
+		{Action: "replace", Cmd: "minka docs uploads versions create " + upload.ID + " <file>", Description: "Give the upload another file, keeping this one as an earlier version"},
 		{Action: "folder", Cmd: "minka docs list " + upload.ToolID + folderFlagOf(upload.Folder), Description: "List what stands beside it"},
 	}
 }

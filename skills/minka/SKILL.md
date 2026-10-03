@@ -197,10 +197,14 @@ minka docs list <toolId> [--folder <folderId>] --json
 minka docs show <documentId> --json
 minka docs create --tool <toolId> --title "Title" --audience everybody|chosen|nobody [--notify <person>]... [--folder <folderId>] [--body - < body.md] --json
 minka docs edit <documentId> [--title "New"] [--body - < body.md] (--expect <updatedAt> | --force) --json
+minka docs versions list <documentId> --json
+minka docs versions show <documentId> <versionId> --json
 minka docs uploads show <uploadId> --json
 minka docs uploads create <file> --tool <toolId> [--folder <folderId>] [--title "Title"] [--description - < about.md] --json
 minka docs uploads create --blob <blobId> --tool <toolId> [--folder <folderId>] [--title "Title"] --json
 minka docs uploads edit <uploadId> [--title "New"] [--description - < about.md] (--expect <updatedAt> | --force) --json
+minka docs uploads versions list <uploadId> --json
+minka docs uploads versions create <uploadId> (<file> | --blob <blobId>) [--expect <updatedAt>] --json
 minka docs comments create (--document <documentId> | --upload <uploadId>) - --json < comment.md
 minka docs comments edit (--document <documentId> | --upload <uploadId>) <commentId> - [--format html] --json < comment.md
 minka docs comments delete (--document <documentId> | --upload <uploadId>) <commentId> --json
@@ -961,13 +965,52 @@ with a description. Both take comments, and the comments take reactions.
   for one second.
 - `--description ""` empties the description. **`--title ""` does not empty the
   title**: exit 9 `uploadTitleMissing`.
-- **The file of an upload cannot be replaced.** Minka ignores a file sent with
-  a change, so the command has no flag for it. To put another file in, create a
-  new upload.
+- **`docs uploads edit` never changes the file.** Minka ignores a file sent
+  with a change, so the command has no flag for it. Another file goes in with
+  `docs uploads versions create`, below.
 - The description is held against the files and mentions it carries, as a
   document's body is: a Markdown description that would drop them exits 1
   unless `--drop-attachments` is given. Send the `descriptionSource` back with
   `--description-format html` to keep them. People newly mentioned are told.
+
+### Versions
+
+- `docs versions list <documentId>` lists every version of a document, oldest
+  first, with its `number`, its `author` and `writtenAt`; the newest is
+  `current`. `author` is `null` for a version written before Minka kept who
+  wrote it. `docs versions show <documentId> <versionId>` gives one version
+  with its `title`, its `body` (Markdown in text, the stored HTML in JSON) and
+  the files the body names. **A file in a version's body shows only in that
+  list**: the stored body names it by no more than a handle, so it reads as
+  `[attachment]` there.
+- `docs uploads versions list <uploadId>` lists every file an upload showed,
+  oldest first; `current` is the one it shows now. An earlier file is fetched
+  with `uploads download <blobId>`, `<blobId>` being `file.id` of its line.
+- **The versions are the team's alone.** A client of the project gets exit 2,
+  also for a document or upload it is shown, and so does an earlier file it
+  did not store itself.
+- Nothing is paged. A document in the archive, below an archived folder or in
+  an archived project still has its versions read. Making an earlier version
+  of a document the current one is done in Minka on the web.
+- `docs uploads versions create <uploadId> <file>` **replaces the file of an
+  upload**: title and description stay, and the file it showed stays as an
+  earlier version. It takes the two requests of `docs uploads create`: it reads
+  the upload and its versions first, so an upload you cannot reach — or reach
+  only as a client — exits 2 **before the file travels**, and one in the
+  archive or below an archived folder exits 9 there. Then it stores the file in
+  the upload's project and gives it to the upload. A refused second step hands
+  over the stored file in `data`, and `--blob <blobId>` takes that step alone.
+  **On a 409 `uploadChanged` `data` is the upload as it stands instead**, and
+  the stored file is named only in the `hint`, with its `--blob`.
+- **An earlier file of the same upload is `fileInUse`.** To give an upload an
+  earlier file back, download it and give it as a file, which stores its bytes
+  anew. `--blob` naming the file the upload shows already writes nothing: exit
+  0 with a `notice` saying so.
+- `--expect <updatedAt>` is optional here: without it Minka still never writes
+  over a title or description changed in the meantime, and nothing is lost,
+  because the file the upload showed stays as a version. With it a change since
+  your read exits 9 `uploadChanged` with the upload in `data`, blind for one
+  second as every guard on an entry.
 
 ### The body, and the trap under it
 

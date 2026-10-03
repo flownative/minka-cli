@@ -240,3 +240,75 @@ func (c *Client) AddFilesUpload(ctx context.Context, toolID string, input AddFil
 func (c *Client) UpdateFilesUpload(ctx context.Context, uploadID string, input UpdateFilesUploadInput) (Result[FilesUpload], error) {
 	return request[FilesUpload](ctx, c, http.MethodPatch, "/files-uploads/"+url.PathEscape(uploadID), input)
 }
+
+// DocumentVersionLine is one version of a document as its history lists it,
+// without the text. Number counts from 1; Current marks the newest, which is
+// what the document says now.
+type DocumentVersionLine struct {
+	ID         string           `json:"id"`
+	DocumentID string           `json:"documentId"`
+	Number     int              `json:"number"`
+	Current    bool             `json:"current"`
+	Author     *PersonReference `json:"author"` // nil where nothing kept who wrote it
+	WrittenAt  string           `json:"writtenAt"`
+}
+
+// DocumentVersion is one version of a document as it was written, with the
+// files its body names.
+type DocumentVersion struct {
+	ID          string           `json:"id"`
+	DocumentID  string           `json:"documentId"`
+	Number      int              `json:"number"`
+	Current     bool             `json:"current"`
+	Title       string           `json:"title"`
+	Body        string           `json:"body"` // the stored HTML
+	Attachments []Attachment     `json:"attachments"`
+	Author      *PersonReference `json:"author"` // nil where nothing kept who wrote it
+	WrittenAt   string           `json:"writtenAt"`
+	AppURL      string           `json:"appUrl"`
+}
+
+// UploadVersion is one file an upload showed or shows. Current marks the file
+// it shows now; Author is who gave it that file.
+type UploadVersion struct {
+	ID        string          `json:"id"`
+	UploadID  string          `json:"uploadId"`
+	Number    int             `json:"number"`
+	Current   bool            `json:"current"`
+	File      Attachment      `json:"file"`
+	Author    PersonReference `json:"author"`
+	WrittenAt string          `json:"writtenAt"`
+}
+
+// AddUploadVersionInput gives an upload another file. BlobID names a file the
+// writer stored in the upload's project that stands nowhere yet; an earlier
+// file of the same upload stands somewhere. ExpectedUpdatedAt works as it does
+// for a change of the upload; left out, Minka expects the upload as the
+// request found it.
+type AddUploadVersionInput struct {
+	BlobID            string  `json:"blobId"`
+	ExpectedUpdatedAt *string `json:"expectedUpdatedAt,omitempty"`
+}
+
+// DocumentVersions lists the versions of a document, oldest first. They are
+// the team's alone: a client of the project is answered 404.
+func (c *Client) DocumentVersions(ctx context.Context, documentID string) (Result[[]DocumentVersionLine], error) {
+	return request[[]DocumentVersionLine](ctx, c, http.MethodGet, "/documents/"+url.PathEscape(documentID)+"/versions", nil)
+}
+
+// DocumentVersionOf reads one version of a document.
+func (c *Client) DocumentVersionOf(ctx context.Context, documentID, versionID string) (Result[DocumentVersion], error) {
+	return request[DocumentVersion](ctx, c, http.MethodGet, "/documents/"+url.PathEscape(documentID)+"/versions/"+url.PathEscape(versionID), nil)
+}
+
+// UploadVersions lists the files an upload was given, oldest first, the
+// team's alone as the versions of a document are.
+func (c *Client) UploadVersions(ctx context.Context, uploadID string) (Result[[]UploadVersion], error) {
+	return request[[]UploadVersion](ctx, c, http.MethodGet, "/files-uploads/"+url.PathEscape(uploadID)+"/versions", nil)
+}
+
+// AddUploadVersion gives an upload another file: 201 with the upload, or 200
+// with it unchanged where the file is the one it shows already.
+func (c *Client) AddUploadVersion(ctx context.Context, uploadID string, input AddUploadVersionInput) (Result[FilesUpload], error) {
+	return request[FilesUpload](ctx, c, http.MethodPost, "/files-uploads/"+url.PathEscape(uploadID)+"/versions", input)
+}
