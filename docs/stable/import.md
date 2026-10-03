@@ -389,7 +389,8 @@ and Minka applies the kinds in an order of its own.
 
 - **People** are the ones a record of the bundle refers to, and nobody else:
   the members of the projects of the run and whoever a record names: its creator,
-  an assignee, who completed a card or a step, who gave a boost, who is
+  an assignee of a card, a to-do or a step, who completed a card or a step,
+  who gave a boost, who is
   mentioned in a text. The people list of an account is what somebody is
   looked up in, not what is written: most of an account has no place where
   only some projects move to.
@@ -518,8 +519,14 @@ and Minka applies the kinds in an order of its own.
   completion Basecamp records, `dueOn` as given and held to the shape of a day,
   `assignees` in the order of their IDs. The note is the stored one (`content`), and `null` when empty.
 - **Steps** come with the card, which shows them itself; only when it has
-  more than it shows is their list asked for. Whom a step is assigned to and
-  when it is due is left out, because a step in Minka has neither.
+  more than it shows is their list asked for. `dueOn` is `due_on` held to the
+  shape of a day, as a card's is, and a day of another shape ends the run, since
+  the applier refuses the bundle there too. `assignees` are the people Basecamp
+  names on the step, each once and in the order of their IDs, as on a to-do;
+  the applier leaves off, each with a warning, whoever is no member of the
+  project or is a client who does not see the board. A Minka from before the
+  two fields passes them over with one warning per field and brings the
+  step without them.
 - **Categories** are the kinds of post of a project, each once: those the
   list of the project holds, and those only a post that is written shows.
   Basecamp lists the categories of the first message board of a project

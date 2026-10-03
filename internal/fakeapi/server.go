@@ -177,9 +177,11 @@ type Card struct {
 }
 
 type Step struct {
-	ID        string
-	Title     string
-	Completed bool
+	ID          string
+	Title       string
+	Completed   bool
+	AssigneeIDs []string // in the order they were assigned; somebody who left the project stays on
+	DueOn       *string  // YYYY-MM-DD, nil for none
 }
 
 type Comment struct {
@@ -1705,7 +1707,7 @@ func (s *Server) addCard(w http.ResponseWriter, r *http.Request, person *Person)
 		return
 	}
 	dueOn, ok := stringField(w, fields, "dueOn")
-	if !ok || !validDueDate(w, dueOn) {
+	if !ok || !validDueDate(w, dueOn, "cardDueDateNotADate") {
 		return
 	}
 	assigneeIDs, ok := stringListField(w, fields, "assigneeIds")
@@ -1784,7 +1786,7 @@ func (s *Server) updateCard(w http.ResponseWriter, r *http.Request, person *Pers
 		return
 	}
 	dueOn, ok := stringField(w, fields, "dueOn")
-	if !ok || !validDueDate(w, dueOn) {
+	if !ok || !validDueDate(w, dueOn, "cardDueDateNotADate") {
 		return
 	}
 	if description != nil && !validDescription(w, *description) {
@@ -2216,7 +2218,11 @@ func (s *Server) notesResource(board *Board, card *Card) map[string]any {
 }
 
 // updateStep looks for the step on the card before it reads the body, so a
-// step that is not there is 404 even on a card that takes no write.
+// step that is not there is 404 even on a card that takes no write. Of the
+// body, the shape of assigneeIds is read before anything is asked of it; a
+// person whose identifier is none is refused before the archive is, and a
+// person who is no member after it. The due day and the people are written
+// before the tick.
 func (s *Server) updateStep(w http.ResponseWriter, r *http.Request, person *Person) {
 	board, column, card, archived := s.cardToWrite(r.PathValue("cardId"), person)
 	if card == nil {
@@ -2228,19 +2234,63 @@ func (s *Server) updateStep(w http.ResponseWriter, r *http.Request, person *Pers
 		notFound(w)
 		return
 	}
+	step := card.Steps[index]
 	fields, ok := readBody(w, r)
 	if !ok {
 		return
 	}
-	completed, isFlag := fields["completed"].(bool)
-	if !isFlag {
+	assigneeIDs, ok := stringListField(w, fields, "assigneeIds")
+	if !ok {
+		return
+	}
+	completedValue, namesCompletion := fields["completed"]
+	_, namesDue := fields["dueOn"]
+	if !namesCompletion && !namesDue && assigneeIDs == nil {
+		unprocessable(w, "nothingToChange", `The body names neither "completed" nor a due date nor assignees.`)
+		return
+	}
+	completed, isFlag := completedValue.(bool)
+	if namesCompletion && !isFlag {
 		unprocessable(w, "stepCompletedMissing", `Changing a step needs the field "completed" as true or false.`)
 		return
 	}
-	if s.refusedAsAClosedCard(w, board, archived) {
+	dueOn, ok := stringField(w, fields, "dueOn")
+	if !ok || namesDue && !validDueDate(w, dueOn, "stepDueDateNotADate") {
 		return
 	}
-	card.Steps[index].Completed = completed
+	for _, id := range assigneeIDs {
+		if !uuidPattern.MatchString(id) {
+			notAProjectMember(w)
+			return
+		}
+	}
+
+	if namesDue || assigneeIDs != nil {
+		if s.refusedAsAClosedCard(w, board, archived) {
+			return
+		}
+		// Who is on the step already stays without a question, somebody who
+		// left the project included; only who comes new has to be a member.
+		project := s.projectOf(board)
+		for _, id := range assigneeIDs {
+			if !slices.Contains(step.AssigneeIDs, id) && !slices.Contains(project.MemberIDs, id) {
+				notAProjectMember(w)
+				return
+			}
+		}
+		if namesDue {
+			step.DueOn = dueDate(dueOn)
+		}
+		if assigneeIDs != nil {
+			step.AssigneeIDs = changedPeople(step.AssigneeIDs, assigneeIDs)
+		}
+	}
+	if namesCompletion {
+		if s.refusedAsAClosedCard(w, board, archived) {
+			return
+		}
+		step.Completed = completed
+	}
 	writeJSON(w, http.StatusOK, s.cardResource(board, column, card))
 }
 
@@ -2273,10 +2323,16 @@ func completedStepCount(card *Card) int {
 	return completed
 }
 
-func stepResources(card *Card) []any {
+// stepResources names everybody on a step, somebody who left the project
+// included, as Minka reads them without asking about the project.
+func (s *Server) stepResources(card *Card) []any {
 	list := []any{}
 	for _, step := range card.Steps {
-		list = append(list, map[string]any{"id": step.ID, "title": step.Title, "completed": step.Completed})
+		assignees := []any{}
+		for _, id := range step.AssigneeIDs {
+			assignees = append(assignees, s.personReference(id))
+		}
+		list = append(list, map[string]any{"id": step.ID, "title": step.Title, "completed": step.Completed, "assignees": assignees, "dueOn": step.DueOn})
 	}
 	return list
 }
@@ -3563,7 +3619,7 @@ func (s *Server) cardResource(board *Board, column *Column, card *Card) map[stri
 		"commentCount": len(card.Comments), "createdAt": timestamp(card.CreatedAt),
 		"creator": s.personReference(card.CreatorID), "completedAt": timestampOrNil(card.CompletedAt),
 		"completedBy": s.personReferenceOrNil(card.CompletedByID), "assignees": s.assigneeReferences(card),
-		"dueOn": card.DueOn, "onHold": card.OnHold, "steps": stepResources(card), "subscribers": s.subscriberReferences(card),
+		"dueOn": card.DueOn, "onHold": card.OnHold, "steps": s.stepResources(card), "subscribers": s.subscriberReferences(card),
 		"comments": comments,
 		"appUrl":   s.cardURL(board, card),
 	}
@@ -3805,8 +3861,9 @@ func timestampOrNil(t *time.Time) any {
 }
 
 // validDueDate accepts no date at all, an empty one, or a day that exists,
-// written as YYYY-MM-DD. 2026-02-30 and 2026-9-8 are refused.
-func validDueDate(w http.ResponseWriter, value *string) bool {
+// written as YYYY-MM-DD. 2026-02-30 and 2026-9-8 are refused with the code
+// of what the day is to stand on.
+func validDueDate(w http.ResponseWriter, value *string, notADateCode string) bool {
 	date := phpTrim(deref(value))
 	if date == "" {
 		return true
@@ -3816,7 +3873,7 @@ func validDueDate(w http.ResponseWriter, value *string) bool {
 			return true
 		}
 	}
-	unprocessable(w, "cardDueDateNotADate", "A due date is a day written as YYYY-MM-DD.")
+	unprocessable(w, notADateCode, "A due date is a day written as YYYY-MM-DD.")
 	return false
 }
 

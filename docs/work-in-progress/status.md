@@ -140,7 +140,8 @@ archived ones included, unless `--project` names some or `--active-only`
 leaves the archived ones out (C-088): people with avatars, projects with members,
 the boards, chats, message boards, questionnaires, to-do sets, inboxes and
 Docs & Files tools as tools, of
-each board the columns, cards, steps, comments and boosts, of each message
+each board the columns, cards, steps with their people and due day, comments
+and boosts, of each message
 board the posts of every status with their categories, comments and boosts, of
 each chat its lines as messages with their boosts, written in parts of one
 chat and some 10,000 lines each, of each questionnaire its questions with the
@@ -304,6 +305,17 @@ Owed with it: a dry run that meets the lists of who follows an item. How
 `subscription.json` answers was measured read-only, see below; a list longer
 than seven people has not been seen.
 
+A step carries the people on it and the day it is due: `steps list` and
+`cards show` name them, and `steps edit` changes them, the people as a whole
+set; `steps create` takes neither (C-100). The rule the commands follow is
+[Steps](../stable/steps.md). Minka's side is on its `main` and in no release
+yet, so the commands are checked against Minka's code and tests and the fake
+only, see below; a Minka without it answers `steps edit` with
+`stepCompletedMissing`, which the hint names. The extractor writes `dueOn` and
+`assignees` on every step. The shape of a Basecamp step was read in the Basecamp
+CLI's response cache of the account, not asked for: no run has carried the two
+fields yet.
+
 The working notes on the back of a card are read with `cards notes show` and
 written with `cards notes set`, which needs `--expect` or `--force` (C-042).
 Seen live against the local instance, which runs Minka's main with the notes
@@ -374,6 +386,15 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   or Posts tool in the trash and no project in the trash. The CLI reads the
   tools of Docs & Files, Posts and Check-ins.
 
+- `steps edit` and the people and the day of a step: no request has gone to a
+  real Minka. Read in `BoardApiController::updateStepAction`,
+  `EditStepHandler`, `DbalCardStepRepository` and `ApiStepAssigneesTest` on
+  Minka's `main`, and mirrored by the fake in the order of
+  [Steps](../stable/steps.md). The fake has no board hidden from clients, so a
+  client who does not see the board, refused by Minka, is put on a step there;
+  it writes the day, the people and the tick of one request together, where
+  Minka writes the tick in a second transaction; and it shows no overdue for a
+  step, which Minka's API does not either.
 - `projects edit`: no request of it has gone to a real Minka, and none can
   until a release carries the rename. Read in `ProjectsApiController::
   updateProjectAction`, `DbalProjectRepository::rename` and `RenameProjectTest`

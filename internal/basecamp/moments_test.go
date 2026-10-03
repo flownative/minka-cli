@@ -335,6 +335,25 @@ func TestADayACardIsDueThatIsNoDayEndsTheRun(t *testing.T) {
 	}
 }
 
+// The day a step is due is held the same way: Minka refuses a bundle whose
+// step is due on anything but a day.
+func TestADayAStepIsDueThatIsNoDayEndsTheRun(t *testing.T) {
+	for what, c := range badDays {
+		account := fakebasecamp.New()
+		busyCard(account).Steps[0].DueOn = c.value
+		err := run(t, account, boardProject)
+		var failed *basecamp.Error
+		if !errors.As(err, &failed) {
+			t.Errorf("%s: got %v, want the run to end", what, err)
+			continue
+		}
+		want := "step 9402 is due on " + c.said
+		if failed.Kind != basecamp.API || !strings.HasSuffix(failed.Message, want) {
+			t.Errorf("%s: got %v %q, want an api_error ending in %q", what, failed.Kind, failed.Message, want)
+		}
+	}
+}
+
 // The days a to-do runs are held to the same shape and said the same way, so
 // that one extractor does not say a day two ways.
 func TestTheDaysOfAToDoThatAreNoDaysEndTheRun(t *testing.T) {

@@ -249,15 +249,20 @@ type Card struct {
 	Subscribers *[]string `json:"subscribers,omitempty"`
 }
 
+// Step is a step of a card. DueOn is a day as YYYY-MM-DD or nil, and Assignees
+// are the people on it as the source names them; Minka leaves off whoever is no
+// member of the project who sees the board, as it does on a to-do.
 type Step struct {
 	Record
-	ProjectSourceID string  `json:"projectSourceId"`
-	ToolSourceID    string  `json:"toolSourceId"`
-	CardSourceID    string  `json:"cardSourceId"`
-	Title           string  `json:"title"`
-	Position        int     `json:"position"`
-	CompletedAt     *string `json:"completedAt"`
-	CompletedBy     *string `json:"completedBy"`
+	ProjectSourceID string   `json:"projectSourceId"`
+	ToolSourceID    string   `json:"toolSourceId"`
+	CardSourceID    string   `json:"cardSourceId"`
+	Title           string   `json:"title"`
+	Position        int      `json:"position"`
+	DueOn           *string  `json:"dueOn"`
+	Assignees       []string `json:"assignees"`
+	CompletedAt     *string  `json:"completedAt"`
+	CompletedBy     *string  `json:"completedBy"`
 }
 
 // Post is a post of a Posts tool. Status is never a draft: a draft is its

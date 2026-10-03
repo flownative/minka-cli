@@ -55,6 +55,7 @@ func everyWrite(e *testEnv) map[string][]string {
 		"cards notes set":   {"cards", "notes", "set", card, "Notes", "--force"},
 		"columns on-hold":   {"columns", "on-hold", f.Doing.ID},
 		"steps create":      {"steps", "create", card, "Another step"},
+		"steps edit":        {"steps", "edit", card, "A step", "--due", "2026-11-02"},
 		"steps complete":    {"steps", "complete", card, "A step"},
 		"steps reopen":      {"steps", "reopen", card, "A step"},
 		"steps delete":      {"steps", "delete", card, "A step"},

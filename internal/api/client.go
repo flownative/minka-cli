@@ -348,7 +348,37 @@ func (c *Client) AddStep(ctx context.Context, cardID, title string) (Result[Card
 // SetStepCompleted ticks a step off or opens it again. A step that stands that
 // way already succeeds as well.
 func (c *Client) SetStepCompleted(ctx context.Context, cardID, stepID string, completed bool) (Result[Card], error) {
-	return request[Card](ctx, c, http.MethodPatch, "/cards/"+url.PathEscape(cardID)+"/steps/"+url.PathEscape(stepID), map[string]bool{"completed": completed})
+	return c.UpdateStep(ctx, cardID, stepID, UpdateStepInput{Completed: &completed})
+}
+
+// UpdateStepInput is a change of a step: what is nil stays as it is. An empty
+// DueOn takes the day off, and AssigneeIDs is the whole set the step is to
+// carry, so an empty one takes everybody off.
+type UpdateStepInput struct {
+	Completed   *bool
+	DueOn       *string
+	AssigneeIDs *[]string
+}
+
+func (in UpdateStepInput) MarshalJSON() ([]byte, error) {
+	fields := map[string]any{}
+	if in.Completed != nil {
+		fields["completed"] = *in.Completed
+	}
+	if in.DueOn != nil {
+		fields["dueOn"] = nullIfEmpty(*in.DueOn)
+	}
+	// Never null: Minka reads null as people left out.
+	if in.AssigneeIDs != nil {
+		fields["assigneeIds"] = append([]string{}, *in.AssigneeIDs...)
+	}
+	return json.Marshal(fields)
+}
+
+// UpdateStep changes any of whether a step is ticked off, the day it is due
+// and who is on it, in one request, and answers the card.
+func (c *Client) UpdateStep(ctx context.Context, cardID, stepID string, input UpdateStepInput) (Result[Card], error) {
+	return request[Card](ctx, c, http.MethodPatch, "/cards/"+url.PathEscape(cardID)+"/steps/"+url.PathEscape(stepID), input)
 }
 
 // DeleteStep removes a step from a card. A step that is not on the card

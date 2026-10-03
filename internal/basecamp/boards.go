@@ -64,6 +64,8 @@ type step struct {
 	ID         int64       `json:"id"`
 	Title      string      `json:"title"`
 	Position   int         `json:"position"`
+	DueOn      *string     `json:"due_on"`
+	Assignees  []person    `json:"assignees"`
 	Completion *completion `json:"completion"`
 }
 
@@ -519,6 +521,20 @@ func requireTheDayItIsDue(found placedCard) error {
 	return nil
 }
 
+// theDayAStepIsDue holds the day a step is due to the shape of a day, as the
+// day of a card is held: Minka refuses a bundle whose step is due on anything
+// else, and only after hours of writing what stood before it.
+func theDayAStepIsDue(found step) (*string, error) {
+	dueOn := aDayOrNone(found.DueOn)
+	if dueOn == nil {
+		return nil, nil
+	}
+	if _, aDate := aDay(*dueOn); !aDate {
+		return nil, &Error{Kind: API, Message: fmt.Sprintf("step %d is due on %s", found.ID, noDay(*dueOn))}
+	}
+	return dueOn, nil
+}
+
 // completed says when and by whom something was completed. Basecamp says so in
 // a record of its own, which is there only for what is completed. A moment that
 // is none ends the run: the bundle carries it as it comes, and a card would be
@@ -534,10 +550,9 @@ func (e *Extractor) completed(what string, id int64, c *completion) (at, by *str
 	return &c.CreatedAt, by, err
 }
 
-// writeSteps adds the steps of a card in the order of their positions. A card
-// shows its steps itself; only when it has more than it shows is the list of
-// them asked for. Whom a step is assigned to and when it is due is left out:
-// a step in Minka has neither.
+// writeSteps adds the steps of a card in the order of their positions, with
+// the people on each and the day it is due. A card shows its steps itself;
+// only when it has more than it shows is the list of them asked for.
 func (e *Extractor) writeSteps(ctx context.Context, w *bundle.Writer, projectID, toolID string, found card) error {
 	steps := found.Steps
 	if found.SubtasksCount > len(steps) {
@@ -565,6 +580,14 @@ func (e *Extractor) writeSteps(ctx context.Context, w *bundle.Writer, projectID,
 		if err != nil {
 			return err
 		}
+		dueOn, err := theDayAStepIsDue(s)
+		if err != nil {
+			return err
+		}
+		assignees, err := e.peopleOn(s.Assignees)
+		if err != nil {
+			return err
+		}
 		err = w.Add(bundle.Steps, bundle.Step{
 			Record:          origin,
 			ProjectSourceID: projectID,
@@ -572,6 +595,8 @@ func (e *Extractor) writeSteps(ctx context.Context, w *bundle.Writer, projectID,
 			CardSourceID:    sourceID(found.ID),
 			Title:           s.Title,
 			Position:        s.Position,
+			DueOn:           dueOn,
+			Assignees:       assignees,
 			CompletedAt:     completedAt,
 			CompletedBy:     completedBy,
 		})
