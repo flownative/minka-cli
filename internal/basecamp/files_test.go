@@ -224,6 +224,27 @@ func holdsTogether(t *testing.T, dir string, missing []basecamp.MissingFile) {
 		if owner, has := owners[file]; has && owner != [2]string{bundle.OwnerUpload, upload["sourceId"].(string)} {
 			t.Errorf("the upload %v stands for %s, which belongs to %s %s", upload["sourceId"], file, owner[0], owner[1])
 		}
+		// The versions of an upload name its earlier files the way `file` names
+		// the one it shows, and end with that one. Minka leaves out an earlier file
+		// it does not get with a warning, so one this run merely missed is no hole.
+		versions, _ := upload["versions"].([]any)
+		for i, entry := range versions {
+			version := entry.(map[string]any)
+			earlier, _ := version["file"].(string)
+			if i == len(versions)-1 {
+				if earlier != file {
+					t.Errorf("the versions of the upload %v end with %s and not with the file it shows", upload["sourceId"], earlier)
+				}
+				continue
+			}
+			if _, isMissing := comesOnALaterRun[earlier]; !records[earlier] && !isMissing {
+				t.Errorf("the upload %v names an earlier file %s, which has no record and is not missing", upload["sourceId"], earlier)
+			}
+			named[earlier] = true
+			if owner, has := owners[earlier]; has && owner != [2]string{bundle.OwnerUpload, upload["sourceId"].(string)} {
+				t.Errorf("the upload %v names an earlier file %s, which belongs to %s %s", upload["sourceId"], earlier, owner[0], owner[1])
+			}
+		}
 	}
 	for id := range records {
 		// A record of a file that will never come may be named by nothing: the one

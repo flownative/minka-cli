@@ -323,7 +323,7 @@ minka work list [--session <id>] --json
 minka heartbeat [--session <id>] --json
 minka hooks install [--file <path>] [--command <command line>] --json
 minka hooks status [--file <path>] --json
-minka import basecamp [--project <basecampProjectId>... | --active-only] (--out <dir> | --dry-run) [--calendars] --json
+minka import basecamp [--project <basecampProjectId>... | --active-only] (--out <dir> | --dry-run) [--calendars] [--upload-versions] --json
 ```
 
 `<column>` is a column ID, a type (`triage`, `not_now`, `done`) or a title
@@ -1969,8 +1969,16 @@ this:
   (`data.docs.titlesFromTheFileName`) and `(no name)` where there is neither
   (`data.docs.withoutAName`). A title Minka would refuse is folded to fit
   (`data.docs.namesMadeIntoATitle`), a name too long the way Minka shortens one:
-  the extension stays and the stem is cut. Only the file the
-  source shows now comes. An upload Basecamp names no stored file for — one in a
+  the extension stays and the stem is cut. With `--upload-versions` the files an
+  upload showed before come as its `versions`, oldest first and the file it shows now last, each
+  earlier one a file of its own (`data.docs.versions.earlierFiles`); a version
+  Basecamp lists without its file is left out and named
+  (`data.docs.versions.withoutTheirFile`), and an upload whose list of versions
+  Basecamp would not hand out, or that does not say which file is current, comes
+  with the file it shows alone (`data.docs.versions.historiesUnread`). Such an
+  earlier file is fetched at its version's address with the token of the Basecamp
+  CLI, which goes to Basecamp's API and nowhere else. Without the flag no
+  version is asked for and the report has no `data.docs.versions`. An upload Basecamp names no stored file for — one in a
   cloud — is left out and named by ID (`data.docs.withoutAStoredFile`), with its
   comments and its boosts (`data.docs.commentsWithoutTheirUpload`,
   `boostsWithoutTheirUpload`), because no run will ever have bytes for it. What

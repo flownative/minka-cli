@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"net/http"
 	"os"
 	"os/exec"
 	"strconv"
@@ -45,6 +46,13 @@ type Downloader struct {
 	// IdleTimeout and TimeLimit replace fileIdleTimeout and fileTimeLimit.
 	IdleTimeout time.Duration
 	TimeLimit   time.Duration
+
+	// versionAPIHost, signedStorageHost and transport replace the two hosts an
+	// earlier file of an upload is fetched from and what carries the requests
+	// to them, so that a test can stand in for Basecamp.
+	versionAPIHost    string
+	signedStorageHost string
+	transport         http.RoundTripper
 }
 
 func (d Downloader) Download(ctx context.Context, address string, into io.Writer) error {

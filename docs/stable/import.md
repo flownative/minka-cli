@@ -51,10 +51,14 @@ nowhere. `--active-only` leaves the archived list unasked.
 
 The extractor does not speak the Basecamp API itself. It runs
 `basecamp api get <path> --agent` for every request, and
-`basecamp files download` for every file of a text or a chat, see Files
-(C-023): the Basecamp CLI brings the sign-in, the refreshing of the token,
-rate limiting and retries, and no Basecamp token ever passes through minka.
-The Basecamp CLI has to be installed and signed in.
+`basecamp files download` for every file of a text, a chat or the file an upload
+shows, see Files (C-023): the Basecamp CLI brings the sign-in, the refreshing of
+the token, rate limiting and retries. **The one exception is an earlier file of an
+upload, and only with `--upload-versions`** (C-104): no call of the Basecamp CLI
+brings such a file, so minka asks `basecamp auth token --agent` for the token and
+makes the two requests itself, the token going to `3.basecampapi.com` and nowhere
+else, see Files. Without the flag no token passes through minka. The Basecamp CLI
+has to be installed and signed in.
 
 - The path stands behind `--` and `BASECAMP_NONINTERACTIVE=1` is set: nothing
   in a path is read as a flag, and a question would hang a run nobody watches.
@@ -64,6 +68,9 @@ The Basecamp CLI has to be installed and signed in.
   that grows by exactly a page between two requests looks the same and ends
   the run as well, and the message says both. A page is read into its records
   when it arrives and let go of; of the page before it a digest is kept.
+  **The versions of an upload are read as one answer**, without a page:
+  Basecamp answers every page of `…/uploads/{id}/versions.json` with the whole
+  list (measured), which a walk by pages would take for a list that moved.
 - **A run only reads, and an address that would write is never asked for**
   (C-097). Basecamp answers a single day of a series of a calendar,
   `…/schedule_entries/{id}/occurrences/{YYYYMMDD}.json`, by making a recording
@@ -389,7 +396,8 @@ to-dos, the forwarded mail and the Docs & Files: `manifest.json`,
 parts, `comments.jsonl`, `reactions.jsonl`, `attachments.jsonl` and `files/`
 with the avatars and the files of texts, chats, answers, lists, to-dos, mails,
 documents and uploads. With `--calendars` the calendars come as well, with
-`events.jsonl` and the files of their descriptions (C-096). A file of a kind
+`events.jsonl` and the files of their descriptions (C-096), and with
+`--upload-versions` the files uploads showed before (C-104). A file of a kind
 the projects have nothing of is missing.
 
 The walk goes kind by kind across the projects of a run (C-028): the projects
@@ -948,10 +956,34 @@ and Minka applies the kinds in an order of its own.
   on such a record, and the address it does give answers with a redirect to a
   store of its own, which no run follows — see Files. `description` is the rich
   text beside the file, or `null`, and
-  `status` is its own as a document's is. Only the file the source shows now
-  comes; the format keeps `versions` free for the earlier copies and reads it
-  nowhere, so a bundle writes none, and the upload says neither how many there
-  are nor which. An upload whose file can never be had is left out with
+  `status` is its own as a document's is. **With `--upload-versions`,
+  `versions` carries the files the upload showed before** (C-104); without it no
+  list of versions is asked for, no upload carries `versions` and the report has
+  no `docs.versions`: the bundle and the report are byte for byte those of an
+  account whose uploads were never given another file. The list is read from
+  `buckets/{b}/uploads/{id}/versions.json` for every upload the bundle carries —
+  nothing on the upload says whether it has any, so the list costs one request
+  per upload, about 0.6 seconds each measured — and for none it leaves out. It is
+  Basecamp's list reversed, oldest first, each entry `{file, createdAt,
+  createdBy}`: `file` the record of that version's file, `upload-<id>-version-<versionId>`,
+  and for the last entry the upload's own `file`; `createdAt` the moment of the
+  version as Basecamp writes it; `createdBy` the person who gave it, or `null`
+  where that is whoever made the upload. An upload never given another file
+  carries no `versions`. Each earlier file is a file of its own with `ownerKind`
+  `upload`, the version's moment as both its times, fetched as Files says. **An
+  entry stays whatever became of its bytes**: one the source no longer has is a
+  `gone` record, one this run could not fetch is named in `missingFiles`, and
+  Minka leaves either out of the upload's versions with a warning, a later run
+  bringing what may still come. A version Basecamp lists without its file (no
+  `upload` object) has nothing to stand for and is left out, named in
+  `docs.versions.withoutTheirFile` by upload and version. A list Basecamp will
+  not hand out (404, 403), and one that does not name the current file first and
+  once or names a version twice or without an identifier, leaves the upload with
+  the file it shows alone, named in `docs.versions.historiesUnread` with `why`
+  (`notFound`, `forbidden`, `notUnderstood`); any other failure of the list ends
+  the run as every request does. `docs.versions.uploadsWithEarlierFiles` and
+  `docs.versions.earlierFiles` count what the bundle carries.
+  An upload whose file can never be had is left out with
   everything pointing at it (C-063): one Basecamp names no stored file for,
   named in `docs.withoutAStoredFile`, and one whose file the source no longer
   has, weighs more than Minka takes or was refused by Basecamp itself, named in
@@ -1472,12 +1504,13 @@ Every `<import-attachment>` the extractor writes has a record in
 `attachments.jsonl` whose `sourceId` is exactly its `ref`, and its bytes at
 `files/<sourceId>/<filename>`: `attachment-<id>` for a file embedded in the
 text of a card, a comment or a post, `blob-<key>` for a file dropped into a
-chat, `upload-<id>` for the file an upload of Docs & Files stands for, and any of
+chat, `upload-<id>` for the file an upload of Docs & Files stands for,
+`upload-<id>-version-<versionId>` for a file it showed before, and any of
 those with the owner behind it for one owner of a file beyond the first, see below.
 The one reference without a record is a file the run could not fetch,
 see Files that cannot be fetched (C-030).
 
-**A file comes by one of two routes.** A file of a text or a chat is fetched **at
+**A file comes by one of three routes.** A file of a text or a chat is fetched **at
 a storage address** the extractor builds from the key of its stored file, held to
 one pattern right before the call. The one file of an **upload** of a Docs & Files
 tool is fetched **by the identifier of the upload and of its project**: Basecamp
@@ -1488,6 +1521,48 @@ pattern stays exactly as strict as it is and the redirect is never followed: wha
 it leads to is not a place a run fetches from, and its query carries the name of
 the file. `basecamp files download <id> --in <project> --out -` knows the way and
 is asked to take it.
+
+**An earlier file of an upload comes at the address of its version and by no other
+route** (C-104), in a run with `--upload-versions` alone. `basecamp files download` takes the address of a version, drops
+the version from it and serves the file the upload shows now, ending 0; `basecamp
+api get` follows the redirect of that address and cannot hand out bytes (exit 7).
+Both were measured. So the extractor takes the two steps itself:
+
+- **The address** is `<api>/<account>/buckets/<b>/uploads/<id>/versions/<versionId>/download/<name>`,
+  taken from the version's `download_url` only where that is exactly the address
+  of this account, project, upload and version with one segment for the name;
+  anything else is this run's own refusal, `notUnderstood`, and never asked for.
+- **Right before the token goes out** the address is held to that shape on the host
+  `3.basecampapi.com` alone (`checkVersionAddress`): https, digits for every
+  identifier, one segment for a name that stays one segment without its escapes,
+  no query and no sign-in. Only then is the Basecamp CLI asked for its token, anew
+  for every file and kept nowhere; a Basecamp CLI that is not signed in ends the
+  run as `auth_required`, and an answer that is no token is sent nowhere. A
+  failure of that call keeps its class only where it is a missing sign-in, the
+  network or Basecamp failing; any other, its "not found" and "forbidden"
+  included, says nothing about the file and is `notUnderstood`, never `gone` or
+  `refusedBySource`. Its reason is the run's own words: nothing the Basecamp CLI
+  printed around it is quoted, because that may be the token.
+- **The first request** goes to that address with `Authorization: Bearer` and
+  follows nothing. Basecamp answers with a redirect (measured: 302); the place it
+  names has to be https on `storage.basecamp.com` exactly, no other port, with a
+  path of a bucket and a key, neither of them dots alone, and no sign-in
+  (`checkSignedAddress`), else nothing more is asked. Another
+  answer keeps its class: 401 ends the run, 403 is `refusedBySource`, 404 a file
+  the source no longer has (`gone`), 408, 429 and 5xx may pass, anything else —
+  a 200 included — is `notUnderstood`.
+- **The second request** asks the signed place **without any token** and follows
+  nothing; 200 brings the bytes, 5xx, 408 and 429 may pass, and any other status is
+  `notUnderstood`, because the signature is Basecamp's own and fresh. The bytes
+  stream into the bundle under the limits of time every download has.
+- **The size decides**, as for every file: a version that gives no `byte_size`
+  is not asked for and is `notUnderstood`, and a number of bytes other than the
+  version's `byte_size` is no file, fewer `failedThisTime` and more
+  `notUnderstood`, so the run ends non-zero and the next one asks again. Size alone
+  could not tell two files of one size apart, which is why the route is fixed: the
+  version's own address is the one Basecamp answers with that version's file.
+- Neither request is asked again within a run, as no download is. The first may
+  take 60 seconds; the second has the idle time and the time limit below.
 
 - **The record** carries `filename`, `contentType` as Basecamp says it, or
   `null`, `bytes`, `sha256`, `file`, which is exactly

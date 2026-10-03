@@ -174,7 +174,10 @@ list, a to-do that repeats with its schedule (C-090), and what
 hangs on a list and a to-do, of each inbox its forwarded mail with the
 answers by mail, the comments and the boosts of each, and of each Docs & Files
 tool its folders, documents and uploads with the comments, the boosts and the
-files of each. With `--calendars` (C-096) it brings each project's calendar as
+files of each. With `--upload-versions` it brings an upload's earlier files
+as its versions, fetched at each version's address with the Basecamp CLI's token
+on Basecamp's API alone (C-104); without it no token passes through minka. With
+`--calendars` (C-096) it brings each project's calendar as
 well, its entries as events with their comments, boosts, files and followers,
 a series as one event with its schedule; without it a calendar is skipped,
 because a Minka whose import does not apply events stops at one. No request of
@@ -1172,12 +1175,25 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   not place ends it 7 (C-069). Read `docs.onlyAFileNoRunWillBring` and the
   entries of `missingFiles`, and settle at the source the ones that say
   `refusedBySource`.
-  Not counted and not asked for: how many earlier copies of its file an upload
-  has. `versions` is a field Minka reads nowhere, and the upload says nothing
-  of them, so a run that wanted the number would ask once per upload. That
-  **eight** files of the account have older versions is a number of the card's
-  own read-only measurement of the account and of no run of the CLI; nothing
-  here measured it and nothing here can.
+- The earlier files of an upload (`versions`, C-104) are checked against Minka's
+  `UploadVersionAtTheSource`, `UploadsApplier` and `ApplyBundleDocsAndFilesTest`
+  at Minka 82633dfde (E-229) and against the fake. **Measured live**, read-only,
+  with Robert's profile: the upload record carries nothing that says it has
+  versions, so the list is asked for per upload, 0.61 seconds a call; the list
+  answers `?page=2` with the whole list again, so it is read as one answer; one
+  upload with two versions gave, by the two requests this run makes — the token
+  of the Basecamp CLI on `3.basecampapi.com` with no redirect followed, 302 to
+  `storage.basecamp.com/<bucket>/<key>?X-Amz-…`, then that place without a
+  token — 60,003 bytes for the earlier version and 64,316 for the current one,
+  each exactly its `byte_size`, with two different digests, the current one's
+  equal to what `basecamp files download --in` brings. Those steps were measured
+  by a probe outside Go; **the Go code itself has not reached Basecamp**: a test
+  binary of it was held back by the firewall, so the first real run is its first
+  live use. Not measured: whether a long list of versions is ever cut, an upload
+  whose list names a version without its file, the list of an archived or a
+  trashed upload, a refusal of the signed store, and a version given by somebody
+  other than whoever made the upload, which the scout's five uploads with
+  versions did not hold.
 - The titles of the Docs & Files are held against Minka's own reading rather
   than against a test here, as the addresses and the titles of the mail were:
   every folder name, document title, upload title and upload file name of the
@@ -1488,6 +1504,10 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
 
 ## Next steps
 
+- A read-only dry run and then a run with `--upload-versions` over a project
+  holding an upload with versions, with Robert's word: the first time the Go code of C-104 reaches
+  Basecamp, and the run that says whether `bin/minka` gets past the firewall
+  for the two requests it makes itself.
 - A read-only dry run of one project with a calendar, `import basecamp
   --project <id> --calendars --dry-run`, with Robert's word, before the
   calendars go into a real run; then commands for calendars and events once

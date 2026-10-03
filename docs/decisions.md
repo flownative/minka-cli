@@ -277,7 +277,8 @@ card when a board changes its prefix, and every other address takes the UUID.
 *Applies to: `import basecamp`, every later extractor whose source has a CLI*
 
 The extractor runs `basecamp api get` for every request instead of speaking
-the Basecamp API; it keeps no Basecamp token and no HTTP client for it.
+the Basecamp API; it keeps no Basecamp token. The one exception is the earlier
+file of an upload (C-104).
 
 **Why:** The Basecamp CLI brings sign-in, token refresh, rate limiting and
 retries, and a Kubernetes job that extracts later ships both binaries.
@@ -1673,3 +1674,17 @@ that crashed or exited still glows up to 25 + 3 minutes after its last beat,
 and a hook going by a session no typed command knows would report nothing.
 **Implemented as:** `work.Host`, `work.List`, `cli.app.agentSession`,
 `cli.app.signal`, see [Saying what you are working on](stable/at-work.md).
+
+<a id="c-104"></a>
+## C-104 — An earlier file of an upload is fetched at its version, the Basecamp CLI's token on the API alone
+
+*Applies to: `import basecamp --upload-versions`, the `versions` of an upload*
+
+Only with `--upload-versions`, off by default, minka asks `basecamp auth token`
+for the token per file, keeps it in memory, sends it only to the
+version's address on `3.basecampapi.com`, follows no redirect and asks the
+signed place on `storage.basecamp.com` without it; both are held to one shape first.
+**Why:** no call of the Basecamp CLI brings an earlier file: `files download`
+serves the current one for a version's address and ends well, and `api get`
+cannot hand out bytes. **Implemented as:** `basecamp.Downloader.DownloadVersion`,
+`Extractor.earlierFilesOf`, see [Importing](stable/import.md).

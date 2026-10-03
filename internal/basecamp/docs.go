@@ -68,6 +68,9 @@ type DocsCounts struct {
 	// entries with them.
 	LeftOut       DocsLeftOut        `json:"leftOut"`
 	PlacesLeftOut []DocsPlaceLeftOut `json:"placesLeftOut"`
+	// Versions says what became of the files the uploads showed before the one
+	// they show now, for a run asked to bring them, and is nil for any other.
+	Versions *VersionCounts `json:"versions,omitempty"`
 }
 
 // EntrySilentAboutClients is one entry of a Docs & Files tool, standing inside a
@@ -527,9 +530,9 @@ func (e *Extractor) writeDocument(ctx context.Context, w *bundle.Writer, walk *d
 // failure that may pass, one this run could not place — and it comes and waits
 // for the run that brings the file.
 //
-// Only the file the source shows now comes. The earlier copies of it stay at the
-// source: the format keeps a field free for them and reads it nowhere, and the
-// upload says neither how many there are nor which.
+// The files the upload showed before come with it as its versions, each a file
+// of its own, where the run is asked to bring them, and are read only for an
+// upload the bundle carries.
 func (e *Extractor) writeUpload(ctx context.Context, w *bundle.Writer, walk *docsWalk, tool int64, folderID *string, found vaultUpload) error {
 	file, aFile := fileOfAnUpload(found, walk.bucket)
 	if !aFile {
@@ -560,6 +563,12 @@ func (e *Extractor) writeUpload(ctx context.Context, w *bundle.Writer, walk *doc
 		e.docs.CommentsWithoutTheirUpload += found.CommentsCount
 		e.docs.BoostsWithoutTheirUpload += found.BoostsCount
 		return nil
+	}
+	var versions []bundle.UploadVersion
+	if e.UploadVersions {
+		if versions, err = e.earlierFilesOf(ctx, w, walk.bucket, found, mine, origin, file.ref); err != nil {
+			return err
+		}
 	}
 	// What the source calls the upload, and the name of the file where it calls
 	// it nothing: Basecamp fills the title from the name and lets anybody rename
@@ -598,6 +607,7 @@ func (e *Extractor) writeUpload(ctx context.Context, w *bundle.Writer, walk *doc
 		File:             file.ref,
 		Status:           found.status(),
 		VisibleToClients: visibleToClientsOf(found.recording),
+		Versions:         versions,
 	}
 	if record.Subscribers, err = e.subscribersOf(ctx, "upload", walk.bucket, found.ID, found.status()); err != nil {
 		return err

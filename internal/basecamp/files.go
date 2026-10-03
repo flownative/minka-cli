@@ -29,6 +29,11 @@ type Files interface {
 	// file, and the address it gives leads to a store of its own that no run
 	// follows. It answers the same way Download does.
 	DownloadUpload(ctx context.Context, project, upload int64, into io.Writer) error
+	// DownloadVersion writes an earlier file of an upload, asked for at the
+	// address of that version on the API, which no other route may stand in
+	// for: both of the others bring the file the upload shows now. It answers
+	// the way Download does.
+	DownloadVersion(ctx context.Context, address string, into io.Writer) error
 }
 
 // ErrLooksLikeAFailure is a download that ended well and brought nothing but
@@ -104,6 +109,10 @@ type sourceFile struct {
 	// store no run follows, so the bytes are asked for by these two.
 	upload int64
 	bucket int64
+	// version is the version of that upload an earlier file was given in, zero
+	// for every other file. Such a file is asked for at the address of the
+	// version on the API, built from downloadURL, and by no other route.
+	version int64
 	// sharesWith names the file of the source, as the source names it, where
 	// this record is a further owner of one file and takes the bytes another
 	// record of the bundle already holds. Empty for the first owner, whose ref
@@ -112,8 +121,10 @@ type sourceFile struct {
 }
 
 // byTheUpload tells a file that is fetched by the identifier of its upload from
-// one that is fetched at a storage address.
-func (f sourceFile) byTheUpload() bool { return f.upload != 0 }
+// one that is fetched at an address, and anEarlierFile one that was an upload's
+// before it was given another.
+func (f sourceFile) byTheUpload() bool   { return f.upload != 0 && f.version == 0 }
+func (f sourceFile) anEarlierFile() bool { return f.version != 0 }
 
 // ofTheSource is the file as the source names it, which is the same name for
 // every owner of it, where ref is the record's own.
@@ -507,15 +518,27 @@ func (e *Extractor) shareTheFile(w *bundle.Writer, record bundle.Attachment, met
 }
 
 // bringing is what fetches the bytes of a file, by the route the file comes by,
-// or the refusal of this run's own that no file gets past. Only a file named at a
-// storage address can be refused here: an upload is asked for by its identifiers,
-// which need no address.
+// or the refusal of this run's own that no file gets past. Only a file named at an
+// address can be refused here: the file an upload shows is asked for by its
+// identifiers, which need no address.
 //
 // **Whatever it refuses, it refuses as its own**, marked as such: what became of
 // a download turns on the difference between a word of this run and an answer of
 // the source, and that difference travels with the failure rather than with
 // whoever reads it.
 func (e *Extractor) bringing(ctx context.Context, file sourceFile) (func(io.Writer) error, error) {
+	if file.anEarlierFile() {
+		// The size is the one proof that what came is the file of the version,
+		// so a version that gives none is not asked for.
+		if file.byteSize == nil {
+			return nil, &ourOwnRefusal{&Error{Kind: API, Message: "Basecamp gives the earlier file no size, so nothing could tell it from another"}}
+		}
+		address, err := e.versionAddress(file)
+		if err != nil {
+			return nil, &ourOwnRefusal{err}
+		}
+		return func(into io.Writer) error { return e.Files.DownloadVersion(ctx, address, into) }, nil
+	}
 	if file.byTheUpload() {
 		return func(into io.Writer) error {
 			return e.Files.DownloadUpload(ctx, file.bucket, file.upload, into)

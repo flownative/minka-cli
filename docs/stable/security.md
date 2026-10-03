@@ -31,6 +31,26 @@ line.
 Whoever addresses another host with `--host` gets that host's token from the
 configuration file, or a refusal — never the token of the first host (C-004).
 
+## The Basecamp token of an import
+
+`import basecamp` leaves Basecamp's sign-in to the Basecamp CLI, and no
+Basecamp token passes through minka (C-023), with one exception, and only with
+`--upload-versions` (C-104): an earlier file of an upload, which no call of the
+Basecamp CLI brings.
+
+- The token comes from `basecamp auth token --agent`, asked anew for every
+  file. It is held in memory for the one request and never written: not to a
+  file, the bundle, a log, a report or a message. A failure of that call is
+  reported in minka's own words and quotes nothing the Basecamp CLI printed,
+  since that may be the token.
+- It is sent to `3.basecampapi.com` alone, over https, to the address of one
+  version, held to that shape right before the request. That request follows
+  no redirect.
+- The place Basecamp redirects to has to be `storage.basecamp.com` over https,
+  no other port, with a bucket and a key; it is asked without the token and
+  follows no redirect either.
+- Without `--upload-versions` nothing of this happens.
+
 ## Host names
 
 `https://` is added, `/api/v1` and a default port are removed. `http://` is
