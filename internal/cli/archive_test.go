@@ -151,6 +151,8 @@ func everyWrite(e *testEnv) map[string][]string {
 		"events edit":   {"events", "edit", f.OnceEvent.ID, "--title", "Renamed"},
 		"events delete": {"events", "delete", f.OnceEvent.ID},
 
+		"events settings": {"events", "settings", f.Calendar.ID, "--content", "eventsOnly"},
+
 		"events comments create":  {"events", "comments", "create", f.OnceEvent.ID, "Another comment"},
 		"events comments edit":    {"events", "comments", "edit", f.OnceEvent.ID, eventComment, "Other words"},
 		"events comments delete":  {"events", "comments", "delete", f.OnceEvent.ID, eventComment},
@@ -177,7 +179,7 @@ var notAWriteIntoAProject = []string{
 	"checkins tools", "checkins list", "checkins show", "checkins reminders",
 	"checkins answers list", "checkins answers show",
 	"posts tools", "posts categories", "posts list", "posts show", "posts comments list",
-	"events tools", "events list", "events show", "events comments list",
+	"events tools", "events list", "events mine", "events show", "events comments list",
 	"chats mark-read", "conversations list", "conversations with", "conversations people",
 	"uploads create", "uploads download", "import basecamp",
 	"work start", "work stop", "work list", "heartbeat", "hooks install", "hooks status",

@@ -307,6 +307,8 @@ minka posts comments react <postId> <commentId> 👍 --json
 minka posts comments unreact <postId> <commentId> 👍 --json
 minka events tools <projectId> --json
 minka events list <toolId> --from YYYY-MM-DD --to YYYY-MM-DD --json
+minka events mine --from YYYY-MM-DD --to YYYY-MM-DD --json
+minka events settings <toolId> --content eventsAndDatedItems|eventsOnly --json
 minka events show <eventId> --json
 minka events create --tool <toolId> --title "Title" (--starts-at <moment> --ends-at <moment> | --first-day YYYY-MM-DD [--last-day YYYY-MM-DD]) [--repeat] [--rhythm <rhythm> ...] [--time-zone <zone>] [--participant <person>]... [--description - < event.md] [--join-url <url>] [--highlighted] --json
 minka events edit <eventId> [--title "New"] [<time>] [--repeat [<details>] | --no-repeat] [--participant <person>... | --no-participants] [--description -] [--join-url <url>] [--highlighted=false] --json
@@ -1581,9 +1583,23 @@ is no way back out of the trash through the API.
 
 - `events list <toolId> --from <day> --to <day>` lists every event with an
   occurrence in the span, both days included and **both required**, at most
-  366 days, not paged. `data` is `{from, to, timeZone, events}`. The days are
-  **yours**: the zone of your preferences in Minka, else the installation's,
-  named by `timeZone`.
+  366 days, not paged. `data` is `{from, to, timeZone, content, events,
+  datedItems}`. The days are **yours**: the zone of your preferences in Minka,
+  else the installation's, named by `timeZone`.
+- **`datedItems` are no events.** While the calendar's `content` is
+  `eventsAndDatedItems` (the default), they are the open to-dos and cards of
+  the project due in the span, **whoever they belong to**, the earliest first:
+  `kind` (`todo`, `card`), `toolId` (To-dos tool or board), `cardId`, `title`,
+  `dueOn`, `placeTitle` (list or board) and `appUrl`. With `eventsOnly` the
+  list is empty. They have a day and no time; read one with `todos show` or
+  `cards show`. The text view puts them under a heading of their own.
+- `events mine --from <day> --to <day>` is **My calendar**, across every
+  project of yours that is not archived: `events` you **take part in** (each
+  line with `toolId` and `project` besides), and `datedItems` assigned **to
+  you**, steps included (`kind` `step`, `cardId` its card, `placeTitle` the
+  card, `appUrl` opens the card). A to-do of which only a subtask is yours is
+  not there. The span is refused as for `events list`; a calendar's `content`
+  does not matter here.
 - **Every event stands in the span once, a series too.** Lay out an agenda from
   `occurrences`, the times it takes place at in the span, never empty and in
   the order they start. The event's own `startsAt`/`endsAt`/`firstDay`/
@@ -1622,6 +1638,10 @@ is no way back out of the trash through the API.
   unless `--drop-attachments` is given.
 - `events delete` puts an event into the trash, a series with all its days; a
   client only an event of their own.
+- `events settings <toolId> --content eventsAndDatedItems|eventsOnly` chooses,
+  for everybody, whether the calendar's span carries what is due. Minka's
+  words, as written: anything else is exit 9 `calendarContentUnknown`. Only
+  the team chooses: a client is exit 2, after the value and the archive.
 
 ### Comments
 
@@ -1655,7 +1675,8 @@ day, the description; then `projectArchived`; then the people
 `eventRepetitionScheduleInvalid`, `eventRepetitionDatesNotADate`,
 `eventRepetitionDatesOutOfOrder`, `eventRepetitionTimeZoneUnknown`,
 `eventRepetitionDoesNotFit`, `eventRepetitionKeepsItsFirstDay`,
-`personNotAProjectMember`, `personCannotSeeIt`, `projectArchived`, all exit 9.
+`calendarContentUnknown`, `personNotAProjectMember`, `personCannotSeeIt`,
+`projectArchived`, all exit 9.
 
 ## Saying which cards you are working on
 

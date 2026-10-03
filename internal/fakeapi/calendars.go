@@ -63,8 +63,18 @@ type CalendarTool struct {
 	// ShownToClients lets the clients of the project into the calendar.
 	ShownToClients bool
 
+	// EventsOnly is a calendar the team chose to show its events alone; any
+	// other shows the dated to-dos and cards of its project beside them.
+	EventsOnly bool
+
 	Events []*CalendarEvent
 }
+
+// What a calendar shows, as the API names it.
+const (
+	contentEventsAndDatedItems = "eventsAndDatedItems"
+	contentEventsOnly          = "eventsOnly"
+)
 
 // CalendarEvent is one event. A timed one has two moments, an all-day one a
 // first and a last day; a series is one event with a repetition.
@@ -120,6 +130,8 @@ func (e *CalendarEvent) time() eventTime {
 func (s *Server) registerCalendarRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/projects/{projectId}/calendars", s.authenticated(s.calendars))
 	mux.HandleFunc("GET /api/v1/calendars/{toolId}", s.authenticated(s.calendar))
+	mux.HandleFunc("PATCH /api/v1/calendars/{toolId}", s.authenticated(s.updateCalendar))
+	mux.HandleFunc("GET /api/v1/me/events", s.authenticated(s.myEvents))
 	mux.HandleFunc("GET /api/v1/calendars/{toolId}/events", s.authenticated(s.eventsInSpan))
 	mux.HandleFunc("POST /api/v1/calendars/{toolId}/events", s.authenticated(s.addEvent))
 	mux.HandleFunc("GET /api/v1/events/{eventId}", s.authenticated(s.event))
@@ -151,7 +163,77 @@ func (s *Server) calendar(w http.ResponseWriter, r *http.Request, person *Person
 		notFound(w)
 		return
 	}
-	writeJSON(w, http.StatusOK, s.toolResource(tool.ID, tool.ProjectID, tool.Title, s.calendarURL(tool)))
+	writeJSON(w, http.StatusOK, s.calendarResource(tool))
+}
+
+// updateCalendar chooses what the calendar shows beside its events. The body
+// and the archive are asked before whether the writer is on the team, so a
+// client the calendar is shown to learns what is wrong with a body, and only
+// a valid choice in an active project gets the 404 of a calendar not there.
+func (s *Server) updateCalendar(w http.ResponseWriter, r *http.Request, person *Person) {
+	tool := s.visibleCalendar(r.PathValue("toolId"), person)
+	if tool == nil {
+		notFound(w)
+		return
+	}
+	body, ok := readBodyWith(w, r, true)
+	if !ok {
+		return
+	}
+	content, ok := stringField(w, body, "content")
+	if !ok {
+		return
+	}
+	if content == nil {
+		unprocessable(w, "nothingToChange", `The body names no "content".`)
+		return
+	}
+	if *content != contentEventsAndDatedItems && *content != contentEventsOnly {
+		unprocessable(w, "calendarContentUnknown", `A calendar shows "eventsAndDatedItems" or "eventsOnly".`)
+		return
+	}
+	if s.refusedAsArchived(w, s.projectWithID(tool.ProjectID)) {
+		return
+	}
+	if s.isAClient(person.ID) {
+		notFound(w)
+		return
+	}
+	tool.EventsOnly = *content == contentEventsOnly
+	writeJSON(w, http.StatusOK, s.calendarResource(tool))
+}
+
+func (s *Server) calendarResource(tool *CalendarTool) map[string]any {
+	resource := s.toolResource(tool.ID, tool.ProjectID, tool.Title, s.calendarURL(tool))
+	resource["content"] = tool.content()
+	return resource
+}
+
+func (tool *CalendarTool) content() string {
+	if tool.EventsOnly {
+		return contentEventsOnly
+	}
+	return contentEventsAndDatedItems
+}
+
+// readSpan reads the two days of a span and refuses them in the order the
+// server does: a day that is none, the order of the two, and the length.
+func readSpan(w http.ResponseWriter, r *http.Request) (string, string, bool) {
+	from, fromIsADay := dayOf(r.URL.Query().Get("from"))
+	to, toIsADay := dayOf(r.URL.Query().Get("to"))
+	if !fromIsADay || !toIsADay {
+		unprocessable(w, "eventsSpanNotADay", `A span is named by "from" and "to", each a day written as YYYY-MM-DD.`)
+		return "", "", false
+	}
+	if to < from {
+		unprocessable(w, "eventsSpanOutOfOrder", `The span ends on or after the day it starts: "to" must not lie before "from".`)
+		return "", "", false
+	}
+	if daysBetween(from, to) >= longestSpanInDays {
+		unprocessable(w, "eventsSpanTooLong", "A span holds at most 366 days.")
+		return "", "", false
+	}
+	return from, to, true
 }
 
 // eventsInSpan lists every event with an occurrence between two days of the
@@ -163,18 +245,8 @@ func (s *Server) eventsInSpan(w http.ResponseWriter, r *http.Request, person *Pe
 		notFound(w)
 		return
 	}
-	from, fromIsADay := dayOf(r.URL.Query().Get("from"))
-	to, toIsADay := dayOf(r.URL.Query().Get("to"))
-	if !fromIsADay || !toIsADay {
-		unprocessable(w, "eventsSpanNotADay", `A span is named by "from" and "to", each a day written as YYYY-MM-DD.`)
-		return
-	}
-	if to < from {
-		unprocessable(w, "eventsSpanOutOfOrder", `The span ends on or after the day it starts: "to" must not lie before "from".`)
-		return
-	}
-	if daysBetween(from, to) >= longestSpanInDays {
-		unprocessable(w, "eventsSpanTooLong", "A span holds at most 366 days.")
+	from, to, ok := readSpan(w, r)
+	if !ok {
 		return
 	}
 
@@ -199,7 +271,15 @@ func (s *Server) eventsInSpan(w http.ResponseWriter, r *http.Request, person *Pe
 	for _, one := range listed {
 		events = append(events, s.eventLineResource(tool, one.event, one.occurrences))
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"from": from, "to": to, "timeZone": zoneName, "events": events})
+	datedItems := []any{}
+	if !tool.EventsOnly {
+		for _, item := range s.datedItemsOfProject(tool.ProjectID, from, to, person) {
+			datedItems = append(datedItems, item.resource())
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"from": from, "to": to, "timeZone": zoneName, "content": tool.content(), "events": events, "datedItems": datedItems,
+	})
 }
 
 func (s *Server) event(w http.ResponseWriter, r *http.Request, person *Person) {
