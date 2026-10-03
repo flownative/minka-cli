@@ -756,9 +756,9 @@ func (e *Extractor) writeTodo(ctx context.Context, w *bundle.Writer, bucket, too
 	return e.writeDiscussion(ctx, w, bucket, bundle.ParentTodo, bundle.TargetTodo, found.ID, found.CommentsCount, found.BoostsCount)
 }
 
-// peopleOn are the people a to-do names, in the order of their IDs and each
-// once, however the source lists them: two runs over an unchanged account write
-// the same bytes.
+// peopleOn are the people a to-do or a step names, in the order of their IDs
+// and each once, however the source lists them: two runs over an unchanged
+// account write the same bytes.
 func (e *Extractor) peopleOn(named []person) ([]string, error) {
 	sorted := append([]person(nil), named...)
 	sort.Slice(sorted, func(i, j int) bool { return sorted[i].ID < sorted[j].ID })

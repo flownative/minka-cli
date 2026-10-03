@@ -62,9 +62,12 @@ type Completion struct {
 }
 
 type Step struct {
-	ID         int64
-	Title      string
-	Position   int
+	ID       int64
+	Title    string
+	Position int
+	// DueOn is null in the answer when empty.
+	DueOn      string
+	Assignees  []Person
 	Creator    *Person
 	CreatedAt  string
 	UpdatedAt  string
@@ -200,7 +203,8 @@ func boardProject(ada, grace, linus, edsger, former Person, tool func(int64, str
 						`<div>` + EmbeddedFile(sketch.SGID, "sketch.png") + `</div>`,
 					Files: []File{sketch},
 					Steps: []Step{
-						{ID: 9402, Title: "Colour the sea", Position: 2, Creator: &ada, CreatedAt: at(5, 10), UpdatedAt: at(5, 10)},
+						// Not in the order of their IDs, and one of them twice.
+						{ID: 9402, Title: "Colour the sea", Position: 2, DueOn: "2023-04-02", Assignees: []Person{grace, ada, grace}, Creator: &ada, CreatedAt: at(5, 10), UpdatedAt: at(5, 10)},
 						{ID: 9401, Title: "Outline the coast", Position: 1, Creator: &ada, CreatedAt: at(5, 9), UpdatedAt: at(7, 9), Completion: &Completion{At: at(7, 9), By: &grace}},
 						{ID: 9403, Title: "Name the towns", Position: 3, Creator: &grace, CreatedAt: at(5, 11), UpdatedAt: at(5, 11)},
 					},
@@ -449,9 +453,17 @@ func (a *Account) completionJSON(c Completion) map[string]any {
 func (a *Account) stepsJSON(steps []Step) []map[string]any {
 	answer := []map[string]any{}
 	for _, step := range steps {
+		people := []map[string]any{}
+		for _, assignee := range step.Assignees {
+			people = append(people, a.person(assignee))
+		}
+		var dueOn any
+		if step.DueOn != "" {
+			dueOn = step.DueOn
+		}
 		entry := map[string]any{
 			"id": step.ID, "title": step.Title, "position": step.Position, "completed": step.Completion != nil,
-			"created_at": step.CreatedAt, "updated_at": step.UpdatedAt, "assignees": []any{}, "due_on": nil,
+			"created_at": step.CreatedAt, "updated_at": step.UpdatedAt, "assignees": people, "due_on": dueOn,
 		}
 		if step.Creator != nil {
 			entry["creator"] = a.person(*step.Creator)

@@ -88,6 +88,9 @@ var idsInCapitals = []idInCapitals{
 	{command: "steps complete", inputs: []string{"<step>"}, prepare: withStepsSpelledInLetters, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
 		return []string{f.CardInTriage.ID, up(openStepID)}
 	}},
+	{command: "steps edit", inputs: []string{"<step>", "--assignee"}, prepare: withStepsSpelledInLetters, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
+		return []string{f.CardInTriage.ID, up(openStepID), "--assignee", up(f.Anke.ID)}
+	}},
 	{command: "steps reopen", inputs: []string{"<step>"}, prepare: withStepsSpelledInLetters, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
 		return []string{f.CardInTriage.ID, up(doneStepID)}
 	}},

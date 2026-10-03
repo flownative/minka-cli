@@ -242,7 +242,7 @@ func TestAThingUnderAnAddressIsLookedForBeforeTheBodyAndTheArchive(t *testing.T)
 		{"DELETE", card + "/comments/" + newID(), card + "/comments/" + comment, ``, "", ``},
 		{"POST", card + "/comments/" + newID() + "/reactions", card + "/comments/" + comment + "/reactions", `{"content":" "}`, "422 reactionMissing", `{"content":"🎉"}`},
 		{"DELETE", card + "/comments/" + newID() + "/reactions?content=", card + "/comments/" + comment + "/reactions?content=", ``, "422 reactionMissing", ``},
-		{"PATCH", card + "/steps/" + newID(), card + "/steps/" + step.ID, `{}`, "422 stepCompletedMissing", `{"completed":true}`},
+		{"PATCH", card + "/steps/" + newID(), card + "/steps/" + step.ID, `{}`, "422 nothingToChange", `{"completed":true}`},
 		{"PATCH", chat + "/messages/" + newID(), chat + "/messages/" + message, `{"body":" "}`, "422 chatMessageMissing", `{"body":"Hi"}`},
 		{"DELETE", chat + "/messages/" + newID(), chat + "/messages/" + message, ``, "", ``},
 		{"POST", chat + "/messages/" + newID() + "/reactions", chat + "/messages/" + message + "/reactions", `{"content":" "}`, "422 reactionMissing", `{"content":"🎉"}`},

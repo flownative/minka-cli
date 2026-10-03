@@ -257,20 +257,22 @@ func TestArchivedAndTrashedCardsComeWithTheBoardTheirColumnIsOf(t *testing.T) {
 	}
 }
 
-func TestStepsComeInTheOrderOfTheirPositionsWithoutAssigneesOrDueDates(t *testing.T) {
+// A step comes with the day it is due and the people on it, each once and in
+// the order of their IDs however the source lists them, as on a to-do.
+func TestStepsComeInTheOrderOfTheirPositionsWithTheirPeopleAndDueDays(t *testing.T) {
 	account := fakebasecamp.New()
 	dir, _ := extract(t, account, boardProject)
 
 	want := []map[string]any{
 		{"sourceId": "9401", "createdAt": "2023-03-05T09:00:00.000Z", "updatedAt": "2023-03-07T09:00:00.000Z", "createdBy": "101",
 			"projectSourceId": "7003", "toolSourceId": "9020", "cardSourceId": "9201", "title": "Outline the coast", "position": float64(1),
-			"completedAt": "2023-03-07T09:00:00.000Z", "completedBy": "102"},
+			"dueOn": nil, "assignees": []any{}, "completedAt": "2023-03-07T09:00:00.000Z", "completedBy": "102"},
 		{"sourceId": "9402", "createdAt": "2023-03-05T10:00:00.000Z", "updatedAt": "2023-03-05T10:00:00.000Z", "createdBy": "101",
 			"projectSourceId": "7003", "toolSourceId": "9020", "cardSourceId": "9201", "title": "Colour the sea", "position": float64(2),
-			"completedAt": nil, "completedBy": nil},
+			"dueOn": "2023-04-02", "assignees": []any{"101", "102"}, "completedAt": nil, "completedBy": nil},
 		{"sourceId": "9403", "createdAt": "2023-03-05T11:00:00.000Z", "updatedAt": "2023-03-05T11:00:00.000Z", "createdBy": "102",
 			"projectSourceId": "7003", "toolSourceId": "9020", "cardSourceId": "9201", "title": "Name the towns", "position": float64(3),
-			"completedAt": nil, "completedBy": nil},
+			"dueOn": nil, "assignees": []any{}, "completedAt": nil, "completedBy": nil},
 	}
 	if got := records(t, dir, bundle.Steps); !reflect.DeepEqual(got, want) {
 		t.Errorf("steps:\n got %v\nwant %v", got, want)
@@ -560,9 +562,12 @@ func TestEveryPersonARecordOfABoardNamesIsInTheBundle(t *testing.T) {
 		"an assignee": func(a *fakebasecamp.Account, p *fakebasecamp.Person) {
 			busyCard(a).Assignees = []fakebasecamp.Person{*p}
 		},
-		"who completed a card":       func(a *fakebasecamp.Account, p *fakebasecamp.Person) { roadmap(a).Lists[4].Cards[0].Completion.By = p },
-		"the creator of a step":      func(a *fakebasecamp.Account, p *fakebasecamp.Person) { busyCard(a).Steps[0].Creator = p },
-		"who completed a step":       func(a *fakebasecamp.Account, p *fakebasecamp.Person) { busyCard(a).Steps[1].Completion.By = p },
+		"who completed a card":  func(a *fakebasecamp.Account, p *fakebasecamp.Person) { roadmap(a).Lists[4].Cards[0].Completion.By = p },
+		"the creator of a step": func(a *fakebasecamp.Account, p *fakebasecamp.Person) { busyCard(a).Steps[0].Creator = p },
+		"who completed a step":  func(a *fakebasecamp.Account, p *fakebasecamp.Person) { busyCard(a).Steps[1].Completion.By = p },
+		"an assignee of a step": func(a *fakebasecamp.Account, p *fakebasecamp.Person) {
+			busyCard(a).Steps[0].Assignees = []fakebasecamp.Person{*p}
+		},
 		"the creator of a comment":   func(a *fakebasecamp.Account, p *fakebasecamp.Person) { busyCard(a).Comments[2].Creator = p },
 		"who boosted a card":         func(a *fakebasecamp.Account, p *fakebasecamp.Person) { busyCard(a).Boosts[0].Booster = p },
 		"who boosted a comment":      func(a *fakebasecamp.Account, p *fakebasecamp.Person) { busyCard(a).Comments[0].Boosts[0].Booster = p },

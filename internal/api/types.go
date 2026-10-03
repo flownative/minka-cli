@@ -204,9 +204,11 @@ type Card struct {
 }
 
 type Step struct {
-	ID        string `json:"id"`
-	Title     string `json:"title"`
-	Completed bool   `json:"completed"`
+	ID        string            `json:"id"`
+	Title     string            `json:"title"`
+	Completed bool              `json:"completed"`
+	Assignees []PersonReference `json:"assignees"` // in the order they were assigned, somebody who left the project included
+	DueOn     *string           `json:"dueOn"`     // the day it is due as YYYY-MM-DD, nil for a step without one
 }
 
 type Comment struct {

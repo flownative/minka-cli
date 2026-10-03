@@ -1590,3 +1590,15 @@ hence no `uploads replace`), a client may read an upload it may not give a
 file, and without an expectation nothing is lost: Minka keeps the old file.
 **Implemented as:** `cli.newDocsVersionsCmd`, `cli.newDocsUploadsVersionsCmd`,
 `cli.uploadVersionRefusal`, see [Docs & Files](stable/docs-and-files.md).
+
+<a id="c-100"></a>
+## C-100 — The people and the day of a step are `steps edit`, never `steps create`
+
+*Applies to: the steps of a card*
+
+`steps edit` sends `--assignee` as the whole set, `--no-assignees` as `[]` and
+`--due ""` as null, as `todos edit` does; `steps create` takes neither.
+**Why:** Minka adds a step from its line alone, and a second request behind it
+could be refused after the step stands, leaving half of one command written.
+**Implemented as:** `cli.newStepsEditCmd`, `api.UpdateStepInput`,
+`cli.stepRefusal`, see [Steps](stable/steps.md).
