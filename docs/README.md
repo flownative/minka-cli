@@ -72,8 +72,9 @@ the documentation says what holds; how it came about is in git.
 - [Repeating to-dos](stable/todo-series.md): What a series is and hands
   over, the days only Minka works out, the flags of a schedule and the detail a
   rhythm ignores, the edit that sends only what was given and its guard, the
-  new to-do named by `Location`, the order of the refusals — before any work on
-  `todos repeat` or `todos series`.
+  notes and the guard over their files, the new to-do named by `Location`,
+  the order of the refusals — before any work on `todos repeat` or `todos
+  series`.
 - [Check-ins](stable/checkins.md): What a question carries and whom `asked`
   leaves out, the schedule and the day every other week counts from, the edit
   that names nobody, the day an answer belongs to, the page of answers without

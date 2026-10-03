@@ -89,7 +89,10 @@ name the series of an occurrence. The rule the commands follow is
 [Repeating to-dos](../stable/todo-series.md) (C-089). The API came with Minka
 v0.41.0: a read-only `todos series list` has answered on `minka.flownative.com`,
 and everything else, every write above all, is checked against the fake only,
-see below.
+see below. The notes of a series — `todos series edit --notes` with the guard
+over files, and `notesSource` and `attachments` in every answer — are on
+Minka's `main` and in no release yet, so production gets them with the next
+Minka release; they are checked against Minka's code and tests and the fake.
 
 The check-ins are read with `checkins tools`, `checkins list`, `checkins show`
 and `checkins reminders`, and written with `checkins create`, `edit`, `pause`
@@ -589,7 +592,17 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   makes occurrences as days pass — the fake's clock stands still and nothing
   but `show-now` makes one; the installation's time zone, for which the fake
   takes UTC; who follows an occurrence; and the race in which a series is made
-  or shown twice in one moment.
+  or shown twice in one moment. Of the notes it mirrors the order — the type
+  after the title's, the value after the title and before the people, the
+  archive and the guard — notes kept and compared as a to-do's, `notesSource`
+  and `attachments`; not the cleaning against the project, which drops a
+  foreign or forged handle and a stranger's mention (the fake keeps them in
+  the stored notes, and only its source and its files leave out a file of no
+  circle of the project, as Minka's source does), the references Minka
+  resolves on
+  saving, the files hanging on the series rather than in its text, and
+  `todoNotesNotReadable`, which needs markup nested deeper than a cleaner
+  reads.
 - Everything of `todos`: no request of it has gone to a real Minka. The fake
   mirrors what was read in `TodosApiController`, the `TodoQueryService`, the
   `AssignedTodoQueryService`, the to-do and subtask handlers,

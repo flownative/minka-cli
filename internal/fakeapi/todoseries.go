@@ -150,9 +150,10 @@ func (s *Server) todoSeries(w http.ResponseWriter, r *http.Request, person *Pers
 // "expectedUpdatedAt" a series written since is answered 409 with the series
 // as it stands; without it the last write wins. A body that changes nothing
 // writes nothing and meets no conflict. The series is looked for first, then
-// the body is checked in full, the type of every field before any value, and
-// the archived project and list, the guard and the people only once the write
-// refused, in that order.
+// the body is checked in full, the type of every field before any value and
+// the notes right after the title, and the archived project and list, the
+// guard and the people only once the write refused, in that order. The notes
+// are kept as the notes of a to-do are, and their files hang on the series.
 func (s *Server) updateTodoSeries(w http.ResponseWriter, r *http.Request, person *Person) {
 	tool, list, series := s.visibleTodoSeries(r.PathValue("seriesId"), person)
 	if series == nil {
@@ -165,6 +166,10 @@ func (s *Server) updateTodoSeries(w http.ResponseWriter, r *http.Request, person
 	}
 	_, namesTitle := fields["title"]
 	title, ok := stringField(w, fields, "title")
+	if !ok {
+		return
+	}
+	notes, ok := stringField(w, fields, "notes")
 	if !ok {
 		return
 	}
@@ -191,6 +196,12 @@ func (s *Server) updateTodoSeries(w http.ResponseWriter, r *http.Request, person
 	if namesTitle && !validTitle(w, "todo", "a to-do", deref(title)) {
 		return
 	}
+	newNotes := series.Notes
+	if notes != nil {
+		if newNotes, ok = storedTodoNotes(w, *notes); !ok {
+			return
+		}
+	}
 	if !seriesPeopleIdentifiers(w, assigneeIDs) || !seriesPeopleIdentifiers(w, notifiedIDs) {
 		return
 	}
@@ -201,8 +212,8 @@ func (s *Server) updateTodoSeries(w http.ResponseWriter, r *http.Request, person
 	if !ok {
 		return
 	}
-	if title == nil && assigneeIDs == nil && notifiedIDs == nil && (schedule == nil || schedule.isEmpty()) && leadDays == nil {
-		unprocessable(w, "nothingToChange", "The body names neither a title nor people nor a schedule nor lead days.")
+	if title == nil && notes == nil && assigneeIDs == nil && notifiedIDs == nil && (schedule == nil || schedule.isEmpty()) && leadDays == nil {
+		unprocessable(w, "nothingToChange", "The body names neither a title nor notes nor people nor a schedule nor lead days.")
 		return
 	}
 	repetition := series.Schedule
@@ -226,7 +237,7 @@ func (s *Server) updateTodoSeries(w http.ResponseWriter, r *http.Request, person
 		newLeadDays = *leadDays
 	}
 	peopleChange := s.peopleChange(tool, list, assigneeIDs, series.AssigneeIDs) || s.peopleChange(tool, list, notifiedIDs, series.NotifiedIDs)
-	if !peopleChange && newTitle == series.Title && newLeadDays == series.LeadDays && reflect.DeepEqual(repetition, series.Schedule) {
+	if !peopleChange && newTitle == series.Title && newNotes == series.Notes && newLeadDays == series.LeadDays && reflect.DeepEqual(repetition, series.Schedule) {
 		writeJSON(w, http.StatusOK, s.todoSeriesResource(tool, list, series))
 		return
 	}
@@ -245,7 +256,7 @@ func (s *Server) updateTodoSeries(w http.ResponseWriter, r *http.Request, person
 		}
 	}
 
-	series.Title, series.Schedule, series.LeadDays = newTitle, repetition, newLeadDays
+	series.Title, series.Notes, series.Schedule, series.LeadDays = newTitle, newNotes, repetition, newLeadDays
 	// Named people are the whole set: whoever is stored and no longer seen
 	// goes with such a write.
 	if assigneeIDs != nil {
@@ -435,7 +446,8 @@ func (s *Server) todoSeriesResource(tool *TodosTool, list *TodoList, series *Tod
 		"id": series.ID, "projectId": tool.ProjectID, "toolId": tool.ID, "listId": list.ID, "groupId": nullable(groupID),
 		"project": s.projectReference(tool.ProjectID), "tool": map[string]any{"id": tool.ID, "title": tool.Title},
 		"list": map[string]any{"id": list.ID, "title": list.Title}, "group": group,
-		"title": series.Title, "notes": series.Notes, "schedule": scheduleResource(schedule), "leadDays": series.LeadDays,
+		"title": series.Title, "notes": series.Notes, "notesSource": s.sourceOf(tool.ProjectID, series.Notes), "attachments": s.attachmentsIn(tool.ProjectID, series.Notes),
+		"schedule": scheduleResource(schedule), "leadDays": series.LeadDays,
 		"state": state, "endedAt": timestampOrNil(series.EndedAt),
 		"nextOccursOn": nextOccursOn, "nextShowsOn": nextShowsOn, "canShowNow": canShowNow,
 		"assignees": s.peopleOnSeries(tool, list, series.AssigneeIDs), "notified": s.peopleOnSeries(tool, list, series.NotifiedIDs),

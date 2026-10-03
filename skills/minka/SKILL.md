@@ -261,7 +261,7 @@ minka todos subtasks delete <todoId> <subtask> --json
 minka todos repeat <todoId> [--rhythm <rhythm>] [--weekdays <days>] [--interval <n>] [--day <n>] [--weekday <day>] [--instance <1-4|last>] [--month <n>] [--ends-on <day>] [--lead-days <n>] --json
 minka todos series list <listId> --json
 minka todos series show <seriesId> --json
-minka todos series edit <seriesId> (--expect <updatedAt> | --force) [--title "New"] [schedule flags] [--starts-on <day>] [--ends-on <day>|""] [--lead-days <n>] [--assignee <person>]... [--no-assignees] [--notify-when-done <person>]... [--no-notify-when-done] --json
+minka todos series edit <seriesId> (--expect <updatedAt> | --force) [--title "New"] [--notes - < notes.md] [schedule flags] [--starts-on <day>] [--ends-on <day>|""] [--lead-days <n>] [--assignee <person>]... [--no-assignees] [--notify-when-done <person>]... [--no-notify-when-done] --json
 minka todos series stop <seriesId> --json
 minka todos series resume <seriesId> --json
 minka todos series show-now <seriesId> --json
@@ -1303,8 +1303,9 @@ series is **never deleted, only stopped**.
   (`running`, `stopped`, or `finished`: past its end), `nextOccursOn` (the day
   of the next occurrence), `nextShowsOn` (the day it appears in the list, null
   where it comes with the next round or is there already), `canShowNow`,
-  `assignees`, `notified` and `updatedAt`. **Take the days from Minka**; the
-  CLI never works them out, and "today" is the installation's day.
+  `assignees`, `notified`, `notes`, `notesSource`, `attachments` (the files of
+  the notes) and `updatedAt`. **Take the days from Minka**; the CLI never
+  works them out, and "today" is the installation's day.
 
 ### Writing
 
@@ -1322,9 +1323,16 @@ series is **never deleted, only stopped**.
   day; a new `--rhythm` or `--starts-on` takes the details not given from the
   first day. `--ends-on ""` takes the end off. `--assignee` and
   `--notify-when-done` are the **whole set**. It changes the occurrences made
-  from now on; the notes cannot be changed. Written over since you read it:
-  exit 9 `todoSeriesChanged`, and `data` is the series as it stands. A change
-  that asks for what stands already writes nothing and is no conflict.
+  from now on. Written over since you read it: exit 9 `todoSeriesChanged`,
+  and `data` is the series as it stands. A change that asks for what stands
+  already writes nothing and is no conflict.
+- `todos series edit --notes` takes Markdown, `-` for stdin, `""` to empty
+  them, as `todos edit` does; `todos repeat` takes no notes, the series starts
+  with the to-do's. **To keep the files and mentions, send `notesSource` back**
+  with `--notes-format html`: notes that would drop them are refused (exit 1)
+  unless `--drop-attachments` is given. Minka drops a file or person from
+  outside the project without a word and tells nobody the notes mention, so
+  read the series back.
 - `todos series stop` stops it; the to-dos it made stay. `todos series resume`
   continues a stopped one with its first day **after today**; missed days are
   not made up.
@@ -1336,12 +1344,13 @@ series is **never deleted, only stopped**.
 
 `todoToRepeatUnknown`, `todoSeriesNeedsDueDay`, `todoRepeatsAlready`,
 `todoSeriesScheduleInvalid`, `todoSeriesDatesNotADate`,
-`todoSeriesDatesOutOfOrder`, `todoSeriesLeadDaysInvalid`,
-`personNotAProjectMember`, `todoSeriesStopped` (stop or show-now of a stopped
-series), `todoSeriesNotStopped` (resume of one that is not stopped, a finished
-one included), `todoSeriesOccurrenceAhead`, `todoSeriesFinished`,
-`todoListArchived`, `projectArchived` and `todoSeriesChanged` (409), all exit
-9. A series of a list you may not read is exit 2.
+`todoSeriesDatesOutOfOrder`, `todoSeriesLeadDaysInvalid`, `todoNotesTooLong`,
+`todoNotesNotReadable`, `personNotAProjectMember`, `todoSeriesStopped` (stop
+or show-now of a stopped series), `todoSeriesNotStopped` (resume of one that
+is not stopped, a finished one included), `todoSeriesOccurrenceAhead`,
+`todoSeriesFinished`, `todoListArchived`, `projectArchived` and
+`todoSeriesChanged` (409), all exit 9. A series of a list you may not read is
+exit 2.
 
 ## Check-ins
 

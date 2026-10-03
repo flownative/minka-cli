@@ -25,9 +25,13 @@ type TodoSeries struct {
 	List      TodoListReference   `json:"list"`
 	Group     *TodoGroupReference `json:"group"`
 	Title     string              `json:"title"`
-	Notes     string              `json:"notes"` // HTML
-	Schedule  RepetitionSchedule  `json:"schedule"`
-	LeadDays  int                 `json:"leadDays"` // how many days before its day an occurrence shows
+	Notes     string              `json:"notes"` // the stored HTML the occurrences start from
+	// NotesSource is the notes as the editor opens them, with handles to the
+	// files and people in them that a write takes back.
+	NotesSource string             `json:"notesSource"`
+	Attachments []Attachment       `json:"attachments"` // the files of the notes, which hang on the series
+	Schedule    RepetitionSchedule `json:"schedule"`
+	LeadDays    int                `json:"leadDays"` // how many days before its day an occurrence shows
 	// State is running, stopped, or finished: not stopped, but with no
 	// further day before its end.
 	State        string  `json:"state"`
@@ -122,10 +126,11 @@ type RepeatTodoInput struct {
 // UpdateTodoSeriesInput changes a series for the occurrences made from now on.
 // A nil field is left out and stays as it is. A list of people is the whole
 // set, so an empty one takes everybody off: it is sent as [] and never as
-// null, which Minka refuses. ExpectedUpdatedAt writes only over the series as
-// it was read.
+// null, which Minka refuses. Notes of "" empty them. ExpectedUpdatedAt writes
+// only over the series as it was read.
 type UpdateTodoSeriesInput struct {
 	Title             *string
+	Notes             *string
 	Schedule          *ScheduleInput
 	LeadDays          *int
 	AssigneeIDs       *[]string
@@ -137,6 +142,9 @@ func (in UpdateTodoSeriesInput) MarshalJSON() ([]byte, error) {
 	fields := map[string]any{}
 	if in.Title != nil {
 		fields["title"] = *in.Title
+	}
+	if in.Notes != nil {
+		fields["notes"] = *in.Notes
 	}
 	if in.Schedule != nil {
 		fields["schedule"] = *in.Schedule

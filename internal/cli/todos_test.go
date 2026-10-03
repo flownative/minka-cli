@@ -298,15 +298,16 @@ func TestTheAssigneesGivenAreTheWholeSet(t *testing.T) {
 func TestNotesWithAttachmentsAreNotDroppedUnlessAsked(t *testing.T) {
 	e := newTestEnv(t)
 	todo := e.fixture.LooseTodo
-	todo.Notes = `<p>Plan</p><action-text-attachment sgid="abc" content-type="image/png" url="https://minka.example/f/1.png" filename="plan.png"></action-text-attachment>`
+	todo.Notes = source(t, e.uploaded(onePixelPNG(), "plan.png"))
+	writes := len(e.server.WritingRequests())
 
 	env, r := e.runJSON("", "todos", "edit", todo.ID, "--notes", "new text")
 	expectCode(t, r, ExitUsage)
 	if !strings.Contains(env.Hint, "--drop-attachments") || !strings.Contains(env.Hint, "notesSource") {
 		t.Fatalf("hint %q", env.Hint)
 	}
-	if n := len(e.server.WritingRequests()); n != 0 {
-		t.Fatalf("%d writes sent", n)
+	if n := len(e.server.WritingRequests()); n != writes {
+		t.Fatalf("%d writes sent", n-writes)
 	}
 
 	env, r = e.runJSON("", "todos", "edit", todo.ID, "--notes", "new text", "--drop-attachments")
@@ -864,3 +865,22 @@ func stringsIn(value any) []string {
 	}
 	return texts
 }
+
+// The guard holds new notes against the source, the text as the editor
+// opens it: a file the stored notes still name but Minka no longer hands out
+// is gone from the source and cannot be lost by a write.
+func TestTheGuardOverTheNotesOfAToDoHoldsTheSource(t *testing.T) {
+	e := newTestEnv(t)
+	todo := e.fixture.LooseTodo
+	todo.Notes = goneFile
+
+	env, r := e.runJSON("", "todos", "edit", todo.ID, "--notes", "Plain")
+	expectCode(t, r, ExitOK)
+	if strings.Contains(env.Notice, "dropped") || todo.Notes != "<p>Plain</p>" {
+		t.Fatalf("notice %q, notes %q", env.Notice, todo.Notes)
+	}
+}
+
+// goneFile is stored notes naming a file that is among the files of no
+// circle, which their source no longer carries.
+const goneFile = `<p>Plan</p><action-text-attachment sgid="sgid-gone" content-type="image/png" filename="plan.png"></action-text-attachment>`

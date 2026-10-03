@@ -3174,6 +3174,27 @@ func (s *Server) attachmentsIn(circle, text string) []any {
 	return list
 }
 
+// attachmentElement is a file or a mention as a stored text carries it.
+var attachmentElement = regexp.MustCompile(`(?s)<action-text-attachment\b[^>]*>.*?</action-text-attachment>`)
+
+// sourceOf is a stored text as the editor opens it. A file of the text that
+// is not among the files of its circle, gone or never one of them, has no
+// handle to be given again, so the source no longer carries it; mentions
+// stay as they are.
+func (s *Server) sourceOf(circle, text string) string {
+	return attachmentElement.ReplaceAllStringFunc(text, func(element string) string {
+		if strings.Contains(element, `content-type="application/vnd.minka.person"`) {
+			return element
+		}
+		for _, upload := range s.Uploads {
+			if upload.Circle == circle && strings.Contains(element, `sgid="`+upload.handle()+`"`) {
+				return element
+			}
+		}
+		return ""
+	})
+}
+
 // namesItsOwnType says whether the name of a file stands for the type the
 // file turned out to be, which is what a store would go by.
 func namesItsOwnType(upload *Upload) bool {

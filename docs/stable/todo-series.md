@@ -13,10 +13,13 @@ series of it, and it is never deleted, only stopped. `todos repeat` makes one,
 `GET todo-series/{seriesId}` answers the series with where it stands
 (`projectId`, `toolId`, `listId`, `groupId` and `project`, `tool`, `list`,
 `group` as references), `title` and `notes` the occurrences start from,
-`schedule`, `leadDays`, `state`, `endedAt`, `nextOccursOn`, `nextShowsOn`,
-`canShowNow`, `assignees`, `notified`, `createdAt`, `creator`, `updatedAt` and
-`appUrl`. `GET todo-lists/{listId}/series` answers every series of a list in
-that form, stopped ones too, the one made first first.
+`notesSource` (the notes as the editor opens them, with freshly signed handles
+to their files and people), `attachments` (the files of the notes, in the shape
+of a to-do's, which hang on the series), `schedule`, `leadDays`, `state`,
+`endedAt`, `nextOccursOn`, `nextShowsOn`, `canShowNow`, `assignees`,
+`notified`, `createdAt`, `creator`, `updatedAt` and `appUrl`. `GET
+todo-lists/{listId}/series` answers every series of a list in that form,
+stopped ones too, the one made first first.
 
 - `state` is `running`, `stopped`, or `finished`: not stopped, but with no
   further day before its end.
@@ -79,7 +82,8 @@ The address names the list, so `todos repeat` reads the to-do first for its
 and takes its title, notes, group and people. Without `--rhythm` it repeats
 weekly on the weekday of that day; the details not given follow from that day.
 `--lead-days` is left to Minka's seven where it is not given. `data` is the
-series.
+series. Minka reads no `notes` here, so `todos repeat` has no `--notes`: the
+notes are the to-do's, and an edit of the series changes them afterwards.
 
 ## Editing, and the guard
 
@@ -89,12 +93,27 @@ keeps day, weekday, instance and month while rhythm and first day stay, keeps
 weekdays and interval while the rhythm stays, and takes the rest from the first
 day. A client that echoed the stored details would pin them where Minka would
 have let them follow a new first day. So `todos series edit` reads the series
-only to look up a person given by name, address or `me`, and never sends what
-it read.
+only to look up a person given by name, address or `me` and to hold new notes
+against its own, and never sends what it read.
 
 `--assignee` and `--notify-when-done` are the whole set, sent as a list; `[]`
 takes everybody off, and a set left out stays untouched. Minka takes a person
-named twice once. The notes of a series cannot be changed.
+named twice once.
+
+**The notes** are cut as those of a to-do ([To-dos and subtasks](todos.md)):
+`--notes` is Markdown converted here, `-` reads stdin, `""` empties them, and
+`--notes-format html` draws the notice of [C-068](../decisions.md#c-068) where
+the text carries no served markup. Left out, the notes stay. Minka cleans them
+as on the web: a file or a person from outside the project and a handle that
+does not verify drop out without a word, the files left hang on the series, and
+nobody the notes mention is told. To keep the files, `notesSource` goes back,
+not `notes`. Notes that carry files, mentions or references are not replaced by
+ones that would drop them, unless `--drop-attachments` is given; the guard
+stands aside where Minka refuses any notes, for a series of a list in the
+archive and in an archived project ([C-082](../decisions.md#c-082)). The series
+does not say whether its list is archived, so the list is read where the guard
+is about to refuse. Notes the series holds already, as Minka stores them, are
+no change.
 
 Like a document, a series is guarded: `--expect <updatedAt>` sends
 `expectedUpdatedAt`, and a series written since — edited, stopped, resumed, or
@@ -135,12 +154,15 @@ from, whatever the body says. Then the **type of every field** (400) —
 also a `todoId` or `expectedUpdatedAt` that is no string, and an
 `expectedUpdatedAt` that is no point in time — before any value, in the order
 the controller reads them: `todoId`, `leadDays`, `schedule` on `repeat`; title,
-`assigneeIds`, `notifiedIds`, `schedule`, `leadDays`, `expectedUpdatedAt` on an
-edit. So `title: ""` beside `assigneeIds: null` is 400, and so is a `leadDays`
-of 999 beside `schedule: 5`. Then each value on its own (422), in the same
-order: a `todoId` that is no identifier (`todoToRepeatUnknown`), the title, a
-person that is no identifier (`personNotAProjectMember`), the days and the
-ranges and names of the schedule, the lead, and on an edit `nothingToChange`.
+`notes`, `assigneeIds`, `notifiedIds`, `schedule`, `leadDays`,
+`expectedUpdatedAt` on an edit. So `title: ""` beside `assigneeIds: null` is
+400, and so is a `leadDays` of 999 beside `schedule: 5`. Then each value on its
+own (422), in the same order: a `todoId` that is no identifier
+(`todoToRepeatUnknown`), the title, the notes (`todoNotesTooLong`,
+`todoNotesNotReadable`), a person that is no identifier
+(`personNotAProjectMember`), the days and the ranges and names of the schedule,
+the lead, and on an edit `nothingToChange`. Notes Minka cannot take are
+refused before the archive, so they meet no `todoListArchived`.
 Then, for `repeat`, the to-do (`todoToRepeatUnknown`, `todoRepeatsAlready`,
 `todoSeriesNeedsDueDay`); for `repeat` and an edit, the days in order and a
 schedule that cannot hold
@@ -157,7 +179,8 @@ an archived project and list.
 `todoToRepeatUnknown`, `todoSeriesNeedsDueDay`, `todoRepeatsAlready`,
 `todoSeriesScheduleInvalid`, `todoSeriesDatesNotADate`,
 `todoSeriesDatesOutOfOrder`, `todoSeriesLeadDaysInvalid`, `todoTitleMissing`,
-`todoTitleTooLong`, `todoTitleHasControlCharacters`, `personNotAProjectMember`,
+`todoTitleTooLong`, `todoTitleHasControlCharacters`, `todoNotesTooLong`,
+`todoNotesNotReadable`, `personNotAProjectMember`,
 `nothingToChange`, `todoSeriesStopped`, `todoSeriesNotStopped`,
 `todoSeriesOccurrenceAhead`, `todoSeriesFinished`, `projectArchived`,
 `todoListArchived` (422) and `todoSeriesChanged` (409), all exit 9, each with a
