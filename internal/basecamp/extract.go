@@ -107,6 +107,20 @@ func ToolKindsARunExtracts() map[string]string {
 	return kinds
 }
 
+// aCalendar is what Basecamp calls the calendar of a project in its dock, which
+// a run brings only where it is asked to.
+const aCalendar = "schedule"
+
+// toolKindOf is the kind of tool a dock entry of that name comes over as, and
+// false for one the run leaves out.
+func (e *Extractor) toolKindOf(name string) (string, bool) {
+	if name == aCalendar {
+		return bundle.ToolCalendar, e.Calendars
+	}
+	kind, known := toolKinds[name]
+	return kind, known
+}
+
 // SkippedTools counts dock entries of one kind that a run left out, either
 // because Minka has nothing like them or because they are switched off.
 type SkippedTools struct {
@@ -320,6 +334,9 @@ type Result struct {
 	// became of the Docs & Files.
 	Forwards ForwardCounts
 	Docs     DocsCounts
+	// Calendars says what became of the calendars and their entries, for a run
+	// that brings them.
+	Calendars CalendarCounts
 	// Subscribers says what became of who follows a post, a card, a to-do, a
 	// document or an upload at the source.
 	Subscribers SubscriberCounts
@@ -351,7 +368,14 @@ type Extractor struct {
 	// Now is the moment the run is made, which a schedule that has run out is
 	// held against; the clock of the machine when nil.
 	Now func() time.Time
+	// Calendars brings the calendars of the projects and their events, which a
+	// Minka that does not apply events refuses: its run stops at the first tool
+	// of that kind. Without it the dock entry is skipped like a kind Minka has
+	// nothing for.
+	Calendars bool
 
+	// source is Source behind the guard every request of a run passes.
+	source  Source
 	people  *registry
 	account string
 	apiRoot string
@@ -407,6 +431,7 @@ type Extractor struct {
 
 	forwards    ForwardCounts
 	docs        DocsCounts
+	calendars   CalendarCounts
 	subscribers SubscriberCounts
 
 	questionsLeftOut    []ImpossibleQuestion
@@ -440,6 +465,7 @@ type talk struct {
 	todosets       []int64
 	inboxes        []int64
 	vaults         []int64
+	calendars      []int64
 	// everyTodoset is every dock entry of a project that is a To-dos tool, those
 	// that are switched off included. A list names only the tool it stands in, so
 	// what hangs on none of them is no list but a group.
@@ -470,10 +496,11 @@ func ValidProjectID(value string) bool {
 //
 // The walk goes kind by kind: the projects with their tools and boards, then
 // the message boards of all of them, then the chats, then the questionnaires,
-// then the To-dos tools, then the inboxes and last the Docs & Files tools.
-// So the comments and the reactions of a bundle stand in the order of what they
-// hang on: those of cards, those of posts, those of lines, those of answers,
-// those of lists and to-dos, those of mails, those of documents and uploads.
+// then the To-dos tools, then the inboxes, then the Docs & Files tools and last
+// the calendars. So the comments and the reactions of a bundle stand in the
+// order of what they hang on: those of cards, those of posts, those of lines,
+// those of answers, those of lists and to-dos, those of mails, those of
+// documents and uploads, those of events.
 func (e *Extractor) Extract(ctx context.Context, projectIDs []string, w *bundle.Writer) (Result, error) {
 	ids, err := sortedIDs(projectIDs)
 	if err != nil {
@@ -487,7 +514,7 @@ func (e *Extractor) Extract(ctx context.Context, projectIDs []string, w *bundle.
 // projects it is given.
 func (e *Extractor) ExtractEveryProject(ctx context.Context, activeOnly bool, w *bundle.Writer) (Result, error) {
 	return e.extract(ctx, w, func(ctx context.Context) ([]int64, error) {
-		return everyProject(ctx, e.Source, activeOnly)
+		return everyProject(ctx, e.source, activeOnly)
 	})
 }
 
@@ -497,6 +524,7 @@ func (e *Extractor) extract(ctx context.Context, w *bundle.Writer, pick func(con
 	if e.LargestFile == 0 {
 		e.LargestFile = largestFileMinkaTakes
 	}
+	e.source = readsOnly{e.Source}
 	e.people = newRegistry()
 	e.skipped = map[skippedKey]int{}
 	e.missing = []MissingFile{}
@@ -541,11 +569,17 @@ func (e *Extractor) extract(ctx context.Context, w *bundle.Writer, pick func(con
 	e.longestBody = map[bundle.Kind]int{bundle.Cards: 0, bundle.Comments: 0, bundle.Posts: 0, bundle.Messages: 0, bundle.Answers: 0,
 		bundle.TodoLists: 0, bundle.Todos: 0, bundle.Forwards: 0, bundle.ForwardReplies: 0,
 		bundle.Documents: 0, bundle.Uploads: 0}
+	// A run without calendars says nothing of them, so that its report reads as
+	// it always has.
+	if e.Calendars {
+		e.longestBody[bundle.Events] = 0
+	}
+	e.calendars = CalendarCounts{Calendars: []CalendarCount{}, CommentsUnderSingleDays: []SingleDayComments{}}
 	e.longestBodyRecords = map[bundle.Kind]LongestBodyRecord{}
 	e.filesOfTheSource, e.attached = map[string]*fileOfTheSource{}, map[string]bool{}
 	e.filesThatNeverArrive, e.fileRecords, e.files = map[string]bool{}, nil, FileCounts{}
 
-	listed, err := getList[person](ctx, e.Source, "people.json")
+	listed, err := getList[person](ctx, e.source, "people.json")
 	if err != nil {
 		return Result{}, err
 	}
@@ -580,9 +614,13 @@ func (e *Extractor) extract(ctx context.Context, w *bundle.Writer, pick func(con
 	if err := e.extractForwards(ctx, w); err != nil {
 		return Result{}, err
 	}
-	// Last of all: a file standing in a card and in a document alike has its
-	// bytes fetched for the card, and the document's record shares them.
+	// After everything else that holds files: a file standing in a card and in
+	// a document alike has its bytes fetched for the card, and the document's
+	// record shares them.
 	if err := e.extractDocs(ctx, w); err != nil {
+		return Result{}, err
+	}
+	if err := e.extractCalendars(ctx, w); err != nil {
 		return Result{}, err
 	}
 
@@ -649,6 +687,7 @@ func (e *Extractor) extract(ctx context.Context, w *bundle.Writer, pick func(con
 
 		Forwards:    e.forwards,
 		Docs:        e.docs,
+		Calendars:   e.calendars,
 		Subscribers: e.subscribers,
 
 		MessagesWithEmptyBody: e.messagesWithEmptyBody,
@@ -734,7 +773,7 @@ func everyProject(ctx context.Context, source Source, activeOnly bool) ([]int64,
 const listTheProjects = "List the projects you can see with: basecamp projects list --all, and the archived ones with: basecamp projects list --all --status archived"
 
 func (e *Extractor) extractProject(ctx context.Context, id int64, w *bundle.Writer) error {
-	p, err := getOne[project](ctx, e.Source, fmt.Sprintf("projects/%d.json", id))
+	p, err := getOne[project](ctx, e.source, fmt.Sprintf("projects/%d.json", id))
 	if err != nil {
 		var failed *Error
 		if errors.As(err, &failed) && failed.Kind == NotFound {
@@ -752,7 +791,7 @@ func (e *Extractor) extractProject(ctx context.Context, id int64, w *bundle.Writ
 		return err
 	}
 
-	members, err := getList[person](ctx, e.Source, fmt.Sprintf("projects/%d/people.json", id))
+	members, err := getList[person](ctx, e.source, fmt.Sprintf("projects/%d/people.json", id))
 	if err != nil {
 		return err
 	}
@@ -788,13 +827,14 @@ func (e *Extractor) extractProject(ctx context.Context, id int64, w *bundle.Writ
 	dock := append([]dockEntry(nil), p.Dock...)
 	sort.SliceStable(dock, func(i, j int) bool { return dock[i].ID < dock[j].ID })
 	for _, entry := range dock {
-		switch toolKinds[entry.Name] {
+		kind, known := e.toolKindOf(entry.Name)
+		switch kind {
 		case bundle.ToolTodos:
 			everyTodoset[entry.ID] = true
 		case bundle.ToolFiles:
 			everyVault[entry.ID] = true
 		}
-		if _, known := toolKinds[entry.Name]; !known || !entry.Enabled {
+		if !known || !entry.Enabled {
 			e.skipped[skippedKey{kind: entry.Name, enabled: entry.Enabled}]++
 			others = append(others, entry)
 			continue
@@ -803,7 +843,7 @@ func (e *Extractor) extractProject(ctx context.Context, id int64, w *bundle.Writ
 		if err != nil {
 			return err
 		}
-		details, err := getOne[toolDetails](ctx, e.Source, path)
+		details, err := getOne[toolDetails](ctx, e.source, path)
 		if err != nil {
 			return err
 		}
@@ -840,16 +880,19 @@ func (e *Extractor) extractProject(ctx context.Context, id int64, w *bundle.Writ
 		if err != nil {
 			return err
 		}
-		kind := toolKinds[tool.entry.Name]
-		err = w.Add(bundle.Tools, bundle.Tool{
+		kind, _ := e.toolKindOf(tool.entry.Name)
+		written := bundle.Tool{
 			Record:           record,
 			ProjectSourceID:  projectID,
 			Kind:             kind,
 			Name:             tool.entry.Title,
 			Position:         tool.entry.Position,
 			VisibleToClients: visibleToClientsOf(tool.details.recording),
-		})
-		if err != nil {
+		}
+		if kind == bundle.ToolCalendar {
+			written.IncludeDueDates = tool.details.IncludeDueAssignments
+		}
+		if err := w.Add(bundle.Tools, written); err != nil {
 			return err
 		}
 		switch kind {
@@ -867,6 +910,8 @@ func (e *Extractor) extractProject(ctx context.Context, id int64, w *bundle.Writ
 			talks.inboxes = append(talks.inboxes, tool.entry.ID)
 		case bundle.ToolFiles:
 			talks.vaults = append(talks.vaults, tool.entry.ID)
+		case bundle.ToolCalendar:
+			talks.calendars = append(talks.calendars, tool.entry.ID)
 		}
 	}
 	e.talks = append(e.talks, talks)
@@ -932,7 +977,7 @@ func (e *Extractor) projectCreator(ctx context.Context, p project, extracted []r
 			continue
 		}
 		probes++
-		tool, err := getOne[recording](ctx, e.Source, path)
+		tool, err := getOne[recording](ctx, e.source, path)
 		var failed *Error
 		if errors.As(err, &failed) && (failed.Kind == NotFound || failed.Kind == Forbidden) {
 			if failed.Kind == Forbidden {

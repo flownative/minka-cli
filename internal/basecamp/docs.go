@@ -251,7 +251,7 @@ func (e *Extractor) extractDocsOfProject(ctx context.Context, w *bundle.Writer, 
 		metFolders: map[int64]bool{}, metDocuments: map[int64]bool{}, metUploads: map[int64]bool{},
 		carried: map[int64]bool{},
 	}
-	folders, err := shelvedInVaults[vaultFolder](ctx, e.Source, t.bucket, "Vault")
+	folders, err := shelvedInVaults[vaultFolder](ctx, e.source, t.bucket, "Vault")
 	if err != nil {
 		return err
 	}
@@ -269,14 +269,14 @@ func (e *Extractor) extractDocsOfProject(ctx context.Context, w *bundle.Writer, 
 		walk.metFolders[found.ID] = true
 	}
 	delete(walk.foldersGone, 0)
-	documents, err := shelvedInVaults[vaultDocument](ctx, e.Source, t.bucket, "Document")
+	documents, err := shelvedInVaults[vaultDocument](ctx, e.source, t.bucket, "Document")
 	if err != nil {
 		return err
 	}
 	for _, found := range documents {
 		walk.documentsGone[found.Parent.ID] = append(walk.documentsGone[found.Parent.ID], found)
 	}
-	uploads, err := shelvedInVaults[vaultUpload](ctx, e.Source, t.bucket, "Upload")
+	uploads, err := shelvedInVaults[vaultUpload](ctx, e.source, t.bucket, "Upload")
 	if err != nil {
 		return err
 	}
@@ -327,15 +327,15 @@ func (e *Extractor) walkVault(ctx context.Context, walk *docsWalk, id, in int64,
 	walk.places = append(walk.places, place)
 	inUse := folder == nil || folder.status() == bundle.StatusActive
 
-	shownFolders, foldersGone, err := listedUnlessItIsGone[vaultFolder](ctx, e.Source, fmt.Sprintf("buckets/%d/vaults/%d/vaults.json", walk.bucket, id), inUse)
+	shownFolders, foldersGone, err := listedUnlessItIsGone[vaultFolder](ctx, e.source, fmt.Sprintf("buckets/%d/vaults/%d/vaults.json", walk.bucket, id), inUse)
 	if err != nil {
 		return err
 	}
-	shownDocuments, documentsGone, err := listedUnlessItIsGone[vaultDocument](ctx, e.Source, fmt.Sprintf("buckets/%d/vaults/%d/documents.json", walk.bucket, id), inUse)
+	shownDocuments, documentsGone, err := listedUnlessItIsGone[vaultDocument](ctx, e.source, fmt.Sprintf("buckets/%d/vaults/%d/documents.json", walk.bucket, id), inUse)
 	if err != nil {
 		return err
 	}
-	shownUploads, uploadsGone, err := listedUnlessItIsGone[vaultUpload](ctx, e.Source, fmt.Sprintf("buckets/%d/vaults/%d/uploads.json", walk.bucket, id), inUse)
+	shownUploads, uploadsGone, err := listedUnlessItIsGone[vaultUpload](ctx, e.source, fmt.Sprintf("buckets/%d/vaults/%d/uploads.json", walk.bucket, id), inUse)
 	if err != nil {
 		return err
 	}
@@ -766,7 +766,7 @@ func (e *Extractor) countWhatFellWithAVault(ctx context.Context, walk *docsWalk)
 // stands in it, so that what falls with it is counted. A folder of it is a place
 // of its own and is added to the walk.
 func (e *Extractor) countWhatStandsInAFolderLeftOut(ctx context.Context, walk *docsWalk, id int64, fell *DocsPlaceLeftOut) error {
-	folders, _, err := listedUnlessItIsGone[vaultFolder](ctx, e.Source, fmt.Sprintf("buckets/%d/vaults/%d/vaults.json", walk.bucket, id), false)
+	folders, _, err := listedUnlessItIsGone[vaultFolder](ctx, e.source, fmt.Sprintf("buckets/%d/vaults/%d/vaults.json", walk.bucket, id), false)
 	if err != nil {
 		return err
 	}
@@ -776,7 +776,7 @@ func (e *Extractor) countWhatStandsInAFolderLeftOut(ctx context.Context, walk *d
 			walk.lost = append(walk.lost, lostVaultPlace{record: "folder", id: found.ID, aFolder: true})
 		}
 	}
-	documents, _, err := listedUnlessItIsGone[vaultDocument](ctx, e.Source, fmt.Sprintf("buckets/%d/vaults/%d/documents.json", walk.bucket, id), false)
+	documents, _, err := listedUnlessItIsGone[vaultDocument](ctx, e.source, fmt.Sprintf("buckets/%d/vaults/%d/documents.json", walk.bucket, id), false)
 	if err != nil {
 		return err
 	}
@@ -786,7 +786,7 @@ func (e *Extractor) countWhatStandsInAFolderLeftOut(ctx context.Context, walk *d
 			e.docs.LeftOut.Documents++
 		}
 	}
-	uploads, _, err := listedUnlessItIsGone[vaultUpload](ctx, e.Source, fmt.Sprintf("buckets/%d/vaults/%d/uploads.json", walk.bucket, id), false)
+	uploads, _, err := listedUnlessItIsGone[vaultUpload](ctx, e.source, fmt.Sprintf("buckets/%d/vaults/%d/uploads.json", walk.bucket, id), false)
 	if err != nil {
 		return err
 	}

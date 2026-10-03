@@ -30,6 +30,7 @@ const (
 	Folders        Kind = "folders"
 	Documents      Kind = "documents"
 	Uploads        Kind = "uploads"
+	Events         Kind = "events"
 	Messages       Kind = "messages"
 	Comments       Kind = "comments"
 	Reactions      Kind = "reactions"
@@ -39,7 +40,7 @@ const (
 // Kinds lists every kind in the order of the format, which is the order a
 // report shows them in.
 var Kinds = []Kind{People, Projects, Tools, Categories, Columns, Cards, Steps, Posts, Questions, Answers, TodoLists, TodoGroups, Todos,
-	Forwards, ForwardReplies, Folders, Documents, Uploads, Messages, Comments, Reactions, Attachments}
+	Forwards, ForwardReplies, Folders, Documents, Uploads, Events, Messages, Comments, Reactions, Attachments}
 
 const (
 	ToolBoard    = "board"
@@ -49,11 +50,13 @@ const (
 	ToolTodos    = "todos"
 	ToolForwards = "forwards"
 	ToolFiles    = "files"
+	ToolCalendar = "calendar"
 
 	OwnerAnswer       = "answer"
 	OwnerCard         = "card"
 	OwnerComment      = "comment"
 	OwnerDocument     = "document"
+	OwnerEvent        = "event"
 	OwnerForward      = "forward"
 	OwnerForwardReply = "forwardreply"
 	OwnerMessage      = "message"
@@ -75,6 +78,7 @@ const (
 	ParentAnswer   = "answer"
 	ParentCard     = "card"
 	ParentDocument = "document"
+	ParentEvent    = "event"
 	ParentForward  = "forward"
 	ParentPost     = "post"
 	ParentTodo     = "todo"
@@ -85,6 +89,7 @@ const (
 	TargetCard     = "card"
 	TargetComment  = "comment"
 	TargetDocument = "document"
+	TargetEvent    = "event"
 	TargetForward  = "forward"
 	TargetMessage  = "message"
 	TargetPost     = "post"
@@ -193,7 +198,9 @@ type Project struct {
 
 // Tool is a tool of a project. VisibleToClients is whether the source shows the
 // tool to clients and is left out where the source says nothing, which leaves
-// what Minka holds alone.
+// what Minka holds alone. IncludeDueDates is said of a calendar alone: whether
+// the source's calendar shows the days to-dos and cards are due, which Minka
+// carries and does not read.
 type Tool struct {
 	Record
 	ProjectSourceID string `json:"projectSourceId"`
@@ -202,6 +209,7 @@ type Tool struct {
 	Position        int    `json:"position"`
 
 	VisibleToClients *bool `json:"visibleToClients,omitempty"`
+	IncludeDueDates  *bool `json:"includeDueDates,omitempty"`
 }
 
 // Category is a kind of post a project offers. It belongs to the project, not
@@ -405,11 +413,13 @@ const (
 	RepeatsYearly           = "yearly"
 )
 
-// Repetition is the schedule of a to-do series in the shape Minka's API takes.
-// A field its rhythm does not use is left out. Weekdays count from 1 for Monday
-// to 7 for Sunday; Interval counts weeks or months; Instance is which of the
-// Weekday's days in the month, 1 to 4. StartsOn is nil where the to-do's due
-// day is the first day, and EndsOn nil for a series that does not run out.
+// Repetition is the schedule of a to-do series or of an event that repeats, in
+// the shape Minka's API takes. A field its rhythm does not use is left out.
+// Weekdays count from 1 for Monday to 7 for Sunday; Interval counts weeks or
+// months; Instance is which of the Weekday's days in the month, 1 to 4.
+// StartsOn is nil where the to-do's due day is the first day, and EndsOn nil
+// for a series that does not run out. TimeZone is the zone the clock times of a
+// timed event hold in, and nil for everything else.
 type Repetition struct {
 	Rhythm   string  `json:"rhythm"`
 	Weekdays []int   `json:"weekdays,omitempty"`
@@ -420,6 +430,7 @@ type Repetition struct {
 	Month    int     `json:"month,omitempty"`
 	StartsOn *string `json:"startsOn,omitempty"`
 	EndsOn   *string `json:"endsOn"`
+	TimeZone *string `json:"timeZone,omitempty"`
 }
 
 // Forward is a mail somebody forwarded into a project. Title is the subject,
@@ -520,6 +531,43 @@ type Upload struct {
 
 	// Subscribers are what they are on a Card.
 	Subscribers *[]string `json:"subscribers,omitempty"`
+}
+
+// Event is an entry of a calendar. A timed one carries StartsAt and EndsAt, two
+// moments as the source writes them; an all-day one carries StartsOn and EndsOn,
+// its first and its last day, both included. The other pair is left out.
+//
+// Status is active or trashed: an event has no shelf in Minka. Participants are
+// the people the event is for; Minka leaves off whoever is no member of the
+// project.
+type Event struct {
+	Record
+	ProjectSourceID string   `json:"projectSourceId"`
+	ToolSourceID    string   `json:"toolSourceId"`
+	Title           string   `json:"title"`
+	Description     *string  `json:"description"`
+	AllDay          bool     `json:"allDay"`
+	StartsAt        *string  `json:"startsAt,omitempty"`
+	EndsAt          *string  `json:"endsAt,omitempty"`
+	StartsOn        *string  `json:"startsOn,omitempty"`
+	EndsOn          *string  `json:"endsOn,omitempty"`
+	Participants    []string `json:"participants"`
+	JoinURL         *string  `json:"joinUrl"`
+	Highlighted     bool     `json:"highlighted"`
+	Status          string   `json:"status"`
+
+	VisibleToClients *bool `json:"visibleToClients,omitempty"`
+
+	// Subscribers are what they are on a Card.
+	Subscribers *[]string `json:"subscribers,omitempty"`
+
+	// Repetition is the schedule of an event that repeats, the record's own
+	// times being its first occurrence, and nil for one that comes once.
+	// RepetitionNotMapped names what of the source's schedule the bundle does
+	// not carry, in the source's own word: an event that names anything there
+	// comes once.
+	Repetition          *Repetition `json:"repetition,omitempty"`
+	RepetitionNotMapped []string    `json:"repetitionNotMapped,omitempty"`
 }
 
 // Message is one line of a chat.

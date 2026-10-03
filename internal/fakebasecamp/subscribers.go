@@ -55,6 +55,7 @@ func (a *Account) subscribersOf(p *Project, id string) ([]Person, bool) {
 		}
 	}
 	a.eachTodo(p, func(one *Todo) { is(one.ID, one.Subscribers) })
+	a.eachEntry(p, func(entry *Entry) { is(entry.ID, entry.Subscribers) })
 	a.eachVault(p, func(in vault) {
 		for _, document := range in.documents {
 			is(document.ID, document.Subscribers)

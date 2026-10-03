@@ -9,10 +9,12 @@ import (
 	"github.com/flownative/minka-cli/internal/bundle"
 )
 
-// toolDetails is what a tool says about itself. Only a card table has lists.
+// toolDetails is what a tool says about itself. Only a card table has lists,
+// and only a calendar says whether it shows the days things are due.
 type toolDetails struct {
 	recording
-	Lists []cardList `json:"lists"`
+	Lists                 []cardList `json:"lists"`
+	IncludeDueAssignments *bool      `json:"include_due_assignments"`
 }
 
 type cardList struct {
@@ -238,7 +240,7 @@ func (e *Extractor) extractBoards(ctx context.Context, w *bundle.Writer, bucket 
 				ids = append(ids, list.OnHold.ID)
 			}
 			for _, id := range ids {
-				cards, err := getList[card](ctx, e.Source, fmt.Sprintf("buckets/%d/card_tables/lists/%d/cards.json", bucket, id))
+				cards, err := getList[card](ctx, e.source, fmt.Sprintf("buckets/%d/card_tables/lists/%d/cards.json", bucket, id))
 				if err != nil {
 					return err
 				}
@@ -262,7 +264,7 @@ func (e *Extractor) extractBoards(ctx context.Context, w *bundle.Writer, bucket 
 	}
 
 	for _, status := range []string{bundle.StatusArchived, bundle.StatusTrashed} {
-		cards, err := getList[card](ctx, e.Source, fmt.Sprintf("projects/recordings.json?type=Kanban::Card&bucket=%d&status=%s", bucket, status))
+		cards, err := getList[card](ctx, e.source, fmt.Sprintf("projects/recordings.json?type=Kanban::Card&bucket=%d&status=%s", bucket, status))
 		if err != nil {
 			return err
 		}
@@ -560,7 +562,7 @@ func (e *Extractor) writeSteps(ctx context.Context, w *bundle.Writer, projectID,
 		if err != nil {
 			return err
 		}
-		if steps, err = getList[step](ctx, e.Source, path); err != nil {
+		if steps, err = getList[step](ctx, e.source, path); err != nil {
 			return err
 		}
 	}
@@ -625,7 +627,7 @@ func (e *Extractor) writeComments(ctx context.Context, w *bundle.Writer, bucket 
 // many comments it has: then the list is the only way to find out, and a
 // record with none costs the request.
 func (e *Extractor) askForComments(ctx context.Context, w *bundle.Writer, bucket int64, parentKind string, parent int64) ([]comment, error) {
-	listed, err := getList[comment](ctx, e.Source, fmt.Sprintf("buckets/%d/recordings/%d/comments.json", bucket, parent))
+	listed, err := getList[comment](ctx, e.source, fmt.Sprintf("buckets/%d/recordings/%d/comments.json", bucket, parent))
 	if err != nil {
 		return nil, err
 	}
@@ -681,7 +683,7 @@ func (e *Extractor) askForComments(ctx context.Context, w *bundle.Writer, bucket
 // for it knows. It is written as it is, a text of some words included: what
 // Minka takes for a reaction is the applier's to decide.
 func (e *Extractor) writeBoosts(ctx context.Context, w *bundle.Writer, bucket int64, targetKind string, target int64) error {
-	boosts, err := getList[boost](ctx, e.Source, fmt.Sprintf("buckets/%d/recordings/%d/boosts.json", bucket, target))
+	boosts, err := getList[boost](ctx, e.source, fmt.Sprintf("buckets/%d/recordings/%d/boosts.json", bucket, target))
 	if err != nil {
 		return err
 	}

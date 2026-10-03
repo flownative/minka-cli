@@ -100,7 +100,7 @@ func (e *Extractor) extractChats(ctx context.Context, w *bundle.Writer) error {
 // a bundle has no word for is left out for that, whatever else is wrong with
 // it.
 func (e *Extractor) extractChat(ctx context.Context, w *bundle.Writer, bucket, chat int64) error {
-	listed, err := getList[line](ctx, e.Source, fmt.Sprintf("buckets/%d/chats/%d/lines.json", bucket, chat))
+	listed, err := getList[line](ctx, e.source, fmt.Sprintf("buckets/%d/chats/%d/lines.json", bucket, chat))
 	if err != nil {
 		return err
 	}

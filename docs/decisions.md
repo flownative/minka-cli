@@ -1389,7 +1389,7 @@ in capitals to this day.
 <a id="c-084"></a>
 ## C-084 — A list of who follows an item is written only where the source handed it out
 
-*Applies to: `import`, the `subscribers` of posts, cards, to-dos, documents and uploads*
+*Applies to: `import`, the `subscribers` of posts, cards, to-dos, documents, uploads and events*
 
 `subscribers` is written only from a whole list Basecamp handed out, `[]` included;
 a trashed, not found or forbidden record goes without it and ends 0.
@@ -1563,6 +1563,29 @@ carries the comments of a to-do or a list, of an event only their count.
 **Implemented as:** `cli.newItemCommentsCmd` with `todoComments`,
 `todoListComments` and `eventComments`, see [To-dos](stable/todos.md) and
 [Calendars and events](stable/calendar.md).
+
+<a id="c-096"></a>
+## C-096 — Calendars come into a bundle only where a run is asked for them
+
+*Applies to: `import basecamp --calendars`, `tools` of kind `calendar`, `events`*
+
+Without `--calendars` a `schedule` of a dock is skipped like a kind Minka has
+nothing for, and the report says nothing of calendars; with it the calendar and
+its entries are extracted as Minka's format says.
+**Why:** A Minka whose import does not apply events stops at the first calendar,
+so a bundle with one is only for a Minka that does.
+**Implemented as:** `basecamp.Extractor.Calendars`, see [Importing from Basecamp](stable/import.md).
+
+<a id="c-097"></a>
+## C-097 — A run refuses an address that writes at the source before asking it
+
+*Applies to: every request of `import basecamp`*
+
+A path with `schedule_entries/` in it ends the run before it is asked, whatever
+part of the run asks; calendars are read from their lists alone.
+**Why:** Basecamp makes a record of a single day of a series where somebody asks
+for it, and a run is a read of the account and nothing else.
+**Implemented as:** `basecamp.readsOnly`, see [Importing from Basecamp](stable/import.md).
 
 <a id="c-098"></a>
 ## C-098 — Calendars and their events are `events`, the calendars `events tools`

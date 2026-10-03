@@ -209,6 +209,10 @@ func (a *Account) storedFile(key string) (storedFile, bool) {
 					commented(answer.Comments)
 				}
 			}
+			for _, entry := range tool.Entries {
+				listed(entry.Files)
+				commented(entry.Comments)
+			}
 		}
 		a.eachTodoListAndGroup(&a.Projects[p], func(list *TodoList) {
 			listed(list.Files)

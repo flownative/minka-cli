@@ -352,6 +352,11 @@ func (a *Account) commentsOf(p *Project, id string) ([]Comment, bool) {
 			}
 		}
 	})
+	a.eachEntry(p, func(entry *Entry) {
+		if strconv.FormatInt(entry.ID, 10) == id {
+			comments, found = entry.Comments, true
+		}
+	})
 	return comments, found
 }
 
@@ -399,6 +404,12 @@ func (a *Account) boostsOf(p *Project, id string) ([]Boost, bool) {
 	a.eachTodo(p, func(one *Todo) {
 		is(one.ID, one.Boosts)
 		for _, comment := range one.Comments {
+			is(comment.ID, comment.Boosts)
+		}
+	})
+	a.eachEntry(p, func(entry *Entry) {
+		is(entry.ID, entry.Boosts)
+		for _, comment := range entry.Comments {
 			is(comment.ID, comment.Boosts)
 		}
 	})

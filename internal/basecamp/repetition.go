@@ -2,6 +2,7 @@ package basecamp
 
 import (
 	"encoding/json"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -9,10 +10,12 @@ import (
 	"github.com/flownative/minka-cli/internal/bundle"
 )
 
-// repetitionSchedule is the schedule of a to-do that repeats, as Basecamp hands
-// it out: always all ten fields, null the ones its frequency has no use for.
-// Only the newest occurrence of a series carries one, and nothing links it to
-// the occurrences before it.
+// repetitionSchedule is the schedule of a to-do or of a calendar entry that
+// repeats, as Basecamp hands it out: always all ten fields, null the ones its
+// frequency has no use for. Of a to-do only the newest occurrence of a series
+// carries one, and nothing links it to the occurrences before it; an entry of a
+// calendar is one record for all its days. Hour and Minute are a clock time in
+// a zone the schedule does not name, Duration is seconds.
 type repetitionSchedule struct {
 	Frequency string `json:"frequency"`
 	// Days are days of the week, Sunday 0, or of the month, by the frequency.
@@ -28,8 +31,13 @@ type repetitionSchedule struct {
 	Minute        *int    `json:"minute"`
 }
 
-// The frequencies of Basecamp the extractor knows.
+// The frequencies of Basecamp the extractor knows. The first four are a
+// calendar's alone.
 const (
+	everyDay        = "every_day"
+	everyWeekday    = "every_weekday"
+	everyOtherWeek  = "every_other_week"
+	customWeek      = "custom_week"
 	everyWeek       = "every_week"
 	everyMonth      = "every_month"
 	customMonth     = "custom_month"
@@ -40,16 +48,18 @@ const (
 // maxRepetitionInterval is the largest interval a series of Minka takes.
 const maxRepetitionInterval = 99
 
-// scheduleReading collects the parts of a schedule that do not come along. A
-// part that is lost takes the series with it; one that is only dropped leaves
-// the series without it.
+// scheduleReading collects the parts of a schedule that do not come along, each
+// once. A part that is lost takes the series with it; one that is only dropped
+// leaves the series without it.
 type scheduleReading struct {
 	notMapped []string
 	lost      bool
 }
 
 func (r *scheduleReading) drop(part string) {
-	r.notMapped = append(r.notMapped, part)
+	if !slices.Contains(r.notMapped, part) {
+		r.notMapped = append(r.notMapped, part)
+	}
 }
 
 func (r *scheduleReading) lose(part string) {
@@ -91,22 +101,7 @@ func repetitionOf(raw json.RawMessage, dueOn *string) (*bundle.Repetition, []str
 	if dueOn == nil {
 		reading.lose("due_on")
 	}
-	startsOn := dayOfSchedule(schedule.StartDate)
-	if schedule.StartDate != nil && strings.TrimSpace(*schedule.StartDate) != "" && startsOn == nil {
-		reading.lose("start_date")
-	}
-	first := startsOn
-	if first == nil {
-		first = dueOn
-	}
-	endsOn := dayOfSchedule(schedule.EndDate)
-	if schedule.EndDate != nil && strings.TrimSpace(*schedule.EndDate) != "" && endsOn == nil {
-		reading.lose("end_date")
-	}
-	// An end before the first day is a schedule no series can have.
-	if endsOn != nil && first != nil && *endsOn < *first {
-		reading.lose("end_date")
-	}
+	startsOn, endsOn, first := datesOf(schedule, dueOn, &reading)
 
 	repetition := bundle.Repetition{StartsOn: startsOn, EndsOn: endsOn}
 	switch schedule.Frequency {
@@ -120,9 +115,49 @@ func repetitionOf(raw json.RawMessage, dueOn *string) (*bundle.Repetition, []str
 		repetition.Interval = intervalOf(schedule.WeekInterval, "week_interval", &reading)
 		unusedInstance(schedule, &reading)
 		unusedInterval(schedule.MonthInterval, "month_interval", &reading)
+	default:
+		if !byTheMonthOrTheYear(schedule, first, &repetition, &reading) {
+			reading.lose("frequency")
+		}
+	}
+
+	if reading.lost {
+		return nil, reading.notMapped
+	}
+	return &repetition, reading.notMapped
+}
+
+// datesOf are the first and the last day of a schedule as the bundle carries
+// them, and first the day its series starts on: the start the schedule names,
+// or fallback where it names none. An end before that day is a schedule no
+// series can have.
+func datesOf(schedule repetitionSchedule, fallback *string, reading *scheduleReading) (startsOn, endsOn, first *string) {
+	startsOn = dayOfSchedule(schedule.StartDate)
+	if schedule.StartDate != nil && strings.TrimSpace(*schedule.StartDate) != "" && startsOn == nil {
+		reading.lose("start_date")
+	}
+	first = startsOn
+	if first == nil {
+		first = fallback
+	}
+	endsOn = dayOfSchedule(schedule.EndDate)
+	if schedule.EndDate != nil && strings.TrimSpace(*schedule.EndDate) != "" && endsOn == nil {
+		reading.lose("end_date")
+	}
+	if endsOn != nil && first != nil && *endsOn < *first {
+		reading.lose("end_date")
+	}
+	return startsOn, endsOn, first
+}
+
+// byTheMonthOrTheYear maps the rhythms a to-do and an event share, those by the
+// month and by the year, and says whether the frequency is one of them. first is
+// the day the series starts on.
+func byTheMonthOrTheYear(schedule repetitionSchedule, first *string, repetition *bundle.Repetition, reading *scheduleReading) bool {
+	switch schedule.Frequency {
 	case everyMonth, customMonth:
-		repetition.Interval = intervalOf(schedule.MonthInterval, "month_interval", &reading)
-		unusedInterval(schedule.WeekInterval, "week_interval", &reading)
+		repetition.Interval = intervalOf(schedule.MonthInterval, "month_interval", reading)
+		unusedInterval(schedule.WeekInterval, "week_interval", reading)
 		if schedule.WeekInstance == nil {
 			// The day of the month is the day the series starts on. A day in
 			// days that says another is not guessed between.
@@ -133,7 +168,7 @@ func repetitionOf(raw json.RawMessage, dueOn *string) (*bundle.Repetition, []str
 			if len(schedule.Days) > 1 || (len(schedule.Days) == 1 && schedule.Days[0] != repetition.Day) {
 				reading.lose("days")
 			}
-			break
+			return true
 		}
 		repetition.Rhythm = bundle.RepeatsMonthlyOnWeekday
 		// How Basecamp says "the last" was never seen, so only the first to the
@@ -155,9 +190,9 @@ func repetitionOf(raw json.RawMessage, dueOn *string) (*bundle.Repetition, []str
 		} else {
 			reading.lose("days")
 		}
-		repetition.Interval = intervalOf(schedule.MonthInterval, "month_interval", &reading)
-		unusedInstance(schedule, &reading)
-		unusedInterval(schedule.WeekInterval, "week_interval", &reading)
+		repetition.Interval = intervalOf(schedule.MonthInterval, "month_interval", reading)
+		unusedInstance(schedule, reading)
+		unusedInterval(schedule.WeekInterval, "week_interval", reading)
 	case everyYear:
 		// The day of the year is the day the series starts on.
 		repetition.Rhythm = bundle.RepeatsYearly
@@ -167,17 +202,181 @@ func repetitionOf(raw json.RawMessage, dueOn *string) (*bundle.Repetition, []str
 		if len(schedule.Days) > 0 {
 			reading.lose("days")
 		}
+		unusedInstance(schedule, reading)
+		unusedInterval(schedule.WeekInterval, "week_interval", reading)
+		unusedInterval(schedule.MonthInterval, "month_interval", reading)
+	default:
+		return false
+	}
+	return true
+}
+
+// eventTimes is what the record of an event says of its first occurrence: the
+// first day of an all-day one, the two moments of a timed one.
+type eventTimes struct {
+	allDay           bool
+	startsOn         string
+	startsAt, endsAt time.Time
+}
+
+const secondsPerDay = 24 * 60 * 60
+
+// eventRepetitionOf is the schedule an event that repeats at the source brings,
+// and the parts of it the bundle does not carry, each named by Basecamp's field.
+// zoneName is the zone of whoever made the entry, which Basecamp does not name
+// on the schedule itself.
+//
+// The rhythms by the month and by the year are a to-do's. Any part that does
+// not fit takes the series with it and the event comes once, at the time of its
+// record: every occurrence of a series is shown, so one on a day the source
+// never had would be a meeting nobody called, while one that is missing is named
+// in the report. That is why the schedule is held against the record before it
+// is written: the clock time it names has to be the record's own in the zone,
+// its first day the record's first day, and that day one of its days.
+func eventRepetitionOf(raw json.RawMessage, times eventTimes, zoneName string) (*bundle.Repetition, []string) {
+	var schedule repetitionSchedule
+	if err := json.Unmarshal(raw, &schedule); err != nil {
+		return nil, []string{"recurrence_schedule"}
+	}
+	var reading scheduleReading
+	// The first day of an event's series is the first day of the event, and
+	// only a schedule that says so can be proven to be the event's.
+	if schedule.StartDate == nil || strings.TrimSpace(*schedule.StartDate) == "" {
+		reading.lose("start_date")
+	}
+	startsOn, endsOn, first := datesOf(schedule, nil, &reading)
+	repetition := bundle.Repetition{StartsOn: startsOn, EndsOn: endsOn}
+
+	if times.allDay {
+		if startsOn != nil && *startsOn != times.startsOn {
+			reading.lose("start_date")
+		}
+		if schedule.Duration != nil && (*schedule.Duration <= 0 || *schedule.Duration%secondsPerDay != 0) {
+			reading.lose("duration")
+		}
+	} else {
+		if zone, known := zoneOf(zoneName); !known {
+			reading.lose("time_zone")
+		} else {
+			repetition.TimeZone = &zoneName
+			local := times.startsAt.In(zone)
+			if startsOn != nil && (local.Format(dayFormat) != *startsOn || schedule.Hour == nil || schedule.Minute == nil ||
+				local.Hour() != *schedule.Hour || local.Minute() != *schedule.Minute) {
+				reading.lose("hour")
+			}
+		}
+		if schedule.Duration != nil && time.Duration(*schedule.Duration)*time.Second != times.endsAt.Sub(times.startsAt) {
+			reading.lose("duration")
+		}
+	}
+
+	switch schedule.Frequency {
+	case everyDay, everyWeekday:
+		repetition.Rhythm = bundle.RepeatsDaily
+		switch {
+		case schedule.Frequency == everyWeekday:
+			repetition.Weekdays = []int{1, 2, 3, 4, 5}
+		case len(schedule.Days) == 0:
+			repetition.Weekdays = []int{1, 2, 3, 4, 5, 6, 7}
+		default:
+			if weekdays, ok := weekdaysOfMinka(schedule.Days); ok {
+				repetition.Weekdays = weekdays
+			} else {
+				reading.lose("days")
+			}
+		}
 		unusedInstance(schedule, &reading)
 		unusedInterval(schedule.WeekInterval, "week_interval", &reading)
 		unusedInterval(schedule.MonthInterval, "month_interval", &reading)
+	case everyWeek, everyOtherWeek, customWeek:
+		repetition.Rhythm = bundle.RepeatsWeekly
+		switch schedule.Frequency {
+		case everyWeek:
+			repetition.Interval = 1
+			unusedInterval(schedule.WeekInterval, "week_interval", &reading)
+		case everyOtherWeek:
+			repetition.Interval = 2
+			if schedule.WeekInterval != nil && *schedule.WeekInterval != 2 {
+				reading.lose("week_interval")
+			}
+		default:
+			repetition.Interval = intervalOf(schedule.WeekInterval, "week_interval", &reading)
+		}
+		repetition.Weekdays = weekdaysOfAWeek(schedule.Days, first, &reading)
+		// Where Basecamp's weeks turn was never seen, so a rhythm of every other
+		// week and beyond is taken on one weekday alone, where it cannot matter.
+		if repetition.Interval > 1 && len(repetition.Weekdays) > 1 {
+			reading.lose("days")
+		}
+		unusedInstance(schedule, &reading)
+		unusedInterval(schedule.MonthInterval, "month_interval", &reading)
 	default:
-		reading.lose("frequency")
+		if !byTheMonthOrTheYear(schedule, first, &repetition, &reading) {
+			reading.lose("frequency")
+		}
 	}
+	theFirstDayIsOneOfItsDays(repetition, first, &reading)
 
 	if reading.lost {
 		return nil, reading.notMapped
 	}
 	return &repetition, reading.notMapped
+}
+
+// weekdaysOfAWeek are the weekdays a weekly rhythm names, and the weekday of
+// the first day where it names none.
+func weekdaysOfAWeek(days []int, first *string, reading *scheduleReading) []int {
+	if len(days) == 0 {
+		if day, ok := firstDayOf(first); ok {
+			return []int{weekdayOfMinka(int(day.Weekday()))}
+		}
+		reading.lose("days")
+		return nil
+	}
+	weekdays, ok := weekdaysOfMinka(days)
+	if !ok {
+		reading.lose("days")
+	}
+	return weekdays
+}
+
+// theFirstDayIsOneOfItsDays holds a schedule to the day its series starts on:
+// Minka refuses an event whose schedule does not fall on its first day. Only
+// what the schedule names is held against it; a part that is missing is named
+// where it went missing.
+func theFirstDayIsOneOfItsDays(repetition bundle.Repetition, first *string, reading *scheduleReading) {
+	day, ok := firstDayOf(first)
+	if !ok {
+		return
+	}
+	weekday := weekdayOfMinka(int(day.Weekday()))
+	switch repetition.Rhythm {
+	case bundle.RepeatsDaily, bundle.RepeatsWeekly:
+		if len(repetition.Weekdays) > 0 && !slices.Contains(repetition.Weekdays, weekday) {
+			reading.lose("days")
+		}
+	case bundle.RepeatsMonthlyOnDay:
+		if repetition.Day != 0 && repetition.Day != day.Day() {
+			reading.lose("days")
+		}
+	case bundle.RepeatsMonthlyOnWeekday:
+		if repetition.Weekday != 0 && repetition.Weekday != weekday {
+			reading.lose("days")
+		}
+		if repetition.Instance != 0 && repetition.Instance != (day.Day()-1)/7+1 {
+			reading.lose("week_instance")
+		}
+	}
+}
+
+// zoneOf is the zone a name names, where it is one Minka takes and the zone
+// database of this program knows it.
+func zoneOf(name string) (*time.Location, bool) {
+	if !zoneNamesMinkaTakes[name] {
+		return nil, false
+	}
+	zone, err := time.LoadLocation(name)
+	return zone, err == nil
 }
 
 // intervalOf is the interval a field counts in, 1 where it names none. One

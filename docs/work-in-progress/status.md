@@ -152,7 +152,12 @@ list, a to-do that repeats with its schedule (C-090), and what
 hangs on a list and a to-do, of each inbox its forwarded mail with the
 answers by mail, the comments and the boosts of each, and of each Docs & Files
 tool its folders, documents and uploads with the comments, the boosts and the
-files of each.
+files of each. With `--calendars` (C-096) it brings each project's calendar as
+well, its entries as events with their comments, boosts, files and followers,
+a series as one event with its schedule; without it a calendar is skipped,
+because a Minka whose import does not apply events stops at one. No request of
+a run reaches an address of a single day of a series or of one entry, which
+Basecamp answers by writing (C-097).
 The Docs & Files tools come last of all, so that the bytes of a file standing in
 a card and in a document alike are fetched for the card, and the inboxes before
 them. Every owner of a file has a record of its own in `attachments.jsonl`, named
@@ -359,6 +364,26 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
 (account Bruno, local instance) gets revoked then.
 
 ## Checked against the fake only
+
+- The calendars of `import basecamp --calendars`: no run has met a real
+  calendar yet, and Minka's applier of events is not on its `main`, so no bundle
+  with one has been applied. The fake's entries are shaped after bodies read
+  read-only from the account: an all-day entry in plain days with its last day
+  included, a timed one in moments of UTC, no `recurrence_schedule` key on an
+  entry that does not repeat, and the one series the account holds, every other
+  week on Fridays at 18:00 in `Europe/Berlin` for 1800 seconds. **Unmeasured**,
+  and in the fake by reasoning or by the format alone: `?status=trashed` and
+  `?status=archived` of `entries.json` and an entry that is drafted; paging of
+  `entries.json` (no calendar held more than three); `join_url`,
+  `highlighted` and `description_attachments` on an entry (named as a to-do's
+  are); `include_due_assignments: false`; every `frequency` but
+  `every_other_week`, and what `days`, `week_instance` and the intervals hold
+  for each; whether `end_date` is the last day a series may start on; an
+  all-day series and its `duration`; a creator whose zone is not the one the
+  hour holds in; whether the list names the first day of a series that has run
+  for years; and whether `projects/recordings.json?type=Comment` names the
+  comments under single days at all. Owed before the merge into a real run: a
+  read-only dry run of one project with a calendar, with Robert's word.
 
 - The order of the refusals follows Minka's `main`, which is in no release
   yet: the address is looked up before the fields of the body and before the
@@ -1369,6 +1394,19 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   it (`DbalPostRepository::throwAway`, `restoreFromTrash`). Reported to Minka
   by the coordination.
 
+- Of the calendars, four places where Minka's format and its code part, for
+  the coordination: the format takes every zone name PHP's `DateTimeZone`
+  takes, `Europe/Kiev` and `US/Pacific` among them, while Minka's `TimeZone`
+  takes only `DateTimeZone::listIdentifiers()`, which holds neither; the run
+  writes what the format says, which the coordination confirmed. Minka's
+  `TimeZone.php:24` accepts only `listIdentifiers()` (`ALL`), so its applier
+  of events has to widen it. The format asks for who follows an entry in the
+  trash, which C-084 does not do for any record. It asks for comments and
+  boosts of every entry, where the run asks only where `comments_count` and
+  `boosts_count` say there are some, as for every other kind. And the applier
+  of events (`ImportKind` `events`) is not on `main`, so `ToolsApplier` still
+  refuses `calendar`.
+
 ## Open in the API
 
 - Renaming and reordering steps does not exist.
@@ -1377,6 +1415,11 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
 - Column colours come later, read-only.
 
 ## Next steps
+
+- A read-only dry run of one project with a calendar, `import basecamp
+  --project <id> --calendars --dry-run`, with Robert's word, before the
+  calendars go into a real run; then commands for calendars and events once
+  Minka's API for them is merged.
 
 - Check the bots of `import basecamp` read-only against the live account, as
   listed under Checked against the fake only, and a bundle with them through

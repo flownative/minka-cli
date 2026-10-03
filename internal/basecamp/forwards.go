@@ -111,7 +111,7 @@ const outsider = "Outsider"
 func (e *Extractor) extractForwards(ctx context.Context, w *bundle.Writer) error {
 	for _, t := range e.talks {
 		for _, inbox := range t.inboxes {
-			listed, err := getList[forward](ctx, e.Source, fmt.Sprintf("buckets/%d/inboxes/%d/forwards.json", t.bucket, inbox))
+			listed, err := getList[forward](ctx, e.source, fmt.Sprintf("buckets/%d/inboxes/%d/forwards.json", t.bucket, inbox))
 			if err != nil {
 				return err
 			}
@@ -249,7 +249,7 @@ func (e *Extractor) writeForwardReplies(ctx context.Context, w *bundle.Writer, b
 	if found.RepliesCount != nil && *found.RepliesCount == 0 {
 		return nil
 	}
-	listed, err := getList[forwardReply](ctx, e.Source, fmt.Sprintf("buckets/%d/inbox_forwards/%d/replies.json", bucket, found.ID))
+	listed, err := getList[forwardReply](ctx, e.source, fmt.Sprintf("buckets/%d/inbox_forwards/%d/replies.json", bucket, found.ID))
 	if err != nil {
 		return err
 	}
