@@ -26,6 +26,7 @@ var badMoments = map[string]string{
 	"whitespace around it":    "something that is no time",
 	"another way round a day": "something that is no time",
 	"a day no calendar has":   `"2026-02-30T17:00:00Z", which no calendar has`,
+	"the year 0":              `"0000-01-01T17:00:00Z", which no calendar has`,
 }
 
 // theValues are the strings badMoments is keyed by. One that holds a name would
@@ -37,6 +38,7 @@ var theValues = map[string]string{
 	"whitespace around it":    " 2024-02-05T17:00:00.000Z",
 	"another way round a day": "05.02.2024 17:00 UTC",
 	"a day no calendar has":   "2026-02-30T17:00:00Z",
+	"the year 0":              "0000-01-01T17:00:00Z",
 }
 
 // theRealForm is a moment the way Basecamp really writes one. Every case is held
@@ -232,6 +234,7 @@ func TestTheStringsThatAreAMomentAndTheStringsThatAreNone(t *testing.T) {
 		"2024-02-05T17:00:00-08:00":   true,
 		"2024-02-05T17:00:00.123456Z": true,
 		"2024-02-29T17:00:00Z":        true,
+		"0001-01-01T00:00:00Z":        true,
 		"2024-02-05t17:00:00z":        false,
 		"2024-02-05T17:00:00.000z":    false,
 		"2024-02-05 17:00:00Z":        false,
@@ -243,6 +246,7 @@ func TestTheStringsThatAreAMomentAndTheStringsThatAreNone(t *testing.T) {
 		"tomorrow":                    false,
 		"+1 day":                      false,
 		"2023-02-29T17:00:00Z":        false,
+		"0000-12-31T23:59:59Z":        false,
 		"2024-13-01T17:00:00Z":        false,
 		"2024-02-05T25:00:00Z":        false,
 		"2024-02-05T17:00:60Z":        false,
@@ -308,6 +312,7 @@ var badDays = map[string]struct{ value, said string }{
 	"the day another way":   {"01.04.2023", "something that is no day"},
 	"no day at all":         {"next spring", "something that is no day"},
 	"a day no calendar has": {"2026-02-30", `"2026-02-30", which no calendar has`},
+	"the year 0":            {"0000-01-01", `"0000-01-01", which no calendar has`},
 }
 
 // The day a card is due is held to the shape a day has, the way the day of a

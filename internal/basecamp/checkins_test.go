@@ -307,6 +307,8 @@ func TestAScheduleMinkaCannotExpressLeavesTheQuestionOutWithItsAnswers(t *testin
 		"a schedule that ends today": {"end_date", func(q *fakebasecamp.Question) { q.Schedule.EndDate = today }},
 		"an end that is no day":      {"end_date", func(q *fakebasecamp.Question) { q.Schedule.EndDate = "2024-3-1" }},
 		"a start that is no day":     {"start_date", func(q *fakebasecamp.Question) { q.Schedule.StartDate = "2024-2-5" }},
+		"an end in the year 0":       {"end_date", func(q *fakebasecamp.Question) { q.Schedule.EndDate = "0000-01-01" }},
+		"a start in the year 0":      {"start_date", func(q *fakebasecamp.Question) { q.Schedule.StartDate = "0000-01-01" }},
 		"an hour of no day":          {"hour", func(q *fakebasecamp.Question) { q.Schedule.Hour = 24 }},
 		"a minute of no hour":        {"minute", func(q *fakebasecamp.Question) { q.Schedule.Minute = 60 }},
 	}
@@ -630,12 +632,14 @@ func TestAnswersAtAnAddressOutsideTheAccountEndTheRun(t *testing.T) {
 // Minka takes a day the way both it and Basecamp write one, and refuses
 // anything else.
 func TestADayOfAnotherShapeEndsTheRun(t *testing.T) {
-	account := fakebasecamp.New()
-	busyQuestion(account).Answers[0].GroupOn = "2024-2-5"
+	for _, c := range badDays {
+		account := fakebasecamp.New()
+		busyQuestion(account).Answers[0].GroupOn = c.value
 
-	err := extractExpectingAnError(t, account, checkinProject)
-	if !strings.Contains(err.Error(), "9320") {
-		t.Errorf("the run ended with %q, which does not name the answer", err)
+		err := extractExpectingAnError(t, account, checkinProject)
+		if want := "answer 9320 belongs to " + c.said; !strings.HasSuffix(err.Error(), want) {
+			t.Errorf("the run ended with %q, want a message that ends in %q", err, want)
+		}
 	}
 }
 

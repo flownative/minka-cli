@@ -1069,10 +1069,11 @@ func noTime(value string) string {
 // and a time without a zone, which is somebody's guess at a zone. Either would
 // store the record at a moment nobody meant, and nothing afterwards tells that
 // from the truth. Refused besides is a moment of the right shape that no
-// calendar has, the thirtieth of February among them.
+// calendar has: the thirtieth of February, and any day of the year 0, which Go
+// takes and Minka cannot store.
 func aMoment(value string) (time.Time, bool) {
 	moment, err := time.Parse(time.RFC3339Nano, value)
-	if err != nil {
+	if err != nil || moment.Year() < firstYear {
 		return time.Time{}, false
 	}
 	return moment, true

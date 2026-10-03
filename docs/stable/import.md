@@ -251,10 +251,12 @@ read — `created_at` and `updated_at` of every kind of record, the moment a car
 a step or a to-do was completed, the moment a boost was given — and anything else ends
 the run, named with the record and the field: a relative word such as `now` or
 `tomorrow`, a time without a zone, a day written another way, and a moment of the
-right shape that no calendar has, the thirtieth of February among them. The
-applier draws the line in the same place, so neither side takes what the other
-turns down: a line two programs draw differently is no line but the place where a
-time changes its meaning without a word. A moment is read whether the bundle
+right shape that no calendar has, the thirtieth of February and any day of the
+year 0 among them. The applier draws the line in the same place, so neither side
+takes what the other turns down: a line two programs draw differently is no line
+but the place where a time changes its meaning without a word. Only the year 0
+is turned down by Minka's database rather than by its reading of the bundle, so
+there it ends a run later and less plainly. A moment is read whether the bundle
 computes with it or only carries it on, and the moment a card or a to-do was
 completed therefore ends a run wherever Basecamp names one, not only for a card in
 Done and not only for a to-do that is done.
@@ -1036,7 +1038,8 @@ and Minka applies the kinds in an order of its own.
   days, is left out and named in `calendars.calendars[].allDayInInstants` or
   `timedInDays`, because either turned into the other moves the event by a day
   for somebody. A time that is neither, one of each, and an end before the start
-  end the run. Comments, boosts and the files of the description hang on an
+  end the run, and so does a timed entry that starts before the year 1 in UTC,
+  where Minka holds it. Comments, boosts and the files of the description hang on an
   event, `parentKind` and `targetKind` `event`, an entry in the trash included;
   who follows an entry is asked as for every record, and not for one in the
   trash (C-084).

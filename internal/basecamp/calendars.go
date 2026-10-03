@@ -319,6 +319,11 @@ func timesOfAnEntry(found scheduleEntry) (eventTimes, entryShape, error) {
 		if endsAt.Before(startsAt) {
 			return eventTimes{}, asItIs, &Error{Kind: API, Message: fmt.Sprintf("%s ends before it starts, which Minka does not take", what)}
 		}
+		// Minka holds the start of an event in UTC, where a moment early in the
+		// year 1 east of Greenwich still falls in the year 0.
+		if startsAt.UTC().Year() < firstYear {
+			return eventTimes{}, asItIs, &Error{Kind: API, Message: fmt.Sprintf("%s starts before the year 1 in UTC, which Minka does not take", what)}
+		}
 		return eventTimes{startsAt: startsAt, endsAt: endsAt}, asItIs, nil
 	}
 	for _, field := range []struct{ name, value string }{{"starts", found.StartsAt}, {"ends", found.EndsAt}} {

@@ -563,13 +563,19 @@ func dayOfMoment(moment time.Time) time.Time {
 // aDay reads a day the way both Basecamp and Minka write one: four digits, two
 // and two. Go reads a date more loosely than that, and Minka refuses whatever
 // it does not write itself, so the reading has to come back as it went in.
+//
+// The year 0 is refused besides: Go takes it, but no calendar Minka stores a day
+// in has it, so the applier would end its run on that day.
 func aDay(value string) (time.Time, bool) {
 	day, err := time.Parse(dayFormat, value)
-	if err != nil || day.Format(dayFormat) != value {
+	if err != nil || day.Format(dayFormat) != value || day.Year() < firstYear {
 		return time.Time{}, false
 	}
 	return day, true
 }
+
+// firstYear is the first year Minka stores a day or a moment of.
+const firstYear = 1
 
 // dayShape is the shape of a day, whether or not a calendar has that day. What
 // has it may be said out loud, as a moment of the shape of one may. Nothing here

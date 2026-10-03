@@ -156,6 +156,7 @@ func TestWhatOfACalendarsScheduleDoesNotFitLeavesTheEventSingle(t *testing.T) {
 		{"an end before the start", sampledSeries(set(map[string]any{"end_date": "2026-10-01"})), berlinFriday, "Europe/Berlin", []string{"end_date"}},
 		{"no start", sampledSeries(set(map[string]any{"start_date": nil})), berlinFriday, "Europe/Berlin", []string{"start_date"}},
 		{"a start of another shape", sampledSeries(set(map[string]any{"start_date": "2.10.2026"})), berlinFriday, "Europe/Berlin", []string{"start_date"}},
+		{"a start in the year 0", sampledSeries(set(map[string]any{"start_date": "0000-01-01"})), berlinFriday, "Europe/Berlin", []string{"start_date"}},
 		{"another hour", sampledSeries(set(map[string]any{"hour": 16})), berlinFriday, "Europe/Berlin", []string{"hour"}},
 		{"another minute", sampledSeries(set(map[string]any{"minute": 30})), berlinFriday, "Europe/Berlin", []string{"hour"}},
 		{"no hour", sampledSeries(set(map[string]any{"hour": nil})), berlinFriday, "Europe/Berlin", []string{"hour"}},

@@ -281,8 +281,15 @@ func TestAnAllDayEntrySaidInMomentsIsLeftOutAndNamed(t *testing.T) {
 // afterwards.
 func TestATimeNoEventCanHaveEndsTheRun(t *testing.T) {
 	for name, change := range map[string]func(*fakebasecamp.Entry){
-		"no time":                 func(e *fakebasecamp.Entry) { e.StartsAt = "" },
-		"a day nobody has":        func(e *fakebasecamp.Entry) { e.AllDay, e.StartsAt, e.EndsAt = true, "2026-02-30", "2026-02-30" },
+		"no time":             func(e *fakebasecamp.Entry) { e.StartsAt = "" },
+		"a day nobody has":    func(e *fakebasecamp.Entry) { e.AllDay, e.StartsAt, e.EndsAt = true, "2026-02-30", "2026-02-30" },
+		"a day of the year 0": func(e *fakebasecamp.Entry) { e.AllDay, e.StartsAt, e.EndsAt = true, "0000-01-01", "0000-01-01" },
+		"a moment of the year 0": func(e *fakebasecamp.Entry) {
+			e.StartsAt, e.EndsAt = "0000-06-16T12:00:00.000Z", "0000-06-16T13:00:00.000Z"
+		},
+		"the year 0 in UTC": func(e *fakebasecamp.Entry) {
+			e.StartsAt, e.EndsAt = "0001-01-01T00:30:00.000+01:00", "0001-01-01T01:30:00.000+01:00"
+		},
 		"an end before the start": func(e *fakebasecamp.Entry) { e.EndsAt = "2026-06-16T12:00:00.000Z" },
 		"an end before the day":   func(e *fakebasecamp.Entry) { e.AllDay, e.StartsAt, e.EndsAt = true, "2026-06-16", "2026-06-15" },
 		"a day and a moment":      func(e *fakebasecamp.Entry) { e.EndsAt = "2026-06-16" },
