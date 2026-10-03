@@ -16,14 +16,13 @@ import (
 	"github.com/flownative/minka-cli/internal/work"
 )
 
-// runAsTheKeepalive runs the CLI at a moment and in the mode of the process that
-// keeps reporting while the session around it is busy.
-func (e *testEnv) runAsTheKeepalive(at time.Time, args ...string) result {
+// signalAsTheKeepalive sends what one tick of the keepalive sends for the list
+// of one session, at a moment, without the timer around it.
+func (e *testEnv) signalAsTheKeepalive(at time.Time, session string) signalled {
 	e.t.Helper()
-	return e.runWith(func(a *app) {
-		a.now = func() time.Time { return at }
-		a.keepalive = true
-	}, "", args...)
+	a := e.theApp(at)
+	a.keepalive = true
+	return a.signal(session, 0)
 }
 
 // storedHosts is the store as it lies on disk: what a command wrote, not what a
@@ -43,14 +42,20 @@ func (e *testEnv) storedHosts() map[string]map[string]any {
 	return file.Hosts
 }
 
-// storedHost is what the store holds for the host of these tests.
-func (e *testEnv) storedHost() map[string]any {
+// storedList is what the store holds for the host of these tests and the
+// session the environment names, the list of no session where it names none.
+func (e *testEnv) storedList() map[string]any {
 	e.t.Helper()
 	entry, known := e.storedHosts()[e.vars["MINKA_HOST"]]
 	if !known {
 		e.t.Fatalf("the store holds nothing for %s: %v", e.vars["MINKA_HOST"], e.storedHosts())
 	}
-	return entry
+	sessions, _ := entry["sessions"].(map[string]any)
+	list, known := sessions[e.vars[sessionVariable]].(map[string]any)
+	if !known {
+		e.t.Fatalf("the store holds nothing for the session %q: %v", e.vars[sessionVariable], entry)
+	}
+	return list
 }
 
 // hostsOfTheStore is what the store is keyed by, sorted.
@@ -129,7 +134,7 @@ func TestASecondKeepaliveOfTheSameHostReportsNothing(t *testing.T) {
 	}
 	// It reports before its timer once it has the lock, so what says it did
 	// nothing at all is the moment of a signal that was never claimed.
-	if got := e.storedHost()["sentAt"]; got != asStored(time.Time{}) {
+	if got := e.storedList()["sentAt"]; got != asStored(time.Time{}) {
 		t.Errorf("a keepalive that got no lock claimed the signal of %v", got)
 	}
 }
@@ -142,7 +147,7 @@ func TestASecondKeepaliveOfTheSameHostReportsNothing(t *testing.T) {
 func TestTheFlagPutsTheRunIntoTheModeThatIsAtNoWork(t *testing.T) {
 	e := newAgentEnv(t)
 	began := time.Date(2026, 9, 23, 10, 0, 0, 0, time.UTC)
-	e.vars[sessionVariable] = "the session that spawned it"
+	e.vars[sessionVariable] = "the-session-that-spawned-it"
 	expectCode(t, e.runAt(began, "work", "start", e.fixture.CardInDoing.ID, "--json"), ExitOK)
 
 	// Two minutes on, where a beat of a session would write both marks.
@@ -151,7 +156,7 @@ func TestTheFlagPutsTheRunIntoTheModeThatIsAtNoWork(t *testing.T) {
 	if ended, _ := decode(t, env.Data)["ended"].(string); !strings.Contains(ended, "told to stop") {
 		t.Errorf("the keepalive ended for %q", ended)
 	}
-	entry := e.storedHost()
+	entry := e.storedList()
 	// The moment of a signal is claimed in the store before the request goes out,
 	// so this is what says that the keepalive reported at all, and that it did so
 	// before its timer.
@@ -505,19 +510,16 @@ func TestATickOfTheKeepaliveGivesUpWhatRanOut(t *testing.T) {
 	expectCode(t, e.runAt(began, "work", "start", e.fixture.CardInDoing.ID, "--json"), ExitOK)
 
 	tooLate := began.Add(work.ForgottenAfter + time.Minute)
-	beat, cards, err := e.theApp(tooLate).whatTheStoreSays(e.storePath(), e.vars["MINKA_HOST"])
+	lists, err := e.theApp(tooLate).whatTheStoreSays(e.storePath(), e.vars["MINKA_HOST"])
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cards != 0 {
-		t.Errorf("the tick found %d cards, want none: the card ran out a minute ago", cards)
-	}
-	if !beat.Equal(began) {
-		t.Errorf("the tick read the mark of a beat as %s, want %s", beat, began)
+	if len(lists) != 0 {
+		t.Errorf("the tick found %+v, want nothing: the card ran out a minute ago", lists)
 	}
 	// And it is gone for every other reader too, not only for this tick.
-	if left := e.storedHost()["cards"].([]any); len(left) != 0 {
-		t.Errorf("%v is left in the store", left)
+	if sessions := e.storedHosts()[e.vars["MINKA_HOST"]]["sessions"].(map[string]any); len(sessions) != 0 {
+		t.Errorf("%v is left in the store", sessions)
 	}
 }
 
@@ -530,14 +532,14 @@ func TestATickOfTheKeepaliveGivesUpWhatRanOut(t *testing.T) {
 func TestABeatOfTheKeepaliveIsNobodyAtWork(t *testing.T) {
 	e := newAgentEnv(t)
 	began := time.Date(2026, 9, 23, 9, 0, 0, 0, time.UTC)
-	e.vars["CLAUDE_CODE_SESSION_ID"] = "the session that spawned it"
+	e.vars[sessionVariable] = "the-session-that-spawned-it"
 	expectCode(t, e.runAt(began, "work", "start", e.fixture.CardInDoing.ID, "--json"), ExitOK)
 
 	for minute := 30; minute <= 7*60; minute += 30 {
-		expectCode(t, e.runAsTheKeepalive(began.Add(time.Duration(minute)*time.Minute), "heartbeat", "--json"), ExitOK)
+		e.signalAsTheKeepalive(began.Add(time.Duration(minute)*time.Minute), e.vars[sessionVariable])
 	}
 
-	entry := e.storedHost()
+	entry := e.storedList()
 	if got := entry["beatAt"]; got != asStored(began) {
 		t.Errorf("the mark of a beat stands at %v, want the moment the card was taken up", got)
 	}
@@ -564,28 +566,28 @@ func TestABeatOfTheKeepaliveIsNobodyAtWork(t *testing.T) {
 func TestWhatSaysThatSomebodyIsStillAtTheStore(t *testing.T) {
 	e := newAgentEnv(t)
 	began := time.Date(2026, 9, 23, 9, 0, 0, 0, time.UTC)
-	e.vars["CLAUDE_CODE_SESSION_ID"] = "a session at work"
+	e.vars[sessionVariable] = "a-session-at-work"
 
 	expectCode(t, e.runAt(began, "work", "start", e.fixture.CardInDoing.ID, "--json"), ExitOK)
-	if got := e.storedHost()["beatAt"]; got != asStored(began) {
+	if got := e.storedList()["beatAt"]; got != asStored(began) {
 		t.Errorf("work start left the mark at %v, want %s", got, asStored(began))
 	}
 
 	looked := began.Add(5 * time.Minute)
 	expectCode(t, e.runAt(looked, "work", "list", "--json"), ExitOK)
-	if got := e.storedHost()["beatAt"]; got != asStored(began) {
+	if got := e.storedList()["beatAt"]; got != asStored(began) {
 		t.Errorf("work list moved the mark to %v", got)
 	}
 
 	beat := began.Add(10 * time.Minute)
 	expectCode(t, e.runAt(beat, "heartbeat", "--json"), ExitOK)
-	if got := e.storedHost()["beatAt"]; got != asStored(beat) {
+	if got := e.storedList()["beatAt"]; got != asStored(beat) {
 		t.Errorf("the beat of a session left the mark at %v, want %s", got, asStored(beat))
 	}
 
 	stopped := began.Add(20 * time.Minute)
 	expectCode(t, e.runAt(stopped, "work", "stop", "--all", "--json"), ExitOK)
-	if got := e.storedHost()["beatAt"]; got != asStored(stopped) {
+	if got := e.storedList()["beatAt"]; got != asStored(stopped) {
 		t.Errorf("work stop left the mark at %v, want %s", got, asStored(stopped))
 	}
 }
@@ -633,7 +635,7 @@ func (e *testEnv) rememberACardUnder(host string, at time.Time) {
 		e.t.Fatal(err)
 	}
 	defer handle.Close()
-	entry := handle.File.Host(host)
+	entry := handle.File.Host(host).List(work.NoSession)
 	entry.Start(work.Card{ID: e.fixture.CardInDoing.ID, StartedAt: at})
 	entry.BeatAt = at
 	if err := handle.Save(); err != nil {

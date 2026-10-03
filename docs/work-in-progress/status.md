@@ -354,8 +354,12 @@ clearing with `--force`, and a 404 for an unknown card. The card resource
 does not say whether a card has notes, so `cards show` only points to them.
 
 An agent says which cards it has in hand: `work start` and `work stop` keep
-one list per machine, `heartbeat` reports it to `PUT /me/work`, and `hooks
-install` writes the hook of Claude Code that calls it after every tool call.
+one list per session, `heartbeat` reports the list of its own session to `PUT
+/me/work` as a client of that session's own (C-103), and `hooks install` writes
+the hook of Claude Code that calls it after every tool call. The session comes
+from `--session` or `$CLAUDE_CODE_SESSION_ID`, for typed commands and the hook
+alike; a store of one list per machine is handed out to its sessions when it
+is read.
 A beat that finds a card in hand and no keepalive of its host starts one
 (C-043), so a tool call that runs for longer than the three minutes a signal
 counts for keeps its tiles alight — up to twenty-five minutes after the last
@@ -1284,6 +1288,16 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   folder or a document names its tool in the field `board`, and that `blockedBy`
   can name a to-do list, a group, a question or a folder in the trash or in an
   archive, is read in Minka's code and held against the text view on its own.
+- That every session reports its own list under a client of its own is tested
+  against the fake alone, and so are `--session`, the hook going by the
+  environment whatever its input names, the keepalive deciding on each session
+  by its own beat and passing over what the server forgot, and a store of one
+  list per machine handed out to its sessions. Measured outside a test: a beat
+  of the hook wrote the sign of life of a card that `work start` in the Bash
+  tool of the same session had taken up, so the hook's environment carries the
+  same `CLAUDE_CODE_SESSION_ID`. Claude Code's documentation names no such
+  variable, only `session_id` in the input of a hook; should the variable go,
+  every session falls back to the list of no session.
 - Of saying what one is working on, what is left: a tile that lights up and one
   that goes quiet. The signal itself got through on `minka.flownative.com`,
   which knows this CLI as an agent, and the hook has reported out of a real
@@ -1492,6 +1506,12 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   gains a build provenance attestation with instructions for verifying it, and
   the macOS binaries get notarised, which waits for an Apple Developer ID.
 - See a tile live: one that lights up and one that goes quiet at once.
+- See two sessions live, once this version runs on Robert's machine: a card of a
+  session that ended goes dark while another session works on, `work list` shows
+  the other's card under `elsewhere`, and `heartbeat --json` out of the hook
+  names the session of the environment. The Claude Code mod that reports from
+  inside a session follows as a pull request of its own, through `heartbeat
+  --session`.
 - Check the keepalive live, as the [live check](../guides/live-check.md) says: a
   tile that stays alight through a tool call of five minutes, the word in
   `heartbeat --json`, the tile going out with `work stop`, no keepalive left

@@ -89,6 +89,10 @@ type app struct {
 	// it writes neither the sign of life of a card nor the mark of a beat.
 	keepalive bool
 
+	// sessionFlag is the session a command was told it speaks for. It
+	// outweighs the environment.
+	sessionFlag string
+
 	// skillIsTheTopic is set by a command that reports on the installed skill
 	// itself, so that it does not say the same thing twice.
 	skillIsTheTopic bool

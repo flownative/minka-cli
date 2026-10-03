@@ -1,10 +1,10 @@
-// Package work keeps the cards this machine is working on.
+// Package work keeps the cards the sessions on this machine are working on.
 //
-// There is one store per machine, next to the configuration, and every session
-// on the machine writes into it: what the server keeps hangs on the agent and
-// its client, so two sessions with lists of their own would take each other's
-// cards away with every signal. A signal therefore reports the union of the
-// store, and every change to it is made while holding a lock of the kernel, so
+// There is one store per machine, next to the configuration, and in it one list
+// per host and session. Every session reports its own list and nothing else,
+// under a client of its own: the server keeps one set per client, so a session
+// that reported the cards of another would keep them alight after that one
+// died. Every change to the store is made while holding a lock of the kernel, so
 // that a card somebody starts is never lost to a write somebody else began at
 // the same moment.
 package work
@@ -16,6 +16,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"time"
 
@@ -38,24 +39,40 @@ const SeenEvery = time.Minute
 // something and say nothing new.
 const BeatEvery = time.Minute
 
+// HeldFor is how long the server counts a signal. A list that has sent nothing
+// for that long has nothing left on the server to take back.
+const HeldFor = 3 * time.Minute
+
+// NoSession is the key of the list of whoever does not say which session they
+// are: a person at a terminal, or an agent that knows nothing of sessions.
+const NoSession = ""
+
+// sessionPattern is what a session may be called. A session of Claude Code
+// goes by a UUID; the letters are those the server takes for a client, so that
+// a name never has to be mangled on its way anywhere.
+var sessionPattern = regexp.MustCompile(`^[A-Za-z0-9._-]{1,128}$`)
+
+// IsSession says whether a name can stand for a session.
+func IsSession(name string) bool {
+	return sessionPattern.MatchString(name)
+}
+
 // ErrBusy means another process holds the lock on the store.
 var ErrBusy = errors.New("another minka is writing the store")
 
-// Card is a card this machine is at work on. The title and the short
-// identifier are kept as they were read, so that the list can be shown without
-// asking the server again.
+// Card is a card a session is at work on. The title and the short identifier
+// are kept as they were read, so that the list can be shown without asking the
+// server again.
 type Card struct {
 	ID        string    `json:"id"`
 	ShortID   string    `json:"shortId,omitempty"`
 	Title     string    `json:"title,omitempty"`
 	StartedAt time.Time `json:"startedAt"`
 
-	// Session is who took the card up, where a session said who it was, and
-	// SeenAt the last moment that session said it was still at it. The list
-	// belongs to the machine and a signal carries all of it, so without the
-	// name the sign of life of one card would be the busyness of every other.
-	Session string    `json:"session,omitempty"`
-	SeenAt  time.Time `json:"seenAt,omitempty"`
+	// SeenAt is the last moment the session of the list said it was still at
+	// the card. A card in the list of no session is never seen again and goes
+	// by the moment it was started.
+	SeenAt time.Time `json:"seenAt,omitempty"`
 }
 
 // LetGoCard is a card the host did not take into the list at work: the word it
@@ -73,7 +90,13 @@ type LetGoCard struct {
 	At      time.Time `json:"at"`
 }
 
-// Host is what is remembered for one Minka host.
+// Host is what is remembered for one Minka host: one list per session, keyed by
+// the name of the session, and NoSession for whoever gave none.
+type Host struct {
+	Sessions map[string]*List `json:"sessions"`
+}
+
+// List is what one session has in hand on one host, and what it last reported.
 //
 // SentAt and SentCards are the throttle: they say what the last signal carried
 // and when it went out, whether it arrived or not. Every signal is a new
@@ -88,7 +111,7 @@ type LetGoCard struct {
 // out of a session, or a command somebody typed. It hangs on the invocation and
 // not on a request going out, because a signal is held back for a minute at a
 // time and a busy session would otherwise look silent.
-type Host struct {
+type List struct {
 	Cards []Card `json:"cards"`
 
 	// LetGo are the cards the host did not take, newest last, kept as long as a
@@ -189,9 +212,108 @@ func (f *File) Host(host string) *Host {
 	return entry
 }
 
-// Start remembers a card, or says again that this machine is still on one it
+// List is the list of one session, an empty one where it holds nothing yet.
+func (h *Host) List(session string) *List {
+	if h.Sessions == nil {
+		h.Sessions = map[string]*List{}
+	}
+	list, ok := h.Sessions[session]
+	if !ok {
+		list = &List{}
+		h.Sessions[session] = list
+	}
+	return list
+}
+
+// StillAtIt says again that a session is at work on the cards it took up, and
+// answers whether that was worth writing down. A session that gave no name
+// says nothing here: its cards go by the moment they were started.
+func (h *Host) StillAtIt(session string, now time.Time) bool {
+	list, known := h.Sessions[session]
+	if session == NoSession || !known {
+		return false
+	}
+	written := false
+	for i := range list.Cards {
+		if now.Sub(list.Cards[i].SeenAt) < SeenEvery {
+			continue
+		}
+		list.Cards[i].SeenAt = now
+		written = true
+	}
+	return written
+}
+
+// ForgetWhatRanOut sweeps every list of the host, and drops a list that has
+// nothing left to hold, to say or to take back: no card, no note, and nothing
+// sent that the server could still be counting. It answers how many cards it
+// forgot in the list of the session named, which is the one a command speaks
+// for, and whether it changed anything at all.
+func (h *Host) ForgetWhatRanOut(session string, now time.Time) (int, bool) {
+	forgottenHere, changed := 0, false
+	for name, list := range h.Sessions {
+		forgotten, swept := list.ForgetWhatRanOut(now)
+		if name == session {
+			forgottenHere = forgotten
+		}
+		changed = changed || swept
+		if len(list.Cards) == 0 && len(list.LetGo) == 0 && (len(list.SentCards) == 0 || now.Sub(list.SentAt) >= HeldFor) {
+			delete(h.Sessions, name)
+			changed = true
+		}
+	}
+	return forgottenHere, changed
+}
+
+// UnmarshalJSON reads a host in either of two shapes: one list per session, and
+// one list for the whole machine whose cards each name the session that took
+// them up. The second is handed out to those sessions, so that no card is lost
+// and every one keeps its sign of life. What the host said about that list and
+// what it was last sent stay with the list of no session, which reports under
+// the client the whole list went by, so that the next signal of that client
+// takes back what is not its own.
+//
+// A list is given the moment its own cards were last seen as the mark of its
+// beat, not the mark of the machine: a session that died long ago would
+// otherwise pass for one at work as long as any other was.
+func (h *Host) UnmarshalJSON(content []byte) error {
+	var stored struct {
+		Sessions map[string]*List `json:"sessions"`
+		List
+		Cards []struct {
+			Card
+			Session string `json:"session"`
+		} `json:"cards"`
+	}
+	if err := json.Unmarshal(content, &stored); err != nil {
+		return err
+	}
+	h.Sessions = stored.Sessions
+	if len(stored.Cards) == 0 && len(stored.LetGo) == 0 && len(stored.SentCards) == 0 {
+		return nil
+	}
+
+	machine := h.List(NoSession)
+	machine.LetGo = append(machine.LetGo, stored.LetGo...)
+	machine.SentAt, machine.SentCards = stored.SentAt, stored.SentCards
+	machine.ReportedAt, machine.Failure, machine.FailedAt = stored.ReportedAt, stored.Failure, stored.FailedAt
+	for _, card := range stored.Cards {
+		session := card.Session
+		if !IsSession(session) {
+			session = NoSession
+		}
+		list := h.List(session)
+		list.Start(card.Card)
+		if seen := lastSeen(card.Card); seen.After(list.BeatAt) {
+			list.BeatAt = seen
+		}
+	}
+	return nil
+}
+
+// Start remembers a card, or says again that the session is still on one it
 // remembers. It answers whether the card was new.
-func (h *Host) Start(card Card) bool {
+func (h *List) Start(card Card) bool {
 	at := slices.IndexFunc(h.Cards, func(c Card) bool { return c.ID == card.ID })
 	if at < 0 {
 		h.Cards = append(h.Cards, card)
@@ -202,7 +324,7 @@ func (h *Host) Start(card Card) bool {
 }
 
 // Stop forgets a card and answers whether it was there.
-func (h *Host) Stop(cardID string) bool {
+func (h *List) Stop(cardID string) bool {
 	before := len(h.Cards)
 	h.Cards = slices.DeleteFunc(h.Cards, func(c Card) bool { return c.ID == cardID })
 	return len(h.Cards) < before
@@ -210,7 +332,7 @@ func (h *Host) Stop(cardID string) bool {
 
 // LetGoOf takes a card out of the list because the host will not have it, and
 // leaves the note that says why.
-func (h *Host) LetGoOf(cardID, reason string, now time.Time) LetGoCard {
+func (h *List) LetGoOf(cardID, reason string, now time.Time) LetGoCard {
 	note := h.note(cardID, reason, now)
 	h.Stop(cardID)
 	return note
@@ -218,14 +340,14 @@ func (h *Host) LetGoOf(cardID, reason string, now time.Time) LetGoCard {
 
 // NoteNotTaken keeps the note about a card the host did not take and leaves the
 // list as it is, for a word this machine does not act on.
-func (h *Host) NoteNotTaken(cardID, reason string, now time.Time) LetGoCard {
+func (h *List) NoteNotTaken(cardID, reason string, now time.Time) LetGoCard {
 	return h.note(cardID, reason, now)
 }
 
 // note writes down what the host said about one card, under the name the card
 // goes by here, and replaces what it said about the same card before: a
 // condition that lasts is one note, not one per signal.
-func (h *Host) note(cardID, reason string, now time.Time) LetGoCard {
+func (h *List) note(cardID, reason string, now time.Time) LetGoCard {
 	note := LetGoCard{ID: cardID, Reason: reason, At: now}
 	if at := slices.IndexFunc(h.Cards, func(c Card) bool { return c.ID == cardID }); at >= 0 {
 		note.ShortID = h.Cards[at].ShortID
@@ -236,29 +358,11 @@ func (h *Host) note(cardID, reason string, now time.Time) LetGoCard {
 	return note
 }
 
-// StillAtIt says again that a session is at work on the cards it took up, and
-// answers whether that was worth writing down. A session that gave no name
-// says nothing here: its cards go by the moment they were started.
-func (h *Host) StillAtIt(session string, now time.Time) bool {
-	if session == "" {
-		return false
-	}
-	written := false
-	for i := range h.Cards {
-		if h.Cards[i].Session != session || now.Sub(h.Cards[i].SeenAt) < SeenEvery {
-			continue
-		}
-		h.Cards[i].SeenAt = now
-		written = true
-	}
-	return written
-}
-
 // Beat writes down that somebody who is at work was here, and answers whether
 // that was worth writing down. Whoever is at no work says nothing here: the
 // mark is what tells a machine where somebody is working from one where nothing
 // but minka itself is left running.
-func (h *Host) Beat(now time.Time) bool {
+func (h *List) Beat(now time.Time) bool {
 	if now.Sub(h.BeatAt) < BeatEvery {
 		return false
 	}
@@ -270,7 +374,7 @@ func (h *Host) Beat(now time.Time) bool {
 // and the notes about cards the host did not take that have stood as long: one
 // window for everything the store keeps without being told again. It answers
 // how many cards it forgot and whether it changed anything at all.
-func (h *Host) ForgetWhatRanOut(now time.Time) (int, bool) {
+func (h *List) ForgetWhatRanOut(now time.Time) (int, bool) {
 	before := len(h.Cards)
 	h.Cards = slices.DeleteFunc(h.Cards, func(c Card) bool { return now.Sub(lastSeen(c)) >= ForgottenAfter })
 	notes := len(h.LetGo)
@@ -290,9 +394,9 @@ func lastSeen(card Card) time.Time {
 	return card.SeenAt
 }
 
-// CardIDs is what a signal carries: every card of the store, sorted, so that
-// two sets can be compared as they are.
-func (h *Host) CardIDs() []string {
+// CardIDs is what a signal carries: every card of the list, sorted, so that two
+// sets can be compared as they are.
+func (h *List) CardIDs() []string {
 	ids := make([]string, 0, len(h.Cards))
 	for _, card := range h.Cards {
 		ids = append(ids, card.ID)

@@ -110,6 +110,6 @@ the card came back **off hold**, which it always does, so `cards unarchive` says
 it in a `notice`.
 
 A card of an archive is left out of the set an agent says it is working on, with
-the word `cardArchived`, so the list of the machine loses it with the next signal
+the word `cardArchived`, so the list of its session loses it with the next signal
 by [C-053](../decisions.md#c-053). `cards archive` does not take it out itself:
 one mechanism for that is enough.

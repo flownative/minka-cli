@@ -4,8 +4,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"os/exec"
+	"slices"
 	"strings"
 	"time"
 
@@ -49,15 +51,15 @@ const (
 	tickEndsForTheClockJumped
 )
 
-// tick is one wake-up of the keepalive: the moment it woke, the moment it woke
-// the time before, and what the store said — which is nothing where somebody
-// else held the store for that moment.
+// tick is one wake-up of the keepalive for the list of one session: the moment
+// it woke, the moment it woke the time before, and what the store said of that
+// list — which is nothing where somebody else held the store for that moment.
 type tick struct {
 	now    time.Time
 	before time.Time
 
-	// read says whether the store answered, beat when somebody at work was last
-	// there, cards how many are in hand.
+	// read says whether the store answered, beat when the session was last
+	// there, cards how many it has in hand.
 	read  bool
 	beat  time.Time
 	cards int
@@ -72,11 +74,7 @@ type tick struct {
 // jumped and a store nobody has been at are left unsaid, because the cards may
 // still be in hand and the server forgets a signal by itself.
 func (t tick) decide() verdict {
-	// A step back of less than a tick is a clock being corrected by a second or
-	// two, which says nothing about the work: ending on that would kill the
-	// keepalive in the middle of the long tool call it is there for, where no
-	// beat is coming to start another.
-	if apart := t.now.Round(0).Sub(t.before.Round(0)); apart >= aJumpInTheClock || apart <= -keepaliveTick {
+	if t.clockJumped() {
 		return tickEndsForTheClockJumped
 	}
 	if !t.read {
@@ -89,6 +87,16 @@ func (t tick) decide() verdict {
 		return tickEndsForNobodyIsAtWork
 	}
 	return tickReports
+}
+
+// clockJumped says whether the two wake-ups stand further apart than a tick can
+// account for. A step back of less than a tick is a clock being corrected by a
+// second or two, which says nothing about the work: ending on that would kill
+// the keepalive in the middle of the long tool call it is there for, where no
+// beat is coming to start another.
+func (t tick) clockJumped() bool {
+	apart := t.now.Round(0).Sub(t.before.Round(0))
+	return apart >= aJumpInTheClock || apart <= -keepaliveTick
 }
 
 // whyItEnded is what the keepalive says of its own last tick. Nothing reads it
@@ -122,16 +130,22 @@ func (a *app) reportWhileNobodyElseDoes() error {
 	})
 }
 
-// keepTilesAlive reports the cards of this machine on a timer of its own, for as
-// long as somebody is at work on them.
+// keepTilesAlive reports the cards of the sessions of this host on a timer of its
+// own, each session's list under that session's client and for as long as that
+// session is at work on them.
 //
 // A session makes no signal of its own while one tool call runs, and the server
 // forgets a card three minutes after the last signal, so the tile would go dark
 // while the work goes on. This is what reports in between, and what it is worth
 // is twenty-five minutes from the last beat of the session: nothing is at the
 // store while that one call runs, so the mark of a beat stands still with it and
-// the keepalive stops that long after it. A call that lasts longer outlives its
-// tiles.
+// the keepalive stops reporting that session that long after it. A call that
+// lasts longer outlives its tiles.
+//
+// Every session is decided on by its own beat and nobody else's. One timer for
+// the host is enough for that, and it must not be more: a session that is busy
+// says nothing about a session that died, so the cards of that one are reported
+// only for as long as its own last beat allows.
 //
 // Nothing it meets is a failure, the way nothing a beat meets is one: it says
 // why it stopped and leaves it at that.
@@ -164,7 +178,7 @@ func (a *app) keepTilesAlive() string {
 	before := a.now()
 	for {
 		now := a.now()
-		beat, cards, err := a.whatTheStoreSays(path, host)
+		lists, err := a.whatTheStoreSays(path, host)
 		// A store somebody else holds is a moment to pass over; a store that
 		// cannot be read is the end. Otherwise a keepalive over a broken store
 		// would tick until the machine is restarted, report nothing, and hold the
@@ -172,22 +186,15 @@ func (a *app) keepTilesAlive() string {
 		if err != nil && !errors.Is(err, work.ErrBusy) {
 			return "the store cannot be read: " + err.Error()
 		}
-		at := tick{now: now, before: before, read: err == nil, beat: beat, cards: cards}.decide()
-		before = now
-
-		switch at {
-		case tickPassesOver:
-		case tickReports:
-			a.signal(aBeatWaitsForTheStore)
-		case tickEndsOnAnEmptyList:
-			// The empty set goes out before the keepalive does, so that the tiles
-			// go out at once instead of after the three minutes the last signal
-			// counts for.
-			a.signal(aBeatWaitsForTheStore)
-			return whyItEnded(at)
-		default:
-			return whyItEnded(at)
+		if (tick{now: now, before: before}).clockJumped() {
+			return whyItEnded(tickEndsForTheClockJumped)
 		}
+		if err == nil {
+			if over := a.reportEverySessionAtWork(lists, now, before); over != tickReports {
+				return whyItEnded(over)
+			}
+		}
+		before = now
 
 		select {
 		case <-a.ctx.Done():
@@ -197,28 +204,91 @@ func (a *app) keepTilesAlive() string {
 	}
 }
 
-// whatTheStoreSays is what one tick decides on. ErrBusy says that somebody else
-// held the store for that moment and nothing else is wrong with it; any other
-// error is what it says.
+// reportEverySessionAtWork is one tick over the lists of the host: it reports
+// every session that is at work, and takes back the set of every session that
+// has nothing in hand any more. It answers tickReports while any session is
+// still at work, and otherwise the verdict the keepalive ends on.
+//
+// An empty list is reported before the keepalive lets go of it, so that the
+// tiles go out at once instead of after the three minutes the last signal counts
+// for; the signal sends nothing where nothing was said before. A list whose
+// session has not been at the store for too long is not reported at all: the
+// cards may still be in hand, and the server forgets them by itself.
+//
+// Nor is a list the server has already forgotten while its session said
+// nothing since: a keepalive that starts after a machine woke up, or after the
+// last one stopped, would otherwise light the tiles of a session that is gone
+// once more. Its next beat lights them again where it is not.
+func (a *app) reportEverySessionAtWork(lists []sessionAtATick, now, before time.Time) verdict {
+	reporting, nobodyAtWork := false, false
+	for _, list := range lists {
+		switch at := (tick{now: now, before: before, read: true, beat: list.beat, cards: list.cards}).decide(); at {
+		case tickReports:
+			if list.forgottenByTheServer(now) {
+				nobodyAtWork = true
+				continue
+			}
+			a.signal(list.session, aBeatWaitsForTheStore)
+			reporting = true
+		case tickEndsOnAnEmptyList:
+			a.signal(list.session, aBeatWaitsForTheStore)
+		case tickEndsForNobodyIsAtWork:
+			nobodyAtWork = true
+		}
+	}
+	switch {
+	case reporting:
+		return tickReports
+	case nobodyAtWork:
+		return tickEndsForNobodyIsAtWork
+	}
+	return tickEndsOnAnEmptyList
+}
+
+// sessionAtATick is what one tick knows of the list of one session: when the
+// session was last at the store, how many cards it holds, and when a signal of
+// it last went out.
+type sessionAtATick struct {
+	session string
+	beat    time.Time
+	cards   int
+	sent    time.Time
+}
+
+// forgottenByTheServer says that the server no longer counts the last signal
+// of the list, and that its session has not been at the store since.
+func (s sessionAtATick) forgottenByTheServer(now time.Time) bool {
+	return now.Sub(s.sent) >= work.HeldFor && !s.beat.After(s.sent)
+}
+
+// whatTheStoreSays is what one tick decides on: the list of every session of
+// the host, in the order of their names. ErrBusy says that somebody else held
+// the store for that moment and nothing else is wrong with it; any other error
+// is what it says.
 //
 // It gives up what ran out like every other writer: when a session dies the
 // keepalive is often the last process left on the machine, and a card nobody
 // gives up would be reported past the working day it is allowed.
-func (a *app) whatTheStoreSays(path, host string) (beat time.Time, cards int, err error) {
+func (a *app) whatTheStoreSays(path, hostName string) ([]sessionAtATick, error) {
 	handle, err := work.Open(path, aBeatWaitsForTheStore)
 	if err != nil {
-		return time.Time{}, 0, err
+		return nil, err
 	}
 	defer handle.Close()
 
-	entry, known := handle.File.Hosts[host]
+	host, known := handle.File.Hosts[hostName]
 	if !known {
-		return time.Time{}, 0, nil
+		return nil, nil
 	}
-	if _, swept := entry.ForgetWhatRanOut(a.now()); swept {
+	if _, swept := host.ForgetWhatRanOut(work.NoSession, a.now()); swept {
 		_ = handle.Save()
 	}
-	return entry.BeatAt, len(entry.Cards), nil
+	var lists []sessionAtATick
+	for _, session := range slices.Sorted(maps.Keys(host.Sessions)) {
+		list := host.Sessions[session]
+		lists = append(lists, sessionAtATick{session: session, beat: list.BeatAt, cards: len(list.Cards), sent: list.SentAt})
+	}
+	return lists, nil
 }
 
 // What heartbeat says became of the keepalive.
@@ -230,7 +300,7 @@ const (
 // whatBecameOfTheKeepalive starts the process that reports while this session is
 // busy with one long tool call, and says what became of it. Somebody looking
 // into a tile that stays dark has nothing else to go on.
-func (a *app) whatBecameOfTheKeepalive() string {
+func (a *app) whatBecameOfTheKeepalive(session string) string {
 	path, err := a.storePath()
 	if err != nil {
 		return notStarted(err.Error())
@@ -243,7 +313,7 @@ func (a *app) whatBecameOfTheKeepalive() string {
 		return notStarted(err.Error())
 	}
 
-	cards, err := a.cardsInTheList(path, host)
+	cards, err := a.cardsInTheList(path, host, session)
 	switch {
 	case errors.Is(err, work.ErrBusy):
 		return notStarted("the store is busy")
@@ -270,24 +340,24 @@ func notStarted(why string) string {
 	return "not started: " + why
 }
 
-// cardsInTheList is how many cards this host holds.
+// cardsInTheList is how many cards one session holds on this host.
 //
 // The signal beside it says only what it carried, and the throttle holds most
 // beats back, so whoever has to know whether anybody is at work asks the store.
 // It waits for nobody: where somebody else holds the store, the next beat asks
 // again.
-func (a *app) cardsInTheList(path, host string) (int, error) {
+func (a *app) cardsInTheList(path, hostName, session string) (int, error) {
 	handle, err := work.Open(path, 0)
 	if err != nil {
 		return 0, err
 	}
 	defer handle.Close()
 
-	entry, known := handle.File.Hosts[host]
+	host, known := handle.File.Hosts[hostName]
 	if !known {
 		return 0, nil
 	}
-	return len(entry.Cards), nil
+	return len(listOf(host, session).Cards), nil
 }
 
 // spawnKeepalive starts the keepalive as a process of its own, for the host the
