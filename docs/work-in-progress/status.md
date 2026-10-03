@@ -276,12 +276,13 @@ a gap about clients; an Email forwards tool carries its word like
 every other tool, and a mail and an answer by mail follow it.
 Mentions in the texts are references, the preview of a link is the link, a
 video or a player embedded in a text is an `<import-embed>` with its address,
-a link to a card, a message or a chat of the account is an
-`<import-reference>`, and the files of the texts and the files dropped
-into a chat come with a record and their bytes, streamed from the
-Basecamp CLI or taken over from the bundle the run replaces. It reads
-through the Basecamp CLI and is tested against the invented account in
-`internal/fakebasecamp`.
+a link to a card, a message, a chat or an entry of a calendar of the account,
+a day of an entry naming the entry, is an `<import-reference>`, made from the
+address alone and with or without `--calendars`, and the files of the texts
+and the files dropped into a chat come with a record and their bytes,
+streamed from the Basecamp CLI or taken over from the bundle the run
+replaces. It reads through the Basecamp CLI and is tested against the
+invented account in `internal/fakebasecamp`.
 A post, a card, a to-do, a document and an upload say who follows them at the
 source (`subscribers`, C-084), which Minka takes as the whole truth. The list is
 read per record from Basecamp's subscription of the recording and names only the
@@ -405,7 +406,13 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   all-day series and its `duration`; a creator whose zone is not the one the
   hour holds in; whether the list names the first day of a series that has run
   for years; and whether `projects/recordings.json?type=Comment` names the
-  comments under single days at all. Owed before the merge into a real run: a
+  comments under single days at all. The links to an entry are shaped after
+  those the account's texts hold, read from the Basecamp CLI's cache: eight
+  distinct ones, six to an entry and two to a day of eight digits, every one
+  at `3.basecamp.com` with the account and the bucket, never with `.json` or
+  anything below; that Minka
+  turns them into a reference to the event is checked against its code and
+  tests only. Owed before the merge into a real run: a
   read-only dry run of one project with a calendar, with Robert's word.
 
 - The order of the refusals follows Minka's `main`, which is in no release

@@ -75,7 +75,8 @@ The Basecamp CLI has to be installed and signed in.
   path with `schedule_entries/` in it before it is asked, whatever part of the
   run asks — a dock entry or a body that names such an address included — and
   ends the run as `api_error`. No part of the extractor needs one: a calendar
-  is read from its lists alone.
+  is read from its lists alone, and a link to an entry or a day of it becomes
+  a reference from its address alone.
 - Only paths of the account reach the Basecamp CLI. Where an answer names an
   absolute address, as a dock entry does, it has to lie under the address of
   the account and is turned into a path; anything else is refused, because the
@@ -1266,8 +1267,8 @@ whole, with the figure Basecamp rendered into it:
   preview has no title (`linkPreviews`). The address is the `href` of the
   embed, else its `url`. Only an absolute address over http or https becomes
   a link: of any other, the title stays as plain text, or nothing, and it is
-  not counted. A link to a card, a post or a chat of the account becomes a
-  reference, see below, and counts as a link all the same.
+  not counted. A link to a card, a post, a chat or an event of the account
+  becomes a reference, see below, and counts as a link all the same.
 - A picture at a foreign address, an embed of the kind `image` without a
   signed ID, is no stored file. It becomes a link to its `url` with its
   `caption` as the text, by the rules of the preview of a link, a reference
@@ -1359,18 +1360,22 @@ wordless would be putting that in writing wherever Minka took the embed after
 all. A dry run knows no more than what Basecamp says of a file's size,
 so it writes the line only where the size alone gives it away.
 
-A link to a card, a message or a chat of the account, and to a line of a
-chat, becomes a reference to that record (C-031):
+A link to a card, a message, a chat or an entry of a calendar of the account,
+to a line of a chat and to a day of an entry, becomes a reference to that
+record (C-031):
 
 ```
-<import-reference kind="cards|posts|tools" ref="<sourceId>" href="<address>">words</import-reference>
+<import-reference kind="cards|posts|tools|events" ref="<sourceId>" href="<address>">words</import-reference>
 ```
 
 - `kind` is the kind of record in a bundle: `cards` for a card, `posts` for a
-  message, `tools` for a chat. A line of a chat is a reference to its chat.
+  message, `tools` for a chat, `events` for an entry of a calendar. A line of a
+  chat is a reference to its chat, and a day of an entry one to its entry: a
+  day is no record of its own, so the day stands in `href` alone.
   `ref` is the source ID of that record, which is the ID of Basecamp in the
   address, without the zeros it may begin with: the ID of a card, of a
-  message, and of a chat, which is also the ID of the chat's tool. `href` is
+  message, of a chat, which is also the ID of the chat's tool, and of an
+  entry, which is the `sourceId` of its event. `href` is
   the address as it stood, escaped as an attribute value once, an anchor
   included. Nothing else of the link comes along.
 - The words of the link stand between the tags as plain text, escaped once:
@@ -1383,23 +1388,36 @@ chat, becomes a reference to that record (C-031):
   words gives an empty reference.
 - Every such link is marked, whatever its words, and whether the record is in
   the bundle or not: the applier resolves what it knows and makes the link
-  anew of what it does not, from `href` and the words.
+  anew of what it does not, from `href` and the words. A link to an entry is
+  marked in a run without `--calendars` as well: the applier also knows the
+  events an earlier run brought, and a Minka that knows no reference to an
+  event keeps the link.
+- A link is read and never followed. Basecamp makes a record of a day of a
+  series where somebody asks for it, so the run names an entry and a day of it
+  from the address alone and asks Basecamp for neither (C-097).
 - The address is asked without the whitespace around it. It begins with
   `http://` or `https://` in any case, its host is `3.basecamp.com` or
   `app.basecamp.com` in any case, without a port and without a name before an
   `@`, and its path, without query and fragment, is
   `/<account>/buckets/<n>/card_tables/cards/<id>`,
-  `/<account>/buckets/<n>/messages/<id>` or
-  `/<account>/buckets/<n>/chats/<id>`, where the account is the one of the
-  run and every `<…>` is digits. A chat may be followed by `@<line>`, and each
-  of them by `/` and anything, such as `/lines/<line>` or the menu of a line.
+  `/<account>/buckets/<n>/messages/<id>`,
+  `/<account>/buckets/<n>/chats/<id>` or
+  `/<account>/buckets/<n>/schedule_entries/<id>`, where the account is the one
+  of the run and every `<…>` is digits. A chat may be followed by `@<line>`,
+  and a card, a message and a chat by `/` and anything, such as
+  `/lines/<line>` or the menu of a line. An entry may be followed by
+  `/occurrences/<day>` alone, where the day is eight digits that name a day
+  of the calendar, `YYYYMMDD`: the thirtieth of February is none, and
+  anything else below an entry, `.json` after its ID or after a day, or a
+  day followed by more, shows nothing, because Basecamp writes no such page
+  (measured: links in texts name an entry or a day of it and nothing else).
   The path is asked with its escapes read and its `.` and `..` segments
   resolved, so a path that climbs out of a page shows what it climbs to. A
   path that begins with `//` shows nothing: Basecamp writes none. An ID of
   more digits than a number holds is none.
 - Any other link stays as it stands: a to-do, a document, a file, a card
   table, a message board, a project, another account, another host, a stored
-  file, and a link without an address.
+  file, an address of the API, and a link without an address.
 - A link ends where its end tag stands, where the next link begins, as it
   does for a browser, where a block such as a paragraph, a list item or a
   figure begins or ends, before the end tag of an element that began before
@@ -1409,7 +1427,7 @@ chat, becomes a reference to that record (C-031):
   begins within the words gives its words, and the end of an element that has
   none, such as `</br>`, ends nothing.
 - The references are counted by kind (`references`: `cards`, `posts`,
-  `tools`).
+  `tools`, `events`).
 
 A line of a chat that is a file somebody dropped has no text. Its body is one
 `<import-attachment ref="blob-<key>"></import-attachment>` per file, in the

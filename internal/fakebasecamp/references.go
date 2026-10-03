@@ -10,13 +10,14 @@ func Link(address, words string) string {
 	return fmt.Sprintf(`<a href="%s">%s</a>`, html.EscapeString(address), words)
 }
 
-// referenceProject is a project whose texts link to cards, messages and
-// chats, and to a line of a chat, of this project and of others, at both
-// hosts Basecamp shows its pages at, with an anchor and below a page; and to
-// what is none of them: a to-do, a document, the project, a card table,
-// another account, another host, a stored file. Every kind of text holds such
-// links: the note of a card, a comment, a message, a line and the preview of
-// a link in a line.
+// referenceProject is a project whose texts link to cards, messages, chats
+// and entries of a calendar, to a line of a chat and a day of an entry, of
+// this project and of others, at both hosts Basecamp shows its pages at, with
+// an anchor and below a page; and to what is none of them: a to-do, a
+// document, the project, a card table, another account, another host, a
+// stored file, and what stands below an entry that is no day of it. Every
+// kind of text holds such links: the note of a card, a comment, a message, a
+// line and the preview of a link in a line.
 func referenceProject(ada, grace Person, tool func(int64, string, string, string, bool, int, *Person) Tool) Project {
 	at := func(day, hour int) string { return fmt.Sprintf("2023-06-%02dT%02d:00:00.000Z", day, hour) }
 	page := func(path string) string { return "https://3.basecamp.com/4242/" + path }
@@ -60,6 +61,19 @@ func referenceProject(ada, grace Person, tool func(int64, string, string, string
 				Link("https://3.basecamp.com.example.test/4242/buckets/7006/messages/9982", "a lookalike") + `, ` +
 				Link(page("buckets/7006/messages/9982@1"), "a message with a line") + `.</div>`},
 		{ID: 9982, Subject: "The plan", Creator: &grace, CreatedAt: at(4, 9), UpdatedAt: at(4, 9), Content: `<div>Plan.</div>`},
+		{ID: 9983, Subject: "When", Creator: &ada, CreatedAt: at(4, 10), UpdatedAt: at(4, 10),
+			Content: `<div>Meet at ` + Link(page("buckets/7006/schedule_entries/9441"), "the kick-off") + `, ` +
+				Link(page("buckets/7006/schedule_entries/9442/occurrences/20230512"), "one Friday") + `, ` +
+				Link("https://app.basecamp.com/4242/buckets/7004/schedule_entries/9443/occurrences/20240229#__recording_9444", "a leap day elsewhere") + `.</div>` +
+				`<div>Not ours: ` + Link("https://3.basecamp.com/9999/buckets/7006/schedule_entries/9441", "another account") + `, ` +
+				Link(page("buckets/7006/schedule_entries/9441x"), "letters after the ID") + `, ` +
+				Link(page("buckets/7006/schedule_entries/9441.json"), "the API") + `, ` +
+				Link(page("buckets/7006/schedule_entries/9441/edit"), "a page below the entry") + `, ` +
+				Link(page("buckets/7006/schedule_entries/9441@1"), "an entry with a line") + `, ` +
+				Link(page("buckets/7006/schedule_entries/9442/occurrences/20230230"), "the thirtieth of February") + `, ` +
+				Link(page("buckets/7006/schedule_entries/9442/occurrences/2023051"), "seven digits") + `, ` +
+				Link(page("buckets/7006/schedule_entries/9442/occurrences/20230512/subscription"), "below a day") + `, ` +
+				Link(page("buckets/7006/schedule_entries/9442/occurrences"), "no day") + `.</div>`},
 	}
 
 	chat := tool(9062, "chat", "chats", "Linked chat", true, 3, &ada)

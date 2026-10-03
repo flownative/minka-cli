@@ -1,6 +1,8 @@
 package basecamp_test
 
 import (
+	"regexp"
+	"strings"
 	"testing"
 
 	"github.com/flownative/minka-cli/internal/basecamp"
@@ -9,13 +11,18 @@ import (
 
 const referenceProject = "7006"
 
+// anEntryOfTheTexts is an ID of an entry the texts of the reference project
+// link to, as a whole number in a path.
+var anEntryOfTheTexts = regexp.MustCompile(`(^|[^0-9])944[1-4]([^0-9]|$)`)
+
 func reference(kind, ref, href, words string) string {
 	return `<import-reference kind="` + kind + `" ref="` + ref + `" href="` + href + `">` + words + `</import-reference>`
 }
 
-func TestALinkToACardAPostOrAChatOfTheAccountBecomesAReferenceInEveryText(t *testing.T) {
+func TestALinkToACardAPostAChatOrAnEventOfTheAccountBecomesAReferenceInEveryText(t *testing.T) {
 	dir := t.TempDir() + "/bundle"
-	result := extractInto(t, fakebasecamp.New(), dir, referenceProject)
+	account := fakebasecamp.New()
+	result := extractInto(t, account, dir, referenceProject)
 	bodies := bodiesOf(t, dir)
 
 	page := func(path string) string { return "https://3.basecamp.com/4242/" + path }
@@ -37,7 +44,19 @@ func TestALinkToACardAPostOrAChatOfTheAccountBecomesAReferenceInEveryText(t *tes
 			fakebasecamp.Link("https://storage.3.basecamp.com/4242/blobs/"+fakebasecamp.FileKey(1)+"/download/x.png", "a stored file") + `, ` +
 			fakebasecamp.Link("https://3.basecamp.com.example.test/4242/buckets/7006/messages/9982", "a lookalike") + `, ` +
 			fakebasecamp.Link(page("buckets/7006/messages/9982@1"), "a message with a line") + `.</div>`,
-		"posts 9982":    `<div>Plan.</div>`,
+		"posts 9982": `<div>Plan.</div>`,
+		"posts 9983": `<div>Meet at ` + reference("events", "9441", page("buckets/7006/schedule_entries/9441"), "the kick-off") + `, ` +
+			reference("events", "9442", page("buckets/7006/schedule_entries/9442/occurrences/20230512"), "one Friday") + `, ` +
+			reference("events", "9443", "https://app.basecamp.com/4242/buckets/7004/schedule_entries/9443/occurrences/20240229#__recording_9444", "a leap day elsewhere") + `.</div>` +
+			`<div>Not ours: ` + fakebasecamp.Link("https://3.basecamp.com/9999/buckets/7006/schedule_entries/9441", "another account") + `, ` +
+			fakebasecamp.Link(page("buckets/7006/schedule_entries/9441x"), "letters after the ID") + `, ` +
+			fakebasecamp.Link(page("buckets/7006/schedule_entries/9441.json"), "the API") + `, ` +
+			fakebasecamp.Link(page("buckets/7006/schedule_entries/9441/edit"), "a page below the entry") + `, ` +
+			fakebasecamp.Link(page("buckets/7006/schedule_entries/9441@1"), "an entry with a line") + `, ` +
+			fakebasecamp.Link(page("buckets/7006/schedule_entries/9442/occurrences/20230230"), "the thirtieth of February") + `, ` +
+			fakebasecamp.Link(page("buckets/7006/schedule_entries/9442/occurrences/2023051"), "seven digits") + `, ` +
+			fakebasecamp.Link(page("buckets/7006/schedule_entries/9442/occurrences/20230512/subscription"), "below a day") + `, ` +
+			fakebasecamp.Link(page("buckets/7006/schedule_entries/9442/occurrences"), "no day") + `.</div>`,
 		"messages 9991": `<div>` + reference("cards", "9961", page("buckets/7006/card_tables/cards/9961"), "Links") + ` and <a name="top">an anchor</a></div>`,
 		"messages 9992": `see ` + reference("cards", "9962", "https://APP.basecamp.com/4242/buckets/7006/card_tables/cards/9962", "https://APP.basecamp.com/4242/buckets/7006/card_tables/cards/9962"),
 		"messages 9993": `Here`,
@@ -47,8 +66,15 @@ func TestALinkToACardAPostOrAChatOfTheAccountBecomesAReferenceInEveryText(t *tes
 			t.Errorf("%s:\n got %q\nwant %q", key, bodies[key], text)
 		}
 	}
-	if want := (basecamp.ReferenceCounts{Cards: 4, Posts: 2, Tools: 3}); result.Bodies.References != want {
+	if want := (basecamp.ReferenceCounts{Cards: 4, Posts: 2, Tools: 3, Events: 3}); result.Bodies.References != want {
 		t.Errorf("references %+v, want %+v", result.Bodies.References, want)
+	}
+	// A link is read, never followed: asking for an entry or a day of it
+	// writes at the source, at whatever address the entry is asked for.
+	for _, path := range account.Requests {
+		if strings.Contains(path, "schedule_entries") || anEntryOfTheTexts.MatchString(path) {
+			t.Errorf("the run asked for %s", path)
+		}
 	}
 	// The preview of a link to a card is a link all the same.
 	if result.Bodies.LinkPreviews != 1 {
