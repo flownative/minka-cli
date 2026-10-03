@@ -44,7 +44,7 @@ func HoldKeepalive(storePath, host string) (*Keepalive, error) {
 
 // Release gives the lock up. It is safe on a lock already released.
 func (k *Keepalive) Release() {
-	k.held.release()
+	k.held.Release()
 }
 
 // SomebodyKeepsAlive says whether a process of this host is reporting on a
