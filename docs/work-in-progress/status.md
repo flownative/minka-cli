@@ -34,10 +34,18 @@ create` and `--ask` of `checkins create` take names and e-mail addresses
 looked up there; `--project` of `docs uploads create` is hidden and checked
 (C-092). The rule the commands follow is
 [Docs & Files](../stable/docs-and-files.md) (C-067, C-068, C-085, C-092).
-Everything the API does not offer — replacing the file of an upload, deleting, archiving
-and moving an entry, folders, the archive of a tool, drafts — is named there
-and nowhere pretended. None of it has been seen live: the whole feature is
-checked against the fake, see below.
+Everything the API does not offer — deleting, archiving and moving an entry,
+folders, the archive of a tool, drafts, making an earlier version current — is
+named there and nowhere pretended. None of it has been seen live: the whole
+feature is checked against the fake, see below.
+
+The versions of a document are read with `docs versions list` and `show`, the
+files of an upload with `docs uploads versions list`, and `docs uploads
+versions create` gives an upload another file in the two steps of `docs
+uploads create`, keeping the old one as a version (C-099). Minka's side is on
+its `main` and in no release yet, so production gets it with the next Minka
+release; the commands are checked against Minka's code and tests and the fake,
+and live only in what addresses that name nothing show, see below.
 
 The to-do lists of a project are read with `todolists tools`, `todolists list`
 and `todolists show`, and written with `todolists create`, `edit`, `archive`,
@@ -466,6 +474,29 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   Who is told about a mention in the description, and the subscription of the
   writer, the fake does not keep at all. Which files a client is shown the fake
   has no word for.
+- The versions of documents and uploads: no request of them has reached a
+  version on a real Minka. Read in `FilesApiController::documentVersionsAction`,
+  `documentVersionAction`, `uploadVersionsAction` and `addUploadVersionAction`,
+  `EditUploadHandler`, `DbalFilesRepository::editUpload`,
+  `whyAnUploadCannotTake`, `FilesQueryService::findVersionsOf` and
+  `findFilesOf` and `ApiFilesVersionsTest` on Minka's `main` (2cef0959), and
+  mirrored by the fake. Seen live on `minka.localbeach.net` against a fresh
+  random UUID only: the three reads and the POST answer Minka's JSON 404, and
+  the POST reads its body first — 400 `malformedBody` for a body that is no
+  JSON and 415 for `text/plain` before the 404, and a body with a `blobId` and
+  an `expectedUpdatedAt` that are none answers the 404, so the upload comes
+  before the fields. `minka.flownative.com` answers the address with a 404 of
+  text/html: it has no such route yet. The local Test-Projekt has no Docs &
+  Files tool, so no version has been read live. What the fake does not mirror:
+  a document or upload set up without versions gets them made up when they are
+  first asked for (a document's first without an author, an upload's by
+  whoever stored its file), where Minka keeps them from its own records; which
+  files a version names is the files its body names, where Minka asks the files kept
+  for the version and those of the document; a write the controller reads in
+  the same moment as somebody else's, which the fake cannot have; and an entry
+  in the trash, which the fake has no word for. A client is refused as in
+  Minka, at the versions and at an earlier file of an upload unless it stored
+  that file itself.
 - Everything of `todolists` and `todogroups`: no request of it has gone to a
   real Minka. The fake mirrors what was read in `TodosApiController`, the
   `TodoQueryService`, the handlers and `DbalTodoRepository`: the order the

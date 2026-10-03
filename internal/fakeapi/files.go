@@ -71,6 +71,11 @@ type Document struct {
 	UpdatedAt time.Time
 	CreatorID string
 	Comments  []*Comment
+
+	// Versions are the texts the document had, oldest first, the last one what
+	// it says now. A document set up without any is taken to have been written
+	// before versions were kept: its first version names no author.
+	Versions []*DocumentVersion
 }
 
 // FilesUpload is a file standing on its own in a tool. The bytes are an
@@ -86,6 +91,11 @@ type FilesUpload struct {
 	UpdatedAt   time.Time
 	CreatorID   string
 	Comments    []*Comment
+
+	// Versions are the files the upload was given, oldest first. An upload set
+	// up without any starts with the file it shows, given by whoever stored
+	// it, at the moment the upload was made.
+	Versions []*UploadVersion
 }
 
 func (s *Server) registerFilesRoutes(mux *http.ServeMux) {
@@ -98,6 +108,7 @@ func (s *Server) registerFilesRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/v1/files-tools/{toolId}/uploads", s.authenticated(s.addFilesUpload))
 	mux.HandleFunc("GET /api/v1/files-uploads/{uploadId}", s.authenticated(s.filesUpload))
 	mux.HandleFunc("PATCH /api/v1/files-uploads/{uploadId}", s.authenticated(s.updateFilesUpload))
+	s.registerVersionRoutes(mux)
 
 	s.registerCommentRoutes(mux, "documents/{documentId}")
 	s.registerCommentRoutes(mux, "files-uploads/{uploadId}")
@@ -239,6 +250,7 @@ func (s *Server) addDocument(w http.ResponseWriter, r *http.Request, person *Per
 		ID: newID(), FolderID: folderIDOf(folder), Title: phpTrim(deref(title)), Body: stored,
 		CreatedAt: s.aWholeSecond(), UpdatedAt: s.aWholeSecond(), CreatorID: person.ID,
 	}
+	document.keepAVersion(person.ID, document.UpdatedAt)
 	tool.Documents = append([]*Document{document}, tool.Documents...)
 	writeJSON(w, http.StatusCreated, s.documentResource(tool, document))
 }
@@ -302,8 +314,10 @@ func (s *Server) updateDocument(w http.ResponseWriter, r *http.Request, person *
 	}
 	// Every write stands a second after the one before, so that each has a
 	// moment of its own for the next guard to tell apart.
+	document.versions()
 	document.Title, document.Body = newTitle, newBody
 	document.UpdatedAt = later(s.aWholeSecond(), document.UpdatedAt.Add(time.Second))
+	document.keepAVersion(person.ID, document.UpdatedAt)
 	writeJSON(w, http.StatusOK, s.documentResource(tool, document))
 }
 
@@ -396,6 +410,7 @@ func (s *Server) addFilesUpload(w http.ResponseWriter, r *http.Request, person *
 		ID: newID(), FolderID: folderIDOf(folder), Title: newTitle, BlobID: file.ID, Description: stored,
 		CreatedAt: s.aWholeSecond(), UpdatedAt: s.aWholeSecond(), CreatorID: person.ID,
 	}
+	upload.keepAVersion(file.ID, person.ID, upload.CreatedAt)
 	tool.Uploads = append([]*FilesUpload{upload}, tool.Uploads...)
 	writeJSON(w, http.StatusCreated, s.filesUploadResource(tool, upload))
 }
@@ -490,15 +505,15 @@ func (s *Server) storedFileOf(projectID, blobID string) *Upload {
 	return nil
 }
 
-// fileIsInUse says whether an upload of any tool stands for the file, or a
-// saved text carries it.
+// fileIsInUse says whether an upload of any tool stands for the file, an
+// earlier version of one holds it, or a saved text carries it.
 func (s *Server) fileIsInUse(file *Upload) bool {
 	if file.StandsInAText {
 		return true
 	}
 	for _, tool := range s.FilesTools {
 		for _, upload := range tool.Uploads {
-			if upload.BlobID == file.ID {
+			if upload.BlobID == file.ID || upload.showedEarlier(file.ID) {
 				return true
 			}
 		}

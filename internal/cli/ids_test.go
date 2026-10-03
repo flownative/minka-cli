@@ -133,6 +133,12 @@ var idsInCapitals = []idInCapitals{
 	}, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
 		return []string{"--blob", up(storedBlobID), "--tool", f.Files.ID}
 	}},
+	{command: "docs uploads versions create", inputs: []string{"--blob"}, prepare: func(e *testEnv) {
+		e.server.Uploads = append(e.server.Uploads, &fakeapi.Upload{ID: storedBlobID, Circle: e.fixture.Project.ID, Filename: "notes.txt",
+			ContentType: "text/plain", Content: []byte("Four hundred."), Size: 13, UploaderID: e.fixture.Bruno.ID})
+	}, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
+		return []string{f.FilesUpload.ID, "--blob", up(storedBlobID)}
+	}},
 	{command: "docs comments create", inputs: []string{"--document"}, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
 		return []string{"Me too", "--document", up(f.Document.ID)}
 	}},

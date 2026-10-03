@@ -1576,3 +1576,17 @@ One group, cut like `posts`: `tools <projectId>`, `list <toolId>` with
 **Why:** every tool reads `<group> tools`, and a flag Minka ignores must not
 pass without a word. **Implemented as:** `cli.newEventsCmd`, `cli.eventFlags`,
 `api.EventInput`, see [Calendars and events](stable/calendar.md).
+
+<a id="c-099"></a>
+## C-099 — Versions are `docs versions` and `docs uploads versions`, and another file is a version created
+
+*Applies to: the versions of a document and the files of an upload*
+
+`docs versions list|show` and `docs uploads versions list|create`; `create`
+takes a file or `--blob` in the two steps of C-085 and reads the upload and its
+versions before the file travels. `--expect` is optional, `--force` absent.
+**Why:** the commands follow Minka's addresses (`uploads` holds stored files,
+hence no `uploads replace`), a client may read an upload it may not give a
+file, and without an expectation nothing is lost: Minka keeps the old file.
+**Implemented as:** `cli.newDocsVersionsCmd`, `cli.newDocsUploadsVersionsCmd`,
+`cli.uploadVersionRefusal`, see [Docs & Files](stable/docs-and-files.md).
