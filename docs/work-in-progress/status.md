@@ -133,6 +133,15 @@ trash and showing one to clients have no address in the API. Minka's side is on 
 release; the commands are checked against Minka's code and tests and the fake,
 and live only in what a read of addresses that name nothing shows, see below.
 
+Beside its events a calendar's span carries what of its project is due,
+`datedItems`, unless its team chose `eventsOnly` with `events settings`; `events
+mine` reads My calendar, the events one takes part in and what is assigned to
+one and due, steps included, across one's active projects (C-106). The text
+views put what is due under a heading of its own. Minka's side is on its `main`
+(#319) and in no release yet, so production gets it with the next Minka
+release; `events mine` is seen live, `events settings` and the dated items of a
+calendar only against the fake, see below.
+
 A project is renamed and described with `projects edit`, which sends only
 `--name` and `--description` given, the description as plain text. The rule
 the command follows is [Projects](../stable/projects.md) (C-093). Minka's side
@@ -742,6 +751,32 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   fake approaches by a host it demands; the cleaning of a description
   against its project and `eventDescriptionNotReadable`; whom a write tells
   and that the writer follows the event; and a calendar in the trash.
+- What a calendar shows and My calendar. Seen live on `minka.localbeach.net`
+  (Minka's `main` with #319) on 2026-10-03, as Bruno: `events mine` with a card
+  of the board "API-3 Abnahme" due on 2026-10-21 and assigned to Bruno, and a
+  step on it due on 2026-10-22 and his, both created for the run, answered the
+  two dated items in the shape the fake gives, the step with `cardId`, its
+  card as `placeTitle` and the card's page as `appUrl`; the text view put them
+  under their heading; `eventsSpanNotADay`, `eventsSpanOutOfOrder` and
+  `eventsSpanTooLong` came as for a calendar, 366 days and days with spaces
+  around them were taken; once the card was in Done both were gone. The card
+  was then put into the trash. `events settings` went out only against
+  identifiers that name nothing: `PATCH
+  /api/v1/calendars/f111132a-4d49-4646-ac46-9dd0dea16f6d` (a fresh random
+  UUID) with `{"content":"eventsOnly"}` and with `{"content":"everything"}`,
+  and `PATCH /api/v1/calendars/00000000-0000-0000-0000-000000000000` with
+  `{"content":"eventsOnly"}`, each the byte-identical 404, so the calendar is
+  looked up before the value. No project of Bruno's has a calendar, so the
+  dated items of a calendar's span, `content`, `calendarContentUnknown` and
+  the client's 404 after the archive are checked against Minka's code and
+  `ApiMyCalendarTest` and the fake only. What the fake does not mirror: the
+  order of dated items with the same day, which Minka leaves to the
+  database's collation of titles in a calendar's span and to PHP's `<=>` on
+  My calendar, where two titles that are both numbers compare as numbers, and
+  the fake compares bytes in both; a card hidden from clients, since the fake
+  shows a client every card; and a tool or a calendar in the trash. That a
+  completed card outside Done stands on My calendar and not in a calendar's
+  span, as Minka's readers have it, is mirrored and tested.
 - The comments under an event: no request of them has gone to a real Minka,
   and production has none of them yet. The fake mirrors
   `EventCommentsApiController` and `ApiEventCommentsTest` through the
@@ -1535,8 +1570,9 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   for the two requests it makes itself.
 - A read-only dry run of one project with a calendar, `import basecamp
   --project <id> --calendars --dry-run`, with Robert's word, before the
-  calendars go into a real run; then commands for calendars and events once
-  Minka's API for them is merged.
+  calendars go into a real run.
+- `events settings` and the dated items of a calendar's span against a real
+  calendar, once the live check names one a run may write to.
 
 - Check the bots of `import basecamp` read-only against the live account, as
   listed under Checked against the fake only, and a bundle with them through

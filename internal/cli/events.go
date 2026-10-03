@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -33,7 +34,24 @@ const (
 	apiCodeEventRepetitionTimeZoneUnknown  = "eventRepetitionTimeZoneUnknown"
 	apiCodeEventRepetitionDoesNotFit       = "eventRepetitionDoesNotFit"
 	apiCodeEventRepetitionKeepsItsFirstDay = "eventRepetitionKeepsItsFirstDay"
+	apiCodeCalendarContentUnknown          = "calendarContentUnknown"
 )
+
+const calendarSettingsNotFoundHint = "There is no such calendar, it is in the trash, it belongs to a project you are not a member of, or you are a client of the project: only its team chooses what a calendar shows. The calendars of a project: minka events tools <projectId>"
+
+const myCalendarUnknownHint = "Its Minka is older than this minka expects and has no My calendar yet. The events of one calendar: minka events list <toolId> --from YYYY-MM-DD --to YYYY-MM-DD"
+
+const datedItemsHelp = `Beside its events a calendar shows what of its project is due on the days of
+the span, unless its team chose otherwise with "events settings": data.content
+is eventsAndDatedItems or eventsOnly, and data.datedItems holds, with the
+first, the open to-dos and cards of the project due in the span, whoever they
+belong to, the earliest first, then by title. Each has id, kind (todo or
+card), projectId, toolId (the To-dos tool or the board), cardId (null here,
+the card of a step on My calendar), title, dueOn, placeTitle (the list of a
+to-do, the board of a card) and appUrl. Done items, items in the trash or
+the archive, those in a list, group or column that is not in use, and what a
+client is not shown are left out. A dated item is no event and has no time:
+it is read with "todos show" or "cards show".`
 
 const calendarNotFoundHint = "There is no such calendar, it is in the trash, it belongs to a project you are not a member of, or you are a client of the project and it is not shown to you. The calendars of a project: minka events tools <projectId>"
 
@@ -88,7 +106,9 @@ follows the event, taking part or not.`
 func (a *app) newEventsCmd() *cobra.Command {
 	return group("events", "Read and write the events of a calendar, one-off, all-day and repeating",
 		a.newEventsToolsCmd(),
+		a.newEventsSettingsCmd(),
 		a.newEventsListCmd(),
+		a.newEventsMineCmd(),
 		a.newEventsShowCmd(),
 		a.newEventsCreateCmd(),
 		a.newEventsEditCmd(),
@@ -154,7 +174,7 @@ func (a *app) newEventsListCmd() *cobra.Command {
 		Short: "List the events of a calendar between two days",
 		Long: `Lists every event with an occurrence between --from and --to, both included and
 both required: at most 366 days, and nothing is paged. data is the span as
-Minka answers it: {from, to, timeZone, events}.
+Minka answers it: {from, to, timeZone, content, events, datedItems}.
 
 The days are yours: those of the time zone of your preferences in Minka, else
 the installation's, which timeZone names. A timed occurrence counts when a
@@ -169,7 +189,10 @@ read from the occurrences, not from the lines. The events come in the order
 of their first occurrence in the span. A line carries no description; events
 show reads one.
 
-The text view shows times in the local time of this machine.`,
+` + datedItemsHelp + `
+
+The text view shows times in the local time of this machine, and what is due
+under a heading of its own, apart from the events.`,
 		Example: `  minka events list 0199... --from 2026-10-19 --to 2026-10-25 --json
   minka events list 0199... --from 2026-10-01 --to 2026-12-31`,
 		Args: requireArgs("toolId"),
@@ -185,12 +208,17 @@ The text view shows times in the local time of this machine.`,
 			if err != nil {
 				return eventRefusal(s, err, calendarNotFoundHint)
 			}
+			summary := fmt.Sprintf("%s from %s to %s, days of %s", spanCount(len(span.Value.Events), len(span.Value.DatedItems)), span.Value.From, span.Value.To, span.Value.TimeZone)
+			if span.Value.Content == api.CalendarContentEventsOnly {
+				summary += "; the calendar shows events only"
+			}
 			return a.ok(success{
 				data:    span.Raw,
-				summary: fmt.Sprintf("%s from %s to %s, days of %s", plural(len(span.Value.Events), "event", "events"), span.Value.From, span.Value.To, span.Value.TimeZone),
+				summary: summary,
 				breadcrumbs: []Breadcrumb{
 					{Action: "show", Cmd: "minka events show <eventId>", Description: "Read an event with its description"},
 					{Action: "create", Cmd: "minka events create --tool " + args[0] + " --title <title> --first-day YYYY-MM-DD", Description: "Add an event to the calendar"},
+					{Action: "settings", Cmd: "minka events settings " + args[0] + " --content eventsAndDatedItems|eventsOnly", Description: "Choose whether the calendar shows what is due beside its events"},
 				},
 				text: func(w io.Writer) { renderEventSpan(w, span.Value) },
 			})
@@ -199,6 +227,139 @@ The text view shows times in the local time of this machine.`,
 	cmd.Flags().StringVar(&from, "from", "", "First day of the span as YYYY-MM-DD")
 	cmd.Flags().StringVar(&to, "to", "", "Last day of the span as YYYY-MM-DD, at most 366 days in all")
 	return cmd
+}
+
+func (a *app) newEventsMineCmd() *cobra.Command {
+	var from, to string
+
+	cmd := &cobra.Command{
+		Use:   "mine",
+		Short: "List what is on your own calendar between two days, across all projects",
+		Long: `Lists My calendar between --from and --to, both included and both required: at
+most 366 days, nothing paged, and the days yours, as for "events list". data is
+{from, to, timeZone, events, datedItems} as Minka answers it, across every
+project you are a member of that is not archived.
+
+events are the events you take part in, each a line as "events list" gives it
+with toolId, its calendar, and project, {id, name}, besides. An event you do
+not take part in is not here, whoever added it.
+
+datedItems are the open to-dos, cards and steps assigned to you and due in the
+span, the earliest first, then by title, each with kind (todo, card or step),
+projectId and project, toolId (the To-dos tool or the board), cardId (the card
+of a step, else null), title, dueOn, placeTitle (the list of a to-do, the board
+of a card, the card of a step) and appUrl, which for a step opens its card. A
+to-do of which only a subtask is yours is not here, and a subtask never is.
+What a calendar chose to show does not matter here: My calendar belongs to no
+calendar.
+
+The text view shows times in the local time of this machine, and what is due
+under a heading of its own, apart from the events.`,
+		Example: `  minka events mine --from 2026-10-19 --to 2026-10-25 --json
+  minka events mine --from 2026-10-01 --to 2026-12-31`,
+		Args: requireArgs(),
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			if !cmd.Flags().Changed("from") || !cmd.Flags().Changed("to") {
+				return usageErrorf(cmd, "a span needs both --from and --to, each a day written as YYYY-MM-DD")
+			}
+			s, err := a.session()
+			if err != nil {
+				return err
+			}
+			mine, err := s.client.MyEvents(a.ctx, from, to)
+			if err != nil {
+				e := eventRefusal(s, err, "")
+				var apiErr *api.Error
+				if e.Code == CodeNotFound && errors.As(err, &apiErr) && apiErr.Body == nil {
+					e.Message = s.host + " has no My calendar"
+					e.Hint = myCalendarUnknownHint
+				}
+				return e
+			}
+			return a.ok(success{
+				data:    mine.Raw,
+				summary: fmt.Sprintf("%s on your calendar from %s to %s, days of %s", spanCount(len(mine.Value.Events), len(mine.Value.DatedItems)), mine.Value.From, mine.Value.To, mine.Value.TimeZone),
+				breadcrumbs: []Breadcrumb{
+					{Action: "show", Cmd: "minka events show <eventId>", Description: "Read an event with its description"},
+					{Action: "todo", Cmd: "minka todos show <todoId>", Description: "Read a to-do that is due"},
+					{Action: "card", Cmd: "minka cards show <cardId>", Description: "Read a card that is due, or the card of a step"},
+				},
+				text: func(w io.Writer) { renderMyCalendar(w, mine.Value) },
+			})
+		},
+	}
+	cmd.Flags().StringVar(&from, "from", "", "First day of the span as YYYY-MM-DD")
+	cmd.Flags().StringVar(&to, "to", "", "Last day of the span as YYYY-MM-DD, at most 366 days in all")
+	return cmd
+}
+
+func (a *app) newEventsSettingsCmd() *cobra.Command {
+	var content string
+
+	cmd := &cobra.Command{
+		Use:   "settings <toolId>",
+		Short: "Choose whether a calendar shows what is due beside its events",
+		Long: `Chooses what a calendar shows beside its events, for everybody who reads it.
+--content is required and takes Minka's word: eventsAndDatedItems, which a
+calendar shows until somebody chooses, lets "events list" carry the open to-dos
+and cards of the project due in the span; eventsOnly leaves datedItems empty.
+Choosing what stands already succeeds and changes nothing. My calendar, read
+with "events mine", is not touched by the choice.
+
+Only the team of the project chooses: a client of the project exits 2 like
+somebody who is not in it, though only once the value and the archive have
+been found right. An archived project takes no choice: exit 9 with
+projectArchived. A calendar no longer in use takes one.
+
+data is the calendar as Minka answers it: id, projectId, project, title,
+content and appUrl.`,
+		Example: `  minka events settings 0199... --content eventsOnly --json
+  minka events settings 0199... --content eventsAndDatedItems`,
+		Args: requireArgs("toolId"),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if !cmd.Flags().Changed("content") {
+				return usageErrorf(cmd, "nothing to change, give --content eventsAndDatedItems or --content eventsOnly")
+			}
+			s, err := a.session()
+			if err != nil {
+				return err
+			}
+			calendar, err := s.client.ChooseCalendarContent(a.ctx, args[0], content)
+			if err != nil {
+				return calendarSettingsRefusal(s, err)
+			}
+			summary := "Calendar " + calendar.Value.Title + " shows " + describeCalendarContent(calendar.Value.Content)
+			return a.ok(success{
+				data:    calendar.Raw,
+				summary: summary,
+				breadcrumbs: []Breadcrumb{
+					{Action: "list", Cmd: "minka events list " + calendar.Value.ID + " --from YYYY-MM-DD --to YYYY-MM-DD", Description: "List the events of the calendar between two days"},
+				},
+				text: func(w io.Writer) {
+					fmt.Fprintf(w, "%s.\n%s\n", summary, calendar.Value.AppURL)
+				},
+			})
+		},
+	}
+	cmd.Flags().StringVar(&content, "content", "", "What the calendar shows: eventsAndDatedItems or eventsOnly")
+	return cmd
+}
+
+// calendarSettingsRefusal tells Minka's own 404, which carries its JSON body,
+// from the page of a host whose Minka does not know the address at all.
+func calendarSettingsRefusal(s *session, err error) *Error {
+	e := eventRefusal(s, err, calendarSettingsNotFoundHint)
+	switch {
+	case e.APICode == apiCodeCalendarContentUnknown:
+		e.Hint = "--content is one of Minka's two words, written as they are: eventsAndDatedItems or eventsOnly."
+	case e.Code == CodeNotFound:
+		var apiErr *api.Error
+		if errors.As(err, &apiErr) && apiErr.Body == nil {
+			e.Message = s.host + " cannot choose what a calendar shows"
+			e.Hint = "Its Minka is older than this minka expects and shows no to-dos or cards in a calendar yet."
+		}
+	}
+	return e
 }
 
 func (a *app) newEventsShowCmd() *cobra.Command {
@@ -669,13 +830,80 @@ func renderCalendars(w io.Writer, calendars []api.Calendar) {
 	_ = table.Flush()
 }
 
+// spanCount says how many events and dated items a span holds, the items only
+// where there are some, so that a span without them reads as events alone.
+func spanCount(events, datedItems int) string {
+	count := plural(events, "event", "events")
+	if datedItems > 0 {
+		count += " and " + plural(datedItems, "item", "items") + " due"
+	}
+	return count
+}
+
+func describeCalendarContent(content string) string {
+	switch content {
+	case api.CalendarContentEventsOnly:
+		return "events only"
+	case api.CalendarContentEventsAndDatedItems:
+		return "events and the to-dos and cards due"
+	}
+	return content
+}
+
 func renderEventSpan(w io.Writer, span api.EventSpan) {
 	fmt.Fprintf(w, "From %s to %s, days of %s.\n", span.From, span.To, span.TimeZone)
-	if len(span.Events) == 0 {
+	if span.Content != "" {
+		fmt.Fprintf(w, "The calendar shows %s.\n", describeCalendarContent(span.Content))
+	}
+	renderEventLines(w, span.Events, nil)
+	// A span that names no content carries no dated items, so "nothing due"
+	// would claim what it never said.
+	if span.Content != "" && span.Content != api.CalendarContentEventsOnly {
+		renderDatedItems(w, span.DatedItems, false)
+	}
+}
+
+func renderMyCalendar(w io.Writer, mine api.MyCalendar) {
+	fmt.Fprintf(w, "My calendar from %s to %s, days of %s.\n", mine.From, mine.To, mine.TimeZone)
+	lines := make([]api.EventLine, len(mine.Events))
+	for i, event := range mine.Events {
+		lines[i] = event.EventLine
+	}
+	renderEventLines(w, lines, func(i int) string { return mine.Events[i].Project.Name })
+	renderDatedItems(w, mine.DatedItems, true)
+}
+
+// renderDatedItems shows what is due apart from the events, under a heading
+// of its own and with its kind, since it has a day and no time.
+func renderDatedItems(w io.Writer, items []api.DatedItem, withProject bool) {
+	fmt.Fprintln(w, "\nDue on these days (not events):")
+	if len(items) == 0 {
+		fmt.Fprintln(w, "  Nothing.")
+		return
+	}
+	table := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
+	for _, item := range items {
+		place := map[string]string{"todo": "in list ", "card": "on board ", "step": "on card "}[item.Kind] + item.PlaceTitle
+		if withProject && item.Project != nil {
+			place += ", " + item.Project.Name
+		}
+		kind := map[string]string{"todo": "to-do"}[item.Kind]
+		if kind == "" {
+			kind = item.Kind
+		}
+		fmt.Fprintf(table, "  %s\t%s\t%s\t%s\t%s\n", item.DueOn, kind, item.Title, place, item.ID)
+	}
+	_ = table.Flush()
+}
+
+// renderEventLines shows each event with its occurrences; where suffix is
+// given, it names what stands behind the title, such as the project.
+func renderEventLines(w io.Writer, events []api.EventLine, suffix func(int) string) {
+	if len(events) == 0 {
 		fmt.Fprintln(w, "No events.")
 		return
 	}
-	for _, event := range span.Events {
+	for i, event := range events {
 		var details []string
 		if event.Schedule != nil {
 			details = append(details, "repeats "+describeRepetition(*event.Schedule))
@@ -692,6 +920,9 @@ func renderEventSpan(w io.Writer, span api.EventSpan) {
 		line := fmt.Sprintf("\n- %s  %s", event.ID, event.Title)
 		if len(details) > 0 {
 			line += " (" + strings.Join(details, ", ") + ")"
+		}
+		if suffix != nil {
+			line += "  [" + suffix(i) + "]"
 		}
 		fmt.Fprintln(w, line)
 		for _, occurrence := range event.Occurrences {

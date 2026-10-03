@@ -4,14 +4,21 @@ A calendar of a project holds **events**: one-off, all-day or repeating.
 `events tools` lists the calendars of a project, `events list` and `events
 show` read, `events create`, `edit` and `delete` write
 ([C-098](../decisions.md#c-098)), and `events comments` reads and writes the
-comments under an event ([C-095](../decisions.md#c-095)).
+comments under an event ([C-095](../decisions.md#c-095)). Beside its events a
+calendar shows what of its project is due, unless its team chose otherwise
+with `events settings`, and `events mine` reads My calendar, across projects
+([C-106](../decisions.md#c-106)).
 
 Everything here was read in Minka's code — `CalendarApiController`,
 `ReadsRepetitionSchedule`, its resources, `CalendarEventQueryService`,
 `EventOccurrences`, `EventRepetition`, `EventTime`, `JoinLink`, `TimeZone`,
 the event handlers, `EventParticipants`, `DbalCalendarEventRepository`,
-`ApiEventsTest`, `EventCommentsApiController` and `ApiEventCommentsTest` — and
-only the refusals of an address that names nothing have been seen live.
+`ApiEventsTest`, `EventCommentsApiController` and `ApiEventCommentsTest`, and
+for what a calendar shows and My calendar `CalendarDatedItemQueryService`,
+`MyCalendarQueryService`, the readers of one's own cards, to-dos and steps,
+`ChooseCalendarContentHandler`, `DbalCalendarSettingsRepository` and
+`ApiMyCalendarTest`. What has been seen live is in the
+[Status](../work-in-progress/status.md).
 
 ## What is not there
 
@@ -24,8 +31,8 @@ hiding it, renaming or removing a calendar, and changing or leaving out a
 `GET projects/{projectId}/calendars` lists the calendars in use as `id`,
 `title` and `appUrl`; one no longer in use is not listed and is still read and
 written at its own address. `GET calendars/{toolId}` answers a calendar with
-its `projectId` and `project`, which `events create` reads to look up a person
-given by name.
+its `projectId`, `project` and `content`, which `events create` reads to look
+up a person given by name.
 
 `GET events/{eventId}` answers the event: `id`, `projectId`, `toolId`,
 `project`, `tool`, `title`, `allDay`, the time, `schedule`, `timeZone`,
@@ -50,7 +57,7 @@ themselves in no promised order), `commentCount`, `createdAt`,
 ## The span
 
 `GET calendars/{toolId}/events?from=…&to=…` answers `{from, to, timeZone,
-events}`. **Both days are required** and included, at most 366 days counting
+content, events, datedItems}`. **Both days are required** and included, at most 366 days counting
 both ends, and nothing is paged. `events list` refuses a call without both
 `--from` and `--to` as a usage error before anything goes out; the values
 themselves are Minka's to judge (`eventsSpanNotADay`, `eventsSpanOutOfOrder`,
@@ -78,6 +85,70 @@ themselves are Minka's to judge (`eventsSpanNotADay`, `eventsSpanOutOfOrder`,
 **The CLI works out no occurrence and no day.** What it shows is what Minka
 answered; the text view only turns the moments into the local time of the
 machine.
+
+## What is due beside the events
+
+`content` is `eventsAndDatedItems`, which a calendar has until somebody
+chooses, or `eventsOnly`. With the first, `datedItems` holds the open to-dos
+and cards **of the calendar's project** due in the span, whoever they belong
+to; with the second it is `[]`. Each item is `id`, `kind` (`todo` or `card`),
+`projectId`, `toolId` (the To-dos tool or the board), `cardId` (`null`),
+`title`, `dueOn`, `placeTitle` (the list of a to-do, the board of a card) and
+`appUrl`; it carries no `project`.
+
+- **Left out:** a done to-do; a card that is completed or stands in Done; what
+  is in the trash or in the archive; a to-do in a list that is archived or in
+  the trash, or in a group in the trash; a card in a column in the trash; what
+  a client is not shown, and everything in a tool hidden from them or in the
+  trash. A step never stands in a calendar's span.
+- An **archived project** still carries its dated items: the span is read
+  there as before.
+- **Order:** by `dueOn`, then by `title`, then by `id`, as the database sorts
+  them.
+- A dated item is **no event**: it has a day and no time, no occurrences, and
+  is read with `todos show` or `cards show`. The text view lists them under a
+  heading of their own, after the events, with their kind and their place.
+
+`events settings <toolId> --content eventsAndDatedItems|eventsOnly` sends
+`PATCH calendars/{toolId}` with `{"content": …}` and answers the calendar.
+`--content` is required and goes out as typed: Minka's two words, as `--rhythm`
+takes Minka's words, and Minka is the one to refuse another
+(`calendarContentUnknown`). The choice is the calendar's, for everybody who
+reads it, and **the team's alone**; choosing what stands is 200. A calendar no
+longer in use takes it. The order of the refusals: the 404 of a calendar not
+there or not visible, before the body; then the media type and the JSON, and
+`content` no string (400); `{}` or `content: null` is `nothingToChange`, which
+the CLI cannot send; another value `calendarContentUnknown`; then
+`projectArchived`, for a client of the project too; and only then the 404 of a
+client, the same body as for a calendar not there. A Minka without the address
+answers with a page of its web: exit 2, and the message says that the host
+cannot choose, not that the calendar is missing.
+
+## My calendar
+
+`events mine --from … --to …` reads `GET me/events?from=…&to=…`, which answers
+`{from, to, timeZone, events, datedItems}` — no `content`: it belongs to no
+calendar, and what a calendar chose to show does not touch it. The span is
+read, bounded and refused exactly as that of a calendar, in the reader's days,
+and the CLI refuses a call without both days as a usage error.
+
+- It reaches every project the reader is a **member of and that is active**;
+  an archived project, and one they left, stand nowhere in it.
+- **`events`** are those the reader **takes part in**, wherever they were
+  added, under the same rules of visibility and occurrence as a calendar's
+  span, each line with `toolId` and `project` (`id`, `name`) besides. A
+  calendar no longer in use still counts. Order: by the first occurrence in
+  the span, then by when the event was added, across calendars.
+- **`datedItems`** are the open to-dos, cards and steps **assigned to the
+  reader** and due in the span, each shaped as in a calendar's span with
+  `project` (`id`, `name`) besides. A step has `kind` `step`, `toolId` its
+  board, `cardId` its card, `placeTitle` the title of its card and `appUrl` the
+  page of its card. A to-do of which only a subtask is the reader's stays out,
+  and a subtask is never an entry. A card in Done is left out, a step that is
+  done, a card in the archive or the trash, and what a client is not shown.
+  Order: by `dueOn`, `title` and `id`, compared by PHP.
+- A Minka without the address answers with a page of its web: exit 2, and the
+  message says that the host has no My calendar.
 
 ## Writing
 
@@ -221,7 +292,7 @@ included; reading stays open.
 `eventRepetitionScheduleInvalid`, `eventRepetitionDatesNotADate`,
 `eventRepetitionDatesOutOfOrder`, `eventRepetitionTimeZoneUnknown`,
 `eventRepetitionDoesNotFit`, `eventRepetitionKeepsItsFirstDay`,
-`personNotAProjectMember`, `personCannotSeeIt`, `projectArchived` and
-`nothingToChange` (422), and under the comments those of a comment and a
-reaction, all exit 9, each with a hint that says what can be
+`calendarContentUnknown`, `personNotAProjectMember`, `personCannotSeeIt`,
+`projectArchived` and `nothingToChange` (422), and under the comments those of
+a comment and a reaction, all exit 9, each with a hint that says what can be
 done.

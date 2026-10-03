@@ -1706,3 +1706,19 @@ list is marked; the keepalive neither reports it nor is started for it.
 three minutes after its last beat instead of 25 + 3. **Implemented as:**
 `mod.Files`, `cli.app.installTheMod`, `work.List.Mod`,
 `cli.app.claimTheSignal`, `cli.app.reportEverySessionAtWork`, see [Saying what you are working on](stable/at-work.md).
+
+<a id="c-106"></a>
+## C-106 — My calendar is `events mine`, what a calendar shows `events settings`, in Minka's words
+
+*Applies to: `events mine`, `events settings`, `events list`*
+
+`events mine --from --to` reads My calendar like `cards mine` and `todos mine`;
+`events settings <toolId> --content eventsAndDatedItems|eventsOnly` chooses what
+a calendar shows, the value sent as typed and refused by Minka alone. The text
+views put dated items under a heading of their own, never among the events.
+**Why:** `events tools` takes a project and cannot carry a subcommand, and
+basecamp-cli changes the same choice with `schedule settings`; Minka's words
+are those `data.content` hands back, as for `--rhythm`. A dated item has a day
+and no time, so mixing it in would read as an event.
+**Implemented as:** `cli.newEventsMineCmd`, `cli.newEventsSettingsCmd`,
+`cli.renderDatedItems`, see [Calendars and events](stable/calendar.md).
