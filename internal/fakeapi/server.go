@@ -3602,8 +3602,13 @@ func (s *Server) visibleCard(id string, person *Person) (*Board, *Column, *Card)
 }
 
 func (s *Server) cardResource(board *Board, column *Column, card *Card) map[string]any {
+	// Minka orders the comments by the moment they were written and then by
+	// their ID, which it makes from the clock as well, so two of the same
+	// moment stand in the order they were written in.
+	ordered := slices.Clone(card.Comments)
+	slices.SortStableFunc(ordered, func(a, b *Comment) int { return a.CreatedAt.Compare(b.CreatedAt) })
 	comments := []any{}
-	for _, comment := range card.Comments {
+	for _, comment := range ordered {
 		comments = append(comments, s.commentResource(board.ProjectID, comment))
 	}
 	project := s.projectOf(board)
