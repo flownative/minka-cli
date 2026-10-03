@@ -294,7 +294,19 @@ func TestAClientReadsAndWritesOnlyWhatIsShownToClients(t *testing.T) {
 	if answer := callSeries(t, s, client, http.MethodGet, span, nil); answer.raw != NotFoundBody {
 		t.Errorf("a calendar hidden from clients: %s %s", answer.got, answer.raw)
 	}
+	calendars := "/projects/" + f.Project.ID + "/calendars"
+	if answer := callSeries(t, s, client, http.MethodGet, calendars, nil); strings.TrimSpace(answer.raw) != "[]" {
+		t.Errorf("a client is told of a calendar hidden from them: %s", answer.raw)
+	}
+	f.OnceEvent.ShownToClients = true
+	if answer := callSeries(t, s, f.Token, http.MethodPatch, "/events/"+f.OnceEvent.ID, map[string]any{"participantIds": []string{f.Client.ID}}); answer.got != "422 personCannotSeeIt" {
+		t.Errorf("a client on an event shown to clients in a calendar hidden from them: %s", answer.got)
+	}
+	f.OnceEvent.ShownToClients = false
 	f.Calendar.ShownToClients = true
+	if answer := callSeries(t, s, client, http.MethodGet, calendars, nil); !strings.Contains(answer.raw, f.Calendar.ID) {
+		t.Errorf("the calendars a client is shown: %s", answer.raw)
+	}
 	if ids := idsOf(t, callSeries(t, s, client, http.MethodGet, span, nil).body["events"]); len(ids) != 0 {
 		t.Errorf("the team's events are hidden from clients: %v", ids)
 	}
