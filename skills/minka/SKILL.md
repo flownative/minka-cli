@@ -1493,8 +1493,8 @@ is no way back out of the trash through the API.
   `--instance`, `--month`, `--ends-on` work as for `todos repeat`. The details
   must fall on the first day of the event (`eventRepetitionDoesNotFit`). A
   timed series keeps its clock time in `--time-zone` (an IANA name such as
-  `Europe/Berlin`; `CET` and `+02:00` are refused), else in the zone it has,
-  else in yours.
+  `Europe/Berlin`, with its capitals; `CET` and `Europe/Kiev` are taken,
+  `+02:00` is refused), else in the zone it has, else in yours.
 - `events edit` sends only what was given. **Without `--repeat` or a detail, a
   series keeps its first day:** moving it is exit 9
   `eventRepetitionKeepsItsFirstDay`; give the new time **with** `--repeat` (and

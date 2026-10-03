@@ -194,7 +194,7 @@ func TestTheRefusalsOfAnEventSayWhatToDo(t *testing.T) {
 		"no title":                   {[]string{"events", "edit", f.OnceEvent.ID, "--title", ""}, apiCodeEventTitleMissing},
 		"a link that is none":        {[]string{"events", "edit", f.OnceEvent.ID, "--join-url", "meet.example.com"}, apiCodeEventJoinURLNotAnAddress},
 		"a schedule off the day":     {append(slices.Clone(create), "--first-day", "2026-10-20", "--rhythm", "weekly", "--weekdays", "mon"), apiCodeEventRepetitionDoesNotFit},
-		"an abbreviation as a zone":  {append(slices.Clone(create), "--starts-at", "2026-10-20T09:00:00Z", "--ends-at", "2026-10-20T10:00:00Z", "--repeat", "--time-zone", "CET"), apiCodeEventRepetitionTimeZoneUnknown},
+		"a zone PHP does not list":   {append(slices.Clone(create), "--starts-at", "2026-10-20T09:00:00Z", "--ends-at", "2026-10-20T10:00:00Z", "--repeat", "--time-zone", "europe/Berlin"), apiCodeEventRepetitionTimeZoneUnknown},
 		"an end before the series":   {append(slices.Clone(create), "--first-day", "2026-10-20", "--repeat", "--ends-on", "2026-10-01"), apiCodeEventRepetitionDatesOutOfOrder},
 		"a series moved without it":  {[]string{"events", "edit", f.WeeklyEvent.ID, "--starts-at", "2026-10-20T08:00:00Z", "--ends-at", "2026-10-20T08:30:00Z"}, apiCodeEventRepetitionKeepsItsFirstDay},
 		"a stranger taking part":     {[]string{"events", "edit", f.OnceEvent.ID, "--participant", f.Stranger.ID}, apiCodePersonNotAProjectMember},

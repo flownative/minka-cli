@@ -457,8 +457,8 @@ type Server struct {
 	PostCategories []*PostCategory
 
 	// TimeZone is the installation's zone, which reads the days of whoever
-	// set none of their own. It may be a name PHP reads and does not list,
-	// such as CET.
+	// set none of their own. It may be a name of the backward table, such as
+	// CET.
 	TimeZone string
 
 	// IgnoresProjectStatus makes the server answer like a Minka from before

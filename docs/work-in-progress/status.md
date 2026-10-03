@@ -594,11 +594,9 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   twice where the clocks go back from 03:00 to 02:00, as in
   `Africa/Casablanca` on the day Ramadan time starts, which PHP takes the
   second time for 02:00 to 02:45 and the fake the first; PHP's list of time
-  zones,
-  which the fake approaches by its regions, so a name of the backward table
-  inside one, such as `Europe/Kiev`, passes the fake and is refused by Minka,
-  and the exact capitals of a zone are held only where the system keeps its
-  zone database under `/usr/share/zoneinfo`; PHP's check of a URL, which the
+  zones, which the fake holds as a snapshot taken with PHP 8.5
+  (`internal/fakeapi/phpzones.json`), so a zone a later PHP adds or drops
+  differs until it is taken again; PHP's check of a URL, which the
   fake approaches by a host it demands; the cleaning of a description
   against its project and `eventDescriptionNotReadable`; whom a write tells
   and that the writer follows the event; and a calendar in the trash.
@@ -1351,9 +1349,9 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   [live check](../guides/live-check.md) names a place to write them: a timed
   series across a change of summer time listed in a span, a series moved with
   and without `--repeat`, stopped with `--no-repeat`, a zone such as `CET`
-  refused, a client named and refused, an event put into the trash, and a
-  comment under a series written, reacted to and refused in an archived
-  project.
+  taken and one such as `europe/Berlin` refused, a client named and refused,
+  an event put into the trash, and a comment under a series written, reacted
+  to and refused in an archived project.
 - Check the posts live, as the [live check](../guides/live-check.md) says: a
   post sent out to `chosen` with `--notify me` and the same person twice, a
   client named and refused, a page of two with `next` and the page behind it,

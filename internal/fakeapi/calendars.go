@@ -1,10 +1,10 @@
 package fakeapi
 
 import (
+	_ "embed"
+	"encoding/json"
 	"net/http"
 	"net/url"
-	"os"
-	"path/filepath"
 	"regexp"
 	"slices"
 	"strconv"
@@ -29,9 +29,21 @@ var eventTimeFields = []string{"startsAt", "endsAt", "firstDay", "lastDay"}
 // fraction of up to six digits and an offset of at most fourteen hours.
 var eventMoment = regexp.MustCompile(`^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,6}))?(Z|([+-])((?:0\d|1[0-3])):?([0-5]\d)|([+-])14:?00)$`)
 
-// zoneRegions are the regions whose zones PHP lists, beside UTC. A name of
-// the backward table, such as CET or US/Eastern, is not listed there.
-var zoneRegions = []string{"Africa/", "America/", "Antarctica/", "Arctic/", "Asia/", "Atlantic/", "Australia/", "Europe/", "Indian/", "Pacific/"}
+// phpZones are the names of the zones PHP lists with ALL_WITH_BC. To
+// regenerate phpzones.json with the PHP Minka runs on:
+//
+//	php -r 'echo json_encode(DateTimeZone::listIdentifiers(DateTimeZone::ALL_WITH_BC), JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES), "\n";' > phpzones.json
+//
+//go:embed phpzones.json
+var phpZonesJSON []byte
+
+var phpZones = func() []string {
+	var zones []string
+	if err := json.Unmarshal(phpZonesJSON, &zones); err != nil {
+		panic(err)
+	}
+	return zones
+}()
 
 // eventRefusals are the codes of a schedule of an event.
 var eventRefusals = scheduleRefusals{prefix: "eventRepetition", outOfOrder: "A series ends on or after the first day of its event."}
@@ -599,33 +611,11 @@ func (s *Server) zoneOfARepetition(w http.ResponseWriter, writer *Person, named 
 	return name, true
 }
 
-// isAListedZone says whether PHP lists a zone of this name. What the fake
-// knows of the list is its regions; a name of the backward table inside one,
-// such as Europe/Kiev, passes here and is refused there.
+// isAListedZone says whether PHP lists a zone of this name, the names of
+// the backward table such as CET and Europe/Kiev included. PHP holds a name
+// to its list exactly, capitals and all.
 func isAListedZone(name string) bool {
-	if _, err := time.LoadLocation(name); err != nil || name == "" || name == "Local" || !spelledAsStored(name) {
-		return false
-	}
-	return name == "UTC" || slices.ContainsFunc(zoneRegions, func(region string) bool { return strings.HasPrefix(name, region) })
-}
-
-// spelledAsStored says whether a zone is written in the capitals of its file
-// in the zone database of the system. PHP holds a name to its list exactly,
-// and a file system that ignores case loads Europe/berlin all the same. A
-// system without the database loads from the copy built in, which is exact.
-func spelledAsStored(name string) bool {
-	dir := "/usr/share/zoneinfo"
-	if _, err := os.Stat(dir); err != nil {
-		return true
-	}
-	for _, part := range strings.Split(name, "/") {
-		entries, err := os.ReadDir(dir)
-		if err != nil || !slices.ContainsFunc(entries, func(entry os.DirEntry) bool { return entry.Name() == part }) {
-			return false
-		}
-		dir = filepath.Join(dir, part)
-	}
-	return true
+	return slices.Contains(phpZones, name)
 }
 
 // fits says whether the repetition starts on the first day of the event and

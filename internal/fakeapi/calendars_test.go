@@ -206,7 +206,7 @@ func TestWhatMakesNoEventIsRefusedWithItsCase(t *testing.T) {
 		`{"title": "x", "schedule": {"endsOn": "2035-10-04"}, ` + moments + `}`:                     "422 eventRepetitionDatesOutOfOrder",
 		`{"title": "x", "schedule": {"rhythm": "weekly", "weekdays": [2]}, ` + moments + `}`:        "422 eventRepetitionDoesNotFit",
 		`{"title": "x", "schedule": {"rhythm": "daily"}, "timeZone": "+02:00", ` + moments + `}`:    "422 eventRepetitionTimeZoneUnknown",
-		`{"title": "x", "schedule": {"rhythm": "daily"}, "timeZone": "CET", ` + moments + `}`:       "422 eventRepetitionTimeZoneUnknown",
+		`{"title": "x", "schedule": {"rhythm": "daily"}, "timeZone": "Mars/Base", ` + moments + `}`: "422 eventRepetitionTimeZoneUnknown",
 		`{"title": "x", "schedule": "weekly", ` + moments + `}`:                                     "400 malformedBody",
 		`{"title": "x", "participantIds": "nobody", ` + moments + `}`:                               "400 malformedBody",
 	} {
@@ -457,15 +457,20 @@ func TestATitleOfAnEventIsRefusedInMinkasWords(t *testing.T) {
 	}
 }
 
-// PHP holds a zone to its list exactly, whatever the file system ignores.
-func TestAZoneIsReadInItsOwnCapitals(t *testing.T) {
+// A zone is one of PHP's list, the names of the backward table included and
+// kept as given, and held to it exactly, whatever the file system ignores.
+func TestAZoneIsOneOfPHPsListInItsOwnCapitals(t *testing.T) {
 	s, f := New(t)
-	for zone, want := range map[string]string{"Europe/berlin": "422 eventRepetitionTimeZoneUnknown", "europe/Berlin": "422 eventRepetitionTimeZoneUnknown", "Europe/Berlin": "201"} {
+	for zone, want := range map[string]string{
+		"Europe/Berlin": "201", "CET": "201", "Europe/Kiev": "201", "US/Pacific": "201",
+		"Europe/berlin": "422 eventRepetitionTimeZoneUnknown", "europe/Berlin": "422 eventRepetitionTimeZoneUnknown",
+		"Mars/Base": "422 eventRepetitionTimeZoneUnknown", "+02:00": "422 eventRepetitionTimeZoneUnknown",
+	} {
 		answer := callSeries(t, s, f.Token, http.MethodPost, eventsOf(f), map[string]any{
 			"title": "x", "startsAt": "2035-10-05T09:00:00Z", "endsAt": "2035-10-05T10:00:00Z", "schedule": map[string]any{}, "timeZone": zone,
 		})
-		if answer.got != want {
-			t.Errorf("%s: %s, want %s", zone, answer.got, want)
+		if answer.got != want || want == "201" && answer.body["timeZone"] != zone {
+			t.Errorf("%s: %s, want %s: %s", zone, answer.got, want, answer.raw)
 		}
 	}
 }

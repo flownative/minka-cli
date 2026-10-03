@@ -59,8 +59,8 @@ themselves are Minka's to judge (`eventsSpanNotADay`, `eventsSpanOutOfOrder`,
 - **Whose days.** `from` and `to` are days of the person of the token: the zone
   of their preferences, else the installation's, which the top-level
   `timeZone` names. A query cannot name another zone. The installation may keep
-  a zone PHP reads but does not list, such as `CET`; the span is read in it all
-  the same.
+  a name of the backward table, such as `CET`; the span is read in it all the
+  same.
 - **Every event stands in the span once**, a series too, with `occurrences`:
   the times it takes place at in the span, each shaped like the time of an
   event, in the order they start, and never empty. An event without an
@@ -131,9 +131,12 @@ does not fall on it is `eventRepetitionDoesNotFit`. A daily series falls on
 Monday to Friday unless `--weekdays` says otherwise.
 
 `--time-zone` names the IANA zone a timed series keeps its clock time in. Left
-out, it is the zone the series has, else the writer's own; an offset such as
-`+02:00`, a name of the backward table such as `CET`, and a writer whose own
-zone is no IANA zone are `eventRepetitionTimeZoneUnknown`. Minka reads it only
+out, it is the zone the series has, else the writer's own. Minka takes every
+name PHP lists, the backward table included: `CET`, `GMT`, `Europe/Kiev` and
+`US/Pacific` are kept as given. A name is held to that list exactly, capitals
+and all, so `europe/Berlin`, a name that is none such as `Mars/Base`, an offset
+such as `+02:00`, and a writer whose own zone is none of the list are
+`eventRepetitionTimeZoneUnknown`. Minka reads it only
 together with a schedule and ignores it for an all-day event, so the CLI
 refuses `--time-zone` without `--repeat` or a detail, and beside `--first-day`,
 as a usage error, and says in a `notice` when the event Minka answered with is

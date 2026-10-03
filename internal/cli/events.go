@@ -605,7 +605,7 @@ func eventRefusal(s *session, err error, notFoundHint string) *Error {
 	case apiCodeEventRepetitionDatesOutOfOrder:
 		e.Hint = "--ends-on lies before the first day of the event, which is the first day of the series."
 	case apiCodeEventRepetitionTimeZoneUnknown:
-		e.Hint = "--time-zone is an IANA name such as Europe/Berlin; an offset such as +02:00 and an abbreviation such as CET are none. Without --time-zone, a timed series keeps the zone it has, else takes yours from your preferences in Minka, which may be none Minka can keep a series in: give --time-zone then."
+		e.Hint = "--time-zone is a name of the IANA zone database such as Europe/Berlin, written with its capitals; an offset such as +02:00 is none. Without --time-zone, a timed series keeps the zone it has, else takes yours from your preferences in Minka, which may be none Minka can keep a series in: give --time-zone then."
 	case apiCodeEventRepetitionDoesNotFit:
 		e.Hint = "The schedule does not fall on the first day of the event, such as a weekly one on other weekdays. Give the details that hold that day, or leave them out to take them from it."
 	case apiCodeEventRepetitionKeepsItsFirstDay:
