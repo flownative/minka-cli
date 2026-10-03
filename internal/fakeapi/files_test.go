@@ -259,6 +259,8 @@ func TestATitleRefusalNamesTheEntryWithItsArticle(t *testing.T) {
 		{upload, `{"title":"a\u0007b"}`, "The title of an upload must not contain control characters."},
 		{document, `{"title":""}`, "A document needs a title."},
 		{document, `{"title":"` + long + `"}`, "The title of a document is too long."},
+		// The length is asked before the control characters, as Minka does.
+		{upload, `{"title":"` + long + `\u0007"}`, "The title of an upload is too long."},
 	} {
 		_, answer := answerTo(t, s, f.Token, http.MethodPatch, c.path, c.body)
 		if message := answer["error"].(map[string]any)["message"]; message != c.want {
