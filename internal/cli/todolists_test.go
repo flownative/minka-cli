@@ -518,11 +518,11 @@ func TestTheColoursNamedAreTheOnesMinkaTakes(t *testing.T) {
 	e := newTestEnv(t)
 	f := e.fixture
 
-	if len(todoGroupColors) != 11 {
-		t.Fatalf("%d colours named, Minka takes eleven", len(todoGroupColors))
+	if len(minkaColors) != 11 {
+		t.Fatalf("%d colours named, Minka takes eleven", len(minkaColors))
 	}
 	help := strings.Join(strings.Fields(todoGroupColorHelp), " ")
-	for _, color := range todoGroupColors {
+	for _, color := range minkaColors {
 		if !strings.Contains(todoGroupColorUnknownHint, color) || !strings.Contains(help, color) {
 			t.Fatalf("%s is missing from the hint or the help", color)
 		}

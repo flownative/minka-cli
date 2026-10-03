@@ -31,6 +31,7 @@ func everyWrite(e *testEnv) map[string][]string {
 	expectCode(e.t, e.run("", "posts", "comments", "create", f.Post.ID, "A comment", "--json"), ExitOK)
 	expectCode(e.t, e.run("", "todos", "comments", "create", f.LooseTodo.ID, "A comment", "--json"), ExitOK)
 	expectCode(e.t, e.run("", "todolists", "comments", "create", f.TodoList.ID, "A comment", "--json"), ExitOK)
+	expectCode(e.t, e.run("", "columns", "create", "--board", f.Board.ID, "--title", "Review", "--json"), ExitOK)
 	comment := f.CardInDoing.Comments[len(f.CardInDoing.Comments)-1].ID
 	postComment := f.Post.Comments[len(f.Post.Comments)-1].ID
 	entryComment := f.Document.Comments[len(f.Document.Comments)-1].ID
@@ -54,6 +55,10 @@ func everyWrite(e *testEnv) map[string][]string {
 		"cards unsubscribe": {"cards", "unsubscribe", card, f.Anke.ID},
 		"cards notes set":   {"cards", "notes", "set", card, "Notes", "--force"},
 		"columns on-hold":   {"columns", "on-hold", f.Doing.ID},
+		"columns create":    {"columns", "create", "--board", f.Board.ID, "--title", "Shipped"},
+		"columns edit":      {"columns", "edit", f.Doing.ID, "--title", "Renamed"},
+		"columns move":      {"columns", "move", "Doing", "--board", f.Board.ID, "--after", "Review"},
+		"columns delete":    {"columns", "delete", "Review", "--board", f.Board.ID},
 		"steps create":      {"steps", "create", card, "Another step"},
 		"steps edit":        {"steps", "edit", card, "A step", "--due", "2026-11-02"},
 		"steps complete":    {"steps", "complete", card, "A step"},

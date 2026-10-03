@@ -39,6 +39,11 @@ func withStepsSpelledInLetters(e *testEnv) {
 	e.fixture.CardInTriage.Steps = []*fakeapi.Step{{ID: openStepID, Title: "Check"}, {ID: doneStepID, Title: "Checked", Completed: true}}
 }
 
+// withAReviewColumn puts a second working column, Review, behind Doing.
+func withAReviewColumn(e *testEnv) {
+	expectCode(e.t, e.run("", "columns", "create", "--board", e.fixture.Board.ID, "--title", "Review", "--json"), ExitOK)
+}
+
 func asAgent(e *testEnv) {
 	e.vars["MINKA_TOKEN"] = e.fixture.AgentToken
 }
@@ -105,6 +110,27 @@ var idsInCapitals = []idInCapitals{
 		return []string{up(f.Doing.ID)}
 	}},
 	{command: "columns on-hold", inputs: []string{"--board"}, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
+		return []string{"Doing", "--board", up(f.Board.ID)}
+	}},
+	{command: "columns create", inputs: []string{"--board"}, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
+		return []string{"--board", up(f.Board.ID), "--title", "Review"}
+	}},
+	{command: "columns edit", inputs: []string{"<column>"}, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
+		return []string{up(f.Doing.ID), "--title", "In progress"}
+	}},
+	{command: "columns edit", inputs: []string{"--board"}, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
+		return []string{"Doing", "--board", up(f.Board.ID), "--color", "red"}
+	}},
+	{command: "columns move", inputs: []string{"<column>", "--board", "--after"}, prepare: withAReviewColumn, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
+		return []string{up(f.Doing.ID), "--board", up(f.Board.ID), "--after", up(f.Board.Columns[2].ID)}
+	}},
+	{command: "columns move", inputs: []string{"--before"}, prepare: withAReviewColumn, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
+		return []string{"Review", "--board", f.Board.ID, "--before", up(f.Doing.ID)}
+	}},
+	{command: "columns delete", inputs: []string{"<column>"}, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
+		return []string{up(f.Doing.ID)}
+	}},
+	{command: "columns delete", inputs: []string{"--board"}, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
 		return []string{"Doing", "--board", up(f.Board.ID)}
 	}},
 	{command: "conversations with", inputs: []string{"<person>"}, args: func(_ *testEnv, f *fakeapi.Fixture) []string {

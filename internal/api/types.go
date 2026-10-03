@@ -61,6 +61,7 @@ type Column struct {
 	Type            string      `json:"type"`
 	Title           string      `json:"title"`
 	CustomTitle     *string     `json:"customTitle"`
+	Color           *string     `json:"color"`     // nil for Triage and Not now; Done is always green
 	CardCount       int         `json:"cardCount"` // the cards of the column without the ones on hold; Done lists only the ones completed last
 	Cards           []BoardCard `json:"cards"`     // without the cards on hold
 	OnHoldEnabled   bool        `json:"onHoldEnabled"`

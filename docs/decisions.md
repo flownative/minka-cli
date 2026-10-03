@@ -1421,8 +1421,8 @@ change Minka silently ignores.
 <a id="c-086"></a>
 ## C-086 — The colour of a group goes as it is named, and Minka is the one to refuse it
 
-*Applies to: `import`, the `color` of `todogroups`; `todogroups create` and
-`todogroups edit`*
+*Applies to: `import`, the `color` of `todogroups`; `todogroups create`,
+`todogroups edit` and `columns edit`*
 
 The extractor writes the colour of a group as Basecamp names it whenever it is
 a string with something in it, `white` included, unchecked, never lowercased
@@ -1441,8 +1441,9 @@ error message names. The hint carries a copy of Minka's eleven names, and no
 test holds it against Minka, only against the fake: that is accepted
 knowingly, because the copy only feeds a hint and never a refusal.
 **Implemented as:** `basecamp.groupColor`, `cli.newTodoGroupsEditCmd`,
-`cli.todoGroupColorUnknownHint`, see [Importing from Basecamp](stable/import.md)
-and [To-do lists and groups](stable/todo-lists.md).
+`cli.todoGroupColorUnknownHint`, `cli.columnRefusal`, see [Importing from
+Basecamp](stable/import.md), [To-do lists and groups](stable/todo-lists.md) and
+[Columns](stable/columns.md).
 
 <a id="c-087"></a>
 ## C-087 — What stands in a list or a group on the shelf or in the trash comes in use
@@ -1639,3 +1640,16 @@ the set of comments shown, per host, token digest and card, in
 the first code basecamp-cli does not use (10 is its account limit). **Implemented as:**
 `cli.newCommentsCreateCmd`, `readmark`, `cli.newConfigCmd`, see
 [Comments on a card](stable/comments.md).
+
+<a id="c-102"></a>
+## C-102 — A column is moved next to a working column of its board, which the CLI checks
+
+*Applies to: `columns move`*
+
+`--board` is required, and exactly one of `--first`, `--after <column>` and
+`--before <column>`; the board is read, and a neighbour that is no other working
+column of it is a usage error before the move goes out.
+**Why:** Minka places a column next to anything else as though it had been put
+first, with the same 200, and no address names the board of a column, so only
+the board read here can tell. **Implemented as:** `cli.newColumnsMoveCmd`, see
+[Columns](stable/columns.md).

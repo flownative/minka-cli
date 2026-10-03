@@ -25,9 +25,9 @@ in its order, with its ID and its open to-dos. A group of a list in the
 archive is at no address until the list is back, so every command here exits
 2 (not_found) on it.`
 
-// todoGroupColors are the colours Minka takes for a group, those of a board
-// column. The CLI only names them: refusing any other is left to Minka.
-var todoGroupColors = []string{"white", "red", "orange", "yellow", "green", "blue", "aqua", "purple", "gray", "pink", "brown"}
+// minkaColors are the colours Minka takes for a group of a to-do list and for
+// a board column. The CLI only names them: refusing any other is left to Minka.
+var minkaColors = []string{"white", "red", "orange", "yellow", "green", "blue", "aqua", "purple", "gray", "pink", "brown"}
 
 // todoGroupColorHelp says which colours a group takes.
 const todoGroupColorHelp = `--color takes one of white, red, orange, yellow, green, blue, aqua, purple,
@@ -36,7 +36,7 @@ group has away. Any other value, the empty one included, is refused with exit
 9 (validation) and meta.apiCode todoGroupColorUnknown.`
 
 // todoGroupColorUnknownHint names what Minka takes as the colour of a group.
-var todoGroupColorUnknownHint = "A group takes one of " + strings.Join(todoGroupColors, ", ") + ", spelt exactly so; white takes the colour away."
+var todoGroupColorUnknownHint = "A group takes one of " + strings.Join(minkaColors, ", ") + ", spelt exactly so; white takes the colour away."
 
 const apiCodeTodoGroupColorUnknown = "todoGroupColorUnknown"
 

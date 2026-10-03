@@ -43,6 +43,10 @@ the documentation says what holds; how it came about is in git.
   only what was given and needs no guard, the description that is plain text,
   the client who gets the same 404 as an outsider, the order of the refusals —
   before any work on `projects`.
+- [Columns](stable/columns.md): How a column is named, what it carries and
+  its colour, the place and colour a new column gets, why a move reads the
+  board first, what happens to the cards of a deleted column, who may write
+  and the order of the refusals — before any work on `columns`.
 - [The archive of a board](stable/archive.md): Why the page size is bounded in
   the CLI, what a walk of several pages promises and what it does not, how a
   cursor that has left the archive is worked around, the refusals of the two
