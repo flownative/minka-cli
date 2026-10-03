@@ -427,3 +427,146 @@ func TestAnEditThatChangesNothingSaysSo(t *testing.T) {
 		t.Fatalf("a change: summary %q, notice %q", env.Summary, env.Notice)
 	}
 }
+
+// The notes go out as Markdown converted here, as HTML with --notes-format
+// html, from stdin with -, and "" empties them.
+func TestTheNotesOfASeriesAreSentAsTheNotesOfAToDoAre(t *testing.T) {
+	e := newTestEnv(t)
+	f := e.fixture
+
+	for _, c := range []struct {
+		stdin string
+		args  []string
+		want  string
+	}{
+		{"", []string{"--notes", "Bring **the amps**"}, "<p>Bring <strong>the amps</strong></p>"},
+		{"Bring *cables*\n", []string{"--notes", "-"}, "<p>Bring <em>cables</em></p>"},
+		{"", []string{"--notes", "<p>As <em>it</em> is</p>", "--notes-format", "html"}, "<p>As <em>it</em> is</p>"},
+		{"", []string{"--notes", ""}, ""},
+	} {
+		r := e.run(c.stdin, append([]string{"todos", "series", "edit", f.Series.ID, "--force", "--json"}, c.args...)...)
+		expectCode(t, r, ExitOK)
+		if got := e.lastWriteBody(); !reflect.DeepEqual(got, map[string]any{"notes": c.want}) {
+			t.Errorf("%v sent %v, want the notes %q alone", c.args, got, c.want)
+		}
+	}
+
+	env, r := e.runJSON("", "todos", "series", "edit", f.Series.ID, "--notes", "# Heading", "--notes-format", "html", "--force")
+	expectCode(t, r, ExitOK)
+	if !strings.Contains(env.Notice, "characters it consists of") || decode(t, env.Data)["notes"] != "<div># Heading</div>" {
+		t.Fatalf("notice %q, notes %v", env.Notice, decode(t, env.Data)["notes"])
+	}
+
+	before := len(e.server.Requests())
+	_, r = e.runJSON("", "todos", "series", "edit", f.Series.ID, "--notes", "x", "--notes-format", "rtf", "--force")
+	expectCode(t, r, ExitUsage)
+	if len(e.server.Requests()) != before {
+		t.Fatal("notes in an unknown shape sent a request")
+	}
+}
+
+// New notes that would lose the files and mentions of the old ones are
+// refused before anything goes out; the source sent back keeps them, and
+// --drop-attachments lets them go.
+func TestNotesOfASeriesWithFilesAreNotDroppedUnlessAsked(t *testing.T) {
+	e := newTestEnv(t)
+	f := e.fixture
+	picture := e.uploaded(onePixelPNG(), "plan.png")
+	expectCode(t, e.run(source(t, picture), "todos", "series", "edit", f.Series.ID, "--notes", "-", "--notes-format", "html", "--force", "--json"), ExitOK)
+
+	env, r := e.runJSON("", "todos", "series", "show", f.Series.ID)
+	expectCode(t, r, ExitOK)
+	shown := decode(t, env.Data)
+	if files := rows(t, shown["attachments"]); len(files) != 1 || files[0]["id"] != picture["id"] {
+		t.Fatalf("the files of the series: %v", shown["attachments"])
+	}
+
+	writes := len(e.server.WritingRequests())
+	env, r = e.runJSON("", "todos", "series", "edit", f.Series.ID, "--notes", "Plain", "--force")
+	expectCode(t, r, ExitUsage)
+	if !strings.Contains(env.Hint, "--drop-attachments") || !strings.Contains(env.Hint, "todos series show --json") || !strings.Contains(env.Hint, "notesSource") {
+		t.Fatalf("hint %q", env.Hint)
+	}
+	if n := len(e.server.WritingRequests()); n != writes {
+		t.Fatalf("%d writes sent", n-writes)
+	}
+
+	kept := shown["notesSource"].(string) + "<p>And more</p>"
+	expectCode(t, e.run(kept, "todos", "series", "edit", f.Series.ID, "--notes", "-", "--notes-format", "html", "--force", "--json"), ExitOK)
+	if !strings.Contains(f.Series.Notes, "action-text-attachment") || !strings.Contains(f.Series.Notes, "And more") {
+		t.Fatalf("the source sent back lost its file: %q", f.Series.Notes)
+	}
+
+	env, r = e.runJSON("", "todos", "series", "edit", f.Series.ID, "--notes", "Plain", "--force", "--drop-attachments")
+	expectCode(t, r, ExitOK)
+	if !strings.Contains(env.Notice, "dropped") || f.Series.Notes != "<p>Plain</p>" {
+		t.Fatalf("notice %q, notes %q", env.Notice, f.Series.Notes)
+	}
+}
+
+func TestTheNotesOfASeriesAreShownWithTheirFiles(t *testing.T) {
+	e := newTestEnv(t)
+	f := e.fixture
+	picture := e.uploaded(onePixelPNG(), "plan.png")
+	expectCode(t, e.run(source(t, picture)+"<p>Bring <strong>cables</strong></p>", "todos", "series", "edit", f.Series.ID, "--notes", "-", "--notes-format", "html", "--force", "--json"), ExitOK)
+
+	r := e.run("", "todos", "series", "show", f.Series.ID, "--styled")
+	expectCode(t, r, ExitOK)
+	for _, want := range []string{"## Notes", "Bring **cables**", "## Files (1)", blobID(t, picture) + "  plan.png (image/png,"} {
+		if !strings.Contains(r.stdout, want) {
+			t.Errorf("missing %q in:\n%s", want, r.stdout)
+		}
+	}
+
+	// What is shown is the source, the text a write takes back.
+	var out strings.Builder
+	renderTodoSeries(&out, api.TodoSeries{Notes: "<p>As stored</p>", NotesSource: "<p>As the editor opens it</p>"})
+	if !strings.Contains(out.String(), "As the editor opens it") || strings.Contains(out.String(), "As stored") {
+		t.Fatalf("text:\n%s", out.String())
+	}
+}
+
+func TestNotesASeriesCannotTakeSayWhy(t *testing.T) {
+	e := newTestEnv(t)
+	env, r := e.runJSON("", "todos", "series", "edit", e.fixture.Series.ID, "--notes", strings.Repeat("x", 100001), "--force")
+	expectCode(t, r, ExitValidation)
+	if env.Meta["apiCode"] != apiCodeTodoNotesTooLong || !strings.Contains(env.Hint, "shorter --notes") {
+		t.Fatalf("apiCode %v, hint %q", env.Meta["apiCode"], env.Hint)
+	}
+
+	// Markup nested too deeply for Minka to read is refused by a cleaner the
+	// fake does not have, so the hint is held against the answer itself.
+	refusal := todoSeriesRefusal(&session{host: "minka.example"}, &api.Error{Method: "PATCH", StatusCode: 422, Code: apiCodeTodoNotesNotReadable, Message: "The notes of a to-do cannot be read."}, "", unknownID)
+	if refusal.Code != CodeValidation || !strings.Contains(refusal.Hint, "nested too deeply") || !strings.Contains(refusal.Hint, "--notes") {
+		t.Fatalf("code %q, hint %q", refusal.Code, refusal.Hint)
+	}
+}
+
+// The guard holds new notes against the source, as on a to-do.
+func TestTheGuardOverTheNotesOfASeriesHoldsTheSource(t *testing.T) {
+	e := newTestEnv(t)
+	series := e.fixture.Series
+	series.Notes = goneFile
+
+	env, r := e.runJSON("", "todos", "series", "edit", series.ID, "--notes", "Plain", "--force")
+	expectCode(t, r, ExitOK)
+	if strings.Contains(env.Notice, "dropped") || series.Notes != "<p>Plain</p>" {
+		t.Fatalf("notice %q, notes %q", env.Notice, series.Notes)
+	}
+}
+
+// Notes that keep every file cost no read of the list and none of the
+// projects: both are asked only where the guard is about to refuse.
+func TestNotesOfASeriesThatLoseNothingReadNeitherListNorProjects(t *testing.T) {
+	e := newTestEnv(t)
+	series := e.fixture.Series
+	series.Notes = "<p>Plain</p>"
+
+	before := len(e.server.Requests())
+	runOK(t, e, "todos", "series", "edit", series.ID, "--notes", "Other words", "--force")
+	for _, request := range e.server.Requests()[before:] {
+		if strings.HasPrefix(request.Path, "/api/v1/todo-lists/") || strings.HasPrefix(request.Path, "/api/v1/projects") {
+			t.Errorf("%s %s was read", request.Method, request.Path)
+		}
+	}
+}

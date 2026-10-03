@@ -1011,7 +1011,7 @@ func (s *Server) todoResource(tool *TodosTool, list *TodoList, todo *Todo) map[s
 		"list": map[string]any{"id": list.ID, "title": list.Title}, "group": group,
 		"title": todo.Title, "completed": todo.CompletedAt != nil, "completedAt": timestampOrNil(todo.CompletedAt),
 		"completedByName": completedBy,
-		"notes":           todo.Notes, "notesSource": todo.Notes, "attachments": s.attachmentsIn(tool.ProjectID, todo.Notes),
+		"notes":           todo.Notes, "notesSource": s.sourceOf(tool.ProjectID, todo.Notes), "attachments": s.attachmentsIn(tool.ProjectID, todo.Notes),
 		"startsOn": todo.StartsOn, "dueOn": todo.DueOn, "isOverdue": s.isOverdue(todo.DueOn, todo.CompletedAt != nil),
 		"series":    seriesReference(todo),
 		"assignees": s.peopleOnTodo(tool, todo.AssigneeIDs), "notified": s.peopleOnTodo(tool, todo.NotifiedIDs),

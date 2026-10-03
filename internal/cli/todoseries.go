@@ -32,6 +32,8 @@ const (
 	apiCodeTodoTitleMissing              = "todoTitleMissing"
 	apiCodeTodoTitleTooLong              = "todoTitleTooLong"
 	apiCodeTodoTitleHasControlCharacters = "todoTitleHasControlCharacters"
+	apiCodeTodoNotesTooLong              = "todoNotesTooLong"
+	apiCodeTodoNotesNotReadable          = "todoNotesNotReadable"
 )
 
 // The rhythms of a series, as Minka names them.
@@ -322,11 +324,15 @@ func (a *app) newTodoSeriesShowCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "show <seriesId>",
 		Short: "Show a series with its schedule, its state and its next day",
-		Long: `Shows a series: its list and group, what its occurrences start from, its
-schedule, its state (running, stopped, or finished: past its end), the day
-of the next occurrence (nextOccursOn) and the day it appears in the list
-(nextShowsOn), whether show-now would make one (canShowNow), and updatedAt,
-which todos series edit --expect takes.
+		Long: `Shows a series: its list and group, what its occurrences start from (the
+title, and the notes with the files that hang in them), its schedule, its
+state (running, stopped, or finished: past its end), the day of the next
+occurrence (nextOccursOn) and the day it appears in the list (nextShowsOn),
+whether show-now would make one (canShowNow), and updatedAt, which todos
+series edit --expect takes.
+
+The notes are shown as notesSource, the text todos series edit --notes takes
+back with --notes-format html, keeping their files and mentions.
 
 nextShowsOn is null where the next occurrence comes with the next round or is
 in the list already, and while the list is archived; a series of an archived
@@ -351,26 +357,42 @@ list makes nothing until the list is back.`,
 	}
 }
 
+// todoSeriesNotesHelp says how the notes of a series are written.
+const todoSeriesNotesHelp = `--notes is Markdown by default and is sent as HTML, the way the notes of a
+to-do are; --notes - reads them from stdin, and --notes "" empties them. With
+--notes-format html the HTML goes as it is, and notes that carry no element
+Minka serves are kept as the characters they consist of, which the command
+says in a notice.
+
+Files and mentions stand in the notes as action-text-attachment elements,
+which Markdown cannot hold. To keep them, take notesSource from todos series
+show --json, change it and send it back with --notes-format html. New notes
+that would drop them are refused unless --drop-attachments is given. Minka
+drops a file or a person from outside the project without a word, and tells
+nobody the notes mention: read the series back to see what was kept.`
+
 func (a *app) newTodoSeriesEditCmd() *cobra.Command {
 	var schedule scheduleFlags
-	var title, expect string
+	var title, notes, notesFormat, expect string
 	var assignees, notified []string
-	var noAssignees, nobodyNotified, force bool
+	var noAssignees, nobodyNotified, dropAttachments, force bool
 
 	cmd := &cobra.Command{
 		Use:   "edit <seriesId>",
-		Short: "Change the title, the schedule, the lead or the people of a series",
+		Short: "Change the title, the notes, the schedule, the lead or the people of a series",
 		Long: `Changes what the occurrences made from now on start from. The occurrence made
 already stays as it is, and what is not given stays as it is: only the flags
 given go out, never the details of the schedule as they stand.
 
 While rhythm and first day stay, the details not given are the series' own,
 so --interval 2 alone keeps the day. On a new --rhythm or --starts-on, the
-details not given follow from the first day, as on the web. The notes of a
-series cannot be changed. A stopped or finished series takes changes too; a
-finished one gets further days again by a later --ends-on.
+details not given follow from the first day, as on the web. A stopped or
+finished series takes changes too; a finished one gets further days again by
+a later --ends-on.
 
 ` + todoSeriesScheduleHelp + `
+
+` + todoSeriesNotesHelp + `
 
 --assignee and --notify-when-done give the WHOLE set of people: whoever is on
 the series and not named again is taken off. --no-assignees and
@@ -389,12 +411,16 @@ the list is taken off by a write that names the people and changes anything,
 and kept otherwise.`,
 		Example: `  minka todos series edit 0199... --interval 2 --expect 2026-09-29T20:08:41.123456Z
   minka todos series edit 0199... --rhythm monthlyOnDay --day 31 --expect 2026-09-29T20:08:41.123456Z
-  minka todos series edit 0199... --ends-on "" --assignee me --force`,
+  minka todos series edit 0199... --ends-on "" --assignee me --force
+  minka todos series edit 0199... --notes - --expect 2026-09-29T20:08:41.123456Z < notes.md`,
 		Args: requireArgs("seriesId"),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			flags := cmd.Flags()
 			guard, err := entryGuard(cmd, "series", "minka todos series show <seriesId>", expect, force)
 			if err != nil {
+				return err
+			}
+			if err := checkNotesFormat(cmd, notesFormat); err != nil {
 				return err
 			}
 			if noAssignees && len(assignees) > 0 {
@@ -409,8 +435,16 @@ and kept otherwise.`,
 			}
 
 			input := api.UpdateTodoSeriesInput{LeadDays: leadDays, ExpectedUpdatedAt: guard}
+			var notices []string
 			if flags.Changed("title") {
 				input.Title = &title
+			}
+			if flags.Changed("notes") {
+				html, warnings, err := a.richTextHTML("the notes", "--notes", notes, notesFormat)
+				if err != nil {
+					return err
+				}
+				input.Notes, notices = &html, warnings
 			}
 			if !in.IsEmpty() {
 				input.Schedule = &in
@@ -421,23 +455,35 @@ and kept otherwise.`,
 			if nobodyNotified {
 				input.NotifiedIDs = &[]string{}
 			}
-			if input.Title == nil && input.Schedule == nil && input.LeadDays == nil && input.AssigneeIDs == nil && input.NotifiedIDs == nil &&
+			if input.Title == nil && input.Notes == nil && input.Schedule == nil && input.LeadDays == nil && input.AssigneeIDs == nil && input.NotifiedIDs == nil &&
 				len(assignees) == 0 && len(notified) == 0 {
-				return usageErrorf(cmd, "nothing to change, give --title, a detail of the schedule, --lead-days, --assignee or --notify-when-done")
+				return usageErrorf(cmd, "nothing to change, give --title, --notes, a detail of the schedule, --lead-days, --assignee or --notify-when-done")
 			}
 
 			s, err := a.session()
 			if err != nil {
 				return err
 			}
-			// The series is read only to look up people by name; its schedule
-			// never goes back out.
-			people := newProjectPeople(a, s, func() (string, error) {
-				series, err := s.client.TodoSeries(a.ctx, args[0])
-				if err != nil {
-					return "", todoSeriesRefusal(s, err, "", args[0])
+			// The series is read only to look up people by name and to hold new
+			// notes against its own; its schedule never goes back out, and the
+			// read fills no --expect.
+			var current *api.TodoSeries
+			read := func() (*api.TodoSeries, error) {
+				if current == nil {
+					series, err := s.client.TodoSeries(a.ctx, args[0])
+					if err != nil {
+						return nil, todoSeriesRefusal(s, err, "", args[0])
+					}
+					current = &series.Value
 				}
-				return series.Value.ProjectID, nil
+				return current, nil
+			}
+			people := newProjectPeople(a, s, func() (string, error) {
+				series, err := read()
+				if err != nil {
+					return "", err
+				}
+				return series.ProjectID, nil
 			})
 			if len(assignees) > 0 {
 				ids, err := people.resolve(assignees)
@@ -453,6 +499,28 @@ and kept otherwise.`,
 				}
 				input.NotifiedIDs = &ids
 			}
+			if input.Notes != nil {
+				series, err := read()
+				if err != nil {
+					return err
+				}
+				// A series of a list in the archive takes no notes at all. The
+				// series does not say so, its list does.
+				listArchived := func() (bool, error) {
+					list, err := s.client.TodoList(a.ctx, series.ListID)
+					if err != nil {
+						return false, todoListRefusal(s, err, series.ListID)
+					}
+					return list.Value.Archived, nil
+				}
+				dropped, err := a.guardOverFiles(s, series.ProjectID, listArchived, firstNonEmpty(series.NotesSource, series.Notes), *input.Notes, dropAttachments,
+					"the notes have %s, and the new notes would drop them",
+					"Change notesSource from todos series show --json and send it back with --notes-format html, or give --drop-attachments.")
+				if err != nil {
+					return err
+				}
+				notices = append(notices, dropped...)
+			}
 
 			series, err := s.client.UpdateTodoSeries(a.ctx, args[0], input)
 			if err != nil {
@@ -461,7 +529,7 @@ and kept otherwise.`,
 			}
 
 			summary := "Changed series " + series.Value.Title + ": repeats " + describeRepetition(series.Value.Schedule)
-			notices := ignoredDetailsNotice(in, series.Value.Schedule)
+			notices = append(notices, ignoredDetailsNotice(in, series.Value.Schedule)...)
 			// A write that asks for what stands already writes nothing, so the
 			// moment read is still the series' own.
 			if guard != nil && sameMoment(*guard, series.Value.UpdatedAt) {
@@ -483,6 +551,9 @@ and kept otherwise.`,
 	schedule.register(cmd, true, true)
 	flags := cmd.Flags()
 	flags.StringVar(&title, "title", "", "New title of the occurrences; an empty one is refused")
+	flags.StringVar(&notes, "notes", "", "New notes of the occurrences, - to read them from stdin, empty to remove them")
+	flags.StringVar(&notesFormat, "notes-format", "markdown", "Format of the notes: markdown or html")
+	flags.BoolVar(&dropAttachments, "drop-attachments", false, "Replace notes that have attachments, mentions or references, which drops them")
 	flags.StringArrayVar(&assignees, "assignee", nil, "Person to be assigned, the whole set (repeatable)")
 	flags.BoolVar(&noAssignees, "no-assignees", false, "Assign nobody")
 	flags.StringArrayVar(&notified, "notify-when-done", nil, "Person to tell when an occurrence is done, the whole set (repeatable)")
@@ -649,6 +720,10 @@ func todoSeriesRefusal(s *session, err error, todoID, seriesID string) *Error {
 		e.Hint = `--title "" is no title: a series needs one, and a title can only be replaced, never removed.`
 	case e.APICode == apiCodeTodoTitleTooLong:
 		e.Hint = "The title is longer than Minka keeps for a to-do; give a shorter --title."
+	case e.APICode == apiCodeTodoNotesTooLong:
+		e.Hint = "The notes are longer than Minka keeps for a to-do, counted as they would be stored, where escaping adds characters; give shorter --notes."
+	case e.APICode == apiCodeTodoNotesNotReadable:
+		e.Hint = "Minka cannot read the notes, for example because their markup is nested too deeply; give --notes with flatter markup."
 	case e.APICode == apiCodeTodoTitleHasControlCharacters:
 		e.Hint = "The title carries a control character, such as a line break or a tab; give --title on one line without them."
 	case e.APICode == apiCodeTodoSeriesLeadDaysInvalid:
@@ -811,7 +886,8 @@ func renderTodoSeries(w io.Writer, series api.TodoSeries) {
 	}
 	fmt.Fprintf(w, "Created: %s by %s\nURL: %s\n", formatTime(series.CreatedAt), series.Creator.Name, series.AppURL)
 	fmt.Fprintf(w, "To write over it: --expect %s\n", series.UpdatedAt)
-	if notes := richtext.ToMarkdown(series.Notes); notes != "" {
+	if notes := richtext.ToMarkdown(firstNonEmpty(series.NotesSource, series.Notes)); notes != "" {
 		fmt.Fprintf(w, "\n## Notes\n\n%s\n", notes)
 	}
+	renderEntryFiles(w, series.Attachments)
 }

@@ -1474,12 +1474,12 @@ ones go along. **Implemented as:** `basecamp.Extractor.ExtractEveryProject`.
 
 Flags mirror Minka's fields (`--weekdays`, `--weekday`, `--instance` 1-4 or
 `last`, …); an edit sends only those given, needs `--expect` or `--force`, and
-reads the series only for names; one that wrote nothing says so where the
-`--expect` moment stayed. A detail `--rhythm` does not use is a usage error,
-one Minka ignored a notice. `show-now` answers `{series, todoId}` from
-`Location`; no day is computed. **Why:** echoed details pin what Minka lets
-follow a new first day. **Implemented as:** `cli.scheduleFlags`,
-`cli.newTodoSeriesEditCmd`, `api.ScheduleInput`.
+reads the series only for names and for the files of its notes; one that wrote
+nothing says so where the `--expect` moment stayed. A detail `--rhythm` does
+not use is a usage error, one Minka ignored a notice. `show-now` answers
+`{series, todoId}` from `Location`; no day is computed. **Why:** echoed
+details pin what Minka lets follow a new first day. **Implemented as:**
+`cli.scheduleFlags`, `cli.newTodoSeriesEditCmd`, `api.ScheduleInput`.
 
 <a id="c-090"></a>
 ## C-090 — What of a to-do's schedule does not fit costs its series, a time of day only itself

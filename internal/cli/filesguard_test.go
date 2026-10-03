@@ -139,6 +139,16 @@ func TestTheGuardOverFilesStandsAsideWhereMinkaRefusesTheWrite(t *testing.T) {
 			e.fixture.Project.Archived = true
 			return []string{"todos", "edit", e.fixture.LooseTodo.ID, "--notes", "Plain"}
 		}, ExitValidation, apiCodeProjectArchived},
+		"a series of a list in the archive": {func(e *testEnv) []string {
+			e.fixture.Series.Notes = withMention
+			e.fixture.TodoList.Archived = true
+			return []string{"todos", "series", "edit", e.fixture.Series.ID, "--notes", "Plain", "--force"}
+		}, ExitValidation, apiCodeTodoListArchived},
+		"a series in an archived project": {func(e *testEnv) []string {
+			e.fixture.Series.Notes = withMention
+			e.fixture.Project.Archived = true
+			return []string{"todos", "series", "edit", e.fixture.Series.ID, "--notes", "Plain", "--force"}
+		}, ExitValidation, apiCodeProjectArchived},
 		"a list of the archive": {func(e *testEnv) []string {
 			e.fixture.ArchivedList.Description = withMention
 			return []string{"todolists", "edit", e.fixture.ArchivedList.ID, "--description", "Plain"}

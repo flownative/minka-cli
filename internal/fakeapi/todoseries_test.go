@@ -421,6 +421,9 @@ func TestTheSeriesIsLookedForBeforeItsBodyIsChecked(t *testing.T) {
 		`{"schedule": {"endsOn": "2030-02-30"}}`:               "422 todoSeriesDatesNotADate",
 		`{"schedule": {"startsOn": ""}}`:                       "422 todoSeriesDatesNotADate",
 		`{"assigneeIds": ["somebody"]}`:                        "422 personNotAProjectMember",
+		`{"notes": 5}`:                                         "400 malformedBody",
+		`{"notes": null}`:                                      "422 nothingToChange",
+		`{"title": "", "notes": 5}`:                            "400 malformedBody",
 	}
 	title, updatedAt := f.Series.Title, f.Series.UpdatedAt
 	for body, want := range refusals {
@@ -585,5 +588,83 @@ func TestAPersonHiddenFromTheListStaysUntilAWriteNamesThePeople(t *testing.T) {
 	callSeries(t, s, f.Token, http.MethodPatch, path, map[string]any{"assigneeIds": []string{f.Bruno.ID}, "leadDays": 6})
 	if len(f.Series.AssigneeIDs) != 1 || f.Series.AssigneeIDs[0] != f.Bruno.ID {
 		t.Fatalf("taken off by a write that names the people and changes: %v", f.Series.AssigneeIDs)
+	}
+}
+
+// The notes are written as the notes of a to-do are, after the title and
+// before every other value, and before the archive: a body without them
+// leaves them, "" empties them, and the files in them hang on the series.
+func TestTheNotesOfASeriesAreWrittenAndKeepTheirFiles(t *testing.T) {
+	s, f := New(t)
+	path := "/todo-series/" + f.Series.ID
+	file := &Upload{ID: newID(), Circle: f.Project.ID, Filename: "plan.pdf", ContentType: "application/pdf", Content: []byte("%PDF"), UploaderID: f.Bruno.ID}
+	foreign := &Upload{ID: newID(), Circle: "conversation:" + newID(), Filename: "other.pdf", ContentType: "application/pdf", Content: []byte("%PDF"), UploaderID: f.Bruno.ID}
+	s.Uploads = append(s.Uploads, file, foreign)
+	notes := `<p>Bring <action-text-attachment sgid="` + file.handle() + `"></action-text-attachment><action-text-attachment sgid="` + foreign.handle() + `"></action-text-attachment></p>`
+
+	written := callSeries(t, s, f.Token, http.MethodPatch, path, map[string]any{"notes": notes})
+	if written.got != "200" || written.body["notes"] != notes {
+		t.Fatalf("%s %s", written.got, written.raw)
+	}
+	// The source is what an editor opens: a file of another circle has no
+	// handle to be given again there.
+	if source := `<p>Bring <action-text-attachment sgid="` + file.handle() + `"></action-text-attachment></p>`; written.body["notesSource"] != source {
+		t.Errorf("notesSource %v, want %s", written.body["notesSource"], source)
+	}
+	if files := written.body["attachments"].([]any); len(files) != 1 || files[0].(map[string]any)["id"] != file.ID {
+		t.Fatalf("the files of the notes: %v", files)
+	}
+	renamed := callSeries(t, s, f.Token, http.MethodPatch, path, map[string]any{"title": "Fetch the amps"})
+	if renamed.body["notes"] != notes {
+		t.Errorf("a body without notes changed them: %v", renamed.body["notes"])
+	}
+	occurrence := callSeries(t, s, f.Token, http.MethodPost, path+"/show-now", nil)
+	if occurrence.got != "201" || f.TodoList.Todos[len(f.TodoList.Todos)-1].Notes != notes {
+		t.Errorf("the occurrence made afterwards does not take the notes: %s", occurrence.got)
+	}
+
+	read := callSeries(t, s, f.Token, http.MethodGet, path, nil).body["updatedAt"]
+	s.now = s.now.Add(time.Hour)
+	if same := callSeries(t, s, f.Token, http.MethodPatch, path, map[string]any{"notes": " " + notes + " ", "expectedUpdatedAt": "2020-01-01T00:00:00Z"}); same.got != "200" || same.body["updatedAt"] != read {
+		t.Errorf("the notes it holds already are no change: %s %v", same.got, same.body["updatedAt"])
+	}
+	if got := callSeries(t, s, f.Token, http.MethodPatch, path, map[string]any{"notes": "<p>Other</p>", "expectedUpdatedAt": "2020-01-01T00:00:00Z"}).got; got != "409 todoSeriesChanged" {
+		t.Errorf("other notes over a version not read: %s", got)
+	}
+
+	emptied := callSeries(t, s, f.Token, http.MethodPatch, path, map[string]any{"notes": ""})
+	if emptied.body["notes"] != "" || len(emptied.body["attachments"].([]any)) != 0 {
+		t.Errorf("emptied: %s", emptied.raw)
+	}
+	if plain := callSeries(t, s, f.Token, http.MethodPatch, path, map[string]any{"notes": "# Heading"}); plain.body["notes"] != "<div># Heading</div>" {
+		t.Errorf("notes without markup are kept as characters: %v", plain.body["notes"])
+	}
+}
+
+func TestNotesASeriesCannotTakeAreRefusedInMinkasOrder(t *testing.T) {
+	s, f := New(t)
+	path := "/todo-series/" + f.Series.ID
+	tooLong := "<p>" + strings.Repeat("x", 100001) + "</p>"
+	for _, c := range []struct {
+		body map[string]any
+		want string
+	}{
+		{map[string]any{"notes": tooLong}, "422 todoNotesTooLong"},
+		{map[string]any{"title": "", "notes": tooLong}, "422 todoTitleMissing"},
+		{map[string]any{"notes": tooLong, "assigneeIds": []string{"somebody"}}, "422 todoNotesTooLong"},
+		{map[string]any{"notes": tooLong, "leadDays": 999}, "422 todoNotesTooLong"},
+		{map[string]any{"notes": tooLong, "schedule": map[string]any{"interval": 0}}, "422 todoNotesTooLong"},
+		{map[string]any{"notes": tooLong, "expectedUpdatedAt": "yesterday"}, "400 malformedBody"},
+	} {
+		if got := callSeries(t, s, f.Token, http.MethodPatch, path, c.body).got; got != c.want {
+			t.Errorf("%.80v: %s, want %s", c.body, got, c.want)
+		}
+	}
+	f.TodoList.Archived = true
+	if got := callSeries(t, s, f.Token, http.MethodPatch, path, map[string]any{"notes": tooLong}).got; got != "422 todoNotesTooLong" {
+		t.Errorf("notes too long in an archived list: %s", got)
+	}
+	if got := callSeries(t, s, f.Token, http.MethodPatch, path, map[string]any{"notes": "<p>Fine</p>"}).got; got != "422 todoListArchived" {
+		t.Errorf("notes in an archived list: %s", got)
 	}
 }
