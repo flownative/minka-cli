@@ -378,13 +378,14 @@ source chose, and a run that replaces the bundle would fetch thousands again.
 `bundle.Writer.StoreFile` and `ReuseFile`, see [Importing](stable/import.md).
 
 <a id="c-031"></a>
-## C-031 — Every link to a card, a post or a chat of the account is a reference
+## C-031 — Every link to a card, a post, a chat or an event of the account is a reference
 
 *Applies to: `import basecamp`, every text of a bundle*
 
-A link whose address shows a card, a message, a chat or a line of a chat of
-the account becomes an `<import-reference>`, whatever its words and whether
-the record is in the bundle or not; any other link stays a link.
+A link whose address shows a card, a message, a chat or a line of it, or an
+entry of a calendar or a day of it, of the account becomes an
+`<import-reference>`, whatever its words, whether the record is in the bundle
+or not and with or without `--calendars`; any other link stays a link.
 
 **Why:** The applier resolves what it knows and falls back to the link for
 the rest, so marking more loses nothing and marking less loses a reference.

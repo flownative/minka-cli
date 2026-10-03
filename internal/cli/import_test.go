@@ -158,7 +158,7 @@ func TestImportBasecampWritesABundleAndReportsWhatItHolds(t *testing.T) {
 			"todolists": float64(0), "todos": float64(0), "forwards": float64(0), "forwardreplies": float64(0),
 			"documents": float64(0), "uploads": float64(0)},
 		"longestBodyRecords": map[string]any{},
-		"references":         map[string]any{"cards": float64(0), "posts": float64(0), "tools": float64(0)},
+		"references":         map[string]any{"cards": float64(0), "posts": float64(0), "tools": float64(0), "events": float64(0)},
 		"requestsRetried":    float64(0),
 	}
 	if got := decode(t, env.Data); !reflect.DeepEqual(got, want) {
@@ -1801,14 +1801,14 @@ func TestImportBasecampReportsTheLinksThatBecameReferences(t *testing.T) {
 
 	env, r := e.runJSON("import", "basecamp", "--project", "7006", "--dry-run")
 	expectCode(t, r, ExitOK)
-	want := map[string]any{"cards": float64(4), "posts": float64(2), "tools": float64(3)}
+	want := map[string]any{"cards": float64(4), "posts": float64(2), "tools": float64(3), "events": float64(3)}
 	if got := decode(t, env.Data)["references"]; !reflect.DeepEqual(got, want) {
 		t.Errorf("references: got %v, want %v", got, want)
 	}
 
 	r = e.run("import", "basecamp", "--project", "7006", "--dry-run", "--styled")
 	expectCode(t, r, ExitOK)
-	if want := "Links turned into references: 4 to cards, 2 to posts, 3 to chats"; !strings.Contains(r.stdout, want) {
+	if want := "Links turned into references: 4 to cards, 2 to posts, 3 to chats, 3 to events"; !strings.Contains(r.stdout, want) {
 		t.Errorf("the text lacks %q:\n%s", want, r.stdout)
 	}
 	// A run without such a link has no line for them.

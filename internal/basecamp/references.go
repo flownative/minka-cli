@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/flownative/minka-cli/internal/bundle"
 	nethtml "golang.org/x/net/html"
@@ -19,6 +20,8 @@ type ReferenceCounts struct {
 	Posts int `json:"posts"`
 	// Tools are the links to a chat, and to a line of it.
 	Tools int `json:"tools"`
+	// Events are the links to an entry of a calendar, and to a day of it.
+	Events int `json:"events"`
 }
 
 // webHosts are the hosts Basecamp shows its pages at. Links of one account
@@ -29,25 +32,51 @@ var webHosts = map[string]bool{"3.basecamp.com": true, "app.basecamp.com": true}
 // then whitespace, the end of the tag or a slash.
 var linkTag = regexp.MustCompile(`<a[\t\n\f\r />]`)
 
-// recordPath is the path of the page of a card, a message or a chat. A line of
-// a chat stands at the page of its chat, as <chat>@<line> or below it at
-// lines/<line>. What stands below the page of a record belongs to it, such as
-// the menu of a line. It is asked of a path whose dot segments are resolved.
-var recordPath = regexp.MustCompile(`^/([0-9]+)/buckets/[0-9]+/(card_tables/cards|messages|chats)/([0-9]+)(@[0-9]+)?(?:/.*)?$`)
+// recordPath is the path of the page of a card, a message, a chat or an entry
+// of a calendar. A line of a chat stands at the page of its chat, as
+// <chat>@<line> or below it at lines/<line>. What stands below the page of a
+// record belongs to it, such as the menu of a line; below an entry only a day
+// of it does, see belongsToTheEntry. It is asked of a path whose dot segments
+// are resolved.
+var recordPath = regexp.MustCompile(`^/([0-9]+)/buckets/[0-9]+/(card_tables/cards|messages|chats|schedule_entries)/([0-9]+)(@[0-9]+)?(/.*)?$`)
 
 // recordKinds are the kinds of record a bundle has for the pages of recordPath.
 var recordKinds = map[string]bundle.Kind{
 	"card_tables/cards": bundle.Cards,
 	"messages":          bundle.Posts,
 	"chats":             bundle.Tools,
+	"schedule_entries":  bundle.Events,
+}
+
+// dayOfAnEntry is the page of one day of an entry that repeats. A day is no
+// record of its own, so a link to it names the entry.
+var dayOfAnEntry = regexp.MustCompile(`^/occurrences/([0-9]{8})$`)
+
+// belongsToTheEntry says whether what stands below the page of an entry is
+// the page of one of its days: a day of the calendar, which the thirtieth of
+// February and a day of the year 0 are not. Anything else is no page Basecamp
+// writes, so it names no entry.
+func belongsToTheEntry(below string) bool {
+	if below == "" {
+		return true
+	}
+	day := dayOfAnEntry.FindStringSubmatch(below)
+	if day == nil {
+		return false
+	}
+	parsed, err := time.Parse("20060102", day[1])
+	return err == nil && parsed.Year() >= firstYear
 }
 
 // referenceTo says which record of the account an address shows: a card, a
-// post or a chat, the chat also for a line of it. The record is named by its
-// kind in a bundle and its source ID, which is the ID of Basecamp that stands
-// in the address. It need not be in the bundle: the applier keeps the link to
-// what it does not know. An address of another account, another host or
-// another kind of record shows none.
+// post, a chat or an event, the chat also for a line of it and the event for a
+// day of it. The record is named by its kind in a bundle and its source ID,
+// which is the ID of Basecamp that stands in the address. It need not be in
+// the bundle: the applier keeps the link to what it does not know. An address
+// of another account, another host or another kind of record shows none.
+//
+// It reads the address and nothing else: asking Basecamp for an entry or a
+// day of it writes at the source.
 func (e *Extractor) referenceTo(address string) (bundle.Kind, string, bool) {
 	parsed, err := url.Parse(strings.Trim(address, addressPadding))
 	if err != nil || parsed.User != nil || !webHosts[strings.ToLower(parsed.Host)] {
@@ -63,6 +92,9 @@ func (e *Extractor) referenceTo(address string) (bundle.Kind, string, bool) {
 	// A path that climbs out of a page with ".." shows what it climbs to.
 	match := recordPath.FindStringSubmatch(path.Clean(parsed.Path))
 	if match == nil || match[1] != e.account || match[4] != "" && match[2] != "chats" {
+		return "", "", false
+	}
+	if match[2] == "schedule_entries" && !belongsToTheEntry(match[5]) {
 		return "", "", false
 	}
 	// A number too large for an ID names no record.
@@ -84,6 +116,8 @@ func (e *Extractor) openReference(kind bundle.Kind, ref, address string) string 
 		e.bodies.References.Posts++
 	case bundle.Tools:
 		e.bodies.References.Tools++
+	case bundle.Events:
+		e.bodies.References.Events++
 	}
 	return `<import-reference kind="` + string(kind) + `" ref="` + html.EscapeString(ref) + `" href="` + html.EscapeString(address) + `">`
 }

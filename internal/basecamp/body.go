@@ -80,8 +80,8 @@ type BodyCounts struct {
 	// EmbedsLeftOut are the embedded frames that became nothing, because their
 	// address is none an embed may carry.
 	EmbedsLeftOut int
-	// References are the links to a card, a post or a chat of the account that
-	// became an <import-reference>.
+	// References are the links to a card, a post, a chat or an event of the
+	// account that became an <import-reference>.
 	References ReferenceCounts
 }
 
@@ -265,8 +265,8 @@ func (e *Extractor) fileReference(ref string, seen rendering) string {
 // an address somebody wrote into a text. Only an address of the web becomes a
 // link, because whoever wrote the text chose what the embed says: any other
 // leaves the title as plain text. What became a link is counted. A link to a
-// card, a post or a chat of the account is a reference, like any other link
-// to one.
+// card, a post, a chat or an event of the account is a reference, like any
+// other link to one.
 func (e *Extractor) link(address, title string, linked *int) string {
 	title, address = strings.Join(strings.Fields(title), " "), strings.TrimSpace(address)
 	parsed, err := url.Parse(address)

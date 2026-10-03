@@ -103,8 +103,8 @@ type importReport struct {
 	// that became nothing, because their address is none an embed may carry.
 	Embeds        int `json:"embeds"`
 	EmbedsLeftOut int `json:"embedsLeftOut"`
-	// References are the links to a card, a post or a chat of the account
-	// that became a reference, by the kind of record.
+	// References are the links to a card, a post, a chat or an event of the
+	// account that became a reference, by the kind of record.
 	References basecamp.ReferenceCounts `json:"references"`
 	// PostsByStatus splits counts.posts. PostsLeftOut are archived and trashed
 	// posts of a message board that is not extracted, PostsWithEmptyBody the
@@ -398,9 +398,10 @@ A mention and a file in a text become a reference, and so does a file
 dropped into a chat. A video or a player embedded in a text, an iframe,
 becomes an embed that carries its address and nothing else (embeds); one whose
 address Minka would not take is left out (embedsLeftOut). A link to a card, a
-message or a chat of the account, or to a line of a chat, becomes a reference
-to that record, with its address and its words, whether the record is in the
-bundle or not (references, by kind).
+message, a chat or an entry of a calendar of the account, or to a line of a
+chat or a day of an entry, becomes a reference to that record, with its
+address and its words, whether the record is in the bundle or not, and with or
+without --calendars (references, by kind).
 
 Every file a reference names comes with a record and its bytes under files/,
 whatever its size and type, streamed from the Basecamp CLI (basecamp files
@@ -954,7 +955,7 @@ func renderImportReport(w io.Writer, report importReport) {
 		fmt.Fprintf(w, "Embedded frames with an address no embed may carry, left out: %d\n", report.EmbedsLeftOut)
 	}
 	if references := report.References; references != (basecamp.ReferenceCounts{}) {
-		fmt.Fprintf(w, "Links turned into references: %d to cards, %d to posts, %d to chats\n", references.Cards, references.Posts, references.Tools)
+		fmt.Fprintf(w, "Links turned into references: %d to cards, %d to posts, %d to chats, %d to events\n", references.Cards, references.Posts, references.Tools, references.Events)
 	}
 	if report.DryRun {
 		fmt.Fprintf(w, "Files a run would fetch: %d, %d bytes as Basecamp gives their sizes\n", report.FilesExpected, report.FilesBytesExpected)

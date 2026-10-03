@@ -2050,12 +2050,13 @@ this:
   `data.embeds` counts them, `data.embedsLeftOut` the frames that are left
   out because Minka would not take their address, which a `notice` counts as
   well. A line that was a video alone is a message; one whose only frame is
-  left out says nothing. A link to a card, a message or a chat of the
-  account, or to a line of a chat, becomes `<import-reference kind="…"
-  ref="…" href="…">words</import-reference>`, whether the record is in the
-  bundle or not, with the address as it stood and the words of the link as
-  plain text: `data.references` counts them by `cards`, `posts` and
-  `tools`. `data.longestBody` is the longest text per kind
+  left out says nothing. A link to a card, a message, a chat or an entry of
+  a calendar of the account, or to a line of a chat or a day of an entry,
+  becomes `<import-reference kind="…" ref="…" href="…">words</import-reference>`,
+  a day naming its event, whether the record is in the bundle or not and
+  with or without `--calendars`, with the address as it stood and the words
+  of the link as plain text: `data.references` counts them by `cards`,
+  `posts`, `tools` and `events`. `data.longestBody` is the longest text per kind
   (`cards`, `comments`, `posts`, `messages`, `answers`, `todolists`, `todos`)
   in characters, and
   `data.longestBodyRecords` names under the same kinds which record it was

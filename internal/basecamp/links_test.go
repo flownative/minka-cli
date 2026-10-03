@@ -1,6 +1,7 @@
 package basecamp
 
 import (
+	"context"
 	"testing"
 
 	"github.com/flownative/minka-cli/internal/bundle"
@@ -13,7 +14,7 @@ func linkExtractor(t *testing.T) *Extractor {
 	return e
 }
 
-func TestAnAddressShowsACardAPostOrAChatOfTheAccount(t *testing.T) {
+func TestAnAddressShowsACardAPostAChatOrAnEventOfTheAccount(t *testing.T) {
 	const bucket = "https://3.basecamp.com/4242/buckets/7/"
 	shows := map[string]struct {
 		kind bundle.Kind
@@ -35,6 +36,19 @@ func TestAnAddressShowsACardAPostOrAChatOfTheAccount(t *testing.T) {
 		"https://app.basecamp.com/4242/buckets/7/chats/4@5#hi": {bundle.Tools, "4"},
 		bucket + "messages/3/./":                               {bundle.Posts, "3"},
 		bucket + "todos/5/../../card_tables/cards/2":           {bundle.Cards, "2"},
+		// A day of an entry names the entry.
+		bucket + "schedule_entries/6":                                      {bundle.Events, "6"},
+		bucket + "schedule_entries/6/":                                     {bundle.Events, "6"},
+		bucket + "schedule_entries/006":                                    {bundle.Events, "6"},
+		"https://app.basecamp.com/4242/buckets/7/schedule_entries/6#x":     {bundle.Events, "6"},
+		bucket + "schedule_entries/6/occurrences/20230512":                 {bundle.Events, "6"},
+		bucket + "schedule_entries/6/occurrences/20240229#__recording_9":   {bundle.Events, "6"},
+		bucket + "schedule_entries/6/occurrences/20230512?x=1":             {bundle.Events, "6"},
+		bucket + "schedule_entries/6/occurrences/20230512/":                {bundle.Events, "6"},
+		bucket + "todos/5/../../schedule_entries/6/occurrences/20230512":   {bundle.Events, "6"},
+		bucket + "schedule_entries/6/edit/../occurrences/20230512":         {bundle.Events, "6"},
+		"HTTPS://3.BASECAMP.COM/4242/buckets/7/schedule_entries/6":         {bundle.Events, "6"},
+		bucket + "schedule_entries/6/occurrences/%32%30%32%33%30%35%31%32": {bundle.Events, "6"},
 	}
 	for address, want := range shows {
 		kind, ref, found := linkExtractor(t).referenceTo(address)
@@ -57,7 +71,6 @@ func TestAnAddressShowsACardAPostOrAChatOfTheAccount(t *testing.T) {
 		bucket + "documents/2",
 		bucket + "uploads/2",
 		bucket + "question_answers/2",
-		bucket + "schedule_entries/2",
 		bucket + "recordings/2",
 		bucket + "card_tables/2",
 		bucket + "card_tables/lists/2",
@@ -83,6 +96,29 @@ func TestAnAddressShowsACardAPostOrAChatOfTheAccount(t *testing.T) {
 		bucket + "messages/3@5",
 		"https://3.basecamp.com/4242/buckets/x/card_tables/cards/2",
 		"https://3.basecamp.com/4242/buckets/7/card_tables/cards/2.json",
+		// No entry, or no day of one.
+		"https://3.basecamp.com/4243/buckets/7/schedule_entries/6",
+		"https://3.basecampapi.com/4242/buckets/7/schedule_entries/6.json",
+		bucket + "schedule_entries/",
+		bucket + "schedule_entries/6x",
+		bucket + "schedule_entries/6.json",
+		bucket + "schedule_entries/6@5",
+		bucket + "schedule_entries/99999999999999999999",
+		bucket + "schedule_entries/6/edit",
+		bucket + "schedule_entries/6/occurrences",
+		bucket + "schedule_entries/6/occurrences/",
+		bucket + "schedule_entries/6/occurrences/20230512.json",
+		bucket + "schedule_entries/6/occurrences/20230512/subscription",
+		bucket + "schedule_entries/6/occurrences/2023-05-12",
+		bucket + "schedule_entries/6/occurrences/2023051",
+		bucket + "schedule_entries/6/occurrences/202305120",
+		bucket + "schedule_entries/6/occurrences/20230230",
+		bucket + "schedule_entries/6/occurrences/20231301",
+		bucket + "schedule_entries/6/occurrences/20230500",
+		bucket + "schedule_entries/6/occurrences/20230229",
+		bucket + "schedule_entries/6/occurrences/00000101",
+		bucket + "schedule_entries/6/days/20230512",
+		bucket + "schedule_entries/6/occurrences/20230512/../../../todos/5",
 		// A path that climbs out of the page of a record.
 		bucket + "card_tables/cards/2/../../../todos/5",
 		bucket + "card_tables/cards/2/%2E%2E/%2e%2e/../todos/5",
@@ -91,6 +127,35 @@ func TestAnAddressShowsACardAPostOrAChatOfTheAccount(t *testing.T) {
 		if kind, ref, found := linkExtractor(t).referenceTo(address); found {
 			t.Errorf("%q shows %s %s, want nothing", address, kind, ref)
 		}
+	}
+}
+
+// askedSource is a source that answers nothing and keeps what it was asked.
+type askedSource struct{ paths []string }
+
+func (s *askedSource) Get(_ context.Context, path string) ([]byte, error) {
+	s.paths = append(s.paths, path)
+	return []byte("{}"), nil
+}
+
+// A link to an entry or a day of it becomes a reference without a request:
+// asking Basecamp for either writes at the source. The source here stands
+// without the guard of a run, so that a request the guard would refuse shows
+// as well.
+func TestALinkToAnEntryIsReadNeverFollowed(t *testing.T) {
+	e := linkExtractor(t)
+	asked := &askedSource{}
+	e.source = asked
+	const entry = "https://3.basecamp.com/4242/buckets/7/schedule_entries/6"
+	text := `<a href="` + entry + `">entry</a> <a href="` + entry + `/occurrences/20230512">day</a> <a href="` + entry + `/edit">no day</a>`
+	want := `<import-reference kind="events" ref="6" href="` + entry + `">entry</import-reference> ` +
+		`<import-reference kind="events" ref="6" href="` + entry + `/occurrences/20230512">day</import-reference> ` +
+		`<a href="` + entry + `/edit">no day</a>`
+	if got := rewritten(t, e, text, ""); got != want {
+		t.Errorf("\n got %q\nwant %q", got, want)
+	}
+	if len(asked.paths) != 0 {
+		t.Errorf("the links were followed: %v", asked.paths)
 	}
 }
 
