@@ -3,6 +3,7 @@ package basecamp
 import (
 	"bytes"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -422,25 +423,74 @@ func TestATokenTheBasecampCLIDoesNotHandOutIsSentNowhere(t *testing.T) {
 }
 
 // A store that stops bringing bytes is given up, as every download is, and counts
-// as a failure of the network. The bound is one only a break trips.
+// as a failure of the network — **however the read of the body ends once it is**:
+// a body cut off may end as though it were whole, and a download given up must
+// never pass for a file. Neither case waits for a pace: the body ends only after
+// the download was given up, so whatever the machine does in between, the only
+// end there is is the one after the limit.
 func TestAnEarlierFileThatStopsComingIsGivenUp(t *testing.T) {
-	standIn := tokenStandIn(t)
-	b := newVersionBasecamp(t)
-	b.storeServe = func(w http.ResponseWriter, r *http.Request) {
-		_, _ = w.Write([]byte("a beginning"))
-		w.(http.Flusher).Flush()
-		<-r.Context().Done()
-	}
-	downloader := b.downloader(standIn)
-	downloader.IdleTimeout = 100 * time.Millisecond
-	started := time.Now()
-	err := downloader.DownloadVersion(t.Context(), b.api.URL+versionPath, &bytes.Buffer{})
+	for what, stall := range map[string]func(t *testing.T, b *versionBasecamp, d *Downloader){
+		"a body that ends as though it were whole once the download is given up": func(t *testing.T, b *versionBasecamp, d *Downloader) {
+			store := strings.TrimPrefix(b.store.URL, "https://")
+			api := d.transport
+			d.transport = roundTripper(func(r *http.Request) (*http.Response, error) {
+				if r.URL.Host != store {
+					return api.RoundTrip(r)
+				}
+				return &http.Response{StatusCode: http.StatusOK, Header: http.Header{}, Request: r,
+					Body: &endsWhenGivenUp{given: r.Context().Done(), first: []byte("a beginning")}}, nil
+			})
+		},
+		"a store that stops and is never heard of again": func(t *testing.T, b *versionBasecamp, _ *Downloader) {
+			release := make(chan struct{})
+			t.Cleanup(func() { close(release) })
+			b.storeServe = func(w http.ResponseWriter, r *http.Request) {
+				_, _ = w.Write([]byte("a beginning"))
+				w.(http.Flusher).Flush()
+				select {
+				case <-release:
+				case <-r.Context().Done():
+				}
+			}
+		},
+	} {
+		standIn := tokenStandIn(t)
+		b := newVersionBasecamp(t)
+		downloader := b.downloader(standIn)
+		downloader.IdleTimeout = 50 * time.Millisecond
+		stall(t, b, &downloader)
+		started := time.Now()
+		err := downloader.DownloadVersion(t.Context(), b.api.URL+versionPath, &bytes.Buffer{})
 
-	var failed *Error
-	if !errors.As(err, &failed) || failed.Kind != Network || !strings.Contains(failed.Message, "given up") {
-		t.Errorf("a store that stopped ended the download with %v, want it given up", err)
-	}
-	if elapsed := time.Since(started); elapsed > 30*time.Second {
-		t.Errorf("the download was given up after %s", elapsed)
+		var failed *Error
+		if !errors.As(err, &failed) || failed.Kind != Network || !strings.Contains(failed.Message, "given up") {
+			t.Errorf("%s: the download ended with %v, want it given up", what, err)
+		}
+		if elapsed := time.Since(started); elapsed > 30*time.Second {
+			t.Errorf("%s: the download was given up after %s", what, elapsed)
+		}
 	}
 }
+
+type roundTripper func(*http.Request) (*http.Response, error)
+
+func (f roundTripper) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+
+// endsWhenGivenUp is a body that brings its first bytes and then nothing until
+// the request is given up, and then ends as though it were whole.
+type endsWhenGivenUp struct {
+	given <-chan struct{}
+	first []byte
+}
+
+func (b *endsWhenGivenUp) Read(into []byte) (int, error) {
+	if len(b.first) > 0 {
+		n := copy(into, b.first)
+		b.first = b.first[n:]
+		return n, nil
+	}
+	<-b.given
+	return 0, io.EOF
+}
+
+func (b *endsWhenGivenUp) Close() error { return nil }

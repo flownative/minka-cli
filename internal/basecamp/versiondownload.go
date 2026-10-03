@@ -335,11 +335,16 @@ func (d Downloader) fetchSigned(ctx context.Context, address *url.URL, into io.W
 	}
 
 	written := &watchedOutput{into: into, alive: func() { idle.Reset(idleTimeout) }}
-	if _, err := io.Copy(written, response.Body); err != nil {
-		if written.failed != nil {
-			return written.failed
-		}
-		return interrupted(&Error{Kind: Network, Message: "the network failed during the download"})
+	_, err = io.Copy(written, response.Body)
+	switch {
+	case written.failed != nil:
+		return written.failed
+	// A body cut off by a limit or a stop may end as though it were whole, so
+	// whether the download was given up decides, and never how the read ended.
+	case running.Err() != nil:
+		return interrupted(&Error{Kind: Network, Message: "the download was ended before it was done"})
+	case err != nil:
+		return &Error{Kind: Network, Message: "the network failed during the download"}
 	}
 	return nil
 }

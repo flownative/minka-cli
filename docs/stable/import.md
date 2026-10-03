@@ -1554,7 +1554,8 @@ Both were measured. So the extractor takes the two steps itself:
 - **The second request** asks the signed place **without any token** and follows
   nothing; 200 brings the bytes, 5xx, 408 and 429 may pass, and any other status is
   `notUnderstood`, because the signature is Basecamp's own and fresh. The bytes
-  stream into the bundle under the limits of time every download has.
+  stream into the bundle under the limits of time every download has; one given
+  up is never taken for a file, however the read of its body ended.
 - **The size decides**, as for every file: a version that gives no `byte_size`
   is not asked for and is `notUnderstood`, and a number of bytes other than the
   version's `byte_size` is no file, fewer `failedThisTime` and more
