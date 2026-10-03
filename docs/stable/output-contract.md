@@ -43,7 +43,9 @@ Warnings are in `notice` with `--json`, on stderr otherwise, so that
 notice}`. `meta.apiCode` is the case code of Minka (`cardTitleTooLong`), `code`
 the class, `hint` the next step. `meta` is there when a server answered.
 `data` and `notice` are there only when a command got its work done but not
-all of it: `data` is the result it would have printed, `notice` its warnings.
+all of it: `data` is the result it would have printed, `notice` its warnings —
+or, for `unread`, when it wrote nothing because of what it read: `data` is the
+comments that stopped it.
 
 | Exit | `code` | Meaning |
 |---|---|---|
@@ -56,6 +58,11 @@ all of it: `data` is the result it would have printed, `notice` its warnings.
 | 7 | `api_error` | server or protocol error |
 | 8 | `ambiguous` | ambiguous input |
 | 9 | `validation` | refused by Minka, a write somebody else got in before included |
+| 11 | `unread` | a comment not written: its card has comments the caller has not read ([Comments](comments.md)) |
+
+The codes up to 9 are those of basecamp-cli, which uses 5 for a rate limit and
+10 for an account limit as well. A class it has no code for starts at 11, clear
+of every code it uses (C-001, C-101).
 
 Such a command fails so that a caller notices, and the result is not lost:
 the error envelope with `data` is printed with `--quiet` as well, and the text

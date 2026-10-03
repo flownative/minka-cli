@@ -1625,3 +1625,17 @@ file, and without an expectation nothing is lost: Minka keeps the old file.
 could be refused after the step stands, leaving half of one command written.
 **Implemented as:** `cli.newStepsEditCmd`, `api.UpdateStepInput`,
 `cli.stepRefusal`, see [Steps](stable/steps.md).
+
+<a id="c-101"></a>
+## C-101 — A comment can wait for the comments before it to be read, and exits 11 where they were not
+
+*Applies to: `comments create`, `comments list`, `comments unread`, `cards show`, `config`*
+
+`--if-latest <commentId|none>` and the setting `comments.requireRead` refuse a
+comment with exit 11 (`unread`) and the unread comments in `data`; the marks are
+the set of comments shown, per host, token digest and card, in
+`comments-read.json`, added to under a lock waited for at most 5 seconds that never fails a read.
+**Why:** a set and not the newest misses no comment that slipped in, and 11 is
+the first code basecamp-cli does not use (10 is its account limit). **Implemented as:**
+`cli.newCommentsCreateCmd`, `readmark`, `cli.newConfigCmd`, see
+[Comments on a card](stable/comments.md).

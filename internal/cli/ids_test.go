@@ -54,6 +54,10 @@ var idsInCapitals = []idInCapitals{
 	{command: "comments react", inputs: []string{"<cardId>", "<commentId>"}, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
 		return []string{up(f.CardInTriage.ID), up(f.CardInTriage.Comments[0].ID), "🚀"}
 	}},
+	{command: "comments create", inputs: []string{"--if-latest"}, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
+		comments := f.CardInTriage.Comments
+		return []string{f.CardInTriage.ID, "Agreed", "--if-latest", up(comments[len(comments)-1].ID)}
+	}},
 	{command: "boards archive", inputs: []string{"<boardId>", "--before"}, prepare: func(e *testEnv) {
 		e.server.PutInTheArchive(e.fixture.CardInDoing)
 		e.server.PutInTheArchive(e.fixture.CardInTriage)

@@ -40,6 +40,9 @@ func Acquire(ctx context.Context, path string) (*Lock, error) {
 			_ = file.Close()
 			return nil, err
 		}
+		if BusyTried != nil {
+			BusyTried()
+		}
 		select {
 		case <-ctx.Done():
 			// One last try, so that a lock given up while the caller slept

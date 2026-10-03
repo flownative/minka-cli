@@ -48,6 +48,13 @@ when stdout is not a terminal, so an agent gets structured output by default.
 - Name cards with `#MNK-1` or their URL, other entries with their URL, never
   only as text. Minka turns such a name into a reference that links both ways;
   a title alone links nothing.
+- Read before you answer: comment with
+  `minka comments create <card> - --if-latest <newest commentId|none>`, the
+  newest comment you read. Where somebody commented since, nothing is written
+  and it exits 11 (`unread`) with those comments in `data`: read them, then
+  decide again. `minka comments unread <card>` shows what this machine has not
+  shown yet; `minka config set comments.requireRead true` makes every comment
+  without `--if-latest` wait for that (`--force` writes anyway).
 - `minka cards done` is safe to repeat: a card already in Done is left alone.
 - `minka cards delete` moves a card to the trash. Repeating it changes
   nothing on the server, but a card in the trash reads like one that never
@@ -82,6 +89,7 @@ Errors: `{"ok": false, "error", "code", "retryable", "hint", "meta": {"apiCode",
 | 7 | `api_error` | server error or unexpected answer (5xx retryable) |
 | 8 | `ambiguous` | a column, person or step given by name matches more than one |
 | 9 | `validation` | the server refused the input, see `meta.apiCode` |
+| 11 | `unread` | a comment was not written: the card has comments you have not read, in `data` |
 
 Validation codes in `meta.apiCode`: `cardTitleMissing`, `cardTitleTooLong`,
 `cardTitleHasControlCharacters` (a title is one line: no line breaks or tabs),
@@ -123,6 +131,8 @@ not expected in practice.
   instead.
 - `minka auth logout --host <url>`: forget the token of a host. The token stays
   valid until it is revoked on the server.
+- `minka config get <key> --json` and `minka config set <key> <value> --json`:
+  the settings of this machine, so far `comments.requireRead`.
 
 ## This skill
 
@@ -177,7 +187,9 @@ minka steps edit <cardId> <step> --assignee me --due 2026-10-09 --json
 minka steps complete <cardId> <step> --json
 minka steps reopen <cardId> <step> --json
 minka steps delete <cardId> <step> --json
-minka comments create <cardId> - --json < comment.txt
+minka comments list <cardId> --json
+minka comments unread <cardId> --json
+minka comments create <cardId> - [--if-latest <commentId|none> | --force] --json < comment.txt
 minka comments edit <cardId> <commentId> - [--format html] --json < comment.txt
 minka comments delete <cardId> <commentId> --json
 minka comments react <cardId> <commentId> 👍 --json
