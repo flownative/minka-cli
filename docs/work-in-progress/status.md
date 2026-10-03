@@ -11,6 +11,14 @@ assignees, due dates, steps, subscribers, comments, chats, private
 conversations, uploads, mentions, reactions and one's own cards across all
 projects. `minka commands` lists them all, built from the command tree itself.
 
+The columns of a board are written with `columns create`, `edit` (title and
+colour, a system column's title given back with `--title ""`), `move` and
+`delete`, which takes the cards of the column into the trash with it. The rule
+the commands follow is [Columns](../stable/columns.md) (C-102, C-086). Minka's
+side is on its `main` and in no release yet, so production gets it with the
+next Minka release; the commands are checked against Minka's code and tests and
+the fake only, see below.
+
 The comments on a card are read with `cards show`, `comments list` and
 `comments unread`, which shows only what this machine has not shown yet. A
 comment can wait for them: `comments create --if-latest <commentId|none>`
@@ -423,6 +431,19 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   or Posts tool in the trash and no project in the trash. The CLI reads the
   tools of Docs & Files, Posts and Check-ins.
 
+- Everything of `columns create`, `edit`, `move` and `delete`: no request has
+  gone to a real Minka, and none can until a release carries the routes. Read
+  in `BoardApiController::addColumnAction`, `updateColumnAction`,
+  `moveColumnAction` and `removeColumnAction`, the column handlers,
+  `DbalBoardColumnRepository`, `BoardColumnColor`, `Gap` and `ApiColumnsTest`
+  on Minka's `main`, and mirrored by the fake in the order of
+  [Columns](../stable/columns.md), the no-op answers to a client included. What
+  the fake does not mirror: a board in the trash, which it has no word for;
+  bringing a column back, which only the web does; Minka's positions, for
+  which the fake keeps the order of a list, the same order; a working column of
+  the fixture set up without a colour, where Minka gives every new one a
+  colour; and the race in which a neighbour read on the board leaves it
+  before the move, which Minka would answer by putting the column first.
 - `steps edit` and the people and the day of a step: no request has gone to a
   real Minka. Read in `BoardApiController::updateStepAction`,
   `EditStepHandler`, `DbalCardStepRepository` and `ApiStepAssigneesTest` on

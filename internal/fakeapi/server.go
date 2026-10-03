@@ -60,7 +60,7 @@ var identifierWildcard = regexp.MustCompile(`\{([A-Za-z]+Id)\}`)
 var identifierFields = []string{
 	"assigneeId", "assigneeIds", "askedIds", "blobId", "cardIds", "categoryId", "columnId",
 	"folderId", "groupId", "listId", "nextCardId", "nextGroupId", "nextSubtaskId", "nextTodoId",
-	"notifiedIds", "notifyIds", "personId", "previousCardId", "previousGroupId",
+	"nextColumnId", "notifiedIds", "notifyIds", "personId", "previousCardId", "previousColumnId", "previousGroupId",
 	"participantIds", "previousSubtaskId", "previousTodoId", "replyTo", "todoId",
 }
 
@@ -146,7 +146,8 @@ type Column struct {
 	// order among themselves, the others theirs; how the two interleave here
 	// means nothing.
 	Cards         []*Card
-	OnHoldEnabled bool // only a working column can have an area for cards on hold
+	OnHoldEnabled bool    // only a working column can have an area for cards on hold
+	Color         *string // only a working column keeps one; nil for none
 }
 
 type Card struct {
@@ -234,6 +235,8 @@ type TrashedCard struct {
 	Column    *Column
 	TrashedAt time.Time
 	TrashedBy string // person ID
+
+	seq int
 }
 
 // ArchivedCard is a card that was put into the archive of its board. It keeps
@@ -440,19 +443,24 @@ func chatText(text string) string {
 type Server struct {
 	*httptest.Server
 
-	People        map[string]*Person
-	Tokens        map[string]string // token → person ID
-	Projects      []*Project
-	Boards        []*Board
-	Chats         []*Chat
-	FilesTools    []*FilesTool
-	TodosTools    []*TodosTool
-	CheckinsTools []*CheckinsTool
-	PostsTools    []*PostsTool
-	Calendars     []*CalendarTool
-	Uploads       []*Upload
-	Trash         []*TrashedCard
-	Archive       []*ArchivedCard
+	People         map[string]*Person
+	Tokens         map[string]string // token → person ID
+	Projects       []*Project
+	Boards         []*Board
+	Chats          []*Chat
+	FilesTools     []*FilesTool
+	TodosTools     []*TodosTool
+	CheckinsTools  []*CheckinsTool
+	PostsTools     []*PostsTool
+	Calendars      []*CalendarTool
+	Uploads        []*Upload
+	Trash          []*TrashedCard
+	TrashedColumns []*TrashedColumn
+	Archive        []*ArchivedCard
+
+	// trashSeq counts what went into the trash, so that the trash can list
+	// what came last first among things taken out in the same moment.
+	trashSeq int
 
 	// PostCategories are the kinds of post of every project, each in the
 	// order its project lists them.
@@ -869,6 +877,7 @@ func New(t testing.TB) (*Server, *Fixture) {
 	mux.HandleFunc("PATCH /api/v1/cards/{cardId}", s.authenticated(s.updateCard))
 	mux.HandleFunc("POST /api/v1/cards/{cardId}/moves", s.authenticated(s.moveCard))
 	mux.HandleFunc("PUT /api/v1/columns/{columnId}/on-hold", s.authenticated(s.setColumnOnHold))
+	s.registerColumnsRoutes(mux)
 	mux.HandleFunc("POST /api/v1/cards/{cardId}/comments", s.authenticated(s.writeComment))
 	mux.HandleFunc("POST /api/v1/cards/{cardId}/comments/{commentId}/reactions", s.authenticated(s.reactToComment))
 	mux.HandleFunc("DELETE /api/v1/cards/{cardId}/comments/{commentId}/reactions", s.authenticated(s.unreactFromComment))
@@ -994,7 +1003,24 @@ func (s *Server) TakeOutOfTheArchive(card *Card) {
 	}
 	s.Archive = slices.DeleteFunc(s.Archive, func(a *ArchivedCard) bool { return a.Card == card })
 	card.OnHold = false
-	archived.Column.Cards = append([]*Card{card}, archived.Column.Cards...)
+	column := s.columnToUnarchiveInto(archived)
+	column.Cards = append([]*Card{card}, column.Cards...)
+}
+
+// columnToUnarchiveInto is the column a card comes back to out of the archive:
+// the one it was taken from while that stands on the board, else the first
+// working column, else Triage.
+func (s *Server) columnToUnarchiveInto(archived *ArchivedCard) *Column {
+	board := s.boardOfColumn(archived.Column)
+	if board == nil || slices.Contains(board.Columns, archived.Column) {
+		return archived.Column
+	}
+	for _, kind := range []string{"column", "triage"} {
+		if i := slices.IndexFunc(board.Columns, func(c *Column) bool { return c.Type == kind }); i >= 0 {
+			return board.Columns[i]
+		}
+	}
+	return archived.Column
 }
 
 // FailNextWith makes the next request answer with this status and a body that
@@ -1543,6 +1569,7 @@ func (s *Server) unarchiveCard(w http.ResponseWriter, r *http.Request, person *P
 		return
 	}
 
+	column = s.columnToUnarchiveInto(s.inTheArchive(card.ID))
 	s.TakeOutOfTheArchive(card)
 	writeJSON(w, http.StatusOK, s.cardResource(board, column, card))
 }
@@ -1568,7 +1595,7 @@ func (s *Server) columnResource(board *Board, column *Column) map[string]any {
 	}
 	return map[string]any{
 		"id": column.ID, "type": column.Type, "title": columnTitle(column), "customTitle": column.CustomTitle,
-		"cardCount": count, "cards": s.boardCardResources(board, listed),
+		"color": shownColor(column), "cardCount": count, "cards": s.boardCardResources(board, listed),
 		"onHoldEnabled": column.OnHoldEnabled, "onHoldCardCount": len(onHold), "onHoldCards": s.boardCardResources(board, onHold),
 	}
 }
@@ -3381,7 +3408,8 @@ func (s *Server) removeCard(w http.ResponseWriter, r *http.Request, person *Pers
 	} else {
 		column.Cards = slices.DeleteFunc(column.Cards, func(c *Card) bool { return c == card })
 	}
-	s.Trash = append(s.Trash, &TrashedCard{Card: card, Column: column, TrashedAt: s.now, TrashedBy: person.ID})
+	s.trashSeq++
+	s.Trash = append(s.Trash, &TrashedCard{Card: card, Column: column, TrashedAt: s.now, TrashedBy: person.ID, seq: s.trashSeq})
 
 	// The server sends its JSON Content-Type along with the empty 204.
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
@@ -3397,29 +3425,60 @@ func (s *Server) trash(w http.ResponseWriter, r *http.Request, person *Person) {
 		return
 	}
 
-	var entries []*TrashedCard
-	for _, trashed := range s.Trash {
-		if board := s.boardOfColumn(trashed.Column); board != nil && board.ProjectID == project.ID {
-			entries = append(entries, trashed)
-		}
+	type entry struct {
+		at       time.Time
+		seq      int
+		resource map[string]any
 	}
-	slices.Reverse(entries)
+	appURL := s.URL + "/projects/" + project.ID + "/trash"
+	var entries []entry
+	for _, trashed := range slices.Backward(s.Trash) {
+		board := s.boardOfColumn(trashed.Column)
+		if board == nil || board.ProjectID != project.ID {
+			continue
+		}
+		// A card whose column lies in the trash as well comes back only after
+		// the column, which only the web brings back.
+		var blockedBy any
+		if s.trashedColumn(trashed.Column) != nil {
+			blockedBy = "column"
+		}
+		entries = append(entries, entry{trashed.TrashedAt, trashed.seq, map[string]any{
+			"kind": "card", "id": trashed.Card.ID, "title": trashed.Card.Title, "toolType": nil,
+			"board":     map[string]any{"id": board.ID, "title": board.Title},
+			"column":    map[string]any{"id": trashed.Column.ID, "type": trashed.Column.Type, "title": columnTitle(trashed.Column), "customTitle": trashed.Column.CustomTitle},
+			"trashedAt": timestampOrNil(nilIfZero(trashed.TrashedAt)), "trashedBy": s.personReferenceOrNil(trashed.TrashedBy),
+			"restorable": blockedBy == nil, "blockedBy": blockedBy,
+			"appUrl": appURL,
+		}})
+	}
+	for _, trashed := range slices.Backward(s.TrashedColumns) {
+		if trashed.Board.ProjectID != project.ID {
+			continue
+		}
+		entries = append(entries, entry{trashed.TrashedAt, trashed.seq, map[string]any{
+			"kind": "column", "id": trashed.Column.ID, "title": trashed.Column.CustomTitle, "toolType": nil,
+			"board":     map[string]any{"id": trashed.Board.ID, "title": trashed.Board.Title},
+			"column":    nil,
+			"trashedAt": timestampOrNil(nilIfZero(trashed.TrashedAt)), "trashedBy": s.personReferenceOrNil(trashed.TrashedBy),
+			"restorable": false, "blockedBy": nil,
+			"appUrl": appURL,
+		}})
+	}
+	slices.SortStableFunc(entries, func(a, b entry) int {
+		if !a.at.Equal(b.at) {
+			return b.at.Compare(a.at)
+		}
+		return b.seq - a.seq
+	})
 	if len(entries) > TrashEntries {
 		entries = entries[:TrashEntries]
 		w.Header().Set("X-Minka-Truncated", "true")
 	}
 
 	list := []any{}
-	for _, trashed := range entries {
-		board := s.boardOfColumn(trashed.Column)
-		list = append(list, map[string]any{
-			"kind": "card", "id": trashed.Card.ID, "title": trashed.Card.Title, "toolType": nil,
-			"board":     map[string]any{"id": board.ID, "title": board.Title},
-			"column":    map[string]any{"id": trashed.Column.ID, "type": trashed.Column.Type, "title": columnTitle(trashed.Column), "customTitle": trashed.Column.CustomTitle},
-			"trashedAt": timestampOrNil(nilIfZero(trashed.TrashedAt)), "trashedBy": s.personReferenceOrNil(trashed.TrashedBy),
-			"restorable": true, "blockedBy": nil,
-			"appUrl": s.URL + "/projects/" + project.ID + "/trash",
-		})
+	for _, e := range entries {
+		list = append(list, e.resource)
 	}
 	writeJSON(w, http.StatusOK, list)
 }
@@ -3450,6 +3509,10 @@ func (s *Server) restoreCard(w http.ResponseWriter, r *http.Request, person *Per
 	if s.refusedAsArchived(w, s.projectOf(board)) {
 		return
 	}
+	if s.trashedColumn(trashed.Column) != nil {
+		notFound(w)
+		return
+	}
 
 	s.Trash = slices.Delete(s.Trash, index, index+1)
 	trashed.Card.OnHold = false
@@ -3457,11 +3520,16 @@ func (s *Server) restoreCard(w http.ResponseWriter, r *http.Request, person *Per
 	writeJSON(w, http.StatusOK, s.cardResource(board, trashed.Column, trashed.Card))
 }
 
+// boardOfColumn is the board a column stands on, or stood on before it went
+// into the trash.
 func (s *Server) boardOfColumn(column *Column) *Board {
 	for _, board := range s.Boards {
 		if slices.Contains(board.Columns, column) {
 			return board
 		}
+	}
+	if trashed := s.trashedColumn(column); trashed != nil {
+		return trashed.Board
 	}
 	return nil
 }
