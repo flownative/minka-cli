@@ -1552,13 +1552,27 @@ it back; only lines tell a deleted chatbot from a deleted user.
 [Importing from Basecamp](stable/import.md).
 
 <a id="c-095"></a>
-## C-095 — The comments of a to-do are `todos comments`, those of a list `todolists comments`
+## C-095 — The comments of a to-do are `todos comments`, those of a list `todolists comments`, those of an event `events comments`
 
-*Applies to: the comments under a to-do and under a to-do list*
+*Applies to: the comments under a to-do, a to-do list and an event*
 
 Each stands below the command of its item, with the item as the first
 argument, cut exactly as `posts comments` ([C-081](#c-081)).
-**Why:** One kind of item hangs under each, so no flag has to say which, and
-whoever reads a to-do or a list with `show` finds its comments one word away.
-**Implemented as:** `cli.newItemCommentsCmd` with `todoComments` and
-`todoListComments`, see [To-dos and subtasks](stable/todos.md).
+**Why:** One kind of item hangs under each, so no flag has to say which; `show`
+carries the comments of a to-do or a list, of an event only their count.
+**Implemented as:** `cli.newItemCommentsCmd` with `todoComments`,
+`todoListComments` and `eventComments`, see [To-dos](stable/todos.md) and
+[Calendars and events](stable/calendar.md).
+
+<a id="c-098"></a>
+## C-098 — Calendars and their events are `events`, the calendars `events tools`
+
+*Applies to: `events …`*
+
+One group, cut like `posts`: `tools <projectId>`, `list <toolId>` with
+`--from` and `--to` both required, `show`, `create --tool`, `edit`,
+`delete`. Time flags mirror Minka's fields; `--repeat` sends a schedule,
+`--no-repeat` null, and `--time-zone` without a schedule is a usage error.
+**Why:** every tool reads `<group> tools`, and a flag Minka ignores must not
+pass without a word. **Implemented as:** `cli.newEventsCmd`, `cli.eventFlags`,
+`api.EventInput`, see [Calendars and events](stable/calendar.md).

@@ -15,6 +15,7 @@ import (
 type commentedKind struct {
 	parent string // the command the comments stand under, such as "posts"
 	noun   string // the item as the help and the summaries name it
+	aNoun  string // the same with its article, such as "an event"
 	arg    string // the name of the argument that takes its ID, which is also the key of the item in the answer of a removal
 	kind   api.CommentedKind
 
@@ -25,6 +26,10 @@ type commentedKind struct {
 	refusal func(s *session, err error, id string) *Error
 
 	reactHelp string // what the help of react says beyond the reactions themselves
+
+	// showOmitsComments is true where the show command of the item carries
+	// only the number of its comments.
+	showOmitsComments bool
 }
 
 type commentedItem struct {
@@ -62,17 +67,41 @@ func (k commentedKind) namingTheAuthor(e *Error) *Error {
 func (k commentedKind) reactionRefusal(s *session, err error, id string) *Error {
 	e := k.refusal(s, err, id)
 	if e.Code == CodeNotFound {
-		e.Hint = fmt.Sprintf("The %s does not exist or is not visible to you, or the comment was removed or hangs under another %s. The comments of a %s: minka %s comments list <%s>", k.noun, k.noun, k.noun, k.parent, k.arg)
+		e.Hint = fmt.Sprintf("The %s does not exist or is not visible to you, or the comment was removed or hangs under another %s. The comments of %s: minka %s comments list <%s>", k.noun, k.noun, k.aNoun, k.parent, k.arg)
 	}
 	return reactionError(e)
 }
 
+// commentsSource is the command whose --json carries the comments of an item
+// with their bodySource.
+func (k commentedKind) commentsSource() string {
+	if k.showOmitsComments {
+		return k.parent + " comments list <" + k.arg + ">"
+	}
+	return k.parent + " show"
+}
+
+// whereToTakeTheBodySource is the sentence of the edit help that names it,
+// wrapped where the list of comments makes it longer than a line.
+func (k commentedKind) whereToTakeTheBodySource() string {
+	if k.showOmitsComments {
+		return k.commentsSource() + " --json, change it and\nsend it back with --format html"
+	}
+	return k.commentsSource() + " --json, change it and send it back with --format html"
+}
+
 func (k commentedKind) breadcrumbs(id string) []Breadcrumb {
+	if k.showOmitsComments {
+		return []Breadcrumb{
+			{Action: "comments", Cmd: "minka " + k.parent + " comments list " + id, Description: "Read the comments on the " + k.noun},
+			{Action: "show", Cmd: "minka " + k.parent + " show " + id, Description: "Read the " + k.noun},
+		}
+	}
 	return []Breadcrumb{{Action: "show", Cmd: "minka " + k.parent + " show " + id, Description: "Read the " + k.noun + " with its comments"}}
 }
 
 func (a *app) newItemCommentsCmd(k commentedKind) *cobra.Command {
-	return group("comments", "Read, write, change, remove and react to comments on a "+k.noun,
+	return group("comments", "Read, write, change, remove and react to comments on "+k.aNoun,
 		a.newItemCommentsListCmd(k),
 		a.newItemCommentsCreateCmd(k),
 		a.newItemCommentsEditCmd(k),
@@ -83,11 +112,15 @@ func (a *app) newItemCommentsCmd(k commentedKind) *cobra.Command {
 }
 
 func (a *app) newItemCommentsListCmd(k commentedKind) *cobra.Command {
+	shown := fmt.Sprintf("%s show carries the same comments together with the %s.", k.parent, k.noun)
+	if k.showOmitsComments {
+		shown = fmt.Sprintf("%s show carries only their number, commentCount.", k.parent)
+	}
 	return &cobra.Command{
 		Use:   "list <" + k.arg + ">",
-		Short: "List the comments on a " + k.noun + ", the oldest first",
-		Long: fmt.Sprintf(`Lists every comment on a %s, the oldest first, with its reactions.
-Nothing is paged. %s show carries the same comments together with the %s.`, k.noun, k.parent, k.noun),
+		Short: "List the comments on " + k.aNoun + ", the oldest first",
+		Long: fmt.Sprintf(`Lists every comment on %s, the oldest first, with its reactions.
+Nothing is paged. %s`, k.aNoun, shown),
 		Args: requireArgs(k.arg),
 		RunE: func(_ *cobra.Command, args []string) error {
 			s, err := a.session()
@@ -119,8 +152,8 @@ func (a *app) newItemCommentsCreateCmd(k commentedKind) *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "create <" + k.arg + "> <text|->",
-		Short: "Comment on a " + k.noun,
-		Long:  "Writes a comment on a " + k.noun + ".\n\n" + commentFormatHelp,
+		Short: "Comment on " + k.aNoun,
+		Long:  "Writes a comment on " + k.aNoun + ".\n\n" + commentFormatHelp,
 		Example: k.example(`create 0199... "Looks right to me"`) + "\n" +
 			k.example("create 0199... - < comment.md"),
 		Args: requireArgs(k.arg, "text"),
@@ -167,18 +200,18 @@ func (a *app) newItemCommentsEditCmd(k commentedKind) *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "edit <" + k.arg + "> <commentId> <text|->",
-		Short: "Change a comment you wrote on a " + k.noun,
+		Short: "Change a comment you wrote on " + k.aNoun,
 		Long: "Changes the text of a comment. Only its author can.\n\n" + commentFormatHelp + fmt.Sprintf(`
 
 Files and mentions stand in a comment as action-text-attachment elements, which
 Markdown cannot hold. To keep them, take the bodySource of the comment from
-%s show --json, change it and send it back with --format html. A new text
+%s. A new text
 that would drop them from a comment of yours is refused unless
 --drop-attachments is given; the command reads the %s first to know, and
 where the comment carries files or mentions, the person of the token to know
 whose it is. Where it is about to refuse, it reads the archived projects as
 well: in an archived project Minka refuses any text, so the request goes out
-and projectArchived is the answer.`, k.parent, k.noun),
+and projectArchived is the answer.`, k.whereToTakeTheBodySource(), k.noun),
 		Example: k.example(`edit 0199... 0199... "Looks right after all"`),
 		Args:    requireArgs(k.arg, "commentId", "text"),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -203,7 +236,7 @@ and projectArchived is the answer.`, k.parent, k.noun),
 				return k.refusal(s, err, args[0])
 			}
 			dropped, err := a.keepsTheAttachmentsOfAComment(s, under.projectID, under.closed, under.comments, args[1], body, dropAttachments,
-				"Change the bodySource of the comment from "+k.parent+" show --json and send it back with --format html, or give --drop-attachments.")
+				"Change the bodySource of the comment from "+k.commentsSource()+" --json and send it back with --format html, or give --drop-attachments.")
 			if err != nil {
 				return err
 			}
@@ -236,7 +269,7 @@ and projectArchived is the answer.`, k.parent, k.noun),
 func (a *app) newItemCommentsDeleteCmd(k commentedKind) *cobra.Command {
 	return &cobra.Command{
 		Use:   "delete <" + k.arg + "> <commentId>",
-		Short: "Remove a comment you wrote on a " + k.noun,
+		Short: "Remove a comment you wrote on " + k.aNoun,
 		Long: `Removes a comment. Only its author can. A removed comment is gone, not marked:
 removing it again exits with 2 (not_found), like a comment that never existed.`,
 		Args: requireArgs(k.arg, "commentId"),
@@ -267,7 +300,7 @@ func (a *app) newItemCommentsReactCmd(k commentedKind) *cobra.Command {
 	}
 	return &cobra.Command{
 		Use:     "react <" + k.arg + "> <commentId> <content>",
-		Short:   "React to a comment on a " + k.noun,
+		Short:   "React to a comment on " + k.aNoun,
 		Long:    long,
 		Example: k.example("react 0199... 0199... 👍"),
 		Args:    requireArgs(k.arg, "commentId", "content"),
@@ -298,7 +331,7 @@ func (a *app) newItemCommentsReactCmd(k commentedKind) *cobra.Command {
 func (a *app) newItemCommentsUnreactCmd(k commentedKind) *cobra.Command {
 	return &cobra.Command{
 		Use:   "unreact <" + k.arg + "> <commentId> <content>",
-		Short: "Take a reaction off a comment on a " + k.noun,
+		Short: "Take a reaction off a comment on " + k.aNoun,
 		Long:  "Takes a reaction off a comment.\n\n" + reactionHelp,
 		Args:  requireArgs(k.arg, "commentId", "content"),
 		RunE: func(_ *cobra.Command, args []string) error {

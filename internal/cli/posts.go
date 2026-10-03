@@ -555,7 +555,7 @@ of the archive.`,
 // postComments are the comments under a post. A post of the archive takes no
 // text at all.
 var postComments = commentedKind{
-	parent: "posts", noun: "post", arg: "postId", kind: api.CommentedPost,
+	parent: "posts", noun: "post", aNoun: "a post", arg: "postId", kind: api.CommentedPost,
 	read: func(a *app, s *session, id string) (commentedItem, error) {
 		post, err := s.client.Post(a.ctx, id)
 		if err != nil {
