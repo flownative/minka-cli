@@ -92,6 +92,16 @@ reacting to a post itself and showing one to clients have no address in the
 API. None of it has been seen live: the whole feature is checked against the
 fake, see below.
 
+The calendars of a project are listed with `events tools`, their events read
+with `events list` (a span of days, with the occurrences of every series in
+it) and `events show`, and written with `events create`, `edit` and `delete`.
+The rule the commands follow is [Calendars and events](../stable/calendar.md)
+(C-098). Taking an event out of the trash, the comments under an event and
+showing one to clients have no address in the API. Minka's side is on its
+`main` and in no release yet, so production gets it with the next Minka
+release; the commands are checked against Minka's code and tests and the fake,
+and live only in what a read of addresses that name nothing shows, see below.
+
 A project is renamed and described with `projects edit`, which sends only
 `--name` and `--description` given, the description as plain text. The rule
 the command follows is [Projects](../stable/projects.md) (C-093). Minka's side
@@ -557,6 +567,40 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   (`DbalCommentRepository::change`) and in the fake, under a document, an
   upload, a to-do and a list as well; the comments under a card in the fake
   still keep it.
+- The calendars and events: no write of them has gone to a real Minka. On
+  `minka.localbeach.net` (Minka's `main`), `events tools` answered `[]` for the
+  three projects Bruno sees — none has a calendar, and the live check allows
+  no write that would add one — and `events tools`, `events list` (with a
+  span and with one that is no span), `events show` and `events edit` of
+  `0192f3a4-5b6c-4d7e-8f90-a1b2c3d4e5f6` answered the byte-identical 404, so
+  the address is looked up before the query and the body there too. That ID
+  is no fresh random UUID but one shaped like the fixtures of the tests; it
+  names nothing on the local instance. The one write request was that
+  `events edit`: `PATCH
+  /api/v1/events/0192f3a4-5b6c-4d7e-8f90-a1b2c3d4e5f6` with
+  `{"title":"x"}`. Everything else is checked against the fake, which
+  mirrors `CalendarApiController`, `ReadsRepetitionSchedule`,
+  `CalendarEventQueryService`, `EventOccurrences`, `EventRepetition`,
+  `EventParticipants`, `DbalCalendarEventRepository` and `ApiEventsTest`: the
+  calendar or event before the body, the type of every field before any value,
+  the values in the controller's order, `projectArchived` after them — also for
+  a change that changes nothing — and before the people, the clock time a
+  series keeps in its zone across summer time, with an hour that comes twice
+  taken the first time and one that is skipped moved forward as PHP's
+  `setTime()` places them (measured with PHP 8.5), the reader's days of a
+  span, the order by the first occurrence, and a client who sees and writes
+  only what is shown to clients. What it does not mirror: an hour that comes
+  twice where the clocks go back from 03:00 to 02:00, as in
+  `Africa/Casablanca` on the day Ramadan time starts, which PHP takes the
+  second time for 02:00 to 02:45 and the fake the first; PHP's list of time
+  zones,
+  which the fake approaches by its regions, so a name of the backward table
+  inside one, such as `Europe/Kiev`, passes the fake and is refused by Minka,
+  and the exact capitals of a zone are held only where the system keeps its
+  zone database under `/usr/share/zoneinfo`; PHP's check of a URL, which the
+  fake approaches by a host it demands; the cleaning of a description
+  against its project and `eventDescriptionNotReadable`; whom a write tells
+  and that the writer follows the event; and a calendar in the trash.
 - The comments under a to-do and under a list: no request of them has gone to
   a real Minka. The fake mirrors `TodoCommentsApiController`,
   `AbstractCommentsApiController`, `DbalCommentRepository`, `CommentableItem`
@@ -1292,6 +1336,11 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   `heartbeat --json`, the tile going out with `work stop`, no keepalive left
   behind afterwards — and, at some point, a machine that really slept.
 - Of the ninety-odd addresses the API offers, a good part have no command.
+- Check the events live once a release carries them and the
+  [live check](../guides/live-check.md) names a place to write them: a timed
+  series across a change of summer time listed in a span, a series moved with
+  and without `--repeat`, stopped with `--no-repeat`, a zone such as `CET`
+  refused, a client named and refused, and an event put into the trash.
 - Check the posts live, as the [live check](../guides/live-check.md) says: a
   post sent out to `chosen` with `--notify me` and the same person twice, a
   client named and refused, a page of two with `next` and the page behind it,

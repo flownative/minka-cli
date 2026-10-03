@@ -283,6 +283,12 @@ minka posts comments edit <postId> <commentId> - [--format html] --json < commen
 minka posts comments delete <postId> <commentId> --json
 minka posts comments react <postId> <commentId> 👍 --json
 minka posts comments unreact <postId> <commentId> 👍 --json
+minka events tools <projectId> --json
+minka events list <toolId> --from YYYY-MM-DD --to YYYY-MM-DD --json
+minka events show <eventId> --json
+minka events create --tool <toolId> --title "Title" (--starts-at <moment> --ends-at <moment> | --first-day YYYY-MM-DD [--last-day YYYY-MM-DD]) [--repeat] [--rhythm <rhythm> ...] [--time-zone <zone>] [--participant <person>]... [--description - < event.md] [--join-url <url>] [--highlighted] --json
+minka events edit <eventId> [--title "New"] [<time>] [--repeat [<details>] | --no-repeat] [--participant <person>... | --no-participants] [--description -] [--join-url <url>] [--highlighted=false] --json
+minka events delete <eventId> --json
 minka work start <card> --json
 minka work stop [<card>] [--all] --json
 minka work list --json
@@ -1444,6 +1450,79 @@ their guard over files is about to refuse. That guard never comes before
 to fix), `postArchived`, `postNotArchived`, `postInTrash`,
 `postsLimitNotANumber`, `postsBeforeUnknown`, `projectArchived` and the comment
 and reaction codes a card knows, all exit 9.
+
+## Calendars and events
+
+A calendar holds **events**: one-off, all-day or repeating. `events …` reads
+and writes them; `events tools <projectId>` lists the calendars in use. There
+are no comments, no reactions and no way back out of the trash through the
+API; `commentCount` counts comments read on the web.
+
+### Reading
+
+- `events list <toolId> --from <day> --to <day>` lists every event with an
+  occurrence in the span, both days included and **both required**, at most
+  366 days, not paged. `data` is `{from, to, timeZone, events}`. The days are
+  **yours**: the zone of your preferences in Minka, else the installation's,
+  named by `timeZone`.
+- **Every event stands in the span once, a series too.** Lay out an agenda from
+  `occurrences`, the times it takes place at in the span, never empty and in
+  the order they start. The event's own `startsAt`/`endsAt`/`firstDay`/
+  `lastDay` are its first occurrence, which for a series may lie years before
+  the span. A line has no description.
+- `events show <eventId>` gives the event with `description`,
+  `descriptionSource`, its files, `schedule`, `timeZone`, `joinUrl`,
+  `highlighted` and `participants`.
+- A timed event carries `startsAt` and `endsAt` in UTC and `firstDay`/`lastDay`
+  null; an all-day one the reverse, `allDay` says which. `schedule` is null for
+  an event that does not repeat; its fields are those of a to-do series.
+
+### Writing
+
+- **The time** is `--starts-at` and `--ends-at` together, ISO 8601 **with an
+  offset** (`2026-10-05T09:00:00+02:00`, `…Z`), or `--first-day` and optionally
+  `--last-day`. A moment without an offset is exit 9 `eventTimeNotReadable`.
+  An edit that names any of the four names the whole time anew.
+- **Repeating:** on `create`, `--repeat` alone repeats weekly on the weekday
+  of the first day; on `edit`, it keeps the stored schedule; `--rhythm`, `--weekdays`, `--interval`, `--day`, `--weekday`,
+  `--instance`, `--month`, `--ends-on` work as for `todos repeat`. The details
+  must fall on the first day of the event (`eventRepetitionDoesNotFit`). A
+  timed series keeps its clock time in `--time-zone` (an IANA name such as
+  `Europe/Berlin`; `CET` and `+02:00` are refused), else in the zone it has,
+  else in yours.
+- `events edit` sends only what was given. **Without `--repeat` or a detail, a
+  series keeps its first day:** moving it is exit 9
+  `eventRepetitionKeepsItsFirstDay`; give the new time **with** `--repeat` (and
+  the details that hold the new day). `--no-repeat` stops the repetition.
+- `--participant` names members, the **whole set** on an edit;
+  `--no-participants` takes everybody off. An event the team adds is shown to
+  no client: naming a client is exit 9 `personCannotSeeIt`.
+- **No guard: the last write wins.** There is no `--expect` here.
+- `--join-url ""` takes the link off, `--highlighted=false` the highlight. A
+  description with files or mentions is not replaced by one without them
+  unless `--drop-attachments` is given.
+- `events delete` puts an event into the trash, a series with all its days; a
+  client only an event of their own.
+
+### The order of the refusals
+
+Exit 2 for a calendar or event not there **before** anything else; then the
+type of every field (400); then title, time, `--join-url`, a participant that
+is no ID, the schedule, the zone, `--ends-on`, the schedule against the first
+day, the description; then `projectArchived`; then the people
+(`personNotAProjectMember`, `personCannotSeeIt`).
+
+### Codes of this part
+
+`eventsSpanNotADay`, `eventsSpanOutOfOrder`, `eventsSpanTooLong`,
+`eventTitleMissing`, `eventTitleTooLong`, `eventTitleHasControlCharacters`,
+`eventTimeMissing`, `eventTimeAmbiguous`, `eventTimeNotReadable`,
+`eventEndsBeforeItStarts`, `eventJoinUrlNotAnAddress`,
+`eventDescriptionTooLong`, `eventDescriptionNotReadable`,
+`eventRepetitionScheduleInvalid`, `eventRepetitionDatesNotADate`,
+`eventRepetitionDatesOutOfOrder`, `eventRepetitionTimeZoneUnknown`,
+`eventRepetitionDoesNotFit`, `eventRepetitionKeepsItsFirstDay`,
+`personNotAProjectMember`, `personCannotSeeIt`, `projectArchived`, all exit 9.
 
 ## Saying which cards you are working on
 

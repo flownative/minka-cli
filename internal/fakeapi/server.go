@@ -61,7 +61,7 @@ var identifierFields = []string{
 	"assigneeId", "assigneeIds", "askedIds", "blobId", "cardIds", "categoryId", "columnId",
 	"folderId", "groupId", "listId", "nextCardId", "nextGroupId", "nextSubtaskId", "nextTodoId",
 	"notifiedIds", "notifyIds", "personId", "previousCardId", "previousGroupId",
-	"previousSubtaskId", "previousTodoId", "replyTo", "todoId",
+	"participantIds", "previousSubtaskId", "previousTodoId", "replyTo", "todoId",
 }
 
 // identifiersOfTheAddressInAnyCase writes every identifier of the address in
@@ -117,6 +117,10 @@ type Person struct {
 	// fake answers with shows it: it decides what a client may be told about,
 	// and nothing else.
 	Client bool
+
+	// TimeZone is the zone of the preferences, empty for none: the
+	// installation's is taken then. No resource carries it either.
+	TimeZone string
 }
 
 type Project struct {
@@ -443,6 +447,7 @@ type Server struct {
 	TodosTools    []*TodosTool
 	CheckinsTools []*CheckinsTool
 	PostsTools    []*PostsTool
+	Calendars     []*CalendarTool
 	Uploads       []*Upload
 	Trash         []*TrashedCard
 	Archive       []*ArchivedCard
@@ -450,6 +455,11 @@ type Server struct {
 	// PostCategories are the kinds of post of every project, each in the
 	// order its project lists them.
 	PostCategories []*PostCategory
+
+	// TimeZone is the installation's zone, which reads the days of whoever
+	// set none of their own. It may be a name PHP reads and does not list,
+	// such as CET.
+	TimeZone string
 
 	// IgnoresProjectStatus makes the server answer like a Minka from before
 	// projects could be archived: no status, and the filter goes unnoticed.
@@ -611,6 +621,15 @@ type Fixture struct {
 	OtherPosts    *PostsTool
 	OtherPost     *Post
 	OtherCategory *PostCategory
+
+	// The calendars, in Berlin.
+	Calendar         *CalendarTool
+	CalendarOutOfUse *CalendarTool  // no longer in use: not listed, read and written at its address
+	OtherCalendar    *CalendarTool  // of the project that belongs to somebody else
+	WeeklyEvent      *CalendarEvent // Mondays at 10:00 in Berlin from 19 October 2026, with Anke taking part
+	OnceEvent        *CalendarEvent // on 21 October 2026, by Anke, with two comments
+	AllDayEvent      *CalendarEvent // 20 to 22 October 2026, highlighted
+	OtherEvent       *CalendarEvent
 }
 
 // New starts a fake with a small fixture: Bruno is a member of one project
@@ -794,6 +813,39 @@ func New(t testing.TB) (*Server, *Fixture) {
 	s.PostsTools = []*PostsTool{posts, postsOutOfUse, otherPosts}
 	s.PostCategories = []*PostCategory{announcement, heartbeat, otherCategory}
 
+	// The calendar of the project, in Berlin, where summer time ends on 25
+	// October 2026: between the first and the second Monday of the series.
+	s.TimeZone = "Europe/Berlin"
+	moment := func(text string) *time.Time {
+		at, err := time.Parse(time.RFC3339, text)
+		if err != nil {
+			panic(err)
+		}
+		return &at
+	}
+	weeklyEvent := &CalendarEvent{
+		ID: newID(), Title: "Weekly planning", StartsAt: moment("2026-10-19T08:00:00Z"), EndsAt: moment("2026-10-19T08:30:00Z"),
+		Repetition: &EventRepetition{
+			Schedule: RepetitionSchedule{Rhythm: RepeatsWeekly, Weekdays: []int{1}, Interval: 1, StartsOn: "2026-10-19"},
+			TimeZone: "Europe/Berlin",
+		},
+		Description: "<p>Plan the <strong>week</strong>.</p>", JoinURL: "https://meet.example.com/planning",
+		ParticipantIDs: []string{anke.ID}, CreatedAt: s.now, CreatorID: bruno.ID,
+	}
+	onceEvent := &CalendarEvent{
+		ID: newID(), Title: "Acceptance", StartsAt: moment("2026-10-21T12:00:00Z"), EndsAt: moment("2026-10-21T13:00:00Z"),
+		CommentCount: 2, CreatedAt: s.now, CreatorID: anke.ID,
+	}
+	allDayEvent := &CalendarEvent{
+		ID: newID(), Title: "Trade fair", FirstDay: "2026-10-20", LastDay: "2026-10-22", Highlighted: true,
+		CreatedAt: s.now, CreatorID: bruno.ID,
+	}
+	calendar := &CalendarTool{ID: newID(), ProjectID: project.ID, Title: "Termine", Events: []*CalendarEvent{weeklyEvent, onceEvent, allDayEvent}}
+	calendarOutOfUse := &CalendarTool{ID: newID(), ProjectID: project.ID, Title: "Old dates", Archived: true}
+	otherEvent := &CalendarEvent{ID: newID(), Title: "Not yours to see", FirstDay: "2026-10-20", LastDay: "2026-10-20", CreatedAt: s.now, CreatorID: stranger.ID}
+	otherCalendar := &CalendarTool{ID: newID(), ProjectID: otherProject.ID, Title: "Secret dates", Events: []*CalendarEvent{otherEvent}}
+	s.Calendars = []*CalendarTool{calendar, calendarOutOfUse, otherCalendar}
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v1/me", s.authenticated(s.me))
 	mux.HandleFunc("PUT /api/v1/me/work", s.authenticated(s.noteAtWork))
@@ -847,6 +899,7 @@ func New(t testing.TB) (*Server, *Fixture) {
 	s.registerTodosRoutes(mux)
 	s.registerCheckinsRoutes(mux)
 	s.registerPostsRoutes(mux)
+	s.registerCalendarRoutes(mux)
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		// Flow answers an unknown path or a wrong method with an HTML page.
 		w.Header().Set("Content-Type", "text/html")
@@ -880,6 +933,8 @@ func New(t testing.TB) (*Server, *Fixture) {
 		Posts: posts, PinnedPost: pinnedPost, Post: post, OlderPost: olderPost, DraftPost: draftPost,
 		ArchivedPost: archivedPost, TrashedPost: trashedPost, Announcement: announcement, Heartbeat: heartbeat,
 		PostsOutOfUse: postsOutOfUse, OtherPosts: otherPosts, OtherPost: otherPost, OtherCategory: otherCategory,
+		Calendar: calendar, CalendarOutOfUse: calendarOutOfUse, OtherCalendar: otherCalendar,
+		WeeklyEvent: weeklyEvent, OnceEvent: onceEvent, AllDayEvent: allDayEvent, OtherEvent: otherEvent,
 	}
 }
 
