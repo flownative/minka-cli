@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 )
 
 // The server refuses a body with anything behind its one value, and so does
@@ -31,5 +32,29 @@ func TestABodyWithSomethingBehindItIsMalformed(t *testing.T) {
 		if response.StatusCode != want {
 			t.Errorf("%q: %d, want %d", body, response.StatusCode, want)
 		}
+	}
+}
+
+// A comment under a card written again with the same text is a write like any
+// other: Minka answers 200 and moves its editedAt to the moment of the request.
+func TestTheSameTextOfACardCommentAgainMovesItsEditedAt(t *testing.T) {
+	s, f := New(t)
+	comment := f.CardInTriage.Comments[0]
+	path := "/api/v1/cards/" + f.CardInTriage.ID + "/comments/" + comment.ID
+
+	if got, _ := answerTo(t, s, f.Token, http.MethodPatch, path, `{"body":"Still open"}`); got != "200" {
+		t.Fatalf("the first change: %s", got)
+	}
+	body := comment.Body
+	s.now = s.now.Add(time.Hour)
+	got, answer := answerTo(t, s, f.Token, http.MethodPatch, path, `{"body":"Still open"}`)
+	if got != "200" {
+		t.Fatalf("the same text again: %s", got)
+	}
+	if comment.Body != body || comment.EditedAt == nil || !comment.EditedAt.Equal(s.now) {
+		t.Errorf("the same text again kept the moment of the first change: %v", comment.EditedAt)
+	}
+	if answer["editedAt"] != timestamp(s.now) {
+		t.Errorf("the answer says editedAt %v, want %s", answer["editedAt"], timestamp(s.now))
 	}
 }
