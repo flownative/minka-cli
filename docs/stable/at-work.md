@@ -31,6 +31,21 @@ their own would take each other's cards away with every signal.
   `work.lock`, and saved by writing a temporary file and renaming it. Without
   the lock, two sessions starting a card at the same moment would read the same
   list and the later write would drop the other's card.
+- A command somebody typed waits its turn for the lock: `work start`, `work
+  stop`, `work list`, and what `cards move` and `cards done` take out of the
+  list. Every holder reads and writes one small file and lets go, so a line of
+  sessions starting at once is through in well under a second. The wait ends
+  after 30 seconds, which only a holder that hangs or a disk that does not
+  answer reaches. A `work` command then exits 1 (`config`), changes nothing,
+  and its `hint` says to try again; `cards move` and `cards done` pass it over
+  like every other trouble with the list. Giving up sooner would cost a card
+  that somebody started on a machine that is merely slow.
+- A beat waits for nobody: where another minka holds the store, `heartbeat`
+  sends nothing and says so in `reason`, because the next beat comes after the
+  next tool call and a hook that waited would hold that tool call up. What is
+  written beside a signal — how it fared — and every tick of the keepalive wait
+  2 seconds and pass the moment over after that; the keepalive's own lock,
+  which stands for a running process, is not waited for at all.
 - `work start` asks the server for the card: a card that cannot be seen is
   refused here, at the one moment somebody can do something about it, instead
   of being passed over in silence for as long as it is remembered. A card in the

@@ -178,12 +178,12 @@ func (a *app) keepTilesAlive() string {
 		switch at {
 		case tickPassesOver:
 		case tickReports:
-			a.signal(waitForTheStore)
+			a.signal(aBeatWaitsForTheStore)
 		case tickEndsOnAnEmptyList:
 			// The empty set goes out before the keepalive does, so that the tiles
 			// go out at once instead of after the three minutes the last signal
 			// counts for.
-			a.signal(waitForTheStore)
+			a.signal(aBeatWaitsForTheStore)
 			return whyItEnded(at)
 		default:
 			return whyItEnded(at)
@@ -205,7 +205,7 @@ func (a *app) keepTilesAlive() string {
 // keepalive is often the last process left on the machine, and a card nobody
 // gives up would be reported past the working day it is allowed.
 func (a *app) whatTheStoreSays(path, host string) (beat time.Time, cards int, err error) {
-	handle, err := work.Open(path, waitForTheStore)
+	handle, err := work.Open(path, aBeatWaitsForTheStore)
 	if err != nil {
 		return time.Time{}, 0, err
 	}

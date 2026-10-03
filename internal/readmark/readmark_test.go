@@ -28,7 +28,7 @@ func TestAWriterWaitsForTheLockAndThenWrites(t *testing.T) {
 		t.Fatal(err)
 	}
 	busy := make(chan struct{}, 1)
-	localfile.BusyTried = func() {
+	localfile.BusyTried = func(int) {
 		select {
 		case busy <- struct{}{}:
 		default:
