@@ -70,8 +70,8 @@ A card that lies in the archive already exits 9 with cardArchived. A card in
 the trash exits 2 (not_found): the trash is not the archive.
 
 The board leaves a card of an archive out of the set an agent says it is working
-on, so a card this machine has in hand drops out of that list with the next
-signal.`,
+on, so a card a session on this machine has in hand drops out of that list with
+the next signal of that session.`,
 		Args: requireArgs("cardId"),
 		RunE: func(_ *cobra.Command, args []string) error {
 			s, err := a.session()
@@ -499,10 +499,11 @@ working column can have and which "minka columns on-hold" switches on. There
 the placement is one among the cards on hold. A card on hold that is moved
 without --on-hold comes off hold, also within its own column.
 
-A card this machine says it is working on leaves that list here as soon as it
-lands in another column, is put on hold or reaches Done; a card that only
-changes place where it already is stays in the list. The board is told at
-once, or with the next signal where that does not get through. An agent that
+A card a session on this machine says it is working on leaves its list here as
+soon as it lands in another column, is put on hold or reaches Done; a card that
+only changes place where it already is stays in the list. Where it was this
+session's card the board is told at once, otherwise, or where that does not get
+through, with the next signal of the session that held it. An agent that
 takes a card up moves it first and says 'minka work start' afterwards.
 
 ` + columnHelp,
@@ -658,8 +659,9 @@ func (a *app) newCardsDoneCmd() *cobra.Command {
 		Long: `Moves a card into the Done column of its board, which completes it. A card that
 is already done stays as it is. To reopen a card, move it out of Done.
 
-A card this machine says it is working on leaves that list here, and the board
-is told at once, or with the next signal where that does not get through.`,
+A card a session on this machine says it is working on leaves its list here.
+Where it was this session's card the board is told at once, otherwise, or where
+that does not get through, with the next signal of the session that held it.`,
 		Args: requireArgs("cardId"),
 		RunE: func(_ *cobra.Command, args []string) error {
 			s, err := a.session()

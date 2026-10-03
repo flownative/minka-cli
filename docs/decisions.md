@@ -464,17 +464,22 @@ of their own would take each other's cards away with every signal.
 **Implemented as:** `internal/work`, see
 [Saying what you are working on](stable/at-work.md).
 
+*Superseded by [C-103](#c-103).*
+
 <a id="c-037"></a>
 ## C-037 — The client of an agent is a name that means nothing
 
 *Applies to: the field `clientId` of every signal*
 
 It is made once at random and kept in the configuration, never the host name
-and nothing about the machine or the person.
+and nothing about the machine or the person. A session reports as that name, a
+dot and sixteen hex digits of a SHA-256 of the session; the list of no session
+as the name alone.
 
 **Why:** It travels into Minka's database and its logs, where a host name would
 say who sits at which machine for as long as those are kept.
-**Implemented as:** `config.NewClientID`, `config.File.ClientID`, see
+**Implemented as:** `config.NewClientID`, `config.File.ClientID`,
+`cli.clientIDOf`, see
 [Saying what you are working on](stable/at-work.md).
 
 <a id="c-038"></a>
@@ -515,13 +520,10 @@ asking goes by the moment it was started. Nothing of the contract asks for any
 of this; the server forgets a card three minutes after the last signal, and
 this is the client's own rule.
 
-**Why:** A session that dies says nothing more about its cards, and every other
-session on the machine would keep reporting them for as long as it runs — which
-is why the sign of life has to be the session's and not the machine's: a signal
-carries the whole list, so a signal as the sign of life would make one session
-at work keep every dead session's cards alive. Eight hours is a working day:
-long enough for the work itself, short enough that nothing glows through the
-night.
+**Why:** A session that dies says nothing more about its cards, so they would
+stay in its list for ever; the sign of life is the session's own, so no other
+session's work keeps them. Eight hours is a working day: long enough for the
+work itself, short enough that a list nobody reports is not kept.
 **Implemented as:** `work.Host.StillAtIt`, `ForgetWhatRanOut` and `lastSeen`,
 see [Saying what you are working on](stable/at-work.md).
 
@@ -564,15 +566,17 @@ choice, not an accident.
 *Applies to: `minka heartbeat`, and the keepalive it starts*
 
 A beat that finds a card in hand and no keepalive of its host starts one,
-detached and under a lock of its own. It is at no work: no session name, and
-neither mark written. It reports an empty list before it stops; a silent store
+detached and under a lock of its own. It reports every session by that
+session's own last beat, and is at no work: no session name, and neither mark
+written. It takes back an empty list before it lets go of it; a silent store
 and a jumped clock stop it without a word.
 
 **Why:** A long tool call makes no signal for longer than the three minutes the
 server counts one for, and a process that could pass for a session at work would
 keep a card alight for a working day with nobody left to stop it.
 **Implemented as:** `cli.app.keepTilesAlive`, `cli.tick.decide`,
-`cli.app.somebodyIsAtWork`, `work.HoldKeepalive`, see
+`cli.app.reportEverySessionAtWork`, `cli.app.somebodyIsAtWork`,
+`work.HoldKeepalive`, see
 [Saying what you are working on](stable/at-work.md).
 
 <a id="c-044"></a>
@@ -1653,3 +1657,18 @@ column of it is a usage error before the move goes out.
 first, with the same 200, and no address names the board of a column, so only
 the board read here can tell. **Implemented as:** `cli.newColumnsMoveCmd`, see
 [Columns](stable/columns.md).
+
+<a id="c-103"></a>
+## C-103 — Every session reports its own cards, as a client of its own
+
+*Applies to: `work start`, `work stop`, `work list`, `heartbeat`, the keepalive, `cards move`, `cards done`*
+
+The store keeps one list per host and session; a signal carries one session's
+list under that session's client. The session is `--session`, else
+`$CLAUDE_CODE_SESSION_ID`, else none, for typed commands and the hook alike; the
+hook's input is not read. A store of one list per machine is handed out.
+**Why:** another session no longer keeps a dead one's cards alight; a session
+that crashed or exited still glows up to 25 + 3 minutes after its last beat,
+and a hook going by a session no typed command knows would report nothing.
+**Implemented as:** `work.Host`, `work.List`, `cli.app.agentSession`,
+`cli.app.signal`, see [Saying what you are working on](stable/at-work.md).

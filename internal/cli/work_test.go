@@ -381,23 +381,6 @@ func TestStoppingSaysWhichCardItStoppedOnATerminal(t *testing.T) {
 	}
 }
 
-func TestOneSignalCarriesTheCardsOfEverySessionOnThisMachine(t *testing.T) {
-	e := newAgentEnv(t)
-	// Two sessions, each starting a card of its own: the server keeps one set
-	// per agent and client, so a signal that left the other's card out would
-	// take it away.
-	expectCode(t, e.run("", "work", "start", e.fixture.CardInDoing.ID, "--json"), ExitOK)
-	expectCode(t, e.run("", "work", "start", e.fixture.CardInTriage.ID, "--json"), ExitOK)
-
-	expectCode(t, e.run("", "heartbeat", "--json"), ExitOK)
-	if ids := e.cardIDsOfTheSignal(); len(ids) != 2 {
-		t.Errorf("the signal named %v, want both cards", ids)
-	}
-	if got := e.server.CardsAtWork(); len(got) != 2 {
-		t.Errorf("the server holds %v, want both cards", got)
-	}
-}
-
 // The safeguards: the store is read and written under a lock of the kernel, and
 // a command somebody typed waits its turn for it. Without the lock, sessions
 // starting a card at the same moment read the same list and the one that writes
@@ -843,9 +826,9 @@ func TestTheSessionThatKeepsWorkingKeepsItsCard(t *testing.T) {
 	began := time.Date(2026, 9, 23, 9, 0, 0, 0, time.UTC)
 	kept, lost := e.fixture.CardInDoing.ID, e.fixture.CardInTriage.ID
 
-	e.vars["CLAUDE_CODE_SESSION_ID"] = "the one that dies"
+	e.vars[sessionVariable] = "the-one-that-dies"
 	expectCode(t, e.runAt(began, "work", "start", lost, "--json"), ExitOK)
-	e.vars["CLAUDE_CODE_SESSION_ID"] = "the one that works on"
+	e.vars[sessionVariable] = "the-one-that-works-on"
 	expectCode(t, e.runAt(began, "work", "start", kept, "--json"), ExitOK)
 
 	// Ten hours of tool calls, all of them from the session that is still at
@@ -871,7 +854,7 @@ func TestACardWithoutASessionGoesByItsBeginning(t *testing.T) {
 	began := time.Date(2026, 9, 23, 9, 0, 0, 0, time.UTC)
 	expectCode(t, e.runAt(began, "work", "start", e.fixture.CardInTriage.ID, "--json"), ExitOK)
 
-	e.vars["CLAUDE_CODE_SESSION_ID"] = "somebody else entirely"
+	e.vars[sessionVariable] = "somebody-else-entirely"
 	for hour := 0; hour <= 9; hour++ {
 		expectCode(t, e.runAt(began.Add(time.Duration(hour)*time.Hour), "heartbeat", "--json"), ExitOK)
 	}
@@ -887,54 +870,53 @@ func TestACardWithoutASessionGoesByItsBeginning(t *testing.T) {
 
 // The safeguard: the sign of life is written before the throttle decides
 // whether to send. A tool call says that the session is at its cards whether
-// or not a signal goes out from it, and the throttle looks at the whole list
-// of the machine — so a session whose beats fall into the minute of another
-// session's signal would lose its card under its own hands.
+// or not a signal goes out from it, and the keepalive reports the same list in
+// between — so a session whose beats fall into the minute of a signal of the
+// keepalive would lose its card under its own hands.
 func TestTheSignOfLifeIsWrittenWhereNoSignalGoesOut(t *testing.T) {
 	e := newAgentEnv(t)
 	began := time.Date(2026, 9, 23, 9, 0, 0, 0, time.UTC)
-	atWork, beside := e.fixture.CardInDoing.ID, e.fixture.CardInTriage.ID
+	card := e.fixture.CardInDoing.ID
 
-	e.vars["CLAUDE_CODE_SESSION_ID"] = "the one that keeps at it"
-	expectCode(t, e.runAt(began, "work", "start", atWork, "--json"), ExitOK)
-	e.vars["CLAUDE_CODE_SESSION_ID"] = "the one beside it"
-	expectCode(t, e.runAt(began, "work", "start", beside, "--json"), ExitOK)
+	e.vars[sessionVariable] = "the-one-that-keeps-at-it"
+	expectCode(t, e.runAt(began, "work", "start", card, "--json"), ExitOK)
+	expectCode(t, e.runAt(began, "heartbeat", "--json"), ExitOK)
 
-	// The session beside it reports first, so the minute of the throttle is
-	// spent on its signal.
-	expectCode(t, e.runAt(began.Add(10*time.Second), "heartbeat", "--json"), ExitOK)
+	// The keepalive reports the list while one tool call runs, so the minute of
+	// the throttle is spent on its signal.
+	e.signalAsTheKeepalive(began.Add(time.Minute+10*time.Second), e.vars[sessionVariable])
+	if len(e.signals()) != 2 {
+		t.Fatalf("%d signals, want the session's and the keepalive's", len(e.signals()))
+	}
 
-	// The other session beats within that minute: the list is the same one,
-	// nothing goes out, and the card is being worked on all the same.
-	e.vars["CLAUDE_CODE_SESSION_ID"] = "the one that keeps at it"
-	beat, r := e.runWithJSON(began.Add(40*time.Second), "heartbeat")
+	// The session beats within that minute: nothing goes out, and the card is
+	// being worked on all the same.
+	beat, r := e.runWithJSON(began.Add(time.Minute+40*time.Second), "heartbeat")
 	expectCode(t, r, ExitOK)
 	if sent, _ := decode(t, beat.Data)["sent"].(bool); sent {
 		t.Fatal("the beat within the minute sent a signal, so the throttle was not what held it")
 	}
-	if len(e.signals()) != 1 {
-		t.Fatalf("%d signals, want the one of the session beside it", len(e.signals()))
-	}
 
-	// A working day after the two cards were taken up: the one whose session
-	// beat is the one that is left.
-	env, r := e.runWithJSON(began.Add(work.ForgottenAfter+20*time.Second), "work", "list")
+	// A working day after the card was taken up, and a little more: the beat
+	// that sent nothing is what keeps it.
+	env, r := e.runWithJSON(began.Add(work.ForgottenAfter+time.Minute), "work", "list")
 	expectCode(t, r, ExitOK)
-	if left := cardIDsOfTheList(t, env); len(left) != 1 || left[0] != atWork {
+	if left := cardIDsOfTheList(t, env); len(left) != 1 || left[0] != card {
 		t.Fatalf("%v is left, want the card of the session whose beat sent nothing", left)
 	}
 }
 
 // The safeguard: what has run out is given up before the sign of life is
 // written. A session that comes back after a day away was not at its card, so
-// the beat it brings must not raise a card that is over — and the board has to
-// hear that it is over.
+// the beat it brings must not raise a card that is over. The board forgot the
+// card long ago, three minutes after its last signal, so nothing needs taking
+// back either.
 func TestABeatThatComesTooLateRaisesNothing(t *testing.T) {
 	e := newAgentEnv(t)
 	began := time.Date(2026, 9, 23, 9, 0, 0, 0, time.UTC)
 	card := e.fixture.CardInDoing.ID
 
-	e.vars["CLAUDE_CODE_SESSION_ID"] = "the one that goes away"
+	e.vars[sessionVariable] = "the-one-that-goes-away"
 	expectCode(t, e.runAt(began, "work", "start", card, "--json"), ExitOK)
 	expectCode(t, e.runAt(began.Add(time.Minute), "heartbeat", "--json"), ExitOK)
 	if got := e.server.CardsAtWork(); len(got) != 1 {
@@ -943,9 +925,12 @@ func TestABeatThatComesTooLateRaisesNothing(t *testing.T) {
 
 	// A day later the same session beats again, its card long run out.
 	tooLate := began.Add(24 * time.Hour)
+	before := len(e.signals())
 	expectCode(t, e.runAt(tooLate, "heartbeat", "--json"), ExitOK)
-	if got := e.server.CardsAtWork(); len(got) != 0 {
-		t.Errorf("the server still holds %v after the card ran out", got)
+	for _, signal := range e.signals()[before:] {
+		if strings.Contains(string(signal.Body), card) {
+			t.Errorf("a beat that came a day late reported the card: %s", signal.Body)
+		}
 	}
 
 	env, r := e.runWithJSON(tooLate.Add(time.Minute), "work", "list")
@@ -955,9 +940,10 @@ func TestABeatThatComesTooLateRaisesNothing(t *testing.T) {
 	}
 }
 
-// storeAsItLies reads the store from disk, the way another process would find
-// it, for the one host these tests report to.
-func (e *testEnv) storeAsItLies() *work.Host {
+// storedListAsItLies reads the store from disk, the way another process would
+// find it, for the one host these tests report to and the session the
+// environment names. A session that holds nothing reads as an empty list.
+func (e *testEnv) storedListAsItLies() *work.List {
 	e.t.Helper()
 	content, err := os.ReadFile(e.storePath())
 	if err != nil {
@@ -970,8 +956,8 @@ func (e *testEnv) storeAsItLies() *work.Host {
 	if len(file.Hosts) != 1 {
 		e.t.Fatalf("%d hosts in the store, want one", len(file.Hosts))
 	}
-	for _, entry := range file.Hosts {
-		return entry
+	for _, host := range file.Hosts {
+		return listOf(host, e.vars[sessionVariable])
 	}
 	return nil
 }
@@ -1036,7 +1022,7 @@ func TestACardTheHostLeavesOutFallsOutOfTheList(t *testing.T) {
 	// Out of the store, so that every other session and the keepalive report
 	// the same shorter set. What the last signal carried it carried, so the set
 	// it was sent with stands as it was.
-	entry := e.storeAsItLies()
+	entry := e.storedListAsItLies()
 	if len(entry.Cards) != 1 || entry.Cards[0].ID != kept.ID {
 		t.Errorf("the store holds %v", entry.Cards)
 	}
@@ -1087,7 +1073,7 @@ func TestAMachineWhoseOnlyCardIsArchivedFallsSilent(t *testing.T) {
 	if got := e.server.CardsAtWork(); len(got) != 0 {
 		t.Errorf("the server still holds %v", got)
 	}
-	if entry := e.storeAsItLies(); len(entry.Cards) != 0 {
+	if entry := e.storedListAsItLies(); len(entry.Cards) != 0 {
 		t.Errorf("the store holds %v", entry.Cards)
 	}
 
@@ -1125,7 +1111,7 @@ func TestTheHookIsSilentWhenTheHostLeavesACardOut(t *testing.T) {
 	if r.stdout != "" || r.stderr != "" {
 		t.Errorf("the hook said something: %q %q", r.stdout, r.stderr)
 	}
-	if entry := e.storeAsItLies(); len(entry.Cards) != 0 || len(entry.LetGo) != 1 {
+	if entry := e.storedListAsItLies(); len(entry.Cards) != 0 || len(entry.LetGo) != 1 {
 		t.Errorf("the store holds %v and notes %+v", entry.Cards, entry.LetGo)
 	}
 }
@@ -1147,7 +1133,7 @@ func TestAWordThisMinkaDoesNotKnowTakesNoCardOutOfTheList(t *testing.T) {
 		t.Errorf("the heartbeat says %v", reasons)
 	}
 
-	entry := e.storeAsItLies()
+	entry := e.storedListAsItLies()
 	if len(entry.Cards) != 1 || entry.Cards[0].ID != card.ID {
 		t.Errorf("the card left the list on a word nobody knows: %v", entry.Cards)
 	}
@@ -1180,7 +1166,7 @@ func TestAWordThisMinkaDoesNotKnowTakesNoCardOutOfTheList(t *testing.T) {
 	if len(e.signals()) < sent+3 {
 		t.Fatalf("%d signals over four minutes, want at least %d", len(e.signals()), sent+3)
 	}
-	if notes := e.storeAsItLies().LetGo; len(notes) != 1 {
+	if notes := e.storedListAsItLies().LetGo; len(notes) != 1 {
 		t.Errorf("%d notes about one card: %+v", len(notes), notes)
 	}
 	env, r = e.runWithJSON(now.Add(6*time.Minute), "work", "list")
@@ -1247,7 +1233,7 @@ func TestStartingAnArchivedCardIsRefused(t *testing.T) {
 
 	// The card of a board is taken up as ever.
 	expectCode(t, e.run("", "work", "start", e.fixture.CardInTriage.ID, "--json"), ExitOK)
-	if entry := e.storeAsItLies(); len(entry.Cards) != 1 {
+	if entry := e.storedListAsItLies(); len(entry.Cards) != 1 {
 		t.Errorf("the store holds %v", entry.Cards)
 	}
 }
@@ -1259,7 +1245,7 @@ func TestAnAnswerThatLeavesNothingOutChangesNothing(t *testing.T) {
 	a := &app{now: func() time.Time { return now }}
 
 	for _, leftOut := range [][]api.LeftOutCard{nil, {}} {
-		entry := &work.Host{
+		entry := &work.List{
 			Cards:     []work.Card{{ID: "a-card", Title: "Review the API", StartedAt: now}},
 			SentCards: []string{"a-card"},
 		}
@@ -1276,7 +1262,7 @@ func TestAnAnswerThatLeavesNothingOutChangesNothing(t *testing.T) {
 // goes: one window for everything the store keeps without being told again.
 func TestANoteAboutACardLetGoIsSweptWithTheList(t *testing.T) {
 	now := time.Date(2026, 9, 23, 10, 0, 0, 0, time.UTC)
-	entry := &work.Host{}
+	entry := &work.List{}
 	entry.Cards = []work.Card{{ID: "a-card", Title: "Review the API", StartedAt: now}}
 	entry.LetGoOf("a-card", api.ReasonCardArchived, now)
 

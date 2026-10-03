@@ -47,8 +47,8 @@ func (a *app) newHooksInstallCmd() *cobra.Command {
 		Long: `Writes a hook into the settings of Claude Code.
 
 Without --file that is ~/.claude/settings.json, where it holds for every
-project, which is where it belongs: what is reported is the whole machine, one
-list and one client for every session on it.
+project, which is where it belongs: every session on the machine reports its
+own cards through it, whatever project it was started in.
 
 --file names another file, such as .claude/settings.local.json for one project
 alone. Not .claude/settings.json: that one is meant to be checked in, and the

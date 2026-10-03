@@ -2,9 +2,12 @@ package cli
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"slices"
 	"strings"
 	"time"
@@ -16,7 +19,7 @@ import (
 )
 
 const (
-	// signalEvery is how often the cards of this machine are reported. The
+	// signalEvery is how often the cards of a session are reported. The
 	// server counts a signal for three minutes, so two may be lost before a
 	// tile goes quiet.
 	signalEvery = time.Minute
@@ -53,7 +56,7 @@ func (a *app) newWorkCmd() *cobra.Command {
 }
 
 func (a *app) newWorkStartCmd() *cobra.Command {
-	return &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   "start <card>",
 		Short: "Remember that you are working on a card",
 		Long: `Remembers a card as one you are working on.
@@ -61,20 +64,28 @@ func (a *app) newWorkStartCmd() *cobra.Command {
 The board shows such a card as alive while minka keeps saying so. Saying so is
 the job of 'minka heartbeat', which the hook of 'minka hooks install' runs
 after every tool call: until one of them has run, 'work start' has changed
-nothing but this machine's own list.
+nothing but this session's own list.
 
-The list belongs to the machine, not to this session: every session on it
-reports the same list together, and 'work stop' takes a card out again. So do
-'cards move' and 'cards done': a card that is moved on is one nobody is at
-work on any more, so take a card up in that order — move it first, then say
-'work start'.
+The list belongs to the session that took the card up, the one Claude Code
+names in $CLAUDE_CODE_SESSION_ID or --session names, and only that session's
+heartbeat reports it: when the session ends, its cards go dark with it instead
+of being reported by every other session on the machine. Without a session,
+the card goes into the list of no session, which only a heartbeat without one
+reports.
+
+'work stop' takes a card out again. So do 'cards move' and 'cards done': a card
+that is moved on is one nobody is at work on any more, so take a card up in
+that order — move it first, then say 'work start'.
 
 A card in the archive of its board is refused: it can be read, and no board
 shows a card in an archive as alive.`,
 		Example: `  minka work start MNK-1A
   minka work start 0199... --json`,
 		Args: requireArgs("cardId"),
-		RunE: func(_ *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := a.checkTheSessionFlag(cmd); err != nil {
+				return err
+			}
 			s, err := a.session()
 			if err != nil {
 				return err
@@ -102,25 +113,31 @@ shows a card in an archive as alive.`,
 			}
 			defer handle.Close()
 
-			entry := handle.File.Host(s.host)
-			forgotten, _ := entry.ForgetWhatRanOut(a.now())
+			session := a.agentSession()
+			host := handle.File.Host(s.host)
+			forgotten, _ := host.ForgetWhatRanOut(session, a.now())
+			entry := host.List(session)
 			entry.Beat(a.now())
 			entry.Start(work.Card{
 				ID:        card.ID,
 				ShortID:   shortIdentifierOf(card),
 				Title:     card.Title,
 				StartedAt: a.now(),
-				Session:   a.agentSession(),
 			})
 			if err := handle.Save(); err != nil {
 				return &Error{Code: CodeConfig, Message: err.Error()}
 			}
 
-			started := a.workSuccess(entry, "Working on "+cardName(shortIdentifierOf(card), card.Title), nil, forgotten)
+			started := a.workSuccess(host, session, "Working on "+cardName(shortIdentifierOf(card), card.Title), nil, forgotten)
 			started.notices = append(started.notices, noticesAboutTheCard(entry.LetGo, card.ID)...)
+			if session == work.NoSession && a.getenv(claudeCodeVariable) == "1" {
+				started.notices = append(started.notices, "Claude Code names no session here, so the card is in the list of no session, which every session on this machine without a name shares; set $"+sessionVariable+" or pass --session for a list of its own")
+			}
 			return a.ok(started)
 		},
 	}
+	a.addSessionFlag(cmd)
+	return cmd
 }
 
 func (a *app) newWorkStopCmd() *cobra.Command {
@@ -128,14 +145,19 @@ func (a *app) newWorkStopCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "stop [<card>]",
 		Short: "Forget that you are working on a card",
-		Long: `Takes a card out of the list this machine reports.
+		Long: `Takes a card out of the list this session reports.
 
-The next signal leaves it out, and the board stops showing it as alive at
-once rather than after the three minutes a signal counts for.
+The next signal of the session leaves it out, and the board stops showing it
+as alive at once rather than after the three minutes a signal counts for.
 
-Without a card it stops the one card that is remembered. Where several are,
-it says which and changes nothing, because the list is shared with every other
-session on this machine: name the card, or take them all with --all.
+Without a card it stops the one card this session has in hand. Where it has
+several, it says which and changes nothing: name the card, or take all of this
+session's cards with --all.
+
+A card named that this session does not hold is taken out of the list of
+whichever other session on this machine holds it: whoever stops a card has let
+go of it. The board hears of that with the next signal of that session, or
+forgets the card three minutes after its last one.
 
 It asks nothing of the network: a card is found in the list under either of
 the names it was remembered with, and one that is not remembered is nothing to
@@ -145,7 +167,10 @@ has nothing to answer about.`,
   minka work stop --all`,
 		Args: optionalCardArg,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			host, err := a.hostOfTheStore()
+			if err := a.checkTheSessionFlag(cmd); err != nil {
+				return err
+			}
+			hostName, err := a.hostOfTheStore()
 			if err != nil {
 				return err
 			}
@@ -157,12 +182,17 @@ has nothing to answer about.`,
 
 			// A host that holds nothing gets no entry of its own here: there is
 			// nothing to stop, and nothing to write down about it either.
-			entry, known := handle.File.Hosts[host]
+			session := a.agentSession()
+			host, known := handle.File.Hosts[hostName]
 			if !known {
-				return a.ok(sayingFirst("Nothing to stop", a.workSuccess(&work.Host{}, "Nothing to stop", map[string]any{"stopped": cardList(nil)}, 0)))
+				return a.ok(sayingFirst("Nothing to stop", a.workSuccess(&work.Host{}, session, "Nothing to stop", map[string]any{"stopped": cardList(nil)}, 0)))
 			}
-			forgotten, _ := entry.ForgetWhatRanOut(a.now())
-			beaten := entry.Beat(a.now())
+			forgotten, swept := host.ForgetWhatRanOut(session, a.now())
+			entry, held := host.Sessions[session]
+			if !held {
+				entry = &work.List{}
+			}
+			beaten := held && entry.Beat(a.now())
 
 			var stopped []work.Card
 			switch {
@@ -170,8 +200,10 @@ has nothing to answer about.`,
 				stopped = entry.Cards
 				entry.Cards = nil
 			case len(args) == 1:
-				if card, found := namedInTheStore(entry, args[0]); found {
+				if card, found := namedInTheList(entry, args[0]); found {
 					entry.Stop(card.ID)
+					stopped = []work.Card{card}
+				} else if card, found := stopElsewhere(host, args[0]); found {
 					stopped = []work.Card{card}
 				}
 			case len(entry.Cards) == 1:
@@ -180,12 +212,12 @@ has nothing to answer about.`,
 			case len(entry.Cards) > 1:
 				return &Error{
 					Code:    CodeUsage,
-					Message: "this machine is working on " + strings.Join(namesOf(entry.Cards), ", ") + ", and another session may have put one of them there",
+					Message: "this session is working on " + strings.Join(namesOf(entry.Cards), ", "),
 					Hint:    "Name the card to stop, or take them all with --all.",
 				}
 			}
 
-			if len(stopped) > 0 || forgotten > 0 || beaten {
+			if len(stopped) > 0 || swept || beaten {
 				if err := handle.Save(); err != nil {
 					return &Error{Code: CodeConfig, Message: err.Error()}
 				}
@@ -195,7 +227,7 @@ has nothing to answer about.`,
 			if len(stopped) > 0 {
 				summary = "Stopped " + strings.Join(namesOf(stopped), ", ")
 			}
-			answer := sayingFirst(summary, a.workSuccess(entry, summary, map[string]any{"stopped": cardList(stopped)}, forgotten))
+			answer := sayingFirst(summary, a.workSuccess(host, session, summary, map[string]any{"stopped": cardList(stopped)}, forgotten))
 			if len(args) == 1 {
 				// A card that is nothing to stop may be one the host would not
 				// have, and then this is where somebody learns it.
@@ -204,18 +236,37 @@ has nothing to answer about.`,
 			return a.ok(answer)
 		},
 	}
-	cmd.Flags().BoolVar(&all, "all", false, "Stop every card this machine is working on")
+	cmd.Flags().BoolVar(&all, "all", false, "Stop every card this session is working on")
+	a.addSessionFlag(cmd)
 	return cmd
 }
 
-func (a *app) newWorkListCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "list",
-		Short: "Show the cards this machine is working on",
-		Long: `Shows what this machine reports as being worked on.
+// stopElsewhere takes a card out of the list of every other session on the host
+// that holds it, and answers with the card as one of them remembered it.
+func stopElsewhere(host *work.Host, name string) (work.Card, bool) {
+	var stopped work.Card
+	found := false
+	for _, list := range host.Sessions {
+		if card, held := namedInTheList(list, name); held {
+			list.Stop(card.ID)
+			stopped, found = card, true
+		}
+	}
+	return stopped, found
+}
 
-The list is the one every session on this machine shares, and it is read from
-disk alone: the server cannot be asked what it holds.
+func (a *app) newWorkListCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "list",
+		Short: "Show the cards this session is working on",
+		Long: `Shows what this session reports as being worked on, and what the other
+sessions on this machine have in hand.
+
+'cards' is the list of this session, the one its heartbeat reports; 'session'
+says which session that is, null for the list of no session. 'elsewhere' are
+the cards of every other session on this machine, each with its session: they
+are reported by those sessions alone. Everything is read from disk: the server
+cannot be asked what it holds.
 
 Going out and arriving are two moments. 'sentAt' says when a signal last went
 out, 'reportedAt' when one last arrived, and 'failure' what the host made of
@@ -227,8 +278,11 @@ nobody signed in, the store held by somebody else — leaves nothing behind;
 A card in the archive of its board is one of them: it is out of the list, and
 this is where it says why, for eight hours after it happened.`,
 		Args: requireArgs(),
-		RunE: func(*cobra.Command, []string) error {
-			host, err := a.hostOfTheStore()
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			if err := a.checkTheSessionFlag(cmd); err != nil {
+				return err
+			}
+			hostName, err := a.hostOfTheStore()
 			if err != nil {
 				return err
 			}
@@ -240,33 +294,52 @@ this is where it says why, for eight hours after it happened.`,
 
 			// What ran out is gone for every reader; the next command that
 			// writes the store takes it out of the file as well.
-			entry, known := handle.File.Hosts[host]
+			session := a.agentSession()
+			host, known := handle.File.Hosts[hostName]
 			if !known {
-				entry = &work.Host{}
+				host = &work.Host{}
 			}
-			forgotten, _ := entry.ForgetWhatRanOut(a.now())
+			forgotten, _ := host.ForgetWhatRanOut(session, a.now())
+			entry := listOf(host, session)
 			summary := fmt.Sprintf("%d cards", len(entry.Cards))
 			if len(entry.Cards) == 1 {
 				summary = "1 card"
 			}
-			listed := a.workSuccess(entry, summary+" on "+host, nil, forgotten)
+			listed := a.workSuccess(host, session, summary+" on "+hostName, nil, forgotten)
 			listed.notices = append(listed.notices, letGoNotices(entry.LetGo)...)
 			return a.ok(listed)
 		},
 	}
+	a.addSessionFlag(cmd)
+	return cmd
+}
+
+// listOf is the list of a session as a command reads it, an empty one where the
+// session holds nothing. It is never put into the host: reading a list does not
+// make one.
+func listOf(host *work.Host, session string) *work.List {
+	if list, held := host.Sessions[session]; held {
+		return list
+	}
+	return &work.List{}
 }
 
 func (a *app) newHeartbeatCmd() *cobra.Command {
 	var asTheKeepalive bool
 	cmd := &cobra.Command{
 		Use:   "heartbeat",
-		Short: "Report the cards this machine is working on",
+		Short: "Report the cards this session is working on",
 		Long: `Reports the cards of 'minka work start' to Minka, so their tiles stay alive.
 
 It is made to run after every tool call of an agent, which 'minka hooks
 install' sets up. With nothing remembered it returns at once and asks nothing
 of the network; otherwise it reports at most once a minute, and again right
 away whenever the list has changed.
+
+It reports the list of one session and nothing else, under a client of that
+session's own: the session --session names, else $CLAUDE_CODE_SESSION_ID, the
+same one a command typed in that session goes by. Without either it reports
+the list of no session. 'session' says which it was.
 
 It always exits 0 and says nothing unless asked with --json, --quiet or on a
 terminal: a hook that fails loudly after every tool call would cost the agent
@@ -276,7 +349,7 @@ was turned away; what the last signal that went out made of it also stands in
 'minka work list'.
 
 A card the host will not have — one that was archived while somebody had it in
-hand — is taken out of the list of this machine, so the cards beside it go on
+hand — is taken out of the list of this session, so the cards beside it go on
 being reported, and the shorter list goes out with the next beat. It stands in
 'letGo', here and in 'minka work list'. A word this CLI does not know takes no
 card out of anything and is reported as it came.
@@ -291,11 +364,21 @@ tile go dark. 'keepalive' says what became of that.`,
 				return a.reportWhileNobodyElseDoes()
 			}
 
-			beat := a.signal(0)
+			var beat signalled
+			var keepalive, session string
+			if a.sessionFlag != "" && !work.IsSession(a.sessionFlag) {
+				// Refused without a word, like everything else a beat meets:
+				// reporting under a name it was not given would be worse.
+				beat = signalled{reason: "--session names no session"}
+				keepalive = notStarted(beat.reason)
+			} else {
+				session = a.agentSession()
+				beat = a.signal(session, 0)
+				keepalive = a.whatBecameOfTheKeepalive(session)
+			}
 			if beat.cards == nil {
 				beat.cards = []string{}
 			}
-			keepalive := a.whatBecameOfTheKeepalive()
 
 			if a.nobodyIsListening() {
 				return nil
@@ -303,7 +386,7 @@ tile go dark. 'keepalive' says what became of that.`,
 			summary := heartbeatSummary(beat.sent, beat.reason, beat.cards)
 			return a.ok(success{
 				data: map[string]any{"sent": beat.sent, "reason": beat.reason, "cardIds": beat.cards,
-					"keepalive": keepalive, "letGo": letGoList(beat.letGo)},
+					"session": nullable(session), "keepalive": keepalive, "letGo": letGoList(beat.letGo)},
 				summary: summary,
 				notices: letGoNotices(beat.letGo),
 				text:    func(w io.Writer) { fmt.Fprintln(w, summary) },
@@ -312,6 +395,7 @@ tile go dark. 'keepalive' says what became of that.`,
 	}
 	cmd.Flags().BoolVar(&asTheKeepalive, "keepalive", false, "Keep reporting on a timer of its own until nobody is at work; minka's own business")
 	_ = cmd.Flags().MarkHidden("keepalive")
+	a.addSessionFlag(cmd)
 	return cmd
 }
 
@@ -322,12 +406,6 @@ func (a *app) nobodyIsListening() bool {
 	return !a.jsonFlag && !a.quietFlag && !a.styledFlag && !a.stdoutIsTerminal()
 }
 
-// signal reports this machine's cards and says what it did.
-//
-// Nothing it meets is a failure of the command: not being signed in, a host
-// that does not answer, a token a person owns. Whoever reads a hook's exit
-// code is in the middle of other work, and none of these is something they
-// could do anything about from there.
 // signalled is what became of one signal: whether it went out, why it did not,
 // which cards the host took, and what it said about the ones it did not.
 type signalled struct {
@@ -337,7 +415,16 @@ type signalled struct {
 	letGo  []work.LetGoCard
 }
 
-func (a *app) signal(wait time.Duration) signalled {
+// signal reports the cards of one session and says what it did. It reports
+// that session's list and no other, under that session's client: the server
+// keeps one set per client, so a session that carried the cards of another
+// would keep them alight after that one died.
+//
+// Nothing it meets is a failure of the command: not being signed in, a host
+// that does not answer, a token a person owns. Whoever reads a hook's exit
+// code is in the middle of other work, and none of these is something they
+// could do anything about from there.
+func (a *app) signal(session string, wait time.Duration) signalled {
 	path, err := a.storePath()
 	if err != nil || work.Untouched(path) {
 		return signalled{reason: "nothing is remembered on this machine"}
@@ -347,7 +434,7 @@ func (a *app) signal(wait time.Duration) signalled {
 		return signalled{reason: "not signed in"}
 	}
 
-	claimed, reason := a.claimTheSignal(path, s.host, wait)
+	claimed, reason := a.claimTheSignal(path, s.host, session, wait)
 	if claimed == nil {
 		return signalled{reason: reason}
 	}
@@ -355,7 +442,7 @@ func (a *app) signal(wait time.Duration) signalled {
 	ctx, cancel := context.WithTimeout(a.ctx, signalTimeout)
 	defer cancel()
 	leftOut, err := s.client.NoteAtWork(ctx, claimed.clientID, claimed.cards)
-	noted := a.noteTheOutcome(path, s.host, err, leftOut)
+	noted := a.noteTheOutcome(path, s.host, session, err, leftOut)
 	if err != nil {
 		// The failure as the list keeps it, so that the one word an agent
 		// reads here names the case: the status and the code of the API are
@@ -390,37 +477,41 @@ type claim struct {
 // signal is a process of its own: two that start together must not both
 // report, and one that fails must not have the next tool call try again at
 // once. It claims nothing where nothing is to be sent, and says why.
-func (a *app) claimTheSignal(path, host string, wait time.Duration) (*claim, string) {
+func (a *app) claimTheSignal(path, hostName, session string, wait time.Duration) (*claim, string) {
 	handle, err := work.Open(path, wait)
 	if err != nil {
 		return nil, "the store is busy or unreadable"
 	}
 	defer handle.Close()
 
-	entry, known := handle.File.Hosts[host]
+	host, known := handle.File.Hosts[hostName]
 	if !known {
-		return nil, "nothing is remembered for " + host
+		return nil, "nothing is remembered for " + hostName
 	}
 	// What has run out is given up before anybody says they are still at it, so
 	// that a beat which comes after the window cannot raise a card that is
 	// over. The sign of life stands whatever the throttle then makes of the
 	// moment: it is about the work, not about the host's ear.
-	_, changed := entry.ForgetWhatRanOut(a.now())
-	if a.somebodyIsAtWork(entry) {
+	_, changed := host.ForgetWhatRanOut(session, a.now())
+	if a.somebodyIsAtWork(host, session) {
 		changed = true
+	}
+	entry, held := host.Sessions[session]
+	if !held {
+		return nil, a.saving(handle, changed, "nothing is remembered for this session on "+hostName)
 	}
 	cards := entry.CardIDs()
 
 	// Nothing to say, and nothing said before that would have to be taken
 	// back: this is where the common case ends, before the network.
 	if len(cards) == 0 && len(entry.SentCards) == 0 {
-		return nil, a.saving(handle, changed, "nothing is remembered for "+host)
+		return nil, a.saving(handle, changed, "nothing is remembered for this session on "+hostName)
 	}
 	if slices.Equal(cards, entry.SentCards) && a.now().Sub(entry.SentAt) < signalEvery {
 		return nil, a.saving(handle, changed, "the last signal is younger than a minute")
 	}
 
-	clientID, err := a.clientID()
+	clientID, err := a.clientID(session)
 	if err != nil {
 		// The one thing that can go wrong while the store is open and the host
 		// is known, so it is the one thing a list can be told about.
@@ -438,19 +529,24 @@ func (a *app) claimTheSignal(path, host string, wait time.Duration) (*claim, str
 }
 
 // somebodyIsAtWork writes down what a beat says about the work behind it: that
-// the session which took its cards up is still at them, and that somebody was
-// at the store at all. It answers whether anything was written.
+// the session is still at the cards it took up, and that it was at the store at
+// all. It answers whether anything was written. A session that holds nothing
+// gets no list for this: there is nothing of its own to keep alive.
 //
 // A beat that keeps tiles alive while nothing else does says neither, whatever
 // its environment carries: it is the work that keeps a card, and a process on a
 // timer of its own is no work. Left to the environment alone, one stray
 // variable would be enough for a card to glow through a working day while
 // nothing ever tells the timer to stop.
-func (a *app) somebodyIsAtWork(entry *work.Host) bool {
+func (a *app) somebodyIsAtWork(host *work.Host, session string) bool {
 	if a.keepalive {
 		return false
 	}
-	written := entry.StillAtIt(a.agentSession(), a.now())
+	entry, held := host.Sessions[session]
+	if !held {
+		return false
+	}
+	written := host.StillAtIt(session, a.now())
 	marked := entry.Beat(a.now())
 	return written || marked
 }
@@ -470,7 +566,10 @@ func (a *app) saving(handle *work.Handle, changed bool, reason string) string {
 // reads later can say why the board shows nothing. It is the one thing this
 // command gives up on quietly: the work itself is done, and the store may well
 // be held by the next session.
-func (a *app) noteTheOutcome(path, host string, failed error, leftOut []api.LeftOutCard) []work.LetGoCard {
+//
+// A list that is gone by now — one whose empty set went out and was swept —
+// gets nothing written: there is nobody left to read it.
+func (a *app) noteTheOutcome(path, hostName, session string, failed error, leftOut []api.LeftOutCard) []work.LetGoCard {
 	handle, err := work.Open(path, aBeatWaitsForTheStore)
 	if err != nil {
 		return nil
@@ -478,7 +577,14 @@ func (a *app) noteTheOutcome(path, host string, failed error, leftOut []api.Left
 	defer handle.Close()
 
 	var noted []work.LetGoCard
-	entry := handle.File.Host(host)
+	host, known := handle.File.Hosts[hostName]
+	if !known {
+		return nil
+	}
+	entry, held := host.Sessions[session]
+	if !held {
+		return nil
+	}
 	if failed != nil {
 		entry.Failure = failed.Error()
 		entry.FailedAt = a.now()
@@ -498,7 +604,7 @@ func (a *app) noteTheOutcome(path, host string, failed error, leftOut []api.Left
 // the names: after a card is out of the list, nothing else names it.
 //
 // A word this CLI does not know takes no card out of anything. It is written
-// down and the card stays, because a list of this machine is not the host's to
+// down and the card stays, because a list of this session is not the host's to
 // shorten with a word nobody here can read. Such a set is not sent again before
 // the minute is out either: the list is what it was, and the host has said what
 // it thinks of it.
@@ -507,7 +613,7 @@ func (a *app) noteTheOutcome(path, host string, failed error, leftOut []api.Left
 // signal is a list that has changed, and a changed list is reported at once, so
 // the corrected set is at the host with the next beat rather than a minute
 // later.
-func (a *app) writeDownWhatTheHostWouldNotHave(entry *work.Host, leftOut []api.LeftOutCard) []work.LetGoCard {
+func (a *app) writeDownWhatTheHostWouldNotHave(entry *work.List, leftOut []api.LeftOutCard) []work.LetGoCard {
 	var noted []work.LetGoCard
 	for _, left := range leftOut {
 		if left.Reason != api.ReasonCardArchived {
@@ -519,59 +625,85 @@ func (a *app) writeDownWhatTheHostWouldNotHave(entry *work.Host, leftOut []api.L
 	return noted
 }
 
-// noLongerInHand is what a command says when it took the card out of the list
-// of this machine on its own. The list is shared with every other session on
-// the machine, so nothing changes it without a word, and the word says how far
-// the change has got.
+// noLongerInHand is what a command says when it took the card out of the lists
+// of this machine on its own. Nothing changes a list without a word, and the
+// word says how far the change has got.
 func noLongerInHand(told bool) string {
 	if told {
-		return "the card is no longer among the cards this machine is working on, and the board was told at once"
+		return "the card is no longer among the cards anybody on this machine is working on, and the board was told at once"
 	}
-	return "the card is no longer among the cards this machine is working on; the board hears of it with the next signal"
+	return "the card is no longer among the cards anybody on this machine is working on; the board hears of it with the next signal of the session that held it"
 }
 
-// letGoOfTheCard takes a card out of the list of this machine and reports the
-// list at once, so that a card somebody has moved on stops glowing instead of
-// waiting for the signal after the next tool call. It says whether the card was
-// in the list at all, and whether the report got through.
+// letGoOfTheCard takes a card out of every list of this machine and reports the
+// list of this session at once, so that a card somebody has moved on stops
+// glowing instead of waiting for the signal after the next tool call. It says
+// whether the card was in a list at all, and whether the board was told.
+//
+// The list of another session is not reported from here: a signal carries the
+// whole list it reports, and this session would be keeping that session's other
+// cards alight. That session's next beat reports the shorter list, and where it
+// has none left, the server forgets the card three minutes after its last one.
 //
 // Whatever it meets on the way it passes over in silence: the card has been
 // moved, and neither a store another session holds at that moment nor a signal
 // that does not get through makes that untrue.
 func (a *app) letGoOfTheCard(host, cardID string) (letGo, told bool) {
-	if !a.takeOutOfTheList(host, cardID) {
-		return false, false
+	session := a.agentSession()
+	gone, mine := a.takeOutOfTheLists(host, session, cardID)
+	if !gone || !mine {
+		return gone, false
 	}
-	return true, a.signal(waitForTheStore).sent
+	return true, a.signal(session, waitForTheStore).sent
 }
 
-// takeOutOfTheList is the half that holds the lock, kept apart so that it is
-// given back before the signal, which takes it for itself.
-func (a *app) takeOutOfTheList(host, cardID string) bool {
+// takeOutOfTheLists is the half that holds the lock, kept apart so that it is
+// given back before the signal, which takes it for itself. It says whether the
+// card was in any list, and whether in the one of this session.
+func (a *app) takeOutOfTheLists(hostName, session, cardID string) (gone, mine bool) {
 	handle, err := a.openStore(waitForTheStore)
 	if err != nil {
-		return false
+		return false, false
 	}
 	defer handle.Close()
 
-	entry, known := handle.File.Hosts[host]
+	host, known := handle.File.Hosts[hostName]
 	if !known {
-		return false
+		return false, false
 	}
 	// Whoever writes the store sweeps it, so that what ran out is gone for the
 	// next reader as well; the card of this command is a different question.
-	_, swept := entry.ForgetWhatRanOut(a.now())
-	gone := entry.Stop(cardID)
-	if !gone && !swept {
-		return false
+	_, swept := host.ForgetWhatRanOut(session, a.now())
+	for name, list := range host.Sessions {
+		if list.Stop(cardID) {
+			gone = true
+			mine = mine || name == session
+		}
 	}
-	return handle.Save() == nil && gone
+	if !gone && !swept {
+		return false, false
+	}
+	if handle.Save() != nil {
+		return false, false
+	}
+	return gone, mine
 }
 
-// clientID is the name this installation of minka goes by. It is made once and
-// kept in the configuration; every caller holds the lock on the store, so two
-// signals at the same moment cannot make two of them.
-func (a *app) clientID() (string, error) {
+// clientID is the client a session reports as, made from the name this
+// installation of minka goes by. That name is made once and kept in the
+// configuration; every caller holds the lock on the store, so two signals at the
+// same moment cannot make two of them.
+func (a *app) clientID(session string) (string, error) {
+	base, err := a.nameOfThisInstallation()
+	if err != nil {
+		return "", err
+	}
+	return clientIDOf(base, session), nil
+}
+
+// nameOfThisInstallation is the name the configuration keeps, made on the first
+// signal that needs it.
+func (a *app) nameOfThisInstallation() (string, error) {
 	path, file, err := a.loadConfig()
 	if err != nil {
 		return "", err
@@ -695,11 +827,18 @@ func (s *session) findCard(ctx context.Context, name string) (api.Card, error) {
 }
 
 // workSuccess is the answer of every command that changes or shows the list.
-// The subject here is the list of this machine and not a resource of the API,
-// so it is put together here; a command that has more to say adds it.
-func (a *app) workSuccess(entry *work.Host, summary string, more map[string]any, forgotten int) success {
+// The subject here is the list of a session and not a resource of the API, so it
+// is put together here; a command that has more to say adds it.
+//
+// What the other sessions of the machine hold stands beside it, so that whoever
+// looks can tell a card nobody holds from one another session reports.
+func (a *app) workSuccess(host *work.Host, session, summary string, more map[string]any, forgotten int) success {
+	entry := listOf(host, session)
+	elsewhere := cardsElsewhere(host, session)
 	data := map[string]any{
+		"session":    nullable(session),
 		"cards":      cardList(entry.Cards),
+		"elsewhere":  elsewhere,
 		"letGo":      letGoList(entry.LetGo),
 		"sentAt":     momentOrNil(entry.SentAt),
 		"reportedAt": momentOrNil(entry.ReportedAt),
@@ -740,8 +879,30 @@ func (a *app) workSuccess(entry *work.Host, summary string, more map[string]any,
 		case !entry.SentAt.IsZero():
 			fmt.Fprintf(w, "\nLast sent %s, and nothing has arrived yet\n", entry.SentAt.Format(time.RFC3339))
 		}
+		if len(elsewhere) > 0 {
+			fmt.Fprintln(w, "\nOther sessions on this machine report:")
+			for _, name := range otherSessions(host, session) {
+				for _, card := range host.Sessions[name].Cards {
+					fmt.Fprintf(w, "%s  %s\n", cardName(card.ShortID, card.Title), card.StartedAt.Format(time.RFC3339))
+				}
+			}
+		}
 	}
 	return s
+}
+
+// cardsElsewhere are the cards of every session but the one named, each with the
+// session that holds it, in the order of the sessions' names so that two looks
+// at the same store read alike.
+func cardsElsewhere(host *work.Host, session string) []map[string]any {
+	list := []map[string]any{}
+	for _, name := range otherSessions(host, session) {
+		for _, card := range cardList(host.Sessions[name].Cards) {
+			card["session"] = nullable(name)
+			list = append(list, card)
+		}
+	}
+	return list
 }
 
 // sayingFirst puts a line in front of what a command prints for a person. The
@@ -796,7 +957,7 @@ func letGoNotices(notes []work.LetGoCard) []string {
 			name = note.ID
 		}
 		if note.Reason == api.ReasonCardArchived {
-			lines = append(lines, name+" lies in the archive of its board, so it is out of the list of this machine and no board shows it as alive")
+			lines = append(lines, name+" lies in the archive of its board, so it is out of the list of this session and no board shows it as alive")
 			continue
 		}
 		lines = append(lines, "the host would not take "+name+", and calls it "+note.Reason+
@@ -816,9 +977,16 @@ func cardList(cards []work.Card) []map[string]any {
 	return list
 }
 
-// namedInTheStore finds a card of the list by its ID or by the short
-// identifier it was remembered under, so that stopping needs no request.
-func namedInTheStore(entry *work.Host, name string) (work.Card, bool) {
+// otherSessions are the names of every session of the host but the one named,
+// sorted.
+func otherSessions(host *work.Host, session string) []string {
+	names := slices.Sorted(maps.Keys(host.Sessions))
+	return slices.DeleteFunc(names, func(name string) bool { return name == session })
+}
+
+// namedInTheList finds a card of a list by its ID or by the short identifier it
+// was remembered under, so that stopping needs no request.
+func namedInTheList(entry *work.List, name string) (work.Card, bool) {
 	for _, card := range entry.Cards {
 		if strings.EqualFold(card.ID, name) || (card.ShortID != "" && strings.EqualFold(card.ShortID, name)) {
 			return card, true
@@ -885,16 +1053,67 @@ func nullable(text string) any {
 	return text
 }
 
-// sessionVariable is where a session of an agent says what it is called.
+// sessionVariable is where Claude Code names its session to the commands its
+// tools run.
 const sessionVariable = "CLAUDE_CODE_SESSION_ID"
 
-// agentSession is what a session of an agent calls itself, where it says so in
-// the environment. It binds a card to whoever took it up: the list belongs to
-// the machine and a signal carries all of it, so a sign of life without a name
-// would make one session's work keep every other session's cards alive.
+// claudeCodeVariable is set by Claude Code for every command it runs.
+const claudeCodeVariable = "CLAUDECODE"
+
+// agentSession is the session a command speaks for: the one it was told with
+// --session, else the one Claude Code names in the environment of the commands
+// it runs, which a command typed through its Bash tool and the hook after it
+// both inherit. The flag is for whatever reports from inside a session and is
+// told the name.
 //
-// A card taken up where nothing says who is asking — a person at a terminal —
-// carries no name and goes by the moment it was started.
+// The input Claude Code gives a hook also names the session, and is not read:
+// a typed command never sees it, and a list the hook reports has to be the
+// list the typed command wrote into. Where the environment names no session,
+// both sides speak for the list of no session.
+//
+// The keepalive speaks for no session: it reports for every session and is at
+// work for none.
 func (a *app) agentSession() string {
-	return a.getenv(sessionVariable)
+	switch {
+	case a.keepalive:
+		return work.NoSession
+	case a.sessionFlag != "":
+		return a.sessionFlag
+	}
+	if named := a.getenv(sessionVariable); work.IsSession(named) {
+		return named
+	}
+	return work.NoSession
+}
+
+// checkTheSessionFlag refuses a --session that cannot stand for a session.
+func (a *app) checkTheSessionFlag(cmd *cobra.Command) error {
+	if a.sessionFlag == "" || work.IsSession(a.sessionFlag) {
+		return nil
+	}
+	return usageErrorf(cmd, "--session takes 1 to 128 letters, digits, \".\", \"-\" and \"_\", not %q", a.sessionFlag)
+}
+
+// addSessionFlag gives a command --session, for whatever reports from inside a
+// session and is told its name rather than finding it in the environment.
+func (a *app) addSessionFlag(cmd *cobra.Command) {
+	cmd.Flags().StringVar(&a.sessionFlag, "session", "", "The session to speak for (default: the hook's input, then $"+sessionVariable+")")
+}
+
+// clientIDOf is the client a session reports as. The list of no session goes
+// by the name this installation was given; a session goes by that name and a
+// digest of its own, so that every session has a set of its own on the server,
+// no session's name reaches the server, and the same session is the same client
+// with every signal. Shortened where needed, it stays within the 64 letters the
+// server takes.
+func clientIDOf(base, session string) string {
+	if session == work.NoSession {
+		return base
+	}
+	digest := sha256.Sum256([]byte(session))
+	const room = 64 - 1 - 16
+	if len(base) > room {
+		base = base[:room]
+	}
+	return base + "." + hex.EncodeToString(digest[:8])
 }

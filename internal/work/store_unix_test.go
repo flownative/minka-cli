@@ -63,7 +63,11 @@ func TestNoCardIsLostWhenSeveralSessionsStartAtOnce(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer handle.Close()
-	if cards := handle.File.Host(aHostOfTheStore).CardIDs(); len(cards) != sessions {
+	var cards []string
+	for _, list := range handle.File.Host(aHostOfTheStore).Sessions {
+		cards = append(cards, list.CardIDs()...)
+	}
+	if len(cards) != sessions {
 		t.Fatalf("%d of %d cards are left: %v", len(cards), sessions, cards)
 	}
 }
@@ -75,7 +79,7 @@ func startACard(path string, session int) error {
 		return fmt.Errorf("session %d: %w", session, err)
 	}
 	defer handle.Close()
-	handle.File.Host(aHostOfTheStore).Start(Card{ID: fmt.Sprintf("card-%02d", session), StartedAt: time.Now()})
+	handle.File.Host(aHostOfTheStore).List(fmt.Sprintf("session-%02d", session)).Start(Card{ID: fmt.Sprintf("card-%02d", session), StartedAt: time.Now()})
 	if err := handle.Save(); err != nil {
 		return fmt.Errorf("session %d: %w", session, err)
 	}

@@ -317,10 +317,10 @@ minka events comments edit <eventId> <commentId> - [--format html] --json < comm
 minka events comments delete <eventId> <commentId> --json
 minka events comments react <eventId> <commentId> 👍 --json
 minka events comments unreact <eventId> <commentId> 👍 --json
-minka work start <card> --json
-minka work stop [<card>] [--all] --json
-minka work list --json
-minka heartbeat --json
+minka work start <card> [--session <id>] --json
+minka work stop [<card>] [--all] [--session <id>] --json
+minka work list [--session <id>] --json
+minka heartbeat [--session <id>] --json
 minka hooks install [--file <path>] [--command <command line>] --json
 minka hooks status [--file <path>] --json
 minka import basecamp [--project <basecampProjectId>... | --active-only] (--out <dir> | --dry-run) [--calendars] --json
@@ -1664,9 +1664,19 @@ can say so — with a person's token every signal is refused — and it works li
 this:
 
 - **`minka work start <card>` alone shows nothing.** It only remembers the
-  card on this machine. What tells Minka is `minka heartbeat`, and until one
-  has run, no board has heard a word. `work start` says so in its `notice`
-  while nothing has ever reported from this machine.
+  card in the list of your session. What tells Minka is `minka heartbeat`, and
+  until one has run, no board has heard a word. `work start` says so in its
+  `notice` while nothing has ever reported that list.
+- **Every session has a list of its own,** and its heartbeat reports that list
+  and no other, as a client of its own. When your session ends, its cards go
+  dark with it instead of being reported by the other sessions on the machine.
+  The session is the one Claude Code names in `$CLAUDE_CODE_SESSION_ID`, for
+  the commands you run and for the hook alike; subagents share the session
+  that spawned them, so their beats count for it. `--session <id>` names it
+  explicitly, for a program that reports from inside a session; you do not
+  need it. Without either, a command speaks for the list of no session, which
+  only a heartbeat without a session reports, and `work start` says so in its
+  `notice` inside Claude Code.
 - `minka hooks install` writes a `PostToolUse` hook into
   `~/.claude/settings.json` that runs `minka heartbeat` after every tool call.
   Install it once, then `work start` is all a session does. Without it, run
@@ -1675,29 +1685,33 @@ this:
   `not installed`. Other hooks in the file are kept, and a settings file this
   command does not understand is refused (exit 1) with the entry to add by hand
   in `hint`.
-- Leave the default alone unless you are asked otherwise. The list, the client
-  and the signal belong to the machine, so a hook for one project reports that
-  project's sessions and no others. If you do write one for a project, take
-  `--file .claude/settings.local.json`, never `.claude/settings.json`: that one
-  is committed, and the entry names a path of this machine which no other
-  checkout has. Read the `notice`, which says when the file lies in a working
-  tree, and pass `--command minka` there.
+- Leave the default alone unless you are asked otherwise. A hook for one project
+  reports that project's sessions and no others. If you do write one for a
+  project, take `--file .claude/settings.local.json`, never
+  `.claude/settings.json`: that one is committed, and the entry names a path of
+  this machine which no other checkout has. Read the `notice`, which says when
+  the file lies in a working tree, and pass `--command minka` there.
 - `minka work stop <card>` takes a card out again, and the next signal gives it
   up at once. Do it when you are done with a card; otherwise it stays alive
   until it runs out. It asks nothing of the network and the card may be named
   by its short identifier, but it needs a host like every other command, so
-  without a sign-in it exits 3.
-- `minka cards move` and `minka cards done` take the card out of the list by
+  without a sign-in it exits 3. A card your session does not hold is taken out
+  of the list of whichever session on this machine holds it.
+- `minka cards move` and `minka cards done` take the card out of every list by
   themselves and tell the board at once, where the card lands in another
   column, is put on hold or reaches Done; a card that only changes place where
-  it already is stays in the list. The `notice` says where it happened, and
+  it already is stays in the list. Only a card your own session held is
+  reported at once; one another session held goes with that session's next
+  signal. The `notice` says where it happened, and
   whether the board has heard of it yet. So take a card up in that order: move
   it into the working column first, then `minka work start`.
-- `minka work stop` without a card stops the one card that is remembered. With
-  several it exits 1 and changes nothing, because the list is shared with every
-  other session on this machine: name the card, or take them all with `--all`.
-- `minka work list --json` shows that list: `data.cards` with `id`, `shortId`,
-  `title` and `startedAt`, `data.sentAt` when a signal last went out,
+- `minka work stop` without a card stops the one card your session holds. With
+  several it exits 1 and changes nothing: name the card, or take all of your
+  session's cards with `--all`.
+- `minka work list --json` shows your session's list: `data.session`, then
+  `data.cards` with `id`, `shortId`, `title` and `startedAt`, `data.elsewhere`
+  with the cards of the other sessions on this machine, each with its
+  `session`, `data.sentAt` when a signal of your session last went out,
   `data.reportedAt` when one last arrived, and `data.failure` what the host
   made of the last one that did not. The `notice` advises `minka hooks install`
   only while nothing has ever gone out; a signal that was turned away is no
@@ -1718,31 +1732,32 @@ this:
   stays, the word is reported as it came, and the `notice` says so. Act on it
   yourself.
 - `minka heartbeat` always exits 0 and prints nothing unless you ask with
-  `--json`. Not signed in, no network, a token that was revoked: none of it
-  stops your work, and none of it is reported as a failure. If the board shows
-  nothing, run `minka heartbeat --json` and read `data.sent` and `data.reason`,
-  which names the case with the status and the code of the API, such as
-  "(HTTP 403, agentsOnly)" for a token that belongs to a person and not to an
-  agent. `minka work list --json` carries the same words in `failure` for the
-  last signal that reached the host.
+  `--json`, which names the session it reported for in `data.session`. Not
+  signed in, no network, a token that was revoked: none of it stops your work,
+  and none of it is reported as a failure. If the board shows nothing, run
+  `minka heartbeat --json` and read `data.sent` and `data.reason`, which names
+  the case with the status and the code of the API, such as "(HTTP 403,
+  agentsOnly)" for a token that belongs to a person and not to an agent. `minka
+  work list --json` carries the same words in `failure` for the last signal that
+  reached the host.
 - A tool call that runs for minutes keeps its tile alive by itself: the beat
   before it starts a process of minka's own that reports while nothing else can,
-  and that process stops when nothing is in hand any more or when nobody has
-  been at work for a while. There is nothing for you to do about it, and
-  `--keepalive` is minka's own business — never call it yourself.
-  `minka heartbeat --json` says in `data.keepalive` whether one was `started`,
-  is `already reporting`, or was `not started` and why.
-- The list belongs to the machine, not to your session, and every signal
-  reports all of it together. Never write the store yourself.
+  every session by its own last beat, and that process stops when nothing is in
+  hand any more or when nobody has been at work for a while. There is nothing
+  for you to do about it, and `--keepalive` is minka's own business — never call
+  it yourself. `minka heartbeat --json` says in `data.keepalive` whether one was
+  `started`, is `already reporting`, or was `not started` and why.
+- Never write the store yourself.
 - Minka forgets a card three minutes after the last signal, so a session that
-  ends without `work stop` goes quiet by itself.
-- The list gives a card up eight hours after the session that took it up was
-  last at it. Your heartbeat says so for the cards you started, so a card you
-  keep working on is kept however long the work lasts, and the card of a
-  session that ended runs out even while other sessions on the machine work on.
-  A card started outside a session — by a person at a terminal — goes by the
-  moment it was started instead. `work list` carries a `notice` when a card was
-  given up, and `minka work start` brings it back.
+  ends without `work stop` goes quiet by itself: at most twenty-five minutes
+  later where the process above was reporting for it, because nothing tells
+  that process a session ended. Other sessions never extend that.
+- The list gives a card up eight hours after your session was last at it. Your
+  heartbeat says so for the cards you started, so a card you keep working on is
+  kept however long the work lasts. A card started outside a session — by a
+  person at a terminal — goes by the moment it was started instead. `work list`
+  carries a `notice` when a card was given up, and `minka work start` brings it
+  back.
 - A card you may not see exits 2 at `work start`; the server itself would pass
   it over without a word. There is no way to read back what Minka holds.
 

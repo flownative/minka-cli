@@ -19,13 +19,59 @@ it always was.
 
 Only an agent may say so. A person's token is refused with `agentsOnly`.
 
-## The list belongs to the machine
+## Every session has a list of its own
 
 The cards lie in `work.json` beside the configuration file, never in a project
-and never in the directory a command was started in. Every session on the
-machine writes into that one list, and every signal reports its union
-(C-036): the server keeps one set per client, so two sessions with lists of
-their own would take each other's cards away with every signal.
+and never in the directory a command was started in: one list per host and
+session. A signal carries the list of one session and nothing else, under a
+client of that session's own (C-103). The server keeps a card alight for as
+long as any client names it, so a session that reported the cards of another
+would keep them glowing after that one died — for hours, as long as anything
+else on the machine was at work.
+
+- **Which session a command speaks for** is the one `--session` names, which
+  is for a program that reports from inside a session and is told its name,
+  and otherwise the one in `$CLAUDE_CODE_SESSION_ID`. Claude Code sets that
+  variable for the commands its Bash tool runs, and the hook inherits it, so a
+  typed `work start` and the beat after it name the same list. A name is 1 to
+  128 letters, digits, `.`, `-` and `_`; `--session` refuses another as usage,
+  a beat sends nothing under it, and one in the environment names nobody.
+- **The input of a hook is not read,** although Claude Code documents its
+  `session_id` as the session of a hook and does not document the variable. A
+  typed command never sees that input, so a beat that went by it would report a
+  list nobody writes into wherever the two differ or the variable is missing:
+  the card would never be reported. Where the variable is missing, both sides
+  speak for the list of no session, and `work start` says so in its `notice`
+  when it runs inside Claude Code (`CLAUDECODE=1`).
+- **A subagent** carries the session of whoever spawned it, in the variable as
+  in the input of its hooks, so a card it works on is its parent's card, and
+  its beats keep it.
+- **Without a session** — a person at a terminal, or an agent that knows
+  nothing of sessions — a command speaks for the list of no session. It is
+  reported under the name of the installation alone, by a heartbeat that names
+  no session and by the keepalive that such a beat starts; no beat of a session
+  ever reports it. A per-terminal name would be none better: nothing that runs
+  in a terminal runs the hook, so nothing would report under it either.
+- `work list` and the answers of `work start` and `work stop` show the list of
+  their session in `cards`, name it in `session` (null for no session), and
+  show the cards of every other session of the host in `elsewhere`, each with
+  its `session`, so that a card another session reports is not taken for one
+  nobody holds.
+- **A list is dropped** once it holds no card, keeps no note and has nothing
+  sent that the server could still be counting: no set, or one older than the
+  three minutes a signal holds. Until then the empty set it owes is reported by
+  its next beat or by the keepalive, so that the tiles go out at once; after
+  that the server has forgotten them by itself.
+- **A store of the older shape**, one list per machine whose cards each name
+  their session, is read and handed out: every card goes into the list of the
+  session it names, with its sign of life, and a card that names none into the
+  list of no session. What the machine was last sent, the notes about cards the
+  host would not have and how the last signal fared stay with the list of no
+  session, which reports under the client the whole machine reported as, so
+  that its next signal takes back what is not its own. The mark of a beat of a
+  list is the moment its own cards were last seen, not the last beat of the
+  machine, so that a session that died long ago does not pass for one at work.
+  Nothing is lost, and the next write leaves the new shape alone.
 
 - The list is read and written under an advisory lock of the kernel on
   `work.lock`, and saved by writing a temporary file and renaming it. Without
@@ -52,33 +98,29 @@ their own would take each other's cards away with every signal.
   archive of its board is refused the same way, as usage: it is readable and no
   board shows it as alive, so taking it up would end in a beat that lets it go
   again and says so to nobody.
-- A card is given up eight hours after the session that took it up was last at
-  it (C-040), and the next `work list` says so. A card remembers that session
-  by the name it finds in `CLAUDE_CODE_SESSION_ID`, and every heartbeat of that
-  session writes the moment down again, at most once a minute and whether or
-  not a signal goes out with it. So a piece of work that lasts longer than a
-  day keeps its card by being worked on, while the card of a session that died
-  runs out however busy the machine around it is — which the sign of life would
-  not manage if it were the signal, because a signal carries the whole list of
-  the machine. What binds a card to a session is that name and nothing else:
-  every heartbeat that finds the same name in the variable keeps the card, one
-  out of a subagent as well, wherever a subagent is given the name of the
-  session that spawned it.
-- A card taken up where nothing says who is asking, a person at a terminal for
-  instance, carries no session and goes by the moment it was started. So does a
-  card of a session that never runs the heartbeat. Saying `work start` again
+- A card is given up eight hours after its session was last at it (C-040), and
+  the next `work list` says so. Every heartbeat of the session writes that
+  moment down for its cards, at most once a minute and whether or not a signal
+  goes out with it. So a piece of work that lasts longer than a day keeps its
+  card by being worked on, while a list nobody reports any more is not kept.
+- A card in the list of no session goes by the moment it was started. So does
+  a card of a session that never runs the heartbeat. Saying `work start` again
   brings such a card back, and that is what the notice advises.
-- `cards move` and `cards done` take the card out of the list themselves and
-  report at once (C-041), so that a card somebody has moved on stops glowing
-  without waiting for the next tool call. What counts as moving on is landing
-  in another column, being put on hold or reaching Done; a card that only
-  changes place where it already is is one nobody has let go of. Neither a store another
+- `cards move` and `cards done` take the card out of every list themselves and
+  report the list of their own session at once (C-041), so that a card somebody
+  has moved on stops glowing without waiting for the next tool call. The list of
+  another session is not reported from there: a signal carries the whole list it
+  reports, so this session would be keeping that one's other cards alight. That
+  session's next beat reports it, or the server forgets the card three minutes
+  after that session's last signal. What counts as moving on is landing in
+  another column, being put on hold or reaching Done; a card that only changes
+  place where it already is is one nobody has let go of. Neither a store another
   session holds at that moment nor a signal that does not get through makes the
   move untrue, so both are passed over in silence; the `notice` says that the
-  card left the list and whether the board has heard of it yet, and says
-  nothing where the card was never in the list.
+  card left the list and whether the board has heard of it yet, and says nothing
+  where the card was never in the list.
 - A card the host names in `leftOut` leaves the list, so that one card it will
-  not have cannot put out the tiles of everything else the machine is at work
+  not have cannot put out the tiles of everything else the session is at work
   on (C-053). The list is shorter than what the last signal carried then, which
   is a list that has changed, so the next beat reports the corrected set at once
   and `sentAt` and `sentCards` go on saying what went out. A word this CLI does
@@ -93,15 +135,22 @@ their own would take each other's cards away with every signal.
 - `work stop` asks nothing of the network and finds a card under either of the
   names it was remembered with. It needs the host all the same, so on a machine
   that is signed in nowhere it ends like every other command, with exit 3.
-  Without a card it stops the one card that is remembered; where several are,
-  it says which and changes nothing, because another session may have put one
-  of them there.
+  Without a card it stops the one card of its session; where the session holds
+  several, it says which and changes nothing. A card named that the session
+  does not hold is taken out of the list of every other session that holds it,
+  because whoever stops a card has let go of it, and the list of a session that
+  died is cleared nowhere else.
 
 ## The client is a made-up name
 
 `clientId` is random, made once and kept in the configuration as `clientId`
 (C-037). It is never the host name and says nothing about the machine or the
-person: it travels into Minka's database and its logs.
+person: it travels into Minka's database and its logs. A session reports as
+that name, a dot and sixteen hex digits of a SHA-256 of the session's name,
+shortened in front where it would not fit the 64 letters the server takes: the
+same client with every signal of the session, another for every session, and
+the session's own name never reaches the server. The list of no session
+reports as the plain name.
 
 Minka reads only a `clientId` left out or `null` as naming no client; an empty
 one is refused with 400 `malformedBody`, as one that is too long or carries
@@ -134,8 +183,8 @@ not have.
   where nothing was ever remembered on the machine.
 - reports at most once a minute, and at once whenever the list has changed, so
   that a card that was given up goes quiet without waiting out the three
-  minutes. The throttle is written into the store before the request goes out,
-  because every signal is a process of its own.
+  minutes. The throttle is the list's own and is written into the store before
+  the request goes out, because every signal is a process of its own.
 - bounds its request to five seconds, far below the timeout of every other
   command.
 
@@ -157,12 +206,17 @@ A subagent is no such case: its tool calls fire the hook, and under the name of
 the session that spawned it, so a session working through subagents reports by
 itself.
 
-- **One per host.** The lock is an advisory lock of the kernel beside the
-  store, named after the host it serves, and it is held for as long as the
-  process reports. A beat that finds it taken starts nothing, and a keepalive
-  that was killed leaves nothing behind, the kernel giving the lock back with
-  the process. One lock for the whole machine would let the cards of a second
-  host go dark without a word, which is worse than a second process.
+- **One per host, deciding on every session by its own beat.** The lock is an
+  advisory lock of the kernel beside the store, named after the host it serves,
+  and it is held for as long as the process reports. A beat that finds it taken
+  starts nothing, and a keepalive that was killed leaves nothing behind, the
+  kernel giving the lock back with the process. One lock for the whole machine
+  would let the cards of a second host go dark without a word, which is worse
+  than a second process. Every tick it reports the list of every session whose
+  own last beat is younger than twenty-five minutes, under that session's
+  client, and nothing of a session whose beat is older: a session that is busy
+  says nothing about one that died. One process per session would decide the
+  same and only multiply the processes.
 - **It is at no work of its own,** and two things say so, both of them: the
   child is given the environment of the beat that started it less
   `CLAUDE_CODE_SESSION_ID`, and a beat in that mode writes neither the sign of
@@ -183,10 +237,24 @@ itself.
   dies the keepalive is often the last process left, and without the sweep it
   would report a card past the eight hours of C-040.
 - **It ends in one of three ways, and they differ.** An empty list is reported
-  and only then is it over, so the tiles go out at once. Twenty-five minutes in
-  which nothing but the keepalive was at the store, and a wall clock that
-  jumped further than a tick can account for, end it without a signal: the
-  cards may still be in hand, and the server forgets them by itself. The jump
+  and only then let go of, so the tiles go out at once. Twenty-five minutes in
+  which the session was not at the store, and a wall clock that jumped further
+  than a tick can account for, end the reporting without a signal: the cards
+  may still be in hand, and the server forgets them by itself. The keepalive
+  stops once no session is left to report, and at once on a jump.
+- **It does not light again what the server forgot.** A list whose last signal
+  is older than the three minutes the server counts it for, and whose session
+  has not been at the store since, is passed over: a keepalive that starts after
+  a machine woke up, or after the last one stopped, would otherwise light the
+  tiles of a session that may be gone. The session's next beat lights them
+  again where it is not.
+- **What it cannot see** is a session that ended while its last beat is young:
+  nothing tells the keepalive that a session is gone, so the cards of a session
+  that crashed or exited without `work stop` stay alight up to twenty-five
+  minutes after its last beat, then three minutes more on the server. Another
+  session's work no longer extends that. A machine that slept or
+  lost its power is no such case: the jump of the clock ends the keepalive, and
+  the server forgets the cards three minutes after the last signal. The jump
   is measured on the wall clock, because the monotonic clock stands still while
   a machine sleeps and would show no jump at all.
 - **What says that somebody is at work** is the moment of a beat or a typed
@@ -223,11 +291,16 @@ starts the agent; where that program is not there any more, the status says so
 instead of calling the hook current.
 
 The default is the settings of the whole machine, and that is where the hook
-belongs: what is reported is the machine — one list, one client, the union of
-every session on it — so a hook for one project alone would report that
-project's sessions and leave the rest of the machine quiet. A file for one
-project is therefore `.claude/settings.local.json` and never
-`.claude/settings.json`, which is meant to be committed: the entry names a path
-of this machine, which no other checkout has. Where the file lies in a working
-tree of Git, `hooks install` says so and points at `--command minka`, which
-writes a bare command instead of a path.
+belongs: every session reports its own cards through it, so a hook for one
+project alone would report that project's sessions and leave the rest of the
+machine quiet. A file for one project is therefore
+`.claude/settings.local.json` and never `.claude/settings.json`, which is meant
+to be committed: the entry names a path of this machine, which no other
+checkout has. Where the file lies in a working tree of Git, `hooks install`
+says so and points at `--command minka`, which writes a bare command instead of
+a path.
+
+The hook needs nothing for the sessions: it inherits the session of Claude Code
+in `$CLAUDE_CODE_SESSION_ID`, so the entry is the same for every session. `hooks
+status` says whether the hook is there and nothing about cards; which session
+holds what is `work list`.
