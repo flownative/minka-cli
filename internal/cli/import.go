@@ -940,7 +940,7 @@ func renderImportReport(w io.Writer, report importReport) {
 	renderTodos(w, report)
 	renderForwards(w, report)
 	renderDocs(w, report)
-	renderCalendars(w, report)
+	renderImportedCalendars(w, report)
 	renderSubscribers(w, report)
 	fmt.Fprintf(w, "In the texts: %s referred to, %s Basecamp lists nothing for dropped, %s, %s, %s\n",
 		plural(report.FilesInBodies, "file", "files"), plural(report.FilesDropped, "file", "files"),

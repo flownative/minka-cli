@@ -358,7 +358,7 @@ func (s *Server) addPost(w http.ResponseWriter, r *http.Request, person *Person)
 		return
 	}
 	title, ok := stringField(w, fields, "title")
-	if !ok || !validEntryTitle(w, "post", deref(title)) {
+	if !ok || !validTitle(w, "post", "a post", deref(title)) {
 		return
 	}
 	body, ok := stringField(w, fields, "body")
@@ -476,7 +476,7 @@ func (s *Server) updatePost(w http.ResponseWriter, r *http.Request, person *Pers
 	}
 	newTitle := post.Title
 	if title != nil {
-		if !validEntryTitle(w, "post", *title) {
+		if !validTitle(w, "post", "a post", *title) {
 			return
 		}
 		newTitle = phpTrim(*title)

@@ -48,8 +48,8 @@ func calendarNotices(report importReport) []string {
 	return notices
 }
 
-// renderCalendars says what became of the calendars of a run that brought them.
-func renderCalendars(w io.Writer, report importReport) {
+// renderImportedCalendars says what became of the calendars of a run that brought them.
+func renderImportedCalendars(w io.Writer, report importReport) {
 	if report.Calendars == nil {
 		return
 	}

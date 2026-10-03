@@ -36,6 +36,7 @@ func everyWrite(e *testEnv) map[string][]string {
 	entryComment := f.Document.Comments[len(f.Document.Comments)-1].ID
 	todoComment := f.LooseTodo.Comments[len(f.LooseTodo.Comments)-1].ID
 	listComment := f.TodoList.Comments[len(f.TodoList.Comments)-1].ID
+	eventComment := f.OnceEvent.Comments[len(f.OnceEvent.Comments)-1].ID
 
 	return map[string][]string{
 		"projects edit":     {"projects", "edit", f.Project.ID, "--name", "Renamed"},
@@ -138,6 +139,16 @@ func everyWrite(e *testEnv) map[string][]string {
 		"posts comments delete":  {"posts", "comments", "delete", f.Post.ID, postComment},
 		"posts comments react":   {"posts", "comments", "react", f.Post.ID, postComment, "👍"},
 		"posts comments unreact": {"posts", "comments", "unreact", f.Post.ID, postComment, "👍"},
+
+		"events create": {"events", "create", "--tool", f.Calendar.ID, "--title", "New", "--first-day", "2026-10-20"},
+		"events edit":   {"events", "edit", f.OnceEvent.ID, "--title", "Renamed"},
+		"events delete": {"events", "delete", f.OnceEvent.ID},
+
+		"events comments create":  {"events", "comments", "create", f.OnceEvent.ID, "Another comment"},
+		"events comments edit":    {"events", "comments", "edit", f.OnceEvent.ID, eventComment, "Other words"},
+		"events comments delete":  {"events", "comments", "delete", f.OnceEvent.ID, eventComment},
+		"events comments react":   {"events", "comments", "react", f.OnceEvent.ID, eventComment, "👍"},
+		"events comments unreact": {"events", "comments", "unreact", f.OnceEvent.ID, eventComment, "👍"},
 	}
 }
 
@@ -157,6 +168,7 @@ var notAWriteIntoAProject = []string{
 	"checkins tools", "checkins list", "checkins show", "checkins reminders",
 	"checkins answers list", "checkins answers show",
 	"posts tools", "posts categories", "posts list", "posts show", "posts comments list",
+	"events tools", "events list", "events show", "events comments list",
 	"chats mark-read", "conversations list", "conversations with", "conversations people",
 	"uploads create", "uploads download", "import basecamp",
 	"work start", "work stop", "work list", "heartbeat", "hooks install", "hooks status",

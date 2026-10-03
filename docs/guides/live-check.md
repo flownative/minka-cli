@@ -13,6 +13,12 @@ instance. Until then the status says it is checked against the fake only.
 The chat "Sommerfest" on the local instance is Robert's demo and stays
 untouched. Only what the run created itself gets deleted.
 
+A request with a write method counts as a write by its address, not by its
+outcome. Outside the places above it is allowed only against an identifier
+that names nothing, a fresh random UUID or the nil UUID, to see a 404 or the
+order of the lookups. Never against a real identifier, never a POST into a
+real container, and the status names every such request.
+
 The default host is the test instance; the local one needs
 `--host https://minka.localbeach.net`.
 

@@ -103,7 +103,7 @@ func (s *Server) repeatTodo(w http.ResponseWriter, r *http.Request, person *Pers
 	}
 	if schedule == nil {
 		schedule = &scheduleFields{}
-	} else if !validScheduleValues(w, *schedule) {
+	} else if !validScheduleValues(w, todoSeriesRefusals, *schedule) {
 		return
 	}
 	todo := activeTodoOf(list, *todoID)
@@ -120,7 +120,7 @@ func (s *Server) repeatTodo(w http.ResponseWriter, r *http.Request, person *Pers
 		return
 	}
 	// The series starts on the due day, whatever startsOn the body names.
-	repetition, ok := composedSchedule(w, *schedule, *todo.DueOn, nil)
+	repetition, ok := composedSchedule(w, todoSeriesRefusals, *schedule, *todo.DueOn, nil)
 	if !ok || s.refusedAsNothingWritten(w, tool, list) {
 		return
 	}
@@ -188,13 +188,13 @@ func (s *Server) updateTodoSeries(w http.ResponseWriter, r *http.Request, person
 		return
 	}
 
-	if namesTitle && !validTodoTitle(w, "todo", "a to-do", deref(title)) {
+	if namesTitle && !validTitle(w, "todo", "a to-do", deref(title)) {
 		return
 	}
 	if !seriesPeopleIdentifiers(w, assigneeIDs) || !seriesPeopleIdentifiers(w, notifiedIDs) {
 		return
 	}
-	if schedule != nil && !validScheduleValues(w, *schedule) {
+	if schedule != nil && !validScheduleValues(w, todoSeriesRefusals, *schedule) {
 		return
 	}
 	leadDays, ok := seriesLeadDays(w, fields)
@@ -211,7 +211,7 @@ func (s *Server) updateTodoSeries(w http.ResponseWriter, r *http.Request, person
 		if schedule.startsOn != nil {
 			startsOn = *schedule.startsOn
 		}
-		if repetition, ok = composedSchedule(w, *schedule, startsOn, &series.Schedule); !ok {
+		if repetition, ok = composedSchedule(w, todoSeriesRefusals, *schedule, startsOn, &series.Schedule); !ok {
 			return
 		}
 	}
@@ -602,17 +602,26 @@ func (r *RepetitionSchedule) monthOrZero() int {
 	return r.Month
 }
 
+// scheduleRefusals name the refusals of a schedule after what repeats, since
+// Minka gives each resource codes of its own.
+type scheduleRefusals struct {
+	prefix     string // the start of every code, such as "todoSeries"
+	outOfOrder string // the message of an end before the first day
+}
+
+var todoSeriesRefusals = scheduleRefusals{prefix: "todoSeries", outOfOrder: "A series ends on or after the day it starts."}
+
 // composedSchedule is the schedule the fields make from a first day: an end
 // before that day is out of order, and fields that make no schedule are
 // invalid.
-func composedSchedule(w http.ResponseWriter, fields scheduleFields, startsOn string, saved *RepetitionSchedule) (RepetitionSchedule, bool) {
+func composedSchedule(w http.ResponseWriter, refusals scheduleRefusals, fields scheduleFields, startsOn string, saved *RepetitionSchedule) (RepetitionSchedule, bool) {
 	if endsOn := fields.endsOnWith(saved); endsOn != "" && endsOn < startsOn {
-		unprocessable(w, "todoSeriesDatesOutOfOrder", "A series ends on or after the day it starts.")
+		unprocessable(w, refusals.prefix+"DatesOutOfOrder", refusals.outOfOrder)
 		return RepetitionSchedule{}, false
 	}
 	schedule, err := fields.scheduleFrom(startsOn, saved)
 	if err != nil {
-		todoSeriesScheduleInvalid(w)
+		scheduleInvalid(w, refusals)
 		return RepetitionSchedule{}, false
 	}
 	return schedule, true
@@ -664,29 +673,29 @@ func scheduleShape(w http.ResponseWriter, fields map[string]any) (*scheduleField
 // validScheduleValues holds each field of a schedule on its own, in the order
 // the server does: the days, then the ranges, then the names of rhythm,
 // weekdays and instance.
-func validScheduleValues(w http.ResponseWriter, f scheduleFields) bool {
+func validScheduleValues(w http.ResponseWriter, refusals scheduleRefusals, f scheduleFields) bool {
 	for _, day := range []*string{f.startsOn, f.endsOn} {
 		if _, isADay := midnightOf(deref(day)); day != nil && !isADay {
-			unprocessable(w, "todoSeriesDatesNotADate", "A day is written as YYYY-MM-DD.")
+			unprocessable(w, refusals.prefix+"DatesNotADate", "A day is written as YYYY-MM-DD.")
 			return false
 		}
 	}
 	if outside(f.interval, 1, maxRepetitionInterval) || outside(f.day, 1, 31) || outside(f.month, 1, 12) {
-		todoSeriesScheduleInvalid(w)
+		scheduleInvalid(w, refusals)
 		return false
 	}
 	if f.rhythm != nil && !slices.Contains([]string{RepeatsDaily, RepeatsWeekly, RepeatsMonthlyOnDay, RepeatsMonthlyOnWeekday, RepeatsYearly}, *f.rhythm) {
-		todoSeriesScheduleInvalid(w)
+		scheduleInvalid(w, refusals)
 		return false
 	}
 	for _, weekday := range f.weekdays {
 		if weekday < 1 || weekday > 7 {
-			todoSeriesScheduleInvalid(w)
+			scheduleInvalid(w, refusals)
 			return false
 		}
 	}
 	if outside(f.weekday, 1, 7) || f.instance != nil && !slices.Contains([]int{1, 2, 3, 4, LastWeekdayInstance}, *f.instance) {
-		todoSeriesScheduleInvalid(w)
+		scheduleInvalid(w, refusals)
 		return false
 	}
 	return true
@@ -803,8 +812,8 @@ func todoRepeatsAlready(w http.ResponseWriter) {
 	unprocessable(w, "todoRepeatsAlready", "This to-do is an occurrence of a series already.")
 }
 
-func todoSeriesScheduleInvalid(w http.ResponseWriter) {
-	unprocessable(w, "todoSeriesScheduleInvalid", "The rhythm is daily, weekly, monthlyOnDay, monthlyOnWeekday or yearly; weekdays are numbers from 1 (Monday) to 7, the day of a month 1 to 31, the instance 1 to 4 or -1 for the last, the month 1 to 12 and the interval 1 to 99.")
+func scheduleInvalid(w http.ResponseWriter, refusals scheduleRefusals) {
+	unprocessable(w, refusals.prefix+"ScheduleInvalid", "The rhythm is daily, weekly, monthlyOnDay, monthlyOnWeekday or yearly; weekdays are numbers from 1 (Monday) to 7, the day of a month 1 to 31, the instance 1 to 4 or -1 for the last, the month 1 to 12 and the interval 1 to 99.")
 }
 
 func seriesPersonNotAMember(w http.ResponseWriter) {
