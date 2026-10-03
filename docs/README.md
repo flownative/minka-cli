@@ -53,6 +53,10 @@ the documentation says what holds; how it came about is in git.
   refused, the guard that cannot see one second, whom a new document reaches,
   the flag that names the kind of entry, the archive of a folder, the refusals
   — before any work on `docs`.
+- [Comments on a card](stable/comments.md): What a read of the comments
+  hands over and which one is the newest, the guards that keep a comment from
+  being written past an unread answer, what counts as read and where the marks
+  lie, the settings of `config` — before any work on `comments` or `config`.
 - [Steps](stable/steps.md): What a step of a card carries, the people given as
   a whole set and who may be among them, the day, why `steps create` takes
   neither, the order of the refusals — before any work on `steps`.

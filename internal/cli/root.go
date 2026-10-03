@@ -15,6 +15,7 @@ import (
 	"github.com/flownative/minka-cli/internal/api"
 	"github.com/flownative/minka-cli/internal/basecamp"
 	"github.com/flownative/minka-cli/internal/config"
+	"github.com/flownative/minka-cli/internal/readmark"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 )
@@ -74,6 +75,10 @@ type app struct {
 	// call runs. It is an injection point so that no test forks a process.
 	startKeepalive func(host string) error
 
+	// markWait is how long a command waits for another minka to finish noting
+	// which comments it has shown.
+	markWait time.Duration
+
 	hostFlag   string
 	jsonFlag   bool
 	quietFlag  bool
@@ -110,6 +115,7 @@ func newApp(ctx context.Context, stdin io.Reader, stdout, stderr io.Writer, gete
 	a.basecampFiles = basecamp.Downloader{}
 	a.avatarFetcher = basecamp.NewAvatarClient()
 	a.now = time.Now
+	a.markWait = 5 * time.Second
 	a.startKeepalive = func(host string) error {
 		return spawnKeepalive(host, environmentWithoutTheSession(os.Environ()))
 	}
@@ -176,7 +182,7 @@ Output is text on a terminal and JSON otherwise. --json prints an envelope
 {ok, data, summary, notice, breadcrumbs}; --quiet prints only data. Failures
 print {ok: false, error, code, retryable, hint, meta} and exit with a code per
 class: 1 usage, 2 not found, 3 not signed in, 4 forbidden, 6 network,
-7 API error, 8 ambiguous, 9 validation.
+7 API error, 8 ambiguous, 9 validation, 11 unread comments.
 
 First steps, on a terminal:
   minka setup
@@ -207,6 +213,7 @@ only used for the host in $MINKA_HOST.`,
 
 	root.AddCommand(
 		a.newSetupCmd(),
+		a.newConfigCmd(),
 		a.newAuthCmd(),
 		a.newMeCmd(),
 		a.newProjectsCmd(),
@@ -341,6 +348,7 @@ type session struct {
 	host        string
 	tokenSource string
 	configPath  string // empty when the token came from the environment
+	reader      string // who reads comments here, named without the token
 }
 
 // session finds the host and the token of a command.
@@ -365,7 +373,7 @@ func (a *app) session() (*session, error) {
 			return nil, &Error{Code: CodeUsage, Message: "$MINKA_HOST: " + err.Error()}
 		}
 		if host == envHost {
-			return &session{client: api.New(host, envToken, userAgent()), host: host, tokenSource: tokenFromEnvironment}, nil
+			return &session{client: api.New(host, envToken, userAgent()), host: host, tokenSource: tokenFromEnvironment, reader: readmark.Reader(envToken)}, nil
 		}
 	}
 
@@ -392,7 +400,7 @@ func (a *app) session() (*session, error) {
 		return nil, e
 	}
 
-	return &session{client: api.New(host, token, userAgent()), host: host, tokenSource: tokenFromConfig, configPath: path}, nil
+	return &session{client: api.New(host, token, userAgent()), host: host, tokenSource: tokenFromConfig, configPath: path, reader: readmark.Reader(token)}, nil
 }
 
 // hostToPaste is the host a hint may put into a command line. Where what may be

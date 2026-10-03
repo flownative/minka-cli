@@ -13,7 +13,9 @@ import (
 )
 
 // Error codes and exit codes. They are the ones basecamp-cli uses, so an
-// agent that knows one of the two CLIs can read the other.
+// agent that knows one of the two CLIs can read the other. What basecamp-cli
+// has no class for starts at 11: it uses 5 for a rate limit and 10 for an
+// account limit, which minka never meets.
 const (
 	CodeUsage      = "usage"
 	CodeNotFound   = "not_found"
@@ -24,6 +26,9 @@ const (
 	CodeAmbiguous  = "ambiguous"
 	CodeValidation = "validation"
 	CodeConfig     = "config"
+	// CodeUnread is a comment not written because its card has comments the
+	// caller has not read. A script keys on it, so it stays as it is.
+	CodeUnread = "unread"
 )
 
 const (
@@ -36,6 +41,7 @@ const (
 	ExitAPI        = 7
 	ExitAmbiguous  = 8
 	ExitValidation = 9
+	ExitUnread     = 11
 )
 
 var exitCodes = map[string]int{
@@ -48,6 +54,7 @@ var exitCodes = map[string]int{
 	CodeAPI:        ExitAPI,
 	CodeAmbiguous:  ExitAmbiguous,
 	CodeValidation: ExitValidation,
+	CodeUnread:     ExitUnread,
 }
 
 const writeMayHaveHappened = "The change may have reached the server. Read it back before trying again."

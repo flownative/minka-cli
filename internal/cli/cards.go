@@ -254,7 +254,10 @@ into the same HTML; in JSON it is the HTML the server stores.
 
 A card in the archive of its board is shown as well, and says so: it stands in
 no column, and the one it names is the column it was taken from. Reading it
-works, writing on it is refused.`,
+works, writing on it is refused.
+
+The comments shown count as read on this machine, for comments unread and for
+comments create.`,
 		Args: requireArgs("cardId"),
 		RunE: func(_ *cobra.Command, args []string) error {
 			s, err := a.session()
@@ -272,7 +275,8 @@ works, writing on it is refused.`,
 			return a.ok(success{
 				data:        card.Raw,
 				summary:     cardSummary(card.Value),
-				breadcrumbs: cardBreadcrumbs(card.Value.ID),
+				notices:     a.rememberShown(s, card.Value),
+				breadcrumbs: commentBreadcrumbs(card.Value),
 				text:        func(w io.Writer) { renderCard(w, card.Value) },
 			})
 		},

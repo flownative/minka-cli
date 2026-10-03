@@ -11,6 +11,17 @@ assignees, due dates, steps, subscribers, comments, chats, private
 conversations, uploads, mentions, reactions and one's own cards across all
 projects. `minka commands` lists them all, built from the command tree itself.
 
+The comments on a card are read with `cards show`, `comments list` and
+`comments unread`, which shows only what this machine has not shown yet. A
+comment can wait for them: `comments create --if-latest <commentId|none>`
+writes only while that comment is still the newest, and the setting
+`comments.requireRead` (`minka config set`) refuses a comment while the card
+has comments not yet shown; both exit 11 (`unread`) with those comments in
+`data`. The rule the commands follow is [Comments on a
+card](../stable/comments.md) (C-101). The guards are cards only. Minka's side
+is what it already serves; the commands are checked against its code and the
+fake, not live.
+
 The archive of a board is read with `boards archive`, and `cards archive` and
 `cards unarchive` move a card in and out of it. `--all` walks every page in one
 run and works around the weakness Minka carries in its own debts: a cursor that

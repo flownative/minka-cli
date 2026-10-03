@@ -26,6 +26,14 @@ type File struct {
 	DefaultHost string               `json:"defaultHost,omitempty"`
 	ClientID    string               `json:"clientId,omitempty"`
 	Hosts       map[string]HostEntry `json:"hosts"`
+	Comments    CommentSettings      `json:"comments,omitzero"`
+}
+
+// CommentSettings are the settings of the comments on a card, for every host.
+type CommentSettings struct {
+	// RequireRead refuses a comment on a card that has comments this machine
+	// has not shown.
+	RequireRead bool `json:"requireRead,omitempty"`
 }
 
 type HostEntry struct {

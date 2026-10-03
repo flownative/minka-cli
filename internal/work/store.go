@@ -18,6 +18,8 @@ import (
 	"path/filepath"
 	"slices"
 	"time"
+
+	"github.com/flownative/minka-cli/internal/localfile"
 )
 
 // ForgottenAfter is how long a card stays in the store without a sign of life.
@@ -147,11 +149,11 @@ func Open(path string, wait time.Duration) (*Handle, error) {
 	switch {
 	case errors.Is(err, fs.ErrNotExist):
 	case err != nil:
-		held.release()
+		held.Release()
 		return nil, fmt.Errorf("reading %s: %w", path, err)
 	default:
 		if err := json.Unmarshal(content, file); err != nil {
-			held.release()
+			held.Release()
 			return nil, fmt.Errorf("reading %s: %w", path, err)
 		}
 		if file.Hosts == nil {
@@ -163,50 +165,18 @@ func Open(path string, wait time.Duration) (*Handle, error) {
 }
 
 func (h *Handle) Close() {
-	h.lock.release()
+	h.lock.Release()
 }
 
 // Save writes the store where it lies. It writes a temporary file next to the
 // target and renames it, so that an interrupted write cannot leave a truncated
 // store behind.
 func (h *Handle) Save() error {
-	path := h.path
-	if target, err := filepath.EvalSymlinks(path); err == nil {
-		path = target
-	}
-
 	content, err := json.MarshalIndent(h.File, "", "  ")
 	if err != nil {
 		return fmt.Errorf("encoding the store: %w", err)
 	}
-
-	temp, err := os.CreateTemp(filepath.Dir(path), ".work-*.json")
-	if err != nil {
-		return fmt.Errorf("writing %s: %w", path, err)
-	}
-	defer os.Remove(temp.Name())
-	if _, err := temp.Write(append(content, '\n')); err != nil {
-		temp.Close()
-		return fmt.Errorf("writing %s: %w", path, err)
-	}
-	if err := temp.Sync(); err != nil {
-		temp.Close()
-		return fmt.Errorf("writing %s: %w", path, err)
-	}
-	if err := temp.Close(); err != nil {
-		return fmt.Errorf("writing %s: %w", path, err)
-	}
-	if err := os.Rename(temp.Name(), path); err != nil {
-		return fmt.Errorf("writing %s: %w", path, err)
-	}
-
-	// The rename itself has to reach the disk, or a machine that loses power
-	// can come back with the file it held before and the new one nowhere.
-	if dir, err := os.Open(filepath.Dir(path)); err == nil {
-		_ = dir.Sync()
-		_ = dir.Close()
-	}
-	return nil
+	return localfile.Write(h.path, ".work-*.json", append(content, '\n'))
 }
 
 // Host is what this host holds, an empty one where it holds nothing yet.
