@@ -104,6 +104,12 @@ type UploadedFile struct {
 	VisibleToClients *bool
 	// Subscribers are whom the account hands the upload to; nil is nobody.
 	Subscribers []Person
+	// EarlierFiles are the files the upload showed before the one it shows now,
+	// oldest first. VersionID and VersionCreatedAt are the version of the file it
+	// shows now, made from the upload where empty.
+	EarlierFiles     []EarlierFile
+	VersionID        int64
+	VersionCreatedAt string
 }
 
 // docsProject is a project with every case of a Docs & Files tool: two tools
@@ -280,8 +286,16 @@ func docsProject(ada, grace, former Person, tool func(int64, string, string, str
 			Description: Embed{File: shredded}.HTML(), Files: []File{shredded}},
 		// Titled at the source by somebody who wrote far more than a title holds:
 		// the fold is of what the source calls it and not of the name of a file.
+		// Given another file twice, once by somebody else, and listed with a
+		// version whose file was removed from the account.
 		{ID: 9277, Title: LongTitleOfAnUpload, Filename: "notes.pdf", ContentType: "application/pdf", Bytes: 130,
-			Creator: &grace, CreatedAt: at(9, 17), UpdatedAt: at(9, 17)},
+			Creator: &grace, CreatedAt: at(9, 17), UpdatedAt: at(12, 9),
+			VersionID: 9296, VersionCreatedAt: at(12, 9),
+			EarlierFiles: []EarlierFile{
+				{ID: 9293, Filename: "notes.pdf", ContentType: "application/pdf", Bytes: 110, Creator: &grace, CreatedAt: "2025-06-09T17:00:00.412Z"},
+				{ID: 9294, Filename: "notes-draft.pdf", ContentType: "application/pdf", Bytes: 120, Creator: &ada, CreatedAt: at(10, 9)},
+				{ID: 9295, NoFile: true, Creator: &ada, CreatedAt: at(11, 9)},
+			}},
 	}
 
 	// A second tool of the same kind: a project may hold several.

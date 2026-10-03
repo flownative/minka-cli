@@ -515,8 +515,9 @@ type Document struct {
 // nothing from it, and File names the record of the file in attachments.jsonl.
 // Status and VisibleToClients are a folder's.
 //
-// Only the file the source shows now comes; the format keeps `versions` free
-// for the older ones and reads it nowhere, so a bundle writes none.
+// Versions are the files the upload was given at the source, oldest first, the
+// one it shows now last; an upload that was never given another file carries
+// none.
 type Upload struct {
 	Record
 	ProjectSourceID string  `json:"projectSourceId"`
@@ -529,8 +530,19 @@ type Upload struct {
 
 	VisibleToClients *bool `json:"visibleToClients,omitempty"`
 
+	Versions []UploadVersion `json:"versions,omitempty"`
+
 	// Subscribers are what they are on a Card.
 	Subscribers *[]string `json:"subscribers,omitempty"`
+}
+
+// UploadVersion is one file an upload was given: the record of the file in
+// attachments.jsonl, when it was given and by whom. CreatedBy is nil for
+// whoever made the upload.
+type UploadVersion struct {
+	File      string  `json:"file"`
+	CreatedAt string  `json:"createdAt"`
+	CreatedBy *string `json:"createdBy"`
 }
 
 // Event is an entry of a calendar. A timed one carries StartsAt and EndsAt, two

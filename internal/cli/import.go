@@ -206,9 +206,10 @@ func (a *app) newImportBasecampCmd() *cobra.Command {
 	var out string
 	var dryRun bool
 	var calendars bool
+	var uploadVersions bool
 
 	cmd := &cobra.Command{
-		Use:   "basecamp [--project <id> … | --active-only] --out <dir> [--calendars] [--dry-run]",
+		Use:   "basecamp [--project <id> … | --active-only] --out <dir> [--calendars] [--upload-versions] [--dry-run]",
 		Short: "Extract projects of a Basecamp account into an import bundle",
 		Long: `Extracts projects of a Basecamp account into an import bundle, the directory
 Minka's applier reads foreign history from.
@@ -259,6 +260,14 @@ in recordsLeftOut. A single day of a series is never asked for, because
 Basecamp makes a record of the day where somebody asks; the comments written
 under one are counted from the list of every comment of the project
 (calendars.commentsUnderSingleDays) and not carried.
+
+--upload-versions brings the files an upload showed before as its versions
+(docs.versions). No call of the Basecamp CLI brings such a file, so minka asks
+it for its token (basecamp auth token) and sends that token to Basecamp's API
+itself, to 3.basecampapi.com and nowhere else, following no redirect; the file
+is then fetched from storage.basecamp.com without the token. Without the flag no
+list of versions is asked for, no token passes through minka, and the report
+says nothing of versions.
 
 The lists of a to-do set that are in use stand in the bundle from the bottom up,
 because Minka puts every new list on top of its tool; the ones the source has put
@@ -518,7 +527,8 @@ it has been applied.`,
 			// Every request of the run goes through the one source that asks
 			// again, whatever kind it is of and whether anything is written.
 			source := basecamp.NewRetrying(a.basecampSource, a.retryPause)
-			extractor := basecamp.Extractor{Source: source, Avatars: a.avatarFetcher, Files: a.basecampFiles, Now: a.now, Calendars: calendars}
+			extractor := basecamp.Extractor{Source: source, Avatars: a.avatarFetcher, Files: a.basecampFiles, Now: a.now, Calendars: calendars,
+				UploadVersions: uploadVersions}
 			var result basecamp.Result
 			var err error
 			if len(projects) > 0 {
@@ -805,6 +815,7 @@ it has been applied.`,
 					"record of a Docs & Files tool lost a file no run will bring; data.docs.onlyAFileNoRunWillBring names it by ID. A document whose whole text was that file arrives without words, its title, comments and boosts with it; an upload has no purpose without its file and is left out with its comments and its boosts, which are counted where what fell with an upload is",
 					"records of Docs & Files tools lost a file no run will bring; data.docs.onlyAFileNoRunWillBring names them by ID. A document whose whole text was that file arrives without words, its title, comments and boosts with it; an upload has no purpose without its file and is left out with its comments and its boosts, which are counted where what fell with an upload is"))
 			}
+			notices = append(notices, uploadVersionNotices(report.Docs.Versions)...)
 			if count := report.Docs.LongerThanMinkaTakes; count > 0 {
 				notices = append(notices, plural(count,
 					"document, or description of an upload, is longer than Minka holds and is passed over there on every run, with its comments and its boosts; data.longestBodyRecords names the longest of each kind, and the text is not cut short",
@@ -868,6 +879,7 @@ it has been applied.`,
 	cmd.Flags().StringVar(&out, "out", "", "Directory of the bundle; an earlier bundle there is replaced")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Walk Basecamp and show the counts, write nothing")
 	cmd.Flags().BoolVar(&calendars, "calendars", false, "Bring the calendars and their events too, for a Minka whose import applies events")
+	cmd.Flags().BoolVar(&uploadVersions, "upload-versions", false, "Bring the files uploads showed before as their versions, sending the Basecamp CLI's token to Basecamp's API")
 	return cmd
 }
 
@@ -1204,6 +1216,9 @@ func renderDocs(w io.Writer, report importReport) {
 	if docs.NamesMadeIntoATitle > 0 {
 		fmt.Fprintf(w, "Titles of uploads folded into one line or cut short to fit: %d\n", docs.NamesMadeIntoATitle)
 	}
+	if docs.Versions != nil {
+		renderEarlierFilesOfUploads(w, *docs.Versions)
+	}
 	if len(docs.WithoutAStoredFile) > 0 {
 		fmt.Fprintf(w, "Uploads Basecamp names no stored file for, left out: %d (upload %s)\n",
 			len(docs.WithoutAStoredFile), strings.Join(docs.WithoutAStoredFile, ", "))
@@ -1235,6 +1250,48 @@ func renderDocs(w io.Writer, report importReport) {
 	for _, place := range docs.PlacesLeftOut {
 		fmt.Fprintf(w, "  with %s %s fell: %d folders, %d documents, %d uploads\n", place.Record, place.SourceID, place.Folders, place.Documents, place.Uploads)
 	}
+}
+
+// renderEarlierFilesOfUploads says what became of the files the uploads showed before,
+// for a run asked to bring them.
+func renderEarlierFilesOfUploads(w io.Writer, versions basecamp.VersionCounts) {
+	if versions.UploadsWithEarlierFiles > 0 {
+		fmt.Fprintf(w, "Earlier files of uploads: %d, of %d uploads\n", versions.EarlierFiles, versions.UploadsWithEarlierFiles)
+	}
+	if left := versions.WithoutTheirFile; len(left) > 0 {
+		named := make([]string, 0, len(left))
+		for _, version := range left {
+			named = append(named, version.UploadSourceID+"/"+version.VersionSourceID)
+		}
+		fmt.Fprintf(w, "Versions listed without the file they held, left out: %d (upload/version %s)\n", len(left), strings.Join(named, ", "))
+	}
+	if unread := versions.HistoriesUnread; len(unread) > 0 {
+		named := make([]string, 0, len(unread))
+		for _, history := range unread {
+			named = append(named, history.UploadSourceID+" "+string(history.Why))
+		}
+		fmt.Fprintf(w, "Uploads whose earlier files were not read: %d (upload %s)\n", len(unread), strings.Join(named, ", "))
+	}
+}
+
+// uploadVersionNotices are the notices about the files the uploads showed
+// before; a run not asked to bring them has none.
+func uploadVersionNotices(versions *basecamp.VersionCounts) []string {
+	if versions == nil {
+		return nil
+	}
+	var notices []string
+	if count := len(versions.WithoutTheirFile); count > 0 {
+		notices = append(notices, plural(count,
+			"version of an upload is listed at the source without the file it held, which Basecamp no longer has, so it is left out of the upload's versions; data.docs.versions.withoutTheirFile names it by upload and version",
+			"versions of uploads are listed at the source without the files they held, which Basecamp no longer has, so they are left out of the uploads' versions; data.docs.versions.withoutTheirFile names each by upload and version"))
+	}
+	if count := len(versions.HistoriesUnread); count > 0 {
+		notices = append(notices, plural(count,
+			"upload comes with the file it shows now and without the files it showed before: Basecamp would not hand out its versions, or handed them out in a shape this run cannot place; data.docs.versions.historiesUnread names it with why",
+			"uploads come with the files they show now and without the files they showed before: Basecamp would not hand out their versions, or handed them out in a shape this run cannot place; data.docs.versions.historiesUnread names each with why"))
+	}
+	return notices
 }
 
 // incompleteImport is the end of a run that lost a file it cannot answer for.

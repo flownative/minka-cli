@@ -19,7 +19,11 @@ account's own company, so Basecamp masks the e-mail addresses of others for it
 and a run ends as `forbidden` right after the people are read. That identity
 is good for looking at the shape of Basecamp's answers.
 
-A run that writes a bundle goes under the profile Robert has set up for it:
+A run that writes a bundle goes under the profile Robert has set up for it.
+`--upload-versions` brings the earlier files of uploads as well; minka then asks
+the Basecamp CLI for its token and sends it to `3.basecampapi.com` itself (C-104),
+which Robert has allowed for this profile. Without the flag nothing of that
+happens:
 
 ```bash
 BASECAMP_PROFILE=flownative-robert ./bin/minka import basecamp \
@@ -48,8 +52,10 @@ account holds every kind of person, bots and deleted people included.
 Build with `make build` and run `bin/minka`. The firewall of this machine
 holds back the network of a freshly built binary at any other path; the
 symptom is every avatar timing out after 30 seconds, not an error. The
-requests and the files go through the Basecamp CLI and are not affected, the
-avatars are fetched by minka itself. While a run is going, nothing else writes
+requests and the files go through the Basecamp CLI and are not affected; the
+avatars and the earlier files of uploads are fetched by minka itself, and an
+earlier file held back fails as the network within 60 seconds and is named among
+the missing files. While a run is going, nothing else writes
 into `bin/`: an implementer or a reviewer at work is told so.
 
 ## How long, and how to wait

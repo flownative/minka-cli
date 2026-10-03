@@ -197,6 +197,12 @@ type Account struct {
 	// for by its identifiers.
 	Downloads       []string
 	UploadDownloads []string
+	// VersionDownloads are the addresses of the versions of uploads whose files
+	// were asked for.
+	VersionDownloads []string
+	// ReshapeVersions replaces the list of versions the account answers for an
+	// upload, for the shapes of a list no real account has been seen in.
+	ReshapeVersions func(upload int64, listed []map[string]any) []map[string]any
 }
 
 // UsersOnly takes everybody out of the list of the account who is no user,
@@ -448,6 +454,9 @@ func (a *Account) Get(_ context.Context, path string) ([]byte, error) {
 			return answer, nil
 		}
 		if answer, known := a.docs(path, page); known {
+			return answer, nil
+		}
+		if answer, known := a.versions(path); known {
 			return answer, nil
 		}
 		if answer, known := a.calendars(path, page); known {

@@ -373,6 +373,11 @@ type Extractor struct {
 	// of that kind. Without it the dock entry is skipped like a kind Minka has
 	// nothing for.
 	Calendars bool
+	// UploadVersions brings the files the uploads showed before as their
+	// versions, fetched with the token of the Basecamp CLI, which minka then
+	// sends to Basecamp's API itself. Without it no list of versions is asked
+	// for and the report says nothing of them.
+	UploadVersions bool
 
 	// source is Source behind the guard every request of a run passes.
 	source  Source
@@ -575,6 +580,9 @@ func (e *Extractor) extract(ctx context.Context, w *bundle.Writer, pick func(con
 		e.longestBody[bundle.Events] = 0
 	}
 	e.calendars = CalendarCounts{Calendars: []CalendarCount{}, CommentsUnderSingleDays: []SingleDayComments{}}
+	if e.UploadVersions {
+		e.docs.Versions = &VersionCounts{WithoutTheirFile: []VersionWithoutAFile{}, HistoriesUnread: []UnreadHistory{}}
+	}
 	e.longestBodyRecords = map[bundle.Kind]LongestBodyRecord{}
 	e.filesOfTheSource, e.attached = map[string]*fileOfTheSource{}, map[string]bool{}
 	e.filesThatNeverArrive, e.fileRecords, e.files = map[string]bool{}, nil, FileCounts{}

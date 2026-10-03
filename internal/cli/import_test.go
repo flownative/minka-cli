@@ -28,6 +28,9 @@ type importEnv struct {
 	// source stands between the CLI and the account, where a test needs more
 	// than the account does by itself.
 	source basecamp.Source
+	// files stands in for the files of the account, where a test needs another
+	// way to them than the account's own.
+	files basecamp.Files
 	// pauses are the pauses a run asked for before it asked a request again.
 	// No test waits for one.
 	pauses []time.Duration
@@ -55,6 +58,9 @@ func (e *importEnv) run(args ...string) result {
 		}
 		a.avatarFetcher = e.account
 		a.basecampFiles = e.account
+		if e.files != nil {
+			a.basecampFiles = e.files
+		}
 		a.now = func() time.Time { return e.now }
 		a.retryPause = func(ctx context.Context, pause time.Duration) error {
 			e.pauses = append(e.pauses, pause)
@@ -2321,6 +2327,54 @@ func TestImportBasecampReportsTheDocsAndFilesOfAProject(t *testing.T) {
 	expectCode(t, r, ExitOK)
 	if want := "Uploads Basecamp names no stored file for, left out:"; !strings.Contains(r.stdout, want) {
 		t.Errorf("a run whose Docs & Files come to nothing says nothing of them:\n%s", r.stdout)
+	}
+}
+
+// --upload-versions is the one way an earlier file of an upload reaches a bundle:
+// without it no list of versions is asked for and the report says nothing of
+// versions, in the data, the notices and the text alike.
+func TestImportBasecampBringsTheEarlierFilesOfUploadsOnlyWhenAsked(t *testing.T) {
+	e := newImportEnv(t)
+	env, r := e.runJSON("import", "basecamp", "--project", "7011", "--out", filepath.Join(t.TempDir(), "plain"))
+	expectCode(t, r, ExitOK)
+	if _, says := decode(t, env.Data)["docs"].(map[string]any)["versions"]; says {
+		t.Errorf("a run without --upload-versions reports versions: %v", decode(t, env.Data)["docs"])
+	}
+	if strings.Contains(env.Notice, "version") {
+		t.Errorf("a run without --upload-versions gives the notice %q", env.Notice)
+	}
+	for _, request := range e.account.Requests {
+		if strings.Contains(request, "versions") {
+			t.Errorf("a run without --upload-versions asked for %s", request)
+		}
+	}
+	r = e.run("import", "basecamp", "--project", "7011", "--out", filepath.Join(t.TempDir(), "plain-text"), "--styled")
+	expectCode(t, r, ExitOK)
+	if strings.Contains(r.stdout, "Earlier files") || strings.Contains(r.stdout, "Versions listed") {
+		t.Errorf("a run without --upload-versions says something of versions:\n%s", r.stdout)
+	}
+
+	e = newImportEnv(t)
+	env, r = e.runJSON("import", "basecamp", "--project", "7011", "--out", filepath.Join(t.TempDir(), "versions"), "--upload-versions")
+	expectCode(t, r, ExitOK)
+	want := map[string]any{"uploadsWithEarlierFiles": float64(1), "earlierFiles": float64(2),
+		"withoutTheirFile": []any{map[string]any{"uploadSourceId": "9277", "versionSourceId": "9295"}},
+		"historiesUnread":  []any{}}
+	if got := decode(t, env.Data)["docs"].(map[string]any)["versions"]; !reflect.DeepEqual(got, want) {
+		t.Errorf("versions:\n got %v\nwant %v", got, want)
+	}
+	if notice := "1 version of an upload is listed at the source without the file it held"; !strings.Contains(env.Notice, notice) {
+		t.Errorf("notice %q does not say %q", env.Notice, notice)
+	}
+	r = e.run("import", "basecamp", "--project", "7011", "--out", filepath.Join(t.TempDir(), "versions-text"), "--upload-versions", "--styled")
+	expectCode(t, r, ExitOK)
+	for _, line := range []string{
+		"Earlier files of uploads: 2, of 1 uploads",
+		"Versions listed without the file they held, left out: 1 (upload/version 9277/9295)",
+	} {
+		if !strings.Contains(r.stdout, line) {
+			t.Errorf("the text lacks %q:\n%s", line, r.stdout)
+		}
 	}
 }
 
