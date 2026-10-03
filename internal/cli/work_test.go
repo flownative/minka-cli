@@ -492,6 +492,7 @@ func TestTheAddressRefusesInTheOrderTheContractGives(t *testing.T) {
 		{"another content type", agent, "text/plain", `{}`, http.StatusUnsupportedMediaType, "unsupportedMediaType"},
 		{"a body that is no object", agent, "application/json", `[]`, http.StatusBadRequest, "malformedBody"},
 		{"a client that is no string", agent, "application/json", `{"clientId": 17}`, http.StatusBadRequest, "malformedBody"},
+		{"an empty client", agent, "application/json", `{"clientId": ""}`, http.StatusBadRequest, "1 to 64 letters"},
 		{"a client with a space in it", agent, "application/json", `{"clientId": "mac studio"}`, http.StatusBadRequest, "malformedBody"},
 		{"a client that is too long", agent, "application/json", `{"clientId": "` + strings.Repeat("a", 65) + `"}`, http.StatusBadRequest, "malformedBody"},
 		{"cards that are no list", agent, "application/json", `{"cardIds": "` + card + `"}`, http.StatusBadRequest, "malformedBody"},
@@ -538,6 +539,20 @@ func TestTheServerKeepsOneSetPerClientAndPassesOverWhatItDoesNotKnow(t *testing.
 	}
 	if got := e.server.CardsAtWork(); len(got) != 1 || got[0] != e.fixture.CardInTriage.ID {
 		t.Errorf("the server holds %v, want the card of the client with no name", got)
+	}
+}
+
+// A clientId of null names no client, as a field left out does, where an
+// empty one is refused.
+func TestANullClientIsTheClientWithNoName(t *testing.T) {
+	e := newAgentEnv(t)
+	card := e.fixture.CardInDoing.ID
+	status, body := e.say(e.fixture.AgentToken, "application/json", `{"clientId": null, "cardIds": ["`+card+`"]}`)
+	if status != http.StatusNoContent {
+		t.Fatalf("status %d: %s", status, body)
+	}
+	if got := e.server.AtWorkOf(e.fixture.Agent.ID, ""); len(got) != 1 || got[0] != card {
+		t.Fatalf("the client with no name holds %v, want %s", got, card)
 	}
 }
 

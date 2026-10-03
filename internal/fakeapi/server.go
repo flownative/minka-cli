@@ -1148,20 +1148,21 @@ func (s *Server) leftOutReason() string {
 	return "cardArchived"
 }
 
-// agentClientID reads which client of an agent is speaking. A name that is too
-// long or carries anything else is refused rather than read as the client that
-// names none: two clients quietly sharing one set of cards is the mix-up the
-// field is there to prevent.
+// agentClientID reads which client of an agent is speaking. Only a field left
+// out or null names none. An empty name, one that is too long or one that
+// carries anything else is refused rather than read as the client that names
+// none: two clients quietly sharing one set of cards is the mix-up the field is
+// there to prevent.
 func agentClientID(w http.ResponseWriter, fields map[string]any) (string, bool) {
 	named, ok := stringField(w, fields, "clientId")
 	if !ok {
 		return "", false
 	}
-	if named == nil || *named == "" {
+	if named == nil {
 		return "", true
 	}
 	if !clientIDPattern.MatchString(*named) {
-		malformed(w, fmt.Sprintf("The field \"clientId\" takes at most %d letters, digits, \".\", \"-\" and \"_\".", maxClientIDLength))
+		malformed(w, fmt.Sprintf("The field \"clientId\" takes 1 to %d letters, digits, \".\", \"-\" and \"_\".", maxClientIDLength))
 		return "", false
 	}
 	return *named, true

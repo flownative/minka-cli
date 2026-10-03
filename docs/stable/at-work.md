@@ -88,6 +88,12 @@ their own would take each other's cards away with every signal.
 (C-037). It is never the host name and says nothing about the machine or the
 person: it travels into Minka's database and its logs.
 
+Minka reads only a `clientId` left out or `null` as naming no client; an empty
+one is refused with 400 `malformedBody`, as one that is too long or carries
+anything but letters, digits, `.`, `-` and `_`. The CLI never sends an empty
+one: a configuration without a name, or with an empty one, gets a new name
+before the signal goes out.
+
 ## The signal disturbs nothing
 
 `heartbeat` runs after every tool call of an agent. It therefore
