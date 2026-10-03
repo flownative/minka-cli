@@ -1,0 +1,4 @@
+{
+  "description": "Runs minka heartbeat from inside the Claude Code process",
+  "modules": ["./register.js"]
+}

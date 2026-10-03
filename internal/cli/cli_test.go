@@ -36,6 +36,12 @@ type testEnv struct {
 	// is under test is the decision to start it and what it is told.
 	keepalives    atomic.Int32
 	keepaliveHost atomic.Value
+
+	// claudeRan are the command lines of Claude Code a run would have run, and
+	// claudeFails what each of them answers. No test runs the real one: it
+	// would install into the Claude Code of whoever runs the tests.
+	claudeRan   [][]string
+	claudeFails error
 }
 
 type result struct {
@@ -87,6 +93,10 @@ func (e *testEnv) runWith(configure func(*app), stdin string, args ...string) re
 		e.keepalives.Add(1)
 		e.keepaliveHost.Store(host)
 		return nil
+	}
+	a.runClaude = func(args []string) error {
+		e.claudeRan = append(e.claudeRan, args)
+		return e.claudeFails
 	}
 	if configure != nil {
 		configure(a)

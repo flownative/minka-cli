@@ -124,6 +124,12 @@ type List struct {
 	Failure    string    `json:"failure,omitempty"`
 	FailedAt   time.Time `json:"failedAt,omitempty"`
 	BeatAt     time.Time `json:"beatAt,omitempty"`
+
+	// Mod says that the session reports from inside its own Claude Code
+	// process, every thirty seconds for as long as that process runs. Nothing
+	// else reports such a list: when the process ends, its beats end, and the
+	// server forgets its cards three minutes after the last signal.
+	Mod bool `json:"mod,omitempty"`
 }
 
 // File is the store as it lies on disk.

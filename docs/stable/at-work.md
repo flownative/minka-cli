@@ -2,7 +2,8 @@
 
 An agent tells Minka which cards it has in hand, and the board shows those
 tiles as alive. `work start` and `work stop` remember them, `heartbeat` reports
-them, `hooks install` makes the hook that calls it.
+them, `hooks install` makes the hook that calls it, and `hooks install --mod`
+the mod that calls it from inside the Claude Code process.
 
 ## What the server holds
 
@@ -252,7 +253,8 @@ itself.
   nothing tells the keepalive that a session is gone, so the cards of a session
   that crashed or exited without `work stop` stay alight up to twenty-five
   minutes after its last beat, then three minutes more on the server. Another
-  session's work no longer extends that. A machine that slept or
+  session's work no longer extends that, and a session that runs the mod is no
+  such case: the keepalive leaves it alone, see below. A machine that slept or
   lost its power is no such case: the jump of the clock ends the keepalive, and
   the server forgets the cards three minutes after the last signal. The jump
   is measured on the wall clock, because the monotonic clock stands still while
@@ -277,10 +279,107 @@ itself.
 - `--keepalive` is minka's own business: hidden from the help and from `minka
   commands`, and nothing but a beat has reason to call it.
 
+## The mod reports from inside the process
+
+The keepalive cannot tell a session that ended from one that is busy, because
+it runs outside the process of the session. The mod runs inside it (C-105): a
+Claude Code mod, a module of JavaScript that Claude Code calls on its own
+events, which runs `minka heartbeat --session <id> --from-mod` through an
+argument list, no shell. When the process ends, so do its beats.
+
+- **When it beats:** at the start of the session, at the start of every turn,
+  at the end of every tool call, and every thirty seconds. The timer of a mod
+  runs while a tool call runs, so a build of an hour keeps its tiles for the
+  hour. A beat is skipped where the one before has not returned yet, and one
+  more follows it where a step came in meanwhile, so beats never pile up behind
+  a minka that is slow; the one that follows is work where any step it stands
+  for was.
+- **Which session:** the one `$.session.id()` names, asked on every beat, and
+  that is the session `$CLAUDE_CODE_SESSION_ID` names to the Bash tool, so a
+  typed `work start` and the beats of the mod meet in one list. The mod has to
+  pass it as `--session`: what the mod starts does not carry the variable.
+- **What counts as work** is a step: the start of a turn and the end of a tool
+  call. A beat of the timer is work while a tool call runs — of the main
+  conversation or of any subagent, which may still work in the background
+  after the turn that started it has ended — and `--idle` otherwise. Turns are
+  not followed: a subagent's turn ends without having started, and a turn whose
+  end never came would count as work for as long as the process runs.
+- **An idle beat** says the process is alive and nothing more. Like the keepalive, it writes neither the sign of life
+  of a card nor the mark of a beat, and it reports a list only for as long as
+  the keepalive would report it: twenty-five minutes after the last step, and
+  not after the server forgot it while nobody was at work. A Claude Code left
+  open over night therefore does not keep its cards alight until the morning,
+  nor past the eight hours of C-040.
+- **A list a beat of the mod reaches is marked** (`mod` in the store) for as long
+  as the list lives. The keepalive passes such a list over, and refuses a signal
+  for it even where the list was marked after the tick read the store; a beat
+  of the hook or of the mod starts no keepalive for it. So a session with the
+  mod goes dark at most three minutes after its last beat: its last signal is no
+  later than that beat, and nothing else reports it. The keepalive stops once
+  only such lists are left. Nothing takes the mark back: where the mod is
+  uninstalled while a list lives, that list is reported by its hook alone, and a
+  tool call that runs for longer than three minutes lets its tiles go dark until
+  the next beat. A list dropped and taken up anew starts without it.
+- **A beat of the mod without a session** reports nothing: the list of no
+  session is nobody's to keep alight from inside a process.
+- **Subagents** run inside the process of their session. Their tool calls reach
+  the mod of that process and beat for that session, as their hook did.
+- **The program it runs** is the minka that installed it, by the path it was
+  started from. Installed from the link Homebrew keeps on the PATH, that is the
+  link, which every upgrade keeps pointing at the new binary, and the path a
+  firewall knows minka by. Installed from any other path, such as `bin/minka` of
+  a checkout, the beats go out from that program, and a firewall that lets only
+  the Homebrew one through holds them back, silently like every failure of a
+  beat.
+
+`hooks install --mod` writes the mod beside the configuration, in
+`claude-mod/`, as a marketplace named `minka-cli` holding one plugin,
+`minka-heartbeat`, and runs `claude plugin marketplace add <dir>` and `claude
+plugin install minka-heartbeat@minka-cli --scope user`. Claude Code loads a
+plugin of a marketplace in a directory from that directory, so a later install
+that writes other files reaches every session started after it, without an
+update in Claude Code; running it again is harmless, and Claude Code answers
+the second time that it has both. Where `claude` cannot be run, the files are
+written all the same, the command exits 1 and the `hint` carries the two
+command lines, each argument quoted where a shell would read it otherwise. The
+mod takes neither `--file` nor `--command`: it is installed for every project
+and runs this minka.
+
+What the install writes, besides `claude-mod/`, Claude Code writes itself: the
+marketplace in `extraKnownMarketplaces` and the plugin in `enabledPlugins` of
+its `settings.json`, and its own files under `plugins/` of its configuration.
+It is Claude Code's own writer on a flag that asks for it, so the rule that
+minka leaves a settings file as it finds it beyond its own entry (C-039) holds.
+Undoing it is Claude Code's as well:
+
+```
+claude plugin uninstall minka-heartbeat@minka-cli
+claude plugin marketplace remove minka-cli
+```
+
+after which `claude-mod/` may be deleted.
+
+The hook may stay beside the mod. Both beat after a tool call then, and the
+signal still goes out at most once a minute, so nothing is reported twice; what
+the hook costs is one process per tool call. `hooks install --mod` says so in
+its `notice` where the hook is there. Removing the hook is left to whoever wrote
+the settings (C-039). A session without the mod is reported by the hook and the
+keepalive as before.
+
+Claude Code reads its settings from `$CLAUDE_CONFIG_DIR` where that is set,
+and `~/.claude` otherwise; `hooks install` and `hooks status` without `--file`
+go by the same rule, for the hook and the mod alike.
+
+`hooks status` says in `mod` what lies in the directory — `current` where it is
+what this minka writes, `stale` where another minka wrote it, `not installed`
+where nothing does — and in `enabled` whether the settings tell Claude Code to
+load it.
+
 ## The hook belongs to whoever wrote the settings
 
-`hooks install` adds a `PostToolUse` hook to `~/.claude/settings.json`, or to
-the file named with `--file`. Everything else in that file is kept, a file that
+`hooks install` adds a `PostToolUse` hook to `~/.claude/settings.json` — the
+`settings.json` in `$CLAUDE_CONFIG_DIR` where that is set — or to the file named
+with `--file`. Everything else in that file is kept, a file that
 carries the hook already is left alone, and a file that is not shaped the way
 Claude Code writes it is refused rather than repaired, with the entry to add by
 hand in the hint (C-039). A `hooks` that stands there as `null` is read as no

@@ -1,0 +1,8 @@
+{
+  "name": "minka-heartbeat",
+  "version": "1.0.0",
+  "description": "Keeps the cards a session is working on alight on the Minka board for as long as its Claude Code process runs",
+  "author": {
+    "name": "Flownative"
+  }
+}

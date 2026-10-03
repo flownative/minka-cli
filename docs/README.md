@@ -37,8 +37,9 @@ the documentation says what holds; how it came about is in git.
   `work start` are kept and why the machine shares one list, when a card is
   given up and what keeps it, what the client is, what the heartbeat does in
   every case it can meet, what the keepalive reports while one long tool call
-  runs, how the hook is written — before any work on `work`, `heartbeat` or
-  `hooks`.
+  runs, how the hook is written, what the mod in the Claude Code process does
+  and how it is installed — before any work on `work`, `heartbeat`, `hooks` or
+  `mod/`.
 - [Projects](stable/projects.md): What a project carries, the edit that sends
   only what was given and needs no guard, the description that is plain text,
   the client who gets the same 404 as an outsider, the order of the refusals —

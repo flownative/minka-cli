@@ -49,6 +49,7 @@ const (
 	tickEndsOnAnEmptyList
 	tickEndsForNobodyIsAtWork
 	tickEndsForTheClockJumped
+	tickEndsForTheModsReport
 )
 
 // tick is one wake-up of the keepalive for the list of one session: the moment
@@ -110,6 +111,8 @@ func whyItEnded(at verdict) string {
 		return fmt.Sprintf("nothing but the keepalive has been at the store for %.0f minutes", nobodyIsAtWorkAfter.Minutes())
 	case tickEndsForTheClockJumped:
 		return "the clock jumped, so the board has long forgotten these cards"
+	case tickEndsForTheModsReport:
+		return "every session left is reported by the mod in its own Claude Code process"
 	}
 	return ""
 }
@@ -219,9 +222,17 @@ func (a *app) keepTilesAlive() string {
 // nothing since: a keepalive that starts after a machine woke up, or after the
 // last one stopped, would otherwise light the tiles of a session that is gone
 // once more. Its next beat lights them again where it is not.
+//
+// A list whose session runs the mod is not touched at all. The mod beats for as
+// long as the process of the session runs, so when its beats stop the process
+// is gone, and the cards have to go dark three minutes after its last signal.
 func (a *app) reportEverySessionAtWork(lists []sessionAtATick, now, before time.Time) verdict {
-	reporting, nobodyAtWork := false, false
+	reporting, nobodyAtWork, leftToTheMod := false, false, false
 	for _, list := range lists {
+		if list.mod {
+			leftToTheMod = true
+			continue
+		}
 		switch at := (tick{now: now, before: before, read: true, beat: list.beat, cards: list.cards}).decide(); at {
 		case tickReports:
 			if list.forgottenByTheServer(now) {
@@ -241,18 +252,21 @@ func (a *app) reportEverySessionAtWork(lists []sessionAtATick, now, before time.
 		return tickReports
 	case nobodyAtWork:
 		return tickEndsForNobodyIsAtWork
+	case leftToTheMod:
+		return tickEndsForTheModsReport
 	}
 	return tickEndsOnAnEmptyList
 }
 
 // sessionAtATick is what one tick knows of the list of one session: when the
-// session was last at the store, how many cards it holds, and when a signal of
-// it last went out.
+// session was last at the store, how many cards it holds, when a signal of it
+// last went out, and whether the mod of its process reports it.
 type sessionAtATick struct {
 	session string
 	beat    time.Time
 	cards   int
 	sent    time.Time
+	mod     bool
 }
 
 // forgottenByTheServer says that the server no longer counts the last signal
@@ -286,7 +300,7 @@ func (a *app) whatTheStoreSays(path, hostName string) ([]sessionAtATick, error) 
 	var lists []sessionAtATick
 	for _, session := range slices.Sorted(maps.Keys(host.Sessions)) {
 		list := host.Sessions[session]
-		lists = append(lists, sessionAtATick{session: session, beat: list.BeatAt, cards: len(list.Cards), sent: list.SentAt})
+		lists = append(lists, sessionAtATick{session: session, beat: list.BeatAt, cards: len(list.Cards), sent: list.SentAt, mod: list.Mod})
 	}
 	return lists, nil
 }
@@ -313,14 +327,16 @@ func (a *app) whatBecameOfTheKeepalive(session string) string {
 		return notStarted(err.Error())
 	}
 
-	cards, err := a.cardsInTheList(path, host, session)
+	list, err := a.theListOf(path, host, session)
 	switch {
 	case errors.Is(err, work.ErrBusy):
 		return notStarted("the store is busy")
 	case err != nil:
 		return notStarted("the store cannot be read: " + err.Error())
-	case cards == 0:
+	case len(list.Cards) == 0:
 		return notStarted("no card is in hand")
+	case list.Mod:
+		return notStarted(theModReports)
 	}
 
 	reporting, err := work.SomebodyKeepsAlive(path, host)
@@ -340,24 +356,25 @@ func notStarted(why string) string {
 	return "not started: " + why
 }
 
-// cardsInTheList is how many cards one session holds on this host.
+// theListOf is the list of one session on this host, an empty one where it
+// holds nothing.
 //
 // The signal beside it says only what it carried, and the throttle holds most
 // beats back, so whoever has to know whether anybody is at work asks the store.
 // It waits for nobody: where somebody else holds the store, the next beat asks
 // again.
-func (a *app) cardsInTheList(path, hostName, session string) (int, error) {
+func (a *app) theListOf(path, hostName, session string) (*work.List, error) {
 	handle, err := work.Open(path, 0)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 	defer handle.Close()
 
 	host, known := handle.File.Hosts[hostName]
 	if !known {
-		return 0, nil
+		return &work.List{}, nil
 	}
-	return len(listOf(host, session).Cards), nil
+	return listOf(host, session), nil
 }
 
 // spawnKeepalive starts the keepalive as a process of its own, for the host the

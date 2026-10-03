@@ -356,7 +356,10 @@ card out of anything and is reported as it came.
 
 With a card in hand it also sees to it that one process of this host keeps
 reporting on a timer, so that a tool call running for minutes does not let a
-tile go dark. 'keepalive' says what became of that.`,
+tile go dark. 'keepalive' says what became of that. A session whose Claude Code
+process runs the mod of 'minka hooks install --mod' needs no such process: the
+mod beats every thirty seconds while the process runs, and the keepalive leaves
+its cards alone.`,
 		Args: requireArgs(),
 		RunE: func(*cobra.Command, []string) error {
 			if asTheKeepalive {
@@ -366,12 +369,18 @@ tile go dark. 'keepalive' says what became of that.`,
 
 			var beat signalled
 			var keepalive, session string
-			if a.sessionFlag != "" && !work.IsSession(a.sessionFlag) {
+			switch {
+			case a.sessionFlag != "" && !work.IsSession(a.sessionFlag):
 				// Refused without a word, like everything else a beat meets:
 				// reporting under a name it was not given would be worse.
 				beat = signalled{reason: "--session names no session"}
 				keepalive = notStarted(beat.reason)
-			} else {
+			case a.fromMod && a.agentSession() == work.NoSession:
+				// The mod reports one session, and the list of no session is
+				// nobody's to keep alight from inside a process.
+				beat = signalled{reason: "the mod names no session"}
+				keepalive = notStarted(beat.reason)
+			default:
 				session = a.agentSession()
 				beat = a.signal(session, 0)
 				keepalive = a.whatBecameOfTheKeepalive(session)
@@ -395,6 +404,10 @@ tile go dark. 'keepalive' says what became of that.`,
 	}
 	cmd.Flags().BoolVar(&asTheKeepalive, "keepalive", false, "Keep reporting on a timer of its own until nobody is at work; minka's own business")
 	_ = cmd.Flags().MarkHidden("keepalive")
+	cmd.Flags().BoolVar(&a.fromMod, "from-mod", false, "The beat comes from the mod inside a Claude Code process; minka's own business")
+	_ = cmd.Flags().MarkHidden("from-mod")
+	cmd.Flags().BoolVar(&a.idle, "idle", false, "The beat says the process is alive, not that anybody is at work; minka's own business")
+	_ = cmd.Flags().MarkHidden("idle")
 	a.addSessionFlag(cmd)
 	return cmd
 }
@@ -500,6 +513,20 @@ func (a *app) claimTheSignal(path, hostName, session string, wait time.Duration)
 	if !held {
 		return nil, a.saving(handle, changed, "nothing is remembered for this session on "+hostName)
 	}
+	if a.fromMod && !entry.Mod {
+		entry.Mod = true
+		changed = true
+	}
+	// The keepalive passes such a list over before it gets here; this holds
+	// it whatever the keepalive read a moment before.
+	if a.keepalive && entry.Mod {
+		return nil, a.saving(handle, changed, theModReports)
+	}
+	if a.idle {
+		if why := nobodyIsAtWorkOn(entry, a.now()); why != "" {
+			return nil, a.saving(handle, changed, why)
+		}
+	}
 	cards := entry.CardIDs()
 
 	// Nothing to say, and nothing said before that would have to be taken
@@ -539,7 +566,7 @@ func (a *app) claimTheSignal(path, hostName, session string, wait time.Duration)
 // variable would be enough for a card to glow through a working day while
 // nothing ever tells the timer to stop.
 func (a *app) somebodyIsAtWork(host *work.Host, session string) bool {
-	if a.keepalive {
+	if a.keepalive || a.idle {
 		return false
 	}
 	entry, held := host.Sessions[session]
@@ -549,6 +576,26 @@ func (a *app) somebodyIsAtWork(host *work.Host, session string) bool {
 	written := host.StillAtIt(session, a.now())
 	marked := entry.Beat(a.now())
 	return written || marked
+}
+
+// theModReports is why nothing but the mod reports a session that has one.
+const theModReports = "the mod in the Claude Code process of this session reports it"
+
+// nobodyIsAtWorkOn says why a beat that only says the process is alive reports
+// nothing, and nothing where it reports. It decides the way a tick of the
+// keepalive decides on the list: a process that sits idle keeps its cards
+// alight for as long as the keepalive would after the last step, and not for
+// as long as the process runs, which may be a night.
+func nobodyIsAtWorkOn(entry *work.List, now time.Time) string {
+	switch (tick{now: now, before: now, read: true, beat: entry.BeatAt, cards: len(entry.Cards)}).decide() {
+	case tickEndsForNobodyIsAtWork:
+		return fmt.Sprintf("nobody has been at work in this session for %.0f minutes", nobodyIsAtWorkAfter.Minutes())
+	case tickReports:
+		if (sessionAtATick{beat: entry.BeatAt, sent: entry.SentAt}).forgottenByTheServer(now) {
+			return "the board has forgotten these cards, and nobody has been at work in this session since"
+		}
+	}
+	return ""
 }
 
 // saving writes the store where the sweep changed something and hands the
