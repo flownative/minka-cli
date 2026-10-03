@@ -16,9 +16,11 @@ import (
 var ErrBusy = errors.New("another minka is writing the file")
 
 // BusyTried is called after every try that found the lock held by somebody
-// else. It is there for tests, which cannot tell a waiting writer from one
-// that has not started yet otherwise; nil does nothing.
-var BusyTried func()
+// else, with how many tries of this caller have found it so far. It is there
+// for tests, which cannot tell a waiting writer from one that has not started
+// yet otherwise, and the first try of each caller is how they count the
+// writers that wait; nil does nothing.
+var BusyTried func(tries int)
 
 // AcquireWithin takes the lock, waiting at most that long; with no wait at all
 // it gives up as soon as somebody else holds it.

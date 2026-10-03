@@ -10,12 +10,12 @@ import (
 	"regexp"
 	"slices"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
 	"github.com/flownative/minka-cli/internal/api"
 	"github.com/flownative/minka-cli/internal/fakeapi"
+	"github.com/flownative/minka-cli/internal/localfile"
 	"github.com/flownative/minka-cli/internal/work"
 )
 
@@ -213,6 +213,42 @@ func TestAHeartbeatThatCannotReportDisturbsNobodyAndSaysWhyLater(t *testing.T) {
 	}
 }
 
+// The safeguard: a beat out of the hook waits for nobody at the store. A
+// typed command waits its turn for as long as only a hang would keep it, and a
+// hook that did the same would hold up the tool call it runs after. Where the
+// beat tries the lock a second time, the test lets go, so that a beat which
+// waits is caught without being waited out.
+func TestAHeartbeatDoesNotWaitForAStoreSomebodyElseHolds(t *testing.T) {
+	e := newAgentEnv(t)
+	expectCode(t, e.run("", "work", "start", e.fixture.CardInDoing.ID, "--json"), ExitOK)
+
+	held, err := localfile.Acquire(t.Context(), filepath.Join(filepath.Dir(e.storePath()), "work.lock"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer held.Release()
+	waited := false
+	localfile.BusyTried = func(tries int) {
+		if tries > 1 {
+			waited = true
+			held.Release()
+		}
+	}
+	t.Cleanup(func() { localfile.BusyTried = nil })
+
+	beat, r := e.runJSON("", "heartbeat")
+	expectCode(t, r, ExitOK)
+	if waited {
+		t.Error("the heartbeat waited for the store")
+	}
+	if reason, _ := decode(t, beat.Data)["reason"].(string); !strings.Contains(reason, "busy") {
+		t.Errorf("the reason %q does not say that the store was busy", reason)
+	}
+	if len(e.signals()) != 0 {
+		t.Errorf("%d signals went out past a store somebody else held", len(e.signals()))
+	}
+}
+
 func TestAHeartbeatWithoutASignInIsQuietAndExitsZero(t *testing.T) {
 	e := newAgentEnv(t)
 	expectCode(t, e.run("", "work", "start", e.fixture.CardInDoing.ID, "--json"), ExitOK)
@@ -362,25 +398,64 @@ func TestOneSignalCarriesTheCardsOfEverySessionOnThisMachine(t *testing.T) {
 	}
 }
 
-// The safeguard: the store is read and written under a lock of the kernel.
-// Without it, two sessions starting a card at the same moment read the same
-// list and the one that writes last drops the other's card — the tile of
-// somebody who is working goes dark.
+// The safeguards: the store is read and written under a lock of the kernel, and
+// a command somebody typed waits its turn for it. Without the lock, sessions
+// starting a card at the same moment read the same list and the one that writes
+// last drops the others' cards — the tile of somebody who is working goes dark.
+// Without the wait, a session that finds the store taken loses its card to
+// whoever was there first.
+//
+// The test holds the lock itself until every one of them has found it taken,
+// so none can have read the list before the others, and none can get through on
+// the pace of the rest; then it lets go.
 func TestTwoSessionsStartingAtOnceLoseNoCard(t *testing.T) {
 	e := newAgentEnv(t)
 	cards := addCards(e, 12)
 
-	var wg sync.WaitGroup
-	for _, card := range cards {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			if r := e.run("", "work", "start", card, "--json"); r.code != ExitOK {
-				t.Errorf("work start %s: exit %d: %s", card, r.code, r.stdout)
-			}
-		}()
+	dir := filepath.Dir(e.storePath())
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
 	}
-	wg.Wait()
+	held, err := localfile.Acquire(t.Context(), filepath.Join(dir, "work.lock"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer held.Release()
+	waiting := make(chan struct{}, len(cards))
+	localfile.BusyTried = func(tries int) {
+		if tries == 1 {
+			waiting <- struct{}{}
+		}
+	}
+	t.Cleanup(func() { localfile.BusyTried = nil })
+
+	type started struct {
+		card string
+		r    result
+	}
+	done := make(chan started, len(cards))
+	for _, card := range cards {
+		go func() { done <- started{card, e.run("", "work", "start", card, "--json")} }()
+	}
+
+	var finished []started
+	for waited := 0; waited < len(cards) && len(finished) == 0; {
+		select {
+		case <-waiting:
+			waited++
+		case s := <-done:
+			finished = append(finished, s)
+		}
+	}
+	for _, s := range finished {
+		t.Errorf("work start %s finished while the store was held: exit %d: %s", s.card, s.r.code, s.r.stdout)
+	}
+	held.Release()
+	for range len(cards) - len(finished) {
+		if s := <-done; s.r.code != ExitOK {
+			t.Errorf("work start %s: exit %d: %s", s.card, s.r.code, s.r.stdout)
+		}
+	}
 
 	env, r := e.runJSON("", "work", "list")
 	expectCode(t, r, ExitOK)

@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/flownative/minka-cli/internal/localfile"
 	"github.com/flownative/minka-cli/internal/work"
 )
 
@@ -105,9 +106,24 @@ func TestASecondKeepaliveOfTheSameHostReportsNothing(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer held.Release()
+	// The lock stands for a process that is running, so waiting for it would
+	// be waiting for that process to end. Where the second one tries it again,
+	// the test lets go, so that one which waits is caught without being waited
+	// out.
+	waited := false
+	localfile.BusyTried = func(tries int) {
+		if tries > 1 {
+			waited = true
+			held.Release()
+		}
+	}
+	t.Cleanup(func() { localfile.BusyTried = nil })
 
 	env, r := e.runKeepaliveThatIsToldToStop(began.Add(time.Second))
 	expectCode(t, r, ExitOK)
+	if waited {
+		t.Error("the second keepalive waited for the lock of the first")
+	}
 	if ended, _ := decode(t, env.Data)["ended"].(string); !strings.Contains(ended, "is reporting") {
 		t.Errorf("the second keepalive ended for %q, want the one that is reporting", ended)
 	}

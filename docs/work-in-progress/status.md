@@ -349,7 +349,8 @@ A beat that finds a card in hand and no keepalive of its host starts one
 counts for keeps its tiles alight — up to twenty-five minutes after the last
 beat of the session, and no further. That process is at no work itself and stops
 on an empty list, on twenty-five minutes in which nothing else was at the store,
-or on a clock that jumped.
+or on a clock that jumped. A typed command waits up to 30 seconds for the lock
+on the list, the claim of a beat not at all.
 The list, the refusals, the throttle and the hook are seen live, and the
 report with them: on `minka.flownative.com`, where this CLI is signed in as an
 agent, `work start`, `heartbeat` and `work stop` get through, and the hook
@@ -1343,6 +1344,11 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   mode it does it in — is reached by a run that is told to stop, so only the
   waiting and what follows it stand outside. Of the endings, the empty list
   reported before the exit is the one no test reaches.
+- That a beat waits for nobody at the store is held for the claim of the
+  heartbeat and the look at the list before a keepalive is started. The 2
+  seconds that the note of how a signal fared and every tick of the keepalive
+  wait are held by no test: a test can tell a wait from none, not a short one
+  from a long one, without waiting it out.
 - What a tick decides under a machine that really slept is held by no test: a
   reading of the monotonic clock differs from the wall clock only where a machine
   was really away or a clock was really set, and in a test every way of moving a

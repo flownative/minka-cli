@@ -31,7 +31,7 @@ func Acquire(ctx context.Context, path string) (*Lock, error) {
 	if err != nil {
 		return nil, err
 	}
-	for {
+	for tries := 1; ; tries++ {
 		err := syscall.Flock(int(file.Fd()), syscall.LOCK_EX|syscall.LOCK_NB)
 		if err == nil {
 			return &Lock{file: file}, nil
@@ -41,7 +41,7 @@ func Acquire(ctx context.Context, path string) (*Lock, error) {
 			return nil, err
 		}
 		if BusyTried != nil {
-			BusyTried()
+			BusyTried(tries)
 		}
 		select {
 		case <-ctx.Done():

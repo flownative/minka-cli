@@ -27,11 +27,21 @@ const (
 	signalTimeout = 5 * time.Second
 
 	// waitForTheStore is how long a command a person or an agent typed waits
-	// for the lock. The heartbeat waits not at all: where somebody else is at
-	// the store, there will be another signal in a minute. A command that
-	// reports on its own behalf waits like the command it is part of, because
-	// for it there is no next time.
-	waitForTheStore = 2 * time.Second
+	// for the lock. For such a command there is no next time, so it waits its
+	// turn behind every other minka at the store. Each of them holds the lock
+	// for one read and one write of a small file, which a line of sessions
+	// starting at once gets through in well under a second; only a holder that
+	// hangs, or a disk that does not answer, keeps it waiting this long. A
+	// command that reports on its own behalf waits like the command it is part
+	// of when it claims the signal.
+	waitForTheStore = 30 * time.Second
+
+	// aBeatWaitsForTheStore is how long what is written beside a beat waits for
+	// the lock: the outcome of a signal, and every tick of the keepalive. Nobody
+	// typed these and the next beat comes in a minute, while a hook that waited
+	// longer would hold up the tool call it runs after. The claim of a beat out
+	// of the hook waits not at all, for the same reason.
+	aBeatWaitsForTheStore = 2 * time.Second
 )
 
 func (a *app) newWorkCmd() *cobra.Command {
@@ -461,7 +471,7 @@ func (a *app) saving(handle *work.Handle, changed bool, reason string) string {
 // command gives up on quietly: the work itself is done, and the store may well
 // be held by the next session.
 func (a *app) noteTheOutcome(path, host string, failed error, leftOut []api.LeftOutCard) []work.LetGoCard {
-	handle, err := work.Open(path, waitForTheStore)
+	handle, err := work.Open(path, aBeatWaitsForTheStore)
 	if err != nil {
 		return nil
 	}

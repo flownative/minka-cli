@@ -19,7 +19,7 @@ func TestALockFreedAsTheWaitEndsIsStillTaken(t *testing.T) {
 	}
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
-	BusyTried = func() {
+	BusyTried = func(int) {
 		held.Release()
 		cancel()
 	}
