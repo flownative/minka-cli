@@ -163,6 +163,7 @@ func TestWhatASeriesCannotHoldIsNamedAndNeverHoldsTheToDoBack(t *testing.T) {
 		{"an end before the start", due, weekly(func(r *fakebasecamp.Repetition) { r.EndDate = "2026-10-01" }), nil, []any{"end_date"}, false},
 		{"an end of no day", due, weekly(func(r *fakebasecamp.Repetition) { r.EndDate = "someday" }), nil, []any{"end_date"}, false},
 		{"a start of no day", due, weekly(func(r *fakebasecamp.Repetition) { r.StartDate = "2026-10-2" }), nil, []any{"start_date"}, false},
+		{"a start in the year 0", due, weekly(func(r *fakebasecamp.Repetition) { r.StartDate = "0000-01-01" }), nil, []any{"start_date"}, false},
 		{"no due day", "", weekly(func(r *fakebasecamp.Repetition) { r.StartDate = "" }), nil, []any{"due_on"}, false},
 		{"a frequency nobody saw", due, weekly(func(r *fakebasecamp.Repetition) { r.Frequency = "every_day" }), nil, []any{"frequency"}, false},
 		{"no weekday", due, weekly(func(r *fakebasecamp.Repetition) { r.Days = nil }), nil, []any{"days"}, false},

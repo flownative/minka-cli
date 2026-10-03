@@ -257,3 +257,28 @@ func TestAReplyIsReadAfterTheChat(t *testing.T) {
 		t.Errorf("a reply that is no string: %s, want 400 malformedBody", got)
 	}
 }
+
+// A person on a new card who is named by no identifier answers like one who is
+// no member, and before the description, the column and the archive are asked
+// about: Minka reads the people right after the title and the day, and asks
+// about membership of the rest only once the card is being written.
+func TestAPersonOnANewCardNamedByNoIdentifierIsRefusedFirst(t *testing.T) {
+	for _, c := range []struct {
+		name, body string
+		archived   bool
+	}{
+		{"beside a column that is not there", `{"title":"t","assigneeIds":["nobody"],"columnId":"nonsense"}`, false},
+		{"beside a description too long", `{"title":"t","assigneeIds":["nobody"],"description":"` + strings.Repeat("x", maxDescriptionLength+1) + `"}`, false},
+		{"in an archived project", `{"title":"t","assigneeIds":["nobody"]}`, true},
+	} {
+		s, f := New(t)
+		f.Project.Archived = c.archived
+		before := len(f.Triage.Cards)
+		if got, _ := answerTo(t, s, f.Token, "POST", "/api/v1/boards/"+f.Board.ID+"/cards", c.body); got != "422 personNotAProjectMember" {
+			t.Errorf("%s: %s, want 422 personNotAProjectMember", c.name, got)
+		}
+		if len(f.Triage.Cards) != before {
+			t.Errorf("%s: a refused card was written", c.name)
+		}
+	}
+}
