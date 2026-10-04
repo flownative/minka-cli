@@ -61,7 +61,6 @@ func TestTheFakeJudgesAColumnEditBeforeItWrites(t *testing.T) {
 	path := "/api/v1/columns/" + f.Doing.ID
 	for body, want := range map[string]string{
 		`{}`:                                 "422 nothingToChange",
-		`{"color":null}`:                     "422 nothingToChange",
 		`{"title":null}`:                     "422 columnTitleMissing",
 		`{"title":"  ","color":"teal"}`:      "422 columnTitleMissing",
 		`{"title":"Two\nlines"}`:             "422 columnTitleHasControlCharacters",
@@ -113,10 +112,39 @@ func TestTheFakeLetsASystemColumnGoByItsTypeAgainAndRefusesItAColour(t *testing.
 	}
 }
 
-// A neighbour that is no identifier is 404. One that is no other working
-// column of the board is passed over: the next one counts then, and without
-// one the column goes first. A column that stands where it is asked to go is
-// answered 200 without a write, even in an archived project.
+// A null colour makes a working column white, which is how a column without a
+// colour looks; Triage, Not now and Done refuse it as any colour, after the
+// archive, and keep the title sent with it.
+func TestTheFakeTakesAColourAwayWithNull(t *testing.T) {
+	s, f := New(t)
+	red := "red"
+	f.Doing.Color = &red
+	if got := sendAs(t, s, f.Token, "PATCH", "/api/v1/columns/"+f.Doing.ID, "application/json", `{"color":null}`); got != "200" || deref(f.Doing.Color) != "white" {
+		t.Errorf("taking the colour off Doing: %s, %v", got, deref(f.Doing.Color))
+	}
+	if got := sendAs(t, s, f.Token, "PATCH", "/api/v1/columns/"+f.Doing.ID, "application/json", `{"title":"Busy"}`); got != "200" || deref(f.Doing.Color) != "white" {
+		t.Errorf("a rename without a colour: %s, %v", got, deref(f.Doing.Color))
+	}
+	for _, column := range []*Column{f.Triage, f.NotNow, f.Done} {
+		if got := sendAs(t, s, f.Token, "PATCH", "/api/v1/columns/"+column.ID, "application/json", `{"title":"Mine","color":null}`); got != "422 systemColumnHasNoColor" {
+			t.Errorf("taking the colour off %s: %s", column.Type, got)
+		}
+		if column.CustomTitle != nil || column.Color != nil {
+			t.Errorf("%s changed: %v, %v", column.Type, column.CustomTitle, column.Color)
+		}
+	}
+
+	f.Project.Archived = true
+	if got := sendAs(t, s, f.Token, "PATCH", "/api/v1/columns/"+f.Done.ID, "application/json", `{"color":null}`); got != "422 projectArchived" {
+		t.Errorf("taking the colour off Done in an archived project: %s", got)
+	}
+}
+
+// A neighbour that is no identifier is 404, and one on another board is
+// refused. One out of sight, a system column of the board and the column
+// itself are passed over: the next one counts then, and without one the
+// column goes first. A column that stands where it is asked to go is answered
+// 200 without a write while the project is in use.
 func TestTheFakeMovesAColumnByItsWorkingNeighbours(t *testing.T) {
 	s, f := New(t)
 	review := addColumn(t, s, f, "Review")
@@ -144,7 +172,19 @@ func TestTheFakeMovesAColumnByItsWorkingNeighbours(t *testing.T) {
 		t.Errorf("a system column before Shipped: %s, %v", got, order())
 	}
 	if got := move(review, `{"previousColumnId":"`+f.OtherBoard.Columns[0].ID+`"}`); got != "200" || !slices.Equal(order(), []string{"Review", "Doing", "Shipped"}) {
-		t.Errorf("a column of another board: %s, %v", got, order())
+		t.Errorf("a column out of sight: %s, %v", got, order())
+	}
+	if got := move(review, `{"nextColumnId":"`+review.ID+`"}`); got != "200" || !slices.Equal(order(), []string{"Review", "Doing", "Shipped"}) {
+		t.Errorf("the column itself: %s, %v", got, order())
+	}
+	second := &Board{ID: newID(), ProjectID: f.Project.ID, Title: "Second", Columns: []*Column{{ID: newID(), Type: "triage"}, {ID: newID(), Type: "column"}}}
+	s.Boards = append(s.Boards, second)
+	for _, neighbour := range second.Columns {
+		for _, body := range []string{`{"previousColumnId":"` + neighbour.ID + `"}`, `{"previousColumnId":"` + shipped.ID + `","nextColumnId":"` + strings.ToUpper(neighbour.ID) + `"}`} {
+			if got := move(review, body); got != "422 neighbourColumnOnAnotherBoard" || !slices.Equal(order(), []string{"Review", "Doing", "Shipped"}) {
+				t.Errorf("%s on another board: %s, %v", body, got, order())
+			}
+		}
 	}
 	// Minka reads a neighbour in any case.
 	if got := move(review, `{"previousColumnId":"`+strings.ToUpper(shipped.ID)+`"}`); got != "200" || !slices.Equal(order(), []string{"Doing", "Shipped", "Review"}) {
@@ -160,8 +200,16 @@ func TestTheFakeMovesAColumnByItsWorkingNeighbours(t *testing.T) {
 		t.Errorf("moving Not now: %s", got)
 	}
 
+	// The neighbour on another board is told before the archive and before
+	// what a system column refuses.
+	if got := move(f.NotNow, `{"nextColumnId":"`+second.Columns[1].ID+`"}`); got != "422 neighbourColumnOnAnotherBoard" {
+		t.Errorf("moving Not now next to another board: %s", got)
+	}
 	f.Project.Archived = true
-	if got := move(shipped, `{}`); got != "200" {
+	if got := move(review, `{"nextColumnId":"`+second.Columns[1].ID+`"}`); got != "422 neighbourColumnOnAnotherBoard" {
+		t.Errorf("a neighbour on another board, in an archived project: %s", got)
+	}
+	if got := move(shipped, `{}`); got != "422 projectArchived" {
 		t.Errorf("a column where it stands, in an archived project: %s", got)
 	}
 	if got := move(review, `{}`); got != "422 projectArchived" {
@@ -169,39 +217,46 @@ func TestTheFakeMovesAColumnByItsWorkingNeighbours(t *testing.T) {
 	}
 }
 
-// The write is the team's. A client sees the board, so the body is judged for
-// a client too, and what Minka tells after a failed write it tells a client as
-// well: the archive, and what a system column refuses. Anything else is the
-// 404 of an outsider, and what writes nothing answers 200.
-func TestTheFakeLetsAClientChangeNoColumn(t *testing.T) {
+// The write is the team's. Whatever a column write names, a client of the
+// project hears what it would hear of a column that does not exist: nothing
+// of a field, a system column, an archived project or a write that would
+// change nothing.
+func TestTheFakeAnswersAClientLikeAColumnThatDoesNotExist(t *testing.T) {
 	s, f := New(t)
 	s.Tokens[clientToken] = f.Client.ID
 	columns := "/api/v1/boards/" + f.Board.ID + "/columns"
 	doing := "/api/v1/columns/" + f.Doing.ID
+	writes := []struct{ method, path, body string }{
+		{"POST", columns, `{"title":"Mine"}`},
+		{"POST", columns, `{"title":""}`},
+		{"POST", columns, `{"title":1}`},
+		{"PATCH", doing, `{"title":"Mine"}`},
+		{"PATCH", doing, `{"title":"Doing"}`},
+		{"PATCH", doing, `{"title":""}`},
+		{"PATCH", doing, `{"color":"red"}`},
+		{"PATCH", doing, `{"color":"teal"}`},
+		{"PATCH", doing, `{"color":null}`},
+		{"PATCH", doing, `{}`},
+		{"PATCH", "/api/v1/columns/" + f.Done.ID, `{"color":"red"}`},
+		{"POST", doing + "/moves", `{}`},
+		{"POST", doing + "/moves", `{"previousColumnId":"` + f.OtherBoard.Columns[0].ID + `"}`},
+		{"POST", "/api/v1/columns/" + f.NotNow.ID + "/moves", `{}`},
+		{"DELETE", doing, ``},
+		{"DELETE", "/api/v1/columns/" + f.Triage.ID, ``},
+		{"PUT", "/api/v1/columns/" + f.Triage.ID + "/on-hold", `{"onHoldEnabled":true}`},
+		{"PUT", doing + "/on-hold", `{}`},
+	}
 
-	for _, c := range []struct{ method, path, body, want string }{
-		{"POST", columns, `{"title":"Mine"}`, "404"},
-		{"POST", columns, `{"title":""}`, "422 columnTitleMissing"},
-		{"PATCH", doing, `{"title":"Mine"}`, "404"},
-		{"PATCH", doing, `{"color":"red"}`, "404"},
-		{"PATCH", doing, `{"title":"Doing"}`, "200"},
-		{"PATCH", "/api/v1/columns/" + f.Done.ID, `{"color":"red"}`, "422 systemColumnHasNoColor"},
-		{"POST", doing + "/moves", `{}`, "200"},
-		{"POST", "/api/v1/columns/" + f.NotNow.ID + "/moves", `{}`, "422 systemColumnCannotMove"},
-		{"DELETE", doing, ``, "404"},
-		{"DELETE", "/api/v1/columns/" + f.Triage.ID, ``, "422 systemColumnCannotBeRemoved"},
-	} {
-		if got := sendAs(t, s, clientToken, c.method, c.path, "application/json", c.body); got != c.want {
-			t.Errorf("%s %s %s: %s, want %s", c.method, c.path, c.body, got, c.want)
+	for _, archived := range []bool{false, true} {
+		f.Project.Archived = archived
+		for _, c := range writes {
+			if got := sendAs(t, s, clientToken, c.method, c.path, "application/json", c.body); got != "404" {
+				t.Errorf("%s %s %s, archived %v: %s, want 404", c.method, c.path, c.body, archived, got)
+			}
 		}
 	}
-	if *f.Doing.CustomTitle != "Doing" || f.Doing.Color != nil || len(f.Board.Columns) != 4 {
+	if *f.Doing.CustomTitle != "Doing" || f.Doing.Color != nil || f.Doing.OnHoldEnabled || len(f.Board.Columns) != 4 {
 		t.Errorf("the client changed the board: %v", columnIDs(f.Board))
-	}
-
-	f.Project.Archived = true
-	if got := sendAs(t, s, clientToken, "PATCH", doing, "application/json", `{"title":"Mine"}`); got != "422 projectArchived" {
-		t.Errorf("a client in an archived project: %s", got)
 	}
 }
 

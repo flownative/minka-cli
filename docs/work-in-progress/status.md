@@ -12,12 +12,19 @@ conversations, uploads, mentions, reactions and one's own cards across all
 projects. `minka commands` lists them all, built from the command tree itself.
 
 The columns of a board are written with `columns create`, `edit` (title and
-colour, a system column's title given back with `--title ""`), `move` and
-`delete`, which takes the cards of the column into the trash with it. The rule
-the commands follow is [Columns](../stable/columns.md) (C-102, C-086). Minka's
-side is on its `main` and in no release yet, so production gets it with the
-next Minka release; the commands are checked against Minka's code and tests and
-the fake only, see below.
+colour, `--no-color`, a system column's title given back with `--title ""`),
+`move` and `delete`, which takes the cards of the column into the trash with
+it. The rule the commands follow is [Columns](../stable/columns.md) (C-102,
+C-086). Minka serves the column routes from v0.52.0+1 on. What Minka's #331
+changed is on its `main` and in no release yet: `"color": null` taking a
+colour away, a client's 404 on every column write,
+`neighbourColumnOnAnotherBoard`, and a no-op move refused in an archived
+project. Until a release carries it, a released Minka answers `--no-color`
+alone with `nothingToChange` and keeps the colour beside `--title`, which the
+CLI reports as such; it tells a client of a system column, the archive or a
+bad title before the 404, answers a client's no-op with 200, and puts a
+column next to a neighbour on another board first. The commands are checked against Minka's code and tests and the
+fake only, see below.
 
 The comments on a card are read with `cards show`, `comments list` and
 `comments unread`, which shows only what this machine has not shown yet. A
@@ -467,12 +474,16 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   tools of Docs & Files, Posts and Check-ins.
 
 - Everything of `columns create`, `edit`, `move` and `delete`: no request has
-  gone to a real Minka, and none can until a release carries the routes. Read
+  gone to a real Minka. The routes are in v0.52.0+1 and later; #331 is on
+  Minka's `main` only, and the fake mirrors `main`, with
+  `KeepsColumnColorOnNull` for the null colour of a released Minka. Read
   in `BoardApiController::addColumnAction`, `updateColumnAction`,
   `moveColumnAction` and `removeColumnAction`, the column handlers,
   `DbalBoardColumnRepository`, `BoardColumnColor`, `Gap` and `ApiColumnsTest`
-  on Minka's `main`, and mirrored by the fake in the order of
-  [Columns](../stable/columns.md), the no-op answers to a client included. What
+  on Minka's `main`, `--no-color`, the client's 404 on every column write,
+  `neighbourColumnOnAnotherBoard` and the refused no-op move in an archived
+  project included, and mirrored by the fake in the order of
+  [Columns](../stable/columns.md). What
   the fake does not mirror: a board in the trash, which it has no word for;
   bringing a column back, which only the web does; Minka's positions, for
   which the fake keeps the order of a list, the same order; a working column of

@@ -1436,8 +1436,9 @@ The extractor writes the colour of a group as Basecamp names it whenever it is
 a string with something in it, `white` included, unchecked, never lowercased
 or mapped; where Basecamp names none, the field is left out. The CLI sends
 what `--color` says, `""` included, and names the eleven colours in the hint
-once Minka has refused one. `--color white` takes a colour away; there is no
-`--color none`.
+once Minka has refused one. `--color white` takes a colour away, and so does
+`columns edit --no-color`, which sends Minka's `null`; there is no `--color
+none`.
 
 **Why:** Minka reads Basecamp's names as its own and warns about the rest, so
 a list kept here as well would only go stale beside it. `white` is what
@@ -1445,9 +1446,11 @@ Basecamp says of a group nobody coloured, and it is the one word that takes a
 colour away in Minka on a later run: left out, a colour taken away at the
 source would stay in Minka for ever. Minka answers `null` and `white` alike
 with no colour, so one way to say it is enough, and it is the one Minka's own
-error message names. The hint carries a copy of Minka's eleven names, and no
-test holds it against Minka, only against the fake: that is accepted
-knowingly, because the copy only feeds a hint and never a refusal.
+error message names. `--no-color` exists all the same because the column API
+names `null` as the way to take a colour away, and it ends in white. The hint
+carries a copy of Minka's eleven names, and no test holds it against Minka,
+only against the fake: that is accepted knowingly, because the copy only feeds
+a hint and never a refusal.
 **Implemented as:** `basecamp.groupColor`, `cli.newTodoGroupsEditCmd`,
 `cli.todoGroupColorUnknownHint`, `cli.columnRefusal`, see [Importing from
 Basecamp](stable/import.md), [To-do lists and groups](stable/todo-lists.md) and
@@ -1657,10 +1660,10 @@ the first code basecamp-cli does not use (10 is its account limit). **Implemente
 `--board` is required, and exactly one of `--first`, `--after <column>` and
 `--before <column>`; the board is read, and a neighbour that is no other working
 column of it is a usage error before the move goes out.
-**Why:** Minka places a column next to anything else as though it had been put
-first, with the same 200, and no address names the board of a column, so only
-the board read here can tell. **Implemented as:** `cli.newColumnsMoveCmd`, see
-[Columns](stable/columns.md).
+**Why:** Minka refuses only a neighbour on another board and still places a
+column next to Triage, Not now, Done or itself as though it had been put first,
+with the same 200, so only the board read here catches those. **Implemented
+as:** `cli.newColumnsMoveCmd`, see [Columns](stable/columns.md).
 
 <a id="c-103"></a>
 ## C-103 — Every session reports its own cards, as a client of its own

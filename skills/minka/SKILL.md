@@ -172,7 +172,7 @@ minka cards unarchive <cardId> --json
 minka cards delete <cardId> --json
 minka cards restore <cardId> --json
 minka columns create --board <boardId> --title "Review" --json
-minka columns edit <column> [--board <boardId>] [--title "New"] [--color <colour>] --json
+minka columns edit <column> [--board <boardId>] [--title "New"] [--color <colour> | --no-color] --json
 minka columns move <column> --board <boardId> (--first | --after <column> | --before <column>) --json
 minka columns delete <column> [--board <boardId>] --json
 minka columns on-hold <column> [--board <boardId>] [--off] --json
@@ -429,20 +429,26 @@ such as `Doing`.
 - `columns create --board <boardId> --title <title>` adds a working column
   behind the others, in the colour the board holds least of. It takes neither
   a place nor a colour: move and colour it afterwards.
-- `columns edit <column> [--title] [--color]` changes what is given, at least
-  one of the two. Triage, Not now and Done take a title of their own too, and
-  `--title ""` gives them back the name of their type; a working column exits
-  9 with `columnTitleMissing` on it. White looks uncoloured; no colour can be
-  taken away altogether. Any other word exits 9 with `columnColorUnknown`, and
-  a colour for Triage, Not now or Done exits 9 with `systemColumnHasNoColor`
-  and leaves the title as it was too. `columnTitleTooLong` (200 characters)
-  and `columnTitleHasControlCharacters` are the other refusals.
+- `columns edit <column> [--title] [--color | --no-color]` changes what is
+  given, at least one of them. Triage, Not now and Done take a title of their
+  own too, and `--title ""` gives them back the name of their type; a working
+  column exits 9 with `columnTitleMissing` on it. `--no-color` takes the colour
+  away: the column reads `white` then, which is how a column without a colour
+  looks. Any other word for `--color` exits 9 with `columnColorUnknown`, and a
+  colour or `--no-color` for Triage, Not now or Done exits 9 with
+  `systemColumnHasNoColor` and leaves the title as it was too.
+  `columnTitleTooLong` (200 characters) and `columnTitleHasControlCharacters`
+  are the other refusals.
+- A Minka that does not take a colour away yet answers `--no-color` alone
+  with exit 9 and `nothingToChange`, and `--no-color` with `--title` with exit
+  7: the title was written, the colour stayed, and `data` is the column.
+  `--color white` gives the same look on any Minka.
 - `columns move <column> --board <boardId>` with exactly one of `--first`,
   `--after <column>` and `--before <column>` places a working column among the
   working columns. The neighbour has to be another working column of the same
   board, or the command exits 1 before anything moves: Minka would put the
-  column first without a word. Triage, Not now and Done exit 9 with
-  `systemColumnCannotMove`.
+  column first without a word next to a system column or itself. Triage, Not
+  now and Done exit 9 with `systemColumnCannotMove`.
 - `columns delete <column>` puts a working column into the trash of its
   project, and its cards go with it: the cards standing in it cannot be read,
   moved or restored until the column is back, and only the web brings it back.
@@ -451,7 +457,8 @@ such as `Doing`.
   `systemColumnCannotBeRemoved`; deleting again exits 2.
 - Without `--board`, `<column>` has to be its ID; with it, a type or a title
   works as well. Only the team changes columns: a client of the project gets
-  exit 2 like an outsider. An archived project exits 9 with `projectArchived`.
+  exit 2 like an outsider, whatever the write. An archived project exits 9
+  with `projectArchived`, a write that would change nothing included.
 
 ## Cards on hold
 
