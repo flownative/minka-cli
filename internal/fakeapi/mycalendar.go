@@ -29,10 +29,31 @@ func (item datedItem) resource() map[string]any {
 	return resource
 }
 
-// byDueDayAndTitle is the order of the dated items: the earliest first, then
-// by title and identifier.
+// byDueDayAndTitle is the order of the dated items, alike in a calendar's span
+// and on My calendar: the earliest first, then by title with only the ASCII
+// letters lowercased and compared byte by byte, then by identifier.
 func byDueDayAndTitle(one, other datedItem) int {
-	return cmp.Or(strings.Compare(one.dueOn, other.dueOn), strings.Compare(one.title, other.title), strings.Compare(one.id, other.id))
+	return cmp.Or(strings.Compare(one.dueOn, other.dueOn), strings.Compare(asciiLower(one.title), asciiLower(other.title)), strings.Compare(one.id, other.id))
+}
+
+// asciiLower lowercases A to Z and leaves every other byte as it is, as
+// PostgreSQL's lower() under the collation "C" and PHP's strtolower() do: an
+// "Ä" stays an "Ä".
+func asciiLower(text string) string {
+	lowered := []byte(text)
+	for i, b := range lowered {
+		if 'A' <= b && b <= 'Z' {
+			lowered[i] = b + ('a' - 'A')
+		}
+	}
+	return string(lowered)
+}
+
+// openCard is a card still to be done, the one rule by which a calendar's
+// span, My calendar and the cards one is assigned to leave cards out: one in
+// Done, and one completed while it stands in another column.
+func openCard(column *Column, card *Card) bool {
+	return column.Type != "done" && card.CompletedAt == nil
 }
 
 func dueIn(dueOn *string, from, to string) bool {
@@ -66,11 +87,8 @@ func (s *Server) datedItemsOfProject(projectID, from, to string, person *Person)
 			continue
 		}
 		for _, column := range board.Columns {
-			if column.Type == "done" {
-				continue
-			}
 			for _, card := range column.Cards {
-				if card.CompletedAt == nil && dueIn(card.DueOn, from, to) {
+				if openCard(column, card) && dueIn(card.DueOn, from, to) {
 					items = append(items, s.datedCard(board, card, nil))
 				}
 			}
@@ -174,10 +192,11 @@ func (s *Server) myDatedItems(from, to string, person *Person) []datedItem {
 			continue
 		}
 		for _, column := range board.Columns {
-			if column.Type == "done" {
-				continue
-			}
 			for _, card := range column.Cards {
+				// The steps of a card no longer to be done go with it.
+				if !openCard(column, card) {
+					continue
+				}
 				if slices.Contains(card.AssigneeIDs, person.ID) && dueIn(card.DueOn, from, to) {
 					items = append(items, s.datedCard(board, card, project))
 				}

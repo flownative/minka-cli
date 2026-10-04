@@ -45,12 +45,14 @@ const datedItemsHelp = `Beside its events a calendar shows what of its project i
 the span, unless its team chose otherwise with "events settings": data.content
 is eventsAndDatedItems or eventsOnly, and data.datedItems holds, with the
 first, the open to-dos and cards of the project due in the span, whoever they
-belong to, the earliest first, then by title. Each has id, kind (todo or
-card), projectId, toolId (the To-dos tool or the board), cardId (null here,
-the card of a step on My calendar), title, dueOn, placeTitle (the list of a
-to-do, the board of a card) and appUrl. Done items, items in the trash or
-the archive, those in a list, group or column that is not in use, and what a
-client is not shown are left out. A dated item is no event and has no time:
+belong to, the earliest first, then by title with only A to Z lowercased and
+compared byte by byte (10 before 9, bx before By), then by id. Each has id,
+kind (todo or card), projectId, toolId (the To-dos tool or the board), cardId
+(null here, the card of a step on My calendar), title, dueOn, placeTitle (the
+list of a to-do, the board of a card) and appUrl. Done items, a card completed
+in a column other than Done among them, items in the trash or the archive,
+those in a list, group or column that is not in use, and what a client is not
+shown are left out. A dated item is no event and has no time:
 it is read with "todos show" or "cards show".`
 
 const calendarNotFoundHint = "There is no such calendar, it is in the trash, it belongs to a project you are not a member of, or you are a client of the project and it is not shown to you. The calendars of a project: minka events tools <projectId>"
@@ -245,11 +247,13 @@ with toolId, its calendar, and project, {id, name}, besides. An event you do
 not take part in is not here, whoever added it.
 
 datedItems are the open to-dos, cards and steps assigned to you and due in the
-span, the earliest first, then by title, each with kind (todo, card or step),
+span, in the order of "events list", each with kind (todo, card or step),
 projectId and project, toolId (the To-dos tool or the board), cardId (the card
 of a step, else null), title, dueOn, placeTitle (the list of a to-do, the board
 of a card, the card of a step) and appUrl, which for a step opens its card. A
-to-do of which only a subtask is yours is not here, and a subtask never is.
+to-do of which only a subtask is yours is not here, and a subtask never is. A
+card in Done or completed in another column is not here, and neither are its
+steps.
 What a calendar chose to show does not matter here: My calendar belongs to no
 calendar.
 
