@@ -1700,10 +1700,13 @@ cannot hand out bytes. **Implemented as:** `basecamp.Downloader.DownloadVersion`
 install it, which writes `enabledPlugins` and `extraKnownMarketplaces` into
 Claude Code's `settings.json` and its `plugins/` files: Claude Code's own writer
 on an explicit opt-in, so C-039 holds. The mod runs `heartbeat --session <id>
---from-mod` on every step and every 30 s, `--idle` while no tool call runs. Its
+--from-mod` on every step and every 30 s, `--idle` while no tool call runs that
+started less than two hours ago and was not abandoned. Its
 list is marked; the keepalive neither reports it nor is started for it.
 **Why:** only the process knows it has ended, so a crashed session goes dark
-three minutes after its last beat instead of 25 + 3. **Implemented as:**
+three minutes after its last beat instead of 25 + 3; a tool call that never
+returns would otherwise keep its session at work for as long as the process
+runs, and no tool call runs two hours without a step. **Implemented as:**
 `mod.Files`, `cli.app.installTheMod`, `work.List.Mod`,
 `cli.app.claimTheSignal`, `cli.app.reportEverySessionAtWork`, see [Saying what you are working on](stable/at-work.md).
 

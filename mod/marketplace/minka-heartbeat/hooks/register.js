@@ -15,9 +15,26 @@ const minka = 'minka'
 const beatEvery = 30_000
 
 // The tool calls that have started and not ended, of the main conversation and
-// of every subagent alike. A subagent working in the background after the main
-// turn has ended is at work all the same.
-let toolsRunning = 0
+// of every subagent alike, by the time each started. A subagent working in the
+// background after the main turn has ended is at work all the same.
+const toolCalls = new Map()
+
+// A tool call that has not returned after two hours no longer counts as work,
+// so a call that never returns cannot keep the cards alight until the process
+// ends. No tool runs that long without a step in between: the Bash tool gives
+// up after minutes, and a subagent that runs for hours has tool calls of its
+// own, each of which is work while it runs.
+const toolCallCountsFor = 2 * 60 * 60 * 1000
+
+// Whether a tool call runs that started within the bound. Calls past the bound
+// are forgotten, so that those that never return do not pile up.
+async function aToolCallRuns($) {
+  const now = await $.clock.now()
+  for (const [call, started] of toolCalls) {
+    if (now - started >= toolCallCountsFor) toolCalls.delete(call)
+  }
+  return toolCalls.size > 0
+}
 
 let beating = false
 // Whether a beat is owed after the one that is running, and whether that beat
@@ -66,7 +83,7 @@ export function register(on) {
   on('session.start', async ($, e, next) => {
     // A tool that runs for an hour is work for the hour; between steps the
     // timer only says that the process is alive.
-    $.clock.every(beatEvery, () => beat($, toolsRunning > 0))
+    $.clock.every(beatEvery, async () => beat($, await aToolCallRuns($).catch(() => false)))
     beat($, false)
     return next(e)
   })
@@ -79,11 +96,20 @@ export function register(on) {
   // The beat after the tool has run reports what the tool changed, such as a
   // card that minka work start has just taken up.
   on('tool.call', async ($, e, next) => {
-    toolsRunning++
+    const call = {}
+    const started = await $.clock.now()
+    // A call that is abandoned, as on an interrupt, may never return. It can
+    // be abandoned while the time is asked for.
+    const forget = () => toolCalls.delete(call)
+    if (!next.signal?.aborted) {
+      toolCalls.set(call, started)
+      next.signal?.addEventListener('abort', forget, { once: true })
+    }
     try {
       return await next(e)
     } finally {
-      toolsRunning--
+      next.signal?.removeEventListener('abort', forget)
+      toolCalls.delete(call)
       beat($, true)
     }
   })
