@@ -53,15 +53,17 @@ func TestTheVersionsThatLoadMods(t *testing.T) {
 		"Claude Code 2.1.289":          true,
 		"2.1.290-beta.1 (Claude Code)": true,
 		"2.1.290-rc1":                  true,
+
 		"Warning: an update\n2.1.289 (Claude Code)": true,
-		"2.1.286 (Claude Code)":                     false,
-		"2.1.286-rc1 (Claude Code)":                 false,
-		"2.0.999 (Claude Code)":                     false,
-		"1.9.300 (Claude Code)":                     false,
-		"2.1 (Claude Code)":                         false,
-		"v2.1.290 (Claude Code)":                    false,
-		"2.1.290.4 (Claude Code)":                   false,
-		"":                                          false,
+
+		"2.1.286 (Claude Code)":     false,
+		"2.1.286-rc1 (Claude Code)": false,
+		"2.0.999 (Claude Code)":     false,
+		"1.9.300 (Claude Code)":     false,
+		"2.1 (Claude Code)":         false,
+		"v2.1.290 (Claude Code)":    false,
+		"2.1.290.4 (Claude Code)":   false,
+		"":                          false,
 	} {
 		a := newApp(t.Context(), strings.NewReader(""), &strings.Builder{}, &strings.Builder{}, func(string) string { return "" })
 		a.runClaude = func([]string) (string, error) { return version, nil }
