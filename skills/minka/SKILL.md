@@ -235,6 +235,8 @@ minka todolists tools <projectId> --json
 minka todolists list <toolId> [--archived] --json
 minka todolists show <listId> --json
 minka todolists create --tool <toolId> --title "Title" [--description - < body.md] --json
+minka todolists templates --json
+minka todolists start --tool <toolId> --template <templateId> [--title "Title"] --json
 minka todolists edit <listId> [--title "New"] [--description - < body.md] --json
 minka todolists archive <listId> --json
 minka todolists unarchive <listId> --json
@@ -1221,6 +1223,40 @@ themselves and their subtasks are `todos …`, see the next part.
   the same list, and the group itself or any other is exit 9
   `todoPlaceUnknown`. A group never leaves its list.
 
+### Lists from templates
+
+The organization's **templates** are lists of a hidden template library, the
+team's alone: a client, and anybody outside the team, is in none.
+
+- `todolists templates` lists the templates in use, in their order, as lines of
+  `todolists list`, and names the library's `projectId` and `toolId`. A person
+  in no library is exit 2.
+- `todolists start --tool <toolId> --template <templateId>` makes a list **on
+  top** of a To-dos tool of a project: the template's description, groups with
+  their colours, to-dos with notes and subtasks. It starts fresh: nothing done,
+  **no days at all**, no comments, no series. The title is the template's unless
+  `--title` is given (`--title ""` is exit 9 `todoListTitleMissing`). There is
+  no flag for a description, days or people: Minka takes none here.
+- **Read `leftOff`.** People on the template's to-dos and subtasks who are no
+  members of the project are not carried; `data.leftOff` names them (`[]` for
+  nobody), and so do the `summary` and the text. Somebody no longer on the team
+  is left off without being named.
+- **Every call makes a new list**: a second run is a second list, so read the
+  tool first where a run may already have happened.
+- A template is read and changed as the list it is (`todolists show|edit`,
+  `todogroups …`, `todos …`) with the library's IDs; a new template is
+  `todolists create --tool <library toolId>`, the archived ones are `todolists
+  list <library toolId> --archived`. In a template a day is exit 9
+  `templateTakesNoDates` (taking one off is fine) and ticking off a to-do or a
+  subtask `templateTakesNoTicks`.
+- Refusals of `start`: exit 2 for a tool that is unknown, not yours or **no
+  longer in use**; then exit 9 `templateUnknown` (unknown, in the trash, a list
+  of a project, or you are in no library), `templateIntoLibrary` (`--tool` is
+  the library's own), `templateArchived`, a title code, `projectArchived`.
+  Without `--title` an archived template is `templateArchived` before
+  everything after it; with `--title` the title is checked first and
+  `projectArchived` comes before `templateArchived`.
+
 ### The archive of a list
 
 A list in the archive is read and takes **no write** — no change, no new
@@ -1236,7 +1272,7 @@ and a list or a group that is not there is exit 2.
 ### What does not exist here
 
 Moving or copying a list into another tool or project, restoring from the
-trash are not offered by this CLI.
+trash are not offered by this CLI; making one from a template is, above.
 
 ### Codes of this part
 
@@ -1245,8 +1281,10 @@ trash are not offered by this CLI.
 `todoListDescriptionNotReadable`, `todoGroupTitleMissing`,
 `todoGroupTitleTooLong`, `todoGroupTitleHasControlCharacters`,
 `todoGroupColorUnknown`, `todoListArchived`, `todoListNotArchived`,
-`todoPlaceUnknown` (a neighbour that is no other group of the same list), all
-exit 9; `projectArchived` before any of the archive codes.
+`todoPlaceUnknown` (a neighbour that is no other group of the same list),
+`templateUnknown`, `templateArchived`, `templateIntoLibrary`,
+`templateTakesNoDates`, `templateTakesNoTicks`, all exit 9; `projectArchived`
+before any of the archive codes.
 
 ## To-dos and subtasks
 

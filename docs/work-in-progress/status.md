@@ -81,6 +81,15 @@ commands follow is [To-do lists and groups](../stable/todo-lists.md) (C-071,
 C-072). None of it has been seen live: the whole feature is checked against
 the fake, see below.
 
+The templates of the organization are listed with `todolists templates`, and a
+list is made from one with `todolists start --tool <toolId> --template
+<templateId> [--title …]`, whose answer names in `leftOff` the people it did
+not carry (C-110). A template is changed with the commands of a list; a day or
+a tick there is refused, and the hints of `todos` say so. Minka's side is #344,
+on its `main` and in no release yet, so production gets it with the next Minka
+release; the commands are checked against Minka's code and tests and the fake,
+and live only in what reads and addresses that name nothing show, see below.
+
 The to-dos are read with `todos show`, `todos completed` for the done ones of a
 list and `todos mine` for one's own across all projects, and written with
 `todos create`, `edit`, `complete`, `reopen`, `move` and `delete`; their
@@ -428,6 +437,30 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
 (account Bruno, local instance) gets revoked then.
 
 ## Checked against the fake only
+
+- Lists from templates (`todolists templates`, `todolists start`, and
+  `templateTakesNoDates`/`templateTakesNoTicks` under `todos`): Minka's #344
+  read in its controller, its copy statement and `ApiTemplatesTest`. Live on
+  `minka.localbeach.net` (Bruno, 2026-10-04) only reads — `todolists
+  templates` answered the library with no template in it, the library is in no
+  `projects list`, its tool is named by `todolists tools <libraryProjectId>` —
+  and two writes against identifiers that name nothing: `POST
+  todos-tools/8cfabb68-c3cc-466d-a7a5-38c6fc25c985/lists`, a random tool,
+  with a random template, and `POST
+  todos-tools/00000000-0000-0000-0000-000000000000/lists`, the nil tool, with
+  `"title": ""`, both 404, the tool before the template and the title.
+  No list was made: the library is empty, and a POST into a real tool is not
+  allowed there. **The fake does not mirror**: bots (401 before anything),
+  more than one organization and its library, the team as anything but the
+  members of the library, files of a template copied into the project (the
+  fake copies the HTML as it is), the people left off counted before the
+  write while the copy follows it, a template archived or trashed between the
+  checks and the write, and the library hidden anywhere but in `projects list`
+  and `todos mine` (search, activity, recent visits). The fake orders
+  `leftOff` by the lowercased name bytewise, as Postgres on musl does, so Ä
+  comes after Z; a glibc collation would put Ä right after A. Pre-existing and
+  untouched: the fake's `PATCH todos/{id}/subtasks/{id}` looks the subtask up
+  after the body, Minka's before it.
 
 - The calendars of `import basecamp --calendars`: no run has met a real
   calendar yet, and Minka's applier of events is not on its `main`, so no bundle

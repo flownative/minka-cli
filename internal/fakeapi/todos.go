@@ -143,6 +143,7 @@ func (s *Server) registerTodosRoutes(mux *http.ServeMux) {
 	s.registerCommentRoutes(mux, "todos/{todoId}")
 	s.registerTodoItemRoutes(mux)
 	s.registerTodoSeriesRoutes(mux)
+	s.registerTemplateRoutes(mux)
 }
 
 // todosTools lists the To-dos tools of a project that are in use, in the
@@ -214,8 +215,9 @@ func (s *Server) archivedTodoLists(w http.ResponseWriter, r *http.Request, perso
 	writeJSON(w, http.StatusOK, lists)
 }
 
-// addTodoList starts a list on top of a tool. The title is held before the
-// description, as the controller does.
+// addTodoList starts a list on top of a tool, empty or made from the template
+// the body names. The title is held before the description, as the controller
+// does.
 func (s *Server) addTodoList(w http.ResponseWriter, r *http.Request, person *Person) {
 	tool := s.visibleTodosTool(r.PathValue("toolId"), person)
 	if tool == nil {
@@ -226,8 +228,19 @@ func (s *Server) addTodoList(w http.ResponseWriter, r *http.Request, person *Per
 	if !ok {
 		return
 	}
+	// A null template is no empty list: only a string names one.
+	template, namesTemplate := fields["template"]
+	templateID, isAString := template.(string)
+	if namesTemplate && !isAString {
+		malformed(w, `The field "template" has to be a string.`)
+		return
+	}
 	title, ok := stringField(w, fields, "title")
 	if !ok {
+		return
+	}
+	if namesTemplate {
+		s.addTodoListFromTemplate(w, tool, templateID, title, person)
 		return
 	}
 	description, ok := stringField(w, fields, "description")

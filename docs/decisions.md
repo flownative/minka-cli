@@ -1768,3 +1768,24 @@ way to the hook, leaves the file alone. **Why:** the file belongs to whoever
 wrote it, and Robert's word allows taking out minka's own entry and no more.
 **Implemented as:** `cli.removeTheOldHook`, `cli.isTheHookOfMinka`, see
 [Saying what you are working on](stable/at-work.md).
+
+<a id="c-110"></a>
+## C-110 — A list from a template is `todolists start`, the templates `todolists templates`
+
+*Applies to: `todolists templates`, `todolists start`*
+
+The templates are listed by `todolists templates`, beside `todolists list`, and
+a list is made from one by `todolists start --tool <toolId> --template
+<templateId>`, not by a `--template` on `todolists create`. `--title` goes out
+only where it is given, so the list takes the template's title otherwise.
+There is no `templates` group of its own: a template is a list of the library
+and is read and written with the commands of a list, and no flag offers what
+the API does not take — a description, a day, people.
+
+**Why:** Minka's one address takes two different bodies: with `template` it
+reads no description and refuses in an order of its own, and the answer
+carries `leftOff`, which a caller has to read. A command of its own says so in
+its help and its result, where `create` would carry a flag that silences
+another (C-071 keeps the lists under `todolists`).
+**Implemented as:** `cli.newTodoListsTemplatesCmd`, `cli.newTodoListsStartCmd`,
+`cli.startRefusal`, see [To-do lists and groups](stable/todo-lists.md).

@@ -4,11 +4,11 @@ A To-dos tool holds lists, the newest on top. A **list** has a title, a
 description and **groups**, named headings with an order of their own. A to-do
 stands in its list directly or in one group of it.
 
-`todolists tools`, `todolists list` and `todolists show` read; `todolists
-create`, `edit`, `archive`, `unarchive` and `delete` write a list; `todogroups
-create`, `edit`, `move` and `delete` write a group; `todolists comments …`
-reads and writes the comments under a list, as [To-dos and subtasks](todos.md)
-says for both. The to-dos themselves and their subtasks have commands of their
+`todolists tools`, `todolists list`, `todolists show` and `todolists templates`
+read; `todolists create`, `start`, `edit`, `archive`, `unarchive` and `delete`
+write a list; `todogroups create`, `edit`, `move` and `delete` write a group;
+`todolists comments …` reads and writes the comments under a list, as [To-dos
+and subtasks](todos.md) says for both. The to-dos themselves and their subtasks have commands of their
 own, under `todos`, which is why the lists and the groups are not called that
 ([C-071](../decisions.md#c-071)); they follow [To-dos and subtasks](todos.md).
 
@@ -116,6 +116,60 @@ neighbour that is no identifier at all is `todoPlaceUnknown` before the
 archive is asked, which the CLI never sends: `--after` and `--before` take an
 ID.
 
+## Lists from templates
+
+The organization's templates are the lists of the To-dos tool of its **template
+library**, a hidden project whose members are the team and their agents. No
+list of projects names it, and its to-dos are in nobody's `todos mine`. A
+client, and anybody outside the team, is in no library.
+
+`GET templates/todo-lists` answers `{projectId, toolId, templates}`: the
+library's project and tool, and the templates in use in their order, each as a
+line of `todolists list`; `completedCount` is always 0. `todolists templates`
+hands it over as it comes, and a person in no library is exit 2. There is no
+filter. The archived templates are `todolists list <library toolId>
+--archived`, and a template is read and written as the list it is, with the
+library's IDs: `todolists show|edit|archive`, `todogroups …`, `todos …`. A new
+template is `todolists create --tool <library toolId>`. A template takes no
+days and no ticks: a day on a to-do or a subtask of the library is 422
+`templateTakesNoDates`, after the days are read and before the archive is
+asked, and ticking one off `templateTakesNoTicks`; taking a day off and
+opening again are no refusals. The hints of `todos` and `todos subtasks` say
+so.
+
+`todolists start --tool <toolId> --template <templateId> [--title …]` is `POST
+todos-tools/{toolId}/lists` with `template` and, only where `--title` is given,
+`title` ([C-110](../decisions.md#c-110)). Minka makes the list on top of the
+tool from the template: its description, its groups out of the trash with
+their colours and order, its to-dos out of the trash with notes and subtasks.
+It starts fresh, nothing done and no day on it; comments and series stay with
+the template, files of the texts are copied into the project, the maker
+follows the list, nobody is notified, and the clients of the project are not
+shown it. The title is the template's unless one is given; a description is
+not read. **There is nothing else to give**: no description, no start day, no
+people.
+
+Assignees, the notified and the assignees of subtasks are carried where they
+are members of the project. The answer is the list as `todolists show` reads it
+plus **`leftOff`**: `{id, name}` of everybody on the template's to-dos and
+subtasks who is no member of the project and on the team, ordered by name, `[]`
+for nobody. Somebody no longer on the team is left off **without being named**.
+The summary names those left off, and the text lists them, or says `Left off:
+nobody`.
+
+Starting is **not idempotent**: every call is another list.
+
+The order of the refusals: the tool (404), the type of `template` and of
+`title` (400, a null template included, which the CLI never sends), then the
+library — `templateUnknown` for a person in none —, `templateIntoLibrary`
+where the tool is the library's own, `templateUnknown` for an ID that names no
+template the person sees (unknown, in the trash, another organization's, a
+list of a project). **Where no title is given**, an archived template is
+`templateArchived` here, before the title; otherwise the title is checked
+first. Then the write, and only where it wrote nothing: `projectArchived`,
+then `templateArchived`, and 404 for a tool that is no longer in use, which the
+lookup at the start finds.
+
 ## The refusals
 
 The writes check in the controller's order: whether the tool, the list or the
@@ -126,7 +180,10 @@ did — the project, then the archive of the list.
 | Answer | Command | Exit |
 |---|---|---|
 | 404 | every read and write, for what is unknown, foreign, in the trash, hidden from a client, and every `todogroups` command on a group of an archived list; before every 422 | 2 |
-| 422 `todoListTitleMissing`, `todoListTitleTooLong`, `todoListTitleHasControlCharacters` | `todolists create`, `todolists edit` | 9 |
+| 404 | `todolists templates` for a person in no library; `todolists start` into a tool no longer in use | 2 |
+| 422 `todoListTitleMissing`, `todoListTitleTooLong`, `todoListTitleHasControlCharacters` | `todolists create`, `todolists edit`, `todolists start` | 9 |
+| 422 `templateUnknown`, `templateIntoLibrary`, `templateArchived` | `todolists start` | 9 |
+| 422 `templateTakesNoDates`, `templateTakesNoTicks` | `todos create`, `edit`, `complete`, `todos subtasks create`, `edit`, `complete` in the library | 9 |
 | 422 `todoListDescriptionTooLong`, `todoListDescriptionNotReadable` | `todolists create`, `todolists edit` | 9 |
 | 422 `todoGroupTitleMissing`, `todoGroupTitleTooLong`, `todoGroupTitleHasControlCharacters` | `todogroups create`, `todogroups edit` | 9 |
 | 422 `todoGroupColorUnknown` | `todogroups create`, `todogroups edit`, after the title | 9 |

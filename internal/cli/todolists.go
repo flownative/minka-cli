@@ -39,6 +39,8 @@ func (a *app) newTodoListsCmd() *cobra.Command {
 		a.newTodoListsListCmd(),
 		a.newTodoListsShowCmd(),
 		a.newTodoListsCreateCmd(),
+		a.newTodoListsTemplatesCmd(),
+		a.newTodoListsStartCmd(),
 		a.newTodoListsEditCmd(),
 		a.newTodoListsArchiveCmd(),
 		a.newTodoListsUnarchiveCmd(),

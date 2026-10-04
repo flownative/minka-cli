@@ -184,6 +184,8 @@ meta.apiCode todoListArchived.`,
 					e.Hint = "--group names no group of the list, or one in the trash. The groups of the list: minka todolists show " + listID
 				case apiCodePersonNotAProjectMember:
 					e.Hint = todoPeopleHint
+				case apiCodeTemplateTakesNoDates:
+					e.Hint = templateTakesNoDatesHint
 				}
 				return e
 			}
@@ -694,6 +696,10 @@ func todoRefusal(s *session, err error, hints todoHints) *Error {
 		e.Hint = hints.place
 	case e.APICode == apiCodePersonNotAProjectMember:
 		e.Hint = todoPeopleHint
+	case e.APICode == apiCodeTemplateTakesNoDates:
+		e.Hint = templateTakesNoDatesHint
+	case e.APICode == apiCodeTemplateTakesNoTicks:
+		e.Hint = templateTakesNoTicksHint
 	case e.Code == CodeNotFound:
 		e.Hint = todoNotFoundHint
 	}
