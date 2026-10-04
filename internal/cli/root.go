@@ -71,17 +71,13 @@ type app struct {
 	retryPause basecamp.Pause
 	now        func() time.Time
 
-	// startKeepalive starts the process that reports for one host while a tool
-	// call runs. It is an injection point so that no test forks a process.
-	startKeepalive func(host string) error
-
-	// executable is the path this minka was started from, which the hook and
-	// the mod are written to run. Tests name another one.
+	// executable is the path this minka was started from, which the mod is
+	// written to run. Tests name another one.
 	executable func() (string, error)
 
 	// runClaude runs the command line of Claude Code. It is an injection point
 	// so that no test installs anything into the Claude Code of whoever runs it.
-	runClaude func(args []string) error
+	runClaude func(args []string) (string, error)
 
 	// markWait is how long a command waits for another minka to finish noting
 	// which comments it has shown.
@@ -92,20 +88,14 @@ type app struct {
 	quietFlag  bool
 	styledFlag bool
 
-	// keepalive is set on the process that keeps reporting while the session
-	// around it is busy with one long tool call. It is at no work of its own, so
-	// it writes neither the sign of life of a card nor the mark of a beat.
-	keepalive bool
-
 	// fromMod is set on a beat of the mod that runs inside a Claude Code
-	// process. Its session is reported by that mod and nothing else, so the
-	// beat starts no keepalive and marks the list for the keepalive to leave.
+	// process. The mod reports one named session, so such a beat without a
+	// session reports nothing.
 	fromMod bool
 
-	// idle is set on a beat that says the process is alive and nothing more:
-	// like the keepalive, it writes neither the sign of life of a card nor the
-	// mark of a beat, and it reports a list only for as long as the keepalive
-	// would.
+	// idle is set on a beat that says the process is alive and nothing more: it
+	// writes neither the sign of life of a card nor the mark of a beat, and it
+	// reports a list only for a while after the last step.
 	idle bool
 
 	// sessionFlag is the session a command was told it speaks for. It
@@ -139,9 +129,6 @@ func newApp(ctx context.Context, stdin io.Reader, stdout, stderr io.Writer, gete
 	a.avatarFetcher = basecamp.NewAvatarClient()
 	a.now = time.Now
 	a.markWait = 5 * time.Second
-	a.startKeepalive = func(host string) error {
-		return spawnKeepalive(host, environmentWithoutTheSession(os.Environ()))
-	}
 	a.runClaude = a.runClaudeCommand
 	a.executable = os.Executable
 	a.stdinIsTerminal = func() bool { return isTerminal(stdin) }

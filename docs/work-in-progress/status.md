@@ -377,29 +377,37 @@ does not say whether a card has notes, so `cards show` only points to them.
 
 An agent says which cards it has in hand: `work start` and `work stop` keep
 one list per session, `heartbeat` reports the list of its own session to `PUT
-/me/work` as a client of that session's own (C-103), and `hooks install` writes
-the hook of Claude Code that calls it after every tool call. The session comes
-from `--session` or `$CLAUDE_CODE_SESSION_ID`, for typed commands and the hook
-alike; a store of one list per machine is handed out to its sessions when it
-is read.
-A beat that finds a card in hand and no keepalive of its host starts one
-(C-043), so a tool call that runs for longer than the three minutes a signal
-counts for keeps its tiles alight — up to twenty-five minutes after the last
-beat of the session, and no further. That process is at no work itself and stops
-on an empty list, on twenty-five minutes in which nothing else was at the store,
-or on a clock that jumped. A typed command waits up to 30 seconds for the lock
-on the list, the claim of a beat not at all.
-`hooks install --mod` installs a Claude Code mod instead (C-105): it beats from
-inside the process after every step and every thirty seconds, `--idle` while no
-tool call runs, and the keepalive leaves its session alone, so a session that
-crashed goes dark three minutes after its last beat. The settings hook may stay
-beside it. Nobody has installed it into a real Claude Code yet; see below for
-what is measured.
-The list, the refusals, the throttle and the hook are seen live, and the
-report with them: on `minka.flownative.com`, where this CLI is signed in as an
-agent, `work start`, `heartbeat` and `work stop` get through, and the hook
-reports out of a session of its own. What nobody has seen yet is a tile alive
-on the board, see below.
+/me/work` as a client of that session's own (C-103), and the Claude Code mod
+calls it from inside the process of a session after every step and every
+thirty seconds, `--idle` while no tool call runs (C-105, C-107), so a session
+that ended goes dark three minutes after its last beat. `minka setup` installs
+the mod after the sign-in (`--no-mod` leaves it out, a missing `claude` is
+named and passed over), and `hooks install` installs it on its own (C-108),
+both only into a Claude Code of 2.1.287 or later, the first that loads mods;
+`claude --version` decides. Both take the settings hook an earlier minka wrote
+out of `~/.claude/settings.json`, that entry and nothing else (C-109).
+No process of minka's own reports between beats any more. The session comes
+from `--session` or `$CLAUDE_CODE_SESSION_ID`; a store of one list per machine
+is handed out to its sessions when it is read. A typed command waits up to 30
+seconds for the lock on the list, the claim of a beat not at all.
+The list, the refusals and the throttle are seen live, and the report with
+them: on `minka.flownative.com`, where this CLI is signed in as an agent, `work
+start`, `heartbeat` and `work stop` get through, and the settings hook reported
+out of a session of its own. Robert's machine has the mod enabled. What nobody
+has seen yet is `setup` installing it, or the old hook taken out of a real
+settings file; see below.
+
+Two things about the settings file are measured, not tested. `claude plugin
+install` writes the whole `settings.json` anew: it reorders the keys,
+reindents and strips a byte order mark. So byte for byte holds only for the cut
+minka makes afterwards, not for the file somebody wrote. And Claude Code
+refuses a settings file with comments in it, so such a file makes the install
+fail before the cut is reached. Claude Code 2.1.211 and 2.1.121 take `claude
+plugin marketplace add` and `install` with exit 0, and `claude plugin
+validate` refuses the mod there ("hooks: Invalid input: expected record");
+2.1.270 to 2.1.284 validate it. The install goes by 2.1.287 as the first
+version that loads a mod; that a version between 2.1.270 and 2.1.286 really
+runs it is not measured.
 
 Everything else is tested against the fake API and checked live — the chain
 upload → attachment in the text → display → the bytes back, as well as private
@@ -1358,15 +1366,11 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   can name a to-do list, a group, a question or a folder in the trash or in an
   archive, is read in Minka's code and held against the text view on its own.
 - That every session reports its own list under a client of its own is tested
-  against the fake alone, and so are `--session`, the hook going by the
-  environment whatever its input names, the keepalive deciding on each session
-  by its own beat and passing over what the server forgot, and a store of one
-  list per machine handed out to its sessions. Measured outside a test: a beat
-  of the hook wrote the sign of life of a card that `work start` in the Bash
-  tool of the same session had taken up, so the hook's environment carries the
-  same `CLAUDE_CODE_SESSION_ID`. Claude Code's documentation names no such
-  variable, only `session_id` in the input of a hook; should the variable go,
-  every session falls back to the list of no session.
+  against the fake alone, and so are `--session`, a beat going by the
+  environment whatever its standard input names, and a store of one list per
+  machine handed out to its sessions. Claude Code's documentation names no
+  `CLAUDE_CODE_SESSION_ID`; should the variable go, a typed `work start` falls
+  back to the list of no session, which the mod does not report.
 - The mod (C-105) is measured in throwaway runs of Claude Code 2.1.288, with the
   mod loaded by `--plugin-dir` and a wrapper in place of minka that logged what
   it was given: `$.session.id()` is the `CLAUDE_CODE_SESSION_ID` the Bash tool
@@ -1374,7 +1378,7 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   `CLAUDECODE`, the timer beats during a Bash call of seventy seconds, the
   tool calls of a subagent reach the mod of the parent with `agentId` set and
   its Bash sees the parent's session, a subagent's turn ends without a start,
-  and a run that is not awaited still runs. `hooks install --mod` ran against a
+  and a run that is not awaited still runs. `hooks install` ran against a
   Claude Code configuration of its own (`CLAUDE_CONFIG_DIR`): both `claude
   plugin` commands answer exit 0 the second time too, the settings carry
   `enabledPlugins` and the marketplace as a `directory` source, and a file
@@ -1418,22 +1422,13 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   request and without making a directory; the eight hours taking out, for every
   reader, a card nobody said anything more about; and the text view of all of
   it. Measured outside a test, though not on a board: a tool call of a subagent
-  carries the session of whoever spawned it and runs the hook, so a session
-  that works through subagents keeps the sign of life of its cards.
-  Of the keepalive, nothing at all is seen live yet, and against the fake not
-  everything either: what a tick decides is tested as a plain function with a
-  moment handed to it, and the lock, the mark of a beat, the sweep of a tick, the
-  mode that is at no work, the host the child is told, the store that cannot be
-  read and what a beat says became of the keepalive are tested with no process
-  forked. Seen by hand outside the tests, on a store of its own and against a
-  host that answers nothing: the output of a beat read through a pipe returns at
-  once although the child is running, that child has `ppid 1`, a session of its
-  own and all three streams at the null device, it reported once a minute, and it
-  left neither mark behind. What no test reaches stands under the limits below.
-  `hooks install` and `hooks status` are seen on real files: a fresh one, one
-  carrying other hooks, one carrying ours, a `hooks` that stands there as
-  `null`, and the shapes that are refused unrepaired with the entry to add by
-  hand.
+  carries the session of whoever spawned it, so a session that works through
+  subagents keeps the sign of life of its cards.
+  Taking the old hook out is tested against settings files of the test's own:
+  other hooks under the same event and others, unusual spacing and order kept
+  byte for byte, a group of somebody else's, the hook written twice, a link, a
+  file with a comment in it, and the mode kept. No test runs `claude`; the two
+  `claude plugin` commands go through an injection point.
 - "agent for X" in `people list` has been seen live, an agent that stepped
   down has not — it is in no list any more.
 - What Minka takes for one file is 100 MiB. The CLI refuses a byte over that
@@ -1482,28 +1477,10 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   longer, because the run has to outlast twice the idle allowance to show
   anything. It is the one test that makes the pace of another program its
   precondition, the named exception to [C-035](../decisions.md#c-035).
-- Of the keepalive, three things are left untested on purpose, and the split is
-  the point of [C-035](../decisions.md#c-035) rather than a new exception to it:
-  the detachment itself, the waiting of the loop, and a machine that really
-  sleeps. The spawning is reached through an injection point on `app` that a
-  stand-in fills, so no test forks a detached process; the decision of a tick is
-  a moment handed to a plain function, not a machine put to sleep; and what the
-  loop does on its first turn — take the lock, read the store, report, and the
-  mode it does it in — is reached by a run that is told to stop, so only the
-  waiting and what follows it stand outside. Of the endings, the empty list
-  reported before the exit is the one no test reaches.
 - That a beat waits for nobody at the store is held for the claim of the
-  heartbeat and the look at the list before a keepalive is started. The 2
-  seconds that the note of how a signal fared and every tick of the keepalive
-  wait are held by no test: a test can tell a wait from none, not a short one
-  from a long one, without waiting it out.
-- What a tick decides under a machine that really slept is held by no test: a
-  reading of the monotonic clock differs from the wall clock only where a machine
-  was really away or a clock was really set, and in a test every way of moving a
-  moment either shifts both readings together or strips the monotonic one. So the
-  `Round(0)` in `tick.decide`, which is what makes the sleeping machine a jump,
-  can be dropped with every test staying green, and the sleeping machine of the
-  live check is what says whether it is there.
+  heartbeat. The 2 seconds that the note of how a signal fared waits are held by
+  no test: a test can tell a wait from none, not a short one from a long one,
+  without waiting it out.
 - Of the eight kinds of record whose word about clients falls to what they hang
   on, the fake produces two: a group and a to-do. A card, a comment, a chat line,
   a column, a step and an answer go through the same one place
@@ -1604,16 +1581,13 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   gains a build provenance attestation with instructions for verifying it, and
   the macOS binaries get notarised, which waits for an Apple Developer ID.
 - See a tile live: one that lights up and one that goes quiet at once.
-- See two sessions live, once this version runs on Robert's machine: a card of a
-  session that ended goes dark while another session works on, `work list` shows
-  the other's card under `elsewhere`, and `heartbeat --json` out of the hook
-  names the session of the environment. The Claude Code mod that reports from
-  inside a session follows as a pull request of its own, through `heartbeat
-  --session`.
-- Check the keepalive live, as the [live check](../guides/live-check.md) says: a
-  tile that stays alight through a tool call of five minutes, the word in
-  `heartbeat --json`, the tile going out with `work stop`, no keepalive left
-  behind afterwards — and, at some point, a machine that really slept.
+- See two sessions live: a card of a session that ended goes dark while another
+  session works on, and `work list` shows the other's card under `elsewhere`.
+- Check the mod live, as the [live check](../guides/live-check.md) says: a tile
+  that stays alight through a tool call of five minutes, and one that goes dark
+  within three minutes of quitting Claude Code. And on Robert's machine after
+  the release: `minka hooks install` takes the old hook out of his
+  `~/.claude/settings.json` and leaves the rest of it as it was.
 - Of the ninety-odd addresses the API offers, a good part have no command.
 - Check the events live once a release carries them and the
   [live check](../guides/live-check.md) names a place to write them: a timed

@@ -40,10 +40,9 @@ const (
 	waitForTheStore = 30 * time.Second
 
 	// aBeatWaitsForTheStore is how long what is written beside a beat waits for
-	// the lock: the outcome of a signal, and every tick of the keepalive. Nobody
-	// typed these and the next beat comes in a minute, while a hook that waited
-	// longer would hold up the tool call it runs after. The claim of a beat out
-	// of the hook waits not at all, for the same reason.
+	// the lock: the outcome of a signal. Nobody typed it and the next beat comes
+	// within a minute, while a beat that waited longer would pile up behind the
+	// ones after it. The claim of a beat waits not at all, for the same reason.
 	aBeatWaitsForTheStore = 2 * time.Second
 )
 
@@ -62,9 +61,10 @@ func (a *app) newWorkStartCmd() *cobra.Command {
 		Long: `Remembers a card as one you are working on.
 
 The board shows such a card as alive while minka keeps saying so. Saying so is
-the job of 'minka heartbeat', which the hook of 'minka hooks install' runs
-after every tool call: until one of them has run, 'work start' has changed
-nothing but this session's own list.
+the job of 'minka heartbeat', which the mod of 'minka hooks install' runs from
+inside the Claude Code process after every step and every thirty seconds: until
+one of them has run, 'work start' has changed nothing but this session's own
+list.
 
 The list belongs to the session that took the card up, the one Claude Code
 names in $CLAUDE_CODE_SESSION_ID or --session names, and only that session's
@@ -131,7 +131,7 @@ shows a card in an archive as alive.`,
 			started := a.workSuccess(host, session, "Working on "+cardName(shortIdentifierOf(card), card.Title), nil, forgotten)
 			started.notices = append(started.notices, noticesAboutTheCard(entry.LetGo, card.ID)...)
 			if session == work.NoSession && a.getenv(claudeCodeVariable) == "1" {
-				started.notices = append(started.notices, "Claude Code names no session here, so the card is in the list of no session, which every session on this machine without a name shares; set $"+sessionVariable+" or pass --session for a list of its own")
+				started.notices = append(started.notices, "Claude Code names no session here, so the card is in the list of no session, which the mod of a session never reports; set $"+sessionVariable+" or pass --session for a list of its own")
 			}
 			return a.ok(started)
 		},
@@ -325,16 +325,17 @@ func listOf(host *work.Host, session string) *work.List {
 }
 
 func (a *app) newHeartbeatCmd() *cobra.Command {
-	var asTheKeepalive bool
 	cmd := &cobra.Command{
 		Use:   "heartbeat",
 		Short: "Report the cards this session is working on",
 		Long: `Reports the cards of 'minka work start' to Minka, so their tiles stay alive.
 
-It is made to run after every tool call of an agent, which 'minka hooks
-install' sets up. With nothing remembered it returns at once and asks nothing
-of the network; otherwise it reports at most once a minute, and again right
-away whenever the list has changed.
+It is made to run from inside the Claude Code process of an agent, which the
+mod of 'minka hooks install' does after every step and every thirty seconds.
+With nothing remembered it returns at once and asks nothing of the network;
+otherwise it reports at most once a minute, and again right away whenever the
+list has changed. The board forgets a card three minutes after the last signal,
+so whatever else runs it has to run it at least that often.
 
 It reports the list of one session and nothing else, under a client of that
 session's own: the session --session names, else $CLAUDE_CODE_SESSION_ID, the
@@ -342,7 +343,7 @@ same one a command typed in that session goes by. Without either it reports
 the list of no session. 'session' says which it was.
 
 It always exits 0 and says nothing unless asked with --json, --quiet or on a
-terminal: a hook that fails loudly after every tool call would cost the agent
+terminal: a beat that fails loudly after every tool call would cost the agent
 its attention for something it cannot act on. Asked, it says in 'reason' what
 it made of the moment, with the status and the code of the API where a request
 was turned away; what the last signal that went out made of it also stands in
@@ -352,38 +353,23 @@ A card the host will not have — one that was archived while somebody had it in
 hand — is taken out of the list of this session, so the cards beside it go on
 being reported, and the shorter list goes out with the next beat. It stands in
 'letGo', here and in 'minka work list'. A word this CLI does not know takes no
-card out of anything and is reported as it came.
-
-With a card in hand it also sees to it that one process of this host keeps
-reporting on a timer, so that a tool call running for minutes does not let a
-tile go dark. 'keepalive' says what became of that. A session whose Claude Code
-process runs the mod of 'minka hooks install --mod' needs no such process: the
-mod beats every thirty seconds while the process runs, and the keepalive leaves
-its cards alone.`,
+card out of anything and is reported as it came.`,
 		Args: requireArgs(),
 		RunE: func(*cobra.Command, []string) error {
-			if asTheKeepalive {
-				a.keepalive = true
-				return a.reportWhileNobodyElseDoes()
-			}
-
 			var beat signalled
-			var keepalive, session string
+			var session string
 			switch {
 			case a.sessionFlag != "" && !work.IsSession(a.sessionFlag):
 				// Refused without a word, like everything else a beat meets:
 				// reporting under a name it was not given would be worse.
 				beat = signalled{reason: "--session names no session"}
-				keepalive = notStarted(beat.reason)
 			case a.fromMod && a.agentSession() == work.NoSession:
 				// The mod reports one session, and the list of no session is
 				// nobody's to keep alight from inside a process.
 				beat = signalled{reason: "the mod names no session"}
-				keepalive = notStarted(beat.reason)
 			default:
 				session = a.agentSession()
 				beat = a.signal(session, 0)
-				keepalive = a.whatBecameOfTheKeepalive(session)
 			}
 			if beat.cards == nil {
 				beat.cards = []string{}
@@ -395,15 +381,13 @@ its cards alone.`,
 			summary := heartbeatSummary(beat.sent, beat.reason, beat.cards)
 			return a.ok(success{
 				data: map[string]any{"sent": beat.sent, "reason": beat.reason, "cardIds": beat.cards,
-					"session": nullable(session), "keepalive": keepalive, "letGo": letGoList(beat.letGo)},
+					"session": nullable(session), "letGo": letGoList(beat.letGo)},
 				summary: summary,
 				notices: letGoNotices(beat.letGo),
 				text:    func(w io.Writer) { fmt.Fprintln(w, summary) },
 			})
 		},
 	}
-	cmd.Flags().BoolVar(&asTheKeepalive, "keepalive", false, "Keep reporting on a timer of its own until nobody is at work; minka's own business")
-	_ = cmd.Flags().MarkHidden("keepalive")
 	cmd.Flags().BoolVar(&a.fromMod, "from-mod", false, "The beat comes from the mod inside a Claude Code process; minka's own business")
 	_ = cmd.Flags().MarkHidden("from-mod")
 	cmd.Flags().BoolVar(&a.idle, "idle", false, "The beat says the process is alive, not that anybody is at work; minka's own business")
@@ -413,7 +397,7 @@ its cards alone.`,
 }
 
 // nobodyIsListening says whether this run has nobody to say anything to: no flag
-// asked for output and no terminal to print it on. A hook that speaks after
+// asked for output and no terminal to print it on. A beat that speaks after
 // every tool call costs the agent its attention for something it cannot act on.
 func (a *app) nobodyIsListening() bool {
 	return !a.jsonFlag && !a.quietFlag && !a.styledFlag && !a.stdoutIsTerminal()
@@ -434,7 +418,7 @@ type signalled struct {
 // would keep them alight after that one died.
 //
 // Nothing it meets is a failure of the command: not being signed in, a host
-// that does not answer, a token a person owns. Whoever reads a hook's exit
+// that does not answer, a token a person owns. Whoever reads a beat's exit
 // code is in the middle of other work, and none of these is something they
 // could do anything about from there.
 func (a *app) signal(session string, wait time.Duration) signalled {
@@ -513,15 +497,6 @@ func (a *app) claimTheSignal(path, hostName, session string, wait time.Duration)
 	if !held {
 		return nil, a.saving(handle, changed, "nothing is remembered for this session on "+hostName)
 	}
-	if a.fromMod && !entry.Mod {
-		entry.Mod = true
-		changed = true
-	}
-	// The keepalive passes such a list over before it gets here; this holds
-	// it whatever the keepalive read a moment before.
-	if a.keepalive && entry.Mod {
-		return nil, a.saving(handle, changed, theModReports)
-	}
 	if a.idle {
 		if why := nobodyIsAtWorkOn(entry, a.now()); why != "" {
 			return nil, a.saving(handle, changed, why)
@@ -560,13 +535,12 @@ func (a *app) claimTheSignal(path, hostName, session string, wait time.Duration)
 // all. It answers whether anything was written. A session that holds nothing
 // gets no list for this: there is nothing of its own to keep alive.
 //
-// A beat that keeps tiles alive while nothing else does says neither, whatever
-// its environment carries: it is the work that keeps a card, and a process on a
-// timer of its own is no work. Left to the environment alone, one stray
-// variable would be enough for a card to glow through a working day while
-// nothing ever tells the timer to stop.
+// A beat that only says the process is alive says neither: it is the work that
+// keeps a card, and a process on a timer of its own is no work. Otherwise a
+// Claude Code left open would keep its cards glowing through a working day
+// while nobody is at them.
 func (a *app) somebodyIsAtWork(host *work.Host, session string) bool {
-	if a.keepalive || a.idle {
+	if a.idle {
 		return false
 	}
 	entry, held := host.Sessions[session]
@@ -576,26 +550,6 @@ func (a *app) somebodyIsAtWork(host *work.Host, session string) bool {
 	written := host.StillAtIt(session, a.now())
 	marked := entry.Beat(a.now())
 	return written || marked
-}
-
-// theModReports is why nothing but the mod reports a session that has one.
-const theModReports = "the mod in the Claude Code process of this session reports it"
-
-// nobodyIsAtWorkOn says why a beat that only says the process is alive reports
-// nothing, and nothing where it reports. It decides the way a tick of the
-// keepalive decides on the list: a process that sits idle keeps its cards
-// alight for as long as the keepalive would after the last step, and not for
-// as long as the process runs, which may be a night.
-func nobodyIsAtWorkOn(entry *work.List, now time.Time) string {
-	switch (tick{now: now, before: now, read: true, beat: entry.BeatAt, cards: len(entry.Cards)}).decide() {
-	case tickEndsForNobodyIsAtWork:
-		return fmt.Sprintf("nobody has been at work in this session for %.0f minutes", nobodyIsAtWorkAfter.Minutes())
-	case tickReports:
-		if (sessionAtATick{beat: entry.BeatAt, sent: entry.SentAt}).forgottenByTheServer(now) {
-			return "the board has forgotten these cards, and nobody has been at work in this session since"
-		}
-	}
-	return ""
 }
 
 // saving writes the store where the sweep changed something and hands the
@@ -818,16 +772,14 @@ func (a *app) hostOfTheStore() (string, error) {
 }
 
 // defaultHostOf is the host of the configuration, read the way a sign-in writes
-// it, and empty where the configuration names none. It is a key of the store and
-// part of the name of a lock, so every process has to make the same string of it:
-// a host written into the file by hand, with a slash at the end or a capital in
-// it, would have one process looking at another list and another lock than the
-// next.
+// it, and empty where the configuration names none. It is a key of the store, so
+// every process has to make the same string of it: a host written into the file
+// by hand, with a slash at the end or a capital in it, would have one process
+// looking at another list than the next.
 //
 // A value that cannot be read at all is no host, and it is refused here rather
 // than handed on. Handed on, it would stand in the session of every command that
-// follows and from there reach whatever prints a host — and the argv of the
-// keepalive, where every process on the machine reads along.
+// follows and from there reach whatever prints a host.
 func defaultHostOf(file *config.File, path string) (string, error) {
 	if file.DefaultHost == "" {
 		return "", nil
@@ -897,7 +849,7 @@ func (a *app) workSuccess(host *work.Host, session, summary string, more map[str
 
 	// Whether anything reports at all is a different question from what the
 	// host makes of it. Where a signal went out and was turned away, advising
-	// the hook would send somebody after a problem they do not have.
+	// the mod would send somebody after a problem they do not have.
 	s := success{data: data, summary: summary}
 	if len(entry.Cards) > 0 && entry.SentAt.IsZero() {
 		s.notices = append(s.notices, "nothing has reported this list yet, so no board shows these cards as alive; run: minka hooks install")
@@ -911,7 +863,7 @@ func (a *app) workSuccess(host *work.Host, session, summary string, more map[str
 	}
 	s.breadcrumbs = []Breadcrumb{
 		{Action: "heartbeat", Cmd: "minka heartbeat --json", Description: "Report the list to Minka now"},
-		{Action: "hooks", Cmd: "minka hooks status --json", Description: "See whether a hook reports it after every tool call"},
+		{Action: "hooks", Cmd: "minka hooks status --json", Description: "See whether the mod reports it from inside Claude Code"},
 	}
 	s.text = func(w io.Writer) {
 		if len(entry.Cards) == 0 {
@@ -1109,22 +1061,12 @@ const claudeCodeVariable = "CLAUDECODE"
 
 // agentSession is the session a command speaks for: the one it was told with
 // --session, else the one Claude Code names in the environment of the commands
-// it runs, which a command typed through its Bash tool and the hook after it
-// both inherit. The flag is for whatever reports from inside a session and is
-// told the name.
-//
-// The input Claude Code gives a hook also names the session, and is not read:
-// a typed command never sees it, and a list the hook reports has to be the
-// list the typed command wrote into. Where the environment names no session,
-// both sides speak for the list of no session.
-//
-// The keepalive speaks for no session: it reports for every session and is at
-// work for none.
+// it runs, which a command typed through its Bash tool inherits. The flag is
+// for the mod, which reports from inside a session and is told the name, and
+// that name is the one the environment gives the Bash tool. Where neither
+// names a session, a command speaks for the list of no session.
 func (a *app) agentSession() string {
-	switch {
-	case a.keepalive:
-		return work.NoSession
-	case a.sessionFlag != "":
+	if a.sessionFlag != "" {
 		return a.sessionFlag
 	}
 	if named := a.getenv(sessionVariable); work.IsSession(named) {
@@ -1144,7 +1086,7 @@ func (a *app) checkTheSessionFlag(cmd *cobra.Command) error {
 // addSessionFlag gives a command --session, for whatever reports from inside a
 // session and is told its name rather than finding it in the environment.
 func (a *app) addSessionFlag(cmd *cobra.Command) {
-	cmd.Flags().StringVar(&a.sessionFlag, "session", "", "The session to speak for (default: the hook's input, then $"+sessionVariable+")")
+	cmd.Flags().StringVar(&a.sessionFlag, "session", "", "The session to speak for (default: $"+sessionVariable+")")
 }
 
 // clientIDOf is the client a session reports as. The list of no session goes

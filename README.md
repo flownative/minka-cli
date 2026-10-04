@@ -50,9 +50,10 @@ minka setup
 ```
 
 asks for the host of your Minka, takes an access token without showing it,
-checks it against the host, saves it, and offers to install the skill for
-agents. Create the token on your account page in Minka, for an agent of yours;
-it is shown once.
+checks it against the host, saves it, offers to install the skill for agents,
+and installs the mod that has Claude Code report the cards a session is working
+on (see below; `--no-mod` leaves it out). Create the token on your account page
+in Minka, for an agent of yours; it is shown once.
 
 Then:
 
@@ -160,6 +161,25 @@ differs from the one the binary carries. minka never replaces it by itself.
 Agents also find their way with `minka commands --json`, with `--help` on any
 command, and with the `breadcrumbs` of an answer, which name the commands that
 commonly follow.
+
+An agent says which cards it is working on with `minka work start <card>`, and
+the board shows them as alive while `minka heartbeat` reports them. In Claude
+Code the mod does that from inside the process of the session, for every
+project: at the start of every turn, after every tool call and every thirty
+seconds, so a long tool call keeps its tile alight and a session that ended
+goes dark three minutes later.
+
+```bash
+minka hooks install    # write the mod and install it with 'claude plugin'
+minka hooks status     # whether it is current and loaded
+```
+
+`minka setup` runs the install as well. It needs `claude` on the PATH, Claude
+Code 2.1.287 or later (the first version that loads mods), and takes effect in
+sessions started afterwards. With an older Claude Code the install says to
+update it and changes nothing in its settings. Where an earlier minka wrote a
+`PostToolUse` hook into `~/.claude/settings.json`, the install takes that entry
+out and leaves the rest of the file as it was.
 
 ## Configuration
 

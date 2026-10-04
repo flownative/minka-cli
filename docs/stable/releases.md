@@ -55,4 +55,5 @@ It is a formula, not a cask: a formula sets no quarantine attribute, and Go
 signs arm64 binaries ad hoc, so the binary runs without notarisation.
 
 The formula installs shell completions and tells, as caveats, to run
-`minka setup` and, after an upgrade, `minka skill install`.
+`minka setup` and, after an upgrade, `minka skill install` and `minka hooks
+install`.

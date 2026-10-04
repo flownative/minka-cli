@@ -326,40 +326,6 @@ func TestMovingACardOfAnotherSessionDoesNotReportThatSession(t *testing.T) {
 	}
 }
 
-// The keepalive reports every session by its own last beat: one that is still
-// at work is reported, one that has said nothing for longer than the keepalive
-// waits is not, however busy the session beside it is. Otherwise the keepalive
-// would do what a shared list did — keep a dead session's cards alight on the
-// busyness of another.
-func TestTheKeepaliveReportsOnlyTheSessionsThatAreAtWork(t *testing.T) {
-	e := newAgentEnv(t)
-	began := time.Date(2026, 9, 23, 9, 0, 0, 0, time.UTC)
-	ofTheDead, ofTheBusy := e.fixture.CardInDoing.ID, e.fixture.CardInTriage.ID
-
-	e.vars[sessionVariable] = "the-one-that-died"
-	expectCode(t, e.runAt(began, "work", "start", ofTheDead, "--json"), ExitOK)
-	e.vars[sessionVariable] = "the-busy-one"
-	expectCode(t, e.runAt(began, "work", "start", ofTheBusy, "--json"), ExitOK)
-	busy := began.Add(nobodyIsAtWorkAfter + time.Minute)
-	expectCode(t, e.runAt(busy, "heartbeat", "--json"), ExitOK)
-
-	ticked := busy.Add(2 * time.Minute)
-	env, r := e.runKeepaliveThatIsToldToStop(ticked)
-	expectCode(t, r, ExitOK)
-	if ended, _ := decode(t, env.Data)["ended"].(string); !strings.Contains(ended, "told to stop") {
-		t.Fatalf("the keepalive ended for %q", ended)
-	}
-	// A keepalive that is told to stop has its requests cut off, so what it
-	// set out to send is what it claimed in the store before the request.
-	if got := e.storedList()["sentAt"]; got != asStored(ticked) {
-		t.Errorf("the busy session was last sent at %v, want the tick at %s", got, asStored(ticked))
-	}
-	e.vars[sessionVariable] = "the-one-that-died"
-	if got := e.storedList()["sentAt"]; got != asStored(time.Time{}) {
-		t.Errorf("the keepalive reported the session that died, at %v", got)
-	}
-}
-
 // A store of one list for the machine, each card naming the session that took
 // it up, is read without losing a card: every card lands in the list of its
 // session with its sign of life, and the list of no session keeps what the
@@ -432,30 +398,6 @@ func TestAStoreOfTheMachineIsHandedOutToItsSessions(t *testing.T) {
 
 func dirOf(path string) string {
 	return path[:strings.LastIndex(path, string(os.PathSeparator))]
-}
-
-// The safeguard: a keepalive that starts after the server forgot a list — after
-// a machine woke up, say — does not light it again while its session has said
-// nothing since. Its last beat may be young enough to report on, but the
-// session may be gone, and only a beat of its own says otherwise.
-func TestAKeepaliveDoesNotRelightWhatTheServerForgot(t *testing.T) {
-	e := newAgentEnv(t)
-	began := time.Date(2026, 9, 23, 9, 0, 0, 0, time.UTC)
-	e.vars[sessionVariable] = "the-one-that-went-quiet"
-	expectCode(t, e.runAt(began, "work", "start", e.fixture.CardInDoing.ID, "--json"), ExitOK)
-	expectCode(t, e.runAt(began, "heartbeat", "--json"), ExitOK)
-	if got := e.storedList()["sentAt"]; got != asStored(began) {
-		t.Fatalf("the beat claimed the signal of %v, want %s", got, asStored(began))
-	}
-
-	env, r := e.runKeepaliveThatIsToldToStop(began.Add(10 * time.Minute))
-	expectCode(t, r, ExitOK)
-	if got := e.storedList()["sentAt"]; got != asStored(began) {
-		t.Errorf("the keepalive lit a list the server forgot, at %v", got)
-	}
-	if ended, _ := decode(t, env.Data)["ended"].(string); !strings.Contains(ended, "nothing but the keepalive") {
-		t.Errorf("the keepalive ended for %q, want nobody at work", ended)
-	}
 }
 
 // The safeguard: the beat of a session never carries the list of no session.

@@ -276,8 +276,8 @@ func TestNormalizeHostNamesUserInformationAsTheFault(t *testing.T) {
 // A registered name may hold the sub-delimiters of a URL by the letter of the
 // standard, so "minka.example.com;t=secret" parses as a host and nothing in the
 // grammar says otherwise. It is no host all the same: nothing answers at it, and
-// it would become a key of the configuration, a key of the store and part of the
-// name of a lock, and be printed as an address somebody could reach.
+// it would become a key of the configuration and a key of the store, and be
+// printed as an address somebody could reach.
 //
 // What may be printed of such a value stops where the name stops. Whatever
 // somebody wrote behind it may be a token, and the refusal names the fault in

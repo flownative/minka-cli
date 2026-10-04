@@ -201,9 +201,9 @@ func TestAHeartbeatThatCannotReportDisturbsNobodyAndSaysWhyLater(t *testing.T) {
 	}
 
 	// The two words must not contradict each other: a signal that went out and
-	// was turned away is no reason to go and install a hook.
+	// was turned away is no reason to go and install the mod.
 	if strings.Contains(env.Notice, "hooks install") {
-		t.Errorf("the list advises the hook although a signal went out: %q", env.Notice)
+		t.Errorf("the list advises the mod although a signal went out: %q", env.Notice)
 	}
 	if data["sentAt"] == nil {
 		t.Error("nothing says that a signal went out")
@@ -213,9 +213,9 @@ func TestAHeartbeatThatCannotReportDisturbsNobodyAndSaysWhyLater(t *testing.T) {
 	}
 }
 
-// The safeguard: a beat out of the hook waits for nobody at the store. A
+// The safeguard: a beat waits for nobody at the store. A
 // typed command waits its turn for as long as only a hang would keep it, and a
-// hook that did the same would hold up the tool call it runs after. Where the
+// beat that did the same would pile up behind the ones after it. Where the
 // beat tries the lock a second time, the test lets go, so that a beat which
 // waits is caught without being waited out.
 func TestAHeartbeatDoesNotWaitForAStoreSomebodyElseHolds(t *testing.T) {
@@ -870,9 +870,9 @@ func TestACardWithoutASessionGoesByItsBeginning(t *testing.T) {
 
 // The safeguard: the sign of life is written before the throttle decides
 // whether to send. A tool call says that the session is at its cards whether
-// or not a signal goes out from it, and the keepalive reports the same list in
-// between — so a session whose beats fall into the minute of a signal of the
-// keepalive would lose its card under its own hands.
+// or not a signal goes out from it, and an idle beat of the mod reports the
+// same list in between — so a session whose steps fall into the minute of an
+// idle beat's signal would lose its card under its own hands.
 func TestTheSignOfLifeIsWrittenWhereNoSignalGoesOut(t *testing.T) {
 	e := newAgentEnv(t)
 	began := time.Date(2026, 9, 23, 9, 0, 0, 0, time.UTC)
@@ -882,11 +882,11 @@ func TestTheSignOfLifeIsWrittenWhereNoSignalGoesOut(t *testing.T) {
 	expectCode(t, e.runAt(began, "work", "start", card, "--json"), ExitOK)
 	expectCode(t, e.runAt(began, "heartbeat", "--json"), ExitOK)
 
-	// The keepalive reports the list while one tool call runs, so the minute of
-	// the throttle is spent on its signal.
-	e.signalAsTheKeepalive(began.Add(time.Minute+10*time.Second), e.vars[sessionVariable])
+	// An idle beat reports the list, so the minute of the throttle is spent on
+	// its signal.
+	expectCode(t, e.runAt(began.Add(time.Minute+10*time.Second), "heartbeat", "--idle", "--json"), ExitOK)
 	if len(e.signals()) != 2 {
-		t.Fatalf("%d signals, want the session's and the keepalive's", len(e.signals()))
+		t.Fatalf("%d signals, want the step's and the idle beat's", len(e.signals()))
 	}
 
 	// The session beats within that minute: nothing goes out, and the card is
@@ -1019,9 +1019,9 @@ func TestACardTheHostLeavesOutFallsOutOfTheList(t *testing.T) {
 		t.Errorf("summary %q", env.Summary)
 	}
 
-	// Out of the store, so that every other session and the keepalive report
-	// the same shorter set. What the last signal carried it carried, so the set
-	// it was sent with stands as it was.
+	// Out of the store, so that every later beat of the session reports the
+	// same shorter set. What the last signal carried it carried, so the set it
+	// was sent with stands as it was.
 	entry := e.storedListAsItLies()
 	if len(entry.Cards) != 1 || entry.Cards[0].ID != kept.ID {
 		t.Errorf("the store holds %v", entry.Cards)
@@ -1094,10 +1094,10 @@ func TestAMachineWhoseOnlyCardIsArchivedFallsSilent(t *testing.T) {
 	}
 }
 
-// The hook says nothing about it and ends well: a card the host would not have
+// A beat says nothing about it and ends well: a card the host would not have
 // is nothing the agent in the middle of a tool call can act on. What happened
 // waits in the list.
-func TestTheHookIsSilentWhenTheHostLeavesACardOut(t *testing.T) {
+func TestABeatIsSilentWhenTheHostLeavesACardOut(t *testing.T) {
 	e := newAgentEnv(t)
 	now := time.Date(2026, 9, 23, 10, 0, 0, 0, time.UTC)
 	card := e.fixture.CardInDoing
@@ -1109,7 +1109,7 @@ func TestTheHookIsSilentWhenTheHostLeavesACardOut(t *testing.T) {
 	r := e.runAt(now.Add(61*time.Second), "heartbeat")
 	expectCode(t, r, ExitOK)
 	if r.stdout != "" || r.stderr != "" {
-		t.Errorf("the hook said something: %q %q", r.stdout, r.stderr)
+		t.Errorf("the beat said something: %q %q", r.stdout, r.stderr)
 	}
 	if entry := e.storedListAsItLies(); len(entry.Cards) != 0 || len(entry.LetGo) != 1 {
 		t.Errorf("the store holds %v and notes %+v", entry.Cards, entry.LetGo)
