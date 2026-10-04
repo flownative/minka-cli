@@ -1369,7 +1369,12 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   changed in the directory after the install was loaded by the next session,
   so the plugin loads in place. `claude plugin validate --strict` and the mod's
   own tests (`claude plugin test`) run in `make check` wherever `claude` is on
-  the PATH, and are skipped where it is not, which is CI. Not seen: the mod in
+  the PATH, and are skipped where it is not, which is CI. The two-hour bound on
+  a tool call that never returns is tested with the mock clock, and that an
+  abandoned call stops counting at once (`next.signal`) with a mod above the
+  heartbeat that gives up on the call, which aborts the signal beneath it; a
+  mod above that returns without waiting at all does not. A call that never
+  returns has never been seen live. Not seen: the mod in
   an installed, signed-in Claude Code over a working day, a tile that goes dark
   three minutes after a session was killed, what `/clear` does to the session
   a beat names, and `session.start` after `/resume`, which the documentation

@@ -304,6 +304,17 @@ argument list, no shell. When the process ends, so do its beats.
   after the turn that started it has ended — and `--idle` otherwise. Turns are
   not followed: a subagent's turn ends without having started, and a turn whose
   end never came would count as work for as long as the process runs.
+- **A tool call that never returns** counts for the timer for two hours from
+  its start and no longer, and one that Claude Code abandons, as on an
+  interrupt, stops counting at once (`next.signal` of the mods API). A hook
+  chain left behind or a hung MCP tool would otherwise keep the session at
+  work, and its cards alight, until the process ends: the eight hours of
+  C-040 do not end it, because every beat at work renews the card. Two hours
+  is longer than any tool call that runs without a step of its own: the Bash
+  tool gives up after minutes, and a subagent working for hours in the
+  foreground makes tool calls of its own, each of which is work while it runs.
+  A call past the bound is forgotten, so calls that never return do not pile
+  up.
 - **An idle beat** says the process is alive and nothing more. Like the keepalive, it writes neither the sign of life
   of a card nor the mark of a beat, and it reports a list only for as long as
   the keepalive would report it: twenty-five minutes after the last step, and
