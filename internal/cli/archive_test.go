@@ -87,6 +87,7 @@ func everyWrite(e *testEnv) map[string][]string {
 		"docs comments unreact":        {"docs", "comments", "unreact", "--upload", upload, f.FilesUpload.Comments[0].ID, "👍"},
 
 		"todolists create":    {"todolists", "create", "--tool", f.Todos.ID, "--title", "A new list"},
+		"todolists start":     {"todolists", "start", "--tool", f.Todos.ID, "--template", f.Template.ID, "--title", "A list from a template"},
 		"todolists edit":      {"todolists", "edit", f.TodoList.ID, "--title", "Renamed"},
 		"todolists archive":   {"todolists", "archive", f.TodoList.ID},
 		"todolists unarchive": {"todolists", "unarchive", f.ArchivedList.ID},
@@ -173,7 +174,7 @@ var notAWriteIntoAProject = []string{
 	"cards mine", "cards show", "cards notes show", "comments list", "comments unread", "steps list", "chats list", "messages list",
 	"docs tools", "docs list", "docs show", "docs uploads show",
 	"docs versions list", "docs versions show", "docs uploads versions list",
-	"todolists tools", "todolists list", "todolists show", "todolists comments list",
+	"todolists tools", "todolists list", "todolists show", "todolists templates", "todolists comments list",
 	"todos mine", "todos show", "todos completed", "todos subtasks list", "todos series list", "todos series show",
 	"todos comments list",
 	"checkins tools", "checkins list", "checkins show", "checkins reminders",

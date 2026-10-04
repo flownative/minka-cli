@@ -129,6 +129,11 @@ type Project struct {
 	Description string
 	MemberIDs   []string
 	Archived    bool // readable, and closed to every write but the read mark of a chat
+
+	// TemplateLibrary is the organization's hidden project of templates,
+	// whose members are the team: no list of projects names it, and its
+	// To-dos tool holds the templates.
+	TemplateLibrary bool
 }
 
 type Board struct {
@@ -601,6 +606,27 @@ type Fixture struct {
 	OtherTodo        *Todo
 	Series           *TodoSeries // of the list, made of the grouped to-do
 
+	// The template library: a hidden project of Bruno, Anke, the agent,
+	// Stranger, Theo, Ada and Zora, the last three in no other project. Its
+	// To-dos tool holds a template with a blue group and a group in the trash,
+	// an empty template, one in the archive and one in the trash. The first
+	// to-do of the template is Stranger's, Bruno's and Olga's, who is on no
+	// team; it tells Anke and Ada when done and has a subtask of Zora's and one
+	// of Anke's. The to-do of the trashed group and one in the trash are
+	// Theo's, and Anke has the to-do of the blue group. Ada's ID sorts after
+	// Zora's, so an order by ID is not the one by name.
+	Theo             *Person
+	Ada              *Person // in the library, on the template only as one told when done
+	Zora             *Person // in the library, on the template only with a subtask
+	Olga             *Person // in no project at all, so on no team
+	TemplateLibrary  *Project
+	Templates        *TodosTool
+	Template         *TodoList
+	EmptyTemplate    *TodoList
+	ArchivedTemplate *TodoList
+	TrashedTemplate  *TodoList
+	TemplateTodo     *Todo
+
 	// The Check-ins tool of the project, on the fake's today, a Sunday. A
 	// daily question asks Anke, Bruno and the client, who is not shown it;
 	// Bruno was asked it for Thursday and Friday and answered Friday, Anke
@@ -767,7 +793,32 @@ func New(t testing.TB) (*Server, *Fixture) {
 	otherTodo := &Todo{ID: newID(), Title: "Not yours either", CreatedAt: s.now, CreatorID: stranger.ID}
 	otherTodoList := &TodoList{ID: newID(), Title: "Not yours", CreatorID: stranger.ID, Todos: []*Todo{otherTodo}}
 	otherTodos := &TodosTool{ID: newID(), ProjectID: otherProject.ID, Title: "Secret to-dos", Lists: []*TodoList{otherTodoList}}
-	s.TodosTools = []*TodosTool{todos, todosOutOfUse, otherTodos}
+	theo := &Person{ID: newID(), Name: "Theo", Email: "theo@example.com"}
+	ada := &Person{ID: "ffffffff-0000-4000-8000-00000000000a", Name: "Ada", Email: "ada@example.com"}
+	zora := &Person{ID: "00000000-0000-4000-8000-00000000000a", Name: "Zora", Email: "zora@example.com"}
+	olga := &Person{ID: newID(), Name: "Olga", Email: "olga@example.com"}
+	for _, p := range []*Person{theo, ada, zora, olga} {
+		s.People[p.ID] = p
+	}
+	library := &Project{ID: newID(), Name: "Templates", TemplateLibrary: true, MemberIDs: []string{bruno.ID, anke.ID, agent.ID, stranger.ID, theo.ID, ada.ID, zora.ID}}
+	s.Projects = append(s.Projects, library)
+	bankGroup := &TodoGroup{ID: newID(), Title: "Bank", Color: "blue"}
+	oldGroup := &TodoGroup{ID: newID(), Title: "Old", Trashed: true}
+	receiptsTodo := &Todo{ID: newID(), Title: "Collect the receipts", Notes: "<p>All of them.</p>", AssigneeIDs: []string{stranger.ID, bruno.ID, olga.ID},
+		NotifiedIDs: []string{anke.ID, ada.ID}, CreatedAt: s.now, CreatorID: bruno.ID,
+		Subtasks: []*Subtask{{ID: newID(), Title: "Coins", AssigneeID: zora.ID}, {ID: newID(), Title: "Notes", AssigneeID: anke.ID}}}
+	reconcileTodo := &Todo{ID: newID(), Title: "Reconcile the account", GroupID: bankGroup.ID, AssigneeIDs: []string{anke.ID}, CreatedAt: s.now, CreatorID: bruno.ID}
+	forgottenTodo := &Todo{ID: newID(), Title: "File the old way", GroupID: oldGroup.ID, AssigneeIDs: []string{theo.ID}, CreatedAt: s.now, CreatorID: bruno.ID}
+	trashedTodo := &Todo{ID: newID(), Title: "Thrown out", AssigneeIDs: []string{theo.ID}, Trashed: true, CreatedAt: s.now, CreatorID: bruno.ID}
+	template := &TodoList{ID: newID(), Title: "Monthly closing (mm-yyyy)", Description: "<p>Every month.</p>", CreatorID: bruno.ID,
+		Groups: []*TodoGroup{bankGroup, oldGroup}, Todos: []*Todo{receiptsTodo, reconcileTodo, forgottenTodo, trashedTodo},
+		Comments: []*Comment{{ID: newID(), AuthorID: anke.ID, Body: "<p>Stays with the template</p>", CreatedAt: s.now}}}
+	emptyTemplate := &TodoList{ID: newID(), Title: "Onboarding", CreatorID: anke.ID}
+	archivedTemplate := &TodoList{ID: newID(), Title: "Yearly closing", Archived: true, ArchivedAt: s.now.Add(-time.Hour), CreatorID: bruno.ID}
+	trashedTemplate := &TodoList{ID: newID(), Title: "Weekly closing", Trashed: true, CreatorID: bruno.ID}
+	templates := &TodosTool{ID: newID(), ProjectID: library.ID, Title: "To-do list templates",
+		Lists: []*TodoList{template, emptyTemplate, archivedTemplate, trashedTemplate}}
+	s.TodosTools = []*TodosTool{todos, todosOutOfUse, otherTodos, templates}
 
 	at := func(day, clock string) time.Time {
 		moment, _ := time.Parse("2006-01-02 15:04", day+" "+clock)
@@ -947,6 +998,8 @@ func New(t testing.TB) (*Server, *Fixture) {
 		EmptyTodoList: emptyTodoList, ArchivedList: archivedList, ArchivedGroup: archivedGroup,
 		TodosOutOfUse: todosOutOfUse, OtherTodos: otherTodos, OtherTodoList: otherTodoList,
 		ArchivedListTodo: archivedListTodo, OtherTodo: otherTodo, Series: series,
+		Theo: theo, Ada: ada, Zora: zora, Olga: olga, TemplateLibrary: library, Templates: templates, Template: template, EmptyTemplate: emptyTemplate,
+		ArchivedTemplate: archivedTemplate, TrashedTemplate: trashedTemplate, TemplateTodo: receiptsTodo,
 		CheckinsTool: checkinsTool, DailyQuestion: dailyQuestion, WeeklyQuestion: weeklyQuestion, PausedQuestion: pausedQuestion,
 		BrunosAnswer: brunosAnswer, AnkesAnswer: ankesAnswer, AnkesEarlierAnswer: ankesEarlierAnswer,
 		OtherCheckinsTool: otherCheckinsTool, OtherQuestion: otherQuestion,
@@ -1254,7 +1307,7 @@ func (s *Server) projects(w http.ResponseWriter, r *http.Request, person *Person
 	if s.IgnoresProjectStatus {
 		list := []any{}
 		for _, p := range s.Projects {
-			if slices.Contains(p.MemberIDs, person.ID) {
+			if slices.Contains(p.MemberIDs, person.ID) && !p.TemplateLibrary {
 				list = append(list, map[string]any{"id": p.ID, "name": p.Name, "description": p.Description, "appUrl": s.URL + "/projects/" + p.ID})
 			}
 		}
@@ -1274,7 +1327,7 @@ func (s *Server) projects(w http.ResponseWriter, r *http.Request, person *Person
 
 	list := []any{}
 	for _, p := range s.Projects {
-		if slices.Contains(p.MemberIDs, person.ID) && p.Archived == archived {
+		if slices.Contains(p.MemberIDs, person.ID) && p.Archived == archived && !p.TemplateLibrary {
 			list = append(list, s.projectResource(p))
 		}
 	}

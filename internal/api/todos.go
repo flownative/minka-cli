@@ -97,6 +97,30 @@ type CreateTodoListInput struct {
 	Description *string `json:"description,omitempty"`
 }
 
+// StartTodoListInput makes a list from a template. A Title left out takes the
+// template's; the description is always the template's.
+type StartTodoListInput struct {
+	Template string  `json:"template"`
+	Title    *string `json:"title,omitempty"`
+}
+
+// TodoListTemplates are the templates in use of the organization's library,
+// in their order, and the project and the To-dos tool the library is: its
+// archive is that tool's, and a new template is a list started there.
+type TodoListTemplates struct {
+	ProjectID string         `json:"projectId"`
+	ToolID    string         `json:"toolId"`
+	Templates []TodoListItem `json:"templates"`
+}
+
+// StartedTodoList is a list made from a template. LeftOff names the people on
+// the template's to-dos and subtasks whom the new list does not carry, because
+// they are no members of its project.
+type StartedTodoList struct {
+	TodoList
+	LeftOff []PersonReference `json:"leftOff"`
+}
+
 // UpdateTodoListInput changes a list. What it leaves out stays as it is; an
 // empty Description empties the description, an empty Title is refused.
 type UpdateTodoListInput struct {
@@ -150,6 +174,17 @@ func (c *Client) TodoList(ctx context.Context, listID string) (Result[TodoList],
 // CreateTodoList starts a list on top of a tool.
 func (c *Client) CreateTodoList(ctx context.Context, toolID string, input CreateTodoListInput) (Result[TodoList], error) {
 	return request[TodoList](ctx, c, http.MethodPost, "/todos-tools/"+url.PathEscape(toolID)+"/lists", input)
+}
+
+// TodoListTemplates reads the templates of the organization's library. A
+// person in no library, a client above all, is told 404.
+func (c *Client) TodoListTemplates(ctx context.Context) (Result[TodoListTemplates], error) {
+	return request[TodoListTemplates](ctx, c, http.MethodGet, "/templates/todo-lists", nil)
+}
+
+// StartTodoList makes a list from a template on top of a tool.
+func (c *Client) StartTodoList(ctx context.Context, toolID string, input StartTodoListInput) (Result[StartedTodoList], error) {
+	return request[StartedTodoList](ctx, c, http.MethodPost, "/todos-tools/"+url.PathEscape(toolID)+"/lists", input)
 }
 
 func (c *Client) UpdateTodoList(ctx context.Context, listID string, input UpdateTodoListInput) (Result[TodoList], error) {

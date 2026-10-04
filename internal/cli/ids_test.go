@@ -233,6 +233,9 @@ var idsInCapitals = []idInCapitals{
 	{command: "todolists create", inputs: []string{"--tool"}, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
 		return []string{"--tool", up(f.Todos.ID), "--title", "Packing"}
 	}},
+	{command: "todolists start", inputs: []string{"--tool", "--template"}, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
+		return []string{"--tool", up(f.Todos.ID), "--template", up(f.Template.ID)}
+	}},
 	{command: "todos create", inputs: []string{"--list", "--group", "--assignee", "--notify-when-done"}, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
 		return []string{"--list", up(f.TodoList.ID), "--group", up(f.StageGroup.ID), "--title", "Book the van", "--assignee", up(f.Anke.ID), "--notify-when-done", up(f.Anke.ID)}
 	}},
@@ -408,7 +411,7 @@ var idInputsExcepted = map[string]string{
 // in a variable or on another receiver is not: todogroups move passes its flag
 // in a variable and cards move passes neighbourCard, and both are covered only
 // because --after and --before are on the list.
-var idFlagNames = []string{"after", "before", "assignee", "notify-when-done", "notify", "ask", "person", "list", "group", "tool", "board", "folder", "document", "upload", "blob", "category", "project", "conversation", "column", "client-message-id", "participant"}
+var idFlagNames = []string{"after", "before", "assignee", "notify-when-done", "notify", "ask", "person", "list", "group", "tool", "board", "folder", "document", "upload", "blob", "category", "project", "conversation", "column", "client-message-id", "participant", "template"}
 
 // idPositions are the positions that take an ID among other names for a thing;
 // a position whose name ends in "Id" takes nothing else and is held by the

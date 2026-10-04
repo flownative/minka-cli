@@ -75,7 +75,7 @@ func (s *Server) addTodo(w http.ResponseWriter, r *http.Request, person *Person)
 		return
 	}
 	start, due, ok := todoDates(w, deref(startsOn), deref(dueOn))
-	if !ok {
+	if !ok || s.refusedAsDatedInTheLibrary(w, tool, startsOn, dueOn) {
 		return
 	}
 	stored, ok := storedTodoNotes(w, deref(notes))
@@ -156,6 +156,9 @@ func (s *Server) updateTodo(w http.ResponseWriter, r *http.Request, person *Pers
 		if start, due, ok = todoDates(w, wantedStart, wantedDue); !ok {
 			return
 		}
+		if s.refusedAsDatedInTheLibrary(w, tool, startsOn, dueOn) {
+			return
+		}
 	}
 	stored := todo.Notes
 	if notes != nil {
@@ -192,7 +195,7 @@ func (s *Server) completeTodo(w http.ResponseWriter, r *http.Request, person *Pe
 		notFound(w)
 		return
 	}
-	if s.refusedAsNothingWritten(w, tool, list) {
+	if s.refusedAsTickedInTheLibrary(w, tool) || s.refusedAsNothingWritten(w, tool, list) {
 		return
 	}
 	if todo.CompletedAt == nil {
@@ -383,7 +386,7 @@ func (s *Server) addSubtask(w http.ResponseWriter, r *http.Request, person *Pers
 	if !ok {
 		return
 	}
-	if s.refusedAsNothingWritten(w, tool, list) || assigneeID != "" && !s.allMembers(w, tool, []string{assigneeID}) {
+	if s.refusedAsDatedInTheLibrary(w, tool, due) || s.refusedAsNothingWritten(w, tool, list) || assigneeID != "" && !s.allMembers(w, tool, []string{assigneeID}) {
 		return
 	}
 
@@ -442,6 +445,9 @@ func (s *Server) updateSubtask(w http.ResponseWriter, r *http.Request, person *P
 	subtask := subtaskOf(todo, r.PathValue("subtaskId"))
 	if subtask == nil {
 		notFound(w)
+		return
+	}
+	if s.refusedAsDatedInTheLibrary(w, tool, due) || completed != nil && *completed && s.refusedAsTickedInTheLibrary(w, tool) {
 		return
 	}
 	if s.refusedAsNothingWritten(w, tool, list) {
@@ -555,7 +561,7 @@ func (s *Server) myTodos(w http.ResponseWriter, r *http.Request, person *Person)
 	var mine []assignedTodo
 	for _, tool := range s.readableTodosTools() {
 		project := s.visibleProject(tool.ProjectID, person)
-		if project == nil || project.Archived {
+		if project == nil || project.Archived || project.TemplateLibrary {
 			continue
 		}
 		for _, list := range tool.Lists {
