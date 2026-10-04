@@ -25,29 +25,36 @@ const columnArgHelp = `The column is given by its ID. With --board it may also b
 
 // columnColorHelp says which colours a column takes.
 const columnColorHelp = `--color takes one of white, red, orange, yellow, green, blue, aqua, purple,
-gray, pink and brown, spelt exactly so. White looks uncoloured; there is no way
-to take a colour away altogether. Any other value, the empty one included, is
-refused with exit 9 (validation) and meta.apiCode columnColorUnknown. Triage
-and Not now carry no colour, Done is always green, and none of the three takes
-one: exit 9 with systemColumnHasNoColor.`
+gray, pink and brown, spelt exactly so. Any other value, the empty one
+included, is refused with exit 9 (validation) and meta.apiCode
+columnColorUnknown. --no-color takes the colour away: the column is white then,
+which is how a column without a colour looks, the same as with --color white.
+A Minka that does not take a colour away yet refuses --no-color alone with
+nothingToChange and keeps the colour beside --title: exit 7 (api_error), the
+title written.
+Triage and Not now carry no colour, Done is always green, and none of the three
+takes one or gives one up: exit 9 with systemColumnHasNoColor.`
 
 // columnWritersHelp says who may change the columns of a board.
 const columnWritersHelp = `Only the team of a project changes its columns: a client of the project gets
 exit 2 (not_found) like somebody outside it.`
 
 const (
-	apiCodeColumnTitleMissing           = "columnTitleMissing"
-	apiCodeColumnTitleTooLong           = "columnTitleTooLong"
-	apiCodeColumnTitleHasControlChars   = "columnTitleHasControlCharacters"
-	apiCodeColumnColorUnknown           = "columnColorUnknown"
-	apiCodeSystemColumnHasNoColor       = "systemColumnHasNoColor"
-	apiCodeSystemColumnCannotMove       = "systemColumnCannotMove"
-	apiCodeSystemColumnCannotBeRemoved  = "systemColumnCannotBeRemoved"
-	columnNotFoundHint                  = "It does not exist, lies in the trash, or belongs to a project you are not on the team of."
-	columnBoardNotFoundHint             = "The board does not exist, lies in the trash, or belongs to a project you are not on the team of."
-	columnBoardNotReadHint              = "The board does not exist, lies in the trash, or belongs to a project you are not in."
-	columnSystemColumnsKeepTheirPlaces  = "Triage, Not now and Done keep their places; only a working column moves."
-	columnSystemColumnsBelongToTheBoard = "Triage, Not now and Done belong to every board and cannot be deleted."
+	apiCodeColumnTitleMissing            = "columnTitleMissing"
+	apiCodeColumnTitleTooLong            = "columnTitleTooLong"
+	apiCodeColumnTitleHasControlChars    = "columnTitleHasControlCharacters"
+	apiCodeColumnColorUnknown            = "columnColorUnknown"
+	apiCodeSystemColumnHasNoColor        = "systemColumnHasNoColor"
+	apiCodeSystemColumnCannotMove        = "systemColumnCannotMove"
+	apiCodeSystemColumnCannotBeRemoved   = "systemColumnCannotBeRemoved"
+	apiCodeNeighbourColumnOnAnotherBoard = "neighbourColumnOnAnotherBoard"
+	apiCodeNothingToChange               = "nothingToChange"
+	columnWhiteInstead                   = "--color white gives the column the same look on any Minka."
+	columnNotFoundHint                   = "It does not exist, lies in the trash, or belongs to a project you are not on the team of."
+	columnBoardNotFoundHint              = "The board does not exist, lies in the trash, or belongs to a project you are not on the team of."
+	columnBoardNotReadHint               = "The board does not exist, lies in the trash, or belongs to a project you are not in."
+	columnSystemColumnsKeepTheirPlaces   = "Triage, Not now and Done keep their places; only a working column moves."
+	columnSystemColumnsBelongToTheBoard  = "Triage, Not now and Done belong to every board and cannot be deleted."
 )
 
 // columnRefusal classifies a failed write on a column and gives the hint that
@@ -64,11 +71,13 @@ func columnRefusal(s *session, err error) *Error {
 	case apiCodeColumnColorUnknown:
 		e.Hint = "A column takes one of " + strings.Join(minkaColors, ", ") + ", spelt exactly so."
 	case apiCodeSystemColumnHasNoColor:
-		e.Hint = "Triage and Not now carry no colour and Done is always green. Nothing was changed, the title included: rename it without --color."
+		e.Hint = "Triage and Not now carry no colour and Done is always green. Nothing was changed, the title included: rename it without --color or --no-color."
 	case apiCodeSystemColumnCannotMove:
 		e.Hint = columnSystemColumnsKeepTheirPlaces
 	case apiCodeSystemColumnCannotBeRemoved:
 		e.Hint = columnSystemColumnsBelongToTheBoard
+	case apiCodeNeighbourColumnOnAnotherBoard:
+		e.Hint = "A column moves only among the working columns of its own board, which \"minka boards show <boardId>\" lists; or give --first."
 	default:
 		if e.Code == CodeNotFound {
 			e.Hint = columnNotFoundHint
@@ -121,10 +130,14 @@ func columnBreadcrumbs(columnID, boardID string) []Breadcrumb {
 	return crumbs
 }
 
-// columnColor names the colour of a column in words.
+// columnColor names the colour of a column in words. White is how a column
+// without a colour looks, and the words say so.
 func columnColor(column api.Column) string {
-	if column.Color == nil {
+	switch {
+	case column.Color == nil:
 		return "none"
+	case *column.Color == "white":
+		return "white, which is no colour"
 	}
 	return *column.Color
 }
@@ -189,12 +202,14 @@ columnTitleHasControlCharacters for a line break or a tab.
 
 func (a *app) newColumnsEditCmd() *cobra.Command {
 	var boardID, title, color string
+	var noColor bool
 
 	cmd := &cobra.Command{
 		Use:   "edit <column>",
 		Short: "Rename or recolour a column",
-		Long: `Gives a column a new title, a new colour or both; at least one of --title and
---color is required. What is not given stays as it is.
+		Long: `Gives a column a new title, a new colour or both; at least one of --title,
+--color and --no-color is required, and --color and --no-color exclude each
+other. What is not given stays as it is.
 
 Triage, Not now and Done take a title of their own as well, and --title ""
 gives them back the name of their type. A working column cannot go without a
@@ -210,19 +225,23 @@ written first, and a refused colour leaves the title as it was.
 ` + columnWritersHelp,
 		Example: `  minka columns edit 0199... --title "In review"
   minka columns edit Doing --board 0199... --color purple
+  minka columns edit Doing --board 0199... --no-color
   minka columns edit triage --board 0199... --title "Inbox"
   minka columns edit triage --board 0199... --title ""`,
 		Args: requireArgs("column"),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			var input api.UpdateColumnInput
+			if noColor && cmd.Flags().Changed("color") {
+				return usageErrorf(cmd, "--color and --no-color exclude each other")
+			}
+			input := api.UpdateColumnInput{NoColor: noColor}
 			if cmd.Flags().Changed("title") {
 				input.Title = &title
 			}
 			if cmd.Flags().Changed("color") {
 				input.Color = &color
 			}
-			if input.Title == nil && input.Color == nil {
-				return usageErrorf(cmd, "nothing to change, give --title, --color or both")
+			if input.Title == nil && input.Color == nil && !input.NoColor {
+				return usageErrorf(cmd, "nothing to change, give --title, --color or --no-color")
 			}
 			if err := checkColumnArg(cmd, &boardID, args[0]); err != nil {
 				return err
@@ -238,7 +257,22 @@ written first, and a refused colour leaves the title as it was.
 			}
 			column, err := s.client.UpdateColumn(a.ctx, columnID, input)
 			if err != nil {
-				return columnRefusal(s, err)
+				e := columnRefusal(s, err)
+				// A Minka that does not take a colour away yet reads null as
+				// no colour named at all.
+				if input.NoColor && e.APICode == apiCodeNothingToChange {
+					e.Hint = "This Minka does not take a colour away yet and read --no-color as no change. " + columnWhiteInstead
+				}
+				return e
+			}
+			// Such a Minka writes the title sent along and keeps the colour,
+			// with a 200 that would otherwise pass for success.
+			if input.NoColor && deref(column.Value.Color) != "white" {
+				message := "this Minka does not take a colour away yet: the column kept its colour " + columnColor(column.Value)
+				if input.Title != nil {
+					message += ", and the title was written"
+				}
+				return &Error{Code: CodeAPI, Message: message, Hint: columnWhiteInstead, Data: column.Raw}
 			}
 
 			summary := "Changed column " + column.Value.ID + ": " + column.Value.Title + ", colour " + columnColor(column.Value)
@@ -255,6 +289,7 @@ written first, and a refused colour leaves the title as it was.
 	flags.StringVar(&boardID, "board", "", "ID of the board, to give the column by its type or title")
 	flags.StringVar(&title, "title", "", `New title of the column; "" gives a system column the name of its type back`)
 	flags.StringVar(&color, "color", "", "New colour of a working column, one of Minka's eleven (see above)")
+	flags.BoolVar(&noColor, "no-color", false, "Take the colour off a working column; it is white then")
 
 	return cmd
 }
@@ -271,12 +306,12 @@ func (a *app) newColumnsMoveCmd() *cobra.Command {
 in front of it. Exactly one of the three is required, and so is --board.
 
 The column named with --after or --before has to be another working column of
-the same board. Minka would place a column next to anything else as though
---first had been given, without a word, so the board is read first and any
-other neighbour exits 1 (usage) before anything moves. Triage, Not now and
-Done keep their places: moving one exits 9 (validation) with meta.apiCode
-systemColumnCannotMove. A column that stands where it is asked to go already
-stays there, and the answer is the same.
+the same board. Minka would place a column next to Triage, Not now, Done or
+itself as though --first had been given, without a word, so the board is read
+first and any other neighbour exits 1 (usage) before anything moves. Triage,
+Not now and Done keep their places: moving one exits 9 (validation) with
+meta.apiCode systemColumnCannotMove. A column that stands where it is asked to
+go already stays there, and the answer is the same.
 
 The column and its neighbour are given by their ID, their type or their title,
 such as "Doing".
@@ -319,8 +354,8 @@ such as "Doing".
 				if err != nil {
 					return err
 				}
-				// Minka passes over a neighbour that is no other working
-				// column of the board and puts the column first instead.
+				// Minka passes over a system column or the column itself as
+				// its neighbour and puts the column first instead.
 				if neighbour.Type != api.ColumnWork || neighbour.ID == columnID {
 					e := usageErrorf(cmd, "%s %s is no other working column of board %s", place.flag, neighbour.Title, board.Title)
 					e.Hint = placesAmongWorkingColumns(*board, columnID)

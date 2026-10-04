@@ -475,6 +475,11 @@ type Server struct {
 	// projects could be archived: no status, and the filter goes unnoticed.
 	IgnoresProjectStatus bool
 
+	// KeepsColumnColorOnNull makes the server answer like a Minka from before
+	// a column's colour could be taken away: a null colour names nothing, so
+	// it alone is nothingToChange and beside a title the colour stays.
+	KeepsColumnColorOnNull bool
+
 	// MessagesPerPage, where set, caps a page of a transcript below the 200
 	// Minka allows, so that a client cannot take the page size for granted.
 	MessagesPerPage int
@@ -1936,7 +1941,7 @@ func placeInArea(cards []*Card, onHold bool, position, previousID, nextID *strin
 // order they stood on hold. Triage, Not now and Done name their refusal,
 // on and off alike.
 func (s *Server) setColumnOnHold(w http.ResponseWriter, r *http.Request, person *Person) {
-	board, column := s.visibleColumn(r.PathValue("columnId"), person)
+	board, column := s.visibleColumnOfTheTeam(r.PathValue("columnId"), person)
 	if column == nil {
 		notFound(w)
 		return

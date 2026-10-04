@@ -32,11 +32,10 @@ func (s *Server) registerColumnsRoutes(mux *http.ServeMux) {
 }
 
 // addColumn puts a working column behind the others, in the colour the board
-// holds least of. The title is judged before the write, and only the team may
-// write: a client who sees the board is refused after the title.
+// holds least of. The title is judged before the write.
 func (s *Server) addColumn(w http.ResponseWriter, r *http.Request, person *Person) {
 	board := s.visibleBoard(r.PathValue("boardId"), person)
-	if board == nil {
+	if board == nil || s.isAClient(person.ID) {
 		notFound(w)
 		return
 	}
@@ -51,7 +50,7 @@ func (s *Server) addColumn(w http.ResponseWriter, r *http.Request, person *Perso
 	if !validColumnTitle(w, deref(title)) {
 		return
 	}
-	if s.columnWriteRefused(w, board, nil, person, "") {
+	if s.columnWriteRefused(w, board, nil, "") {
 		return
 	}
 
@@ -70,10 +69,11 @@ func (s *Server) addColumn(w http.ResponseWriter, r *http.Request, person *Perso
 
 // updateColumn renames and recolours a column. Every field is read and judged
 // before anything is written; then the colour goes first, so that a system
-// column refusing it keeps its title as well. A title the column bears already
-// is no write at all and answers 200 even to a client, as in Minka.
+// column refusing it keeps its title as well. A null colour makes a working
+// column white, which is how a column without a colour looks. A title the
+// column bears already is no write while the project is in use.
 func (s *Server) updateColumn(w http.ResponseWriter, r *http.Request, person *Person) {
-	board, column := s.visibleColumn(r.PathValue("columnId"), person)
+	board, column := s.visibleColumnOfTheTeam(r.PathValue("columnId"), person)
 	if column == nil {
 		notFound(w)
 		return
@@ -83,6 +83,10 @@ func (s *Server) updateColumn(w http.ResponseWriter, r *http.Request, person *Pe
 		return
 	}
 	_, titleNamed := fields["title"]
+	_, colorNamed := fields["color"]
+	if s.KeepsColumnColorOnNull && fields["color"] == nil {
+		colorNamed = false
+	}
 	title, ok := stringField(w, fields, "title")
 	if !ok {
 		return
@@ -91,7 +95,7 @@ func (s *Server) updateColumn(w http.ResponseWriter, r *http.Request, person *Pe
 	if !ok {
 		return
 	}
-	if !titleNamed && color == nil {
+	if !titleNamed && !colorNamed {
 		unprocessable(w, "nothingToChange", "The body names neither a title nor a color.")
 		return
 	}
@@ -110,16 +114,19 @@ func (s *Server) updateColumn(w http.ResponseWriter, r *http.Request, person *Pe
 		return
 	}
 
-	if color != nil {
-		if s.columnWriteRefused(w, board, column, person, "systemColumnHasNoColor") {
+	if colorNamed {
+		if s.columnWriteRefused(w, board, column, "systemColumnHasNoColor") {
 			return
 		}
-		chosen := *color
+		chosen := "white"
+		if color != nil {
+			chosen = *color
+		}
 		column.Color = &chosen
 	}
 	unchanged := !s.projectOf(board).Archived && equalTitles(column.CustomTitle, newTitle)
 	if titleNamed && !unchanged {
-		if s.columnWriteRefused(w, board, column, person, "") {
+		if s.columnWriteRefused(w, board, column, "") {
 			return
 		}
 		column.CustomTitle = newTitle
@@ -128,13 +135,13 @@ func (s *Server) updateColumn(w http.ResponseWriter, r *http.Request, person *Pe
 }
 
 // moveColumn places a working column between its neighbours, or at the front
-// without them. A neighbour that is no identifier is 404; one that is no other
-// working column of the board is passed over, as the gap is looked for among
-// the working columns alone. A column that stands where it is asked to go
-// already is no write and answers 200 even to a client or in an archived
-// project, as in Minka.
+// without them. A neighbour that is no identifier is 404, and one on another
+// board is refused. One the person cannot see, a system column of the board
+// and the column itself are passed over, as the gap is looked for among the
+// working columns alone. A column that stands where it is asked to go already
+// is no write while the project is in use.
 func (s *Server) moveColumn(w http.ResponseWriter, r *http.Request, person *Person) {
-	board, column := s.visibleColumn(r.PathValue("columnId"), person)
+	board, column := s.visibleColumnOfTheTeam(r.PathValue("columnId"), person)
 	if column == nil {
 		notFound(w)
 		return
@@ -157,6 +164,15 @@ func (s *Server) moveColumn(w http.ResponseWriter, r *http.Request, person *Pers
 			return
 		}
 	}
+	for _, id := range []*string{previousID, nextID} {
+		if id == nil || *id == "" {
+			continue
+		}
+		if neighboursBoard, _ := s.visibleColumn(strings.ToLower(*id), person); neighboursBoard != nil && neighboursBoard != board {
+			unprocessable(w, "neighbourColumnOnAnotherBoard", "A column moves only between columns of its own board.")
+			return
+		}
+	}
 
 	var working []*Column
 	from := -1
@@ -176,11 +192,11 @@ func (s *Server) moveColumn(w http.ResponseWriter, r *http.Request, person *Pers
 	} else if i := indexOfColumn(working, deref(nextID)); i >= 0 {
 		to = i
 	}
-	if from == to {
+	if from == to && !s.projectOf(board).Archived {
 		writeJSON(w, http.StatusOK, s.columnResource(board, column))
 		return
 	}
-	if s.columnWriteRefused(w, board, column, person, "systemColumnCannotMove") {
+	if s.columnWriteRefused(w, board, column, "systemColumnCannotMove") {
 		return
 	}
 
@@ -199,12 +215,12 @@ func (s *Server) moveColumn(w http.ResponseWriter, r *http.Request, person *Pers
 // cards go with it untouched: none of them is at its address until the column
 // is back, which only the web does.
 func (s *Server) removeColumn(w http.ResponseWriter, r *http.Request, person *Person) {
-	board, column := s.visibleColumn(r.PathValue("columnId"), person)
+	board, column := s.visibleColumnOfTheTeam(r.PathValue("columnId"), person)
 	if column == nil {
 		notFound(w)
 		return
 	}
-	if s.columnWriteRefused(w, board, column, person, "systemColumnCannotBeRemoved") {
+	if s.columnWriteRefused(w, board, column, "systemColumnCannotBeRemoved") {
 		return
 	}
 
@@ -217,21 +233,25 @@ func (s *Server) removeColumn(w http.ResponseWriter, r *http.Request, person *Pe
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// visibleColumnOfTheTeam finds a column for a write on it. A client of the
+// project gets nothing, so that it hears of no field, system column or archive
+// what it would not hear of a column that does not exist.
+func (s *Server) visibleColumnOfTheTeam(id string, person *Person) (*Board, *Column) {
+	if s.isAClient(person.ID) {
+		return nil, nil
+	}
+	return s.visibleColumn(id, person)
+}
+
 // columnWriteRefused answers a write Minka's statement does not let through,
-// in the order Minka asks why once it failed: an archived project, told to
-// whoever sees the project, a client among them; then Triage, Not now or Done
-// where systemCode names what they refuse; then a client, who gets the same
-// 404 as an outsider.
-func (s *Server) columnWriteRefused(w http.ResponseWriter, board *Board, column *Column, person *Person, systemCode string) bool {
+// in the order Minka asks why once it failed: an archived project, then
+// Triage, Not now or Done where systemCode names what they refuse.
+func (s *Server) columnWriteRefused(w http.ResponseWriter, board *Board, column *Column, systemCode string) bool {
 	if s.refusedAsArchived(w, s.projectOf(board)) {
 		return true
 	}
 	if systemCode != "" && column != nil && column.Type != "column" {
 		unprocessable(w, systemCode, systemColumnRefusals[systemCode])
-		return true
-	}
-	if s.isAClient(person.ID) {
-		notFound(w)
 		return true
 	}
 	return false

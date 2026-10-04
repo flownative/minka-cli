@@ -178,6 +178,83 @@ func TestColumnsEditNamesTheColoursMinkaTakes(t *testing.T) {
 	}
 }
 
+// --no-color sends null, which Minka answers with white, and the summary says
+// that white is no colour.
+func TestColumnsEditTakesTheColourOffWithNoColor(t *testing.T) {
+	e := newTestEnv(t)
+	red := "red"
+	e.fixture.Doing.Color = &red
+
+	env, r := e.runJSON("", "columns", "edit", "Doing", "--board", e.fixture.Board.ID, "--no-color")
+	expectCode(t, r, ExitOK)
+	if body := e.lastWriteBody(); len(body) != 1 || body["color"] != nil {
+		t.Errorf("body sent %v", body)
+	} else if _, named := body["color"]; !named {
+		t.Errorf("body sent %v, want the colour named as null", body)
+	}
+	if column := decode(t, env.Data); column["color"] != "white" {
+		t.Errorf("column %s", env.Data)
+	}
+	if env.Summary != "Changed column "+e.fixture.Doing.ID+": Doing, colour white, which is no colour" {
+		t.Errorf("summary %q", env.Summary)
+	}
+
+	_, r = e.runJSON("", "columns", "edit", e.fixture.Doing.ID, "--title", "Busy", "--no-color")
+	expectCode(t, r, ExitOK)
+	if body := e.lastWriteBody(); len(body) != 2 || body["title"] != "Busy" || body["color"] != nil {
+		t.Errorf("body sent %v", body)
+	}
+}
+
+// A Minka that does not take a colour away yet answers --no-color alone with
+// nothingToChange, and beside a title with a 200 that kept the colour; neither
+// may pass for a colour taken away.
+func TestColumnsEditSaysWhenMinkaKeepsTheColour(t *testing.T) {
+	e := newTestEnv(t)
+	e.server.KeepsColumnColorOnNull = true
+	red := "red"
+	e.fixture.Doing.Color = &red
+
+	env, r := e.runJSON("", "columns", "edit", e.fixture.Doing.ID, "--no-color")
+	expectCode(t, r, ExitValidation)
+	if env.Meta["apiCode"] != "nothingToChange" || !strings.Contains(env.Hint, "does not take a colour away yet") || !strings.Contains(env.Hint, "--color white") {
+		t.Errorf("apiCode %v, hint %q", env.Meta["apiCode"], env.Hint)
+	}
+
+	env, r = e.runJSON("", "columns", "edit", e.fixture.Doing.ID, "--title", "Busy", "--no-color")
+	expectCode(t, r, ExitAPI)
+	if !strings.Contains(env.Error, "does not take a colour away yet") || !strings.Contains(env.Error, "the title was written") || !strings.Contains(env.Hint, "--color white") {
+		t.Errorf("error %q, hint %q", env.Error, env.Hint)
+	}
+	if column := decode(t, env.Data); column["title"] != "Busy" || column["color"] != "red" {
+		t.Errorf("data %s", env.Data)
+	}
+}
+
+func TestColumnsEditTakesEitherAColourOrNone(t *testing.T) {
+	e := newTestEnv(t)
+	for _, color := range []string{"red", ""} {
+		env, r := e.runJSON("", "columns", "edit", e.fixture.Doing.ID, "--color", color, "--no-color")
+		expectCode(t, r, ExitUsage)
+		if !strings.Contains(env.Error, "--color and --no-color exclude each other") {
+			t.Errorf("error %q", env.Error)
+		}
+	}
+	if len(e.server.Requests()) != 0 {
+		t.Error("a request was sent")
+	}
+}
+
+// Done gives up no colour either, and the hint names both flags.
+func TestColumnsEditOfDoneWithoutAColourChangesNothing(t *testing.T) {
+	e := newTestEnv(t)
+	env, r := e.runJSON("", "columns", "edit", "done", "--board", e.fixture.Board.ID, "--title", "Finished", "--no-color")
+	expectRefusal(t, env, r, "systemColumnHasNoColor", "without --color or --no-color")
+	if e.fixture.Done.CustomTitle != nil {
+		t.Errorf("Done was renamed to %s", *e.fixture.Done.CustomTitle)
+	}
+}
+
 // Done refuses a colour, and the title sent with it is not written either.
 func TestColumnsEditOfDoneWithAColourChangesNothing(t *testing.T) {
 	e := newTestEnv(t)
@@ -259,9 +336,9 @@ func TestColumnsMovePutsAColumnBetweenItsNeighbours(t *testing.T) {
 	}
 }
 
-// Minka places a column next to anything that is no other working column of
-// the board as though it had been put first, so such a neighbour is refused
-// before anything moves.
+// Minka places a column next to Triage, Not now, Done or itself as though it
+// had been put first, so such a neighbour is refused before anything moves,
+// and so is one that is not on the board.
 func TestColumnsMoveRefusesANeighbourMinkaWouldPassOver(t *testing.T) {
 	e := newTestEnv(t)
 	withAReviewColumn(e)
@@ -279,13 +356,24 @@ func TestColumnsMoveRefusesANeighbourMinkaWouldPassOver(t *testing.T) {
 			t.Errorf("%s: hint %q", neighbour, env.Hint)
 		}
 	}
-	_, r := e.runJSON("", "columns", "move", "Review", "--board", e.fixture.Board.ID, "--after", "Nowhere")
-	expectCode(t, r, ExitUsage)
+	for _, neighbour := range []string{"Nowhere", e.fixture.OtherBoard.Columns[0].ID} {
+		_, r := e.runJSON("", "columns", "move", "Review", "--board", e.fixture.Board.ID, "--after", neighbour)
+		expectCode(t, r, ExitUsage)
+	}
 	if len(e.server.WritingRequests()) != writes {
 		t.Error("a move was sent")
 	}
 	if got := workingColumns(e); !slices.Equal(got, []string{"Doing", "Review"}) {
 		t.Errorf("working columns %v", got)
+	}
+}
+
+// The board read refuses a neighbour of another board before Minka could;
+// Minka's own refusal still gets a hint of its own.
+func TestColumnsMoveNamesTheWayOnFromANeighbourOnAnotherBoard(t *testing.T) {
+	refusal := columnRefusal(&session{host: "minka.example"}, &api.Error{Method: "POST", StatusCode: 422, Code: apiCodeNeighbourColumnOnAnotherBoard, Message: "A column moves only between columns of its own board."})
+	if refusal.Code != CodeValidation || !strings.Contains(refusal.Hint, "its own board") || !strings.Contains(refusal.Hint, "--first") {
+		t.Errorf("refusal %+v", refusal)
 	}
 }
 
