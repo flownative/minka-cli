@@ -63,17 +63,15 @@ underscore, an empty label and a dot at the end go through, because they name a
 machine somebody may really be reaching. A registered name may carry the
 sub-delimiters of a URL by the letter of the standard, so
 `https://minka.example.com;t=x` parses as one — and is refused, because nothing
-answers at it while it would become a key of the configuration, a key of the
-list of cards and part of the name of a lock beside it.
+answers at it while it would become a key of the configuration and of the list
+of cards.
 
 This holds for the default host of the configuration as well, whoever wrote it
 there, and a value that cannot be read at all is no host: it is refused where
 it is read, and no session comes about under it (C-044). The host is a key of
-the list of cards and part of the name of a lock, so every process has to make
-the same string of it, and a value no process can make a host of is nothing to
-carry further: carried further, it stands in a status, in a report, in the hint
-of a 401 and in the argv of the keepalive, where every process on the machine
-reads along — which is the very reason a token never comes through a flag. The
+the list of cards, so every process has to make the same string of it, and a
+value no process can make a host of is nothing to carry further: carried
+further, it stands in a status, in a report and in the hint of a 401. The
 refusal names the file to repair and the way out. Where the configuration keeps
 the same host in another form, the refusal says which entry that is: the token
 is there, it is only written where nothing looks for it.

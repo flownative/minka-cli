@@ -27,8 +27,9 @@ class Minka < Formula
       First steps, on a terminal:
         minka setup
 
-      After an upgrade, bring the skill for agents up to date:
+      After an upgrade, bring the skill and the Claude Code mod up to date:
         minka skill install
+        minka hooks install
     EOS
   end
 

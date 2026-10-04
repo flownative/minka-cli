@@ -7,8 +7,8 @@ anybody runs `minka doctor`.
 
 `setup` asks questions, so it runs on a terminal only. Without one it exits 1
 before anything is asked, sent or written, and names the single steps an agent
-or a script takes instead: `auth login --with-token` and `skill install`
-(C-018).
+or a script takes instead: `auth login --with-token`, `skill install` and
+`hooks install` (C-018).
 
 In this order:
 
@@ -28,10 +28,14 @@ In this order:
    and no skill is installed.
 4. The skill: where installing would change something and is possible, it
    asks. Only `y`, `yes` or an empty answer installs.
+5. The mod: installed without a question, as `hooks install` installs it, old
+   hook and all; `--no-mod` leaves it out. Where `claude` is missing or does not
+   take it, setup says so and ends well all the same (C-108); see [Saying what
+   you are working on](at-work.md).
 
 Questions and progress go to stderr; stdout carries what every command prints,
-here the host, the person and the state of the skill, with the first commands
-as breadcrumbs. The token is never printed.
+here the host, the person, the state of the skill, the mod and the old hook,
+with the first commands as breadcrumbs. The token is never printed.
 
 ## doctor
 

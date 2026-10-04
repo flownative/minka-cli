@@ -2,15 +2,17 @@ package cli
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"io/fs"
 	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/flownative/minka-cli/internal/config"
@@ -23,7 +25,16 @@ const (
 	modCurrent      = "current"
 	modStale        = "stale"
 	modNotInstalled = "not installed"
+
+	// modWritten is a mod written beside the configuration that Claude Code
+	// was not told of, and modSkipped one setup was told not to install.
+	modWritten = "written"
+	modSkipped = "skipped"
 )
+
+// errNoClaude says that Claude Code cannot be run from here. Setup goes on
+// without the mod then: signing in is worth having on a machine without it.
+var errNoClaude = errors.New("claude is not on the PATH")
 
 // claudeCommands are what makes Claude Code load the mod from where minka wrote
 // it: the directory as a marketplace, and the plugin from it for every project.
@@ -35,89 +46,179 @@ func claudeCommands(dir string) [][]string {
 	}
 }
 
-// runClaudeCommand runs the claude command line, and says what it printed
-// where it failed.
-func (a *app) runClaudeCommand(args []string) error {
+// runClaudeCommand runs the claude command line and answers what it printed
+// on its standard output. What it says on standard error, such as a warning of
+// Node or a notice of an update, is no answer, and only shown where it failed.
+func (a *app) runClaudeCommand(args []string) (string, error) {
 	program, err := exec.LookPath("claude")
 	if err != nil {
-		return errors.New("claude is not on the PATH")
+		return "", errNoClaude
 	}
-	output, err := exec.CommandContext(a.ctx, program, args...).CombinedOutput()
+	var stdout, stderr bytes.Buffer
+	run := exec.CommandContext(a.ctx, program, args...)
+	run.Stdout, run.Stderr = &stdout, &stderr
+	if err := run.Run(); err != nil {
+		said := strings.TrimSpace(stderr.String() + "\n" + stdout.String())
+		return "", fmt.Errorf("claude %s: %w: %s", strings.Join(args, " "), err, said)
+	}
+	return stdout.String(), nil
+}
+
+// modsSince is the first version of Claude Code that loads a mod. An older one
+// takes the plugin without a word and never runs it, so the install would
+// report a mod that reports nothing.
+var modsSince = [3]int{2, 1, 287}
+
+// claudeLoadsMods says why the Claude Code on the PATH cannot load the mod,
+// nil where it can. A version it cannot read counts as one that cannot: the
+// hook stays then, which costs a process per tool call, where taking it would
+// cost the reporting.
+func (a *app) claudeLoadsMods() error {
+	output, err := a.runClaude([]string{"--version"})
 	if err != nil {
-		return fmt.Errorf("claude %s: %w: %s", strings.Join(args, " "), err, strings.TrimSpace(string(output)))
+		return err
+	}
+	version, readable := claudeVersionOf(output)
+	minimum := fmt.Sprintf("%d.%d.%d", modsSince[0], modsSince[1], modsSince[2])
+	if !readable {
+		return cannotLoadMods(fmt.Sprintf("the version of Claude Code cannot be read from %q, and only %s and later load mods", strings.TrimSpace(output), minimum))
+	}
+	for i := range version {
+		if version[i] != modsSince[i] {
+			if version[i] < modsSince[i] {
+				return cannotLoadMods(fmt.Sprintf("Claude Code %d.%d.%d cannot load mods; update it to %s or later", version[0], version[1], version[2], minimum))
+			}
+			break
+		}
 	}
 	return nil
 }
 
-// installTheMod writes the mod beside the configuration and has Claude Code
-// install it from there.
+// cannotLoadMods is a Claude Code that runs and would take the mod, and never
+// load it. Telling it of the mod helps nobody; updating it does.
+type cannotLoadMods string
+
+func (c cannotLoadMods) Error() string { return string(c) }
+
+// aVersion is a word that is a version: three numbers, and a pre-release or a
+// build behind them, which says nothing about whether mods load.
+var aVersion = regexp.MustCompile(`^(\d+)\.(\d+)\.(\d+)(?:[-+]\S*)?$`)
+
+// claudeVersionOf reads the version from what claude --version prints, such
+// as "2.1.289 (Claude Code)": the first word that is one, so that a line of a
+// warning before it does not hide it. A word such as "v2.1.289" is not read:
+// claude does not print one, and a version that cannot be read keeps the hook,
+// which is the safe side.
+func claudeVersionOf(output string) ([3]int, bool) {
+	var version [3]int
+	for _, word := range strings.Fields(output) {
+		found := aVersion.FindStringSubmatch(word)
+		if found == nil {
+			continue
+		}
+		for i := range version {
+			number, err := strconv.Atoi(found[i+1])
+			if err != nil {
+				return version, false
+			}
+			version[i] = number
+		}
+		return version, true
+	}
+	return version, false
+}
+
+// modInstall is what became of an install of the mod: where it lies, which
+// minka it runs, whether Claude Code was told of it, and what became of the
+// hook of minka in the settings of Claude Code.
+type modInstall struct {
+	dir     string
+	program string
+	state   string
+	// untold says why Claude Code was not told of the mod, nil where it was.
+	untold error
+	hook   oldHook
+}
+
+func (m modInstall) data() map[string]any {
+	data := map[string]any{"path": m.dir, "plugin": mod.Plugin, "state": m.state, "program": m.program}
+	if m.untold != nil {
+		data["reason"] = m.untold.Error()
+	}
+	return data
+}
+
+// notices are what an install has to say beyond its state: a program that is
+// not there, and a hook that could not go.
+func (m modInstall) notices() []string {
+	var notices []string
+	if m.state != modSkipped && !theProgramIsThere(m.program) {
+		notices = append(notices, "the mod runs "+m.program+", and there is no such program; it reports nothing and says nothing about it")
+	}
+	if !m.hook.found() && m.hook.why != "" {
+		notices = append(notices, m.hook.why+", so whether it still carries the old hook of minka cannot be told; where it does, take it out of hooks."+oldHookEvent+" by hand")
+	}
+	if m.hook.found() && m.state == modSkipped {
+		notices = append(notices, "the old hook in "+m.hook.path+" runs "+m.hook.command+" after every tool call; it is a leftover, and minka hooks install takes it out")
+	}
+	if m.hook.found() && !m.hook.removed && m.state != modSkipped {
+		notices = append(notices, "the old hook in "+m.hook.path+" runs "+m.hook.command+" after every tool call and could not be removed: "+m.hook.why+"; take it out of hooks."+oldHookEvent+" by hand")
+	}
+	return notices
+}
+
+// installTheMod writes the mod beside the configuration, has Claude Code
+// install it from there, and then takes the hook of minka out of the settings
+// of Claude Code. It fails only where the mod cannot be written; whether
+// Claude Code was told of it is in the answer.
 //
 // Every install writes what differs from the files of this minka, so that the
 // mod a machine runs is the one of the minka that last installed it. Claude
 // Code loads a plugin of a directory marketplace from that directory, so the
 // new files take effect with the next session, with no update in Claude Code.
-func (a *app) installTheMod() error {
+//
+// Claude Code is told only where its version loads mods, and the hook goes
+// only once it has been told: a session left with neither would report
+// nothing. It goes after Claude Code is told, because telling it writes the
+// same settings file, and what it wrote has to be kept.
+func (a *app) installTheMod() (modInstall, error) {
 	dir, err := a.modPath()
 	if err != nil {
-		return err
+		return modInstall{}, err
 	}
-	program := a.minkaProgram()
-	files, err := mod.Files(program)
+	installed := modInstall{dir: dir, program: a.minkaProgram(), state: modCurrent}
+	files, err := mod.Files(installed.program)
 	if err != nil {
-		return &Error{Code: CodeConfig, Message: err.Error()}
+		return modInstall{}, &Error{Code: CodeConfig, Message: err.Error()}
 	}
 	changed, err := writeTheMod(dir, files)
 	if err != nil {
-		return &Error{Code: CodeConfig, Message: err.Error()}
+		return modInstall{}, &Error{Code: CodeConfig, Message: err.Error()}
+	}
+	if changed {
+		installed.state = modInstalled
 	}
 
+	if err := a.claudeLoadsMods(); err != nil {
+		installed.state, installed.untold = modWritten, err
+		return installed, nil
+	}
 	for _, args := range claudeCommands(dir) {
-		if err := a.runClaude(args); err != nil {
-			return &Error{
-				Code:    CodeConfig,
-				Message: "the mod is written to " + dir + ", and Claude Code was not told of it: " + err.Error(),
-				Hint:    "Run these yourself:\n" + strings.Join(claudeCommandLines(dir), "\n"),
-			}
+		if _, err := a.runClaude(args); err != nil {
+			installed.state, installed.untold = modWritten, err
+			return installed, nil
 		}
 	}
 
-	state, summary := modCurrent, "The mod in "+dir+" is current and installed in Claude Code"
-	if changed {
-		state, summary = modInstalled, "Wrote the mod to "+dir+" and installed it in Claude Code"
-	}
-	s := success{
-		data:    map[string]any{"mod": map[string]any{"path": dir, "plugin": mod.Plugin, "state": state, "program": program}},
-		summary: summary,
-		text:    func(w io.Writer) { fmt.Fprintf(w, "%s: %s\n", dir, state) },
-	}
-	s.notices = append(s.notices, "the mod takes effect in Claude Code sessions started from now on")
-	if !theProgramIsThere(program) {
-		s.notices = append(s.notices, "the mod runs "+program+", and there is no such program; it reports nothing and says nothing about it")
-	}
-	if notice := a.theHookIsThereAsWell(); notice != "" {
-		s.notices = append(s.notices, notice)
-	}
-	return a.ok(s)
-}
-
-// theHookIsThereAsWell says so where the settings of the machine still carry
-// the hook beside the mod. The two do not report twice, because a signal goes
-// out at most once a minute whoever asks, so the hook is left where it is: it
-// costs one process after every tool call and nothing else.
-func (a *app) theHookIsThereAsWell() string {
-	path, err := a.settingsPath("")
+	path, err := a.settingsPath()
 	if err != nil {
-		return ""
+		return installed, nil
 	}
-	settings, err := readSettings(path, "")
+	installed.hook, err = removeTheOldHook(path)
 	if err != nil {
-		return ""
+		installed.hook.why = err.Error()
 	}
-	found, err := heartbeatHookIn(settings, a.heartbeatCommand())
-	if err != nil || found == "" {
-		return ""
-	}
-	return "the hook in " + path + " runs " + found + " after every tool call as well; the mod does all it did, so the hook may go, and where it stays it costs a process per tool call and reports nothing twice"
+	return installed, nil
 }
 
 func claudeCommandLines(dir string) []string {
@@ -145,8 +246,8 @@ func shellWord(arg string) string {
 }
 
 // modStatus says what is on disk of the mod and whether the settings tell
-// Claude Code to load it.
-func (a *app) modStatus(settings map[string]any) (map[string]any, string, error) {
+// Claude Code to load it. Settings that cannot be read tell it nothing.
+func (a *app) modStatus(settingsPath string) (map[string]any, string, error) {
 	dir, err := a.modPath()
 	if err != nil {
 		return nil, "", err
@@ -157,8 +258,11 @@ func (a *app) modStatus(settings map[string]any) (map[string]any, string, error)
 	}
 	state := theModOnDisk(dir, files)
 	enabled := false
-	if plugins, ok := settings["enabledPlugins"].(map[string]any); ok {
-		enabled, _ = plugins[mod.Plugin].(bool)
+	var settings map[string]any
+	if content, err := os.ReadFile(settingsPath); err == nil && json.Unmarshal(content, &settings) == nil {
+		if plugins, ok := settings["enabledPlugins"].(map[string]any); ok {
+			enabled, _ = plugins[mod.Plugin].(bool)
+		}
 	}
 
 	var summary string
@@ -170,7 +274,7 @@ func (a *app) modStatus(settings map[string]any) (map[string]any, string, error)
 	default:
 		summary = "The mod in " + dir + " is " + state + " and loads in every Claude Code session"
 	}
-	return map[string]any{"path": dir, "plugin": mod.Plugin, "state": state, "enabled": enabled}, summary, nil
+	return map[string]any{"path": dir, "plugin": mod.Plugin, "state": state, "enabled": enabled, "settings": settingsPath}, summary, nil
 }
 
 // theModOnDisk compares what lies in the directory with what this minka would

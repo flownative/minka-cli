@@ -15,7 +15,6 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -31,17 +30,14 @@ type testEnv struct {
 	fixture *fakeapi.Fixture
 	vars    map[string]string
 
-	// keepalives counts the processes a run would have started, keepaliveHost
-	// holds the host the last of them was to report to. No test forks one: what
-	// is under test is the decision to start it and what it is told.
-	keepalives    atomic.Int32
-	keepaliveHost atomic.Value
-
-	// claudeRan are the command lines of Claude Code a run would have run, and
-	// claudeFails what each of them answers. No test runs the real one: it
-	// would install into the Claude Code of whoever runs the tests.
-	claudeRan   [][]string
-	claudeFails error
+	// claudeRan are the command lines of Claude Code a run would have run, but
+	// for asking its version, claudeFails what each of them answers, and
+	// claudeVersion what claude --version prints, a version that loads mods
+	// where it is empty. No test runs the real one: it would install into the
+	// Claude Code of whoever runs the tests.
+	claudeRan     [][]string
+	claudeFails   error
+	claudeVersion string
 }
 
 type result struct {
@@ -89,14 +85,15 @@ func (e *testEnv) runWith(configure func(*app), stdin string, args ...string) re
 	e.t.Helper()
 	var stdout, stderr bytes.Buffer
 	a := newApp(context.Background(), strings.NewReader(stdin), &stdout, &stderr, func(name string) string { return e.vars[name] })
-	a.startKeepalive = func(host string) error {
-		e.keepalives.Add(1)
-		e.keepaliveHost.Store(host)
-		return nil
-	}
-	a.runClaude = func(args []string) error {
+	a.runClaude = func(args []string) (string, error) {
+		if len(args) == 1 && args[0] == "--version" {
+			if e.claudeVersion == "" {
+				return "2.1.289 (Claude Code)\n", e.claudeFails
+			}
+			return e.claudeVersion, e.claudeFails
+		}
 		e.claudeRan = append(e.claudeRan, args)
-		return e.claudeFails
+		return "", e.claudeFails
 	}
 	if configure != nil {
 		configure(a)
@@ -1695,8 +1692,8 @@ func TestARefusedHostKeepsItsPasswordOutOfTheOutput(t *testing.T) {
 // A default host the configuration cannot read is no host: it is refused where
 // it is read, and no command comes to a session under it. That is what keeps the
 // value out of everything that prints a host — a status, a report, the hint of a
-// refusal — and out of the argv of the keepalive. What the refusal says of the
-// value is the address alone, and it names the file to repair.
+// refusal. What the refusal says of the value is the address alone, and it names
+// the file to repair.
 func TestADefaultHostThatCannotBeReadIsNoHost(t *testing.T) {
 	const password = "s3cr3t-password"
 	const withCredentials = "https://robert:" + password + "@minka.example.com"

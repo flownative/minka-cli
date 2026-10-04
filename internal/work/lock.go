@@ -7,8 +7,7 @@ import (
 	"github.com/flownative/minka-cli/internal/localfile"
 )
 
-// lock is only ever held for the moment a store is read and written, or for
-// as long as a keepalive reports.
+// lock is only ever held for the moment a store is read and written.
 type lock = localfile.Lock
 
 func acquire(path string, wait time.Duration) (*lock, error) {

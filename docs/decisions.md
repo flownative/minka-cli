@@ -214,7 +214,7 @@ into somebody's checkout, changes files nobody asked it to touch.
 <a id="c-018"></a>
 ## C-018 — `setup` is for a person, the single steps are for an agent
 
-*Applies to: `setup`, `auth login`, `skill install`*
+*Applies to: `setup`, `auth login`, `skill install`, `hooks install`*
 
 `setup` asks questions and refuses without a terminal; everything it does is
 also a command of its own that asks nothing.
@@ -510,6 +510,8 @@ the entry to add by hand.
 is worse than one that refuses. **Implemented as:** `cli.addHeartbeatHook`,
 `heartbeatHookIn`, see [Saying what you are working on](stable/at-work.md).
 
+*Superseded by [C-109](#c-109).*
+
 <a id="c-040"></a>
 ## C-040 — A card is given up eight hours after its session was last at it
 
@@ -581,7 +583,7 @@ keep a card alight for a working day with nobody left to stop it.
 `work.HoldKeepalive`, see
 [Saying what you are working on](stable/at-work.md).
 
-*A session whose process runs the mod is left to the mod: [C-105](#c-105).*
+*Superseded by [C-107](#c-107).*
 
 <a id="c-044"></a>
 ## C-044 — A host is read, or it is no host
@@ -593,9 +595,9 @@ is refused where it is read, so that no session comes about under it. Signing ou
 is the one command that takes an entry as the file writes it, so that one written
 by hand can be taken out again.
 
-**Why:** Such a value would become a key of the configuration, a key of the
-list of cards and part of the name of a lock, and a session under it would
-carry it into everything that prints a host and into the argv of the keepalive.
+**Why:** Such a value would become a key of the configuration and of the list
+of cards, and a session under it would carry it into everything that prints a
+host.
 A key such a value already made in the list of cards is left where it lies:
 nothing walks the hosts of that list, so it is inert, and the file is written
 with the mode of the configuration beside it. **Implemented as:**
@@ -1668,15 +1670,14 @@ as:** `cli.newColumnsMoveCmd`, see [Columns](stable/columns.md).
 <a id="c-103"></a>
 ## C-103 — Every session reports its own cards, as a client of its own
 
-*Applies to: `work start`, `work stop`, `work list`, `heartbeat`, the keepalive, `cards move`, `cards done`*
+*Applies to: `work start`, `work stop`, `work list`, `heartbeat`, `cards move`, `cards done`*
 
 The store keeps one list per host and session; a signal carries one session's
 list under that session's client. The session is `--session`, else
-`$CLAUDE_CODE_SESSION_ID`, else none, for typed commands and the hook alike; the
-hook's input is not read. A store of one list per machine is handed out.
-**Why:** another session no longer keeps a dead one's cards alight; a session
-that crashed or exited still glows up to 25 + 3 minutes after its last beat,
-and a hook going by a session no typed command knows would report nothing.
+`$CLAUDE_CODE_SESSION_ID`, else none, for typed commands and the mod alike; the
+standard input of a beat is not read. A store of one list per machine is
+handed out. **Why:** another session never keeps a dead one's cards alight,
+and a beat going by a session no typed command knows would report nothing.
 **Implemented as:** `work.Host`, `work.List`, `cli.app.agentSession`,
 `cli.app.signal`, see [Saying what you are working on](stable/at-work.md).
 
@@ -1695,23 +1696,19 @@ cannot hand out bytes. **Implemented as:** `basecamp.Downloader.DownloadVersion`
 `Extractor.earlierFilesOf`, see [Importing](stable/import.md).
 
 <a id="c-105"></a>
-## C-105 — A mod in the Claude Code process reports its session, and the keepalive leaves it
+## C-105 — A mod in the Claude Code process beats for its session, idle or at work
 
-*Applies to: `hooks install --mod`, `hooks status`, `heartbeat --from-mod --idle`, the keepalive*
+*Applies to: the mod, `heartbeat --from-mod --idle`*
 
-`--mod` writes the mod to `<config dir>/claude-mod` and has `claude plugin`
-install it, which writes `enabledPlugins` and `extraKnownMarketplaces` into
-Claude Code's `settings.json` and its `plugins/` files: Claude Code's own writer
-on an explicit opt-in, so C-039 holds. The mod runs `heartbeat --session <id>
+The mod lies in `<config dir>/claude-mod` and runs `heartbeat --session <id>
 --from-mod` on every step and every 30 s, `--idle` while no tool call runs that
-started less than two hours ago and was not abandoned. Its
-list is marked; the keepalive neither reports it nor is started for it.
-**Why:** only the process knows it has ended, so a crashed session goes dark
-three minutes after its last beat instead of 25 + 3; a tool call that never
-returns would otherwise keep its session at work for as long as the process
-runs, and no tool call runs two hours without a step. **Implemented as:**
-`mod.Files`, `cli.app.installTheMod`, `work.List.Mod`,
-`cli.app.claimTheSignal`, `cli.app.reportEverySessionAtWork`, see [Saying what you are working on](stable/at-work.md).
+started less than two hours ago and was not abandoned. An idle beat marks
+nothing and reports a list only for 25 minutes after the last step, never
+relighting what the server forgot. **Why:** only the process knows it has
+ended; a tool call that never returns would otherwise keep its session at work
+for as long as the process runs, and an open window is nobody at work.
+**Implemented as:** `mod.Files`, `cli.nobodyIsAtWorkOn`, `cli.app.claimTheSignal`,
+see [Saying what you are working on](stable/at-work.md).
 
 <a id="c-106"></a>
 ## C-106 — My calendar is `events mine`, what a calendar shows `events settings`, in Minka's words
@@ -1728,3 +1725,46 @@ are those `data.content` hands back, as for `--rhythm`. A dated item has a day
 and no time, so mixing it in would read as an event.
 **Implemented as:** `cli.newEventsMineCmd`, `cli.newEventsSettingsCmd`,
 `cli.renderDatedItems`, see [Calendars and events](stable/calendar.md).
+
+<a id="c-107"></a>
+## C-107 — The mod is the one thing that reports a Claude Code session; nothing reports after a beat
+
+*Applies to: `heartbeat`, the mod*
+
+A beat reports and ends; no process of minka's own reports between beats. A
+Claude Code session reports through the mod alone; whatever runs without it,
+such as an agent that is not Claude Code, runs `heartbeat` every minute or two
+itself. The 25 minutes of an idle process and the 8 hours of C-040 stay.
+**Why:** the mod beats during a long tool call from inside the process, which
+alone knows it ended; with the hook gone, only a heartbeat run by hand would
+start a keepalive, and its 25 minutes would outlive a session that ended.
+**Implemented as:** `cli.newHeartbeatCmd`, see
+[Saying what you are working on](stable/at-work.md).
+
+<a id="c-108"></a>
+## C-108 — `setup` installs the mod, and goes on where Claude Code cannot take it
+
+*Applies to: `setup`, `hooks install`, `hooks status`*
+
+`setup` installs the mod after the sign-in and the skill, without asking;
+`--no-mod` installs nothing. Only a `claude --version` of 2.1.287 or later is
+told of it; where `claude` is older, missing or fails, the state is `written`
+with a `reason`, the old hook stays, setup exits 0 and `hooks install` 1.
+`--mod` is a hidden no-op, `--file` and `--command` are gone. **Why:** everybody
+who signs in gets the reporting, a sign-in is worth keeping without Claude Code,
+and an older one exits 0 on the install and never runs the mod.
+**Implemented as:** `cli.app.installTheMod`, `cli.app.claudeLoadsMods`, `cli.app.setupMod`.
+
+<a id="c-109"></a>
+## C-109 — The old hook of minka is cut out of the settings, and nothing else
+
+*Applies to: `hooks install`, `setup`, `hooks status`*
+
+Once Claude Code has the mod, every `PostToolUse` hook of type `command` whose
+command is `minka heartbeat` or `/…/minka heartbeat` is cut out of the text,
+with what only held it; the cut changes no other byte, the file is written
+atomically where a link points, its mode kept. No JSON, or a key twice on the
+way to the hook, leaves the file alone. **Why:** the file belongs to whoever
+wrote it, and Robert's word allows taking out minka's own entry and no more.
+**Implemented as:** `cli.removeTheOldHook`, `cli.isTheHookOfMinka`, see
+[Saying what you are working on](stable/at-work.md).
