@@ -1,8 +1,10 @@
 package fakeapi
 
 import (
+	"encoding/json"
 	"net/http"
 	"reflect"
+	"slices"
 	"testing"
 	"time"
 )
@@ -34,10 +36,14 @@ func withDatedItems(f *Fixture) {
 		{ID: newID(), Title: "Already got", Completed: true, AssigneeIDs: []string{f.Anke.ID}, DueOn: day("2035-04-18")},
 	}
 	f.Done.Cards = append(f.Done.Cards, &Card{ID: newID(), Title: "Done already", DueOn: day("2035-04-15"), AssigneeIDs: []string{f.Anke.ID}})
-	// Completed and still in Doing: a calendar's span asks for the moment it
-	// was completed, My calendar only for the column.
+	// Completed and still in Doing, with an open step of Anke's: neither
+	// stands anywhere, as if it were in Done.
 	completedAt := time.Date(2035, 4, 1, 9, 0, 0, 0, time.UTC)
-	f.Doing.Cards = append(f.Doing.Cards, &Card{ID: newID(), Title: "Completed in Doing", DueOn: day("2035-04-17"), AssigneeIDs: []string{f.Anke.ID}, CompletedAt: &completedAt})
+	f.Doing.Cards = append(f.Doing.Cards, &Card{
+		ID: newID(), Title: "Completed in Doing", DueOn: day("2035-04-17"), AssigneeIDs: []string{f.Anke.ID}, CompletedAt: &completedAt,
+		CreatorID: f.Bruno.ID, CompletedByID: f.Bruno.ID,
+		Steps: []*Step{{ID: newID(), Title: "Step of a completed card", AssigneeIDs: []string{f.Anke.ID}, DueOn: day("2035-04-19")}},
+	})
 }
 
 func asAnke(s *Server, f *Fixture) string {
@@ -85,7 +91,7 @@ func TestACalendarShowsTheDatedItemsOfItsProjectUntilTheTeamChoosesEventsOnly(t 
 	if answer := callSeries(t, s, f.Token, http.MethodPatch, calendar, map[string]any{"content": "eventsOnly"}); answer.got != "200" {
 		t.Errorf("the same again: %s", answer.got)
 	}
-	if answer := callSeries(t, s, asAnke(s, f), http.MethodGet, "/me/events"+april, nil); len(answer.body["datedItems"].([]any)) != 4 {
+	if answer := callSeries(t, s, asAnke(s, f), http.MethodGet, "/me/events"+april, nil); len(answer.body["datedItems"].([]any)) != 3 {
 		t.Errorf("what a calendar shows does not touch My calendar: %s", answer.raw)
 	}
 	callSeries(t, s, f.Token, http.MethodPatch, calendar, map[string]any{"content": "eventsAndDatedItems"})
@@ -177,10 +183,10 @@ func TestMyCalendarHoldsTheEventsTakenPartInAndWhatIsMineThatIsDue(t *testing.T)
 	})
 
 	items := callSeries(t, s, anke, http.MethodGet, "/me/events"+april, nil).body["datedItems"].([]any)
-	if titles := titlesOf(t, items); !reflect.DeepEqual(titles, []string{"Count the tents", "Review the API", "Completed in Doing", "Get an offer"}) {
+	if titles := titlesOf(t, items); !reflect.DeepEqual(titles, []string{"Count the tents", "Review the API", "Get an offer"}) {
 		t.Fatalf("dated items %v", titles)
 	}
-	expectPicked(t, "the step", items[3].(map[string]any), map[string]any{
+	expectPicked(t, "the step", items[2].(map[string]any), map[string]any{
 		"kind": "step", "toolId": f.Board.ID, "cardId": f.CardInTriage.ID, "placeTitle": "Write the CLI",
 		"appUrl": s.cardURL(f.Board, f.CardInTriage), "project": map[string]any{"id": f.Project.ID, "name": "Test-Projekt"},
 	})
@@ -191,7 +197,7 @@ func TestMyCalendarHoldsTheEventsTakenPartInAndWhatIsMineThatIsDue(t *testing.T)
 	// A to-do of which only a subtask is hers stays out, and so does the subtask.
 	due := "2035-04-20"
 	f.GroupedTodo.DueOn, f.GroupedTodo.Subtasks[0].DueOn = &due, &due
-	if titles := titlesOf(t, callSeries(t, s, anke, http.MethodGet, "/me/events"+april, nil).body["datedItems"]); len(titles) != 4 {
+	if titles := titlesOf(t, callSeries(t, s, anke, http.MethodGet, "/me/events"+april, nil).body["datedItems"]); len(titles) != 3 {
 		t.Errorf("a subtask counted: %v", titles)
 	}
 
@@ -250,5 +256,90 @@ func TestAClientGetsOnlyTheDatedItemsShownToThem(t *testing.T) {
 	f.LooseTodo.AssigneeIDs = []string{f.Client.ID}
 	if titles := titlesOf(t, callSeries(t, s, "minka_pat_client", http.MethodGet, "/me/events"+april, nil).body["datedItems"]); len(titles) != 0 {
 		t.Errorf("My calendar of a client: %v", titles)
+	}
+}
+
+func TestACardCompletedOutsideDoneIsNoLongerToBeDoneAnywhere(t *testing.T) {
+	s, f := New(t)
+	withDatedItems(f)
+	anke := asAnke(s, f)
+	completed := f.Doing.Cards[len(f.Doing.Cards)-1]
+
+	myCardTitles := func() []string {
+		t.Helper()
+		var cards []map[string]any
+		if err := json.Unmarshal([]byte(callSeries(t, s, anke, http.MethodGet, "/me/cards", nil).raw), &cards); err != nil {
+			t.Fatal(err)
+		}
+		titles := []string{}
+		for _, card := range cards {
+			titles = append(titles, card["title"].(string))
+		}
+		return titles
+	}
+	everywhere := func() (span, mine, cards []string) {
+		t.Helper()
+		return titlesOf(t, callSeries(t, s, f.Token, http.MethodGet, eventsOf(f)+april, nil).body["datedItems"]),
+			titlesOf(t, callSeries(t, s, anke, http.MethodGet, "/me/events"+april, nil).body["datedItems"]),
+			myCardTitles()
+	}
+
+	span, mine, cards := everywhere()
+	if slices.Contains(span, "Completed in Doing") {
+		t.Errorf("a calendar's span: %v", span)
+	}
+	if slices.Contains(mine, "Completed in Doing") || slices.Contains(mine, "Step of a completed card") {
+		t.Errorf("My calendar, the card or its step: %v", mine)
+	}
+	if slices.Contains(cards, "Completed in Doing") {
+		t.Errorf("the cards Anke is assigned to: %v", cards)
+	}
+
+	completed.CompletedAt = nil
+	span, mine, cards = everywhere()
+	if !slices.Contains(span, "Completed in Doing") || !slices.Contains(mine, "Completed in Doing") || !slices.Contains(mine, "Step of a completed card") || !slices.Contains(cards, "Completed in Doing") {
+		t.Errorf("reopened where it stands, it is back everywhere: %v, %v, %v", span, mine, cards)
+	}
+}
+
+// Only A to Z are lowercased before titles are compared byte by byte, as
+// Minka does in SQL under the collation "C" and in PHP with strtolower(): "10"
+// comes before "9", "bx" before "By", and "Äb" before "äa", which a
+// lowercasing that knew umlauts would turn round. Titles alike once folded go
+// by their identifier, whichever of them was added first: a sort that kept
+// the order it was handed would otherwise pass for the tie-break.
+func TestTheDatedItemsOfADayAreOrderedAlikeInASpanAndOnMyCalendar(t *testing.T) {
+	alike := []*Card{
+		{ID: "0a000000-0000-4000-8000-000000000001", Title: "tent"},
+		{ID: "0a000000-0000-4000-8000-000000000002", Title: "Tent"},
+	}
+	for name, pair := range map[string][]*Card{
+		"the lower identifier added first": {alike[0], alike[1]},
+		"the lower identifier added last":  {alike[1], alike[0]},
+	} {
+		t.Run(name, func(t *testing.T) {
+			s, f := New(t)
+			anke := asAnke(s, f)
+			day := "2035-04-22"
+			f.LooseTodo.DueOn, f.LooseTodo.AssigneeIDs = &day, []string{f.Anke.ID}
+			cards := append([]*Card{
+				{ID: newID(), Title: "9"}, {ID: newID(), Title: "10"}, {ID: newID(), Title: "Zebra"}, {ID: newID(), Title: "apple"},
+				{ID: newID(), Title: "By"}, {ID: newID(), Title: "bx"}, {ID: newID(), Title: "äa"}, {ID: newID(), Title: "Äb"},
+			}, pair...)
+			for _, card := range cards {
+				added := *card
+				added.DueOn, added.AssigneeIDs, added.CreatorID = &day, []string{f.Anke.ID}, f.Bruno.ID
+				f.Doing.Cards = append(f.Doing.Cards, &added)
+			}
+			want := []string{"10", "9", "apple", "bx", "By", "Count the tents", "tent", "Tent", "Zebra", "Äb", "äa"}
+
+			const theDay = "?from=2035-04-22&to=2035-04-22"
+			if titles := titlesOf(t, callSeries(t, s, f.Token, http.MethodGet, eventsOf(f)+theDay, nil).body["datedItems"]); !reflect.DeepEqual(titles, want) {
+				t.Errorf("a calendar's span: %q, want %q", titles, want)
+			}
+			if titles := titlesOf(t, callSeries(t, s, anke, http.MethodGet, "/me/events"+theDay, nil).body["datedItems"]); !reflect.DeepEqual(titles, want) {
+				t.Errorf("My calendar: %q, want %q", titles, want)
+			}
+		})
 	}
 }

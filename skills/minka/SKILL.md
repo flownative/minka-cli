@@ -337,10 +337,11 @@ such as `Doing`.
   every project it is a member of, as a bare array of the same cards
   `cards show` gives. Each carries `project {id, name}` and `board {id, title}`
   besides `projectId` and `boardId`.
-- Cards in Done, cards in the trash, cards in the archive of their board, cards
-  of an archived project and cards of a project that was left are not among
-  them, so the list is what is still to do. A card that is not in the list is
-  therefore not necessarily done: it may have been archived.
+- Cards in Done, cards completed in another column, cards in the trash, cards
+  in the archive of their board, cards of an archived project and cards of a
+  project that was left are not among them, so the list is what is still to
+  do. A card that is not in the list is therefore not necessarily done: it may
+  have been archived.
 - The order is the order of the page: projects by name, then by `dueOn` with
   the overdue ones first and the ones without a date last.
 - It is the cheapest way to answer "what am I on?": one request instead of a
@@ -1588,7 +1589,8 @@ is no way back out of the trash through the API.
   else the installation's, named by `timeZone`.
 - **`datedItems` are no events.** While the calendar's `content` is
   `eventsAndDatedItems` (the default), they are the open to-dos and cards of
-  the project due in the span, **whoever they belong to**, the earliest first:
+  the project due in the span, **whoever they belong to**, the earliest first,
+  then by title with only A to Z lowercased (`10` before `9`), then by `id`:
   `kind` (`todo`, `card`), `toolId` (To-dos tool or board), `cardId`, `title`,
   `dueOn`, `placeTitle` (list or board) and `appUrl`. With `eventsOnly` the
   list is empty. They have a day and no time; read one with `todos show` or
@@ -1597,9 +1599,10 @@ is no way back out of the trash through the API.
   project of yours that is not archived: `events` you **take part in** (each
   line with `toolId` and `project` besides), and `datedItems` assigned **to
   you**, steps included (`kind` `step`, `cardId` its card, `placeTitle` the
-  card, `appUrl` opens the card). A to-do of which only a subtask is yours is
-  not there. The span is refused as for `events list`; a calendar's `content`
-  does not matter here.
+  card, `appUrl` opens the card), in the order of `events list`. A to-do of
+  which only a subtask is yours is not there, nor is a card in Done or
+  completed in another column, nor its steps. The span is refused as for
+  `events list`; a calendar's `content` does not matter here.
 - **Every event stands in the span once, a series too.** Lay out an agenda from
   `occurrences`, the times it takes place at in the span, never empty and in
   the order they start. The event's own `startsAt`/`endsAt`/`firstDay`/

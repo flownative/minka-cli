@@ -15,7 +15,8 @@ Everything here was read in Minka's code — `CalendarApiController`,
 the event handlers, `EventParticipants`, `DbalCalendarEventRepository`,
 `ApiEventsTest`, `EventCommentsApiController` and `ApiEventCommentsTest`, and
 for what a calendar shows and My calendar `CalendarDatedItemQueryService`,
-`MyCalendarQueryService`, the readers of one's own cards, to-dos and steps,
+`MyCalendarQueryService`, `CalendarDatedItem`, `OpenCard`, the readers of
+one's own cards, to-dos and steps,
 `ChooseCalendarContentHandler`, `DbalCalendarSettingsRepository` and
 `ApiMyCalendarTest`. What has been seen live is in the
 [Status](../work-in-progress/status.md).
@@ -96,15 +97,17 @@ to; with the second it is `[]`. Each item is `id`, `kind` (`todo` or `card`),
 `title`, `dueOn`, `placeTitle` (the list of a to-do, the board of a card) and
 `appUrl`; it carries no `project`.
 
-- **Left out:** a done to-do; a card that is completed or stands in Done; what
-  is in the trash or in the archive; a to-do in a list that is archived or in
-  the trash, or in a group in the trash; a card in a column in the trash; what
-  a client is not shown, and everything in a tool hidden from them or in the
-  trash. A step never stands in a calendar's span.
+- **Left out:** a done to-do; a card that stands in Done or was completed in
+  another column; what is in the trash or in the archive; a to-do in a list
+  that is archived or in the trash, or in a group in the trash; a card in a
+  column in the trash; what a client is not shown, and everything in a tool
+  hidden from them or in the trash. A step never stands in a calendar's span.
 - An **archived project** still carries its dated items: the span is read
   there as before.
-- **Order:** by `dueOn`, then by `title`, then by `id`, as the database sorts
-  them.
+- **Order:** by `dueOn`, then by `title` with only A to Z lowercased and
+  compared byte by byte, then by `id`: `10` before `9`, `apple` before
+  `Zebra`, `bx` before `By`, and `Äb` before `äa`, since an umlaut keeps its
+  case. My calendar orders alike.
 - A dated item is **no event**: it has a day and no time, no occurrences, and
   is read with `todos show` or `cards show`. The text view lists them under a
   heading of their own, after the events, with their kind and their place.
@@ -144,9 +147,10 @@ and the CLI refuses a call without both days as a usage error.
   `project` (`id`, `name`) besides. A step has `kind` `step`, `toolId` its
   board, `cardId` its card, `placeTitle` the title of its card and `appUrl` the
   page of its card. A to-do of which only a subtask is the reader's stays out,
-  and a subtask is never an entry. A card in Done is left out, a step that is
-  done, a card in the archive or the trash, and what a client is not shown.
-  Order: by `dueOn`, `title` and `id`, compared by PHP.
+  and a subtask is never an entry. A card is left out where a calendar's span
+  leaves it out, in Done or completed in another column, and its steps with
+  it; so are a step that is done, a card in the archive or the trash, and what
+  a client is not shown. Order: as in a calendar's span.
 - A Minka without the address answers with a page of its web: exit 2, and the
   message says that the host has no My calendar.
 

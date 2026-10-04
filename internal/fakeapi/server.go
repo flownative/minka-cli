@@ -1633,11 +1633,8 @@ func (s *Server) myCards(w http.ResponseWriter, _ *http.Request, person *Person)
 			continue
 		}
 		for _, column := range board.Columns {
-			if column.Type == "done" {
-				continue
-			}
 			for _, card := range column.Cards {
-				if slices.Contains(card.AssigneeIDs, person.ID) {
+				if openCard(column, card) && slices.Contains(card.AssigneeIDs, person.ID) {
 					mine = append(mine, assigned{board, column, card})
 				}
 			}

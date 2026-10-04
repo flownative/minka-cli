@@ -138,9 +138,12 @@ Beside its events a calendar's span carries what of its project is due,
 mine` reads My calendar, the events one takes part in and what is assigned to
 one and due, steps included, across one's active projects (C-106). The text
 views put what is due under a heading of its own. Minka's side is on its `main`
-(#319) and in no release yet, so production gets it with the next Minka
-release; `events mine` is seen live, `events settings` and the dated items of a
-calendar only against the fake, see below.
+(#319, and #327, by which a calendar's span, My calendar and `cards mine` leave
+out the same cards and order a day's items alike) and in no release yet, so
+production gets it with the next Minka release; until then a released Minka
+still lists a card completed outside Done under `cards mine`. `events mine` is
+seen live, `events settings` and the dated items of a calendar only against
+the fake, see below.
 
 A project is renamed and described with `projects edit`, which sends only
 `--name` and `--description` given, the description as plain text. The rule
@@ -769,14 +772,12 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   looked up before the value. No project of Bruno's has a calendar, so the
   dated items of a calendar's span, `content`, `calendarContentUnknown` and
   the client's 404 after the archive are checked against Minka's code and
-  `ApiMyCalendarTest` and the fake only. What the fake does not mirror: the
-  order of dated items with the same day, which Minka leaves to the
-  database's collation of titles in a calendar's span and to PHP's `<=>` on
-  My calendar, where two titles that are both numbers compare as numbers, and
-  the fake compares bytes in both; a card hidden from clients, since the fake
-  shows a client every card; and a tool or a calendar in the trash. That a
-  completed card outside Done stands on My calendar and not in a calendar's
-  span, as Minka's readers have it, is mirrored and tested.
+  `ApiMyCalendarTest` and the fake only. The rules of #327 are mirrored and
+  tested, against its code and `ApiMyCalendarTest`, not live: a card
+  completed outside Done and its steps stand nowhere, and a day's items go by
+  title with only A to Z lowercased, then by `id`, in both. What the fake
+  does not mirror: a card hidden from clients, since the fake shows a client
+  every card; and a tool or a calendar in the trash.
 - The comments under an event: no request of them has gone to a real Minka,
   and production has none of them yet. The fake mirrors
   `EventCommentsApiController` and `ApiEventCommentsTest` through the

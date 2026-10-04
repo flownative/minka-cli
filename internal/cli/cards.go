@@ -166,9 +166,10 @@ func (a *app) newCardsMineCmd() *cobra.Command {
 		Use:   "mine",
 		Short: "List the cards you are responsible for, across all projects",
 		Long: `Lists the cards the account of the token is assigned to, in every project it is
-a member of. Cards in Done, cards in the trash, cards in the archive of their
-board and cards of a project that was left are not among them. A card that is
-missing here is therefore not necessarily done: it may have been archived.
+a member of. Cards in Done, cards completed in another column, cards in the
+trash, cards in the archive of their board and cards of a project that was
+left are not among them. A card that is missing here is therefore not
+necessarily done: it may have been archived.
 
 The order is the one the web page has: projects by name, and inside a project
 the cards by due date, the overdue ones first and those without a date last.
