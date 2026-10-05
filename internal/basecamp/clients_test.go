@@ -234,20 +234,57 @@ func theClientProject(t *testing.T, a *fakebasecamp.Account) *fakebasecamp.Proje
 	return nil
 }
 
-// A company Minka would refuse ends the run rather than reaching it. Writing the
-// record without the company the source names would tell Minka to drop the
-// company it holds, which is a lie about a person that no later run takes back.
-func TestACompanyMinkaWouldRefuseEndsTheRun(t *testing.T) {
-	for name, company := range map[string]fakebasecamp.Company{
-		"without an identifier":                {Name: "Northwind Example"},
-		"without a name":                       {ID: 9284, Name: "  "},
-		"with a name too long":                 {ID: 9284, Name: strings.Repeat("a", 201)},
-		"with a control character in its name": {ID: 9284, Name: "North\u0007wind"},
+// A company named without an identifier ends the run rather than reaching it.
+// Writing the record without the company the source names would tell Minka to
+// drop the company it holds, which is a lie about a person that no later run
+// takes back.
+func TestACompanyWithoutAnIdentifierEndsTheRun(t *testing.T) {
+	company := fakebasecamp.Company{Name: "Northwind Example"}
+	// A client of whom Basecamp keeps a Tombstone may yet turn out a bot, so
+	// the company of theirs ends the run where the people are written.
+	for _, where := range []string{"person", "deleted person", "project"} {
+		account := fakebasecamp.New()
+		switch where {
+		case "person":
+			theClient(t, account).Company = &company
+		case "deleted person":
+			deletedClient(t, account).Company = &company
+		default:
+			theClientProject(t, account).ClientCompany = &company
+		}
+		extractor := basecamp.Extractor{Source: account, Avatars: account, Files: account,
+			Now: func() time.Time { return runDay }}
+		_, err := extractor.Extract(t.Context(), []string{clientProject}, bundle.Discard())
+
+		var failed *basecamp.Error
+		if !errors.As(err, &failed) || failed.Kind != basecamp.API {
+			t.Fatalf("%s: got %v, want an api error", where, err)
+		}
+		// Never the name itself: a field that holds no name holds something.
+		for _, secret := range []string{company.Name, "Cora", "Southward"} {
+			if strings.Contains(failed.Message, secret) {
+				t.Errorf("%s: the message names %q: %s", where, secret, failed.Message)
+			}
+		}
+	}
+}
+
+// A company whose name Minka would refuse comes with a name made to fit, as
+// every name does, and the report names the company once, however many records
+// carry it; the run goes on.
+func TestACompanyWhoseNameMinkaWouldRefuseComesWithANameMadeToFit(t *testing.T) {
+	for name, c := range map[string]struct {
+		value, want string
+		why         []string
+	}{
+		"without a name":                       {"  ", "(no name)", []string{"none"}},
+		"with a name too long":                 {strings.Repeat("a", 201), strings.Repeat("a", 199) + "…", []string{"cut"}},
+		"with a control character in its name": {"North\u0007wind", "North wind", []string{"folded"}},
+		"with a quote pasted from Word":        {"North\u0092wind", "North wind", []string{"folded"}},
 	} {
-		// A client of whom Basecamp keeps a Tombstone may yet turn out a bot, so
-		// the company of theirs ends the run where the people are written.
 		for _, where := range []string{"person", "deleted person", "project"} {
 			account := fakebasecamp.New()
+			company := fakebasecamp.Company{ID: 9284, Name: c.value}
 			switch where {
 			case "person":
 				theClient(t, account).Company = &company
@@ -256,32 +293,44 @@ func TestACompanyMinkaWouldRefuseEndsTheRun(t *testing.T) {
 			default:
 				theClientProject(t, account).ClientCompany = &company
 			}
-			extractor := basecamp.Extractor{Source: account, Avatars: account, Files: account,
-				Now: func() time.Time { return runDay }}
-			_, err := extractor.Extract(t.Context(), []string{clientProject}, bundle.Discard())
+			dir, result := extract(t, account, clientProject)
 
-			var failed *basecamp.Error
-			if !errors.As(err, &failed) || failed.Kind != basecamp.API {
-				t.Fatalf("%s, a company %s: got %v, want an api error", where, name, err)
+			var carried map[string]any
+			switch where {
+			case "person":
+				carried, _ = recordWithID(t, records(t, dir, bundle.People), "109")["company"].(map[string]any)
+			case "deleted person":
+				carried, _ = recordWithID(t, records(t, dir, bundle.People), "110")["company"].(map[string]any)
+			default:
+				carried, _ = recordWithID(t, records(t, dir, bundle.Projects), clientProject)["clientCompany"].(map[string]any)
 			}
-			// Never the name itself: a field that holds no name holds something.
-			for _, secret := range []string{company.Name, "Cora", "Southward"} {
-				if strings.TrimSpace(secret) != "" && strings.Contains(failed.Message, secret) {
-					t.Errorf("%s, a company %s: the message names %q: %s", where, name, secret, failed.Message)
-				}
+			if carried["sourceId"] != "9284" || carried["name"] != c.want {
+				t.Errorf("%s, a company %s: carried as %v, want %q", where, name, carried, c.want)
 			}
-			if company.ID != 0 && !strings.Contains(failed.Message, "9284") {
-				t.Errorf("%s, a company %s: the message does not say which company: %s", where, name, failed.Message)
+			want := []basecamp.TitleMadeToFit{{Record: "company", SourceID: "9284", Why: c.why}}
+			if !reflect.DeepEqual(result.TitlesMadeToFit, want) {
+				t.Errorf("%s, a company %s: the report names %+v, want %+v", where, name, result.TitlesMadeToFit, want)
 			}
 		}
+	}
+
+	// One company named by a client and by the project is named once.
+	account := fakebasecamp.New()
+	company := fakebasecamp.Company{ID: 9284, Name: ""}
+	theClient(t, account).Company = &company
+	theClientProject(t, account).ClientCompany = &company
+	_, result := extract(t, account, clientProject)
+	want := []basecamp.TitleMadeToFit{{Record: "company", SourceID: "9284", Why: []string{"none"}}}
+	if !reflect.DeepEqual(result.TitlesMadeToFit, want) {
+		t.Errorf("a company named twice: the report names %+v, want %+v", result.TitlesMadeToFit, want)
 	}
 }
 
 // The run ends where the client comes in. An extraction of an account walks for
 // hours, and a company it read in the first minutes must not end it in the last.
-func TestACompanyMinkaWouldRefuseEndsTheRunWhereTheClientComesIn(t *testing.T) {
+func TestACompanyWithoutAnIdentifierEndsTheRunWhereTheClientComesIn(t *testing.T) {
 	account := fakebasecamp.New()
-	theClient(t, account).Company = &fakebasecamp.Company{ID: 9284, Name: "  "}
+	theClient(t, account).Company = &fakebasecamp.Company{Name: "Northwind Example"}
 	extractor := basecamp.Extractor{Source: account, Avatars: account, Files: account,
 		Now: func() time.Time { return runDay }}
 	_, err := extractor.Extract(t.Context(), []string{clientProject}, bundle.Discard())

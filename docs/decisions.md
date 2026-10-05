@@ -687,6 +687,10 @@ this entry was left over.
 <a id="c-050"></a>
 ## C-050 — The run stops where it would write something wrong, and leaves out what a bundle cannot express
 
+**Superseded in one point by [C-111](#c-111)**: a title or a name Minka refuses
+no longer ends the run, and neither does a to-do that starts after it is due or
+an event that ends before it starts. Everything else below holds.
+
 *Applies to: `import`, every record of a bundle, the report of a run*
 
 A record the source describes with a word a bundle has none for is left out and
@@ -818,6 +822,10 @@ company and no access is one whose clients have none there.
 
 <a id="c-056"></a>
 ## C-056 — What nobody can repair at the source is made to fit
+
+**Superseded in one point by [C-111](#c-111)**: the title of a card, a post, a
+to-do, a folder or a document no longer ends the run; it is made to fit as a
+subject is. Everything else below holds.
 
 *Applies to: `import basecamp`, the `title` and the `fromAddress` of a forward,
 the `title` of an upload*
@@ -1789,3 +1797,42 @@ its help and its result, where `create` would carry a flag that silences
 another (C-071 keeps the lists under `todolists`).
 **Implemented as:** `cli.newTodoListsTemplatesCmd`, `cli.newTodoListsStartCmd`,
 `cli.startRefusal`, see [To-do lists and groups](stable/todo-lists.md).
+
+<a id="c-111"></a>
+## C-111 — A record somebody typed wrong costs the record at most, never the run
+
+*Applies to: `import basecamp`, every title and name of a bundle, the days of a
+to-do, the times of an event*
+
+A title or a name Minka refuses — empty, with a control character, longer than
+Minka holds — is made to fit as a subject is (C-056), the way Minka reads it: a
+control character it refuses becomes a blank and one it reads as Windows-1252
+stays, only what PHP's `trim` takes comes off, what is too long is cut and ends
+in an ellipsis, nothing becomes `(no title)` or `(no name)`. A step holds 500.
+`titlesMadeToFit` names each by kind and ID. A to-do that starts after it is due
+comes without its start; an event that ends before it starts or lies in the
+year 0 is left out. Both
+are named. What the source itself wrote in a shape nobody can read still ends
+the run.
+**Why:** A walk of hours that ends on one character nobody can see never brings
+an account across, and the value made to fit is the one Minka would take.
+**Implemented as:** `basecamp.Extractor.titleOf`, `basecamp.aTitleOfAtMost`,
+`basecamp.companyOf`, `basecamp.daysOfATodo`, `basecamp.timesOfAnEntry`, see
+[Importing from Basecamp](stable/import.md).
+
+<a id="c-112"></a>
+## C-112 — A text, a description and an icon Minka refuses are made to fit too
+
+*Applies to: `import basecamp`, the `body` of a comment and a message, the
+`description` of a project, the `emoji` of a category*
+
+A comment and a line of a chat lose every control character but a tab and a
+line break (`textsCleaned`). A description of a project longer than Minka's
+2000 characters of plain text is cut after the last word that fits, ending in
+an ellipsis within them (`descriptionsCut`). A kind of post without an icon
+gets 📝 (`categoriesGivenAnEmoji`). Each is named by its ID.
+**Why:** The applier stops at each of them, as it does at a title (C-111), and
+each is what somebody typed or left empty, not what the source broke.
+**Implemented as:** `basecamp.withoutControlCharacters`,
+`basecamp.aDescriptionMinkaTakes`, `basecamp.placeholderEmoji`, see
+[Importing from Basecamp](stable/import.md).

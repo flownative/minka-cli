@@ -810,28 +810,6 @@ func TestATimeOfAnEntryThatIsNoTimeEndsTheRun(t *testing.T) {
 	}
 }
 
-// A title Minka refuses ends the run instead of reaching it: a folder and a
-// document carry what somebody typed, and somebody can put that right at the
-// source. No message quotes it.
-func TestATitleOfAFolderOrADocumentMinkaRefusesEndsTheRun(t *testing.T) {
-	for name, broken := range map[string]func(*fakebasecamp.Account){
-		"a folder without a title":     func(a *fakebasecamp.Account) { theFolder(t, a, 9220).Title = "  " },
-		"a folder with a long title":   func(a *fakebasecamp.Account) { theFolder(t, a, 9220).Title = strings.Repeat("a", 201) },
-		"a document without a title":   func(a *fakebasecamp.Account) { theDocument(t, a, 9244).Title = "" },
-		"a document with a line break": func(a *fakebasecamp.Account) { theDocument(t, a, 9244).Title = "one\ntwo" },
-	} {
-		account := fakebasecamp.New()
-		broken(account)
-		failed := extractExpectingAnError(t, account, docsProject)
-		if failed.Kind != basecamp.API {
-			t.Errorf("%s ended the run as %v, want an api_error", name, failed.Kind)
-		}
-		if strings.Contains(failed.Message, "one\ntwo") || strings.Contains(failed.Message, strings.Repeat("a", 201)) {
-			t.Errorf("%s: the message quotes the title", name)
-		}
-	}
-}
-
 // A dry run walks the same way and brings no file. What it cannot know, because
 // all it has of a file is the size the source gives it, is which record stands
 // or falls with a file the source no longer has: which document arrives

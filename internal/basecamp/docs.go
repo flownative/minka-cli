@@ -166,8 +166,10 @@ func (f vaultFolder) status() string   { return statusOrInUse(f.Status) }
 func (d vaultDocument) status() string { return statusOrInUse(d.Status) }
 func (u vaultUpload) status() string   { return statusOrInUse(u.Status) }
 
-// noName is the title an upload gets whose file Basecamp names nothing at all. A
-// title cannot be empty here, and a file without a name is a file all the same.
+// noName is what an upload whose file Basecamp names nothing at all is called,
+// and a project, a person, a company or a category of posts without a name: a
+// name cannot be empty in Minka, and a record without one is a record all the
+// same.
 const noName = "(no name)"
 
 // docsPlace is one vault the bundle carries: the top of a Docs & Files tool, or a
@@ -430,10 +432,7 @@ func (e *Extractor) writeVaultPlace(ctx context.Context, w *bundle.Writer, walk 
 // Neither a comment nor a boost of a folder is written or asked for: Minka takes
 // neither of a folder, and Basecamp gives a folder neither.
 func (e *Extractor) writeFolder(w *bundle.Writer, walk *docsWalk, tool, in int64, found vaultFolder) error {
-	title, err := itemTitle("folder", found.ID, found.Title)
-	if err != nil {
-		return err
-	}
+	title := e.titleOf("folder", found.ID, found.Title)
 	origin, err := e.record("folder", found.ID, found.recording)
 	if err != nil {
 		return err
@@ -464,10 +463,7 @@ func (e *Extractor) writeFolder(w *bundle.Writer, walk *docsWalk, tool, in int64
 // wrote the folder's word onto it would put it away one by one and never bring it
 // back with the folder.
 func (e *Extractor) writeDocument(ctx context.Context, w *bundle.Writer, walk *docsWalk, tool int64, folderID *string, found vaultDocument) error {
-	title, err := itemTitle("document", found.ID, found.Title)
-	if err != nil {
-		return err
-	}
+	title := e.titleOf("document", found.ID, found.Title)
 	origin, err := e.record("document", found.ID, found.recording)
 	if err != nil {
 		return err

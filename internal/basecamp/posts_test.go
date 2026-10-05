@@ -401,41 +401,51 @@ func TestAMessageMetTwiceIsWrittenOnce(t *testing.T) {
 	}
 }
 
-func TestAKindOfPostWithoutANameEndsTheRunAndOneWithoutAnIconComes(t *testing.T) {
+// A kind of post without a name comes as "(no name)", named in the report, and
+// the run goes on, whether the list names it or only a post shows it; one
+// without an icon comes with one of the run's own.
+func TestAKindOfPostWithoutANameOrAnIconComesWithOneOfTheRunsOwn(t *testing.T) {
 	for what, c := range map[string]struct {
-		change  func(*fakebasecamp.Account)
-		message string
+		change func(*fakebasecamp.Account)
+		id     string
 	}{
-		"in the list":     {func(a *fakebasecamp.Account) { a.Projects[3].Categories[1].Name = " " }, "category 9603 has no name"},
-		"shown by a post": {func(a *fakebasecamp.Account) { pitches(a).Posts[0].Category.Name = "" }, "category 9650 has no name"},
-		"of no post we see": {func(a *fakebasecamp.Account) {
-			a.Projects[3].Dock[1].Posts[0].Category = &fakebasecamp.Category{ID: 9660}
-		}, ""},
+		"in the list":     {func(a *fakebasecamp.Account) { a.Projects[3].Categories[1].Name = " " }, "9603"},
+		"shown by a post": {func(a *fakebasecamp.Account) { pitches(a).Posts[0].Category.Name = "" }, "9650"},
 	} {
 		account := fakebasecamp.New()
 		c.change(account)
-		writer := bundle.Discard()
-		extractor := basecamp.Extractor{Source: account, Avatars: account, Files: account}
-		_, err := extractor.Extract(t.Context(), []string{talkProject}, writer)
-		if c.message == "" {
-			if err != nil {
-				t.Errorf("%s: %v", what, err)
-			}
-			continue
+		dir, result := extract(t, account, talkProject)
+		if got := recordWithID(t, records(t, dir, bundle.Categories), c.id)["name"]; got != "(no name)" {
+			t.Errorf("%s: the kind of post comes as %q", what, got)
 		}
-		var failed *basecamp.Error
-		if !errors.As(err, &failed) || failed.Kind != basecamp.API || failed.Message != c.message {
-			t.Errorf("%s: got %v, want the error %q", what, err, c.message)
-		}
-		if counts := writer.Counts(); counts[bundle.Categories] != 0 || counts[bundle.Posts] != 0 {
-			t.Errorf("%s: %v was written", what, counts)
+		want := []basecamp.TitleMadeToFit{{Record: "category", SourceID: c.id, Why: []string{"none"}}}
+		if !reflect.DeepEqual(result.TitlesMadeToFit, want) {
+			t.Errorf("%s: the report names %+v, want %+v", what, result.TitlesMadeToFit, want)
 		}
 	}
 
-	account := fakebasecamp.New()
-	account.Projects[3].Categories[1].Icon = ""
-	dir, _ := extract(t, account, talkProject)
-	if emoji, has := recordWithID(t, records(t, dir, bundle.Categories), "9603")["emoji"]; !has || emoji != "" {
-		t.Errorf("a category without an icon comes with the emoji %v", emoji)
+	// A kind of post of no post we see is no kind the run has to name.
+	{
+		account := fakebasecamp.New()
+		account.Projects[3].Dock[1].Posts[0].Category = &fakebasecamp.Category{ID: 9660}
+		extract(t, account, talkProject)
+	}
+
+	// Minka takes no category without an icon, so one the source gives none,
+	// or nothing but whitespace, comes with the run's own and is named.
+	for _, icon := range []string{"", " \t"} {
+		account := fakebasecamp.New()
+		account.Projects[3].Categories[1].Icon = icon
+		dir, result := extract(t, account, talkProject)
+		if emoji := recordWithID(t, records(t, dir, bundle.Categories), "9603")["emoji"]; emoji != "📝" {
+			t.Errorf("a category with the icon %q comes with the emoji %v", icon, emoji)
+		}
+		if !reflect.DeepEqual(result.CategoriesGivenAnEmoji, []string{"9603"}) {
+			t.Errorf("the report names %v", result.CategoriesGivenAnEmoji)
+		}
+	}
+	_, result := extract(t, fakebasecamp.New(), talkProject)
+	if len(result.CategoriesGivenAnEmoji) != 0 {
+		t.Errorf("categories with icons are named: %v", result.CategoriesGivenAnEmoji)
 	}
 }

@@ -124,8 +124,9 @@ func (e *Extractor) extractPosts(ctx context.Context, w *bundle.Writer, bucket i
 // message board of a project alone; a further board has its own, which are in
 // no list and cannot be asked for, so what a post shows of its category is all
 // there is: such a category takes the time of the oldest post that carries it.
-// Nobody is named as the creator of a category. One without a name ends the
-// run, as it would end the applier's; an icon comes as it is, empty or not.
+// Nobody is named as the creator of a category. A name Minka would refuse is
+// made to fit, as every name is, and one without an icon gets the run's own,
+// because Minka takes no category without one.
 //
 // They are written in the order of their names, whatever the case of a
 // letter, and by their IDs where two are called the same; the position is the
@@ -140,20 +141,11 @@ func (e *Extractor) writeCategories(ctx context.Context, w *bundle.Writer, bucke
 	}
 	known := map[int64]bool{}
 	var categories []category
-	named := func(c category) error {
-		if strings.TrimSpace(c.Name) == "" {
-			return &Error{Kind: API, Message: fmt.Sprintf("category %d has no name", c.ID)}
-		}
-		return nil
-	}
 	for _, c := range listed {
 		if known[c.ID] {
 			continue
 		}
 		if err := requireTimestamps(fmt.Sprintf("category %d", c.ID), c.CreatedAt, c.UpdatedAt); err != nil {
-			return err
-		}
-		if err := named(c); err != nil {
 			return err
 		}
 		known[c.ID] = true
@@ -166,14 +158,18 @@ func (e *Extractor) writeCategories(ctx context.Context, w *bundle.Writer, bucke
 	}
 	for _, post := range byAge {
 		if c := post.Category; c != nil && c.ID != 0 && !known[c.ID] {
-			if err := named(*c); err != nil {
-				return err
-			}
 			known[c.ID] = true
 			categories = append(categories, category{ID: c.ID, Name: c.Name, Icon: c.Icon, CreatedAt: post.CreatedAt, UpdatedAt: post.CreatedAt})
 		}
 	}
 
+	for i := range categories {
+		categories[i].Name = e.nameOf("category", categories[i].ID, categories[i].Name)
+		if strings.Trim(categories[i].Icon, minkaTrims) == "" {
+			categories[i].Icon = placeholderEmoji
+			e.emojisGiven = append(e.emojisGiven, sourceID(categories[i].ID))
+		}
+	}
 	sort.SliceStable(categories, func(i, j int) bool {
 		a, b := strings.ToLower(categories[i].Name), strings.ToLower(categories[j].Name)
 		if a != b {
@@ -218,7 +214,7 @@ func (e *Extractor) writePost(ctx context.Context, w *bundle.Writer, bucket int6
 		Record:           origin,
 		ProjectSourceID:  sourceID(bucket),
 		ToolSourceID:     toolID,
-		Title:            found.Subject,
+		Title:            e.titleOf("post", found.ID, found.Subject),
 		Body:             body,
 		PinnedAt:         pinnedAt,
 		Status:           found.Status,

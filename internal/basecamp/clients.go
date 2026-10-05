@@ -2,9 +2,6 @@ package basecamp
 
 import (
 	"fmt"
-	"strings"
-	"unicode"
-	"unicode/utf8"
 
 	"github.com/flownative/minka-cli/internal/bundle"
 )
@@ -48,41 +45,33 @@ func (e *Extractor) clientsOf(p project) (*bool, *bundle.CompanyOrNone, error) {
 	if p.ClientsEnabled == nil {
 		return nil, nil, nil
 	}
-	company, err := companyOf("project", p.ID, p.ClientCompany)
+	company, madeToFit, err := companyOf("project", p.ID, p.ClientCompany)
 	if err != nil {
 		return nil, nil, err
+	}
+	if p.ClientCompany != nil {
+		e.noteMadeToFit("company", p.ClientCompany.ID, madeToFit)
 	}
 	return p.ClientsEnabled, company, nil
 }
 
 // companyOf is the company a record names, as a bundle carries it: the company,
-// or the word that the source names none. The name comes without the whitespace
-// around it that Minka takes off anyway.
+// or the word that the source names none. Its name is made into one Minka takes,
+// as every name is, and madeToFit says what that took, for whoever writes the
+// record to name it.
 //
-// A company a bundle cannot carry ends the run instead of being left out of the
-// record. Minka reads a company that is missing and one that is null the same
-// way and drops the company it holds, so a record written without the company
-// the source names says of somebody that they belong to nobody, and takes away
-// on the next run what the run before wrote.
-//
-// No message repeats the name: a field that holds no name holds something, and
-// what it holds is nobody's to print. The identifier says which company it is.
-func companyOf(what string, id int64, named *companyAtTheSource) (*bundle.CompanyOrNone, error) {
+// A company named without an identifier ends the run instead of being left out
+// of the record. Minka reads a company that is missing and one that is null the
+// same way and drops the company it holds, so a record written without the
+// company the source names says of somebody that they belong to nobody, and
+// takes away on the next run what the run before wrote.
+func companyOf(what string, id int64, named *companyAtTheSource) (company *bundle.CompanyOrNone, madeToFit []string, err error) {
 	if named == nil {
-		return bundle.NoCompany(), nil
+		return bundle.NoCompany(), nil, nil
 	}
 	if named.ID == 0 {
-		return nil, &Error{Kind: API, Message: fmt.Sprintf("Basecamp names the company of %s %d without an identifier", what, id)}
+		return nil, nil, &Error{Kind: API, Message: fmt.Sprintf("Basecamp names the company of %s %d without an identifier", what, id)}
 	}
-	name := strings.TrimSpace(named.Name)
-	company := fmt.Sprintf("company %d, named by %s %d", named.ID, what, id)
-	switch {
-	case name == "":
-		return nil, &Error{Kind: API, Message: company + ", has no name"}
-	case utf8.RuneCountInString(name) > maxName:
-		return nil, &Error{Kind: API, Message: fmt.Sprintf("%s, has a name longer than the %d characters a name may have", company, maxName)}
-	case strings.ContainsFunc(name, unicode.IsControl):
-		return nil, &Error{Kind: API, Message: company + ", has a name that holds a character nobody can see"}
-	}
-	return bundle.TheCompany(sourceID(named.ID), name), nil
+	name, madeToFit := aTitleOfAtMost(named.Name, noName, maxName, foldedAsANestedName)
+	return bundle.TheCompany(sourceID(named.ID), name), madeToFit, nil
 }

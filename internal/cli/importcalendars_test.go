@@ -38,7 +38,7 @@ func TestImportBasecampBringsTheCalendarsWhereItIsAskedTo(t *testing.T) {
 	want := map[string]any{
 		"calendars": []any{map[string]any{
 			"projectSourceId": project, "toolSourceId": "9601", "written": float64(6), "trashed": float64(1),
-			"thatRepeat": float64(2), "withASeries": float64(1), "allDayInInstants": []any{"9619"}, "timedInDays": []any{},
+			"thatRepeat": float64(2), "withASeries": float64(1), "allDayInInstants": []any{"9619"}, "timedInDays": []any{}, "timesMinkaRefuses": []any{},
 			"repetitionNotMapped":  []any{map[string]any{"part": "time_zone", "events": float64(1), "sourceIds": []any{"9615"}}},
 			"longerThanMinkaTakes": float64(0),
 		}},

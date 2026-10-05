@@ -928,56 +928,13 @@ func TestTheLongestTextOfAListAndAToDoIsMeasured(t *testing.T) {
 	}
 }
 
-// A title the applier refuses ends the run where the walk meets it, for a list,
-// a group and a to-do alike, and no message quotes a title.
-func TestATitleNoToDoCanCarryEndsTheRun(t *testing.T) {
-	titles := map[string]string{
-		"nothing at all":          "",
-		"whitespace alone":        "   ",
-		"more than 200 letters":   strings.Repeat("ä", 201),
-		"a character nobody sees": "Print the \x01 invitations",
-	}
-	for what, title := range titles {
-		for _, of := range []struct {
-			record string
-			id     int64
-			set    func(*fakebasecamp.Account, string)
-		}{
-			{"list", 9401, func(a *fakebasecamp.Account, title string) { theList(a, 9401).Title = title }},
-			{"group", 9411, func(a *fakebasecamp.Account, title string) { theList(a, 9411).Title = title }},
-			{"to-do", 9421, func(a *fakebasecamp.Account, title string) { theTodo(a, 9421).Title = title }},
-		} {
-			account := fakebasecamp.New()
-			of.set(account, title)
-			err := extractExpectingAnError(t, account, todoProject)
-			if !strings.Contains(err.Error(), strconv.FormatInt(of.id, 10)) {
-				t.Errorf("%s of a %s: the run ended with %q, which does not name the record", what, of.record, err)
-			}
-			if title != "" && strings.Contains(err.Error(), title) {
-				t.Errorf("%s of a %s: the failure quotes the title", what, of.record)
-			}
-		}
-	}
-
-	// A title of exactly 200 letters, and one whose whitespace makes it longer,
-	// come through.
-	account := fakebasecamp.New()
-	theTodo(account, 9421).Title = "  " + strings.Repeat("ä", 200) + "  "
-	dir, _ := extract(t, account, todoProject)
-	if got := recordWithID(t, records(t, dir, bundle.Todos), "9421")["title"]; got != strings.Repeat("ä", 200) {
-		t.Errorf("a title of 200 letters comes as %d characters", len([]rune(got.(string))))
-	}
-}
-
-// The days of a to-do are held to what Minka takes: a day of another shape, and
-// a start after the day it is due, end the run rather than reaching a bundle the
-// applier would refuse.
+// A day of a to-do of another shape than Minka reads ends the run rather than
+// reaching a bundle the applier would refuse: the source wrote it.
 func TestDaysNoToDoCanHaveEndTheRun(t *testing.T) {
 	cases := map[string]func(*fakebasecamp.Todo){
 		"a start of another shape": func(one *fakebasecamp.Todo) { one.StartsOn = "20.04.2025" },
 		"a day that is no day":     func(one *fakebasecamp.Todo) { one.DueOn = "2025-13-45" },
 		"a day Go reads loosely":   func(one *fakebasecamp.Todo) { one.DueOn = "2025-4-1" },
-		"a start after the end":    func(one *fakebasecamp.Todo) { one.StartsOn, one.DueOn = "2025-05-02", "2025-05-01" },
 	}
 	for what, break_ := range cases {
 		account := fakebasecamp.New()
@@ -995,6 +952,22 @@ func TestDaysNoToDoCanHaveEndTheRun(t *testing.T) {
 	one := recordWithID(t, records(t, dir, bundle.Todos), "9421")
 	if one["startsOn"] != "2025-05-01" || one["dueOn"] != "2025-05-01" {
 		t.Errorf("a to-do that starts on the day it is due: %v", one)
+	}
+}
+
+// A start after the day a to-do is due is what somebody typed, and Minka takes
+// no such to-do. It comes without its start, which says less than the source and
+// nothing wrong; the report names it, and the run goes on.
+func TestAToDoThatStartsAfterItIsDueComesWithoutItsStart(t *testing.T) {
+	account := fakebasecamp.New()
+	theTodo(account, 9421).StartsOn, theTodo(account, 9421).DueOn = "2025-05-02", "2025-05-01"
+	dir, result := extract(t, account, todoProject)
+	one := recordWithID(t, records(t, dir, bundle.Todos), "9421")
+	if start, has := one["startsOn"]; (has && start != nil) || one["dueOn"] != "2025-05-01" {
+		t.Errorf("the to-do comes as %v", one)
+	}
+	if !slices.Equal(result.TodosStartingAfterTheyAreDue, []string{"9421"}) {
+		t.Errorf("the report names %v", result.TodosStartingAfterTheyAreDue)
 	}
 }
 

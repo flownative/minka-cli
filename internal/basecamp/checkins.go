@@ -166,10 +166,6 @@ func (e *Extractor) extractQuestions(ctx context.Context, w *bundle.Writer, buck
 // the field that made it impossible, and its answers go with it: an answer
 // without its question has nothing to hang on.
 func (e *Extractor) writeQuestion(ctx context.Context, w *bundle.Writer, bucket, tool int64, found question) error {
-	title, err := itemTitle("question", found.ID, found.Title)
-	if err != nil {
-		return err
-	}
 	when, impossible, err := scheduleOf(found, e.now().UTC())
 	if err != nil {
 		return err
@@ -208,7 +204,7 @@ func (e *Extractor) writeQuestion(ctx context.Context, w *bundle.Writer, bucket,
 		Record:          origin,
 		ProjectSourceID: sourceID(bucket),
 		ToolSourceID:    sourceID(tool),
-		Title:           title,
+		Title:           e.titleOf("question", found.ID, found.Title),
 		Rhythm:          when.rhythm,
 		Weekdays:        when.weekdays,
 		TimeOfDay:       when.timeOfDay,
@@ -567,8 +563,18 @@ func dayOfMoment(moment time.Time) time.Time {
 // The year 0 is refused besides: Go takes it, but no calendar Minka stores a day
 // in has it, so the applier would end its run on that day.
 func aDay(value string) (time.Time, bool) {
+	day, isADay := aDayOfAnyYear(value)
+	if !isADay || day.Year() < firstYear {
+		return time.Time{}, false
+	}
+	return day, true
+}
+
+// aDayOfAnyYear is aDay with the year 0 among the days: a day somebody can
+// write, which Minka stores none of.
+func aDayOfAnyYear(value string) (time.Time, bool) {
 	day, err := time.Parse(dayFormat, value)
-	if err != nil || day.Format(dayFormat) != value || day.Year() < firstYear {
+	if err != nil || day.Format(dayFormat) != value {
 		return time.Time{}, false
 	}
 	return day, true

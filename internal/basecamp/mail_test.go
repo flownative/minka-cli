@@ -3,7 +3,6 @@ package basecamp
 import (
 	"strings"
 	"testing"
-	"unicode"
 	"unicode/utf8"
 )
 
@@ -16,16 +15,17 @@ func TestWhatASubjectBecomes(t *testing.T) {
 	long := strings.Repeat("ab ", 100)
 
 	for name, given := range map[string]struct{ subject, title string }{
-		"a subject a title can carry":           {"Invoice for March", "Invoice for March"},
-		"whitespace around it":                  {"  Invoice  ", "Invoice"},
-		"nothing at all":                        {"", "(no subject)"},
-		"nothing but whitespace":                {"  \t\n ", "(no subject)"},
-		"nothing but characters nobody can see": {r(0) + r(7) + r(0x9f), "(no subject)"},
-		"a line break":                          {"Re:\nFwd: it", "Re: Fwd: it"},
-		"a carriage return and a tab":           {"Re:\r\n\tFwd: it", "Re:   Fwd: it"},
-		"a control character of the second set": {"Re:" + r(0x85) + "it", "Re: it"},
-		"a delete":                              {"Re:" + r(0x7f) + "it", "Re: it"},
-		"bytes that are no UTF-8":               {string([]byte{0xff, 0xfe}) + "it", "it"},
+		"a subject a title can carry":                 {"Invoice for March", "Invoice for March"},
+		"whitespace around it":                        {"  Invoice  ", "Invoice"},
+		"nothing at all":                              {"", "(no subject)"},
+		"nothing but whitespace":                      {"  \t\n ", "(no subject)"},
+		"nothing but characters nobody can see":       {r(0) + r(7) + r(0x81) + r(0x9d), "(no subject)"},
+		"a line break":                                {"Re:\nFwd: it", "Re: Fwd: it"},
+		"a carriage return and a tab":                 {"Re:\r\n\tFwd: it", "Re:   Fwd: it"},
+		"a C1 code point Windows-1252 has none for":   {"Re:" + r(0x8d) + "it", "Re:it"},
+		"a C1 code point Minka reads as Windows-1252": {"Re" + r(0x85), "Re" + r(0x85)},
+		"a delete":                {"Re:" + r(0x7f) + "it", "Re: it"},
+		"bytes that are no UTF-8": {string([]byte{0xff, 0xfe}) + "it", "it"},
 	} {
 		title, _, _ := aTitleMinkaTakes(given.subject, noSubject)
 		if title != given.title {
@@ -86,7 +86,7 @@ func TestWhatASubjectBecomes(t *testing.T) {
 			t.Errorf("%q became a title of nothing", subject)
 		case utf8.RuneCountInString(title) > maxName:
 			t.Errorf("%q became a title of %d characters", subject, utf8.RuneCountInString(title))
-		case strings.ContainsFunc(title, unicode.IsControl):
+		case strings.ContainsFunc(title, unseenInAText):
 			t.Errorf("%q became a title holding a character nobody can see", subject)
 		case !utf8.ValidString(title):
 			t.Errorf("%q became a title that is no UTF-8", subject)

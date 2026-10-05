@@ -673,38 +673,6 @@ func TestTheStatusOfAQuestionIsTheOneTheSourceHas(t *testing.T) {
 	}
 }
 
-// A title the applier refuses ends the run where the walk meets it, as a kind
-// of post without a name does.
-func TestATitleNoBundleCanCarryEndsTheRun(t *testing.T) {
-	cases := map[string]string{
-		"nothing at all":          "",
-		"whitespace alone":        "   ",
-		"more than 200 letters":   strings.Repeat("ä", 201),
-		"a character nobody sees": "What did you \x01 do?",
-	}
-	for what, title := range cases {
-		account := fakebasecamp.New()
-		busyQuestion(account).Title = title
-
-		err := extractExpectingAnError(t, account, checkinProject)
-		if !strings.Contains(err.Error(), "9310") {
-			t.Errorf("%s: the run ended with %q, which does not name the question", what, err)
-		}
-		if strings.Contains(err.Error(), title) && title != "" {
-			t.Errorf("%s: the failure quotes the title", what)
-		}
-	}
-
-	// A title of exactly 200 letters, and one whose whitespace makes it longer,
-	// come through.
-	account := fakebasecamp.New()
-	busyQuestion(account).Title = "  " + strings.Repeat("ä", 200) + "  "
-	dir, _ := extract(t, account, checkinProject)
-	if got := recordWithID(t, records(t, dir, bundle.Questions), "9310")["title"]; got != strings.Repeat("ä", 200) {
-		t.Errorf("a title of 200 letters comes as %d characters", len([]rune(got.(string))))
-	}
-}
-
 // Every reference a record of a check-in carries leads to a record of the
 // bundle.
 func TestEveryRecordOfACheckinNamesRecordsOfTheBundle(t *testing.T) {

@@ -344,7 +344,7 @@ func (e *Extractor) writeColumns(w *bundle.Writer, projectID string, b *board) e
 			Record:          record,
 			ProjectSourceID: projectID,
 			ToolSourceID:    sourceID(b.id),
-			Name:            list.Title,
+			Name:            e.columnNameOf(list),
 			Position:        i + 1,
 			Role:            columnRoles[list.Type],
 		})
@@ -377,6 +377,16 @@ func (e *Extractor) metAmong(statuses map[string]bool, what string, id int64, st
 		return false, nil
 	}
 	return true, requireTimestamps(fmt.Sprintf("%s %d", what, id), origin.CreatedAt, origin.UpdatedAt)
+}
+
+// columnNameOf is the name a column carries. A column of a role Minka keeps
+// itself may come without one, which keeps the name Minka gives it; a working
+// column has to be called something.
+func (e *Extractor) columnNameOf(list cardList) string {
+	if folded, _ := foldedToOneLine(list.Title); columnRoles[list.Type] != bundle.RoleWork && folded == "" {
+		return ""
+	}
+	return e.titleOf("column", list.ID, list.Title)
 }
 
 // leaveOut notes a record a bundle cannot carry, counted per kind of record,
@@ -450,7 +460,7 @@ func (e *Extractor) writeCard(ctx context.Context, w *bundle.Writer, bucket int6
 		ProjectSourceID: projectID,
 		ToolSourceID:    toolID,
 		ColumnSourceID:  sourceID(found.columnID),
-		Title:           found.Title,
+		Title:           e.titleOf("card", found.ID, found.Title),
 		Position:        found.position,
 		DueOn:           found.DueOn,
 		CompletedAt:     completedAt,
@@ -595,7 +605,7 @@ func (e *Extractor) writeSteps(ctx context.Context, w *bundle.Writer, projectID,
 			ProjectSourceID: projectID,
 			ToolSourceID:    toolID,
 			CardSourceID:    sourceID(found.ID),
-			Title:           s.Title,
+			Title:           e.stepTitleOf(s.ID, s.Title),
 			Position:        s.Position,
 			DueOn:           dueOn,
 			Assignees:       assignees,
@@ -660,6 +670,7 @@ func (e *Extractor) askForComments(ctx context.Context, w *bundle.Writer, bucket
 		if err != nil {
 			return nil, err
 		}
+		body, refused := withoutControlCharacters(body)
 		err = w.Add(bundle.Comments, bundle.Comment{
 			Record:          origin,
 			ProjectSourceID: sourceID(bucket),
@@ -669,6 +680,9 @@ func (e *Extractor) askForComments(ctx context.Context, w *bundle.Writer, bucket
 		})
 		if err != nil {
 			return nil, err
+		}
+		if refused {
+			e.noteTextCleaned("comment", origin.SourceID)
 		}
 		e.measure(bundle.Comments, body, LongestBodyRecord{Record: "comment", SourceID: origin.SourceID, In: "project", InSourceID: sourceID(bucket)})
 		if err := e.attachFiles(ctx, w, mine, origin, files); err != nil {

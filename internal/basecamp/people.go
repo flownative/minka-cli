@@ -36,6 +36,9 @@ type seenPerson struct {
 	// company is what the bundle carries for a client, read where they come
 	// in. Nobody else has one: Minka reads a company on a client alone.
 	company *bundle.CompanyOrNone
+	// companyMadeToFit is what the name of that company took to be one Minka
+	// takes.
+	companyMadeToFit []string
 	// named counts the records that name the person, and integrationLines
 	// those of them that are lines an integration posted.
 	named            int
@@ -197,11 +200,11 @@ func (r *registry) refer(named *person, present bool) (*string, error) {
 	// may yet make them a bot, who is then no client, it is said where the
 	// people are written.
 	if seen.aClient() && !seen.botByItsLines() {
-		company, err := companyOf("person", p.ID, p.Company)
+		company, madeToFit, err := companyOf("person", p.ID, p.Company)
 		if err != nil {
 			return nil, err
 		}
-		seen.company = company
+		seen.company, seen.companyMadeToFit = company, madeToFit
 	}
 	r.referred[p.ID] = seen
 	return &id, nil

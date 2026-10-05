@@ -1922,8 +1922,8 @@ this:
   clients and `data.clientMemberships` the memberships Minka leaves out, because
   a client is no member of a project there; for the same reason no question is
   said to be asked of a client, which `data.askedLeftOut.clients` counts. A
-  company the source names without an identifier, or with a name Minka refuses,
-  ends the run where the record that names it comes in: written away as none it
+  company the source names without an identifier ends the run where the record
+  that names it comes in: written away as none it
   would tell Minka to drop the company it holds. An Email forwards tool carries
   its word, and a mail and an answer follow it. **An entry of Docs & Files is
   the one exception to the rule above:** a folder, a document and an upload
@@ -1948,7 +1948,8 @@ this:
   names in `repetitionNotMapped` each part of a schedule that did not fit (the
   event then comes once), and in `allDayInInstants` and `timedInDays` the
   entries left out because the source says their days in moments or the other
-  way round. `data.calendars.commentsUnderSingleDays` counts the comments
+  way round, and in `timesMinkaRefuses` those left out because they end before
+  they start or start before the year 1. `data.calendars.commentsUnderSingleDays` counts the comments
   written under one day of a series, which a bundle has no place for. An entry
   on the shelf or drafted is in `data.recordsLeftOut`. A run never asks for a
   single day of a series: Basecamp makes a record of the day where somebody
@@ -2101,6 +2102,18 @@ this:
   time and is short: a value of another shape is not repeated, because that field
   then holds whatever the source put in it, and a long one is not repeated
   because a message is no place to carry it.
+- A title or a name Minka would refuse — empty, holding a control character such
+  as a line break, longer than 200 characters (a step 500) — never ends the run:
+  a control character becomes a blank, what is too long is cut and ends in an
+  ellipsis, and nothing becomes `(no title)` or `(no name)`; a system column
+  without a name keeps Minka's. `data.titlesMadeToFit` names each record by kind
+  and `sourceId` with what was done (`none`, `folded`, `cut`), never the title,
+  and a `notice` counts them. A to-do that starts after the day it is due comes
+  without its start, named in `data.todosStartingAfterTheyAreDue`. A comment or
+  a chat line loses the control characters Minka refuses
+  (`data.textsCleaned`), a project description over 2000 characters is cut at
+  a word with an ellipsis (`data.descriptionsCut`), and a kind of post without
+  an icon gets 📝 (`data.categoriesGivenAnEmoji`).
 - A question of a check-in carries the rhythm, the weekdays counted from Monday,
   the time of day, the day the rhythm is counted from and whom it is asked of,
   which are the subscribers of the question and not whoever answered it. Only a
