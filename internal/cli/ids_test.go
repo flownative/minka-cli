@@ -290,6 +290,14 @@ var idsInCapitals = []idInCapitals{
 	}, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
 		return []string{up(f.CardInTriage.ID)}
 	}},
+	{command: "reminders set", inputs: []string{"<item>"}, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
+		return []string{"comment", up(f.Post.Comments[0].ID), "--preset", "tomorrow"}
+	}},
+	{command: "reminders delete", inputs: []string{"<item>"}, prepare: func(e *testEnv) {
+		e.server.Reminders = []*fakeapi.Reminder{{PersonID: e.fixture.Bruno.ID, SubjectID: e.fixture.Post.ID}}
+	}, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
+		return []string{"post", up(f.Post.ID)}
+	}},
 }
 
 func aFileToUpload(e *testEnv) string {
@@ -416,7 +424,7 @@ var idFlagNames = []string{"after", "before", "assignee", "notify-when-done", "n
 // idPositions are the positions that take an ID among other names for a thing;
 // a position whose name ends in "Id" takes nothing else and is held by the
 // test of the arguments above.
-var idPositions = []string{"<person>", "<card>", "<step>", "<subtask>", "<column>"}
+var idPositions = []string{"<person>", "<card>", "<step>", "<subtask>", "<column>", "<item>"}
 
 // A command that takes an ID is run with it in capitals above, or said here
 // why it is not.

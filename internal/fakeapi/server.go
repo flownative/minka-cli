@@ -463,6 +463,11 @@ type Server struct {
 	TrashedColumns []*TrashedColumn
 	Archive        []*ArchivedCard
 
+	// Reminders are the reminders of every person, RemovedReminders those
+	// taken away, with the outcome they were taken away with.
+	Reminders        []*Reminder
+	RemovedReminders []RemovedReminder
+
 	// trashSeq counts what went into the trash, so that the trash can list
 	// what came last first among things taken out in the same moment.
 	trashSeq int
@@ -971,6 +976,7 @@ func New(t testing.TB) (*Server, *Fixture) {
 	s.registerCheckinsRoutes(mux)
 	s.registerPostsRoutes(mux)
 	s.registerCalendarRoutes(mux)
+	s.registerReminderRoutes(mux)
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		// Flow answers an unknown path or a wrong method with an HTML page.
 		w.Header().Set("Content-Type", "text/html")
