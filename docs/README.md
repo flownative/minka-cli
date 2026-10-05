@@ -94,6 +94,11 @@ the documentation says what holds; how it came about is in git.
   time given as moments or days, the zone a series keeps its clock time in,
   what an edit does to the repetition, the write without a guard, the order of
   the refusals — before any work on `events`.
+- [Reminders](stable/reminders.md): What a reminder of one's own is, the
+  kind beside the ID and why it is checked here, the preset counted in
+  Minka's zone and the moment sent as written, the list cut before what is out
+  of sight is left out, the outcome, why it is no write into a project, the
+  order of the refusals — before any work on `reminders`.
 - [Testing](stable/testing.md): Fake API, sabotage proofs, what a test pins
   down, what it may demand of time — read before your first test.
 

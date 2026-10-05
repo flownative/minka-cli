@@ -1836,3 +1836,19 @@ each is what somebody typed or left empty, not what the source broke.
 **Implemented as:** `basecamp.withoutControlCharacters`,
 `basecamp.aDescriptionMinkaTakes`, `basecamp.placeholderEmoji`, see
 [Importing from Basecamp](stable/import.md).
+
+<a id="c-113"></a>
+## C-113 — A reminder is `reminders list|set|delete` with `<kind> <item>`, the kind checked here
+
+*Applies to: `reminders list`, `reminders set`, `reminders delete`*
+
+The group is the plural of the resource, as everywhere, and the kind is a
+position of its own beside the ID, taken in any case and sent in Minka's
+spelling. A word that is no kind, neither or both of `--preset` and `--at`,
+and an `--at` that is not RFC 3339 as Minka reads it are refused before a
+request; `--outcome` goes out as written.
+**Why:** Minka answers a misspelt kind with the 404 of a thing that is not
+there, and it reads a moment in exactly one form, which a check here can
+hold without refusing anything Minka takes.
+**Implemented as:** `cli.newRemindersCmd`, `cli.reminderSubject`,
+`cli.reminderRefusal`, see [Reminders](stable/reminders.md).

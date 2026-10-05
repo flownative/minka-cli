@@ -161,6 +161,16 @@ still lists a card completed outside Done under `cards mine`. `events mine` is
 seen live, `events settings` and the dated items of a calendar only against
 the fake, see below.
 
+One's own reminders ("Remind me") are read with `reminders list` and written
+with `reminders set <kind> <item> --preset … | --at …` and `reminders delete
+<kind> <item> [--outcome done|dismissed]`, of an item, a comment or a line of
+a project chat. The rule the commands follow is
+[Reminders](../stable/reminders.md) (C-113). Minka's side (#358, and #359,
+which reads a moment in RFC 3339 only; E-252) is on its `main` and in no
+release yet, so production gets it with the next Minka
+release; the commands are checked against Minka's code and tests and the fake,
+and live only in a read, see below.
+
 A project is renamed and described with `projects edit`, which sends only
 `--name` and `--description` given, the description as plain text. The rule
 the command follows is [Projects](../stable/projects.md) (C-093). Minka's side
@@ -444,6 +454,34 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
 (account Bruno, local instance) gets revoked then.
 
 ## Checked against the fake only
+
+- Reminders (`reminders list`, `set`, `delete`): Minka's #358 and #359 read
+  in `ReminderApiController`, `Rfc3339Moment`, `ReminderKind`,
+  `ReminderPreset`, `ReminderQueryService`, `DbalReminderRepository`,
+  `Rfc3339MomentTest` and `ApiRemindersTest`; the moments of
+  `Rfc3339MomentTest` are held against the fake's reader and the CLI's check
+  alike.
+  Live on `minka.localbeach.net` (Bruno, 2026-10-05) `reminders list`, JSON
+  and text: 200, an empty list; and three writes against the nil UUID, which
+  names nothing: `PUT me/reminders/card/00000000-0000-0000-0000-000000000000`
+  with `{"preset":"tomorrow"}`, 404; `DELETE` of the same address with
+  `?outcome=later`, 422 `reminderOutcomeUnknown`, the outcome before the
+  reminder; and without an outcome, 404. No reminder was set. **The fake does not mirror**:
+  forwards (it has none, so `forward` finds nothing); a client's view of a
+  single comment or chat line beyond the item and the chat; for a client, the
+  switch of a document or an upload at the top of a Docs & Files tool
+  (Minka's `minka_item_shown_to_clients`), so such an entry is shown to no
+  client in the fake, while one below a folder follows the topmost folder;
+  of the plain text Minka keeps beside an answer (`RichText::asPlainText`),
+  the fake has the blocks on lines of their own, line breaks, the tags gone
+  and the entities decoded, but not the source of `script`, `style` and their
+  like dropped, an embed read as its address, nor the leniency of an HTML5
+  parser with broken markup; the bell and its read mark; and a document or an upload in the
+  trash. That an archived card in an archived project and one's own draft
+  take a reminder, and somebody else's draft not, is what Minka's
+  `ApiRemindersTest` says
+  (`aReminderMayPointAtAnArchivedCardInAnArchivedProject`,
+  `aReminderMayPointAtOnesOwnDraftButNotAtAnothersDraft`).
 
 - Lists from templates (`todolists templates`, `todolists start`, and
   `templateTakesNoDates`/`templateTakesNoTicks` under `todos`): Minka's #344
