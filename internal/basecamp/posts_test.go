@@ -403,8 +403,8 @@ func TestAMessageMetTwiceIsWrittenOnce(t *testing.T) {
 
 // A kind of post without a name comes as "(no name)", named in the report, and
 // the run goes on, whether the list names it or only a post shows it; one
-// without an icon comes with one of the run's own.
-func TestAKindOfPostWithoutANameOrAnIconComesWithOneOfTheRunsOwn(t *testing.T) {
+// without an icon comes without an emoji.
+func TestAKindOfPostWithoutANameOrAnIconComesAsTheSourceGivesIt(t *testing.T) {
 	for what, c := range map[string]struct {
 		change func(*fakebasecamp.Account)
 		id     string
@@ -431,21 +431,19 @@ func TestAKindOfPostWithoutANameOrAnIconComesWithOneOfTheRunsOwn(t *testing.T) {
 		extract(t, account, talkProject)
 	}
 
-	// Minka takes no category without an icon, so one the source gives none,
-	// or nothing but whitespace, comes with the run's own and is named.
+	// Minka puts an emoji in front of the name and takes a kind without one,
+	// so one the source gives no icon, or nothing but whitespace, carries no
+	// emoji at all: neither an empty one nor one the run made up.
 	for _, icon := range []string{"", " \t"} {
 		account := fakebasecamp.New()
 		account.Projects[3].Categories[1].Icon = icon
-		dir, result := extract(t, account, talkProject)
-		if emoji := recordWithID(t, records(t, dir, bundle.Categories), "9603")["emoji"]; emoji != "📝" {
-			t.Errorf("a category with the icon %q comes with the emoji %v", icon, emoji)
+		dir, _ := extract(t, account, talkProject)
+		heartbeat := recordWithID(t, records(t, dir, bundle.Categories), "9603")
+		if emoji, given := heartbeat["emoji"]; given {
+			t.Errorf("a category with the icon %q comes with the emoji %q", icon, emoji)
 		}
-		if !reflect.DeepEqual(result.CategoriesGivenAnEmoji, []string{"9603"}) {
-			t.Errorf("the report names %v", result.CategoriesGivenAnEmoji)
+		if heartbeat["name"] != "Heartbeat" {
+			t.Errorf("a category with the icon %q comes as %v", icon, heartbeat["name"])
 		}
-	}
-	_, result := extract(t, fakebasecamp.New(), talkProject)
-	if len(result.CategoriesGivenAnEmoji) != 0 {
-		t.Errorf("categories with icons are named: %v", result.CategoriesGivenAnEmoji)
 	}
 }

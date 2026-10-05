@@ -853,8 +853,8 @@ func New(t testing.TB) (*Server, *Fixture) {
 	otherCheckinsTool := &CheckinsTool{ID: newID(), ProjectID: otherProject.ID, Title: "Secret check-ins", Questions: []*CheckinQuestion{otherQuestion}}
 	s.CheckinsTools = []*CheckinsTool{checkinsTool, otherCheckinsTool}
 
-	announcement := &PostCategory{ID: newID(), ProjectID: project.ID, Emoji: "📢", Name: "Announcement"}
-	heartbeat := &PostCategory{ID: newID(), ProjectID: project.ID, Emoji: "❤️", Name: "Heartbeat"}
+	announcement := &PostCategory{ID: newID(), ProjectID: project.ID, Name: "📢 Announcement"}
+	heartbeat := &PostCategory{ID: newID(), ProjectID: project.ID, Name: "❤️ Heartbeat"}
 	pinnedAt := at("2026-09-02", "09:00")
 	pinnedPost := &Post{ID: newID(), Title: "Where the tent stands", Body: "<div>Behind the barn.</div>",
 		PinnedAt: &pinnedAt, CreatedAt: at("2026-09-01", "09:00"), UpdatedAt: at("2026-09-01", "09:00"), CreatorID: anke.ID,
@@ -877,7 +877,7 @@ func New(t testing.TB) (*Server, *Fixture) {
 	posts := &PostsTool{ID: newID(), ProjectID: project.ID, Title: "Message Board", ShownToClients: true,
 		Posts: []*Post{olderPost, pinnedPost, archivedPost, post, draftPost, trashedPost}}
 	postsOutOfUse := &PostsTool{ID: newID(), ProjectID: project.ID, Title: "Old announcements", Archived: true}
-	otherCategory := &PostCategory{ID: newID(), ProjectID: otherProject.ID, Emoji: "🔒", Name: "Secret"}
+	otherCategory := &PostCategory{ID: newID(), ProjectID: otherProject.ID, Name: "🔒 Secret"}
 	otherPost := &Post{ID: newID(), Title: "Not yours to read", Body: "<div>Secret.</div>",
 		CreatedAt: at("2026-09-07", "09:00"), UpdatedAt: at("2026-09-07", "09:00"), CreatorID: stranger.ID, SubscriberIDs: []string{stranger.ID}}
 	otherPosts := &PostsTool{ID: newID(), ProjectID: otherProject.ID, Title: "Secret board", Posts: []*Post{otherPost}}

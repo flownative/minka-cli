@@ -213,11 +213,12 @@ type Tool struct {
 }
 
 // Category is a kind of post a project offers. It belongs to the project, not
-// to one of its tools.
+// to one of its tools. Emoji is left out where the source gives none; Minka
+// puts a given one in front of the name.
 type Category struct {
 	Record
 	ProjectSourceID string `json:"projectSourceId"`
-	Emoji           string `json:"emoji"`
+	Emoji           string `json:"emoji,omitempty"`
 	Name            string `json:"name"`
 	Position        int    `json:"position"`
 }

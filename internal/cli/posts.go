@@ -131,7 +131,7 @@ web.`,
 					table := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
 					fmt.Fprintln(table, "ID\tKIND")
 					for _, category := range categories.Value {
-						fmt.Fprintf(table, "%s\t%s %s\n", category.ID, category.Emoji, category.Name)
+						fmt.Fprintf(table, "%s\t%s\n", category.ID, category.Name)
 					}
 					_ = table.Flush()
 				},

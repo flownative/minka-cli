@@ -1555,7 +1555,9 @@ it may be filed under, and comments. `posts …` reads and writes them;
 
 - `posts tools <projectId>` lists the Posts tools in use; `posts categories
   <projectId>` the kinds a post can be filed under, which every tool of the
-  project shares.
+  project shares. An emoji is part of a kind's name ("📢 Announcement"), and a
+  post's `category` is that name; the `emoji` beside it is deprecated and
+  always empty — do not read it.
 - `posts list <toolId>` lists the posts that went out: **pinned ones first**,
   the one pinned last on top, then the newest. It is a page, `{posts, next}`:
   `next` is null on the last page, and otherwise goes to `--before` exactly as
@@ -2160,8 +2162,8 @@ this:
   without its start, named in `data.todosStartingAfterTheyAreDue`. A comment or
   a chat line loses the control characters Minka refuses
   (`data.textsCleaned`), a project description over 2000 characters is cut at
-  a word with an ellipsis (`data.descriptionsCut`), and a kind of post without
-  an icon gets 📝 (`data.categoriesGivenAnEmoji`).
+  a word with an ellipsis (`data.descriptionsCut`). A kind of post without an
+  icon comes without an `emoji`, by its name alone.
 - A question of a check-in carries the rhythm, the weekdays counted from Monday,
   the time of day, the day the rhythm is counted from and whom it is asked of,
   which are the subscribers of the question and not whoever answered it. Only a

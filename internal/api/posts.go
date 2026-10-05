@@ -25,11 +25,11 @@ type PostsToolReference struct {
 }
 
 // PostCategory is one kind of post a project offers. Every Posts tool of the
-// project shares the list.
+// project shares the list. An emoji is part of the name; the `emoji` Minka
+// still sends beside it is always empty and is not read.
 type PostCategory struct {
-	ID    string `json:"id"`
-	Emoji string `json:"emoji"`
-	Name  string `json:"name"`
+	ID   string `json:"id"`
+	Name string `json:"name"`
 }
 
 // PostLine is one post as the list of its tool names it, without the body.
@@ -37,7 +37,7 @@ type PostLine struct {
 	ID           string          `json:"id"`
 	Title        string          `json:"title"`
 	Lead         string          `json:"lead"`       // the first words of the body without markup
-	Category     *string         `json:"category"`   // emoji and name, nil for none
+	Category     *string         `json:"category"`   // the name of the kind, nil for none
 	CategoryID   *string         `json:"categoryId"` // nil for none
 	Pinned       bool            `json:"pinned"`
 	CommentCount int             `json:"commentCount"`

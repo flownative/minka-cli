@@ -1823,6 +1823,10 @@ an account across, and the value made to fit is the one Minka would take.
 <a id="c-112"></a>
 ## C-112 — A text, a description and an icon Minka refuses are made to fit too
 
+**Superseded in one point by [C-114](#c-114)**: a kind of post without an icon
+comes without an `emoji`, not with 📝, and `categoriesGivenAnEmoji` stays in
+the report, always empty. Everything else below holds.
+
 *Applies to: `import basecamp`, the `body` of a comment and a message, the
 `description` of a project, the `emoji` of a category*
 
@@ -1852,3 +1856,22 @@ there, and it reads a moment in exactly one form, which a check here can
 hold without refusing anything Minka takes.
 **Implemented as:** `cli.newRemindersCmd`, `cli.reminderSubject`,
 `cli.reminderRefusal`, see [Reminders](stable/reminders.md).
+
+<a id="c-114"></a>
+## C-114 — A post category is its name, the emoji in it; none is made up for the import
+
+*Applies to: `posts categories`, the `category` of a post, `import basecamp`,
+the `emoji` of a category in a bundle*
+
+The CLI shows a kind of post by its name and reads no `emoji` beside it, which
+Minka keeps empty for one release and then drops. A kind is still chosen by
+its ID alone. A category the source gives no icon goes into a bundle without
+`emoji`, neither empty nor 📝. The report keeps `categoriesGivenAnEmoji`,
+deprecated and always empty, with neither a notice nor a line of text.
+**Why:** Minka made the emoji part of the name (E-144) and takes a kind
+without one, putting a given emoji in front of the name; a placeholder would
+now be an icon nobody chose. A field of the output never disappears, as Minka
+keeps its `emoji` empty rather than dropping it at once.
+**Implemented as:** `api.PostCategory`, `cli.newPostsCategoriesCmd`,
+`bundle.Category`, `basecamp.Extractor.writeCategories`, see
+[Posts](stable/posts.md) and [Importing from Basecamp](stable/import.md).

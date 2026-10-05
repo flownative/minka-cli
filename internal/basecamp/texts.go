@@ -105,7 +105,3 @@ func asMinkaDrawsIt(text string) string {
 func asciiSpace(r rune) bool {
 	return r == ' ' || r == '\t' || r == '\n' || r == '\v' || r == '\f' || r == '\r'
 }
-
-// placeholderEmoji is the icon of a category of posts the source gives none:
-// Minka takes no category without one.
-const placeholderEmoji = "📝"

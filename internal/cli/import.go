@@ -190,11 +190,13 @@ type importReport struct {
 	// one Minka takes, by kind and identifier and never by the title.
 	TitlesMadeToFit []basecamp.TitleMadeToFit `json:"titlesMadeToFit"`
 	// TextsCleaned names the comments and lines whose control characters the
-	// run took out, DescriptionsCut the projects whose descriptions it cut and
-	// CategoriesGivenAnEmoji the categories of posts it gave its own icon.
-	TextsCleaned           []basecamp.TextCleaned `json:"textsCleaned"`
-	DescriptionsCut        []string               `json:"descriptionsCut"`
-	CategoriesGivenAnEmoji []string               `json:"categoriesGivenAnEmoji"`
+	// run took out, DescriptionsCut the projects whose descriptions it cut.
+	TextsCleaned    []basecamp.TextCleaned `json:"textsCleaned"`
+	DescriptionsCut []string               `json:"descriptionsCut"`
+	// CategoriesGivenAnEmoji is deprecated and always empty: the run gives no
+	// kind of post an icon any more, and a field of the output never
+	// disappears.
+	CategoriesGivenAnEmoji []string `json:"categoriesGivenAnEmoji"`
 	// LongestBody is the longest text per kind, in characters: a number and
 	// nothing of the text. LongestBodyRecords names the record each number was
 	// measured on, so that it can be looked at at the source: a kind, an
@@ -264,7 +266,7 @@ ellipsis, and nothing becomes "(no title)" or "(no name)". titlesMadeToFit
 names each record by kind and ID. A comment or a line of a chat loses the
 control characters Minka takes in neither (textsCleaned), a description of a
 project longer than the 2000 characters Minka holds is cut (descriptionsCut),
-and a kind of post without an icon gets 📝 (categoriesGivenAnEmoji). A to-do
+and a kind of post without an icon comes by its name alone. A to-do
 that starts after the day it is due
 comes without its start (todosStartingAfterTheyAreDue), and an event that ends
 before it starts is left out (calendars.calendars[].timesMinkaRefuses).
@@ -625,7 +627,7 @@ it has been applied.`,
 				TitlesMadeToFit:        result.TitlesMadeToFit,
 				TextsCleaned:           result.TextsCleaned,
 				DescriptionsCut:        result.DescriptionsCut,
-				CategoriesGivenAnEmoji: result.CategoriesGivenAnEmoji,
+				CategoriesGivenAnEmoji: []string{},
 
 				TodoListsByStatus:            result.TodoListsByStatus,
 				TodosByStatus:                result.TodosByStatus,
@@ -886,11 +888,6 @@ it has been applied.`,
 					"project comes with its description cut after the last word that fits and ending in an ellipsis, because Minka holds 2000 characters of one; data.descriptionsCut names it",
 					"projects come with their descriptions cut after the last word that fits and ending in an ellipsis, because Minka holds 2000 characters of one; data.descriptionsCut names them"))
 			}
-			if count := len(report.CategoriesGivenAnEmoji); count > 0 {
-				notices = append(notices, plural(count,
-					"kind of post comes with the icon 📝, because the source gives it none and Minka takes no kind of post without one; data.categoriesGivenAnEmoji names it",
-					"kinds of post come with the icon 📝, because the source gives them none and Minka takes no kind of post without one; data.categoriesGivenAnEmoji names them"))
-			}
 			if count := recordsLeftOut(report); count > 0 {
 				notices = append(notices, plural(count,
 					"record is left out, because the source describes it with a word a bundle has none for; data.recordsLeftOut names the kind of record, the word and where it stood, and a later run brings it once a bundle has a word for it",
@@ -1017,9 +1014,6 @@ func renderImportReport(w io.Writer, report importReport) {
 	}
 	if ids := report.DescriptionsCut; len(ids) > 0 {
 		fmt.Fprintf(w, "Projects whose descriptions were cut: %d — %s\n", len(ids), strings.Join(ids, ", "))
-	}
-	if ids := report.CategoriesGivenAnEmoji; len(ids) > 0 {
-		fmt.Fprintf(w, "Kinds of post given the icon 📝: %d — %s\n", len(ids), strings.Join(ids, ", "))
 	}
 	renderCheckins(w, report)
 	renderTodos(w, report)

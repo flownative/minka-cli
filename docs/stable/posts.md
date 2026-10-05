@@ -26,11 +26,13 @@ listed with `trash list`, and a post there says so.
 `GET projects/{projectId}/posts` lists the tools in use as `id`, `title` and
 `appUrl`; one no longer in use is not listed and is still read and written at
 its own address. `GET projects/{projectId}/post-categories` lists the kinds of
-the project as `id`, `emoji` and `name`, in the order the members put them.
+the project as `id` and `name`, in the order the members put them. An emoji is
+part of the name ("📢 Announcement"); the `emoji` Minka still sends beside it is
+always empty, goes away in a later release and is not read (C-114).
 
 `GET posts-tools/{toolId}/posts` is a page `{posts, next}`. A line carries
 `id`, `title`, `lead` (the first 400 characters of the body as plain text,
-trimmed), `category` (emoji and name, or null), `categoryId`, `pinned`,
+trimmed), `category` (the name of the kind, or null), `categoryId`, `pinned`,
 `commentCount`, `createdAt`, `creator` and `appUrl`. The order is **pinned
 first, the one pinned last on top**, then the newest, the identifier breaking a
 tie. No draft stands in it, and nothing of the archive or the trash.

@@ -51,11 +51,10 @@ type PostsTool struct {
 }
 
 // PostCategory is a kind of post a project offers; every Posts tool of the
-// project shares the list.
+// project shares the list. An emoji is part of the name.
 type PostCategory struct {
 	ID        string
 	ProjectID string
-	Emoji     string
 	Name      string
 }
 
@@ -140,7 +139,7 @@ func (s *Server) postsTool(w http.ResponseWriter, r *http.Request, person *Perso
 }
 
 // postCategories lists the kinds of post of a project in the order the
-// members put them.
+// members put them, with the deprecated `emoji` beside each, always empty.
 func (s *Server) postCategories(w http.ResponseWriter, r *http.Request, person *Person) {
 	project := s.visibleProject(r.PathValue("projectId"), person)
 	if project == nil {
@@ -150,7 +149,7 @@ func (s *Server) postCategories(w http.ResponseWriter, r *http.Request, person *
 	categories := []any{}
 	for _, category := range s.PostCategories {
 		if category.ProjectID == project.ID {
-			categories = append(categories, map[string]any{"id": category.ID, "emoji": category.Emoji, "name": category.Name})
+			categories = append(categories, map[string]any{"id": category.ID, "name": category.Name, "emoji": ""})
 		}
 	}
 	writeJSON(w, http.StatusOK, categories)
@@ -327,7 +326,7 @@ func (s *Server) archivedPosts(w http.ResponseWriter, r *http.Request, person *P
 	list := []any{}
 	for _, post := range archived {
 		list = append(list, map[string]any{
-			"id": post.ID, "projectId": tool.ProjectID, "title": post.Title, "category": s.categoryBadge(post.CategoryID),
+			"id": post.ID, "projectId": tool.ProjectID, "title": post.Title, "category": s.categoryName(post.CategoryID),
 			"archivedAt": timestampOrNil(nilIfZero(post.ArchivedAt)), "archivedBy": s.personReferenceOrNil(post.ArchivedByID),
 			"appUrl": s.postURL(tool, post),
 		})
@@ -662,11 +661,11 @@ func (s *Server) offersTheKind(projectID, categoryID string) bool {
 	})
 }
 
-// categoryBadge is a kind as a post names it: its emoji and its name, or null.
-func (s *Server) categoryBadge(categoryID string) any {
+// categoryName is a kind as a post names it: its name, or null.
+func (s *Server) categoryName(categoryID string) any {
 	for _, category := range s.PostCategories {
 		if category.ID == categoryID {
-			return category.Emoji + " " + category.Name
+			return category.Name
 		}
 	}
 	return nil
@@ -741,7 +740,7 @@ func (s *Server) postWithID(postID string, person *Person) (*PostsTool, *Post) {
 func (s *Server) postListItemResource(tool *PostsTool, post *Post) map[string]any {
 	return map[string]any{
 		"id": post.ID, "projectId": tool.ProjectID, "title": post.Title, "lead": postLeadOf(post.Body),
-		"category": s.categoryBadge(post.CategoryID), "categoryId": nullable(post.CategoryID),
+		"category": s.categoryName(post.CategoryID), "categoryId": nullable(post.CategoryID),
 		"pinned": post.PinnedAt != nil, "commentCount": len(post.Comments),
 		"createdAt": timestamp(post.CreatedAt), "creator": s.personReference(post.CreatorID),
 		"appUrl": s.postURL(tool, post),
@@ -754,7 +753,7 @@ func (s *Server) postResource(tool *PostsTool, post *Post) map[string]any {
 		"project": s.projectReference(tool.ProjectID), "tool": map[string]any{"id": tool.ID, "title": tool.Title},
 		"title": post.Title, "body": post.Body, "bodySource": post.Body,
 		"attachments": s.attachmentsIn(tool.ProjectID, post.Body),
-		"category":    s.categoryBadge(post.CategoryID), "categoryId": nullable(post.CategoryID),
+		"category":    s.categoryName(post.CategoryID), "categoryId": nullable(post.CategoryID),
 		"archived": post.Archived, "pinned": post.PinnedAt != nil, "commentCount": len(post.Comments),
 		"createdAt": timestamp(post.CreatedAt), "editedAt": editedAt(post.CreatedAt, post.UpdatedAt),
 		"creator":  s.personReference(post.CreatorID),

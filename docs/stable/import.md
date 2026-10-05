@@ -291,8 +291,8 @@ Minka runs a no-break space and the other Unicode spaces together as well, so
 such a text counts longer here than there and never shorter. A longer one is
 cut after the last word that fits and ends in an ellipsis within the 2000, and
 what goes into the bundle is then the plain text as measured
-(`descriptionsCut`). A kind of post the source gives no icon gets 📝, because
-Minka takes none without one (`categoriesGivenAnEmoji`).
+(`descriptionsCut`). A kind of post the source gives no icon comes without an
+`emoji`, and Minka gives it its name alone (C-114).
 
 The run ends as `api_error` where going on would put something wrong into the
 bundle: a record without `created_at` or `updated_at` and a time that is none,
@@ -619,12 +619,13 @@ and Minka applies the kinds in an order of its own.
   Basecamp lists the categories of the first message board of a project
   alone; a further board has its own, which are in no list and cannot be
   asked for, so such a category is what a post shows of it, and as old as the
-  oldest post that carries it. `emoji` is the icon, `createdBy` is `null`.
+  oldest post that carries it. `emoji` is the icon, which Minka puts in front
+  of the name, and is left out where the source gives none or only
+  whitespace (C-114); `createdBy` is `null`.
   They are written in the order of their names, whatever the case of a
   letter, then of their IDs, and `position` is the number in that order,
   because Basecamp gives none. A category without a name is called `(no name)`
-  and named in `titlesMadeToFit` (C-111); one without an icon comes with 📝
-  (C-112). The list has no pages and answers every page
+  and named in `titlesMadeToFit` (C-111). The list has no pages and answers every page
   with all of it, so it is read once and without a page, and only for a
   project with a message board that is extracted.
 - **Posts** are the messages of every message board, and the archived and
@@ -1915,7 +1916,8 @@ A name and a company are personal data.
   `recordsLeftOut` (`record`, `field`, `value`, `in`, `inSourceId`,
   `leftOut`), `titlesMadeToFit` (`record`, `sourceId`, `why`),
   `textsCleaned` (`record`, `sourceId`), `descriptionsCut`,
-  `categoriesGivenAnEmoji`,
+  `categoriesGivenAnEmoji` (deprecated, always empty: the run gives no kind
+  of post an icon, C-114),
   `parts` as the manifest has them, `mentionsUnresolved`, `filesInBodies`,
   `filesDropped`, `filesExpected`, `filesBytesExpected`, `filesBytes`,
   `filesFetched`, `filesReused`, `filesGone`, `fileNamesChanged`,
@@ -1958,8 +1960,8 @@ A name and a company are personal data.
   `creatorProbesRefused`, `embeds`, `embedsLeftOut`, `references`,
   `recordsLeftOut`, `titlesMadeToFit` and `textsCleaned`, whose lines come one
   per entry under a line that counts the records of all of them;
-  `descriptionsCut` and `categoriesGivenAnEmoji` have a line each that names
-  them, and `todosStartingAfterTheyAreDue` one under To-dos.
+  `descriptionsCut` has a line that names them, and
+  `todosStartingAfterTheyAreDue` one under To-dos.
   No output names a title, a person or what stands in a text.
 - A run prints nothing while it goes on, in any mode: the output contract
   knows results, warnings and errors only.
