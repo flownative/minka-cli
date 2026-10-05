@@ -1627,14 +1627,14 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   of events (`ImportKind` `events`) is not on `main`, so `ToolsApplier` still
   refuses `calendar`.
 
-- A post category's emoji is part of its name since Minka's 61f9cfca6
+- A post category's emoji is part of its name since Minka #365 (7c038982d)
   (E-144), which no release carries yet. The CLI follows it (C-114): it shows
   the name alone and reads no `emoji`, which Minka keeps on the categories,
   always empty, for one release. Against a Minka without it, `posts
   categories` shows a kind without its emoji. **A bundle made by this CLI is
-  refused by a Minka without 61f9cfca6**, which demanded a non-blank `emoji`
+  refused by a Minka without #365**, which demanded a non-blank `emoji`
   on every category; so the release of the CLI carrying C-114 must not go out
-  before a Minka release carrying 61f9cfca6.
+  before a Minka release carrying #365.
 
 ## Open in the API
 
