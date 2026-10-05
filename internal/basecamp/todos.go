@@ -483,10 +483,7 @@ func (e *Extractor) writeTodoGroups(ctx context.Context, w *bundle.Writer, bucke
 	groups = append(groups, gone...)
 
 	for _, found := range groups {
-		title, err := itemTitle("group", found.ID, found.Title)
-		if err != nil {
-			return nil, nil, err
-		}
+		title := e.titleOf("group", found.ID, found.Title)
 		origin, err := e.record("group", found.ID, found.recording)
 		if err != nil {
 			return nil, nil, err
@@ -519,10 +516,7 @@ func groupColor(color *string) *string {
 
 // writeTodoList adds a list with its text, its comments and its boosts.
 func (e *Extractor) writeTodoList(ctx context.Context, w *bundle.Writer, bucket, tool int64, found todoList) error {
-	title, err := itemTitle("to-do list", found.ID, found.Title)
-	if err != nil {
-		return err
-	}
+	title := e.titleOf("to-do list", found.ID, found.Title)
 	origin, err := e.record("to-do list", found.ID, found.recording)
 	if err != nil {
 		return err
@@ -656,13 +650,13 @@ func (e *Extractor) todosIn(ctx context.Context, bucket, in int64, shelved []tod
 // only the newest carries the schedule, so the older ones come as to-dos that do
 // not repeat, as they are at the source.
 func (e *Extractor) writeTodo(ctx context.Context, w *bundle.Writer, bucket, tool, list int64, group *int64, found todo) error {
-	title, err := itemTitle("to-do", found.ID, found.Title)
+	title := e.titleOf("to-do", found.ID, found.Title)
+	startsOn, dueOn, startDropped, err := daysOfATodo(found)
 	if err != nil {
 		return err
 	}
-	startsOn, dueOn, err := daysOfATodo(found)
-	if err != nil {
-		return err
+	if startDropped {
+		e.startsAfterTheDue = append(e.startsAfterTheDue, sourceID(found.ID))
 	}
 	origin, err := e.record("to-do", found.ID, found.recording)
 	if err != nil {
@@ -780,11 +774,13 @@ func (e *Extractor) peopleOn(named []person) ([]string, error) {
 	return ids, nil
 }
 
-// daysOfATodo are the days a to-do runs, held to what Minka takes: a day of
-// another shape than YYYY-MM-DD, and a start after the day the to-do is due, end
-// the run, because the applier would refuse them too and a day nobody can read
-// is a day nobody can put right afterwards.
-func daysOfATodo(found todo) (startsOn, dueOn *string, err error) {
+// daysOfATodo are the days a to-do runs, held to what Minka takes. A day of
+// another shape than YYYY-MM-DD ends the run: the source wrote it, and a day
+// nobody can read is a day nobody can put right afterwards. A start after the
+// day the to-do is due is what somebody typed and Minka refuses; the to-do comes
+// without its start, which says less than the source and nothing wrong, and
+// startDropped says so.
+func daysOfATodo(found todo) (startsOn, dueOn *string, startDropped bool, err error) {
 	startsOn, dueOn = aDayOrNone(found.StartsOn), aDayOrNone(found.DueOn)
 	for _, day := range []struct {
 		field string
@@ -797,13 +793,13 @@ func daysOfATodo(found todo) (startsOn, dueOn *string, err error) {
 			continue
 		}
 		if _, aDate := aDay(*day.value); !aDate {
-			return nil, nil, &Error{Kind: API, Message: fmt.Sprintf("Basecamp says that to-do %d %s %s", found.ID, day.field, noDay(*day.value))}
+			return nil, nil, false, &Error{Kind: API, Message: fmt.Sprintf("Basecamp says that to-do %d %s %s", found.ID, day.field, noDay(*day.value))}
 		}
 	}
 	if startsOn != nil && dueOn != nil && *startsOn > *dueOn {
-		return nil, nil, &Error{Kind: API, Message: fmt.Sprintf("to-do %d starts after the day it is due, which Minka does not take", found.ID)}
+		return nil, dueOn, true, nil
 	}
-	return startsOn, dueOn, nil
+	return startsOn, dueOn, false, nil
 }
 
 // aDayOrNone is the day a field holds, and nothing where it holds none: a source

@@ -278,6 +278,18 @@ type Result struct {
 	// said a word a bundle has none for, counted per kind of record, per word
 	// and per place.
 	RecordsLeftOut []LeftOutRecords
+	// TitlesMadeToFit names the records whose titles the run made into ones
+	// Minka takes.
+	TitlesMadeToFit []TitleMadeToFit
+	// TextsCleaned names the comments and lines whose texts held control
+	// characters Minka refuses, which the run took out.
+	TextsCleaned []TextCleaned
+	// DescriptionsCut names the projects whose descriptions were longer than
+	// Minka holds and were cut.
+	DescriptionsCut []string
+	// CategoriesGivenAnEmoji names the categories of posts the source gives no
+	// icon, which carry the run's own.
+	CategoriesGivenAnEmoji []string
 	// TodoListsByStatus counts the lists of the bundle: active, archived,
 	// trashed.
 	TodoListsByStatus map[string]int
@@ -293,6 +305,9 @@ type Result struct {
 	// stand in no list of it, each with its project. They are counted in
 	// TodosLeftOut.Todos as well.
 	TodosWithoutAList []TodoWithoutAList
+	// TodosStartingAfterTheyAreDue names the to-dos that come without the day
+	// they start on, because the source says they start after they are due.
+	TodosStartingAfterTheyAreDue []string
 	// TodosNotDone counts the to-dos the source has open. A later run reopens
 	// nothing, so one that is done in Minka stays done.
 	TodosNotDone int
@@ -414,6 +429,10 @@ type Extractor struct {
 	messagesByType     map[string]int
 	uploadLinesLeftOut int
 	recordsLeftOut     []LeftOutRecords
+	titlesMadeToFit    []TitleMadeToFit
+	textsCleaned       []TextCleaned
+	descriptionsCut    []string
+	emojisGiven        []string
 
 	messagesWithEmptyBody int
 	longestBody           map[bundle.Kind]int
@@ -425,6 +444,7 @@ type Extractor struct {
 	todosLeftOut      TodosLeftOut
 	todoPlacesLeftOut []TodoPlaceLeftOut
 	todosWithoutAList []TodoWithoutAList
+	startsAfterTheDue []string
 	todosNotDone      int
 	todosWithPeople   int
 	todosWithSubtasks int
@@ -545,6 +565,10 @@ func (e *Extractor) extract(ctx context.Context, w *bundle.Writer, pick func(con
 	e.postsByStatus = everyStatus()
 	e.postsLeftOut, e.postsWithEmptyBody, e.uploadLinesLeftOut, e.messagesWithEmptyBody = 0, 0, 0, 0
 	e.recordsLeftOut = []LeftOutRecords{}
+	e.titlesMadeToFit = []TitleMadeToFit{}
+	e.textsCleaned = []TextCleaned{}
+	e.descriptionsCut = []string{}
+	e.emojisGiven = []string{}
 	e.messagesByType = map[string]int{}
 	for _, name := range lineTypes {
 		e.messagesByType[name] = 0
@@ -553,6 +577,7 @@ func (e *Extractor) extract(ctx context.Context, w *bundle.Writer, pick func(con
 	e.todosByStatus = map[string]int{bundle.StatusActive: 0, bundle.StatusTrashed: 0}
 	e.todosLeftOut, e.todoPlacesLeftOut = TodosLeftOut{}, []TodoPlaceLeftOut{}
 	e.todosWithoutAList = []TodoWithoutAList{}
+	e.startsAfterTheDue = []string{}
 	e.todosNotDone, e.todosWithPeople = 0, 0
 	e.todosWithSubtasks, e.subtasksLeftOut, e.todosThatRepeat = 0, 0, 0
 	e.todosWithASeries, e.repetitionsNotMapped = 0, []RepetitionNotMapped{}
@@ -664,24 +689,29 @@ func (e *Extractor) extract(ctx context.Context, w *bundle.Writer, pick func(con
 		CardsLeftOut:    e.cardsLeftOut,
 		CommentsTrashed: e.commentsTrashed,
 
-		PostsByStatus:      e.postsByStatus,
-		PostsLeftOut:       e.postsLeftOut,
-		PostsWithEmptyBody: e.postsWithEmptyBody,
-		MessagesByType:     e.messagesByType,
-		UploadLinesLeftOut: e.uploadLinesLeftOut,
-		RecordsLeftOut:     e.recordsLeftOut,
+		PostsByStatus:          e.postsByStatus,
+		PostsLeftOut:           e.postsLeftOut,
+		PostsWithEmptyBody:     e.postsWithEmptyBody,
+		MessagesByType:         e.messagesByType,
+		UploadLinesLeftOut:     e.uploadLinesLeftOut,
+		RecordsLeftOut:         e.recordsLeftOut,
+		TitlesMadeToFit:        e.titlesMadeToFit,
+		TextsCleaned:           e.textsCleaned,
+		DescriptionsCut:        e.descriptionsCut,
+		CategoriesGivenAnEmoji: e.emojisGiven,
 
-		TodoListsByStatus: e.todoListsByStatus,
-		TodosByStatus:     e.todosByStatus,
-		TodosLeftOut:      e.todosLeftOut,
-		TodoPlacesLeftOut: e.todoPlacesLeftOut,
-		TodosWithoutAList: e.todosWithoutAList,
-		TodosNotDone:      e.todosNotDone,
-		TodosWithPeople:   e.todosWithPeople,
-		TodosWithSubtasks: e.todosWithSubtasks,
-		SubtasksLeftOut:   e.subtasksLeftOut,
-		TodosThatRepeat:   e.todosThatRepeat,
-		TodosWithASeries:  e.todosWithASeries,
+		TodoListsByStatus:            e.todoListsByStatus,
+		TodosByStatus:                e.todosByStatus,
+		TodosLeftOut:                 e.todosLeftOut,
+		TodoPlacesLeftOut:            e.todoPlacesLeftOut,
+		TodosWithoutAList:            e.todosWithoutAList,
+		TodosStartingAfterTheyAreDue: e.startsAfterTheDue,
+		TodosNotDone:                 e.todosNotDone,
+		TodosWithPeople:              e.todosWithPeople,
+		TodosWithSubtasks:            e.todosWithSubtasks,
+		SubtasksLeftOut:              e.subtasksLeftOut,
+		TodosThatRepeat:              e.todosThatRepeat,
+		TodosWithASeries:             e.todosWithASeries,
 
 		RepetitionsNotMapped: e.repetitionsNotMapped,
 
@@ -870,8 +900,8 @@ func (e *Extractor) extractProject(ctx context.Context, id int64, w *bundle.Writ
 	}
 	err = w.Add(bundle.Projects, bundle.Project{
 		Record:        bundle.Record{SourceID: projectID, CreatedAt: p.CreatedAt, UpdatedAt: p.UpdatedAt, CreatedBy: creator},
-		Name:          p.Name,
-		Description:   textToHTML(p.Description),
+		Name:          e.nameOf("project", p.ID, p.Name),
+		Description:   textToHTML(e.descriptionOf(p)),
 		Status:        p.Status,
 		Members:       memberIDs,
 		ClientAccess:  clientAccess,
@@ -893,7 +923,7 @@ func (e *Extractor) extractProject(ctx context.Context, id int64, w *bundle.Writ
 			Record:           record,
 			ProjectSourceID:  projectID,
 			Kind:             kind,
-			Name:             tool.entry.Title,
+			Name:             e.titleOf("tool", tool.entry.ID, tool.entry.Title),
 			Position:         tool.entry.Position,
 			VisibleToClients: visibleToClientsOf(tool.details.recording),
 		}
@@ -1080,8 +1110,18 @@ func noTime(value string) string {
 // calendar has: the thirtieth of February, and any day of the year 0, which Go
 // takes and Minka cannot store.
 func aMoment(value string) (time.Time, bool) {
+	moment, isAMoment := aMomentOfAnyYear(value)
+	if !isAMoment || moment.Year() < firstYear {
+		return time.Time{}, false
+	}
+	return moment, true
+}
+
+// aMomentOfAnyYear is aMoment with the year 0 among the moments: a time
+// somebody can write, which Minka stores none of.
+func aMomentOfAnyYear(value string) (time.Time, bool) {
 	moment, err := time.Parse(time.RFC3339Nano, value)
-	if err != nil || moment.Year() < firstYear {
+	if err != nil {
 		return time.Time{}, false
 	}
 	return moment, true
@@ -1122,6 +1162,16 @@ func (e *Extractor) relativePath(what, address string) (string, error) {
 	return path, nil
 }
 
+// descriptionOf is the description of a project as Minka takes it, named in
+// the report where it had to be cut.
+func (e *Extractor) descriptionOf(p project) string {
+	description, cut := aDescriptionMinkaTakes(p.Description)
+	if cut {
+		e.descriptionsCut = append(e.descriptionsCut, sourceID(p.ID))
+	}
+	return description
+}
+
 // writePeople adds everybody the run has seen, each with their avatar.
 //
 // A bot comes as a bot, without the address Basecamp may still keep of a
@@ -1131,7 +1181,7 @@ func (e *Extractor) writePeople(ctx context.Context, w *bundle.Writer) (int, err
 	for _, seen := range e.people.sorted() {
 		id := sourceID(seen.ID)
 		origin := bundle.Record{SourceID: id, CreatedAt: seen.CreatedAt, UpdatedAt: seen.UpdatedAt}
-		record := bundle.Person{Record: origin, Name: seen.Name, Retired: seen.retired()}
+		record := bundle.Person{Record: origin, Name: e.nameOf("person", seen.ID, seen.Name), Retired: seen.retired()}
 		if seen.EmailAddress != "" {
 			record.Email = &seen.EmailAddress
 		}
@@ -1142,11 +1192,14 @@ func (e *Extractor) writePeople(ctx context.Context, w *bundle.Writer) (int, err
 			e.peopleAsClients++
 			record.Company = seen.company
 			if record.Company == nil {
-				company, err := companyOf("person", seen.ID, seen.Company)
+				company, madeToFit, err := companyOf("person", seen.ID, seen.Company)
 				if err != nil {
 					return 0, err
 				}
-				record.Company = company
+				record.Company, seen.companyMadeToFit = company, madeToFit
+			}
+			if seen.Company != nil {
+				e.noteMadeToFit("company", seen.Company.ID, seen.companyMadeToFit)
 			}
 		}
 		bot := seen.bot()

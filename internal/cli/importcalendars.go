@@ -15,10 +15,11 @@ func calendarNotices(report importReport) []string {
 	notices := []string{plural(len(report.Calendars.Calendars),
 		"calendar is in the bundle, which only a Minka whose import applies events takes: any other stops at it",
 		"calendars are in the bundle, which only a Minka whose import applies events takes: any other stops at the first of them")}
-	single, saidOtherwise, tooLong := 0, 0, 0
+	single, saidOtherwise, refused, tooLong := 0, 0, 0, 0
 	for _, calendar := range report.Calendars.Calendars {
 		single += calendar.ThatRepeat - calendar.WithASeries
 		saidOtherwise += len(calendar.AllDayInInstants) + len(calendar.TimedInDays)
+		refused += len(calendar.TimesMinkaRefuses)
 		tooLong += calendar.LongerThanMinkaTakes
 	}
 	if single > 0 {
@@ -30,6 +31,11 @@ func calendarNotices(report importReport) []string {
 		notices = append(notices, plural(saidOtherwise,
 			"entry of a calendar is left out because the source says its days in moments or its moments in days, which no rule turns into the other without moving it for somebody; data.calendars.calendars[] names it under allDayInInstants or timedInDays",
 			"entries of calendars are left out because the source says their days in moments or their moments in days, which no rule turns into the other without moving them for somebody; data.calendars.calendars[] names them under allDayInInstants and timedInDays"))
+	}
+	if refused > 0 {
+		notices = append(notices, plural(refused,
+			"entry of a calendar is left out because it ends before it starts or starts before the year 1, which Minka takes no event with; data.calendars.calendars[].timesMinkaRefuses names it, and a later run brings it once its times are put right at the source",
+			"entries of calendars are left out because they end before they start or start before the year 1, which Minka takes no event with; data.calendars.calendars[].timesMinkaRefuses names them, and a later run brings them once their times are put right at the source"))
 	}
 	if tooLong > 0 {
 		notices = append(notices, plural(tooLong,
@@ -69,6 +75,9 @@ func renderImportedCalendars(w io.Writer, report importReport) {
 		}
 		if len(calendar.TimedInDays) > 0 {
 			fmt.Fprintf(w, "  timed entries said in days, left out: %d — %s\n", len(calendar.TimedInDays), strings.Join(calendar.TimedInDays, ", "))
+		}
+		if len(calendar.TimesMinkaRefuses) > 0 {
+			fmt.Fprintf(w, "  entries that end before they start or start before the year 1, left out: %d — %s\n", len(calendar.TimesMinkaRefuses), strings.Join(calendar.TimesMinkaRefuses, ", "))
 		}
 		if calendar.LongerThanMinkaTakes > 0 {
 			fmt.Fprintf(w, "  descriptions longer than Minka holds: %d\n", calendar.LongerThanMinkaTakes)

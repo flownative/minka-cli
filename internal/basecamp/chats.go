@@ -138,6 +138,7 @@ func (e *Extractor) extractChat(ctx context.Context, w *bundle.Writer, bucket, c
 		if err != nil {
 			return err
 		}
+		body, refused := withoutControlCharacters(body)
 		// A line that says nothing is no line of a bundle: nobody is brought in
 		// for it, its boosts are not asked for, and no part ends at it.
 		if saysNothing(body) {
@@ -169,6 +170,9 @@ func (e *Extractor) extractChat(ctx context.Context, w *bundle.Writer, bucket, c
 		})
 		if err != nil {
 			return err
+		}
+		if refused {
+			e.noteTextCleaned("line", origin.SourceID)
 		}
 		e.measure(bundle.Messages, body, LongestBodyRecord{Record: "line", SourceID: origin.SourceID, In: "chat", InSourceID: sourceID(chat)})
 		e.messagesByType[lineTypes[found.Type]]++

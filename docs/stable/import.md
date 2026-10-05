@@ -233,17 +233,73 @@ A sender that is no e-mail address Minka takes leaves the **mail** out, named by
 its `sourceId` in `forwards.withoutAnAddress`, and nothing of it is asked for:
 `fromAddress` takes nothing else and a bundle cannot say a mail without one.
 The rule an address is held to is the same wherever one reaches a bundle, see
-**One rule for every address** below. The title of a card, a post or a to-do
-still ends the run, and so does that of a folder or a document: that one
-somebody can repair where it stands.
+**One rule for every address** below.
+
+**A title or a name somebody typed is made to fit, and the run goes on**
+(C-111). Minka holds every title and name to one rule (`IsName`, and
+`StepTitle` for a step): what PHP's `trim` takes off the ends — a blank, a tab,
+a line break, a null, a vertical tab, and no other whitespace — is taken off, it
+may not be empty, it holds no control character (`\p{Cc}`, a line break and a
+tab among them) and at most 200 characters, a step 500. Before that, its reader
+takes a code point between U+0080 and U+009F in a text of a record as the
+character of Windows-1252 it stands for, a quote or a dash pasted from Word,
+and removes the five Windows-1252 has none for. The applier stops at the first
+title that breaks the rule, so the run makes each into one Minka takes, the way
+a subject is made into a title: every control character Minka would refuse
+becomes a blank — those below U+0020 and U+007F — the five Windows-1252 has no
+character for are taken out, as Minka takes them out, and the other 27 stay,
+Minka reading each as one character; what `trim` takes comes off the
+ends, so a no-break space stays; what is longer is cut before the last character
+and ends in an ellipsis; and what is left of nothing is called `(no title)` — a card, a step,
+a column, a tool, a post, a to-do list, a group, a to-do, a question, a folder,
+a document, an event — or `(no name)` — a project, a person, a company, a
+category of posts. A column of a role Minka keeps itself (Triage, Not now,
+Done) that has no name comes without one and keeps the name Minka gives it; only
+a working column is called `(no title)`. `titlesMadeToFit` names each record by
+its kind and `sourceId`, with what was done (`none`, `folded`, `cut`), and never
+the title; a company stands there once, however many records name it, and a
+`notice` counts them. A title that only needed trimming is a title as it
+stands and is not named. The name of a company stands inside another value of
+a record, where Minka's reader reads no character of Windows-1252, so there
+every control character becomes a blank. The upload and the forwarded mail
+keep their own rules above, and their fold is the same.
+
+**A to-do that starts after the day it is due** comes without its start
+(`todosStartingAfterTheyAreDue`), because Minka takes no such to-do and a to-do
+without its start says less than the source and nothing wrong. **An event that
+ends before it starts**, or whose start falls in the year 0, as written or in
+UTC, is left out and named in `calendars.calendars[].timesMinkaRefuses`, because an event
+has no time without both. Either comes with a later run once it is put right at
+the source.
+
+**Three more things somebody typed are made to fit** (C-112). A comment and a
+line of a chat lose every control character but a tab and a line break, the
+delete among them: Minka refuses such a text (`CommentBody`, `MessageBody`)
+and stops the applier, and its reader has read the code points between U+0080
+and U+009F before, so those stay. `textsCleaned` names each by kind (`comment`,
+`line`) and `sourceId`. The content of a boost is held to a stricter rule
+there (`ReactionContent` refuses control and format characters but the
+zero-width joiner), but Minka passes such a boost over with a warning, so it
+costs the boost and never the run; no other text a bundle carries is refused for
+a control character. A description of a project is plain text Minka holds 2000
+characters of, measured on the plain text it makes back of the HTML: a run of
+whitespace within a line one blank, the blanks at either end of a line off, a
+line of nothing but whitespace kept as an empty line, a line break one
+character, two line breaks after a paragraph and never more than two in a row.
+The run measures it the same way, but runs ASCII whitespace alone together:
+Minka runs a no-break space and the other Unicode spaces together as well, so
+such a text counts longer here than there and never shorter. A longer one is
+cut after the last word that fits and ends in an ellipsis within the 2000, and
+what goes into the bundle is then the plain text as measured
+(`descriptionsCut`). A kind of post the source gives no icon gets 📝, because
+Minka takes none without one (`categoriesGivenAnEmoji`).
 
 The run ends as `api_error` where going on would put something wrong into the
 bundle: a record without `created_at` or `updated_at` and a time that is none,
 because the record would be placed wrongly among the others; a day of another
 shape than `YYYY-MM-DD`; a time zone the run does not know, because the day
 would be somebody else's; an address outside the account, because it is a
-request the run may not make; a title Minka refuses, because the applier would
-refuse it too, and for the same reason a start after the day a to-do is due; a
+request the run may not make; a
 second Triage, Not now or Done on one board, because the cards of the second
 would end up in a column nobody had; a boost that does not say
 whose it is, because `createdBy` takes `null` and a reaction with an empty one
@@ -502,7 +558,8 @@ and Minka applies the kinds in an order of its own.
   asked for, which ends the run as it always did. The creator comes into the
   bundle like anybody a record names.
   The description is plain text there and HTML in the bundle: escaped, a
-  paragraph per block, a `<br>` per line break. `status` is the one the
+  paragraph per block, a `<br>` per line break; one longer than Minka holds is
+  cut (C-112). `status` is the one the
   project itself answers with: `active`, `archived` or `trashed`.
   **A star is not carried** (C-088): whether somebody starred a project
   (`starred`, `star_url`) is nobody's in Minka, and the run never reads it.
@@ -565,9 +622,9 @@ and Minka applies the kinds in an order of its own.
   oldest post that carries it. `emoji` is the icon, `createdBy` is `null`.
   They are written in the order of their names, whatever the case of a
   letter, then of their IDs, and `position` is the number in that order,
-  because Basecamp gives none. A category without a name ends the run as
-  `api_error`, named by its ID, because the applier would stop at it; an
-  empty icon comes as it is. The list has no pages and answers every page
+  because Basecamp gives none. A category without a name is called `(no name)`
+  and named in `titlesMadeToFit` (C-111); one without an icon comes with 📝
+  (C-112). The list has no pages and answers every page
   with all of it, so it is read once and without a page, and only for a
   project with a message board that is extracted.
 - **Posts** are the messages of every message board, and the archived and
@@ -592,7 +649,8 @@ and Minka applies the kinds in an order of its own.
   written once, or be missed where one is deleted meanwhile. A line somebody
   wrote that says nothing is left out and counted (`messagesWithEmptyBody`):
   nobody comes into the bundle for it, its boosts are not asked for and no
-  part ends at it. Nothing is what a reader sees nothing of: whitespace,
+  part ends at it; a control character Minka refuses is taken out of a line
+  first (C-112). Nothing is what a reader sees nothing of: whitespace,
   characters without a width, `<br>` and empty `<div>` and `<p>`. A
   reference to a file or a person, a link, a rule and an embed say
   something: a line that was a video alone is a line, and one whose only
@@ -673,9 +731,8 @@ and Minka applies the kinds in an order of its own.
   empty, outside 0…6 or more than one where the rhythm takes one, an `end_date`
   that has not passed, a `start_date` or an `end_date` of another shape than
   `YYYY-MM-DD`, an `hour` or a `minute` of no day, and `group_on` for an
-  `everyOtherWeek` question nobody ever answered. A title the applier refuses ends the run as `api_error`, named by
-  ID: empty, longer than 200 characters, or with a character nobody can see. The
-  whitespace around a title is taken off, as Minka takes it off.
+  `everyOtherWeek` question nobody ever answered. A title the applier would
+  refuse is made to fit and named in `titlesMadeToFit` (C-111).
 - **Answers** are what somebody answered a question, per question oldest first,
   by `created_at` and then by ID; one met twice is written once. `groupOn` is
   the day the answer belongs to, taken from `group_on` as it is and never worked
@@ -769,7 +826,8 @@ and Minka applies the kinds in an order of its own.
   `notifyWhenDone` are the people the source names, in the order of their
   IDs and each once, `completedAt` and `completedBy` come from the
   completion Basecamp records, and `startsOn` and `dueOn` as given, both held
-  to the shape of a day. Comments, boosts and files hang on a to-do.
+  to the shape of a day; a start after the day it is due is left off and named
+  in `todosStartingAfterTheyAreDue` (C-111). Comments, boosts and files hang on a to-do.
   **`updatedAt` is never older than `completedAt`** (C-051). **Subtasks are
   not carried:** the format has no word for them, so all that is left of
   them is how many there were, counted in `todosWithSubtasks` and
@@ -1070,9 +1128,11 @@ and Minka applies the kinds in an order of its own.
   a moment of a day: an all-day entry said in moments, or a timed one said in
   days, is left out and named in `calendars.calendars[].allDayInInstants` or
   `timedInDays`, because either turned into the other moves the event by a day
-  for somebody. A time that is neither, one of each, and an end before the start
-  end the run, and so does a timed entry that starts before the year 1 in UTC,
-  where Minka holds it. Comments, boosts and the files of the description hang on an
+  for somebody. A time that is neither, and one of each, end the run: the source
+  wrote them. An end before the start, an end on a day before the first, and a
+  timed entry that starts in the year 0, as written or in UTC, where Minka holds
+  it, and an all-day one in the year 0, leave the entry out, named in `calendars.calendars[].timesMinkaRefuses` (C-111); an
+  end at the moment of the start is one Minka takes. Comments, boosts and the files of the description hang on an
   event, `parentKind` and `targetKind` `event`, an entry in the trash included;
   who follows an entry is asked as for every record, and not for one in the
   trash (C-084).
@@ -1143,7 +1203,8 @@ and Minka applies the kinds in an order of its own.
   `card`, `post`, `answer`, `todolist`, `todo`, `forward`, `document`,
   `upload` or `event`, per parent oldest first, by `created_at` and then by ID: the applier reads
   the order of the comments of a parent from the file. Basecamp hands out the
-  rendered text of a comment only. A comment in the trash is left out with
+  rendered text of a comment only, and a control character Minka refuses in
+  it is taken out (C-112). A comment in the trash is left out with
   its boosts and counted (`commentsTrashed`); any other comes, the archived
   comment of an archived card as well.
 - **Subscribers** are whom the source says follow a post, a card, a to-do, a
@@ -1741,15 +1802,14 @@ therefore read from the source and never guessed (C-055).
   address out of the projects, and Minka retires them for it.
 - **`company`** stands on a client alone, `{sourceId, name}` or `null`, because
   Minka reads it nowhere else and where somebody who is no client works is
-  nothing an import needs. A company the source names without an identifier, or
-  with a name Minka refuses — blank, longer than 200 characters, or holding a
-  character nobody can see — ends the run as `api_error`, where the record that
-  names it comes in and not at the end of a walk of hours. Minka reads a company
-  that is missing and one that is `null` the same way and drops the company it
-  holds, so writing the record without it would say of somebody that they belong
-  to nobody, and a later run would take away what the run before wrote. The
-  message names the company's identifier and what is wrong with the name, never
-  the name: a field that holds no name holds something.
+  nothing an import needs. A company the source names without an identifier ends
+  the run as `api_error`, where the record that names it comes in and not at the
+  end of a walk of hours. Minka reads a company that is missing and one that is
+  `null` the same way and drops the company it holds, so writing the record
+  without it would say of somebody that they belong to nobody, and a later run
+  would take away what the run before wrote. The message names the record that
+  names the company, never the name. A name Minka would refuse is made to fit
+  and the company named in `titlesMadeToFit` (C-111).
 - **Projects** carry `clientAccess` from `clients_enabled` and `clientCompany`
   from `client_company`, and both stand or neither does: Minka reads a project
   that names a client company and no access as one whose clients have none. A
@@ -1853,7 +1913,9 @@ A name and a company are personal data.
   `postsLeftOut`, `postsWithEmptyBody`, `messagesByType` (`text`, `richText`,
   `upload`, `integration`), `messagesWithEmptyBody`, `uploadLinesLeftOut`,
   `recordsLeftOut` (`record`, `field`, `value`, `in`, `inSourceId`,
-  `leftOut`),
+  `leftOut`), `titlesMadeToFit` (`record`, `sourceId`, `why`),
+  `textsCleaned` (`record`, `sourceId`), `descriptionsCut`,
+  `categoriesGivenAnEmoji`,
   `parts` as the manifest has them, `mentionsUnresolved`, `filesInBodies`,
   `filesDropped`, `filesExpected`, `filesBytesExpected`, `filesBytes`,
   `filesFetched`, `filesReused`, `filesGone`, `fileNamesChanged`,
@@ -1862,6 +1924,7 @@ A name and a company are personal data.
   `todoListsByStatus`, `todosByStatus`, `todosLeftOut` (`lists`, `groups`,
   `todos`), `todoPlacesLeftOut` (`record`, `sourceId`, `groups`, `todos`),
   `todosWithoutAList` (`sourceId`, `projectSourceId`),
+  `todosStartingAfterTheyAreDue`,
   `todosNotDone`, `todosWithPeople`, `todosWithSubtasks`, `subtasksLeftOut`,
   `todosThatRepeat`, `todosWithASeries`, `repetitionsNotMapped` (`part`,
   `seriesComes`, `todos`, `sourceIds`),
@@ -1892,9 +1955,11 @@ A name and a company are personal data.
   not in it, because the run does not carry one; the identifier and the place
   are what it names. `requestsRetried` is a number, 0 for a run that met no
   failure; the text shows its line only when it is more, and so it does for
-  `creatorProbesRefused`, `embeds`, `embedsLeftOut`, `references` and
-  `recordsLeftOut`, whose lines come one per entry under a line that counts the
-  records of all of them.
+  `creatorProbesRefused`, `embeds`, `embedsLeftOut`, `references`,
+  `recordsLeftOut`, `titlesMadeToFit` and `textsCleaned`, whose lines come one
+  per entry under a line that counts the records of all of them;
+  `descriptionsCut` and `categoriesGivenAnEmoji` have a line each that names
+  them, and `todosStartingAfterTheyAreDue` one under To-dos.
   No output names a title, a person or what stands in a text.
 - A run prints nothing while it goes on, in any mode: the output contract
   knows results, warnings and errors only.

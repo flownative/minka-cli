@@ -238,6 +238,13 @@ source calls it, the name of its file standing in and folded to fit where the
 source calls it nothing and the name is one Minka would refuse (C-056),
 because Minka derives nothing from a file and refuses an upload without a
 title.
+Every title and name a bundle carries is made into one Minka takes and named
+in `titlesMadeToFit` rather than ending the run, a to-do that starts after it
+is due comes without its start, and an event that ends before it starts is left
+out (C-111): a walk of hours ends on nothing somebody typed. A comment or a
+chat line loses the control characters Minka refuses, a project description
+over 2000 characters is cut, and a category of posts without an icon gets 📝
+(C-112).
 Every address a bundle carries — a person's, a mail's sender, an answer's —
 is read the way Minka reads it and no wider (C-059), so that none of them
 stops the applier after hours of walking, and one pair of quotation marks
@@ -299,9 +306,9 @@ word at every depth, because Minka reads it below the top of a tool as well and
 something hidden there hides the folder at the top with everything in it.
 A client is no member of a project in Minka, so the run counts the
 memberships that fall away and says no question is asked of a client. A company
-the source names without an identifier, or with a name Minka refuses, ends the
-run where the record that names it comes in: written away as none, it would tell
-Minka to drop the company it holds.
+the source names without an identifier ends the run where the record that names
+it comes in: written away as none, it would tell Minka to drop the company it
+holds. A name Minka would refuse is made to fit (C-111).
 Every kind of tool Minka has a counterpart for is extracted, so no report names
 a gap about clients; an Email forwards tool carries its word like
 every other tool, and a mail and an answer by mail follow it.

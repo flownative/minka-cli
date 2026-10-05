@@ -124,6 +124,9 @@ type importReport struct {
 	// stand in no list of it, which a bundle has no place for; they count in
 	// TodosLeftOut as well.
 	TodosWithoutAList []basecamp.TodoWithoutAList `json:"todosWithoutAList"`
+	// TodosStartingAfterTheyAreDue names the to-dos that come without the day
+	// they start on, because the source says they start after they are due.
+	TodosStartingAfterTheyAreDue []string `json:"todosStartingAfterTheyAreDue"`
 	// TodosNotDone are the to-dos the source has open, and TodosWithPeople those
 	// that name somebody: the two differences a later run cannot carry, because
 	// it reopens nothing and leaves the people of a to-do as they stand.
@@ -183,6 +186,15 @@ type importReport struct {
 	// said a word it has none for, counted per kind of record, per word and per
 	// place.
 	RecordsLeftOut []basecamp.LeftOutRecords `json:"recordsLeftOut"`
+	// TitlesMadeToFit names the records whose title or name the run made into
+	// one Minka takes, by kind and identifier and never by the title.
+	TitlesMadeToFit []basecamp.TitleMadeToFit `json:"titlesMadeToFit"`
+	// TextsCleaned names the comments and lines whose control characters the
+	// run took out, DescriptionsCut the projects whose descriptions it cut and
+	// CategoriesGivenAnEmoji the categories of posts it gave its own icon.
+	TextsCleaned           []basecamp.TextCleaned `json:"textsCleaned"`
+	DescriptionsCut        []string               `json:"descriptionsCut"`
+	CategoriesGivenAnEmoji []string               `json:"categoriesGivenAnEmoji"`
 	// LongestBody is the longest text per kind, in characters: a number and
 	// nothing of the text. LongestBodyRecords names the record each number was
 	// measured on, so that it can be looked at at the source: a kind, an
@@ -244,6 +256,18 @@ each to-do set its lists with their groups and to-dos, of each inbox its
 forwarded mail with the answers by mail, the comments and the boosts of each,
 and of each Docs & Files tool its folders, documents and uploads with the
 comments, the boosts and the files of each.
+
+A title or a name Minka would refuse — empty, holding a character nobody can
+see, or longer than Minka holds — is made into one it takes and the run goes
+on: such a character becomes a blank, what is too long is cut and ends in an
+ellipsis, and nothing becomes "(no title)" or "(no name)". titlesMadeToFit
+names each record by kind and ID. A comment or a line of a chat loses the
+control characters Minka takes in neither (textsCleaned), a description of a
+project longer than the 2000 characters Minka holds is cut (descriptionsCut),
+and a kind of post without an icon gets 📝 (categoriesGivenAnEmoji). A to-do
+that starts after the day it is due
+comes without its start (todosStartingAfterTheyAreDue), and an event that ends
+before it starts is left out (calendars.calendars[].timesMinkaRefuses).
 
 --calendars brings the calendar of each project as well, Basecamp's Schedule,
 as a tool of the kind calendar with its entries as events. Only a Minka whose
@@ -444,10 +468,10 @@ one. A folder, a document and an upload of Docs & Files carry the word at every
 depth, and not only at the top of their tool: Minka reads it below the top as
 well, and something hidden from clients below a folder the source shows makes
 Minka hide that folder with everything in it. A company the source names
-without an
-identifier, or with a name Minka refuses, ends the run where the record that
-names it comes in: writing the record without it would tell Minka to drop the
-company it holds.
+without an identifier ends the run where the record that names it comes in:
+writing the record without it would tell Minka to drop the company it holds. A
+name of a company Minka would refuse is made to fit, as every title and name
+is.
 
 A record the source describes with a word a bundle has none for is left out
 and the run goes on: a line of a chat of an unknown kind or with a status other
@@ -592,24 +616,29 @@ it has been applied.`,
 				EmbedsLeftOut:        result.Bodies.EmbedsLeftOut,
 				References:           result.Bodies.References,
 
-				PostsByStatus:      result.PostsByStatus,
-				PostsLeftOut:       result.PostsLeftOut,
-				PostsWithEmptyBody: result.PostsWithEmptyBody,
-				MessagesByType:     result.MessagesByType,
-				UploadLinesLeftOut: result.UploadLinesLeftOut,
-				RecordsLeftOut:     result.RecordsLeftOut,
+				PostsByStatus:          result.PostsByStatus,
+				PostsLeftOut:           result.PostsLeftOut,
+				PostsWithEmptyBody:     result.PostsWithEmptyBody,
+				MessagesByType:         result.MessagesByType,
+				UploadLinesLeftOut:     result.UploadLinesLeftOut,
+				RecordsLeftOut:         result.RecordsLeftOut,
+				TitlesMadeToFit:        result.TitlesMadeToFit,
+				TextsCleaned:           result.TextsCleaned,
+				DescriptionsCut:        result.DescriptionsCut,
+				CategoriesGivenAnEmoji: result.CategoriesGivenAnEmoji,
 
-				TodoListsByStatus: result.TodoListsByStatus,
-				TodosByStatus:     result.TodosByStatus,
-				TodosLeftOut:      result.TodosLeftOut,
-				TodoPlacesLeftOut: result.TodoPlacesLeftOut,
-				TodosWithoutAList: result.TodosWithoutAList,
-				TodosNotDone:      result.TodosNotDone,
-				TodosWithPeople:   result.TodosWithPeople,
-				TodosWithSubtasks: result.TodosWithSubtasks,
-				SubtasksLeftOut:   result.SubtasksLeftOut,
-				TodosThatRepeat:   result.TodosThatRepeat,
-				TodosWithASeries:  result.TodosWithASeries,
+				TodoListsByStatus:            result.TodoListsByStatus,
+				TodosByStatus:                result.TodosByStatus,
+				TodosLeftOut:                 result.TodosLeftOut,
+				TodoPlacesLeftOut:            result.TodoPlacesLeftOut,
+				TodosWithoutAList:            result.TodosWithoutAList,
+				TodosStartingAfterTheyAreDue: result.TodosStartingAfterTheyAreDue,
+				TodosNotDone:                 result.TodosNotDone,
+				TodosWithPeople:              result.TodosWithPeople,
+				TodosWithSubtasks:            result.TodosWithSubtasks,
+				SubtasksLeftOut:              result.SubtasksLeftOut,
+				TodosThatRepeat:              result.TodosThatRepeat,
+				TodosWithASeries:             result.TodosWithASeries,
 
 				RepetitionsNotMapped: result.RepetitionsNotMapped,
 
@@ -750,6 +779,11 @@ it has been applied.`,
 					"to-do names somebody as an assignee or as somebody to tell when it is done, and a later run leaves the people of a to-do as they stand in Minka: a change at the source never arrives",
 					"to-dos name somebody as an assignee or as somebody to tell when they are done, and a later run leaves the people of a to-do as they stand in Minka: a change at the source never arrives"))
 			}
+			if count := len(report.TodosStartingAfterTheyAreDue); count > 0 {
+				notices = append(notices, plural(count,
+					"to-do comes without the day it starts on, because the source says it starts after the day it is due, which Minka takes no to-do with; data.todosStartingAfterTheyAreDue names it, and a later run brings the start once it is put right at the source",
+					"to-dos come without the days they start on, because the source says they start after the days they are due, which Minka takes no to-do with; data.todosStartingAfterTheyAreDue names them, and a later run brings the starts once they are put right at the source"))
+			}
 			if count := report.TodosNotDone; count > 0 {
 				notices = append(notices, plural(count,
 					"to-do is open at the source, and a later run reopens nothing: one that somebody has ticked off in Minka stays done",
@@ -837,6 +871,26 @@ it has been applied.`,
 					"folders or Docs & Files tools are left out with what stood in them, which is left out with them; data.docs.placesLeftOut names each with how many folders, documents and uploads fell with it"))
 			}
 			notices = append(notices, calendarNotices(report)...)
+			if count := len(report.TitlesMadeToFit); count > 0 {
+				notices = append(notices, plural(count,
+					"record carries a title or a name the run made into one Minka takes, because what the source holds is empty, holds a character nobody can see or is longer than Minka holds: such a character became a blank, what was too long was cut and ends in an ellipsis, and nothing became (no title) or (no name). data.titlesMadeToFit names it by kind and ID with what was done; put it right at the source and a later run brings it",
+					"records carry titles or names the run made into ones Minka takes, because what the source holds is empty, holds a character nobody can see or is longer than Minka holds: such a character became a blank, what was too long was cut and ends in an ellipsis, and nothing became (no title) or (no name). data.titlesMadeToFit names each by kind and ID with what was done; put them right at the source and a later run brings them"))
+			}
+			if count := len(report.TextsCleaned); count > 0 {
+				notices = append(notices, plural(count,
+					"comment or line of a chat comes without the control characters it held, which Minka takes in neither; data.textsCleaned names it by kind and ID",
+					"comments or lines of chats come without the control characters they held, which Minka takes in neither; data.textsCleaned names them by kind and ID"))
+			}
+			if count := len(report.DescriptionsCut); count > 0 {
+				notices = append(notices, plural(count,
+					"project comes with its description cut after the last word that fits and ending in an ellipsis, because Minka holds 2000 characters of one; data.descriptionsCut names it",
+					"projects come with their descriptions cut after the last word that fits and ending in an ellipsis, because Minka holds 2000 characters of one; data.descriptionsCut names them"))
+			}
+			if count := len(report.CategoriesGivenAnEmoji); count > 0 {
+				notices = append(notices, plural(count,
+					"kind of post comes with the icon 📝, because the source gives it none and Minka takes no kind of post without one; data.categoriesGivenAnEmoji names it",
+					"kinds of post come with the icon 📝, because the source gives them none and Minka takes no kind of post without one; data.categoriesGivenAnEmoji names them"))
+			}
 			if count := recordsLeftOut(report); count > 0 {
 				notices = append(notices, plural(count,
 					"record is left out, because the source describes it with a word a bundle has none for; data.recordsLeftOut names the kind of record, the word and where it stood, and a later run brings it once a bundle has a word for it",
@@ -948,6 +1002,24 @@ func renderImportReport(w io.Writer, report importReport) {
 		for _, one := range report.RecordsLeftOut {
 			fmt.Fprintf(w, "  %-8s %-6s %-24s in %s %s: %d\n", one.Record, one.Field, one.Value, one.In, one.InSourceID, one.LeftOut)
 		}
+	}
+	if count := len(report.TitlesMadeToFit); count > 0 {
+		fmt.Fprintf(w, "Titles and names made into ones Minka takes: %d\n", count)
+		for _, one := range report.TitlesMadeToFit {
+			fmt.Fprintf(w, "  %-10s %s: %s\n", one.Record, one.SourceID, strings.Join(one.Why, ", "))
+		}
+	}
+	if count := len(report.TextsCleaned); count > 0 {
+		fmt.Fprintf(w, "Comments and lines without the control characters they held: %d\n", count)
+		for _, one := range report.TextsCleaned {
+			fmt.Fprintf(w, "  %-10s %s\n", one.Record, one.SourceID)
+		}
+	}
+	if ids := report.DescriptionsCut; len(ids) > 0 {
+		fmt.Fprintf(w, "Projects whose descriptions were cut: %d — %s\n", len(ids), strings.Join(ids, ", "))
+	}
+	if ids := report.CategoriesGivenAnEmoji; len(ids) > 0 {
+		fmt.Fprintf(w, "Kinds of post given the icon 📝: %d — %s\n", len(ids), strings.Join(ids, ", "))
 	}
 	renderCheckins(w, report)
 	renderTodos(w, report)
@@ -1160,6 +1232,9 @@ func renderTodos(w io.Writer, report importReport) {
 		}
 		fmt.Fprintf(w, "To-dos hanging on a To-dos tool itself and in no list of it, left out: %d — %s\n",
 			len(named), strings.Join(named, ", "))
+	}
+	if ids := report.TodosStartingAfterTheyAreDue; len(ids) > 0 {
+		fmt.Fprintf(w, "To-dos that start after they are due, without their start: %d — %s\n", len(ids), strings.Join(ids, ", "))
 	}
 }
 

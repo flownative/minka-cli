@@ -62,6 +62,9 @@ type CalendarCount struct {
 	// not move it by a day for somebody, so both are left out.
 	AllDayInInstants []string `json:"allDayInInstants"`
 	TimedInDays      []string `json:"timedInDays"`
+	// TimesMinkaRefuses names the entries that end before they start or start
+	// before the year 1, which Minka takes no event with; they are left out.
+	TimesMinkaRefuses []string `json:"timesMinkaRefuses"`
 	// RepetitionNotMapped names each part of a schedule the bundle does not
 	// carry, with the events whose schedule held it. Each of them comes once.
 	RepetitionNotMapped []EventRepetitionNotMapped `json:"repetitionNotMapped"`
@@ -128,7 +131,7 @@ func (e *Extractor) extractCalendars(ctx context.Context, w *bundle.Writer) erro
 // A walk is no snapshot: an entry met twice is written once.
 func (e *Extractor) extractCalendar(ctx context.Context, w *bundle.Writer, bucket, calendar int64) (bool, error) {
 	count := CalendarCount{ProjectSourceID: sourceID(bucket), ToolSourceID: sourceID(calendar),
-		AllDayInInstants: []string{}, TimedInDays: []string{}, RepetitionNotMapped: []EventRepetitionNotMapped{}}
+		AllDayInInstants: []string{}, TimedInDays: []string{}, TimesMinkaRefuses: []string{}, RepetitionNotMapped: []EventRepetitionNotMapped{}}
 	met := map[int64]bool{}
 	var entries []scheduleEntry
 	for _, status := range []string{"", bundle.StatusTrashed, bundle.StatusArchived} {
@@ -178,10 +181,6 @@ func (e *Extractor) extractCalendar(ctx context.Context, w *bundle.Writer, bucke
 // days, is left out and named: a day made of a moment is the day of one zone,
 // and somebody in another would find the event on the day before or after.
 func (e *Extractor) writeEvent(ctx context.Context, w *bundle.Writer, bucket, calendar int64, found scheduleEntry, count *CalendarCount) (bool, error) {
-	title, err := itemTitle("event", found.ID, found.Summary)
-	if err != nil {
-		return false, err
-	}
 	times, shape, err := timesOfAnEntry(found)
 	if err != nil {
 		return false, err
@@ -193,7 +192,11 @@ func (e *Extractor) writeEvent(ctx context.Context, w *bundle.Writer, bucket, ca
 	case momentsSaidInDays:
 		count.TimedInDays = append(count.TimedInDays, sourceID(found.ID))
 		return false, nil
+	case timesMinkaRefuses:
+		count.TimesMinkaRefuses = append(count.TimesMinkaRefuses, sourceID(found.ID))
+		return false, nil
 	}
+	title := e.titleOf("event", found.ID, found.Summary)
 	origin, err := e.record("event", found.ID, found.recording)
 	if err != nil {
 		return false, err
@@ -292,24 +295,29 @@ const (
 	asItIs entryShape = iota
 	daysSaidInMoments
 	momentsSaidInDays
+	// timesMinkaRefuses is an entry that ends before it starts, or lies in
+	// the year 0: somebody typed it so, and Minka takes no such event.
+	timesMinkaRefuses
 )
 
 // timesOfAnEntry reads the times of an entry. A time that is neither a day nor
-// a moment, and an end before the start, end the run: Minka refuses both, and
-// a time nobody can read is one nobody can put right afterwards.
+// a moment ends the run: the source wrote it, and a time nobody can read is one
+// nobody can put right afterwards. An end before the start, and a start in
+// the year 0, are what somebody typed; Minka takes neither, so the entry is
+// left out and named rather than ending a walk of hours.
 func timesOfAnEntry(found scheduleEntry) (eventTimes, entryShape, error) {
 	what := fmt.Sprintf("event %d", found.ID)
-	_, startIsADay := aDay(found.StartsAt)
-	_, endIsADay := aDay(found.EndsAt)
-	startsAt, startIsAMoment := aMoment(found.StartsAt)
-	endsAt, endIsAMoment := aMoment(found.EndsAt)
+	startsOn, startIsADay := aDayOfAnyYear(found.StartsAt)
+	_, endIsADay := aDayOfAnyYear(found.EndsAt)
+	startsAt, startIsAMoment := aMomentOfAnyYear(found.StartsAt)
+	endsAt, endIsAMoment := aMomentOfAnyYear(found.EndsAt)
 	switch {
 	case startIsADay && endIsADay:
 		if !found.AllDay {
 			return eventTimes{}, momentsSaidInDays, nil
 		}
-		if found.EndsAt < found.StartsAt {
-			return eventTimes{}, asItIs, &Error{Kind: API, Message: fmt.Sprintf("%s ends on a day before the one it starts on, which Minka does not take", what)}
+		if found.EndsAt < found.StartsAt || startsOn.Year() < firstYear {
+			return eventTimes{}, timesMinkaRefuses, nil
 		}
 		return eventTimes{allDay: true, startsOn: found.StartsAt}, asItIs, nil
 	case startIsAMoment && endIsAMoment:
@@ -317,12 +325,13 @@ func timesOfAnEntry(found scheduleEntry) (eventTimes, entryShape, error) {
 			return eventTimes{}, daysSaidInMoments, nil
 		}
 		if endsAt.Before(startsAt) {
-			return eventTimes{}, asItIs, &Error{Kind: API, Message: fmt.Sprintf("%s ends before it starts, which Minka does not take", what)}
+			return eventTimes{}, timesMinkaRefuses, nil
 		}
 		// Minka holds the start of an event in UTC, where a moment early in the
-		// year 1 east of Greenwich still falls in the year 0.
+		// year 1 east of Greenwich still falls in the year 0, as one of the year 0
+		// itself does.
 		if startsAt.UTC().Year() < firstYear {
-			return eventTimes{}, asItIs, &Error{Kind: API, Message: fmt.Sprintf("%s starts before the year 1 in UTC, which Minka does not take", what)}
+			return eventTimes{}, timesMinkaRefuses, nil
 		}
 		return eventTimes{startsAt: startsAt, endsAt: endsAt}, asItIs, nil
 	}

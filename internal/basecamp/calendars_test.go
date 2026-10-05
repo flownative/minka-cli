@@ -276,23 +276,13 @@ func TestAnAllDayEntrySaidInMomentsIsLeftOutAndNamed(t *testing.T) {
 	}
 }
 
-// A time that is neither a day nor a moment, and an end before the start, end
-// the run: Minka would refuse the event, and nobody can put such a time right
-// afterwards.
+// A time that is neither a day nor a moment ends the run: the source wrote it,
+// and nobody can put such a time right afterwards.
 func TestATimeNoEventCanHaveEndsTheRun(t *testing.T) {
 	for name, change := range map[string]func(*fakebasecamp.Entry){
-		"no time":             func(e *fakebasecamp.Entry) { e.StartsAt = "" },
-		"a day nobody has":    func(e *fakebasecamp.Entry) { e.AllDay, e.StartsAt, e.EndsAt = true, "2026-02-30", "2026-02-30" },
-		"a day of the year 0": func(e *fakebasecamp.Entry) { e.AllDay, e.StartsAt, e.EndsAt = true, "0000-01-01", "0000-01-01" },
-		"a moment of the year 0": func(e *fakebasecamp.Entry) {
-			e.StartsAt, e.EndsAt = "0000-06-16T12:00:00.000Z", "0000-06-16T13:00:00.000Z"
-		},
-		"the year 0 in UTC": func(e *fakebasecamp.Entry) {
-			e.StartsAt, e.EndsAt = "0001-01-01T00:30:00.000+01:00", "0001-01-01T01:30:00.000+01:00"
-		},
-		"an end before the start": func(e *fakebasecamp.Entry) { e.EndsAt = "2026-06-16T12:00:00.000Z" },
-		"an end before the day":   func(e *fakebasecamp.Entry) { e.AllDay, e.StartsAt, e.EndsAt = true, "2026-06-16", "2026-06-15" },
-		"a day and a moment":      func(e *fakebasecamp.Entry) { e.EndsAt = "2026-06-16" },
+		"no time":            func(e *fakebasecamp.Entry) { e.StartsAt = "" },
+		"a day nobody has":   func(e *fakebasecamp.Entry) { e.AllDay, e.StartsAt, e.EndsAt = true, "2026-02-30", "2026-02-30" },
+		"a day and a moment": func(e *fakebasecamp.Entry) { e.EndsAt = "2026-06-16" },
 	} {
 		t.Run(name, func(t *testing.T) {
 			account := withCalendar()
@@ -309,6 +299,50 @@ func TestATimeNoEventCanHaveEndsTheRun(t *testing.T) {
 	}
 }
 
+// Times somebody typed that Minka takes no event with — an end before the
+// start, an end on a day before the first, a start in the year 0, in UTC or
+// as written —
+// leave the entry out, named, and the run goes on to the entries after it. An
+// end at the very moment of the start is one Minka takes.
+func TestTimesMinkaRefusesLeaveTheEventOutAndTheRunGoesOn(t *testing.T) {
+	for name, change := range map[string]func(*fakebasecamp.Entry){
+		"an end before the start": func(e *fakebasecamp.Entry) { e.EndsAt = "2026-06-16T12:00:00.000Z" },
+		"an end before the day":   func(e *fakebasecamp.Entry) { e.AllDay, e.StartsAt, e.EndsAt = true, "2026-06-16", "2026-06-15" },
+		"the year 0 in UTC": func(e *fakebasecamp.Entry) {
+			e.StartsAt, e.EndsAt = "0001-01-01T00:30:00.000+01:00", "0001-01-01T01:30:00.000+01:00"
+		},
+		"a day of the year 0": func(e *fakebasecamp.Entry) { e.AllDay, e.StartsAt, e.EndsAt = true, "0000-01-01", "0000-01-01" },
+		"a moment of the year 0": func(e *fakebasecamp.Entry) {
+			e.StartsAt, e.EndsAt = "0000-06-16T12:00:00.000Z", "0000-06-16T13:00:00.000Z"
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			account := withCalendar()
+			change(&account.Calendar().Entries[2])
+			dir, result := extractWithCalendars(t, account, calendarProject)
+			calendar := result.Calendars.Calendars[0]
+			if !slices.Equal(calendar.TimesMinkaRefuses, []string{"9613"}) {
+				t.Errorf("entries with times Minka refuses: %v", calendar.TimesMinkaRefuses)
+			}
+			events := records(t, dir, bundle.Events)
+			if slices.ContainsFunc(events, func(event map[string]any) bool { return event["sourceId"] == "9613" }) {
+				t.Error("the entry is in the bundle")
+			}
+			if calendar.Written != 5 || len(events) != 5 {
+				t.Errorf("%d events written and %d in the bundle, want the 5 others", calendar.Written, len(events))
+			}
+		})
+	}
+
+	account := withCalendar()
+	entry := &account.Calendar().Entries[2]
+	entry.EndsAt = entry.StartsAt
+	_, result := extractWithCalendars(t, account, calendarProject)
+	if got := result.Calendars.Calendars[0].TimesMinkaRefuses; len(got) != 0 {
+		t.Errorf("an event that ends when it starts is left out: %v", got)
+	}
+}
+
 // The report of a calendar counts what the run wrote and names what it could
 // not map of a schedule; the comments written under single days of a series,
 // which a bundle has no place for, are counted from the list of every comment
@@ -320,7 +354,7 @@ func TestTheReportOfACalendarCountsWhatTheRunWrote(t *testing.T) {
 		Calendars: []basecamp.CalendarCount{{
 			ProjectSourceID: calendarProject, ToolSourceID: "9601",
 			Written: 6, Trashed: 1, ThatRepeat: 2, WithASeries: 1,
-			AllDayInInstants: []string{"9619"}, TimedInDays: []string{},
+			AllDayInInstants: []string{"9619"}, TimedInDays: []string{}, TimesMinkaRefuses: []string{},
 			RepetitionNotMapped: []basecamp.EventRepetitionNotMapped{{Part: "time_zone", Events: 1, SourceIDs: []string{"9615"}}},
 		}},
 		CommentsUnderSingleDays: []basecamp.SingleDayComments{{ProjectSourceID: calendarProject, Comments: 3, DaySourceIDs: []string{"9701", "9702"}}},
