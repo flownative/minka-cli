@@ -125,8 +125,8 @@ func (e *Extractor) extractPosts(ctx context.Context, w *bundle.Writer, bucket i
 // no list and cannot be asked for, so what a post shows of its category is all
 // there is: such a category takes the time of the oldest post that carries it.
 // Nobody is named as the creator of a category. A name Minka would refuse is
-// made to fit, as every name is, and one without an icon gets the run's own,
-// because Minka takes no category without one.
+// made to fit, as every name is. A category without an icon comes without an
+// emoji, and Minka gives it its name alone.
 //
 // They are written in the order of their names, whatever the case of a
 // letter, and by their IDs where two are called the same; the position is the
@@ -166,8 +166,7 @@ func (e *Extractor) writeCategories(ctx context.Context, w *bundle.Writer, bucke
 	for i := range categories {
 		categories[i].Name = e.nameOf("category", categories[i].ID, categories[i].Name)
 		if strings.Trim(categories[i].Icon, minkaTrims) == "" {
-			categories[i].Icon = placeholderEmoji
-			e.emojisGiven = append(e.emojisGiven, sourceID(categories[i].ID))
+			categories[i].Icon = ""
 		}
 	}
 	sort.SliceStable(categories, func(i, j int) bool {

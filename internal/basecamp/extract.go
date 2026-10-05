@@ -287,9 +287,6 @@ type Result struct {
 	// DescriptionsCut names the projects whose descriptions were longer than
 	// Minka holds and were cut.
 	DescriptionsCut []string
-	// CategoriesGivenAnEmoji names the categories of posts the source gives no
-	// icon, which carry the run's own.
-	CategoriesGivenAnEmoji []string
 	// TodoListsByStatus counts the lists of the bundle: active, archived,
 	// trashed.
 	TodoListsByStatus map[string]int
@@ -432,7 +429,6 @@ type Extractor struct {
 	titlesMadeToFit    []TitleMadeToFit
 	textsCleaned       []TextCleaned
 	descriptionsCut    []string
-	emojisGiven        []string
 
 	messagesWithEmptyBody int
 	longestBody           map[bundle.Kind]int
@@ -568,7 +564,6 @@ func (e *Extractor) extract(ctx context.Context, w *bundle.Writer, pick func(con
 	e.titlesMadeToFit = []TitleMadeToFit{}
 	e.textsCleaned = []TextCleaned{}
 	e.descriptionsCut = []string{}
-	e.emojisGiven = []string{}
 	e.messagesByType = map[string]int{}
 	for _, name := range lineTypes {
 		e.messagesByType[name] = 0
@@ -689,16 +684,15 @@ func (e *Extractor) extract(ctx context.Context, w *bundle.Writer, pick func(con
 		CardsLeftOut:    e.cardsLeftOut,
 		CommentsTrashed: e.commentsTrashed,
 
-		PostsByStatus:          e.postsByStatus,
-		PostsLeftOut:           e.postsLeftOut,
-		PostsWithEmptyBody:     e.postsWithEmptyBody,
-		MessagesByType:         e.messagesByType,
-		UploadLinesLeftOut:     e.uploadLinesLeftOut,
-		RecordsLeftOut:         e.recordsLeftOut,
-		TitlesMadeToFit:        e.titlesMadeToFit,
-		TextsCleaned:           e.textsCleaned,
-		DescriptionsCut:        e.descriptionsCut,
-		CategoriesGivenAnEmoji: e.emojisGiven,
+		PostsByStatus:      e.postsByStatus,
+		PostsLeftOut:       e.postsLeftOut,
+		PostsWithEmptyBody: e.postsWithEmptyBody,
+		MessagesByType:     e.messagesByType,
+		UploadLinesLeftOut: e.uploadLinesLeftOut,
+		RecordsLeftOut:     e.recordsLeftOut,
+		TitlesMadeToFit:    e.titlesMadeToFit,
+		TextsCleaned:       e.textsCleaned,
+		DescriptionsCut:    e.descriptionsCut,
 
 		TodoListsByStatus:            e.todoListsByStatus,
 		TodosByStatus:                e.todosByStatus,

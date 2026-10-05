@@ -253,8 +253,8 @@ in `titlesMadeToFit` rather than ending the run, a to-do that starts after it
 is due comes without its start, and an event that ends before it starts is left
 out (C-111): a walk of hours ends on nothing somebody typed. A comment or a
 chat line loses the control characters Minka refuses, a project description
-over 2000 characters is cut, and a category of posts without an icon gets 📝
-(C-112).
+over 2000 characters is cut (C-112); a category of posts without an icon
+comes without an emoji (C-114).
 Every address a bundle carries — a person's, a mail's sender, an answer's —
 is read the way Minka reads it and no wider (C-059), so that none of them
 stops the applier after hours of walking, and one pair of quotation marks
@@ -1626,6 +1626,15 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   `boosts_count` say there are some, as for every other kind. And the applier
   of events (`ImportKind` `events`) is not on `main`, so `ToolsApplier` still
   refuses `calendar`.
+
+- A post category's emoji is part of its name since Minka's 61f9cfca6
+  (E-144), which no release carries yet. The CLI follows it (C-114): it shows
+  the name alone and reads no `emoji`, which Minka keeps on the categories,
+  always empty, for one release. Against a Minka without it, `posts
+  categories` shows a kind without its emoji. **A bundle made by this CLI is
+  refused by a Minka without 61f9cfca6**, which demanded a non-blank `emoji`
+  on every category; so the release of the CLI carrying C-114 must not go out
+  before a Minka release carrying 61f9cfca6.
 
 ## Open in the API
 

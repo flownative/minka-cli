@@ -28,6 +28,11 @@ func TestThePostsToolsInUseAndTheKindsOfAProjectAreListed(t *testing.T) {
 	if len(kinds) != 2 || kinds[0]["id"] != f.Announcement.ID || kinds[1]["id"] != f.Heartbeat.ID {
 		t.Fatalf("kinds %v, want the two of the project in their order", kinds)
 	}
+	// Minka keeps the deprecated `emoji` beside the name, always empty, and the
+	// data hands it on as it came.
+	if emoji, given := kinds[0]["emoji"]; !given || emoji != "" || kinds[0]["name"] != "📢 Announcement" {
+		t.Fatalf("a kind %v: want the emoji in the name and an empty `emoji` beside it", kinds[0])
+	}
 
 	for _, args := range [][]string{
 		{"posts", "tools", f.OtherProject.ID},
@@ -36,6 +41,21 @@ func TestThePostsToolsInUseAndTheKindsOfAProjectAreListed(t *testing.T) {
 	} {
 		_, r := e.runJSON("", args...)
 		expectCode(t, r, ExitNotFound)
+	}
+}
+
+// An emoji is part of a kind's name, and the `emoji` Minka still sends beside
+// it is empty: a kind is shown by its name alone, with nothing put in front.
+func TestAKindOfPostIsShownByItsNameAlone(t *testing.T) {
+	e := newTestEnv(t)
+	f := e.fixture
+
+	text := e.run("", "posts", "categories", f.Project.ID, "--styled")
+	expectCode(t, text, ExitOK)
+	for _, want := range []string{f.Announcement.ID + "  📢 Announcement\n", f.Heartbeat.ID + "  ❤️ Heartbeat\n"} {
+		if !strings.Contains(text.stdout, want) {
+			t.Fatalf("the text lacks %q:\n%s", want, text.stdout)
+		}
 	}
 }
 

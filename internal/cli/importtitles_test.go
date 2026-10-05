@@ -89,8 +89,9 @@ func TestImportBasecampNamesTheEventsWhoseTimesMinkaRefuses(t *testing.T) {
 	}
 }
 
-// What the run took out of a text, cut off a description or gave a kind of post
-// is named in data, in a notice and in the text.
+// What the run took out of a text or cut off a description is named in data,
+// in a notice and in the text; a kind of post without an icon is no change
+// the run made and is named nowhere.
 func TestImportBasecampNamesTheTextsItCleaned(t *testing.T) {
 	e := newImportEnv(t)
 	e.account.Projects[0].Description = strings.Repeat("Plan the work. ", 200)
@@ -102,16 +103,17 @@ func TestImportBasecampNamesTheTextsItCleaned(t *testing.T) {
 	expectCode(t, r, ExitOK)
 	data := decode(t, env.Data)
 	for key, want := range map[string]any{
-		"textsCleaned":           []any{map[string]any{"record": "line", "sourceId": "9801"}},
-		"descriptionsCut":        []any{"7001"},
-		"categoriesGivenAnEmoji": []any{"9603"},
+		"textsCleaned":    []any{map[string]any{"record": "line", "sourceId": "9801"}},
+		"descriptionsCut": []any{"7001"},
+		// Deprecated and kept empty, so that a reader of the report finds it.
+		"categoriesGivenAnEmoji": []any{},
 	} {
 		if got := data[key]; !reflect.DeepEqual(got, want) {
 			t.Errorf("%s: got %v, want %v", key, got, want)
 		}
 	}
 	for _, said := range []string{"1 comment or line of a chat comes without the control characters",
-		"1 project comes with its description cut", "1 kind of post comes with the icon 📝"} {
+		"1 project comes with its description cut"} {
 		if !strings.Contains(env.Notice, said) {
 			t.Errorf("the notice does not say %q: %s", said, env.Notice)
 		}
@@ -120,7 +122,7 @@ func TestImportBasecampNamesTheTextsItCleaned(t *testing.T) {
 	styled := e.run("import", "basecamp", "--project", "7001", "--project", "7004", "--out", out, "--styled")
 	expectCode(t, styled, ExitOK)
 	for _, said := range []string{"Comments and lines without the control characters they held: 1\n  line       9801",
-		"Projects whose descriptions were cut: 1 — 7001", "Kinds of post given the icon 📝: 1 — 9603"} {
+		"Projects whose descriptions were cut: 1 — 7001"} {
 		if !strings.Contains(styled.stdout, said) {
 			t.Errorf("the text lacks %q:\n%s", said, styled.stdout)
 		}
