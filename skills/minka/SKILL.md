@@ -45,9 +45,18 @@ when stdout is not a terminal, so an agent gets structured output by default.
   and `minka cards notes set <card> - --expect <updatedAt>` at every milestone,
   so that the next session can take the card over. Comments are the other
   thing — the conversation with people.
-- Name cards with `#MNK-1` or their URL, other entries with their URL, never
-  only as text. Minka turns such a name into a reference that links both ways;
-  a title alone links nothing.
+- When a comment, a description or a message points at another card, write it
+  as `#MNK-1`; point at any other entry by pasting its bare address, the
+  `appUrl` that `--json` gives for it. Only these forms become a reference:
+  Minka links it, and in a project the page of the card, post, to-do, to-do
+  list, document, file, check-in question or event named lists it among what
+  points at it (on the web; a chat or a chat line lists nothing, and nothing
+  written in a private conversation is listed anywhere). Never write `MNK-1`
+  without `#`, never a Markdown link with words of its own such as
+  `[MNK-1](https://<host>/go/card/MNK-1)`, and never a title alone: each of
+  them stays plain text or a plain link, and nothing points back. Example:
+  `Blocked by #MNK-AS; the spec is in https://<host>/projects/…/posts/…/<postId>`.
+  See "Pointing at a card or another record" for every kind of address.
 - Read before you answer: comment with
   `minka comments create <card> - --if-latest <newest commentId|none>`, the
   newest comment you read. Where somebody commented since, nothing is written
@@ -841,15 +850,16 @@ printf '%s please have a look' "$MARKUP" | minka comments create <cardId> - --fo
 
 - Write `#MNK-1` for a card with a short identifier, or paste the address of a
   card, a post, a chat, a chat line (a chat's address ending in
-  `#chat-message-…`), a to-do, a to-do list, a document, an upload or a
-  check-in question of the same Minka — in the words or as `<address>`. A line
-  of a private conversation counts as well
+  `#chat-message-…`), a to-do, a to-do list, a document, an upload, a
+  check-in question or a calendar event of the same Minka — in the words or
+  as `<address>`. A line of a private conversation counts as well
   (`/messages/<id>#chat-message-…`); the conversation's address alone
   (`/messages/<id>`) is no reference.
   On saving, Minka turns each into a `<minka-ref>` for every way in: Markdown,
   HTML, comments, messages. `MNK-1` without `#`, anything in code, a link with
-  words of its own (`[the card](…)`), an address of another host and a target
-  you cannot see stay as written.
+  words of its own (`[the card](…)`, `[MNK-1](…/go/card/MNK-1)` as well), an
+  address of another host and a target you cannot see stay as written: they
+  link nothing back.
 - Every answer adds what the reader needs to the element: `title`, `short-id`
   for a card that has one, and `href`. `--json` hands the text over exactly as
   served; sending it back as HTML is safe, because saving keeps only `kind` and
