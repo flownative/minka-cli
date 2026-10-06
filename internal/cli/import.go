@@ -21,11 +21,15 @@ func (a *app) newImportCmd() *cobra.Command {
 }
 
 type importReport struct {
-	Source         string              `json:"source"`
-	SourceInstance string              `json:"sourceInstance"`
-	DryRun         bool                `json:"dryRun"`
-	Bundle         string              `json:"bundle,omitempty"`
-	Counts         map[bundle.Kind]int `json:"counts"`
+	Source         string `json:"source"`
+	SourceInstance string `json:"sourceInstance"`
+	DryRun         bool   `json:"dryRun"`
+	Bundle         string `json:"bundle,omitempty"`
+	// KeptFiles is where files lie that a run with --keep-files kept beside
+	// the bundle, while they are there after the run: personal data outside of
+	// any bundle.
+	KeptFiles string              `json:"keptFiles,omitempty"`
+	Counts    map[bundle.Kind]int `json:"counts"`
 	// Parts names the files of a kind that is written in several.
 	Parts        map[bundle.Kind][]string `json:"parts,omitempty"`
 	Avatars      importAvatars            `json:"avatars"`
@@ -221,9 +225,10 @@ func (a *app) newImportBasecampCmd() *cobra.Command {
 	var dryRun bool
 	var calendars bool
 	var uploadVersions bool
+	var keepFiles bool
 
 	cmd := &cobra.Command{
-		Use:   "basecamp [--project <id> … | --active-only] --out <dir> [--calendars] [--upload-versions] [--dry-run]",
+		Use:   "basecamp [--project <id> … | --active-only] --out <dir> [--calendars] [--upload-versions] [--keep-files] [--dry-run]",
 		Short: "Extract projects of a Basecamp account into an import bundle",
 		Long: `Extracts projects of a Basecamp account into an import bundle, the directory
 Minka's applier reads foreign history from.
@@ -513,12 +518,40 @@ download that brings no byte for 60 seconds, or does not end within an hour,
 is given up and counts as such a file. A Basecamp CLI that is not signed in
 ends the run, for a file as for a request. A run that ends before its bundle
 is in place loses the files it fetched: only a bundle in place hands files
-over to the next run.
+over to the next run, unless the run keeps them.
 
-A bundle holds personal data. Keep it out of repositories and delete it when
-it has been applied.`,
+--keep-files keeps every file a run brings beside --out, in .<name>.kept, from
+the first file on: a run that fails, is stopped or is killed leaves them there,
+and the next run with --keep-files takes over what is still whole instead of
+fetching it again. The walk through Basecamp always runs anew. Kept files are
+taken over only by a run of the same build of minka over the same Basecamp
+account, and a run that meets others is refused with the reason; a build that
+names no commit, a dev build or one with uncommitted changes, can keep nothing.
+Once a bundle is in place the kept files are removed, because the bundle holds
+the ones the run used and the next run takes them over from there; the bundle
+stays where it is, as after every run. A run without --keep-files neither takes
+kept files over nor removes them, and says where they lie.
+
+A bundle holds personal data, and so do kept files. Keep them out of
+repositories and delete them when the bundle has been applied.`,
 		Args: requireArgs(),
-		RunE: func(cmd *cobra.Command, _ []string) error {
+		RunE: func(cmd *cobra.Command, _ []string) (err error) {
+			var writer *bundle.Writer
+			// Another run that holds the lock may be using the kept files.
+			lockedOut := false
+			// Kept files lie outside of any bundle, so a run that ends in a
+			// failure says where as well, whatever it failed over.
+			defer func() {
+				if e, failed := err.(*Error); failed && e.Data == nil {
+					if kept, notice := theKeptFiles(writer, out, keepFiles, dryRun, lockedOut); kept != "" {
+						e.Data = map[string]string{"keptFiles": kept}
+						e.Notices = append(e.Notices, notice)
+						if e.Text == nil {
+							e.Text = func(w io.Writer) { fmt.Fprintf(w, "Kept files: %s\n", kept) }
+						}
+					}
+				}
+			}()
 			if activeOnly && len(projects) > 0 {
 				return usageErrorf(cmd, "--project names exactly the projects to take; leave out --active-only, or --project to take every active project")
 			}
@@ -530,25 +563,29 @@ it has been applied.`,
 			if out == "" && !dryRun {
 				return usageErrorf(cmd, "name the directory of the bundle with --out, or use --dry-run")
 			}
+			if keepFiles && !buildNamesItsCode(version) {
+				return usageErrorf(cmd, "--keep-files needs a build of minka that names its commit, and this one is %q: kept files are taken over only by the build that brought them, which a dev build or one with uncommitted changes cannot vouch for. Build from a clean checkout with: make build", version)
+			}
 
-			writer := bundle.Discard()
+			writer = bundle.Discard()
 			switch {
 			case !dryRun:
-				var err error
 				if writer, err = bundle.Create(out, basecamp.SourceName); err != nil {
+					lockedOut = errors.Is(err, bundle.ErrLocked)
 					return bundleError(err)
 				}
 			case out != "":
 				// A dry run says beforehand what the real one would refuse.
-				target, err := filepath.Abs(out)
-				if err == nil {
-					err = bundle.Check(target, basecamp.SourceName)
-				}
-				if err != nil {
+				if writer, err = bundle.DiscardFor(out, basecamp.SourceName); err != nil {
 					return bundleError(err)
 				}
 			}
 			defer writer.Abort()
+			if keepFiles {
+				if err := writer.Keep("minka " + version); err != nil {
+					return bundleError(err)
+				}
+			}
 
 			// Every request of the run goes through the one source that asks
 			// again, whatever kind it is of and whether anything is written.
@@ -556,7 +593,6 @@ it has been applied.`,
 			extractor := basecamp.Extractor{Source: source, Avatars: a.avatarFetcher, Files: a.basecampFiles, Now: a.now, Calendars: calendars,
 				UploadVersions: uploadVersions}
 			var result basecamp.Result
-			var err error
 			if len(projects) > 0 {
 				result, err = extractor.Extract(a.ctx, projects, writer)
 			} else {
@@ -896,6 +932,16 @@ it has been applied.`,
 			if leftover != "" {
 				notices = append(notices, "the bundle of the run before could not be removed and still lies at "+leftover+"; it holds personal data, remove it by hand")
 			}
+			switch kept, notice := theKeptFiles(writer, out, keepFiles, dryRun, false); {
+			case keepFiles && !dryRun && kept != "":
+				report.KeptFiles = kept
+				notices = append(notices, "the files kept for a run that fails could not be removed and still lie at "+kept+"; the bundle holds the ones this run used, and they hold personal data: remove them by hand")
+			case keepFiles && !dryRun:
+				notices = append(notices, "the files kept for a run that fails are removed, because the bundle at "+writer.Path()+" holds the ones this run used; it stays there with its personal data until you delete it")
+			case kept != "":
+				report.KeptFiles = kept
+				notices = append(notices, notice)
+			}
 			summary := "Dry run, nothing written: "
 			if !dryRun {
 				report.Bundle = writer.Path()
@@ -931,7 +977,45 @@ it has been applied.`,
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Walk Basecamp and show the counts, write nothing")
 	cmd.Flags().BoolVar(&calendars, "calendars", false, "Bring the calendars and their events too, for a Minka whose import applies events")
 	cmd.Flags().BoolVar(&uploadVersions, "upload-versions", false, "Bring the files uploads showed before as their versions, sending the Basecamp CLI's token to Basecamp's API")
+	cmd.Flags().BoolVar(&keepFiles, "keep-files", false, "Keep the files a run brings beside --out, so that a run that fails hands them to the next run with this flag; they hold personal data")
 	return cmd
+}
+
+// buildNamesItsCode tells whether a version names the code a build was made
+// of: a release, or a commit of a checkout without changes, which the
+// Makefile marks -dirty for an untracked file too. Files are kept
+// for the build that brought them alone, because the way a run names and
+// checks a file may change with any commit.
+func buildNamesItsCode(version string) bool {
+	return version != "" && version != "dev" && !strings.HasSuffix(version, "-dirty")
+}
+
+// theKeptFiles names the kept files that lie beside the bundle after a run,
+// and what to say about them: they are personal data outside of any bundle. A
+// run that keeps files has them until its bundle is in place; else whatever
+// lies beside --out was kept by another run, which this one left alone, and
+// which the run that holds the lock may be using right now.
+func theKeptFiles(writer *bundle.Writer, out string, keepFiles, dryRun, lockedOut bool) (string, string) {
+	if keepFiles && writer != nil && writer.Kept() != "" {
+		kept := writer.Kept()
+		return kept, "the files kept for the next run with --keep-files lie at " + kept + "; they hold personal data, remove the directory once no run is to take them over"
+	}
+	target, err := filepath.Abs(out)
+	if out == "" || err != nil {
+		return "", ""
+	}
+	kept := bundle.KeptBeside(target)
+	switch {
+	case kept == "":
+		return "", ""
+	case lockedOut:
+		return kept, "files a run with --keep-files kept lie at " + kept + ", which the run that holds the lock may be using; they hold personal data, so once no run is at work and none is to take them over, remove the directory"
+	case keepFiles && dryRun:
+		return kept, "files a run with --keep-files kept lie at " + kept + ", which a dry run neither takes over nor removes; they hold personal data, remove the directory once no run is to take them over"
+	case keepFiles:
+		return kept, "files a run with --keep-files kept lie at " + kept + ", and this run neither took them over nor removed them; they hold personal data, remove the directory once no run is to take them over"
+	}
+	return kept, "files a run with --keep-files kept lie at " + kept + ", and this run neither took them over nor removed them; they hold personal data: run with --keep-files to take them over, or remove the directory"
 }
 
 // measuredKinds are the kinds whose longest text a run measures, in the order
@@ -944,6 +1028,9 @@ func renderImportReport(w io.Writer, report importReport) {
 		fmt.Fprintln(w, "Dry run: nothing written")
 	} else {
 		fmt.Fprintf(w, "Bundle: %s\n", report.Bundle)
+	}
+	if report.KeptFiles != "" {
+		fmt.Fprintf(w, "Kept files: %s\n", report.KeptFiles)
 	}
 	fmt.Fprintf(w, "Source: %s %s\n\n", report.Source, report.SourceInstance)
 
@@ -1465,8 +1552,17 @@ func bundleError(err error) *Error {
 			Hint:    "A run replaces everything in --out. Name a directory that is empty, does not exist yet, or holds an earlier bundle.",
 		}
 	}
+	if errors.Is(err, bundle.ErrKeptForAnotherRun) {
+		return &Error{
+			Code:    CodeUsage,
+			Message: err.Error(),
+			Hint:    "Kept files are taken over only by the build of minka that kept them, reading the same Basecamp account, so that no bundle mixes files nobody can vouch for. Run that build over that account, or remove the directory the message names and run again.",
+		}
+	}
 	e := &Error{Code: CodeConfig, Message: err.Error()}
 	switch {
+	case errors.Is(err, bundle.ErrKeptThroughALink):
+		e.Hint = "Kept files are neither read nor written through a link: what it leads to would be taken for kept files, or would get personal data where nobody looks for it. Remove the link the message names, or the directory of the kept files with it, and run again."
 	case errors.Is(err, bundle.ErrSymlink):
 		e.Hint = "A bundle is not written through a link: the one behind it would stay where nobody looks for it. Name the directory itself with --out."
 	case errors.Is(err, bundle.ErrLocked):

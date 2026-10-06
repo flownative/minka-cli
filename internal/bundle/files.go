@@ -191,20 +191,23 @@ func (w *Writer) DropFile(sourceID string) error {
 	if err != nil {
 		return err
 	}
+	if w.kept != nil {
+		delete(w.kept.taken, sourceID)
+	}
 	if err := os.RemoveAll(dir); err != nil {
 		return fmt.Errorf("the file of attachment %q cannot be removed: %w", sourceID, withoutPath(err))
 	}
 	return nil
 }
 
-// ReuseFile takes the file of an attachment over from the bundle this run
-// replaces, so that a run does not fetch again what the run before brought. It
-// answers false when that bundle has no such file, or not the one its record
-// describes: the file has to lie where the new record puts it, with the size
-// and the digest the old record gives it. The digest is computed anew, because
-// a record only claims it.
+// ReuseFile takes the file of an attachment over from the files an earlier run
+// kept, or else from the bundle this run replaces, so that a run does not fetch
+// again what a run before brought. It answers false when neither has such a
+// file, or not the one its record describes: the file has to lie where the new
+// record puts it, with the size and the digest the old record gives it. The
+// digest is computed anew, because a record only claims it.
 //
-// The bundle being replaced is only read. The file is linked where that can
+// Where the files come from is only read. The file is linked where that can
 // be done, which costs no space, and copied otherwise. A link shares its
 // content with the old file, so nothing may ever write into a file of the new
 // bundle, which the directory made anew for every file sees to; removing
@@ -217,15 +220,28 @@ func (w *Writer) ReuseFile(sourceID, filename string) (StoredFile, bool, error) 
 	if err != nil {
 		return StoredFile{}, false, err
 	}
+	if w.kept != nil && !w.kept.refused {
+		stored, taken, err := takeOver(w.kept.dir, w.kept.files, sourceID, filename, dir)
+		if err != nil || taken {
+			w.kept.taken[sourceID] = taken
+			return stored, taken, err
+		}
+	}
 	if w.replaced == nil {
 		w.replaced = readReplacedFiles(filepath.Join(w.target, attachmentsFile))
 	}
-	old, known := w.replaced[sourceID]
+	return takeOver(w.target, w.replaced, sourceID, filename, dir)
+}
+
+// takeOver puts the file of an attachment into dir, made anew for it, from the
+// files under root that index describes.
+func takeOver(root string, index map[string]replacedFile, sourceID, filename, dir string) (StoredFile, bool, error) {
+	old, known := index[sourceID]
 	if !known || old.file != sourceID+"/"+filename {
 		return StoredFile{}, false, nil
 	}
 
-	oldDir := filepath.Join(w.target, filesDir, sourceID)
+	oldDir := filepath.Join(root, filesDir, sourceID)
 	oldPath := filepath.Join(oldDir, filename)
 	// A link could lead anywhere, so only a real file in a real directory
 	// counts.

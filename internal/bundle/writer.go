@@ -70,6 +70,9 @@ type Writer struct {
 	// replaced is what the bundle at the target says about its files, read
 	// when a file of it is first asked for.
 	replaced map[string]replacedFile
+	// kept is where the files of a run that keeps them go, for a run after it
+	// that ends before its bundle is in place.
+	kept *keptFiles
 }
 
 // parted is a kind that is written in parts.
@@ -120,6 +123,22 @@ func Create(target, source string) (*Writer, error) {
 // Discard makes a Writer that counts what it is given and writes nothing.
 func Discard() *Writer {
 	return &Writer{discard: true, counts: map[Kind]int{}, parts: map[Kind]*parted{}}
+}
+
+// DiscardFor makes a Writer that writes nothing for a run that would write a
+// bundle at target, and refuses what Create would refuse there, so that a run
+// that only looks shows the refusal beforehand.
+func DiscardFor(target, source string) (*Writer, error) {
+	target, err := filepath.Abs(target)
+	if err != nil {
+		return nil, err
+	}
+	if err := Check(target, source); err != nil {
+		return nil, err
+	}
+	w := Discard()
+	w.source, w.target = source, target
+	return w, nil
 }
 
 // Check tells whether a run may put its bundle at target. A run replaces
@@ -356,7 +375,9 @@ func (w *Writer) Add(kind Kind, record any) error {
 //
 // The bundle of the run before is moved aside first and removed last. When it
 // cannot be removed, the new bundle is in place all the same: leftover then
-// names where the old one still lies, and the run has not failed.
+// names where the old one still lies, and the run has not failed. Kept files go
+// as well, because the bundle holds the ones this run used, and the next run
+// takes them over from there; Kept names them where they cannot be removed.
 func (w *Writer) Commit(manifest Manifest) (leftover string, err error) {
 	manifest.Format = Format
 	manifest.Source = w.source
@@ -410,13 +431,18 @@ func (w *Writer) Commit(manifest Manifest) (leftover string, err error) {
 	if hadPrevious && removeAll(previous) != nil {
 		leftover = previous
 	}
+	if w.kept != nil {
+		w.kept.closeIndex()
+		w.kept.removed = removeAll(w.kept.dir) == nil
+	}
 	w.lock.release()
 	return leftover, nil
 }
 
-// Abort throws away what was written. After Commit it does nothing, so it can
-// be deferred.
+// Abort throws away what was written, except the kept files, which are there
+// for the run after it. After Commit it does nothing, so it can be deferred.
 func (w *Writer) Abort() {
+	w.kept.closeIndex()
 	for kind, file := range w.files {
 		delete(w.files, kind)
 		_ = file.Close()

@@ -342,7 +342,7 @@ minka work list [--session <id>] --json
 minka heartbeat [--session <id>] --json
 minka hooks install --json
 minka hooks status --json
-minka import basecamp [--project <basecampProjectId>... | --active-only] (--out <dir> | --dry-run) [--calendars] [--upload-versions] --json
+minka import basecamp [--project <basecampProjectId>... | --active-only] (--out <dir> | --dry-run) [--calendars] [--upload-versions] [--keep-files] --json
 ```
 
 `<column>` is a column ID, a type (`triage`, `not_now`, `done`) or a title
@@ -2305,10 +2305,22 @@ this:
   same way — a sign-in that is gone is no word about a picture, and every person
   of the account would lose theirs. A run that ends that way, or is
   stopped, fetches its files again: only a bundle in place hands files
-  over.
-- A bundle holds personal data: names, e-mail addresses, pictures. Write it
-  outside of any repository, do not quote from it, and delete it once it has
-  been applied.
+  over, unless the run had `--keep-files`.
+- `--keep-files` keeps every file a run brings in `.<name>.kept` beside
+  `--out` from the first file on, so a run that fails, is stopped or killed
+  hands them to the next run with the flag, which takes over what is still
+  whole (`data.filesReused`) and walks Basecamp anew. Use it for a long run.
+  It needs a build whose version names its commit (`make build` in a clean
+  checkout, or a release); `dev` or `-dirty` exits 1 (`usage`). Kept files of
+  another build or another Basecamp account exit 1 (`usage`) with the path:
+  run that build, or remove the directory. A bundle in place removes them.
+  Wherever kept files lie after a run, `data.keptFiles` names them (also in
+  the `data` of an error envelope) with a `notice`; a run without the flag
+  leaves them alone and says so.
+- A bundle holds personal data: names, e-mail addresses, pictures, and so do
+  kept files. Write it outside of any repository, do not quote from it, and
+  delete it once it has been applied, and kept files once no run is to take
+  them over.
 
 ## Common workflows
 

@@ -31,7 +31,8 @@ the documentation says what holds; how it came about is in git.
   before any work on the workflows, the Makefile's `dist` or the formula.
 - [Importing from Basecamp](stable/import.md): What the extractor reads
   through the Basecamp CLI and why, what a bundle holds so far, how a run
-  protects what is in `--out`, the privacy rule for bundles — before any work
+  protects what is in `--out`, which files a run keeps for the next one, the
+  privacy rule for bundles — before any work
   on `import` or on a further kind of record.
 - [Saying what you are working on](stable/at-work.md): Where the cards of
   `work start` are kept and why the machine shares one list, when a card is

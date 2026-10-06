@@ -816,6 +816,11 @@ func (e *Extractor) extractProject(ctx context.Context, id int64, w *bundle.Writ
 	if err := e.rememberAccount(p); err != nil {
 		return err
 	}
+	// Files an earlier run kept are of one account, and the first project is
+	// the first place the account is known, before any file is asked for.
+	if err := w.ReadsFrom(e.account); err != nil {
+		return err
+	}
 	if !projectStatuses[p.Status] {
 		return &Error{Kind: API, Message: fmt.Sprintf("project %d has the status %q, which a bundle does not know", id, p.Status)}
 	}

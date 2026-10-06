@@ -1,4 +1,8 @@
-VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
+# A version names the code of a build: a checkout with changes is -dirty,
+# untracked files included, which git describe passes over.
+VERSION ?= $(shell v=$$(git describe --tags --always --dirty 2>/dev/null || echo dev); \
+	if [ "$$v" != dev ] && [ -n "$$(git status --porcelain 2>/dev/null)" ]; then v=$${v%-dirty}-dirty; fi; \
+	echo $$v)
 LDFLAGS := -X github.com/flownative/minka-cli/internal/cli.version=$(VERSION)
 
 .PHONY: build install test check dist
