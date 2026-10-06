@@ -220,7 +220,10 @@ well, its entries as events with their comments, boosts, files and followers,
 a series as one event with its schedule; without it a calendar is skipped,
 because a Minka whose import does not apply events stops at one. No request of
 a run reaches an address of a single day of a series or of one entry, which
-Basecamp answers by writing (C-097).
+Basecamp answers by writing (C-097). With `--keep-files` (C-115) a run keeps
+every file it brings beside `--out`, so that one that fails, is stopped or is
+killed hands them to the next run with the flag, which walks Basecamp anew and
+fetches only what is missing; a bundle in place removes them.
 The Docs & Files tools come last of all, so that the bytes of a file standing in
 a card and in a document alike are fetched for the card, and the inboxes before
 them. Every owner of a file has a record of its own in `attachments.jsonl`, named
@@ -1371,6 +1374,12 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   run rather than writing the picture off is held against the fake, by a run whose
   avatar answers without a sign-in; no sign-in has ever run out while avatars were
   being fetched live.
+- Of `--keep-files` of `import basecamp` (C-115): all of it. No live run has
+  used it; it is held against the fake and against the file system of the
+  tests, a kill by a run that runs no handler. That a run killed in the middle
+  of a file or of a line of the index leaves nothing that is taken over is
+  reasoned from the order of the writes and tested with the leftovers such a
+  kill makes, not with a real kill.
 - Of the embeds of `import basecamp`: a frame that gets no tag, a caption in
   a figure, a frame outside a figure and broken markup. Seen live, in the
   bundle of both projects: some 500 embeds written, none left out, no raw frame

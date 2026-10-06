@@ -471,6 +471,9 @@ func (e *Extractor) attachFile(ctx context.Context, w *bundle.Writer, owner file
 		e.files.Fetched++
 	}
 
+	if err := w.KeepFile(file.ref, name, stored); err != nil {
+		return err
+	}
 	e.files.Bytes += stored.Bytes
 	if stored.Bytes > e.LargestFile {
 		e.filesThatNeverArrive[file.ref] = true

@@ -368,6 +368,10 @@ Basecamp CLI gives up at once on a status it does not know, a gateway's 525.
 <a id="c-030"></a>
 ## C-030 — Files are streamed in, or taken over from the bundle before
 
+**Superseded in one point by [C-115](#c-115)**: a run with `--keep-files`
+takes a file over from the files an earlier run kept as well, before it looks
+at the bundle before. Everything else below holds.
+
 *Applies to: `import basecamp`, every file of a text or a chat*
 
 `basecamp files download --out -` streams a file into the staged bundle under
@@ -1875,3 +1879,44 @@ keeps its `emoji` empty rather than dropping it at once.
 **Implemented as:** `api.PostCategory`, `cli.newPostsCategoriesCmd`,
 `bundle.Category`, `basecamp.Extractor.writeCategories`, see
 [Posts](stable/posts.md) and [Importing from Basecamp](stable/import.md).
+
+<a id="c-115"></a>
+## C-115 — A run with `--keep-files` keeps the files it brings for the next one
+
+*Applies to: `import basecamp`, every file a run fetches or takes over, the
+directory beside `--out`*
+
+With `--keep-files` every file a run holds — fetched or taken over, of a text,
+a chat, an upload or an earlier version of one, never an avatar — is linked
+into `.<name>.kept` beside `--out` the moment it is whole, and its line in an
+index there follows. A run that fails, is stopped or is killed leaves that
+directory, and the next run with the flag takes a file over from there when
+the index vouches for it, by the rules a file is taken over from a bundle by.
+The walk through Basecamp runs anew every time; nothing of the records is
+kept. Once a bundle is in place the directory goes. The files are taken over
+only by the same build — a version that names its commit, never `dev` or a
+`-dirty` one, which `make build` makes of a checkout with any change, an
+untracked file included — reading the same account; anything else is refused
+as `usage` with the reason. Which projects a run takes and whether it brings
+calendars or earlier versions do not count. A run without the flag neither
+takes kept files over nor removes them, and names them in a notice and in
+`keptFiles`.
+
+**Why:** A run over the whole account takes ten hours, nearly all of them
+downloads, and one that failed late lost them all. Only files are
+kept, because a record is written in one pass in an order across projects and
+could be checked against nothing, while a file carries its own proof: its
+identifier, its size at the source and a digest. A file is named the same
+whichever projects or options a run has, which is why only the account and the
+build count: an identifier means one thing within one account, and a build may
+change how a file is named or what an identifier stands for, which no number
+short of the commit could tell. The directory has its own name from before the
+first file, because a run that is killed runs no handler and the next run
+tidies away what was being built. A run without the flag leaves the files,
+because removing hours of downloads over a forgotten flag is the loss the flag
+is there to prevent, and says where they lie, because they are personal data
+outside of any bundle. The bundle in `--out` stays after every run that put
+it there, with or without the flag, until somebody deletes it.
+**Implemented as:** `bundle.Writer.Keep`, `ReadsFrom`, `KeepFile`, `Kept`,
+`bundle.KeptBeside`, `cli.buildNamesItsCode`, `cli.theKeptFiles`, see
+[Importing from Basecamp](stable/import.md).

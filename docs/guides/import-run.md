@@ -68,8 +68,13 @@ from the bundle it replaces. Start a run in the background and let it report
 when it ends. The ten-minute limit of a background command does not end it.
 
 A run that ends hard leaves the earlier bundle in place and loses the files it
-fetched. A single failure of a gateway ends no run any more, the request is
-asked again.
+fetched, unless it had `--keep-files`: then the next run with the flag takes
+them over from `.<bundle>.kept` beside the bundle and only walks Basecamp
+again. A full run of the account wants the flag. It needs `bin/minka` built
+from a checkout without changes, untracked files included, and the next run
+the same binary; delete `.<bundle>.kept` by hand when no run is to take it
+over. A single failure of a gateway ends no run any more, the request is asked
+again.
 
 A further run goes into a clone of the newest bundle rather than into an empty
 directory: `cp -Rc <bundle> <new bundle>` is done in a second and costs no

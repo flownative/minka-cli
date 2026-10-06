@@ -7,7 +7,7 @@ thing the two sides share; Minka's applier reads the bundle, the CLI never
 writes history into Minka itself.
 
 ```
-minka import basecamp [--project <id> … | --active-only] --out <dir> [--dry-run]
+minka import basecamp [--project <id> … | --active-only] --out <dir> [--calendars] [--upload-versions] [--keep-files] [--dry-run]
 ```
 
 The command talks to Basecamp only, and only reads there. It needs no Minka
@@ -1763,8 +1763,8 @@ Both were measured. So the extractor takes the two steps itself:
   `--out` that the run replaces, instead of being downloaded, when the index
   of that bundle has a record of the same `sourceId` that names the same
   `file`, the file is a regular file of the size the record gives, which is
-  also the size Basecamp gives, and its digest, computed anew, is the one of
-  the record (`bundle.Writer.ReuseFile`). Anything else is fetched. A record
+  also the size Basecamp gives where it gives one, and its digest, computed
+  anew, is the one of the record (`bundle.Writer.ReuseFile`). Anything else is fetched. A record
   that says `gone` is not trusted, the file is asked for again; an avatar is
   never taken over, because somebody may have another picture under the
   same ID. The old bundle is only read. The file is linked (a hard link),
@@ -1774,16 +1774,20 @@ Both were measured. So the extractor takes the two steps itself:
   directory that is made anew for it, one per attachment, and a directory
   that stands takes nothing. A file is only ever removed by its name.
   Removing the old bundle, giving a run up and tidying up after a killed one
-  therefore leave the other bundle whole. `filesReused` and `filesFetched`
-  count both ways. A record of a **further owner** of one file is taken over by
+  therefore leave the other bundle whole. A run with `--keep-files` looks at
+  the files an earlier run kept first, by the same rules, with the index of
+  the kept files in the place of the bundle's (C-115); see Keeping the files of
+  a run. `filesReused` counts what came from either, and `filesFetched` what
+  was fetched. A record of a **further owner** of one file is taken over by
   neither route: it shares what the first record of the file got, taken over or
   fetched, so a duplicate is never fetched because its identifier is new.
 - **What a run that ends hard loses.** Files are taken over from a bundle
   that is in place, and a bundle takes its place only at the end of a run.
-  A run that fails, is stopped or is killed therefore loses the files it
-  had fetched, and the next run fetches them again. The first complete run
-  over an account is the expensive one; every run after it fetches what is
-  new or was missing.
+  Without `--keep-files` a run that fails, is stopped or is killed therefore
+  loses the files it had fetched, and the next run fetches them again. The
+  first complete run over an account is the expensive one; every run after it
+  fetches what is new or was missing. With `--keep-files` it loses the records
+  and nothing of the files, see Keeping the files of a run.
 
 A further kind is a further step of the walk that adds its records to the same
 writer, feeds the creators it meets into the same people and attaches the
@@ -1874,7 +1878,8 @@ A name and a company are personal data.
   removed last (C-024).
   A run that fails or is interrupted, by Ctrl-C or by SIGTERM, leaves what was
   there: the earlier bundle, or nothing, not even the directories it made on
-  the way to `--out`.
+  the way to `--out`. A run with `--keep-files` leaves the files it kept as
+  well, see Keeping the files of a run.
 - When the new bundle cannot take its place, the old one is put back; when
   that fails too, the error names where it lies. An old bundle that cannot be
   removed afterwards is a `notice` with its path, not a failure.
@@ -1883,7 +1888,7 @@ A name and a company are personal data.
   puts a bundle back that was moved aside when no new one took its place. It
   touches only real directories named exactly `.<name>.staging-<digits>`, with
   or without `.previous`: the name of `--out` never works as a pattern, and a
-  link is left alone.
+  link is left alone. Kept files, `.<name>.kept`, are none of them.
 - One run at a time works on an `--out`. A run holds an advisory lock of the
   kernel (`flock`) on `.<name>.lock` next to it, from before the tidying up
   until the bundle is in place, and removes the file at the end. A second run
@@ -1934,8 +1939,8 @@ A name and a company are personal data.
   (`notInTheProject`, `clients`,
   `retired`, `withoutAnAddress`), `answersWithoutABody`, `answersWithoutADay`,
   `answersTrashed`, `subscribers` (`lists`, `leftOff` with the four reasons of
-  `askedLeftOut`, `unread`), `longestBody`, `longestBodyRecords`, `requestsRetried` and the absolute path of
-  the bundle. The lines about check-ins are shown only by a run that met a
+  `askedLeftOut`, `unread`), `longestBody`, `longestBodyRecords`, `requestsRetried`, the absolute path of
+  the bundle and, where kept files lie beside it, `keptFiles`. The lines about check-ins are shown only by a run that met a
   questionnaire, and those about to-dos only by one that met a To-dos tool.
   `filesBytes` is what the files of the bundle weigh, fetched or taken over, each
   file of the source once whatever number of records own it, see Files; it
@@ -2035,11 +2040,101 @@ in a bundle. A file of a text or a chat comes through the Basecamp CLI, see
 Files. A reason never carries the address or the name of a file, which name
 a person or what they wrote.
 
+## Keeping the files of a run
+
+A run over the whole account takes some ten hours, nearly all of them
+downloads, and without anything kept one that fails late loses them all.
+`--keep-files` keeps the files and nothing else (C-115): the walk through
+Basecamp runs anew every time, because a record is written in one pass, in an
+order across projects, and nothing could tell a record of a run before from
+one this run would write.
+
+- **What is kept.** Every file the run holds of a text, a chat, an upload or
+  an earlier version of one, fetched or taken over, the moment the run takes
+  it for the file: whole, and of the size Basecamp gives where it gives one,
+  as a file without a size is taken by the look of it and stands in the
+  bundle the same way. An avatar never, as it is never taken
+  over; a record of a further owner of a file never, as it shares the first
+  owner's.
+- **Where.** In `.<name>.kept` beside `--out`, the directory 0700 and its files
+  0600: `files/<sourceId>/<filename>` as in a bundle, `files.jsonl` with a
+  line per file — `sourceId`, `file`, `bytes`, `sha256` — and `kept.json`, what
+  the files were brought under. A file is linked from the bundle being built,
+  which costs no space; only where the file system makes no links is it
+  copied and takes its space twice. A file of the same identifier that was
+  there goes first, by its name, as nothing is ever written into a file that
+  stands. A link in the place of the directory or the file of one attachment
+  is never taken over, as in a bundle; for the others see A link below.
+- **A run that is killed.** No handler runs, and the next run tidies away what
+  was being built, the directories `.<name>.staging-<digits>`. The kept files
+  carry their own name from before the first file comes, which no tidying up
+  takes. A file's line in the index comes only once the file is whole: a run
+  killed in between leaves a file the index does not vouch for, which nobody
+  takes over. A line a run did not end begins nothing: the next run starts its
+  first line on a line of its own. The record is written before anything
+  else, so a directory with neither a record nor a file in it is one a run
+  ended in before it wrote the record, and the next run takes it as new.
+- **Taking over.** A file is taken over from there when the line of its
+  `sourceId`, the last one if there are several, names the same `file`, the
+  file is a regular file of that size, which is also the size Basecamp gives
+  where it gives one, and its digest, computed anew, is the one of the line —
+  the rules of Taking files over. A file cut short, spoilt or missing is fetched, and the one
+  fetched takes its place there. A file of an upload that changed at the source
+  is told by its name and its size as in a bundle, and no better.
+- **What the files were brought under.** `kept.json` holds `source`,
+  `sourceInstance` — the Basecamp account, written once the first project is
+  read — and `extractor`, `minka <version>`. A run with the flag refuses kept
+  files of another source or build before Basecamp is asked, and those of
+  another account once the first project is read, before any file; the
+  refusal is `usage` with the reason and the path, and nothing of them is
+  changed. **The build counts and nothing else of the run:** which projects it
+  takes, `--active-only`, `--calendars` and `--upload-versions` choose which
+  files a run names, never what a name stands for, so a file kept by one is
+  the same file for another. A build may change how a file is named or what an
+  identifier stands for, and only its commit can say it did not: a build is
+  the same when its version is the same, and `--keep-files` needs a version
+  that names its commit — a release or `make build` in a checkout without
+  changes, where `make build` takes an untracked file for a change, which `git
+  describe` alone does not. `dev` and a version ending in `-dirty` are refused
+  as `usage` before anything is asked. A record nobody can read, beside files,
+  is refused the same way; the hint says to remove the directory.
+- **After a run.** A run that fails, is stopped or is killed leaves the kept
+  files. One that puts its bundle in place removes them, as the bundle holds
+  the ones it used and the next run takes them over from there; files of
+  projects this run did not take go with them. The bundle stays in `--out`
+  after every run that put it there, with or without the flag, until somebody
+  deletes it. Kept files that cannot be removed are a `notice` with their
+  path.
+- **A run without the flag** is the run it always was: it neither takes kept
+  files over nor removes them. Removing hours of downloads over a forgotten
+  flag is the loss the flag is there to prevent.
+- **What the output says.** Wherever kept files lie after a run, `keptFiles`
+  names their directory — in the report, or as the `data` of the error
+  envelope of a run that failed, a refused one included, unless that `data` is
+  already the report — the text shows `Kept files: <path>`, and a
+  `notice` says that they are personal data and what to do about them. A run
+  with the flag whose bundle is in place says in a `notice` that the kept files
+  are removed and the bundle stays.
+- **One run at a time.** The kept files are touched under the lock of the
+  run, so a second run is refused before it reads them. Its `notice` says the
+  run that holds the lock may be using them, and not to remove them now.
+- **A link.** One where the kept files lie, or in the place of `kept.json`,
+  `files.jsonl` or `files`, is refused as `config` with a hint of its own:
+  remove the link. The record is written under `kept.json.new` first, and
+  whatever stands at that name goes by its name before, so that no record is
+  written through a link.
+- **Disk space.** Kept files, the bundle being built and the bundle in
+  `--out` share their bytes wherever they are the same file, so a run needs
+  no more space than without the flag, except on a file system without links.
+- **A dry run** with the flag and `--out` checks the kept files as a run
+  would, the account included, and keeps nothing.
+
 ## A bundle is personal data
 
-A bundle holds names, e-mail addresses and pictures. Its directories are 0700
-and its files 0600. It is written outside of any repository and deleted once
-it has been applied. Nothing out of a real bundle appears in the repository:
+A bundle holds names, e-mail addresses and pictures, and kept files hold what
+the files of a bundle hold. Its directories are 0700 and its files 0600. It is
+written outside of any repository and deleted once it has been applied; kept
+files are deleted once no run is to take them over. Nothing out of a real bundle appears in the repository:
 not in a test, a fixture, a document or a commit message. Tests run against
 `internal/fakebasecamp`, an invented account, and never call the Basecamp CLI
 or the network.
