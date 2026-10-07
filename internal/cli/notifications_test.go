@@ -61,11 +61,16 @@ func (e *testEnv) runWaitJSON(clock *waitClock, args ...string) (envelope, resul
 	return env, r
 }
 
-// aMove is the line Bruno's bell gets when Anke moves a card of his.
+// aMove is the line Bruno's bell gets when Anke moves a card of his into
+// Doing, with the summary the fake answers for it.
 func (e *testEnv) aMove(card *fakeapi.Card) *fakeapi.Notification {
+	name := card.ShortID
+	if name == "" {
+		name = "“" + card.Title + "”"
+	}
 	return &fakeapi.Notification{
 		PersonID: e.fixture.Bruno.ID, Occasion: "card.moved", ActorID: e.fixture.Anke.ID, CardID: card.ID,
-		Summary: "Anke moved " + card.Title + " to “Doing”",
+		MovedToColumnID: e.fixture.Doing.ID, Summary: "Anke moved " + name + " to “Doing”",
 	}
 }
 
@@ -119,7 +124,7 @@ func linesOf(t *testing.T, env envelope) []map[string]any {
 func TestTheFirstWaitStartsFromNowAndPrintsWhatArrives(t *testing.T) {
 	e := newTestEnv(t)
 	e.vars[sessionVariable] = sessionOfTheWait
-	e.server.Notify(&fakeapi.Notification{PersonID: e.fixture.Bruno.ID, Occasion: "comment.created", Summary: "from before"})
+	e.server.Notify(&fakeapi.Notification{PersonID: e.fixture.Bruno.ID, Occasion: "comment.written", Summary: "from before"})
 	arriving := e.aMove(e.fixture.CardInDoing)
 	e.aLineArrivesInTheWait(arriving)
 
@@ -175,7 +180,7 @@ func TestAWaitPrintsOneLinePerNotification(t *testing.T) {
 
 	r := e.run("", "notifications", "wait", "--styled")
 	expectCode(t, r, ExitOK)
-	want := "MNK-B4 Review the API: Anke moved Review the API to “Doing”\nWrite the CLI: Anke moved Write the CLI to “Doing”\n"
+	want := "MNK-B4 Review the API: Anke moved MNK-B4 to “Doing”\nWrite the CLI: Anke moved “Write the CLI” to “Doing”\n"
 	if r.stdout != want {
 		t.Fatalf("stdout %q, want %q", r.stdout, want)
 	}
@@ -245,7 +250,7 @@ func TestEverySessionAndAccountWaitsFromAMarkOfItsOwn(t *testing.T) {
 
 	e.vars["MINKA_TOKEN"] = e.fixture.AgentToken
 	e.server.WhileWaiting = nil
-	e.aLineArrivesInTheWait(&fakeapi.Notification{PersonID: e.fixture.Agent.ID, Occasion: "card.moved", Summary: "for the agent"})
+	e.aLineArrivesInTheWait(&fakeapi.Notification{PersonID: e.fixture.Agent.ID, Occasion: "comment.written", Summary: "for the agent"})
 	env, r := e.runWaitJSON(nil)
 	expectCode(t, r, ExitOK)
 	if lines := linesOf(t, env); len(lines) != 1 || lines[0]["summary"] != "for the agent" {
@@ -266,7 +271,7 @@ func TestFiltersKeepTheLinesOfABoardOrColumnAndReadTheRest(t *testing.T) {
 	expectCode(t, e.runWith(func(a *app) { a.now = clock.Now }, "", "notifications", "wait", "--timeout", "1s", "--json"), ExitTimeout)
 
 	inTriage := e.server.Notify(e.aMove(e.fixture.CardInTriage))
-	e.server.Notify(&fakeapi.Notification{PersonID: e.fixture.Bruno.ID, Occasion: "message.created", Summary: "about no card"})
+	e.server.Notify(&fakeapi.Notification{PersonID: e.fixture.Bruno.ID, Occasion: "person.mentionedPrivately", Summary: "about no card"})
 	inDoing := e.server.Notify(e.aMove(e.fixture.CardInDoing))
 
 	env, r := e.runWaitJSON(clock, "--board", up(e.fixture.Board.ID), "--column", "doing", "--timeout", "1h")
@@ -370,7 +375,7 @@ func TestAWaitReadsEveryPageThatPiledUp(t *testing.T) {
 	e.server.WhileWaiting = nil
 	var last *fakeapi.Notification
 	for i := range 250 {
-		last = e.server.Notify(&fakeapi.Notification{PersonID: e.fixture.Bruno.ID, Occasion: "comment.created", Summary: fmt.Sprintf("line %d", i)})
+		last = e.server.Notify(&fakeapi.Notification{PersonID: e.fixture.Bruno.ID, Occasion: "comment.written", Summary: fmt.Sprintf("line %d", i)})
 	}
 	before := len(e.waitRequests())
 	env, r := e.runWaitJSON(nil)

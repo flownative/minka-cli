@@ -41,7 +41,8 @@ the documentation says what holds; how it came about is in git.
   `setup` and `hooks install` install it, and how the old hook is taken out —
   before any work on `work`, `heartbeat`, `hooks`, `setup` or `mod/`.
 - [Waiting and coordinating](stable/waiting-and-coordinating.md): What the
-  bell's list and the coordinator of a board offer, where a wait starts and
+  bell's list, one line of it, its count and the coordinator of a board
+  offer, which rows a page leaves out and which it counts, where a wait starts and
   which session it goes by, where the position lies and when it moves on, the
   filters, the timeout and exit 12, a position Minka forgot, who claims and
   releases a board — before any work on `notifications` or `boards

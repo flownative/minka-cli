@@ -1993,3 +1993,19 @@ The bytes are asked for without `download`.
 **Why:** It changes only the headers around the same bytes, and the CLI takes
 the name from the resource, not from a header. **Implemented as:**
 `api.Client.FileBytes`, see [Output](stable/output-contract.md).
+
+<a id="c-122"></a>
+## C-122 — One line of the bell is `notifications show|mark-read <notificationId>`, its number `notifications count`
+
+*Applies to: `notifications count`, `notifications show`, `notifications
+mark-read`, `GET /api/v1/me/notifications/count`, `GET` and `POST
+/api/v1/notifications/{notificationId}[/read]`*
+
+The routes of the native app stand under `notifications` beside `wait`, and
+take the `id` of a line a wait printed. Marking read is `mark-read`, not
+`read`, as for a chat.
+
+**Why:** `read` beside `show` would read as reading the line; `chats
+mark-read` already names the same act (C-009). **Implemented as:**
+`cli.app.newNotificationsShowCmd`, `cli.app.newNotificationsMarkReadCmd`, see
+[Waiting and coordinating](stable/waiting-and-coordinating.md).
