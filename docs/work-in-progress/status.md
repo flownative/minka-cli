@@ -47,7 +47,17 @@ been seen live: the whole feature is checked against the fake, see below.
 A file goes both ways: `uploads create` puts one in, `uploads download`
 fetches its bytes back. Every text says which files hang in it, so reading a
 card, a comment or a message gives the identifier a download takes, without
-anything being taken out of the text.
+anything being taken out of the text. `uploads download` sends no `?download`,
+which changes the headers and not the bytes (C-121).
+
+`messages create --reply-to <messageId>` answers an earlier message of the same
+chat, and `messages list` shows which message a reply answers. `chats show`
+reads one chat of a project by its ID alone, and `todolists tool`, `posts
+tool`, `docs tool`, `checkins tool` and `events tool` one tool of their kind
+(C-120). `auth logout --revoke` revokes the token of the entry on the
+server before it takes the entry out, and keeps the entry when that fails
+(C-119). Minka serves all of it from v0.53.0 on (replies from v0.26.0 on); the
+commands are checked against Minka's code and tests and the fake, not live.
 
 The Docs & Files of a project are read with `docs tools`, `docs list`,
 `docs show` and `docs uploads show`; `docs create` and `docs edit` write a
@@ -441,6 +451,17 @@ validate` refuses the mod there ("hooks: Invalid input: expected record");
 version that loads a mod; that a version between 2.1.270 and 2.1.286 really
 runs it is not measured.
 
+An agent waits for what is new with `notifications wait` instead of polling a
+board, and one session of a person coordinates a board with `boards
+coordinator claim`, `release` and `show` (C-117, C-118); `notifications
+count`, `show` and `mark-read` read the number on the bell and one line, and
+settle it (C-122). The rule is
+[Waiting and coordinating](../stable/waiting-and-coordinating.md). Minka's
+side, the list of the bell, `card.moved` and the coordinator, is MNK-B3, on
+Minka's `main` since #381 and in no release yet; the routes of one line and
+the count are E-241 and older. The commands are checked against that code and
+its tests and the fake, not live, see below.
+
 Everything else is tested against the fake API and checked live — the chain
 upload → attachment in the text → display → the bytes back, as well as private
 conversations in both directions. What is checked against the fake only is
@@ -461,6 +482,35 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
 
 ## Checked against the fake only
 
+- Waiting and coordinating (`notifications wait`, `count`, `show`,
+  `mark-read`, `boards coordinator claim`, `release`, `show`, the coordinator
+  in `boards show`): the fake is held against Minka's `main` at b2011b254:
+  `NotificationWaitApiController`, `NotificationsApiController`,
+  `NotificationResource`, `UnreadCountResource`,
+  `NotificationQueryService::findAfter`, `findOneFor`, `countNewFor` and
+  `selectNotificationsOfAProject`, `Notifications::markRead`,
+  `BoardApiController::claimCoordinatorAction` and `releaseCoordinatorAction`,
+  `BoardCoordinators`, `CoordinatorResource`, `NotificationLineResource`,
+  `NotificationOutboxListener`, `NotificationRecipients`,
+  `ApiNotificationWaitTest`, `ApiNotificationsTest` and
+  `ApiBoardCoordinatorTest`. The fake mirrors that a row of an unknown
+  occasion uses up a page and moves the cursor, that a row the person may no
+  longer see and a reaction do neither, that a line about a card in a column
+  in the trash stays listed and names that column, that a sign of life renews
+  only a board the person still sees as one of the team, that a move names its
+  column from the trash as well and says the bell's own sentence where it
+  names none or the column is gone, and the lookup of one line with its 404s. **The fake does not mirror**: of what the bell hides,
+  more than a project the person left or that is archived and a card in the
+  trash or the archive — a tool in the trash, the subjects other than a card,
+  what a client is not shown, a draft post — so lines about those are shown;
+  the unread private messages in the count and a private mention that its
+  conversation stands for; that Minka forgets read lines; a post sent by name
+  as time-sensitive; the appUrl of a line about anything but a card;
+  subjects other than a card as Minka names them, the translated summaries
+  and titles but those of a move and a completion, the poll interval of a
+  held request, and a board in the archive of a project in use, which the
+  fake has not, so the 404 Minka gives a claim on one is not held by a test.
+  Nothing of it has been seen live.
 - Reminders (`reminders list`, `set`, `delete`): Minka's #358 and #359 read
   in `ReminderApiController`, `Rfc3339Moment`, `ReminderKind`,
   `ReminderPreset`, `ReminderQueryService`, `DbalReminderRepository`,

@@ -137,10 +137,11 @@ type Project struct {
 }
 
 type Board struct {
-	ID        string
-	ProjectID string
-	Title     string
-	Columns   []*Column
+	ID          string
+	ProjectID   string
+	Title       string
+	Columns     []*Column
+	Coordinator *Coordinator // kept after it expired, and read as nobody from then on
 }
 
 type Column struct {
@@ -349,6 +350,7 @@ type ChatMessage struct {
 	Removed         bool
 	Imported        bool // brought in from another tool; no field of the answer says so
 	Reactions       []*Reaction
+	ReplyTo         string // the message of the same chat this one answers, empty for none
 }
 
 func (c *Chat) post(authorID, text, clientMessageID string, now time.Time) *ChatMessage {
@@ -533,6 +535,30 @@ type Server struct {
 	// be, which no Minka does: what a client makes of bytes that are not the
 	// ones announced must not depend on the server being right about them.
 	SendsAFileShort bool
+
+	// Notifications are the lines of the bells of everybody, in the order
+	// they were written.
+	Notifications []*Notification
+
+	// ForgottenCursors are positions of the bell the server no longer knows
+	// although it handed them out, which it answers with cursorUnknown.
+	ForgottenCursors []string
+
+	// WaitsOut stands for the clock a held request of the bell waits by. It is
+	// given the wait and answers when that has passed; nil is the real clock.
+	// A test makes the wait pass at once with it.
+	WaitsOut func(time.Duration) <-chan time.Time
+
+	// WhileWaiting is called once a request of the bell is held, without the
+	// lock of the server, so that a test can let a line arrive in the wait.
+	WhileWaiting func(*Person)
+
+	// HoldsAtMost, where set, is the longest the server holds a request of
+	// the bell instead of WaitAtMost, as an installation configured otherwise.
+	HoldsAtMost time.Duration
+
+	notificationSeqs map[string]int // person ID → the number of their last line
+	arrival          chan struct{}  // closed when a line arrives
 
 	mu       sync.Mutex
 	requests []RecordedRequest
@@ -923,6 +949,7 @@ func New(t testing.TB) (*Server, *Fixture) {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v1/me", s.authenticated(s.me))
+	mux.HandleFunc("DELETE /api/v1/me/token", s.authenticated(s.revokeOwnToken))
 	mux.HandleFunc("PUT /api/v1/me/work", s.authenticated(s.noteAtWork))
 	mux.HandleFunc("GET /api/v1/projects", s.authenticated(s.projects))
 	mux.HandleFunc("PATCH /api/v1/projects/{projectId}", s.authenticated(s.editProject))
@@ -977,6 +1004,7 @@ func New(t testing.TB) (*Server, *Fixture) {
 	s.registerPostsRoutes(mux)
 	s.registerCalendarRoutes(mux)
 	s.registerReminderRoutes(mux)
+	s.registerNotificationsRoutes(mux)
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		// Flow answers an unknown path or a wrong method with an HTML page.
 		w.Header().Set("Content-Type", "text/html")
@@ -1166,6 +1194,14 @@ func (s *Server) me(w http.ResponseWriter, _ *http.Request, person *Person) {
 		"kind": kindOf(person), "retired": person.Retired, "principal": s.principalOf(person),
 		"organizationRole": "member",
 	})
+}
+
+// revokeOwnToken revokes the token the request carries and no other. A token
+// that is gone already never reaches it: the sign-in answers 401 first.
+func (s *Server) revokeOwnToken(w http.ResponseWriter, r *http.Request, _ *Person) {
+	token, _ := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
+	delete(s.Tokens, token)
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // noteAtWork takes the whole set of cards one client of an agent is at work
@@ -1482,9 +1518,15 @@ func (s *Server) board(w http.ResponseWriter, r *http.Request, person *Person) {
 	for _, column := range board.Columns {
 		columns = append(columns, s.columnResource(board, column))
 	}
-	writeJSON(w, http.StatusOK, map[string]any{
+	fields := map[string]any{
 		"id": board.ID, "projectId": board.ProjectID, "title": board.Title, "appUrl": s.boardURL(board), "columns": columns,
-	})
+	}
+	// A client of the project is not told who coordinates the board, not even
+	// that nobody does.
+	if !s.isAClient(person.ID) {
+		fields["coordinator"] = s.coordinatorResource(board)
+	}
+	writeJSON(w, http.StatusOK, fields)
 }
 
 // archivedCardsLimit is the shape a limit has to have, as the controller reads
@@ -1966,6 +2008,9 @@ func (s *Server) moveCard(w http.ResponseWriter, r *http.Request, person *Person
 	if to.Type != "done" {
 		card.CompletedAt = nil
 		card.CompletedByID = ""
+	}
+	if to != from {
+		s.noteTheMove(board, card, to, person)
 	}
 	writeJSON(w, http.StatusOK, s.cardResource(board, to, card))
 }
@@ -2693,7 +2738,8 @@ func (s *Server) postMessage(w http.ResponseWriter, r *http.Request, person *Per
 	if !ok {
 		return
 	}
-	if deref(replyTo) != "" && !uuidPattern.MatchString(*replyTo) {
+	answered := deref(replyTo)
+	if answered != "" && !uuidPattern.MatchString(answered) {
 		replyToUnknown(w)
 		return
 	}
@@ -2702,9 +2748,9 @@ func (s *Server) postMessage(w http.ResponseWriter, r *http.Request, person *Per
 	if s.refusedAsArchived(w, s.projectOfChat(chat)) {
 		return
 	}
-	// Which message a reply answers is taken as it was named and not shown:
-	// no command sends one.
-	if deref(replyTo) != "" && !slices.ContainsFunc(chat.Messages, func(m *ChatMessage) bool { return m.ID == *replyTo && !m.Removed }) {
+	// The message answered has to stand in this chat, asked after the
+	// archive like the right to write, as Minka asks it inside the write.
+	if answered != "" && !slices.ContainsFunc(chat.Messages, func(m *ChatMessage) bool { return m.ID == answered && !m.Removed }) {
 		replyToUnknown(w)
 		return
 	}
@@ -2716,7 +2762,17 @@ func (s *Server) postMessage(w http.ResponseWriter, r *http.Request, person *Per
 			}
 		}
 	}
-	writeJSON(w, http.StatusCreated, s.chatMessageResource(chat, chat.post(person.ID, text, deref(clientMessageID), s.now)))
+	message := chat.post(person.ID, text, deref(clientMessageID), s.now)
+	message.ReplyTo = answered
+	writeJSON(w, http.StatusCreated, s.chatMessageResource(chat, message))
+}
+
+// orNull is a value the answer names as null where there is none.
+func orNull(value string) any {
+	if value == "" {
+		return nil
+	}
+	return value
 }
 
 func replyToUnknown(w http.ResponseWriter) {
@@ -3313,7 +3369,7 @@ func (s *Server) chatMessageResource(chat *Chat, message *ChatMessage) map[strin
 		"author": s.personReference(message.AuthorID), "bodyHtml": message.BodyHTML, "bodyText": message.BodyText, "bodySource": message.BodyHTML,
 		"attachments": s.attachmentsIn(circleOf(chat), message.BodyHTML),
 		"createdAt":   timestamp(message.CreatedAt), "editedAt": timestampOrNil(message.EditedAt), "removed": message.Removed,
-		"reactions": s.reactionResources(message.Reactions),
+		"reactions": s.reactionResources(message.Reactions), "replyTo": orNull(message.ReplyTo),
 	}
 }
 

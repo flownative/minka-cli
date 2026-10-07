@@ -12,10 +12,10 @@ the documentation says what holds; how it came about is in git.
 - [Output, errors and exit codes](stable/output-contract.md): The three output
   modes, the envelope, the table of exit codes, how commands are cut — read
   before any work on a command.
-- [Token, hosts and requests](stable/security.md): How the token is kept and
-  sent, how a host name is read whoever wrote it, what is fixed about the HTTP
-  client, which check happens before a request — before any work on sign-in,
-  client or IDs.
+- [Token, hosts and requests](stable/security.md): How the token is kept,
+  sent and revoked on signing out, how a host name is read whoever wrote it,
+  what is fixed about the HTTP client, which check happens before a request —
+  before any work on sign-in, client or IDs.
 - [Rich text in both directions](stable/rich-text.md): Markdown to HTML and
   back, the allowlist of the server, sources, files, mentions and references
   to other records — before any
@@ -40,6 +40,13 @@ the documentation says what holds; how it came about is in git.
   every case it can meet, what the mod in the Claude Code process does, how
   `setup` and `hooks install` install it, and how the old hook is taken out —
   before any work on `work`, `heartbeat`, `hooks`, `setup` or `mod/`.
+- [Waiting and coordinating](stable/waiting-and-coordinating.md): What the
+  bell's list, one line of it, its count and the coordinator of a board
+  offer, which rows a page leaves out and which it counts, where a wait starts and
+  which session it goes by, where the position lies and when it moves on, the
+  filters, the timeout and exit 12, a position Minka forgot, who claims and
+  releases a board — before any work on `notifications` or `boards
+  coordinator`.
 - [Projects](stable/projects.md): What a project carries, the edit that sends
   only what was given and needs no guard, the description that is plain text,
   the client who gets the same 404 as an outsider, the order of the refusals —

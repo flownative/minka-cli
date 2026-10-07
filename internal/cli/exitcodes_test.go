@@ -21,6 +21,7 @@ var exitCodeContract = map[string]int{
 	CodeAmbiguous:  8,
 	CodeValidation: 9,
 	CodeUnread:     11,
+	CodeTimeout:    12,
 }
 
 // The safeguard: every code leaves with the exit code the contract names, and

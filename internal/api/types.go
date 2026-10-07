@@ -51,6 +51,9 @@ type Board struct {
 	Title     string   `json:"title"`
 	AppURL    string   `json:"appUrl"`
 	Columns   []Column `json:"columns"`
+	// Coordinator is the session that coordinates the board, nil where nobody
+	// does or the last one has expired.
+	Coordinator *Coordinator `json:"coordinator"`
 }
 
 // Column is one column of a board. A working column can have an area for the
@@ -237,6 +240,17 @@ type Chat struct {
 	AppURL      string `json:"appUrl"`
 }
 
+// ChatOfAProject is a chat read by its identifier alone, with the project it
+// stands in. It is named like a line of the chats of a project, not titled
+// like a tool.
+type ChatOfAProject struct {
+	ID        string           `json:"id"`
+	ProjectID string           `json:"projectId"`
+	Project   ProjectReference `json:"project"`
+	Name      string           `json:"name"`
+	AppURL    string           `json:"appUrl"`
+}
+
 // Tool is a tool read by its identifier alone, so that whoever holds only the
 // tool learns the project it stands in.
 type Tool struct {
@@ -288,6 +302,7 @@ type ChatMessage struct {
 	EditedAt    *string         `json:"editedAt"`
 	Removed     bool            `json:"removed"` // true only in an answer to After: the message is gone
 	Reactions   []Reaction      `json:"reactions"`
+	ReplyTo     *string         `json:"replyTo"` // the message of the same chat this one answers, nil for most
 }
 
 // MessagesQuery chooses the messages of a chat. Without Before and After it is

@@ -58,3 +58,22 @@ func TestTheSameTextOfACardCommentAgainMovesItsEditedAt(t *testing.T) {
 		t.Errorf("the answer says editedAt %v, want %s", answer["editedAt"], timestamp(s.now))
 	}
 }
+
+// Signing out revokes the token the request carries and no other; the same
+// token is turned away afterwards, the revocation included.
+func TestARevokedTokenIsTurnedAwayAndNoOther(t *testing.T) {
+	s, f := New(t)
+
+	if got, _ := answerTo(t, s, f.Token, http.MethodDelete, "/api/v1/me/token", ""); got != "204" {
+		t.Fatalf("revoking: %s, want 204", got)
+	}
+	if got, _ := answerTo(t, s, f.Token, http.MethodGet, "/api/v1/me", ""); got != "401 unauthenticated" {
+		t.Errorf("the revoked token reading: %s, want 401", got)
+	}
+	if got, _ := answerTo(t, s, f.Token, http.MethodDelete, "/api/v1/me/token", ""); got != "401 unauthenticated" {
+		t.Errorf("the revoked token revoking again: %s, want 401", got)
+	}
+	if got, _ := answerTo(t, s, f.StrangerToken, http.MethodGet, "/api/v1/me", ""); got != "200" {
+		t.Errorf("another token: %s, want 200", got)
+	}
+}

@@ -7,7 +7,9 @@ show` read, `events create`, `edit` and `delete` write
 comments under an event ([C-095](../decisions.md#c-095)). Beside its events a
 calendar shows what of its project is due, unless its team chose otherwise
 with `events settings`, and `events mine` reads My calendar, across projects
-([C-106](../decisions.md#c-106)).
+([C-106](../decisions.md#c-106)). `events tool <toolId>` reads one calendar by
+its ID alone: the fields of every tool read so ([C-120](../decisions.md#c-120))
+and `content`, what it shows beside its events.
 
 Everything here was read in Minka's code — `CalendarApiController`,
 `ReadsRepetitionSchedule`, its resources, `CalendarEventQueryService`,

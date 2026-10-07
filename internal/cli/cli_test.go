@@ -84,7 +84,15 @@ func (e *testEnv) run(stdin string, args ...string) result {
 func (e *testEnv) runWith(configure func(*app), stdin string, args ...string) result {
 	e.t.Helper()
 	var stdout, stderr bytes.Buffer
-	a := newApp(context.Background(), strings.NewReader(stdin), &stdout, &stderr, func(name string) string { return e.vars[name] })
+	ctx := context.Background()
+	if len(args) > 0 && args[0] == "notifications" {
+		// A wait whose guard broke would wait for ever; this ends it, so that
+		// the test fails instead of hanging.
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, waitDeadline)
+		defer cancel()
+	}
+	a := newApp(ctx, strings.NewReader(stdin), &stdout, &stderr, func(name string) string { return e.vars[name] })
 	a.runClaude = func(args []string) (string, error) {
 		if len(args) == 1 && args[0] == "--version" {
 			if e.claudeVersion == "" {

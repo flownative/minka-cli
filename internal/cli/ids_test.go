@@ -69,6 +69,11 @@ var idsInCapitals = []idInCapitals{
 	}, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
 		return []string{up(f.Board.ID), "--before", up(f.CardInTriage.ID)}
 	}},
+	{command: "notifications wait", inputs: []string{"--board", "--column"}, prepare: func(e *testEnv) {
+		e.aLineArrivesInTheWait(e.aMove(e.fixture.CardInDoing))
+	}, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
+		return []string{"--board", up(f.Board.ID), "--column", up(f.Doing.ID)}
+	}},
 	{command: "cards assign", inputs: []string{"<person>"}, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
 		return []string{f.CardInTriage.ID, up(f.Anke.ID)}
 	}},
@@ -208,6 +213,9 @@ var idsInCapitals = []idInCapitals{
 	}},
 	{command: "messages create", inputs: []string{"--client-message-id"}, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
 		return []string{f.Chat.ID, "Tent is booked", "--client-message-id", up(openStepID)}
+	}},
+	{command: "messages create", inputs: []string{"--reply-to"}, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
+		return []string{f.Chat.ID, "Me!", "--reply-to", up(f.Chat.Messages[0].ID)}
 	}},
 	{command: "posts create", inputs: []string{"--tool", "--category", "--notify"}, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
 		return []string{"--tool", up(f.Posts.ID), "--category", up(f.Announcement.ID), "--title", "Setting up", "--audience", "chosen", "--notify", up(f.Anke.ID), "--body", "Friday."}
@@ -420,7 +428,7 @@ var idInputsExcepted = map[string]string{
 // in a variable or on another receiver is not: todogroups move passes its flag
 // in a variable and cards move passes neighbourCard, and both are covered only
 // because --after and --before are on the list.
-var idFlagNames = []string{"after", "before", "assignee", "notify-when-done", "notify", "ask", "person", "list", "group", "tool", "board", "folder", "document", "upload", "blob", "category", "project", "conversation", "column", "client-message-id", "participant", "template"}
+var idFlagNames = []string{"after", "before", "assignee", "notify-when-done", "notify", "ask", "person", "list", "group", "tool", "board", "folder", "document", "upload", "blob", "category", "project", "conversation", "column", "client-message-id", "reply-to", "participant", "template"}
 
 // idPositions are the positions that take an ID among other names for a thing;
 // a position whose name ends in "Id" takes nothing else and is held by the

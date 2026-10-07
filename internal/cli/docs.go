@@ -55,13 +55,14 @@ is written then, and sending it again changes nothing: name somebody else.`
 
 const documentNotFoundHint = "There is no such document, it is a draft, it belongs to a project you are not a member of, or you are a client of the project and it is not shown to you."
 
-const filesToolNotFoundHint = "There is no such Docs & Files tool, it belongs to a project you are not a member of, or you are a client of the project and it is not shown to you."
+const filesToolNotFoundHint = "There is no such Docs & Files tool, it is in the trash, it belongs to a project you are not a member of, or you are a client of the project and it is not shown to you."
 
 const uploadNotFoundHint = "There is no such upload, it belongs to a project you are not a member of, or you are a client of the project and it is not shown to you."
 
 func (a *app) newDocsCmd() *cobra.Command {
 	return group("docs", "Read and write the documents and uploads of a Docs & Files tool, and comment on them",
 		a.newDocsToolsCmd(),
+		a.newDocsToolCmd(),
 		a.newDocsListCmd(),
 		a.newDocsShowCmd(),
 		a.newDocsCreateCmd(),

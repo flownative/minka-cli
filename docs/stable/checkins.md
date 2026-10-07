@@ -7,7 +7,9 @@ An **answer** belongs to one day, and anybody in the project may write one.
 `checkins create`, `edit`, `pause` and `resume` write them; `checkins answers
 list`, `show`, `create` and `edit` read and write the answers; `checkins
 reminders` lists what the person of the token was asked and has not answered
-([C-077](../decisions.md#c-077)).
+([C-077](../decisions.md#c-077)). `checkins tool <toolId>` reads one Check-ins
+tool by its ID alone, with the project it stands in, as `todolists tool` reads
+a To-dos tool ([C-120](../decisions.md#c-120)).
 
 ## What a read hands over
 

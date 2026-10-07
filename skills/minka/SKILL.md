@@ -40,6 +40,16 @@ when stdout is not a terminal, so an agent gets structured output by default.
   card and `minka work stop <card>` when you are done with it. It shows on the
   board only while `minka heartbeat` keeps reporting it, which the mod of
   `minka setup` or `minka hooks install` does once and for all.
+- To wait for news — a card moved, a comment, an assignment — never poll a
+  board: run `minka notifications wait --json` (in Claude Code with
+  `run_in_background`), which exits when something arrives. Waiting marks
+  nothing read; `minka notifications mark-read <id>` does, with the `id` of a
+  line. Coordinating a board and the whole flow:
+  [references/waiting-and-coordinating.md](references/waiting-and-coordinating.md).
+- Keep the work steps of a card as steps (`minka steps create <card> "…"`,
+  `minka steps complete`), never as a list in the card's description or a
+  comment: a step can be ticked off, carries people and a day, and the board
+  counts it.
 - Take a card up from its back: `minka cards notes show <card>` before you
   begin, because whoever was on it before left the state of the work there,
   and `minka cards notes set <card> - --expect <updatedAt>` at every milestone,
@@ -99,6 +109,7 @@ Errors: `{"ok": false, "error", "code", "retryable", "hint", "meta": {"apiCode",
 | 8 | `ambiguous` | a column, person or step given by name matches more than one |
 | 9 | `validation` | the server refused the input, see `meta.apiCode` |
 | 11 | `unread` | a comment was not written: the card has comments you have not read, in `data` |
+| 12 | `timeout` | `minka notifications wait --timeout` ran out with nothing new; wait again |
 
 Validation codes in `meta.apiCode`: `cardTitleMissing`, `cardTitleTooLong`,
 `cardTitleHasControlCharacters` (a title is one line: no line breaks or tabs),
@@ -111,7 +122,9 @@ fine), `commentNotReadable`, `cardDueDateNotADate`, `personNotAProjectMember`, `
 `chatMessageNotReadable`, `chatMessageDraftNotAnIdentifier`, `chatMessagesLimitNotANumber`,
 `chatReadSeqMissing`, `nothingToChange`, `columnIdMissing`, `onHoldEnabledMissing`,
 `columnHasNoOnHoldArea`, `systemColumnHasNoOnHoldArea`, `malformedBody`,
-`unsupportedMediaType`, `projectArchived`.
+`unsupportedMediaType`, `projectArchived`, `coordinatorTaken`,
+`coordinatorSessionInvalid`, `cursorUnknown`, `notificationsWaitInvalid`,
+`notificationsLimitInvalid`.
 
 That is not all of them: Minka has a code for every refusal of every endpoint,
 far more than the CLI can meet, and the list above holds the ones that come up
@@ -142,7 +155,13 @@ not expected in practice.
   login --host <url> --with-token < file`, `minka skill install` and `minka
   hooks install` instead.
 - `minka auth logout --host <url>`: forget the token of a host. The token stays
-  valid until it is revoked on the server.
+  valid until it is revoked on the server. `--revoke` revokes it there first
+  and removes the entry only then; when the revocation fails the entry is kept
+  and the exit code is the failure's (a `retryable` one may simply be run
+  again). A token Minka itself no longer accepts counts as revoked, with a
+  `notice`; a 401 of a proxy in front of Minka does not. A token in
+  `$MINKA_TOKEN` is never revoked, and a `notice` says so. `data` is `{host,
+  removed, revoked}`.
 - `minka config get <key> --json` and `minka config set <key> <value> --json`:
   the settings of this machine, so far `comments.requireRead`.
 
@@ -152,8 +171,9 @@ The binary carries this description, so it fits the commands of the version
 that is installed.
 
 - `minka skill show --styled`: print it.
-- `minka skill install`: write it to `~/.claude/skills/minka/SKILL.md`, or
-  into another directory of skills with `--dir <dir>`. A directory of
+- `minka skill install`: write it to `~/.claude/skills/minka/SKILL.md`, with
+  its references beside it, or into another directory of skills with
+  `--dir <dir>`. A directory of
   skills or a skill directory that is a symbolic link is refused (exit 1)
   rather than written through, and draws no notice.
 - `minka skill status --json`: `data.state` is `current`, `differs` or
@@ -211,8 +231,9 @@ minka comments delete <cardId> <commentId> --json
 minka comments react <cardId> <commentId> 👍 --json
 minka comments unreact <cardId> <commentId> 👍 --json
 minka chats list <projectId> --json
+minka chats show <chatId> --json
 minka messages list <chatId> [--before <seq> | --after <changeSeq>] [--limit <n>] --json
-minka messages create <chatId> - [--client-message-id <uuid>] --json < message.txt
+minka messages create <chatId> - [--client-message-id <uuid>] [--reply-to <messageId>] --json < message.txt
 minka messages edit <chatId> <messageId> - --json < message.txt
 minka messages delete <chatId> <messageId> --json
 minka messages react <chatId> <messageId> 👍 --json
@@ -223,6 +244,7 @@ minka conversations with <person> [--project <projectId>] --json
 minka uploads create <file> (--project <projectId> | --conversation <conversationId>) [--name <name>] [--content-type <type>] --json
 minka uploads download <blobId> [--variant original|display] [-o <path>|-o -] [--force] --json
 minka docs tools <projectId> --json
+minka docs tool <toolId> --json
 minka docs list <toolId> [--folder <folderId>] --json
 minka docs show <documentId> --json
 minka docs create --tool <toolId> --title "Title" --audience everybody|chosen|nobody [--notify <person>]... [--folder <folderId>] [--body - < body.md] --json
@@ -241,6 +263,7 @@ minka docs comments delete (--document <documentId> | --upload <uploadId>) <comm
 minka docs comments react (--document <documentId> | --upload <uploadId>) <commentId> 👍 --json
 minka docs comments unreact (--document <documentId> | --upload <uploadId>) <commentId> 👍 --json
 minka todolists tools <projectId> --json
+minka todolists tool <toolId> --json
 minka todolists list <toolId> [--archived] --json
 minka todolists show <listId> --json
 minka todolists create --tool <toolId> --title "Title" [--description - < body.md] --json
@@ -290,6 +313,7 @@ minka todos comments delete <todoId> <commentId> --json
 minka todos comments react <todoId> <commentId> 👍 --json
 minka todos comments unreact <todoId> <commentId> 👍 --json
 minka checkins tools <projectId> --json
+minka checkins tool <toolId> --json
 minka checkins list <toolId> --json
 minka checkins show <questionId> --json
 minka checkins create --tool <toolId> --title "Question?" --rhythm daily|weekly|everyOtherWeek|monthly --weekday <day>... --time HH:MM --ask <person>... --json
@@ -302,6 +326,7 @@ minka checkins answers show <answerId> --json
 minka checkins answers create <questionId> - [--asked-for <day>] [--format html] --json < answer.md
 minka checkins answers edit <answerId> - [--format html] --json < answer.md
 minka posts tools <projectId> --json
+minka posts tool <toolId> --json
 minka posts categories <projectId> --json
 minka posts list <toolId> [--limit <n>] [--before <next>] --json
 minka posts list <toolId> --archived --json
@@ -320,6 +345,7 @@ minka posts comments delete <postId> <commentId> --json
 minka posts comments react <postId> <commentId> 👍 --json
 minka posts comments unreact <postId> <commentId> 👍 --json
 minka events tools <projectId> --json
+minka events tool <toolId> --json
 minka events list <toolId> --from YYYY-MM-DD --to YYYY-MM-DD --json
 minka events mine --from YYYY-MM-DD --to YYYY-MM-DD --json
 minka events settings <toolId> --content eventsAndDatedItems|eventsOnly --json
@@ -336,6 +362,10 @@ minka events comments unreact <eventId> <commentId> 👍 --json
 minka reminders list --json
 minka reminders set <kind> <item> (--preset in30Minutes|in1Hour|in3Hours|tomorrow|nextMonday | --at <moment>) --json
 minka reminders delete <kind> <item> [--outcome done|dismissed] --json
+minka notifications wait [--board <boardId>]... [--column <column>]... [--timeout 30m] --json
+minka notifications count --json
+minka notifications show <notificationId> --json
+minka notifications mark-read <notificationId> --json
 minka work start <card> [--session <id>] --json
 minka work stop [<card>] [--all] [--session <id>] --json
 minka work list [--session <id>] --json
@@ -695,12 +725,17 @@ What the two commands do:
 - `chats list <projectId>` gives `{id, name, unreadCount, appUrl}`.
   `unreadCount` never counts your own messages, removed ones or lines an
   import brought. The same holds for a conversation.
+- `chats show <chatId>` gives one chat of a project by its ID alone as `{id,
+  projectId, project {id, name}, name, appUrl}`. A private conversation stands
+  in no project and exits 2 there.
 - `messages list --styled` shows a message as Markdown when it carries markup,
   so a file in it is a Markdown image or link and a mention is `@Name`. The
   plain `bodyText` beside every message has neither.
 - `messages list <chatId>` gives messages oldest first as `{id, seq,
-  changeSeq, author, bodyHtml, bodyText, createdAt, editedAt, removed}`, the
-  latest 50 by default, `--limit` up to 200.
+  changeSeq, author, bodyHtml, bodyText, createdAt, editedAt, removed,
+  replyTo}`, the latest 50 by default, `--limit` up to 200. `replyTo` is the
+  `id` of the message a reply answers, null for most; the text view shows it
+  as "In reply to #<seq>, <author>" where that message is on the page.
   - The list is ordered by moment (`createdAt`, then `seq`), not by `seq`. Keep
     the order it comes in; never sort by `seq`.
   - `seq` is the number of a message in its chat, the unit of the read mark and
@@ -723,6 +758,10 @@ What the two commands do:
   text as it is (the server keeps it as plain text with line breaks and
   links), `--format html` sends HTML. Always pass `--client-message-id` with a UUID of your own: sending it
   again then writes nothing new, and a failed send is `retryable`.
+- `messages create --reply-to <messageId>` answers an earlier message, named by
+  its `id`. It has to stand in the same chat and not be removed, otherwise exit
+  9 with `chatMessageReplyToUnknown`. Only the reference is kept, so the quote
+  above a reply always shows the words as they stand now; nobody is notified.
 - `messages edit` and `messages delete` only work on your own messages;
   somebody else's exits 2. Deleting twice succeeds.
 - `messages edit` refuses a new text that would drop a file, a mention or a
@@ -965,7 +1004,8 @@ with a description. Both take comments, and the comments take reactions.
 ### Reading
 
 - `docs tools <projectId>` lists the tools of a project; a project can have
-  more than one.
+  more than one. `docs tool <toolId>` gives one tool by its ID alone as `{id,
+  projectId, project {id, name}, title, appUrl}`.
 - `docs list <toolId>` lists what stands at the top, `--folder <folderId>`
   what stands in a folder. It reaches **one folder deep**: to go further, call
   it again with a folder of the answer. Nothing is paged and nothing is cut,
@@ -1188,6 +1228,11 @@ themselves and their subtasks are `todos …`, see the next part.
 
 - `todolists tools <projectId>` lists the To-dos tools of a project in use; a
   project can have more than one.
+- `todolists tool <toolId>` gives one To-dos tool by its ID alone as `{id,
+  projectId, project {id, name}, title, appUrl}`, one the project no longer
+  lists included. `posts tool`, `docs tool`, `checkins tool` and `events
+  tool` do the same for their kind of tool; a client gets exit 2 for a tool
+  not shown to clients.
 - `todolists list <toolId>` lists the lists on the page of the tool, in its
   order; `--archived` lists **the archive instead**, the list archived last
   first. A list is on one of the two, never on both, so one missing from the
@@ -1461,7 +1506,8 @@ reminders` lists what you were asked and have not answered.
 
 ### Reading
 
-- `checkins tools <projectId>` lists the Check-ins tools in use;
+- `checkins tools <projectId>` lists the Check-ins tools in use, `checkins
+  tool <toolId>` one tool by its ID alone;
   `checkins list <toolId>` their questions, the oldest first; `checkins show
   <questionId>` one question with `schedule` (`rhythm`, `weekdays`, `timeOfDay`,
   `startsOn`), `paused` and `asked`.
@@ -1563,7 +1609,8 @@ it may be filed under, and comments. `posts …` reads and writes them;
 
 ### Reading
 
-- `posts tools <projectId>` lists the Posts tools in use; `posts categories
+- `posts tools <projectId>` lists the Posts tools in use, `posts tool
+  <toolId>` one tool by its ID alone; `posts categories
   <projectId>` the kinds a post can be filed under, which every tool of the
   project shares. An emoji is part of a kind's name ("📢 Announcement"), and a
   post's `category` is that name; the `emoji` beside it is deprecated and
@@ -1640,7 +1687,9 @@ and reaction codes a card knows, all exit 9.
 ## Calendars and events
 
 A calendar holds **events**: one-off, all-day or repeating. `events …` reads
-and writes them; `events tools <projectId>` lists the calendars in use. There
+and writes them; `events tools <projectId>` lists the calendars in use, and
+`events tool <toolId>` gives one calendar by its ID alone, with `content`
+(what it shows beside its events) next to the fields of every tool. There
 is no way back out of the trash through the API.
 
 ### Reading

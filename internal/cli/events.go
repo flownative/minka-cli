@@ -108,6 +108,7 @@ follows the event, taking part or not.`
 func (a *app) newEventsCmd() *cobra.Command {
 	return group("events", "Read and write the events of a calendar, one-off, all-day and repeating",
 		a.newEventsToolsCmd(),
+		a.newEventsToolCmd(),
 		a.newEventsSettingsCmd(),
 		a.newEventsListCmd(),
 		a.newEventsMineCmd(),

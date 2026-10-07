@@ -18,10 +18,10 @@ an exit code per class of error, a description of the commands in
 `skills/minka/SKILL.md`.
 
 The model for its concepts is [basecamp-cli](https://github.com/basecamp/basecamp-cli):
-adopt the principles, not the scope. Not part of it: AI integrations,
-notifications, an interactive TUI, anything the API does not offer. The one
-exception is `minka import basecamp`: it reads Basecamp projects through the
-Basecamp CLI and writes an import bundle for Minka's applier.
+adopt the principles, not the scope. Not part of it: AI integrations, an
+interactive TUI, anything the API does not offer. The one exception is
+`minka import basecamp`: it reads Basecamp projects through the Basecamp CLI
+and writes an import bundle for Minka's applier.
 
 Proprietary like Minka, until Minka is published. The repository lives on
 GitHub at `git@github.com:flownative/minka-cli.git`. Work reaches `main`

@@ -16,10 +16,50 @@ import (
 const messageAuthorHint = "It does not exist, or somebody else wrote it: only the author can change or remove a message."
 
 func (a *app) newChatsCmd() *cobra.Command {
-	return group("chats", "List the chats of a project and mark them read",
+	return group("chats", "List the chats of a project, show one and mark them read",
 		a.newChatsListCmd(),
+		a.newChatsShowCmd(),
 		a.newChatsMarkReadCmd(),
 	)
+}
+
+func (a *app) newChatsShowCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "show <chatId>",
+		Short: "Show a chat of a project with the project it stands in",
+		Long: `Shows a chat of a project by its ID alone: its name, the project it stands in
+and its address on the web. Its messages are read with "messages list".
+
+A private conversation stands in no project and exits 2 here, although its ID
+reads and writes messages like the ID of a chat.`,
+		Args: requireArgs("chatId"),
+		RunE: func(_ *cobra.Command, args []string) error {
+			s, err := a.session()
+			if err != nil {
+				return err
+			}
+			chat, err := s.client.Chat(a.ctx, args[0])
+			if err != nil {
+				e := s.fail(err)
+				if e.Code == CodeNotFound {
+					e.Hint = "There is no such chat, it is in the trash, it belongs to a project you are not a member of, you are a client of the project and it is not shown to you, or it is a private conversation, which stands in no project: those are listed with minka conversations list."
+				}
+				return e
+			}
+
+			return a.ok(success{
+				data:    chat.Raw,
+				summary: fmt.Sprintf("Chat %s in %s", chat.Value.Name, chat.Value.Project.Name),
+				breadcrumbs: []Breadcrumb{
+					{Action: "messages", Cmd: "minka messages list " + chat.Value.ID, Description: "Read the latest messages of the chat"},
+					{Action: "chats", Cmd: "minka chats list " + chat.Value.ProjectID, Description: "List the chats of the project"},
+				},
+				text: func(w io.Writer) {
+					fmt.Fprintf(w, "%s\nProject: %s\nID:      %s\nURL:     %s\n", chat.Value.Name, chat.Value.Project.Name, chat.Value.ID, chat.Value.AppURL)
+				},
+			})
+		},
+	}
 }
 
 func (a *app) newChatsListCmd() *cobra.Command {
@@ -238,8 +278,12 @@ func messageBody(cmd *cobra.Command, text, format string) (string, []string, err
 	}
 }
 
+// apiCodeReplyToUnknown is what Minka answers a reply to a message that is no
+// identifier, stands in another chat or has been removed.
+const apiCodeReplyToUnknown = "chatMessageReplyToUnknown"
+
 func (a *app) newMessagesCreateCmd() *cobra.Command {
-	var clientMessageID, format string
+	var clientMessageID, replyTo, format string
 
 	cmd := &cobra.Command{
 		Use:   "create <chatId> <text|->",
@@ -250,9 +294,16 @@ func (a *app) newMessagesCreateCmd() *cobra.Command {
 
 --client-message-id names the message with a UUID of your own. The same one
 sent again writes nothing new and answers with the message written before, so
-a message whose sending failed can be sent again without appearing twice.`,
+a message whose sending failed can be sent again without appearing twice.
+
+--reply-to makes the message a reply to an earlier one, named by its id as
+"messages list --json" gives it. That message has to stand in the same chat
+and must not have been removed; anything else is refused with exit 9. Only the
+reference is kept: whoever reads the reply reads the words that stand above it
+now. Nobody is told of a reply.`,
 		Example: `  minka messages create 0199... "Tent is booked"
-  minka messages create 0199... - --client-message-id "$(uuidgen)" < note.txt`,
+  minka messages create 0199... - --client-message-id "$(uuidgen)" < note.txt
+  minka messages create 0199... "Me!" --reply-to 0199...`,
 		Args: requireArgs("chatId", "text"),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if clientMessageID != "" {
@@ -261,6 +312,11 @@ a message whose sending failed can be sent again without appearing twice.`,
 					return usageErrorf(cmd, "--client-message-id has to be a UUID")
 				}
 				clientMessageID = id
+			}
+			if replyTo != "" {
+				if err := requireID(cmd, "--reply-to", &replyTo); err != nil {
+					return err
+				}
 			}
 			if _, _, err := messageBody(cmd, "", format); err != nil {
 				return err
@@ -278,10 +334,12 @@ a message whose sending failed can be sent again without appearing twice.`,
 			if err != nil {
 				return err
 			}
-			message, err := s.client.PostMessage(a.ctx, args[0], body, clientMessageID)
+			message, err := s.client.PostMessage(a.ctx, args[0], body, clientMessageID, replyTo)
 			if err != nil {
 				e := s.fail(err)
 				switch {
+				case e.APICode == apiCodeReplyToUnknown:
+					e.Hint = "--reply-to has to name a message of this chat that has not been removed. Take its id from: minka messages list " + args[0] + " --json"
 				case clientMessageID != "" && (e.Code == CodeNetwork || e.Code == CodeAPI && e.HTTPStatus >= 500):
 					e.Retryable = true
 					e.Hint = "Send it again with the same --client-message-id: the message is written only once."
@@ -292,6 +350,9 @@ a message whose sending failed can be sent again without appearing twice.`,
 			}
 
 			summary := fmt.Sprintf("Wrote message %d in chat %s", message.Value.Seq, args[0])
+			if message.Value.ReplyTo != nil {
+				summary = fmt.Sprintf("Wrote message %d in chat %s, in reply to %s", message.Value.Seq, args[0], *message.Value.ReplyTo)
+			}
 			if message.StatusCode == http.StatusOK {
 				summary = fmt.Sprintf("Message %d was written with this --client-message-id already", message.Value.Seq)
 			}
@@ -304,6 +365,7 @@ a message whose sending failed can be sent again without appearing twice.`,
 		},
 	}
 	cmd.Flags().StringVar(&clientMessageID, "client-message-id", "", "A UUID that makes sending this message again safe")
+	cmd.Flags().StringVar(&replyTo, "reply-to", "", "ID of the message of the same chat this one answers")
 	cmd.Flags().StringVar(&format, "format", "markdown", "Format of the text: markdown, text or html")
 
 	return cmd
@@ -511,6 +573,10 @@ func renderMessages(w io.Writer, messages []api.ChatMessage) {
 		fmt.Fprintln(w, "No messages.")
 		return
 	}
+	onThePage := map[string]api.ChatMessage{}
+	for _, message := range messages {
+		onThePage[message.ID] = message
+	}
 	for i, message := range messages {
 		if i > 0 {
 			fmt.Fprintln(w)
@@ -523,7 +589,11 @@ func renderMessages(w io.Writer, messages []api.ChatMessage) {
 		if message.EditedAt != nil {
 			header += " (edited)"
 		}
-		fmt.Fprintf(w, "%s\n%s\n", header, messageText(message))
+		fmt.Fprintf(w, "%s\n", header)
+		if line := replyLine(message, onThePage); line != "" {
+			fmt.Fprintf(w, "%s\n", line)
+		}
+		fmt.Fprintf(w, "%s\n", messageText(message))
 		if line := fileLine(message.Attachments); line != "" {
 			fmt.Fprintf(w, "%s\n", line)
 		}
@@ -531,4 +601,17 @@ func renderMessages(w io.Writer, messages []api.ChatMessage) {
 			fmt.Fprintf(w, "%s\n", line)
 		}
 	}
+}
+
+// replyLine says which message a reply answers: by its number and author where
+// that message stands on the same page, by its ID where it does not, since a
+// page cannot tell whether it stands further up or has been removed since.
+func replyLine(message api.ChatMessage, onThePage map[string]api.ChatMessage) string {
+	if message.ReplyTo == nil || *message.ReplyTo == "" {
+		return ""
+	}
+	if answered, found := onThePage[*message.ReplyTo]; found {
+		return fmt.Sprintf("In reply to #%d, %s", answered.Seq, answered.Author.Name)
+	}
+	return fmt.Sprintf("In reply to message %s, not on this page", *message.ReplyTo)
 }

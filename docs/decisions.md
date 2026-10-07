@@ -1958,3 +1958,92 @@ whether the human is a member there already.
 **Implemented as:** `basecamp.ParseAgents`, `registry.takeAgents`,
 `bringInThePrincipals`, `inWritingOrder`, `bundle.Agent`, see
 [Importing from Basecamp](stable/import.md).
+
+<a id="c-117"></a>
+## C-117 — `notifications wait` goes on from a position kept per account and session, and exits 12 when its time runs out
+
+*Applies to: `notifications wait`*
+
+It is the group of the resource and an action (C-001), not a bare `wait`.
+The position Minka hands out is kept beside the configuration per host, token
+and session (C-103, no session included), moved on only after the lines are
+printed and only from the one the process read; the first wait starts from
+now, a forgotten one from now with a notice. Filters read what they leave
+out. It asks in waits of at most 50 s, as long as Minka holds one, and
+`--timeout` ends with exit 12
+(`timeout`); a failed ask is no retry but a retryable exit, and an ask that
+comes back early and empty is followed by a growing pause.
+**Why:** a line may be printed twice but never lost, and basecamp-cli uses 10.
+**Implemented as:** `newsmark.MoveOn`, `cli.newsWait`, see
+[Waiting and coordinating](stable/waiting-and-coordinating.md).
+
+<a id="c-118"></a>
+## C-118 — The coordinator of a board is `boards coordinator claim|release|show`
+
+*Applies to: `boards coordinator claim`, `boards coordinator release`,
+`boards coordinator show`, `boards show`*
+
+The coordinator is a part of a board, so its commands stand under `boards`
+with the board as `<boardId>`, one verb each, not as `coordinate` with
+`--release` and `show`. A claim needs `--session`, a name as Minka takes it
+(1 to 64 characters, no control or format character, untrimmed), never
+`$CLAUDE_CODE_SESSION_ID`. A board that leaves `coordinator` out shows null
+with a notice that it is not shown, never nobody.
+**Why:** a command is a plural group and an action (C-001), a flag that turns
+a claim into a release would be two commands in one, and people read the name.
+**Implemented as:** `cli.newBoardsCoordinatorCmd`, `cli.coordinatorRefusal`,
+see [Waiting and coordinating](stable/waiting-and-coordinating.md).
+
+<a id="c-119"></a>
+## C-119 — `auth logout --revoke` revokes first and keeps the entry when that fails
+
+*Applies to: `auth logout --revoke`, `DELETE /api/v1/me/token`*
+
+The token is revoked at the entry's host, read like every host, before the
+entry leaves the file. Minka's own 401 counts as revoked; any other failure,
+a 401 of a front door included, keeps the entry and exits with its own code.
+
+**Why:** The entry is the one copy of the token here, and only Minka's 401
+says the token is dead, so a second run after a lost answer ends like the first.
+**Implemented as:** `cli.app.revokeToken`, see
+[Token, hosts and requests](stable/security.md).
+
+<a id="c-120"></a>
+## C-120 — One tool is `<group> tool <toolId>`, one chat is `chats show`
+
+*Applies to: `chats show`, `todolists tool`, `posts tool`, `docs tool`,
+`checkins tool`, `events tool`*
+
+A chat has a group of its own and is read with `show`; a tool has none, so one
+tool is `tool` in the group of what it holds, beside `tools <projectId>`.
+
+**Why:** `show` in that group already names what the tool holds (`todolists
+show` is a list). **Implemented as:** `cli.app.newOneToolCmd`,
+`cli.app.newChatsShowCmd`, see [Output](stable/output-contract.md).
+
+<a id="c-121"></a>
+## C-121 — `uploads download` sends no `?download`
+
+*Applies to: `uploads download`, `GET /api/v1/uploads/{blobId}/{variant}`*
+
+The bytes are asked for without `download`.
+
+**Why:** It changes only the headers around the same bytes, and the CLI takes
+the name from the resource, not from a header. **Implemented as:**
+`api.Client.FileBytes`, see [Output](stable/output-contract.md).
+
+<a id="c-122"></a>
+## C-122 — One line of the bell is `notifications show|mark-read <notificationId>`, its number `notifications count`
+
+*Applies to: `notifications count`, `notifications show`, `notifications
+mark-read`, `GET /api/v1/me/notifications/count`, `GET` and `POST
+/api/v1/notifications/{notificationId}[/read]`*
+
+The routes of the native app stand under `notifications` beside `wait`, and
+take the `id` of a line a wait printed. Marking read is `mark-read`, not
+`read`, as for a chat.
+
+**Why:** `read` beside `show` would read as reading the line; `chats
+mark-read` already names the same act (C-009). **Implemented as:**
+`cli.app.newNotificationsShowCmd`, `cli.app.newNotificationsMarkReadCmd`, see
+[Waiting and coordinating](stable/waiting-and-coordinating.md).
