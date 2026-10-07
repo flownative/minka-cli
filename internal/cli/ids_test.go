@@ -183,6 +183,21 @@ var idsInCapitals = []idInCapitals{
 	}, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
 		return []string{f.FilesUpload.ID, "--blob", up(storedBlobID)}
 	}},
+	{command: "cards notes attachments create", inputs: []string{"--blob"}, prepare: func(e *testEnv) {
+		e.server.Uploads = append(e.server.Uploads, &fakeapi.Upload{ID: storedBlobID, Circle: e.fixture.Project.ID, Filename: "notes.txt",
+			ContentType: "text/plain", Content: []byte("Four hundred."), Size: 13, UploaderID: e.fixture.Bruno.ID})
+	}, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
+		return []string{f.CardInTriage.ID, "--blob", up(storedBlobID)}
+	}},
+	{command: "cards notes attachments show", inputs: []string{"<attachment>"}, prepare: withAnAttachment, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
+		return []string{f.CardInTriage.ID, up(attachmentID)}
+	}},
+	{command: "cards notes attachments download", inputs: []string{"<attachment>"}, prepare: withAnAttachment, args: func(e *testEnv, f *fakeapi.Fixture) []string {
+		return []string{f.CardInTriage.ID, up(attachmentID), "-o", filepath.Join(e.t.TempDir(), "research.md")}
+	}},
+	{command: "cards notes attachments delete", inputs: []string{"<attachment>"}, prepare: withAnAttachment, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
+		return []string{f.CardInTriage.ID, up(attachmentID)}
+	}},
 	{command: "docs comments create", inputs: []string{"--document"}, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
 		return []string{"Me too", "--document", up(f.Document.ID)}
 	}},
@@ -439,7 +454,7 @@ var idFlagNames = []string{"after", "before", "assignee", "notify-when-done", "n
 // idPositions are the positions that take an ID among other names for a thing;
 // a position whose name ends in "Id" takes nothing else and is held by the
 // test of the arguments above.
-var idPositions = []string{"<person>", "<card>", "<step>", "<subtask>", "<column>", "<item>"}
+var idPositions = []string{"<person>", "<card>", "<step>", "<subtask>", "<column>", "<item>", "<attachment>"}
 
 // A command that takes an ID is run with it in capitals above, or said here
 // why it is not.

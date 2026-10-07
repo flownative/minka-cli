@@ -427,6 +427,26 @@ existing notes with the notes as they stand, a write with the right time,
 clearing with `--force`, and a 404 for an unknown card. The card resource
 does not say whether a card has notes, so `cards show` only points to them.
 
+The files on the back of a card are read and written with `cards notes
+attachments list`, `create`, `show`, `download` and `delete`, and the rule for
+keeping the back stands in the help of `cards notes` and in the skill (C-124,
+[The back of a card](../stable/card-back.md)). Minka's side is #400, on its
+`main` at b9355febe and in no release yet, which also keeps the whole back,
+the notes included, from a client; a released Minka answers every attachment
+command with 404, which the hints name. Seen live against the local instance,
+which runs that `main`: a file put on the back in one command, the same name
+again as version 2 with the same ID, `--blob` and its `uploadNotAttachable`
+for an upload already held, the list by name, `show` by name, position and ID
+with the text alone on standard output, a picture refused by `show` and
+fetched by `download`, a download that does not write over a file, the
+refusals on an archived card (`create` before the transfer, `delete` from
+Minka) while the list still reads, `delete` by name, position and ID, and 404
+on a second delete and on the back of a card in the trash. Minka re-encodes a
+picture when it is stored: a PNG of 5091 bytes came back as one of 139, with
+`byteSize` saying so. Not seen live: a client, whom the local instance has no
+token for, and `cardTakesNoChanges`. Both are read in the code; the fake
+mirrors the client and has no `cardTakesNoChanges`, see below.
+
 An agent says which cards it has in hand: `work start` and `work stop` keep
 one list per session, `heartbeat` reports the list of its own session to `PUT
 /me/work` as a client of that session's own (C-103), and the Claude Code mod
@@ -707,6 +727,13 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   off the other card. Read in the code, mirrored by the fake, not seen live,
   and unreachable from the CLI, which checks every ID as a UUID before a
   request.
+
+- Of the back of a card: a client of the project gets 404 for the notes and
+  the attachments, which the fake mirrors and the local instance had no token
+  to show. The fake checks an attach in Minka's order (the card, the body, the
+  card's state, then the upload) and does not carry the uploads of a back into
+  another project with a moved card, has no column or board out of use and so
+  no `cardTakesNoChanges`, re-encodes no picture and serves no ranges.
 
 - Of the notes of a card: `cardNotesHasControlCharacters`, and `cardArchived`
   for a card in its board's archive, which the fake gives after the body and

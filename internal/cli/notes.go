@@ -39,10 +39,13 @@ var notesTimeLayouts = []string{
 var notesTimePattern = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,6})?(Z|[+-]\d{2}:?\d{2})$`)
 
 func (a *app) newCardsNotesCmd() *cobra.Command {
-	return group("notes", "Read and write the working notes on the back of a card",
+	cmd := group("notes", "Read and write the back of a card: its working notes and attachments",
 		a.newCardsNotesShowCmd(),
 		a.newCardsNotesSetCmd(),
+		a.newCardsNotesAttachmentsCmd(),
 	)
+	cmd.Long = cardBackHelp
+	return cmd
 }
 
 func (a *app) newCardsNotesShowCmd() *cobra.Command {
@@ -65,7 +68,7 @@ of the notes is what cards notes set --expect takes to write over them.`,
 			}
 			notes, err := s.client.CardNotes(a.ctx, args[0])
 			if err != nil {
-				return s.fail(err)
+				return cardBackRefusal(s, err, cardBackNotFoundHint)
 			}
 
 			summary := "No working notes on the card yet"
@@ -137,7 +140,7 @@ stands, and one of the two flags is required.`,
 			}
 			notes, err := s.client.WriteCardNotes(a.ctx, args[0], text, guard)
 			if err != nil {
-				return a.notesFailure(s.fail(err), err)
+				return a.notesFailure(cardBackRefusal(s, err, cardBackNotFoundHint), err)
 			}
 
 			summary := "Wrote the working notes of the card"
@@ -277,6 +280,7 @@ func expectationOf(notes api.CardNotes) string {
 func notesBreadcrumbs(notes api.CardNotes) []Breadcrumb {
 	return []Breadcrumb{
 		{Action: "set", Cmd: "minka cards notes set " + notes.CardID + " - --expect " + expectationOf(notes), Description: "Replace the notes, unless somebody changed them since"},
+		{Action: "attachments", Cmd: "minka cards notes attachments list " + notes.CardID, Description: "List the files on the back of the card"},
 		{Action: "card", Cmd: "minka cards show " + notes.CardID, Description: "Show the card"},
 	}
 }

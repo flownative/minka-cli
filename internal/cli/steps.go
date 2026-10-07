@@ -545,6 +545,9 @@ type namedLines struct {
 	noun, owner string
 	ids, titles []string
 	described   string
+	// caseMatters says that two titles may differ in case alone, as the names
+	// of files do: the title as written is then taken before case is ignored.
+	caseMatters bool
 }
 
 // findLine finds a line by ID, position or text and answers its index. A
@@ -566,6 +569,12 @@ func findLine(lines namedLines, value string) (int, string, error) {
 			}
 		}
 		return position - 1, lines.ids[position-1], nil
+	}
+
+	if lines.caseMatters {
+		if at := slices.Index(lines.titles, wanted); at >= 0 && slices.Index(lines.titles[at+1:], wanted) < 0 {
+			return at, lines.ids[at], nil
+		}
 	}
 
 	var matches []int
