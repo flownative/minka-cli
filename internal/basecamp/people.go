@@ -26,6 +26,8 @@ type registry struct {
 	referred map[int64]*seenPerson
 	invalid  map[int64]bool
 	unquoted map[int64]bool
+	// agents are the people the run writes as agents of a human.
+	agents Agents // the agents'
 }
 
 type seenPerson struct {
@@ -318,12 +320,12 @@ func (r *registry) leftOut() int {
 }
 
 // invalidAddresses names, by ID and in the order of the IDs, who came into
-// the bundle without an address because theirs was none. A bot is none of
-// them: it comes without an address whatever the source keeps.
+// the bundle without an address because theirs was none. A bot and an agent
+// are none of them: they come without an address whatever the source keeps.
 func (r *registry) invalidAddresses() []string {
 	ids := make([]int64, 0, len(r.invalid))
 	for id := range r.invalid {
-		if !r.referred[id].bot() {
+		if !r.withoutAnAddress(id) {
 			ids = append(ids, id)
 		}
 	}
@@ -336,16 +338,22 @@ func (r *registry) invalidAddresses() []string {
 }
 
 // unquotedAddresses counts the people whose address came inside a pair of
-// quotation marks that the run took off, one for each of them. A bot's address
-// is not written, so nothing came off it.
+// quotation marks that the run took off, one for each of them. The address of
+// a bot or an agent is not written, so nothing came off it.
 func (r *registry) unquotedAddresses() int {
 	count := 0
 	for id := range r.unquoted {
-		if !r.referred[id].bot() {
+		if !r.withoutAnAddress(id) {
 			count++
 		}
 	}
 	return count
+}
+
+// withoutAnAddress tells of somebody of the bundle that their record carries
+// no address, whatever the source keeps.
+func (r *registry) withoutAnAddress(id int64) bool {
+	return r.referred[id].bot() || r.isAnAgent(id) // the agents'
 }
 
 // mask is the character Basecamp puts in the place of what an identity may

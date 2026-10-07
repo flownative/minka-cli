@@ -181,6 +181,29 @@ func (botKind) MarshalJSON() ([]byte, error) {
 	return []byte(`"bot"`), nil
 }
 
+// Agent is somebody of the source who comes as the agent of a human of the
+// bundle, Principal being that human's sourceId. It has no field for an
+// address: an agent is never matched to an account by one.
+//
+// Temporary: it serves the moving over of one account and goes when that is
+// done.
+type Agent struct {
+	Record
+	Name      string    `json:"name"`
+	Avatar    *string   `json:"avatar"`
+	Retired   bool      `json:"retired"`
+	Client    bool      `json:"client"`
+	Kind      agentKind `json:"kind"`
+	Principal string    `json:"principal"`
+}
+
+// agentKind is the kind of person an Agent is, which is the one it can be.
+type agentKind struct{}
+
+func (agentKind) MarshalJSON() ([]byte, error) {
+	return []byte(`"agent"`), nil
+}
+
 // Project is a project of the source. ClientAccess tells that it works with
 // clients and ClientCompany names the company it works with; the two stand
 // together or neither does, because a company without the access would say that

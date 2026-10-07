@@ -233,7 +233,10 @@ a run reaches an address of a single day of a series or of one entry, which
 Basecamp answers by writing (C-097). With `--keep-files` (C-115) a run keeps
 every file it brings beside `--out`, so that one that fails, is stopped or is
 killed hands them to the next run with the flag, which walks Basecamp anew and
-fetches only what is missing; a bundle in place removes them.
+fetches only what is missing; a bundle in place removes them. With `--agent
+<agent ID>=<human ID>` (C-116, temporary, for moving Flownative's own account
+over) a user comes as the agent of another, without an address, and the human
+comes along.
 The Docs & Files tools come last of all, so that the bytes of a file standing in
 a card and in a document alike are fetched for the card, and the inboxes before
 them. Every owner of a file has a record of its own in `attachments.jsonl`, named
@@ -1424,6 +1427,16 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   run rather than writing the picture off is held against the fake, by a run whose
   avatar answers without a sign-in; no sign-in has ever run out while avatars were
   being fetched live.
+- Of `--agent` of `import basecamp` (C-116): all of it, against the fake.
+  Checked by reading against Minka's merged import (`main` at `fd6e6ffd0`,
+  E-263): it takes `kind: "agent"` and `principal` as a reference, refuses an
+  agent with an `email` and one whose `principal` no earlier line brought, is
+  itself, is no human or is a client, and leaves an agent out of a project its
+  human is not in, counting it. It turns a person an earlier run brought as a
+  human into the agent and stops, naming them, over a login of their own,
+  another organization, agents or bots of their own, the owner or admin role,
+  or being the last member of a project their human is not in. Nothing the
+  bundle writes goes against it; no bundle with an agent has been applied.
 - Of `--keep-files` of `import basecamp` (C-115): all of it. No live run has
   used it; it is held against the fake and against the file system of the
   tests, a kill by a run that runs no handler. That a run killed in the middle

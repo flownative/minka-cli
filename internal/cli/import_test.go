@@ -521,6 +521,7 @@ func TestImportFailuresHaveTheCodeOfTheirClass(t *testing.T) {
 		{"Basecamp or a gateway failed", basecamp.Unavailable, CodeAPI, ExitAPI, true, "try again", 4},
 		{"interrupted", basecamp.Interrupted, CodeNetwork, ExitNetwork, false, "", 1},
 		{"API", basecamp.API, CodeAPI, ExitAPI, false, "", 1},
+		{"usage", basecamp.Usage, CodeUsage, ExitUsage, false, "", 1}, // the agents'
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -839,6 +840,11 @@ func TestImportChecksTheCommandLineBeforeAskingBasecamp(t *testing.T) {
 		"one of two is none":        {"import", "basecamp", "--project", "7001", "--project", "1234567890123456789", "--out", out},
 		"an argument":               {"import", "basecamp", "7001", "--out", out},
 		"an unknown command":        {"import", "jira"},
+		// the agents'
+		"an agent that is no pair": {"import", "basecamp", "--project", "7001", "--agent", "101", "--out", out},
+		"an agent of themselves":   {"import", "basecamp", "--project", "7001", "--agent", "101=101", "--out", out},
+		"an agent of two humans":   {"import", "basecamp", "--project", "7001", "--agent", "101=102", "--agent", "101=104", "--out", out},
+		"an agent as a human":      {"import", "basecamp", "--project", "7001", "--agent", "101=102", "--agent", "102=104", "--out", out},
 	} {
 		t.Run(name, func(t *testing.T) {
 			e := newImportEnv(t)

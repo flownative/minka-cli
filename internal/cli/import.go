@@ -52,6 +52,9 @@ type importReport struct {
 	// BotsAlsoNamedElsewhere are the IDs of the deleted chatbots that
 	// records other than lines of an integration name as well.
 	BotsAlsoNamedElsewhere []string `json:"botsAlsoNamedElsewhere"`
+	// Agents are the people of counts.people written as agents of a human,
+	// which only --agent makes; a run without it does not carry the key.
+	Agents int `json:"agents,omitempty"` // the agents'
 	// CreatorProbesRefused are the dock entries asked for the creator of a
 	// project that Basecamp refused: they are passed over, and a project may
 	// come without a creator because of it.
@@ -226,9 +229,10 @@ func (a *app) newImportBasecampCmd() *cobra.Command {
 	var calendars bool
 	var uploadVersions bool
 	var keepFiles bool
+	var agentFlags []string // the agents'
 
 	cmd := &cobra.Command{
-		Use:   "basecamp [--project <id> … | --active-only] --out <dir> [--calendars] [--upload-versions] [--keep-files] [--dry-run]",
+		Use:   "basecamp [--project <id> … | --active-only] --out <dir> [--calendars] [--upload-versions] [--keep-files] [--agent <id>=<id> …] [--dry-run]",
 		Short: "Extract projects of a Basecamp account into an import bundle",
 		Long: `Extracts projects of a Basecamp account into an import bundle, the directory
 Minka's applier reads foreign history from.
@@ -532,6 +536,9 @@ the ones the run used and the next run takes them over from there; the bundle
 stays where it is, as after every run. A run without --keep-files neither takes
 kept files over nor removes them, and says where they lie.
 
+--agent writes a user of the account as the agent of another, without an
+address. It is temporary, for moving one account over, and will be removed.
+
 A bundle holds personal data, and so do kept files. Keep them out of
 repositories and delete them when the bundle has been applied.`,
 		Args: requireArgs(),
@@ -566,6 +573,10 @@ repositories and delete them when the bundle has been applied.`,
 			if keepFiles && !buildNamesItsCode(version) {
 				return usageErrorf(cmd, "--keep-files needs a build of minka that names its commit, and this one is %q: kept files are taken over only by the build that brought them, which a dev build or one with uncommitted changes cannot vouch for. Build from a clean checkout with: make build", version)
 			}
+			agents, err := basecamp.ParseAgents(agentFlags) // the agents'
+			if err != nil {
+				return basecampError(err)
+			}
 
 			writer = bundle.Discard()
 			switch {
@@ -591,7 +602,7 @@ repositories and delete them when the bundle has been applied.`,
 			// again, whatever kind it is of and whether anything is written.
 			source := basecamp.NewRetrying(a.basecampSource, a.retryPause)
 			extractor := basecamp.Extractor{Source: source, Avatars: a.avatarFetcher, Files: a.basecampFiles, Now: a.now, Calendars: calendars,
-				UploadVersions: uploadVersions}
+				UploadVersions: uploadVersions, Agents: agents} // the agents'
 			var result basecamp.Result
 			if len(projects) > 0 {
 				result, err = extractor.Extract(a.ctx, projects, writer)
@@ -624,6 +635,7 @@ repositories and delete them when the bundle has been applied.`,
 				AddressesUnquoted:      result.AddressesUnquoted,
 				PeopleLeftOut:          result.PeopleLeftOut,
 				Bots:                   result.Bots,
+				Agents:                 result.Agents, // the agents'
 				BotsAlsoNamedElsewhere: result.BotsAlsoNamedElsewhere,
 				CreatorProbesRefused:   result.CreatorProbesRefused,
 
@@ -978,6 +990,8 @@ repositories and delete them when the bundle has been applied.`,
 	cmd.Flags().BoolVar(&calendars, "calendars", false, "Bring the calendars and their events too, for a Minka whose import applies events")
 	cmd.Flags().BoolVar(&uploadVersions, "upload-versions", false, "Bring the files uploads showed before as their versions, sending the Basecamp CLI's token to Basecamp's API")
 	cmd.Flags().BoolVar(&keepFiles, "keep-files", false, "Keep the files a run brings beside --out, so that a run that fails hands them to the next run with this flag; they hold personal data")
+	// the agents'
+	cmd.Flags().StringArrayVar(&agentFlags, "agent", nil, "<agent ID>=<human ID>: write that user as the agent of that user, without an address; repeat for several. Temporary, for moving accounts over; will be removed")
 	return cmd
 }
 
@@ -1046,6 +1060,9 @@ func renderImportReport(w io.Writer, report importReport) {
 	fmt.Fprintf(w, "People of the account nothing refers to, left out: %d\n", report.PeopleLeftOut)
 	if report.Bots > 0 {
 		fmt.Fprintf(w, "Chatbots and integrations among the people, written as bots: %d\n", report.Bots)
+	}
+	if report.Agents > 0 { // the agents'
+		fmt.Fprintf(w, "People written as agents of a human: %d\n", report.Agents)
 	}
 	if count := len(report.BotsAlsoNamedElsewhere); count > 0 {
 		fmt.Fprintf(w, "Deleted people written as bots whom other records name too: %d (person %s)\n", count, strings.Join(report.BotsAlsoNamedElsewhere, ", "))
@@ -1536,6 +1553,8 @@ func basecampError(err error) *Error {
 		e.Hint = "Basecamp, or a gateway in front of it, failed several times in a row. That usually passes: try again in a few minutes."
 	case basecamp.Interrupted:
 		e.Code = CodeNetwork
+	case basecamp.Usage: // the agents'
+		e.Code = CodeUsage
 	}
 	if failed.Hint != "" {
 		e.Hint = failed.Hint

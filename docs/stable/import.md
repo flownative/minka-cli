@@ -7,7 +7,7 @@ thing the two sides share; Minka's applier reads the bundle, the CLI never
 writes history into Minka itself.
 
 ```
-minka import basecamp [--project <id> … | --active-only] --out <dir> [--calendars] [--upload-versions] [--keep-files] [--dry-run]
+minka import basecamp [--project <id> … | --active-only] --out <dir> [--calendars] [--upload-versions] [--keep-files] [--agent <id>=<id> …] [--dry-run]
 ```
 
 The command talks to Basecamp only, and only reads there. It needs no Minka
@@ -503,7 +503,50 @@ and Minka applies the kinds in an order of its own.
   `addressesUnquoted`, a bot is never counted among the clients, and the
   company of a deleted chatbot is not looked at. `bots` in the report counts
   the bots of `counts.people`. Every other person carries no `kind`, which
-  Minka reads as `human`.
+  Minka reads as `human`, except an agent.
+  **An agent** is named by whoever runs the import, because Basecamp has none:
+  `--agent <agent ID>=<human ID>`, repeated for several, both Basecamp person
+  IDs (C-116). **The flag is temporary**, for moving Flownative's own account
+  over, and goes once that is done. The agent comes with `kind: "agent"` and
+  `principal`, the `sourceId` of the human, beside `name`, `avatar`, `retired`
+  and `client`, and with no `email` key at all, whatever address Basecamp keeps:
+  the agent must not be found by an address and get a login. That address is
+  therefore neither in `invalidAddresses` nor counted in `addressesUnquoted`;
+  the masks check reads it with the rest of the list all the same, because a
+  mask anywhere says what the identity sees. The flag is read strictly: two
+  numbers as Basecamp writes them, without a sign or a leading zero, joined by
+  `=`. Refused as `usage` before Basecamp is asked anything, in a dry run as
+  well: a value of another shape, an agent of themselves, one agent named for
+  two humans, and somebody named as an agent and as the human of one, since an
+  agent acts for a human. Refused as `usage` once the people list of the account
+  is read and before a project is asked for: an agent or a human the list does
+  not hold, one who is no `User` (a bot, somebody deleted, a client of the
+  legacy kind) and one Basecamp counts a client. An agent comes like anybody
+  else, only where a record refers to it; it refers to its human in turn, so
+  the human comes whether a record of the run names them or not, and is no
+  longer among `peopleLeftOut`. An agent no record names stays out, and so does
+  its human unless something else names them. The agents stand after everybody
+  else in `people.jsonl`, in the order of their IDs, so that the human an agent
+  names always stands before it; a run without the flag writes the same bytes as
+  before. `agents` in the report counts the agents of `counts.people`, and is
+  missing from a run without them. An agent is no person without an address
+  where the subscribers of an item and the people asked a question are
+  chosen, since Minka gives it one. The times of agent and human are checked
+  with the list as well, so a human who comes only for their agent cannot end
+  the run where the people are written. **Not counted:** an agent that is a
+  member of a project its human is not a member of. Minka leaves it out of
+  that project and counts it itself; the run cannot tell, because the human
+  may already be a member there. Such an agent can therefore stand among the
+  subscribers or the asked of an item in that project, where Minka leaves it
+  off.
+  **Minka stops a run over an agent where the extractor cannot see it**
+  (E-263 there). A person an earlier run brought as a human becomes the agent,
+  and the run and a dry run stop, naming them, when that person has a login of
+  their own, is no person the import made, is in another organization as well,
+  has agents or bots of their own, is an owner or admin of the organization, or
+  is the last member of a project their human is not in, which is named too.
+  None of this is in Basecamp, so the extractor writes the bundle all the same:
+  **run Minka's import as a dry run first**, and settle what it names there.
   **Two risks the rule carries.** A deleted user whose Tombstone once wrote a
   line of an integration becomes a bot as well, and Minka never turns a bot
   back into a human: `botsAlsoNamedElsewhere` names, by ID, every bot of a
@@ -1856,7 +1899,8 @@ therefore read from the source and never guessed (C-055).
   question is ever said to be asked of a client: Minka drops such a person from
   `asked` without a word, so a client among the subscribers of a question is left
   out here and counted (`askedLeftOut.clients`), beside whoever is no member, has
-  left or comes without an address. One reason is counted per person: being no
+  left or comes without an address — an agent, which comes without one and is
+  given one by Minka, excepted. One reason is counted per person: being no
   member of the project first, then being a client, then having left and coming
   without an address, because Minka has a client out of the project before it
   asks anything else about them.
@@ -1913,7 +1957,7 @@ A name and a company are personal data.
   not look at what a run could take over. It needs no `--out`; given one, it
   checks it the way the real run does, so the refusal shows beforehand.
 - The report carries `counts` as the manifest has them, `avatars`, `bots`,
-  `botsAlsoNamedElsewhere`, `skippedTools`, `missingFiles`,
+  `agents` where there are any, `botsAlsoNamedElsewhere`, `skippedTools`, `missingFiles`,
   `creatorProbesRefused`, `cardsByStatus`,
   `cardsOnHold`, `cardsLeftOut`, `commentsTrashed`, `postsByStatus`,
   `postsLeftOut`, `postsWithEmptyBody`, `messagesByType` (`text`, `richText`,

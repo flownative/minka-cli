@@ -372,7 +372,7 @@ minka work list [--session <id>] --json
 minka heartbeat [--session <id>] --json
 minka hooks install --json
 minka hooks status --json
-minka import basecamp [--project <basecampProjectId>... | --active-only] (--out <dir> | --dry-run) [--calendars] [--upload-versions] [--keep-files] --json
+minka import basecamp [--project <basecampProjectId>... | --active-only] (--out <dir> | --dry-run) [--calendars] [--upload-versions] [--keep-files] [--agent <basecampPersonId>=<basecampPersonId>...] --json
 ```
 
 `<column>` is a column ID, a type (`triage`, `not_now`, `done`) or a title
@@ -2366,6 +2366,13 @@ this:
   Wherever kept files lie after a run, `data.keptFiles` names them (also in
   the `data` of an error envelope) with a `notice`; a run without the flag
   leaves them alone and says so.
+- `--agent <agent ID>=<human ID>` (temporary, for moving one account over)
+  writes that Basecamp user as the agent of the other, without an address,
+  and brings the human along. A bad value, an agent of themselves or of two
+  humans, or a human who is also named as an agent exits 1 (`usage`) before
+  anything is read; an agent or human who is no user of the account, or a
+  client, exits 1 (`usage`) once the people list is read.
+  `data.agents` counts them.
 - A bundle holds personal data: names, e-mail addresses, pictures, and so do
   kept files. Write it outside of any repository, do not quote from it, and
   delete it once it has been applied, and kept files once no run is to take
