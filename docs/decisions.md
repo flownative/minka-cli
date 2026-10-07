@@ -1954,7 +1954,11 @@ the agent's, as Minka requires: it refuses an agent whose principal no
 earlier line brought. An agent counts as having an address wherever an
 address decides who is kept, because Minka gives it one. A member agent whose
 human is no member of the project is not counted, because only Minka knows
-whether the human is a member there already.
+whether the human is a member there already. Minka stops a run over an agent
+it cannot make (E-263 there: a login of its own, another organization, agents
+or bots of its own, the owner or admin role, the last member of a project its
+human is not in); none of it can be seen in Basecamp, so the import docs advise
+a dry run of Minka's import first.
 **Implemented as:** `basecamp.ParseAgents`, `registry.takeAgents`,
 `bringInThePrincipals`, `inWritingOrder`, `bundle.Agent`, see
 [Importing from Basecamp](stable/import.md).

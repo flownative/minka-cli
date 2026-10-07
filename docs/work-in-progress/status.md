@@ -1427,19 +1427,16 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   run rather than writing the picture off is held against the fake, by a run whose
   avatar answers without a sign-in; no sign-in has ever run out while avatars were
   being fetched live.
-- Of `--agent` of `import basecamp` (C-116): all of it. The contract it
-  writes (`kind: "agent"`, `principal`, no `email` key, agents after the
-  humans) is the one the coordination gave; Minka's branch `import-agents`
-  carried no commit of its own when it was built (2026-10-07, at
-  `9f27ab342`), and the `PeopleApplier` on `main` refuses `kind: "agent"`
-  as a malformed bundle. The uncommitted work on that branch read the same
-  day takes `kind` and `principal`, refuses an agent with an address, one
-  whose `principal` no earlier line brought, is itself or is no human, and
-  leaves an agent out of a project its human is not in. Check it against the
-  branch once it is committed. The coordination says (2026-10-07, not yet
-  in committed code) that Minka turns a person an earlier run brought as a
-  human with an address into the agent as long as they never signed in with
-  their own login, and otherwise ends the run naming them.
+- Of `--agent` of `import basecamp` (C-116): all of it, against the fake.
+  Checked by reading against Minka's merged import (`main` at `fd6e6ffd0`,
+  E-263): it takes `kind: "agent"` and `principal` as a reference, refuses an
+  agent with an `email` and one whose `principal` no earlier line brought, is
+  itself, is no human or is a client, and leaves an agent out of a project its
+  human is not in, counting it. It turns a person an earlier run brought as a
+  human into the agent and stops, naming them, over a login of their own,
+  another organization, agents or bots of their own, the owner or admin role,
+  or being the last member of a project their human is not in. Nothing the
+  bundle writes goes against it; no bundle with an agent has been applied.
 - Of `--keep-files` of `import basecamp` (C-115): all of it. No live run has
   used it; it is held against the fake and against the file system of the
   tests, a kill by a run that runs no handler. That a run killed in the middle

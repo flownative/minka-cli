@@ -539,6 +539,14 @@ and Minka applies the kinds in an order of its own.
   may already be a member there. Such an agent can therefore stand among the
   subscribers or the asked of an item in that project, where Minka leaves it
   off.
+  **Minka stops a run over an agent where the extractor cannot see it**
+  (E-263 there). A person an earlier run brought as a human becomes the agent,
+  and the run and a dry run stop, naming them, when that person has a login of
+  their own, is no person the import made, is in another organization as well,
+  has agents or bots of their own, is an owner or admin of the organization, or
+  is the last member of a project their human is not in, which is named too.
+  None of this is in Basecamp, so the extractor writes the bundle all the same:
+  **run Minka's import as a dry run first**, and settle what it names there.
   **Two risks the rule carries.** A deleted user whose Tombstone once wrote a
   line of an integration becomes a bot as well, and Minka never turns a bot
   back into a human: `botsAlsoNamedElsewhere` names, by ID, every bot of a
