@@ -61,6 +61,7 @@ func everyWrite(e *testEnv) map[string][]string {
 		"columns delete":    {"columns", "delete", "Review", "--board", f.Board.ID},
 		"steps create":      {"steps", "create", card, "Another step"},
 		"steps edit":        {"steps", "edit", card, "A step", "--due", "2026-11-02"},
+		"steps move":        {"steps", "move", card, "A step", "--top"},
 		"steps complete":    {"steps", "complete", card, "A step"},
 		"steps reopen":      {"steps", "reopen", card, "A step"},
 		"steps delete":      {"steps", "delete", card, "A step"},

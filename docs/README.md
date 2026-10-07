@@ -71,7 +71,8 @@ the documentation says what holds; how it came about is in git.
   lie, the settings of `config` — before any work on `comments` or `config`.
 - [Steps](stable/steps.md): What a step of a card carries, the people given as
   a whole set and who may be among them, the day, why `steps create` takes
-  neither, the order of the refusals — before any work on `steps`.
+  neither, the text that changes, the move and its end, what an older Minka
+  answers, the order of the refusals — before any work on `steps`.
 - [To-do lists and groups](stable/todo-lists.md): What a read of a list hands
   over and what it only counts, the colour of a group and why white is none,
   the archive a list goes quiet in and the group that is then at no address,

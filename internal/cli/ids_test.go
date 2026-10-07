@@ -105,6 +105,12 @@ var idsInCapitals = []idInCapitals{
 	{command: "steps edit", inputs: []string{"<step>", "--assignee"}, prepare: withStepsSpelledInLetters, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
 		return []string{f.CardInTriage.ID, up(openStepID), "--assignee", up(f.Anke.ID)}
 	}},
+	{command: "steps move", inputs: []string{"<step>", "--after"}, prepare: withStepsSpelledInLetters, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
+		return []string{f.CardInTriage.ID, up(openStepID), "--after", up(doneStepID)}
+	}},
+	{command: "steps move", inputs: []string{"--before"}, prepare: withStepsSpelledInLetters, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
+		return []string{f.CardInTriage.ID, doneStepID, "--before", up(openStepID)}
+	}},
 	{command: "steps reopen", inputs: []string{"<step>"}, prepare: withStepsSpelledInLetters, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
 		return []string{f.CardInTriage.ID, up(doneStepID)}
 	}},
