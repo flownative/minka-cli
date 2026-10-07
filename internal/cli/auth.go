@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -211,14 +213,27 @@ func (a *app) hostToSignOutOf(file *config.File) (string, error) {
 }
 
 func (a *app) newAuthLogoutCmd() *cobra.Command {
-	return &cobra.Command{
+	var revoke bool
+
+	cmd := &cobra.Command{
 		Use:   "logout",
-		Short: "Remove the token of a host from the config file",
-		Long: `Removes the token of the host from the config file. The token itself stays
-valid until it is revoked on the server.
+		Short: "Remove the token of a host from the config file, and revoke it with --revoke",
+		Long: `Removes the token of the host from the config file. Without --revoke the token
+itself stays valid on the server until it is revoked there.
+
+--revoke revokes the token on the server first, and only then removes the
+entry: the entry is the one copy of the token this machine has, so it is kept
+when the revocation fails, and the command exits with the code of that failure.
+Revoking is safe to repeat: a token the server no longer accepts counts as
+revoked, the entry is removed, and a notice says so. Only the token of the
+entry is revoked; a token in $MINKA_TOKEN is never touched.
 
 Without --host it is the host signed in to last. The entry is reached as the
-file writes it, so an address written in by hand can be taken out again.`,
+file writes it, so an address written in by hand can be taken out again; with
+--revoke the token goes to that address read like every host, and an entry no
+host can be read from keeps its token and exits 1.`,
+		Example: `  minka auth logout
+  minka auth logout --host https://minka.example.com --revoke`,
 		Args: requireArgs(),
 		RunE: func(*cobra.Command, []string) error {
 			path, file, err := a.loadConfig()
@@ -231,35 +246,63 @@ file writes it, so an address written in by hand can be taken out again.`,
 			}
 			if host == "" {
 				return a.ok(success{
-					data:    map[string]any{"host": nil, "removed": false},
+					data:    map[string]any{"host": nil, "removed": false, "revoked": false},
 					summary: "Not signed in to any host",
 					text:    func(w io.Writer) { fmt.Fprintln(w, "Not signed in to any host.") },
 				})
 			}
 
-			removed := file.RemoveHost(host)
-			if removed {
-				if err := file.Save(path); err != nil {
-					return &Error{Code: CodeConfig, Message: err.Error()}
-				}
-			}
-
 			// The entry is reached by the value the file holds; what is printed
 			// of it is the address alone, which is not where a password belongs.
 			shown := config.HostForOutput(host)
+			var notices []string
+			revoked := false
+			if entry, standing := file.Hosts[host]; revoke && standing && entry.Token != "" {
+				alreadyGone, err := a.revokeToken(host, entry.Token)
+				if err != nil {
+					return err
+				}
+				revoked = true
+				if alreadyGone {
+					notices = append(notices, shown+" no longer accepted the token: it was revoked, had expired or belonged to an agent that stepped down, so there was nothing left to revoke")
+				}
+			}
+			// A sign-out reaches the file alone, so a token given in the
+			// environment is still valid, and whoever asked to revoke has to
+			// hear that.
+			if revoke && a.getenv("MINKA_TOKEN") != "" {
+				notices = append(notices, "the token in $MINKA_TOKEN was not revoked: a sign-out revokes only the token of the config file. Revoke it in Minka's account area, or sign it in with minka auth login --with-token and sign out again with --revoke")
+			}
+
+			removed := file.RemoveHost(host)
+			if removed {
+				if err := file.Save(path); err != nil {
+					e := &Error{Code: CodeConfig, Message: err.Error()}
+					if revoked {
+						e.Message = "the token is revoked, but its entry could not be taken out of the config file: " + err.Error()
+						e.Data = map[string]any{"host": shown, "removed": false, "revoked": true}
+					}
+					return e
+				}
+			}
+
 			summary := "Not signed in to " + shown
 			if removed {
 				summary = "Signed out of " + shown
 			}
 			answer := success{
-				data:    map[string]any{"host": shown, "removed": removed},
+				data:    map[string]any{"host": shown, "removed": removed, "revoked": revoked},
 				summary: summary,
+				notices: notices,
 				text: func(w io.Writer) {
-					if !removed {
+					switch {
+					case !removed:
 						fmt.Fprintf(w, "%s.\n", summary)
-						return
+					case revoked:
+						fmt.Fprintf(w, "%s. The token is revoked on the server.\n", summary)
+					default:
+						fmt.Fprintf(w, "%s. The token stays valid on the server until it is revoked.\n", summary)
 					}
-					fmt.Fprintf(w, "%s. The token stays valid on the server until it is revoked.\n", summary)
 				},
 			}
 			// Saying that there is nothing here would be the whole answer only if
@@ -268,11 +311,66 @@ file writes it, so an address written in by hand can be taken out again.`,
 			if !removed {
 				if written := hostWrittenAnotherWay(file, host); written != "" {
 					elsewhere := config.HostForOutput(written)
+					command := "minka auth logout --host " + elsewhere
+					if revoke {
+						command += " --revoke"
+					}
 					answer.notices = append(answer.notices, "the configuration keeps a token under "+elsewhere+
-						", the same host written another way; take that entry out with: minka auth logout --host "+elsewhere)
+						", the same host written another way; take that entry out with: "+command)
 				}
 			}
 			return a.ok(answer)
 		},
 	}
+	cmd.Flags().BoolVar(&revoke, "revoke", false, "Revoke the token on the server before removing it")
+
+	return cmd
+}
+
+// revokeToken revokes a token at the host its entry names, and says whether
+// the host had stopped accepting it before. That counts as revoked: what was
+// asked for, a token nobody can use, holds either way, and a second run after
+// a first that arrived unseen ends the same. Only Minka's own 401 says so: one
+// of a proxy or a password page in front of it says nothing about the token,
+// which may well be valid behind it.
+//
+// The token goes to the entry's host read like every host a request goes to,
+// never to the value as the file writes it: an entry that reads as no host
+// sends nothing.
+func (a *app) revokeToken(host, token string) (alreadyGone bool, err error) {
+	address, err := config.NormalizeHost(host)
+	if err != nil {
+		return false, &Error{
+			Code:    CodeConfig,
+			Message: "the token was not revoked and its entry is kept: " + err.Error(),
+			Hint:    "Sign out without --revoke, which takes the entry out as the file writes it, and revoke the token in Minka's account area.",
+		}
+	}
+	err = api.New(address, token, userAgent()).RevokeOwnToken(a.ctx)
+	if err == nil {
+		return false, nil
+	}
+	var refusal *api.Error
+	if errors.As(err, &refusal) && refusal.RefusedByMinka {
+		return true, nil
+	}
+	e := apiError(err, address)
+	e.Message = "the token was not revoked and its entry is kept: " + e.Message
+	const elsewhere = "Sign out without --revoke and revoke the token in Minka's account area."
+	const again = "Run the same command with --revoke again: a token the server no longer accepts counts as revoked."
+	interrupted := errors.Is(err, context.Canceled)
+	e.Retryable = e.Code == CodeNetwork && !interrupted || e.Code == CodeAPI && e.HTTPStatus >= 500
+	switch {
+	case interrupted:
+		e.Hint = again
+	case e.Retryable:
+		e.Hint = again + " Otherwise, sign out without --revoke and revoke the token in Minka's account area."
+	case e.Code == CodeAuth:
+		e.Hint = "The 401 did not come from Minka's sign-in but from something in front of it, such as a proxy asking for a password, and says nothing about the token. " + elsewhere
+	case e.Code == CodeNotFound:
+		e.Hint = "A Minka older than v0.53.0 has no address to revoke a token at. " + elsewhere
+	default:
+		e.Hint = elsewhere
+	}
+	return false, e
 }

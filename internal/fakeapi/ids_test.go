@@ -1,7 +1,9 @@
 package fakeapi
 
 import (
+	"encoding/json"
 	"fmt"
+	"net/http"
 	"slices"
 	"strings"
 	"testing"
@@ -255,6 +257,41 @@ func TestAReplyIsReadAfterTheChat(t *testing.T) {
 	}
 	if got, _ := answerTo(t, s, f.Token, "POST", "/api/v1/chats/"+f.Chat.ID+"/messages", body); got != "400 malformedBody" {
 		t.Errorf("a reply that is no string: %s, want 400 malformedBody", got)
+	}
+}
+
+// A reply carries the message it answers when it is posted and when it is
+// read, named in lowercase however it was written; one that answers nothing
+// says so with null.
+func TestAReplyNamesTheMessageItAnswers(t *testing.T) {
+	s, f := New(t)
+	question := f.Chat.Messages[0]
+	body := `{"body":"<p>Me!</p>","replyTo":"` + strings.ToUpper(question.ID) + `"}`
+	got, answer := answerTo(t, s, f.Token, "POST", "/api/v1/chats/"+f.Chat.ID+"/messages", body)
+	if got != "201" || answer["replyTo"] != question.ID {
+		t.Fatalf("the reply: %s, replyTo %v, want 201 and %s", got, answer["replyTo"], question.ID)
+	}
+
+	request, err := http.NewRequest(http.MethodGet, s.URL+"/api/v1/chats/"+f.Chat.ID+"/messages", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Header.Set("Authorization", "Bearer "+f.Token)
+	response, err := http.DefaultClient.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = response.Body.Close() }()
+	var transcript []map[string]any
+	if err := json.NewDecoder(response.Body).Decode(&transcript); err != nil {
+		t.Fatal(err)
+	}
+	first, last := transcript[0], transcript[len(transcript)-1]
+	if value, named := first["replyTo"]; !named || value != nil {
+		t.Errorf("a message that answers nothing: replyTo %v, named %v, want null", value, named)
+	}
+	if last["replyTo"] != question.ID {
+		t.Errorf("the reply read back: replyTo %v, want %s", last["replyTo"], question.ID)
 	}
 }
 

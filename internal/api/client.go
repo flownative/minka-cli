@@ -158,6 +158,11 @@ type Error struct {
 	Code       string // the code of the error body, or one derived from the status
 	Message    string
 	Body       json.RawMessage // the answer as sent, for a refusal that carries more than its error
+
+	// RefusedByMinka is true for the 401 of Minka's own sign-in, which says
+	// the token is not accepted there. A 401 of anything in front of Minka,
+	// such as a proxy asking for a password, says nothing about the token.
+	RefusedByMinka bool
 }
 
 func (e *Error) Error() string {
@@ -182,6 +187,14 @@ func (e *NetworkError) Unwrap() error {
 
 func (c *Client) Me(ctx context.Context) (Result[Me], error) {
 	return request[Me](ctx, c, http.MethodGet, "/me", nil)
+}
+
+// RevokeOwnToken revokes the token this client signs in with, and no other.
+// The server answers a token that is gone already with 401, as it answers
+// every request of such a token.
+func (c *Client) RevokeOwnToken(ctx context.Context) error {
+	_, err := request[struct{}](ctx, c, http.MethodDelete, "/me/token", nil)
+	return err
 }
 
 // NoteAtWork tells the host which cards one client of this agent is working on
@@ -405,6 +418,12 @@ func (c *Client) Chats(ctx context.Context, projectID string) (Result[[]Chat], e
 	return request[[]Chat](ctx, c, http.MethodGet, "/projects/"+url.PathEscape(projectID)+"/chats", nil)
 }
 
+// Chat reads a chat of a project by its identifier alone. A private
+// conversation stands in no project and is not found here.
+func (c *Client) Chat(ctx context.Context, chatID string) (Result[ChatOfAProject], error) {
+	return request[ChatOfAProject](ctx, c, http.MethodGet, "/chats/"+url.PathEscape(chatID), nil)
+}
+
 // Messages reads messages of a chat, oldest first.
 func (c *Client) Messages(ctx context.Context, chatID string, query MessagesQuery) (Result[[]ChatMessage], error) {
 	values := url.Values{}
@@ -424,12 +443,16 @@ func (c *Client) Messages(ctx context.Context, chatID string, query MessagesQuer
 	return request[[]ChatMessage](ctx, c, http.MethodGet, path, nil)
 }
 
-// PostMessage writes a message in a chat. With a client message ID, sending
-// the same one again answers with status 200 and the message written before.
-func (c *Client) PostMessage(ctx context.Context, chatID, body, clientMessageID string) (Result[ChatMessage], error) {
+// PostMessage writes a message in a chat, as a reply to the message replyTo
+// names unless that is empty. With a client message ID, sending the same one
+// again answers with status 200 and the message written before.
+func (c *Client) PostMessage(ctx context.Context, chatID, body, clientMessageID, replyTo string) (Result[ChatMessage], error) {
 	fields := map[string]string{"body": body}
 	if clientMessageID != "" {
 		fields["clientMessageId"] = clientMessageID
+	}
+	if replyTo != "" {
+		fields["replyTo"] = replyTo
 	}
 	return request[ChatMessage](ctx, c, http.MethodPost, "/chats/"+url.PathEscape(chatID)+"/messages", fields)
 }
@@ -636,6 +659,7 @@ func send[T any](ctx context.Context, c *Client, httpClient *http.Client, method
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		apiErr := errorFromResponse(resp.StatusCode, raw)
 		apiErr.Method = method
+		apiErr.RefusedByMinka = isMinkasSignInRefusal(resp.StatusCode, resp.Header, raw)
 		if json.Valid(raw) {
 			apiErr.Body = raw
 		}
@@ -677,6 +701,24 @@ func (c *Client) newRequest(ctx context.Context, method, path string, body io.Re
 		req.ContentLength = size
 	}
 	return req, nil
+}
+
+// minkasChallenge is the challenge of Minka's sign-in, the one header no
+// front door sends in Minka's words.
+const minkasChallenge = `Bearer realm="Minka"`
+
+// isMinkasSignInRefusal tells Minka's own 401 by both of its marks: the
+// challenge of its realm and the error body with the code "unauthenticated".
+func isMinkasSignInRefusal(statusCode int, header http.Header, raw []byte) bool {
+	if statusCode != http.StatusUnauthorized || header.Get("WWW-Authenticate") != minkasChallenge {
+		return false
+	}
+	var body struct {
+		Error struct {
+			Code string `json:"code"`
+		} `json:"error"`
+	}
+	return json.Unmarshal(raw, &body) == nil && body.Error.Code == "unauthenticated"
 }
 
 func errorFromResponse(statusCode int, raw []byte) *Error {
