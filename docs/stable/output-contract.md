@@ -59,6 +59,7 @@ comments that stopped it.
 | 8 | `ambiguous` | ambiguous input |
 | 9 | `validation` | refused by Minka, a write somebody else got in before included |
 | 11 | `unread` | a comment not written: its card has comments the caller has not read ([Comments](comments.md)) |
+| 12 | `timeout` | a wait that ran out with nothing new ([Waiting and coordinating](waiting-and-coordinating.md)) |
 
 The codes up to 9 are those of basecamp-cli, which uses 5 for a rate limit and
 10 for an account limit as well. A class it has no code for starts at 11, clear

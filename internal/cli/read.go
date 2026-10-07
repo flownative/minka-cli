@@ -125,10 +125,11 @@ projectArchived. Its cards are not among "cards mine".`,
 }
 
 func (a *app) newBoardsCmd() *cobra.Command {
-	return group("boards", "List and show boards, and read the archive of one",
+	return group("boards", "List and show boards, read the archive of one, and say who coordinates it",
 		a.newBoardsListCmd(),
 		a.newBoardsShowCmd(),
 		a.newBoardsArchiveCmd(),
+		a.newBoardsCoordinatorCmd(),
 	)
 }
 

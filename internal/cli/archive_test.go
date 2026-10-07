@@ -159,14 +159,17 @@ func everyWrite(e *testEnv) map[string][]string {
 		"events comments delete":  {"events", "comments", "delete", f.OnceEvent.ID, eventComment},
 		"events comments react":   {"events", "comments", "react", f.OnceEvent.ID, eventComment, "👍"},
 		"events comments unreact": {"events", "comments", "unreact", f.OnceEvent.ID, eventComment, "👍"},
+
+		"boards coordinator claim": {"boards", "coordinator", "claim", f.Board.ID, "--session", "planning"},
 	}
 }
 
 // notAWriteIntoAProject are the commands that read, that write nowhere on the
 // host, or that write where no project is: the read mark of a chat is taken in
 // an archived project as well, and so is a reminder, which is one's own; a
-// conversation hangs on none. An upload is tested by itself, because it needs
-// a file.
+// conversation hangs on none. The coordinator of a board is released in an
+// archived project as well. An upload is tested by itself, because it needs a
+// file.
 var notAWriteIntoAProject = []string{
 	"auth login", "auth logout", "auth status", "setup", "doctor", "me", "version", "commands",
 	"skill show", "skill install", "skill status",
@@ -186,6 +189,7 @@ var notAWriteIntoAProject = []string{
 	"chats mark-read", "conversations list", "conversations with", "conversations people",
 	"uploads create", "uploads download", "import basecamp",
 	"work start", "work stop", "work list", "heartbeat", "hooks install", "hooks status",
+	"notifications wait", "boards coordinator release", "boards coordinator show",
 }
 
 // A command that is new has to be put into one of the two lists, so that a way

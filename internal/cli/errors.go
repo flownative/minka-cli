@@ -29,6 +29,9 @@ const (
 	// CodeUnread is a comment not written because its card has comments the
 	// caller has not read. A script keys on it, so it stays as it is.
 	CodeUnread = "unread"
+	// CodeTimeout is a wait that ended with nothing new before its time ran
+	// out. A script that waits in a loop keys on it.
+	CodeTimeout = "timeout"
 )
 
 const (
@@ -42,6 +45,7 @@ const (
 	ExitAmbiguous  = 8
 	ExitValidation = 9
 	ExitUnread     = 11
+	ExitTimeout    = 12
 )
 
 var exitCodes = map[string]int{
@@ -55,6 +59,7 @@ var exitCodes = map[string]int{
 	CodeAmbiguous:  ExitAmbiguous,
 	CodeValidation: ExitValidation,
 	CodeUnread:     ExitUnread,
+	CodeTimeout:    ExitTimeout,
 }
 
 const writeMayHaveHappened = "The change may have reached the server. Read it back before trying again."

@@ -83,6 +83,10 @@ type app struct {
 	// which comments it has shown.
 	markWait time.Duration
 
+	// pause waits for a while unless the context ends first; tests move a
+	// clock instead.
+	pause func(ctx context.Context, d time.Duration) error
+
 	hostFlag   string
 	jsonFlag   bool
 	quietFlag  bool
@@ -129,6 +133,7 @@ func newApp(ctx context.Context, stdin io.Reader, stdout, stderr io.Writer, gete
 	a.avatarFetcher = basecamp.NewAvatarClient()
 	a.now = time.Now
 	a.markWait = 5 * time.Second
+	a.pause = pauseFor
 	a.runClaude = a.runClaudeCommand
 	a.executable = os.Executable
 	a.stdinIsTerminal = func() bool { return isTerminal(stdin) }
@@ -194,7 +199,8 @@ Output is text on a terminal and JSON otherwise. --json prints an envelope
 {ok, data, summary, notice, breadcrumbs}; --quiet prints only data. Failures
 print {ok: false, error, code, retryable, hint, meta} and exit with a code per
 class: 1 usage, 2 not found, 3 not signed in, 4 forbidden, 6 network,
-7 API error, 8 ambiguous, 9 validation, 11 unread comments.
+7 API error, 8 ambiguous, 9 validation, 11 unread comments, 12 nothing new
+within the time a wait was given.
 
 First steps, on a terminal:
   minka setup
@@ -251,6 +257,7 @@ only used for the host in $MINKA_HOST.`,
 		a.newImportCmd(),
 		a.newWorkCmd(),
 		a.newHeartbeatCmd(),
+		a.newNotificationsCmd(),
 		a.newHooksCmd(),
 		a.newSkillCmd(),
 		a.newDoctorCmd(),
@@ -511,5 +518,17 @@ func (a *app) newVersionCmd() *cobra.Command {
 				text:    func(w io.Writer) { fmt.Fprintf(w, "minka %s\n", version) },
 			})
 		},
+	}
+}
+
+// pauseFor waits for d, or until the context ends.
+func pauseFor(ctx context.Context, d time.Duration) error {
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+	select {
+	case <-timer.C:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
 	}
 }

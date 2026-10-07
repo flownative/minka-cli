@@ -119,6 +119,7 @@ with a code for its class:
 | 8 | `ambiguous` | a name matches more than one thing |
 | 9 | `validation` | Minka refused the input; `meta.apiCode` says why |
 | 11 | `unread` | a comment was not written: its card has comments you have not read |
+| 12 | `timeout` | `notifications wait --timeout` ran out with nothing new |
 
 `retryable` is true only where a second attempt cannot do harm. After a failed
 write, read the state back before trying again.

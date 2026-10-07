@@ -448,6 +448,15 @@ validate` refuses the mod there ("hooks: Invalid input: expected record");
 version that loads a mod; that a version between 2.1.270 and 2.1.286 really
 runs it is not measured.
 
+An agent waits for what is new with `notifications wait` instead of polling a
+board, and one session of a person coordinates a board with `boards
+coordinator claim`, `release` and `show` (C-117, C-118); the rule is
+[Waiting and coordinating](../stable/waiting-and-coordinating.md). Minka's
+side, the list of the bell, `card.moved` and the coordinator, is MNK-B3, on
+its branch `notifications-wait-coordinator` and in review there; the commands
+are checked against that code and its tests and the fake, not live, see
+below.
+
 Everything else is tested against the fake API and checked live — the chain
 upload → attachment in the text → display → the bytes back, as well as private
 conversations in both directions. What is checked against the fake only is
@@ -468,6 +477,20 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
 
 ## Checked against the fake only
 
+- Waiting and coordinating (`notifications wait`, `boards coordinator claim`,
+  `release`, `show`, the coordinator in `boards show`): the fake is held
+  against Minka's branch `notifications-wait-coordinator` at b078a753a, not on
+  `main` and in no release: `NotificationWaitApiController`,
+  `BoardApiController::claimCoordinatorAction` and `releaseCoordinatorAction`,
+  `BoardCoordinators`, `CoordinatorResource`, `NotificationLineResource`,
+  `NotificationOutboxListener`, `NotificationRecipients`,
+  `ApiNotificationWaitTest` and `ApiBoardCoordinatorTest`. **The fake does not
+  mirror**: the bell's visibility and the lines it leaves out, reactions,
+  subjects other than a card as Minka names them, the translated summaries
+  but those of a move and a completion, the poll interval of a held request,
+  and a board in the archive of a project in use, which the fake has not, so
+  the 404 Minka gives a claim on one is not held by a test. Nothing of it has
+  been seen live.
 - Reminders (`reminders list`, `set`, `delete`): Minka's #358 and #359 read
   in `ReminderApiController`, `Rfc3339Moment`, `ReminderKind`,
   `ReminderPreset`, `ReminderQueryService`, `DbalReminderRepository`,

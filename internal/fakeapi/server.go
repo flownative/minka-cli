@@ -137,10 +137,11 @@ type Project struct {
 }
 
 type Board struct {
-	ID        string
-	ProjectID string
-	Title     string
-	Columns   []*Column
+	ID          string
+	ProjectID   string
+	Title       string
+	Columns     []*Column
+	Coordinator *Coordinator // kept after it expired, and read as nobody from then on
 }
 
 type Column struct {
@@ -534,6 +535,30 @@ type Server struct {
 	// be, which no Minka does: what a client makes of bytes that are not the
 	// ones announced must not depend on the server being right about them.
 	SendsAFileShort bool
+
+	// Notifications are the lines of the bells of everybody, in the order
+	// they were written.
+	Notifications []*Notification
+
+	// ForgottenCursors are positions of the bell the server no longer knows
+	// although it handed them out, which it answers with cursorUnknown.
+	ForgottenCursors []string
+
+	// WaitsOut stands for the clock a held request of the bell waits by. It is
+	// given the wait and answers when that has passed; nil is the real clock.
+	// A test makes the wait pass at once with it.
+	WaitsOut func(time.Duration) <-chan time.Time
+
+	// WhileWaiting is called once a request of the bell is held, without the
+	// lock of the server, so that a test can let a line arrive in the wait.
+	WhileWaiting func(*Person)
+
+	// HoldsAtMost, where set, is the longest the server holds a request of
+	// the bell instead of WaitAtMost, as an installation configured otherwise.
+	HoldsAtMost time.Duration
+
+	notificationSeqs map[string]int // person ID → the number of their last line
+	arrival          chan struct{}  // closed when a line arrives
 
 	mu       sync.Mutex
 	requests []RecordedRequest
@@ -979,6 +1004,7 @@ func New(t testing.TB) (*Server, *Fixture) {
 	s.registerPostsRoutes(mux)
 	s.registerCalendarRoutes(mux)
 	s.registerReminderRoutes(mux)
+	s.registerNotificationsRoutes(mux)
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		// Flow answers an unknown path or a wrong method with an HTML page.
 		w.Header().Set("Content-Type", "text/html")
@@ -1492,9 +1518,15 @@ func (s *Server) board(w http.ResponseWriter, r *http.Request, person *Person) {
 	for _, column := range board.Columns {
 		columns = append(columns, s.columnResource(board, column))
 	}
-	writeJSON(w, http.StatusOK, map[string]any{
+	fields := map[string]any{
 		"id": board.ID, "projectId": board.ProjectID, "title": board.Title, "appUrl": s.boardURL(board), "columns": columns,
-	})
+	}
+	// A client of the project is not told who coordinates the board, not even
+	// that nobody does.
+	if !s.isAClient(person.ID) {
+		fields["coordinator"] = s.coordinatorResource(board)
+	}
+	writeJSON(w, http.StatusOK, fields)
 }
 
 // archivedCardsLimit is the shape a limit has to have, as the controller reads
@@ -1976,6 +2008,9 @@ func (s *Server) moveCard(w http.ResponseWriter, r *http.Request, person *Person
 	if to.Type != "done" {
 		card.CompletedAt = nil
 		card.CompletedByID = ""
+	}
+	if to != from {
+		s.noteTheMove(board, card, to, person)
 	}
 	writeJSON(w, http.StatusOK, s.cardResource(board, to, card))
 }
