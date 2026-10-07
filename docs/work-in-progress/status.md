@@ -438,6 +438,14 @@ validate` refuses the mod there ("hooks: Invalid input: expected record");
 version that loads a mod; that a version between 2.1.270 and 2.1.286 really
 runs it is not measured.
 
+An agent waits for what is new with `notifications wait` instead of polling a
+board, and one session of a person coordinates a board with `boards
+coordinator claim`, `release` and `show` (C-117, C-118); the rule is
+[Waiting and coordinating](../stable/waiting-and-coordinating.md). Minka
+builds its side, the list of the bell, `card.moved` and the coordinator, as
+MNK-B3; it is on no branch of Minka's with a commit yet, so everything of it is
+checked against the fake only, see below.
+
 Everything else is tested against the fake API and checked live — the chain
 upload → attachment in the text → display → the bytes back, as well as private
 conversations in both directions. What is checked against the fake only is
@@ -458,6 +466,15 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
 
 ## Checked against the fake only
 
+- Waiting and coordinating (`notifications wait`, `boards coordinator claim`,
+  `release`, `show`, the coordinator in `boards show`): built against the
+  contract the coordination set for MNK-B3 alone, as long as Minka has no code
+  for it; its branch `notifications-wait-coordinator` holds no commit beyond
+  `main`. The fake follows that contract, the answers of the list as
+  `{notifications, cursor}` and the 200 of a claim as the coordinator bare.
+  Only what Minka answers for an archived project is not laid down; the fake
+  lets it through. Once the code exists it decides, and the fake is checked
+  against it.
 - Reminders (`reminders list`, `set`, `delete`): Minka's #358 and #359 read
   in `ReminderApiController`, `Rfc3339Moment`, `ReminderKind`,
   `ReminderPreset`, `ReminderQueryService`, `DbalReminderRepository`,

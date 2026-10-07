@@ -55,6 +55,7 @@ type Client struct {
 	http      *http.Client
 	uploads   *http.Client
 	downloads *http.Client
+	waits     *http.Client // for a request the server holds open; each sets a deadline of its own
 }
 
 // New returns a client for a host such as "https://minka.localbeach.net".
@@ -80,6 +81,7 @@ func New(host, token, userAgent string) *Client {
 			Timeout:       bodyTimeout,
 			CheckRedirect: noRedirect,
 		},
+		waits: &http.Client{CheckRedirect: noRedirect},
 	}
 	c.address, _ = url.Parse(c.host)
 	c.downloads = &http.Client{Timeout: bodyTimeout, CheckRedirect: c.followTheBytes}

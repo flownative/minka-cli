@@ -2,9 +2,11 @@ package cli
 
 import (
 	"bytes"
+	"maps"
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 
@@ -41,6 +43,10 @@ func TestSkillInstallWritesTheSkillTheBinaryCarries(t *testing.T) {
 	}
 	if !bytes.Equal(installed, skills.Minka) {
 		t.Fatal("the installed skill is not the one the binary carries")
+	}
+	reference := filepath.Join(filepath.Dir(e.installedSkillPath()), "references", "waiting-and-coordinating.md")
+	if installed, err := os.ReadFile(reference); err != nil || !bytes.Equal(installed, skills.MinkaFiles()["references/waiting-and-coordinating.md"]) {
+		t.Fatalf("the reference beside the skill was not installed: %v", err)
 	}
 
 	env, r = e.runJSON("", "skill", "status")
@@ -226,7 +232,7 @@ func TestNoNoticeWithoutASkillOrWithTheCurrentOne(t *testing.T) {
 		t.Fatalf("notice %q although no skill is installed", env.Notice)
 	}
 
-	e.writeInstalledSkill(string(skills.Minka))
+	expectCode(t, e.run("", "skill", "install", "--json"), ExitOK)
 	env, _ = e.runJSON("", "version")
 	if env.Notice != "" {
 		t.Fatalf("notice %q although the skill is current", env.Notice)
@@ -261,9 +267,16 @@ func TestSkillShowPrintsTheSkill(t *testing.T) {
 // start of a line, in inline code, behind a pipe or inside $( ).
 var minkaCall = regexp.MustCompile("(?m)(?:^|[`|(] ?)minka ([a-z][a-z-]*(?: [a-z][a-z-]*)?)")
 
+// The skill is SKILL.md together with its references: a command may be
+// described in either, and a call in either has to be a command.
 func TestTheSkillNamesEveryCommandAndNoOther(t *testing.T) {
 	root := newApp(t.Context(), strings.NewReader(""), &bytes.Buffer{}, &bytes.Buffer{}, func(string) string { return "" }).newRootCmd()
-	skill := string(skills.Minka)
+	var whole strings.Builder
+	for _, name := range slices.Sorted(maps.Keys(skills.MinkaFiles())) {
+		whole.Write(skills.MinkaFiles()[name])
+		whole.WriteString("\n")
+	}
+	skill := whole.String()
 
 	existing, groups := map[string]bool{}, map[string]bool{}
 	for _, path := range commandPaths(root) {
@@ -295,5 +308,95 @@ func TestTheSkillNamesEveryCommandAndNoOther(t *testing.T) {
 			continue
 		}
 		t.Errorf("the skill names %q, which is not a command", path)
+	}
+}
+
+// A reference the skill points to travels with it: one missing or older
+// beside an installed SKILL.md makes the skill differ, so that the notice
+// advises the install that brings it.
+func TestASkillWithoutItsReferenceDiffers(t *testing.T) {
+	e := newTestEnv(t)
+	expectCode(t, e.run("", "skill", "install", "--json"), ExitOK)
+	reference := filepath.Join(filepath.Dir(e.installedSkillPath()), "references", "waiting-and-coordinating.md")
+
+	if err := os.WriteFile(reference, []byte("an older reference"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	env, r := e.runJSON("", "skill", "status")
+	expectCode(t, r, ExitOK)
+	if got := decode(t, env.Data)["state"]; got != skillDiffers {
+		t.Fatalf("state %v with an older reference, want %s", got, skillDiffers)
+	}
+
+	if err := os.Remove(reference); err != nil {
+		t.Fatal(err)
+	}
+	env, r = e.runJSON("", "version")
+	expectCode(t, r, ExitOK)
+	if !strings.Contains(env.Notice, "minka skill install") {
+		t.Fatalf("notice %q says nothing of the missing reference", env.Notice)
+	}
+
+	expectCode(t, e.run("", "skill", "install", "--json"), ExitOK)
+	env, _ = e.runJSON("", "skill", "status")
+	if got := decode(t, env.Data)["state"]; got != skillCurrent {
+		t.Fatalf("state %v after the install, want %s", got, skillCurrent)
+	}
+}
+
+// A directory of references that is a symbolic link is somebody else's, and
+// nothing is written through it, SKILL.md included.
+func TestSkillInstallDoesNotWriteThroughALinkedDirectoryOfReferences(t *testing.T) {
+	e := newTestEnv(t)
+	elsewhere := t.TempDir()
+	dir := filepath.Dir(e.installedSkillPath())
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(elsewhere, filepath.Join(dir, "references")); err != nil {
+		t.Fatal(err)
+	}
+
+	env, r := e.runJSON("", "skill", "install")
+	expectCode(t, r, ExitUsage)
+	if env.Code != CodeConfig {
+		t.Fatalf("code %q, want %q", env.Code, CodeConfig)
+	}
+	if entries, _ := os.ReadDir(elsewhere); len(entries) != 0 {
+		t.Fatalf("something was written behind the link: %v", entries)
+	}
+	if _, err := os.Stat(e.installedSkillPath()); err == nil {
+		t.Fatal("SKILL.md was written although the install was refused")
+	}
+}
+
+// What skill show hands an agent includes the references, so that one that
+// reads the skill without installing it can follow its pointers.
+func TestSkillShowHandsOverTheReferences(t *testing.T) {
+	e := newTestEnv(t)
+	env, r := e.runJSON("", "skill", "show")
+	expectCode(t, r, ExitOK)
+	references, _ := decode(t, env.Data)["references"].(map[string]any)
+	if references["references/waiting-and-coordinating.md"] != string(skills.MinkaFiles()["references/waiting-and-coordinating.md"]) {
+		t.Fatalf("references %v", references)
+	}
+}
+
+// Every pointer of the skill to a file beside it leads to a file the binary
+// carries, and every file it carries besides SKILL.md is pointed to.
+func TestEveryReferenceOfTheSkillIsCarriedAndPointedTo(t *testing.T) {
+	files := skills.MinkaFiles()
+	pointer := regexp.MustCompile(`\]\((references/[^)#]+)\)`)
+	pointed := map[string]bool{}
+	for _, match := range pointer.FindAllStringSubmatch(string(skills.Minka), -1) {
+		pointed[match[1]] = true
+		if files[match[1]] == nil {
+			t.Errorf("the skill points to %s, which it does not carry", match[1])
+		}
+	}
+	for name := range files {
+		if name != "SKILL.md" && !pointed[name] {
+			t.Errorf("the skill carries %s and points nowhere to it", name)
+		}
 	}
 }

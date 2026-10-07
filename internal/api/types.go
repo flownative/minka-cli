@@ -51,6 +51,9 @@ type Board struct {
 	Title     string   `json:"title"`
 	AppURL    string   `json:"appUrl"`
 	Columns   []Column `json:"columns"`
+	// Coordinator is the session that coordinates the board, nil where nobody
+	// does or the last one has expired.
+	Coordinator *Coordinator `json:"coordinator"`
 }
 
 // Column is one column of a board. A working column can have an area for the

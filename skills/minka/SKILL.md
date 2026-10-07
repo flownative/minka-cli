@@ -40,6 +40,10 @@ when stdout is not a terminal, so an agent gets structured output by default.
   card and `minka work stop <card>` when you are done with it. It shows on the
   board only while `minka heartbeat` keeps reporting it, which the mod of
   `minka setup` or `minka hooks install` does once and for all.
+- To wait for news — a card moved, a comment, an assignment — never poll a
+  board: run `minka notifications wait --json` (in Claude Code with
+  `run_in_background`), which exits when something arrives. Coordinating a
+  board and the whole flow: [references/waiting-and-coordinating.md](references/waiting-and-coordinating.md).
 - Take a card up from its back: `minka cards notes show <card>` before you
   begin, because whoever was on it before left the state of the work there,
   and `minka cards notes set <card> - --expect <updatedAt>` at every milestone,
@@ -99,6 +103,7 @@ Errors: `{"ok": false, "error", "code", "retryable", "hint", "meta": {"apiCode",
 | 8 | `ambiguous` | a column, person or step given by name matches more than one |
 | 9 | `validation` | the server refused the input, see `meta.apiCode` |
 | 11 | `unread` | a comment was not written: the card has comments you have not read, in `data` |
+| 12 | `timeout` | `minka notifications wait --timeout` ran out with nothing new; wait again |
 
 Validation codes in `meta.apiCode`: `cardTitleMissing`, `cardTitleTooLong`,
 `cardTitleHasControlCharacters` (a title is one line: no line breaks or tabs),
@@ -111,7 +116,9 @@ fine), `commentNotReadable`, `cardDueDateNotADate`, `personNotAProjectMember`, `
 `chatMessageNotReadable`, `chatMessageDraftNotAnIdentifier`, `chatMessagesLimitNotANumber`,
 `chatReadSeqMissing`, `nothingToChange`, `columnIdMissing`, `onHoldEnabledMissing`,
 `columnHasNoOnHoldArea`, `systemColumnHasNoOnHoldArea`, `malformedBody`,
-`unsupportedMediaType`, `projectArchived`.
+`unsupportedMediaType`, `projectArchived`, `coordinatorTaken`,
+`coordinatorSessionInvalid`, `cursorUnknown`, `notificationsWaitInvalid`,
+`notificationsLimitInvalid`.
 
 That is not all of them: Minka has a code for every refusal of every endpoint,
 far more than the CLI can meet, and the list above holds the ones that come up
@@ -152,8 +159,9 @@ The binary carries this description, so it fits the commands of the version
 that is installed.
 
 - `minka skill show --styled`: print it.
-- `minka skill install`: write it to `~/.claude/skills/minka/SKILL.md`, or
-  into another directory of skills with `--dir <dir>`. A directory of
+- `minka skill install`: write it to `~/.claude/skills/minka/SKILL.md`, with
+  its references beside it, or into another directory of skills with
+  `--dir <dir>`. A directory of
   skills or a skill directory that is a symbolic link is refused (exit 1)
   rather than written through, and draws no notice.
 - `minka skill status --json`: `data.state` is `current`, `differs` or

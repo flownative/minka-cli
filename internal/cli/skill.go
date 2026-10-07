@@ -6,8 +6,11 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"maps"
 	"os"
+	"path"
 	"path/filepath"
+	"slices"
 
 	"github.com/flownative/minka-cli/skills"
 	"github.com/spf13/cobra"
@@ -37,7 +40,7 @@ func (a *app) newSkillShowCmd() *cobra.Command {
 		Args:  requireArgs(),
 		RunE: func(*cobra.Command, []string) error {
 			return a.ok(success{
-				data:    map[string]string{"name": skillName, "version": version, "content": string(skills.Minka)},
+				data:    map[string]any{"name": skillName, "version": version, "content": string(skills.Minka), "references": skillReferences()},
 				summary: "The skill of minka " + version,
 				text:    func(w io.Writer) { _, _ = w.Write(skills.Minka) },
 			})
@@ -130,34 +133,76 @@ func (a *app) skillsDir(named string) (string, error) {
 }
 
 // installSkill writes the skill into a directory of skills and returns the
-// path of the file.
+// path of its SKILL.md. Every file the skill carries is written, the
+// references beside SKILL.md included, each of them replaced whole.
 //
-// A directory of skills, or the directory of this skill in it, that is a
-// symbolic link belongs to somebody else: a checkout somebody works in, or
-// the store of another tool. Writing through it would change a file there, so
-// it is refused. Links further up, such as a home directory kept elsewhere,
-// are where somebody chose to keep their own files.
+// A directory of skills, the directory of this skill in it, or a directory of
+// the skill below that, which is a symbolic link belongs to somebody else: a
+// checkout somebody works in, or the store of another tool. Writing through it
+// would change a file there, so it is refused before anything is written.
+// Links further up, such as a home directory kept elsewhere, are where
+// somebody chose to keep their own files.
 func installSkill(skillsDir string) (string, error) {
 	dir := filepath.Join(skillsDir, skillName)
-	if link := firstSymlink(skillsDir, dir); link != "" {
+	files := skills.MinkaFiles()
+	if link := firstSymlink(append([]string{skillsDir}, skillDirectories(dir, files)...)...); link != "" {
 		return "", &Error{
 			Code:    CodeConfig,
 			Message: link + " is a symbolic link; the skill is not written through it",
 			Hint:    "Remove the link, or name another directory of skills with --dir.",
 		}
 	}
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return "", &Error{Code: CodeConfig, Message: err.Error()}
-	}
 
-	path := filepath.Join(dir, skillFile)
+	names := slices.Sorted(maps.Keys(files))
+	for _, name := range names {
+		if err := writeSkillFile(filepath.Join(dir, filepath.FromSlash(name)), files[name]); err != nil {
+			return "", &Error{Code: CodeConfig, Message: err.Error()}
+		}
+	}
+	return filepath.Join(dir, skillFile), nil
+}
+
+// skillReferences are the files of the skill beside SKILL.md, by their path
+// below the directory of the skill.
+func skillReferences() map[string]string {
+	references := map[string]string{}
+	for name, content := range skills.MinkaFiles() {
+		if name != skillFile {
+			references[name] = string(content)
+		}
+	}
+	return references
+}
+
+// skillDirectories are the directory of the skill and every directory below
+// it that a file of the skill lies in.
+func skillDirectories(dir string, files map[string][]byte) []string {
+	dirs := []string{dir}
+	for name := range files {
+		for parent := path.Dir(name); parent != "."; parent = path.Dir(parent) {
+			if full := filepath.Join(dir, filepath.FromSlash(parent)); !slices.Contains(dirs, full) {
+				dirs = append(dirs, full)
+			}
+		}
+	}
+	slices.Sort(dirs)
+	return dirs
+}
+
+// writeSkillFile writes one file through a temporary file renamed into place,
+// so that a file that is a symbolic link is replaced, not written through.
+func writeSkillFile(path string, content []byte) error {
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
 	temp, err := os.CreateTemp(dir, ".skill-*")
 	if err != nil {
-		return "", &Error{Code: CodeConfig, Message: err.Error()}
+		return err
 	}
 	defer os.Remove(temp.Name())
 
-	_, err = temp.Write(skills.Minka)
+	_, err = temp.Write(content)
 	if err == nil {
 		err = temp.Chmod(0o644)
 	}
@@ -167,10 +212,7 @@ func installSkill(skillsDir string) (string, error) {
 	if err == nil {
 		err = os.Rename(temp.Name(), path)
 	}
-	if err != nil {
-		return "", &Error{Code: CodeConfig, Message: err.Error()}
-	}
-	return path, nil
+	return err
 }
 
 func firstSymlink(paths ...string) string {
@@ -182,6 +224,10 @@ func firstSymlink(paths ...string) string {
 	return ""
 }
 
+// skillState compares the skill whose SKILL.md lies at path with the one this
+// binary carries, file by file. A reference missing beside SKILL.md makes it
+// differ: a pointer to it would lead nowhere. A file the binary does not carry
+// is left out of the comparison; it harms nobody.
 func skillState(path string) string {
 	installed, err := os.ReadFile(path)
 	switch {
@@ -189,9 +235,14 @@ func skillState(path string) string {
 		return skillMissing
 	case err != nil || !bytes.Equal(installed, skills.Minka):
 		return skillDiffers
-	default:
-		return skillCurrent
 	}
+	dir := filepath.Dir(path)
+	for name, content := range skills.MinkaFiles() {
+		if installed, err := os.ReadFile(filepath.Join(dir, filepath.FromSlash(name))); err != nil || !bytes.Equal(installed, content) {
+			return skillDiffers
+		}
+	}
+	return skillCurrent
 }
 
 // staleSkillNotice says when the skill Claude Code reads is not the one this
@@ -204,7 +255,7 @@ func (a *app) staleSkillNotice() string {
 	if err != nil {
 		return ""
 	}
-	if firstSymlink(skillsDir, filepath.Join(skillsDir, skillName)) != "" {
+	if firstSymlink(append([]string{skillsDir}, skillDirectories(filepath.Join(skillsDir, skillName), skills.MinkaFiles())...)...) != "" {
 		return ""
 	}
 	path := filepath.Join(skillsDir, skillName, skillFile)

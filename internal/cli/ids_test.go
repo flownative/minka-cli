@@ -69,6 +69,11 @@ var idsInCapitals = []idInCapitals{
 	}, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
 		return []string{up(f.Board.ID), "--before", up(f.CardInTriage.ID)}
 	}},
+	{command: "notifications wait", inputs: []string{"--board", "--column"}, prepare: func(e *testEnv) {
+		e.aLineArrivesInTheWait(e.aMove(e.fixture.CardInDoing))
+	}, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
+		return []string{"--board", up(f.Board.ID), "--column", up(f.Doing.ID)}
+	}},
 	{command: "cards assign", inputs: []string{"<person>"}, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
 		return []string{f.CardInTriage.ID, up(f.Anke.ID)}
 	}},

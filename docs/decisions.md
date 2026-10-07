@@ -1920,3 +1920,35 @@ it there, with or without the flag, until somebody deletes it.
 **Implemented as:** `bundle.Writer.Keep`, `ReadsFrom`, `KeepFile`, `Kept`,
 `bundle.KeptBeside`, `cli.buildNamesItsCode`, `cli.theKeptFiles`, see
 [Importing from Basecamp](stable/import.md).
+
+<a id="c-117"></a>
+## C-117 — `notifications wait` goes on from a position kept per account and session, and exits 12 when its time runs out
+
+*Applies to: `notifications wait`*
+
+It is the group of the resource and an action (C-001), not a bare `wait`.
+The position Minka hands out is kept beside the configuration per host, token
+and session (C-103, no session included), moved on only after the lines are
+printed and only from the one the process read; the first wait starts from
+now, a forgotten one from now with a notice. Filters read what they leave
+out. `--timeout` asks in waits of at most 300 s and ends with exit 12
+(`timeout`); a failed ask is no retry but a retryable exit, and an ask that
+comes back early and empty is followed by a growing pause.
+**Why:** a line may be printed twice but never lost, and basecamp-cli uses 10.
+**Implemented as:** `newsmark.MoveOn`, `cli.newsWait`, see
+[Waiting and coordinating](stable/waiting-and-coordinating.md).
+
+<a id="c-118"></a>
+## C-118 — The coordinator of a board is `boards coordinator claim|release|show`
+
+*Applies to: `boards coordinator claim`, `boards coordinator release`,
+`boards coordinator show`, `boards show`*
+
+The coordinator is a part of a board, so its commands stand under `boards`
+with the board as `<boardId>`, one verb each, not as `coordinate` with
+`--release` and `show`. A claim needs `--session`, a name of at most 64
+characters sent as written, never `$CLAUDE_CODE_SESSION_ID`.
+**Why:** a command is a plural group and an action (C-001), a flag that turns
+a claim into a release would be two commands in one, and people read the name.
+**Implemented as:** `cli.newBoardsCoordinatorCmd`, `cli.coordinatorRefusal`,
+see [Waiting and coordinating](stable/waiting-and-coordinating.md).

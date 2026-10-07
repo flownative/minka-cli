@@ -17,6 +17,9 @@ import (
 func renderBoard(w io.Writer, board api.Board) {
 	fmt.Fprintf(w, "# %s\n", board.Title)
 	fmt.Fprintf(w, "Board: %s\nProject: %s\nURL: %s\n", board.ID, board.ProjectID, board.AppURL)
+	if board.Coordinator != nil {
+		fmt.Fprintf(w, "Coordinator: %s, last active %s\n", describeCoordinator(*board.Coordinator), formatTime(board.Coordinator.LastSeenAt))
+	}
 
 	for _, column := range board.Columns {
 		fmt.Fprintln(w)
