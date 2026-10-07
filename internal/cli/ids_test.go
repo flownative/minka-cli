@@ -409,6 +409,7 @@ var idInputsExcepted = map[string]string{
 	"posts list --before":       "a place Minka hands over",
 	"todos completed --before":  "a place Minka hands over",
 	"import basecamp --project": "an ID of Basecamp",
+	"import basecamp --agent":   "IDs of Basecamp", // the agents'
 }
 
 // idFlagNames are the flags that take an ID wherever they are. The tree test

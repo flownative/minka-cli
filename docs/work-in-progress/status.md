@@ -223,7 +223,10 @@ a run reaches an address of a single day of a series or of one entry, which
 Basecamp answers by writing (C-097). With `--keep-files` (C-115) a run keeps
 every file it brings beside `--out`, so that one that fails, is stopped or is
 killed hands them to the next run with the flag, which walks Basecamp anew and
-fetches only what is missing; a bundle in place removes them.
+fetches only what is missing; a bundle in place removes them. With `--agent
+<agent ID>=<human ID>` (C-116, temporary, for moving Flownative's own account
+over) a user comes as the agent of another, without an address, and the human
+comes along.
 The Docs & Files tools come last of all, so that the bytes of a file standing in
 a card and in a document alike are fetched for the card, and the inboxes before
 them. Every owner of a file has a record of its own in `attachments.jsonl`, named
@@ -1374,6 +1377,19 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   run rather than writing the picture off is held against the fake, by a run whose
   avatar answers without a sign-in; no sign-in has ever run out while avatars were
   being fetched live.
+- Of `--agent` of `import basecamp` (C-116): all of it. The contract it
+  writes (`kind: "agent"`, `principal`, no `email` key, agents after the
+  humans) is the one the coordination gave; Minka's branch `import-agents`
+  carried no commit of its own when it was built (2026-10-07, at
+  `9f27ab342`), and the `PeopleApplier` on `main` refuses `kind: "agent"`
+  as a malformed bundle. The uncommitted work on that branch read the same
+  day takes `kind` and `principal`, refuses an agent with an address, one
+  whose `principal` no earlier line brought, is itself or is no human, and
+  leaves an agent out of a project its human is not in. Check it against the
+  branch once it is committed. The coordination says (2026-10-07, not yet
+  in committed code) that Minka turns a person an earlier run brought as a
+  human with an address into the agent as long as they never signed in with
+  their own login, and otherwise ends the run naming them.
 - Of `--keep-files` of `import basecamp` (C-115): all of it. No live run has
   used it; it is held against the fake and against the file system of the
   tests, a kill by a run that runs no handler. That a run killed in the middle
