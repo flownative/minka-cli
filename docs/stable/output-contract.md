@@ -86,6 +86,14 @@ answer, so standard output carries them alone and the word about them goes to
 stderr; `--json` and `--quiet` are refused there, because standard output
 cannot carry two answers at once.
 
+The CLI does not send `?download` with that request. It changes the headers
+around the same bytes, not the bytes: `attachment` instead of `inline` with the
+same name, an octet stream instead of the type of audio or video a player
+would take (a picture keeps its type), no redirect to the store and no
+ranges. The name of the file on disk comes from
+the resource, never from a header, so nothing of it reaches the user
+([C-121](../decisions.md#c-121)).
+
 ## Commands
 
 Plural group plus action (`cards move`, `comments react`). A command that
@@ -101,3 +109,9 @@ of putting two kinds of ID in the same position: `uploads create <file>
 
 What the API offers under the same ID gets no second set of commands: the ID
 of a private conversation goes to `messages …` and `chats mark-read` (C-009).
+
+A thing read by its ID alone is shown by `show` in its own group (`chats show
+<chatId>`). A tool has no group of its own: one tool is `<group> tool
+<toolId>`, beside `<group> tools <projectId>` for the tools of a project
+(`todolists tool`, `posts tool`, `docs tool`, `checkins tool`, `events tool`,
+C-120).

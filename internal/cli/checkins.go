@@ -27,7 +27,7 @@ const (
 	apiCodeAnswersBeforeUnknown    = "answersBeforeUnknown"
 )
 
-const checkinsToolNotFoundHint = "There is no such Check-ins tool, it is in the trash, or it belongs to a project you are not a member of. The tools of a project: minka checkins tools <projectId>"
+const checkinsToolNotFoundHint = "There is no such Check-ins tool, it is in the trash, it belongs to a project you are not a member of, or you are a client of the project and it is not shown to you. The tools of a project: minka checkins tools <projectId>"
 
 const questionNotFoundHint = "There is no such question, it is in the trash, its tool or project is in the trash, or it belongs to a project you are not a member of. The questions of a tool: minka checkins list <toolId>"
 
@@ -52,6 +52,7 @@ text to read it from stdin.`
 func (a *app) newCheckinsCmd() *cobra.Command {
 	return group("checkins", "Read and write check-in questions, their answers and your reminders",
 		a.newCheckinsToolsCmd(),
+		a.newCheckinsToolCmd(),
 		a.newCheckinsListCmd(),
 		a.newCheckinsShowCmd(),
 		a.newCheckinsCreateCmd(),

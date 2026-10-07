@@ -36,6 +36,7 @@ command says so in a notice, and nothing else ever will.`
 func (a *app) newTodoListsCmd() *cobra.Command {
 	return group("todolists", "Read, start, change, archive, trash and comment on the to-do lists of a To-dos tool",
 		a.newTodoListsToolsCmd(),
+		a.newTodoListsToolCmd(),
 		a.newTodoListsListCmd(),
 		a.newTodoListsShowCmd(),
 		a.newTodoListsCreateCmd(),

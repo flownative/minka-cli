@@ -12,10 +12,10 @@ the documentation says what holds; how it came about is in git.
 - [Output, errors and exit codes](stable/output-contract.md): The three output
   modes, the envelope, the table of exit codes, how commands are cut — read
   before any work on a command.
-- [Token, hosts and requests](stable/security.md): How the token is kept and
-  sent, how a host name is read whoever wrote it, what is fixed about the HTTP
-  client, which check happens before a request — before any work on sign-in,
-  client or IDs.
+- [Token, hosts and requests](stable/security.md): How the token is kept,
+  sent and revoked on signing out, how a host name is read whoever wrote it,
+  what is fixed about the HTTP client, which check happens before a request —
+  before any work on sign-in, client or IDs.
 - [Rich text in both directions](stable/rich-text.md): Markdown to HTML and
   back, the allowlist of the server, sources, files, mentions and references
   to other records — before any

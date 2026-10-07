@@ -4,7 +4,9 @@ A Posts tool — the message board of a project — holds **posts**: a title, a
 body, a kind it may be filed under, and comments. `posts tools`, `posts
 categories`, `posts list` and `posts show` read; `posts create`, `edit`, `pin`,
 `unpin`, `archive`, `unarchive` and `delete` write; `posts comments …` reads
-and writes the comments under a post ([C-081](../decisions.md#c-081)).
+and writes the comments under a post ([C-081](../decisions.md#c-081)). `posts
+tool <toolId>` reads one Posts tool by its ID alone, with the project it stands
+in, as `todolists tool` reads a To-dos tool ([C-120](../decisions.md#c-120)).
 
 Everything here was read in Minka's code — `PostsApiController`, its
 resources, `PostQueryService`, `PostsCursor`, the post handlers,

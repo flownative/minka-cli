@@ -4,12 +4,13 @@ A To-dos tool holds lists, the newest on top. A **list** has a title, a
 description and **groups**, named headings with an order of their own. A to-do
 stands in its list directly or in one group of it.
 
-`todolists tools`, `todolists list`, `todolists show` and `todolists templates`
-read; `todolists create`, `start`, `edit`, `archive`, `unarchive` and `delete`
-write a list; `todogroups create`, `edit`, `move` and `delete` write a group;
-`todolists comments …` reads and writes the comments under a list, as [To-dos
-and subtasks](todos.md) says for both. The to-dos themselves and their subtasks have commands of their
-own, under `todos`, which is why the lists and the groups are not called that
+`todolists tools`, `todolists tool`, `todolists list`, `todolists show` and
+`todolists templates` read; `todolists create`, `start`, `edit`, `archive`,
+`unarchive` and `delete` write a list; `todogroups create`, `edit`, `move` and
+`delete` write a group; `todolists comments …` reads and writes the comments
+under a list, as [To-dos and subtasks](todos.md) says for both. The to-dos
+themselves and their subtasks have commands of their own, under `todos`, which
+is why the lists and the groups are not called that
 ([C-071](../decisions.md#c-071)); they follow [To-dos and subtasks](todos.md).
 
 ## What a read hands over
@@ -33,6 +34,14 @@ listed**: Minka reads them a page at a time at an address of their own, which
 `GET projects/{projectId}/todos` names the tools that are **in use**. A tool
 that is no longer in use is not named there and is still read, and written, at
 its own address.
+
+`GET todos-tools/{toolId}`, which `todolists tool <toolId>` asks, answers one
+tool by its ID alone with the project it stands in: `id`, `projectId`,
+`project` (`id`, `name`), `title` and `appUrl`. A tool no longer in use is
+answered too; a client of the project gets 404 for a tool not shown to clients,
+like an outsider, and so does a tool in the trash. The command is named for the
+one tool beside `todolists tools` for the tools of a project
+([C-120](../decisions.md#c-120)).
 
 A group has **no address to read it at**. Every write on a group answers the
 group (`id`, `listId`, `title`, `color`, `todos`), and `todolists show` is where

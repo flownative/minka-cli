@@ -9,7 +9,9 @@ create` and `docs edit` write a document; `docs uploads create` puts a file into
 a tool and `docs uploads edit` changes an upload; `docs versions list` and
 `show` read the versions of a document, `docs uploads versions list` the files
 of an upload, and `docs uploads versions create` gives an upload another file;
-`docs comments …` write under either kind of entry.
+`docs comments …` write under either kind of entry. `docs tool <toolId>` reads
+one tool by its ID alone, with the project it stands in, as `todolists tool`
+reads a To-dos tool ([C-120](../decisions.md#c-120)).
 
 ## What is not there, and why nothing pretends otherwise
 

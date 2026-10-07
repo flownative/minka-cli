@@ -47,7 +47,17 @@ been seen live: the whole feature is checked against the fake, see below.
 A file goes both ways: `uploads create` puts one in, `uploads download`
 fetches its bytes back. Every text says which files hang in it, so reading a
 card, a comment or a message gives the identifier a download takes, without
-anything being taken out of the text.
+anything being taken out of the text. `uploads download` sends no `?download`,
+which changes the headers and not the bytes (C-121).
+
+`messages create --reply-to <messageId>` answers an earlier message of the same
+chat, and `messages list` shows which message a reply answers. `chats show`
+reads one chat of a project by its ID alone, and `todolists tool`, `posts
+tool`, `docs tool`, `checkins tool` and `events tool` one tool of their kind
+(C-120). `auth logout --revoke` revokes the token of the entry on the
+server before it takes the entry out, and keeps the entry when that fails
+(C-119). Minka serves all of it from v0.53.0 on (replies from v0.26.0 on); the
+commands are checked against Minka's code and tests and the fake, not live.
 
 The Docs & Files of a project are read with `docs tools`, `docs list`,
 `docs show` and `docs uploads show`; `docs create` and `docs edit` write a

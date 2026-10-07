@@ -1955,3 +1955,41 @@ with a notice that it is not shown, never nobody.
 a claim into a release would be two commands in one, and people read the name.
 **Implemented as:** `cli.newBoardsCoordinatorCmd`, `cli.coordinatorRefusal`,
 see [Waiting and coordinating](stable/waiting-and-coordinating.md).
+
+<a id="c-119"></a>
+## C-119 — `auth logout --revoke` revokes first and keeps the entry when that fails
+
+*Applies to: `auth logout --revoke`, `DELETE /api/v1/me/token`*
+
+The token is revoked at the entry's host, read like every host, before the
+entry leaves the file. Minka's own 401 counts as revoked; any other failure,
+a 401 of a front door included, keeps the entry and exits with its own code.
+
+**Why:** The entry is the one copy of the token here, and only Minka's 401
+says the token is dead, so a second run after a lost answer ends like the first.
+**Implemented as:** `cli.app.revokeToken`, see
+[Token, hosts and requests](stable/security.md).
+
+<a id="c-120"></a>
+## C-120 — One tool is `<group> tool <toolId>`, one chat is `chats show`
+
+*Applies to: `chats show`, `todolists tool`, `posts tool`, `docs tool`,
+`checkins tool`, `events tool`*
+
+A chat has a group of its own and is read with `show`; a tool has none, so one
+tool is `tool` in the group of what it holds, beside `tools <projectId>`.
+
+**Why:** `show` in that group already names what the tool holds (`todolists
+show` is a list). **Implemented as:** `cli.app.newOneToolCmd`,
+`cli.app.newChatsShowCmd`, see [Output](stable/output-contract.md).
+
+<a id="c-121"></a>
+## C-121 — `uploads download` sends no `?download`
+
+*Applies to: `uploads download`, `GET /api/v1/uploads/{blobId}/{variant}`*
+
+The bytes are asked for without `download`.
+
+**Why:** It changes only the headers around the same bytes, and the CLI takes
+the name from the resource, not from a header. **Implemented as:**
+`api.Client.FileBytes`, see [Output](stable/output-contract.md).
