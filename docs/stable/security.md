@@ -80,9 +80,39 @@ Signing out is the one command that takes the entry as the file writes it, the
 host it was told as much as the default one. It has to reach the entry that is
 there: one written in another form would be left standing with its token by a
 host that was read straight, and one that cannot be read at all is matched
-letter for letter. Nothing goes anywhere from here, and no command lists the
-hosts, so an entry that could not be signed out of would be invisible and
-unremovable with its token valid on the server.
+letter for letter. Without `--revoke` nothing goes anywhere from here, and no
+command lists the hosts, so an entry that could not be signed out of would be
+invisible and unremovable with its token valid on the server.
+
+## Revoking the token on signing out
+
+`auth logout --revoke` sends one request before it touches the file:
+`DELETE /me/token` with the token of the entry, which Minka answers by revoking
+that token and no other (E-238). The entry is taken out only after the
+revocation went through, because the entry is the one copy of the token this
+machine has: taken out first, a revocation that then failed would leave a valid
+token nothing here can reach any more (C-119).
+
+- 204 revokes the token. Minka's own 401 says Minka no longer accepts it —
+  revoked already, expired, or the token of an agent that stepped down — which
+  is what was asked for: the entry comes out, and a notice says there was
+  nothing left to revoke. A second run after a first whose answer was lost
+  therefore ends the same. Minka's 401 is told by both of its marks, the
+  challenge `Bearer realm="Minka"` and the body with the code
+  `unauthenticated`; a 401 without them comes from something in front of
+  Minka, such as a proxy asking for a password, says nothing about the token
+  and counts as a failure.
+- Every other failure keeps the entry and exits with its own code. A failure of
+  the network and a 5xx are `retryable`, since running again is safe; an
+  interruption is not, and its hint is to run `--revoke` again. A 404 names a
+  Minka older than v0.53.0, which has no such address.
+- The token goes to the entry's host read like every host a request goes to,
+  never to the value as the file writes it. An entry that cannot be read as a
+  host sends nothing, keeps its token and exits 1 (`config`); a sign-out without
+  `--revoke` takes it out.
+- Only the token of the entry is revoked: `$MINKA_TOKEN` is not the file's, and
+  a sign-out never touches it. With `--revoke` and `$MINKA_TOKEN` set, a
+  notice says that token was not revoked.
 
 A host is said back to whoever gave it, and from there it travels into a
 transcript, a ticket and a log. What is printed of it is the address alone:

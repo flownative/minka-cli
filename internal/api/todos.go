@@ -156,6 +156,11 @@ func (c *Client) TodosTools(ctx context.Context, projectID string) (Result[[]Tod
 	return request[[]TodosTool](ctx, c, http.MethodGet, "/projects/"+url.PathEscape(projectID)+"/todos", nil)
 }
 
+// TodosTool reads a To-dos tool by its identifier alone.
+func (c *Client) TodosTool(ctx context.Context, toolID string) (Result[Tool], error) {
+	return request[Tool](ctx, c, http.MethodGet, "/todos-tools/"+url.PathEscape(toolID), nil)
+}
+
 // TodoLists lists the lists on the page of a tool, in their order, or those
 // in its archive, the one archived last first. Nothing of it is paged.
 func (c *Client) TodoLists(ctx context.Context, toolID string, archived bool) (Result[[]TodoListItem], error) {

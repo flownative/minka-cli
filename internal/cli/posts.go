@@ -27,7 +27,7 @@ const (
 
 const postNotFoundHint = "There is no such post, it is a draft, it is in the trash, it belongs to a project you are not a member of, or you are a client of the project and it is not shown to you. A draft and a post in the trash are reached in Minka on the web only."
 
-const postsToolNotFoundHint = "There is no such Posts tool, it is in the trash, or it belongs to a project you are not a member of. The tools of a project: minka posts tools <projectId>"
+const postsToolNotFoundHint = "There is no such Posts tool, it is in the trash, it belongs to a project you are not a member of, or you are a client of the project and it is not shown to you. The tools of a project: minka posts tools <projectId>"
 
 const postBodyHelp = `The body is Markdown by default and is sent as HTML, the way a description is.
 Minka keeps headings, bold, italic, strikethrough, inline code, links, lists,
@@ -55,6 +55,7 @@ the post, and they are not notified of it and cannot open it.`
 func (a *app) newPostsCmd() *cobra.Command {
 	return group("posts", "Read and write the posts of a Posts tool, pin, archive and comment on them",
 		a.newPostsToolsCmd(),
+		a.newPostsToolCmd(),
 		a.newPostsCategoriesCmd(),
 		a.newPostsListCmd(),
 		a.newPostsShowCmd(),
