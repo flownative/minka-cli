@@ -117,7 +117,7 @@ Validation codes in `meta.apiCode`: `cardTitleMissing`, `cardTitleTooLong`,
 `commentTooLong`, `commentHasControlCharacters` (line breaks and tabs are
 fine), `commentNotReadable`, `cardDueDateNotADate`, `personNotAProjectMember`, `personIdMissing`,
 `stepMissing`, `stepTooLong`, `stepHasControlCharacters`, `stepCompletedMissing`,
-`stepDueDateNotADate`, `cardArchived`,
+`stepDueDateNotADate`, `stepPlaceUnknown`, `cardArchived`,
 `chatMessageMissing`, `chatMessageTooLong`, `chatMessageHasControlCharacters`,
 `chatMessageNotReadable`, `chatMessageDraftNotAnIdentifier`, `chatMessagesLimitNotANumber`,
 `chatReadSeqMissing`, `nothingToChange`, `columnIdMissing`, `onHoldEnabledMissing`,
@@ -220,6 +220,8 @@ minka cards notes set <cardId> - --expect <updatedAt|none> --json < notes.md
 minka steps list <cardId> --json
 minka steps create <cardId> "Text" --json
 minka steps edit <cardId> <step> --assignee me --due 2026-10-09 --json
+minka steps edit <cardId> <step> --title "Text" --json
+minka steps move <cardId> <step> (--top | --bottom | --after <step> | --before <step>) --json
 minka steps complete <cardId> <step> --json
 minka steps reopen <cardId> <step> --json
 minka steps delete <cardId> <step> --json
@@ -637,19 +639,30 @@ such as `Doing`.
 - `steps create` adds a step at the end. A step is one line of at most 500
   characters: `stepMissing`, `stepTooLong` and `stepHasControlCharacters` exit 9.
   It comes without people and without a due day; give them with `steps edit`.
-- `steps edit <cardId> <step>` changes the people and the due day in one write;
-  what is not given stays. `--assignee` (repeatable) is the WHOLE set: whoever
+- `steps edit <cardId> <step>` changes the text, the people and the due day in
+  one request; what is not given stays. `--title` follows the rules of
+  `steps create`; `--title ""` exits 9 with `stepMissing`. `--assignee` (repeatable) is the WHOLE set: whoever
   is on the step and not named again is taken off; `--no-assignees` takes
   everybody off. `--due YYYY-MM-DD`, `--due ""` takes the day off. A person is
   an ID, `me`, an e-mail address or a name. Only a member of the project who
   sees the board can be on a step: anybody else refuses the whole write with
-  `personNotAProjectMember` (exit 9), and nothing is written. A day that is no
+  `personNotAProjectMember` (exit 9), and nothing is written, the text
+  neither. A day that is no
   day is `stepDueDateNotADate`, a card in the archive `cardArchived` (exit 9).
   A Minka without the people and the day of a step answers
   `stepCompletedMissing`, and the hint says so.
 - Completing a completed step, reopening an open one and deleting a step that
   is gone all succeed. Deleting does not ask.
-- Renaming and reordering steps are not possible through the API yet.
+- `steps move <cardId> <step>` needs exactly one of `--top`, `--bottom`,
+  `--after <step>` and `--before <step>`; the neighbour is named like `<step>`.
+  Moving a step where it stands succeeds. The step itself as its neighbour is
+  `stepPlaceUnknown` (exit 9). `--bottom` goes behind the last step as read;
+  if that step is gone by the move, `stepPlaceUnknown` comes with a hint that
+  says so: list the steps and move again. A Minka without the move answers 404
+  (exit 2) for every step; the hint says so only for a step found on the card.
+- A Minka without renaming answers `--title` alone with `nothingToChange`
+  (exit 9) and passes over it beside other flags: exit 7, the rest written,
+  the card in `data`; the hint says so.
 
 ## Working notes
 

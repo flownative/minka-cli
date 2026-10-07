@@ -62,6 +62,7 @@ var identifierFields = []string{
 	"folderId", "groupId", "listId", "nextCardId", "nextGroupId", "nextSubtaskId", "nextTodoId",
 	"nextColumnId", "notifiedIds", "notifyIds", "personId", "previousCardId", "previousColumnId", "previousGroupId",
 	"participantIds", "previousSubtaskId", "previousTodoId", "replyTo", "todoId",
+	"previousStepId", "nextStepId",
 }
 
 // identifiersOfTheAddressInAnyCase writes every identifier of the address in
@@ -492,6 +493,12 @@ type Server struct {
 	// it alone is nothingToChange and beside a title the colour stays.
 	KeepsColumnColorOnNull bool
 
+	// NeitherRenamesNorMovesSteps makes the server answer like a Minka from
+	// before a step could be renamed or moved: a title names nothing, so it
+	// alone is nothingToChange and beside the rest it is passed over, and the
+	// address of a move is none.
+	NeitherRenamesNorMovesSteps bool
+
 	// MessagesPerPage, where set, caps a page of a transcript below the 200
 	// Minka allows, so that a client cannot take the page size for granted.
 	MessagesPerPage int
@@ -505,6 +512,11 @@ type Server struct {
 	// goes out. It lets a test change what the file meets next, such as a
 	// sweep between storing a file and putting it into a tool.
 	AfterStoring func(*Upload)
+
+	// BeforeMovingStep is called with the card of every move of a step before
+	// anything of it is looked at. It lets a test change the steps between
+	// the read of the card and the move, as somebody else on the web would.
+	BeforeMovingStep func(*Card)
 
 	// StoreURL stands for a file store that serves the bytes itself. Where it
 	// is set, a picture is answered with a redirect there, the way an
@@ -983,6 +995,7 @@ func New(t testing.TB) (*Server, *Fixture) {
 	mux.HandleFunc("PUT /api/v1/cards/{cardId}/notes", s.authenticated(s.writeCardNotes))
 	mux.HandleFunc("POST /api/v1/cards/{cardId}/steps", s.authenticated(s.addStep))
 	mux.HandleFunc("PATCH /api/v1/cards/{cardId}/steps/{stepId}", s.authenticated(s.updateStep))
+	mux.HandleFunc("POST /api/v1/cards/{cardId}/steps/{stepId}/moves", s.authenticated(s.moveStep))
 	mux.HandleFunc("DELETE /api/v1/cards/{cardId}/steps/{stepId}", s.authenticated(s.removeStep))
 	mux.HandleFunc("POST /api/v1/cards/{cardId}/subscribers/{personId}", s.authenticated(s.subscribeToCard))
 	mux.HandleFunc("DELETE /api/v1/cards/{cardId}/subscribers/{personId}", s.authenticated(s.unsubscribeFromCard))
@@ -2208,16 +2221,8 @@ func (s *Server) addStep(w http.ResponseWriter, r *http.Request, person *Person)
 	if !ok {
 		return
 	}
-	text := phpTrim(deref(title))
-	switch {
-	case utf8.RuneCountInString(text) > maxStepLength:
-		unprocessable(w, "stepTooLong", "The line of a step is too long.")
-		return
-	case strings.IndexFunc(text, unicode.IsControl) >= 0:
-		unprocessable(w, "stepHasControlCharacters", "The line of a step must not contain control characters.")
-		return
-	case text == "":
-		unprocessable(w, "stepMissing", "A step needs a line of text.")
+	text, ok := stepText(w, title)
+	if !ok {
 		return
 	}
 	if s.refusedAsAClosedCard(w, board, archived) {
@@ -2225,6 +2230,24 @@ func (s *Server) addStep(w http.ResponseWriter, r *http.Request, person *Person)
 	}
 	card.Steps = append(card.Steps, &Step{ID: newID(), Title: text})
 	writeJSON(w, http.StatusCreated, s.cardResource(board, column, card))
+}
+
+// stepText is the line of a step as Minka keeps it, trimmed, or the refusal
+// of one: the length first, then control characters, then nothing at all.
+func stepText(w http.ResponseWriter, title *string) (string, bool) {
+	text := phpTrim(deref(title))
+	switch {
+	case utf8.RuneCountInString(text) > maxStepLength:
+		unprocessable(w, "stepTooLong", "The line of a step is too long.")
+		return "", false
+	case strings.IndexFunc(text, unicode.IsControl) >= 0:
+		unprocessable(w, "stepHasControlCharacters", "The line of a step must not contain control characters.")
+		return "", false
+	case text == "":
+		unprocessable(w, "stepMissing", "A step needs a line of text.")
+		return "", false
+	}
+	return text, true
 }
 
 // shortIdentifierOrNotes tells the two addresses of two parts below /cards
@@ -2352,10 +2375,11 @@ func (s *Server) notesResource(board *Board, card *Card) map[string]any {
 
 // updateStep looks for the step on the card before it reads the body, so a
 // step that is not there is 404 even on a card that takes no write. Of the
-// body, the shape of assigneeIds is read before anything is asked of it; a
-// person whose identifier is none is refused before the archive is, and a
-// person who is no member after it. The due day and the people are written
-// before the tick.
+// body, the shape of assigneeIds is read before anything is asked of it; the
+// line is read after the tick and before the day; a person whose identifier
+// is none is refused before the archive is, and a person who is no member
+// after it. The due day and the people are written first, so a person refused
+// leaves the line as it was, then the line, then the tick.
 func (s *Server) updateStep(w http.ResponseWriter, r *http.Request, person *Person) {
 	board, column, card, archived := s.cardToWrite(r.PathValue("cardId"), person)
 	if card == nil {
@@ -2376,16 +2400,28 @@ func (s *Server) updateStep(w http.ResponseWriter, r *http.Request, person *Pers
 	if !ok {
 		return
 	}
+	_, namesTitle := fields["title"]
+	namesTitle = namesTitle && !s.NeitherRenamesNorMovesSteps
 	completedValue, namesCompletion := fields["completed"]
 	_, namesDue := fields["dueOn"]
-	if !namesCompletion && !namesDue && assigneeIDs == nil {
-		unprocessable(w, "nothingToChange", `The body names neither "completed" nor a due date nor assignees.`)
+	if !namesTitle && !namesCompletion && !namesDue && assigneeIDs == nil {
+		unprocessable(w, "nothingToChange", `The body names neither a title nor "completed" nor a due date nor assignees.`)
 		return
 	}
 	completed, isFlag := completedValue.(bool)
 	if namesCompletion && !isFlag {
 		unprocessable(w, "stepCompletedMissing", `Changing a step needs the field "completed" as true or false.`)
 		return
+	}
+	var text string
+	if namesTitle {
+		title, ok := stringField(w, fields, "title")
+		if !ok {
+			return
+		}
+		if text, ok = stepText(w, title); !ok {
+			return
+		}
 	}
 	dueOn, ok := stringField(w, fields, "dueOn")
 	if !ok || namesDue && !validDueDate(w, dueOn, "stepDueDateNotADate") {
@@ -2418,12 +2454,77 @@ func (s *Server) updateStep(w http.ResponseWriter, r *http.Request, person *Pers
 			step.AssigneeIDs = changedPeople(step.AssigneeIDs, assigneeIDs)
 		}
 	}
+	if namesTitle {
+		if s.refusedAsAClosedCard(w, board, archived) {
+			return
+		}
+		step.Title = text
+	}
 	if namesCompletion {
 		if s.refusedAsAClosedCard(w, board, archived) {
 			return
 		}
 		step.Completed = completed
 	}
+	writeJSON(w, http.StatusOK, s.cardResource(board, column, card))
+}
+
+// moveStep puts a step between two others of its card, by the neighbours as
+// they stand: a previous step it finds decides, the next one only without it,
+// and with neither the step goes to the top. A step that is not on the card
+// is 404 before the body is read. A neighbour that is no other step of the
+// card is refused, but an archived project or card is told first; the
+// previous neighbour is read before the next.
+func (s *Server) moveStep(w http.ResponseWriter, r *http.Request, person *Person) {
+	board, column, card, archived := s.cardToWrite(r.PathValue("cardId"), person)
+	if card == nil || s.NeitherRenamesNorMovesSteps {
+		notFound(w)
+		return
+	}
+	if s.BeforeMovingStep != nil {
+		s.BeforeMovingStep(card)
+	}
+	stepID := r.PathValue("stepId")
+	index := slices.IndexFunc(card.Steps, func(step *Step) bool { return step.ID == stepID })
+	if index < 0 {
+		notFound(w)
+		return
+	}
+	fields, ok := readBody(w, r)
+	if !ok {
+		return
+	}
+	var neighbours [2]string
+	for i, name := range []string{"previousStepId", "nextStepId"} {
+		value, ok := stringField(w, fields, name)
+		if !ok {
+			return
+		}
+		id := deref(value)
+		if id == "" {
+			continue
+		}
+		if id == stepID || !slices.ContainsFunc(card.Steps, func(step *Step) bool { return step.ID == id }) {
+			if !s.refusedAsAClosedCard(w, board, archived) {
+				unprocessable(w, "stepPlaceUnknown", "The neighbours named are no other steps of this card.")
+			}
+			return
+		}
+		neighbours[i] = id
+	}
+	if s.refusedAsAClosedCard(w, board, archived) {
+		return
+	}
+
+	step := card.Steps[index]
+	others := slices.Delete(slices.Clone(card.Steps), index, index+1)
+	at := 0
+	if previous := slices.IndexFunc(others, func(other *Step) bool { return other.ID == neighbours[0] }); neighbours[0] != "" && previous >= 0 {
+		at = previous + 1
+	} else if next := slices.IndexFunc(others, func(other *Step) bool { return other.ID == neighbours[1] }); neighbours[1] != "" && next >= 0 {
+		at = next
+	}
+	card.Steps = slices.Insert(others, at, step)
 	writeJSON(w, http.StatusOK, s.cardResource(board, column, card))
 }
 

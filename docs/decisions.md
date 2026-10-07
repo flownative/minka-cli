@@ -2051,3 +2051,24 @@ take the `id` of a line a wait printed. Marking read is `mark-read`, not
 mark-read` already names the same act (C-009). **Implemented as:**
 `cli.app.newNotificationsShowCmd`, `cli.app.newNotificationsMarkReadCmd`, see
 [Waiting and coordinating](stable/waiting-and-coordinating.md).
+
+<a id="c-123"></a>
+## C-123 — A step is moved to a place that is named, its end found in the card
+
+*Applies to: `steps move`, `POST /api/v1/cards/{cardId}/steps/{stepId}/moves`*
+
+Exactly one of `--top`, `--bottom`, `--after <step>` and `--before <step>`, as
+for a group and a to-do ([C-072](#c-072), [C-074](#c-074)), but with
+`--bottom`: it sends the last other step of the card as read as the previous
+one, or no neighbour where there is none. Where that step is gone by the
+move, Minka's `stepPlaceUnknown` comes with a hint of its own. The step named as its own neighbour goes to
+Minka, which answers `stepPlaceUnknown`.
+
+**Why:** Minka moves a step without a neighbour to the top with the same 200
+as any move, so a forgotten flag would reorder the steps without a word, and
+given both neighbours it places the step behind the previous one alone. Unlike
+a group, a step is named through the card the command reads anyway, so the
+last step is known without a request of its own; Minka's tests send the end
+the same way. Which neighbour a step may have is Minka's rule, as in
+[C-070](#c-070). **Implemented as:** `cli.app.newStepsMoveCmd`,
+`api.MoveStepInput`, see [Steps](stable/steps.md).

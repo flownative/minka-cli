@@ -408,6 +408,16 @@ only, see below; a Minka without it answers `steps edit` with
 CLI's response cache of the account, not asked for: no run has carried the two
 fields yet.
 
+`steps edit --title` changes the text of a step in the same request as its
+people and its day, and `steps move` puts it elsewhere on its card with
+exactly one of `--top`, `--bottom`, `--after` and `--before` (C-123). Minka's
+side is #390, on its `main` and in no release yet, so production gets it with
+the next Minka release; until then a released Minka answers `--title` alone
+with `nothingToChange`, passes over it beside other flags, which the CLI
+reports as exit 7, and answers every move with 404, which the hint names. The
+commands are checked against Minka's code and tests and the fake only, see
+below.
+
 The working notes on the back of a card are read with `cards notes show` and
 written with `cards notes set`, which needs `--expect` or `--force` (C-042).
 Seen live against the local instance, which runs Minka's main with the notes
@@ -641,6 +651,15 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   it writes the day, the people and the tick of one request together, where
   Minka writes the tick in a second transaction; and it shows no overdue for a
   step, which Minka's API does not either.
+- `steps edit --title` and `steps move`: no request has gone to a real Minka.
+  Read in `BoardApiController::updateStepAction` and `moveStepAction`,
+  `StepTitle`, `RenameStepHandler`, `MoveStepHandler`, `Gap` and
+  `ApiCardStepsTest` on Minka's `main` (da3fb0250), and mirrored by the fake in
+  the order of [Steps](../stable/steps.md). The fake puts a moved step right
+  behind or in front of its neighbour in a list, where Minka works out a
+  position between two keys; it writes the text in the same go as the rest,
+  and stands in for a Minka without either by a switch, whose 404 for the
+  move is the API's own.
 - `projects edit`: no request of it has gone to a real Minka, and none can
   until a release carries the rename. Read in `ProjectsApiController::
   updateProjectAction`, `DbalProjectRepository::rename` and `RenameProjectTest`
@@ -1710,7 +1729,6 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
 
 ## Open in the API
 
-- Renaming and reordering steps does not exist.
 - Paging Done beyond 25 cards does not exist; needed once dogfooding needs it.
 - Flow answers a wrong HTTP method with HTML instead of JSON.
 - Column colours come later, read-only.

@@ -370,6 +370,7 @@ func (c *Client) SetStepCompleted(ctx context.Context, cardID, stepID string, co
 // DueOn takes the day off, and AssigneeIDs is the whole set the step is to
 // carry, so an empty one takes everybody off.
 type UpdateStepInput struct {
+	Title       *string
 	Completed   *bool
 	DueOn       *string
 	AssigneeIDs *[]string
@@ -377,6 +378,9 @@ type UpdateStepInput struct {
 
 func (in UpdateStepInput) MarshalJSON() ([]byte, error) {
 	fields := map[string]any{}
+	if in.Title != nil {
+		fields["title"] = *in.Title
+	}
 	if in.Completed != nil {
 		fields["completed"] = *in.Completed
 	}
@@ -390,10 +394,23 @@ func (in UpdateStepInput) MarshalJSON() ([]byte, error) {
 	return json.Marshal(fields)
 }
 
-// UpdateStep changes any of whether a step is ticked off, the day it is due
-// and who is on it, in one request, and answers the card.
+// UpdateStep changes any of the line of a step, whether it is ticked off, the
+// day it is due and who is on it, in one request, and answers the card.
 func (c *Client) UpdateStep(ctx context.Context, cardID, stepID string, input UpdateStepInput) (Result[Card], error) {
 	return request[Card](ctx, c, http.MethodPatch, "/cards/"+url.PathEscape(cardID)+"/steps/"+url.PathEscape(stepID), input)
+}
+
+// MoveStepInput names where a step goes among the steps of its card: behind
+// PreviousStepID, or in front of NextStepID. With neither it goes to the top.
+type MoveStepInput struct {
+	PreviousStepID string `json:"previousStepId,omitempty"`
+	NextStepID     string `json:"nextStepId,omitempty"`
+}
+
+// MoveStep puts a step elsewhere among those of its card and answers the
+// card.
+func (c *Client) MoveStep(ctx context.Context, cardID, stepID string, input MoveStepInput) (Result[Card], error) {
+	return request[Card](ctx, c, http.MethodPost, "/cards/"+url.PathEscape(cardID)+"/steps/"+url.PathEscape(stepID)+"/moves", input)
 }
 
 // DeleteStep removes a step from a card. A step that is not on the card

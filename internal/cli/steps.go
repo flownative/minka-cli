@@ -22,13 +22,34 @@ const stepPeopleHint = "Only a member of the project who sees the board can be o
 // change of a step that does not tick it.
 const apiCodeStepCompletedMissing = "stepCompletedMissing"
 
+// apiCodeStepPlaceUnknown is how Minka refuses a move next to a step that is
+// the step itself or no other step of the card.
+const apiCodeStepPlaceUnknown = "stepPlaceUnknown"
+
 const stepsOfAnOlderMinkaHint = "The Minka of this host is older than the people and the due day of a step and takes only a tick: minka steps complete or reopen."
 
+const stepsWithoutRenamingHint = "The Minka of this host does not rename a step yet. Until it does, add the step anew with minka steps create and delete the old one."
+
+const stepsWithoutMovingHint = "The step was on the card a moment ago: the Minka of this host may not move a step yet, which it answers like a step that is not there."
+
+// phpBlanks are the characters Minka trims off both ends of a step.
+const phpBlanks = " \t\n\r\x00\x0B"
+
+// stepTextAsKept is the text of a step as Minka keeps what was sent: invalid
+// UTF-8 replaced as encoding/json replaces it on the way out, then trimmed.
+func stepTextAsKept(text string) string {
+	sent, _ := json.Marshal(text)
+	var received string
+	_ = json.Unmarshal(sent, &received)
+	return strings.Trim(received, phpBlanks)
+}
+
 func (a *app) newStepsCmd() *cobra.Command {
-	return group("steps", "List, add, change, tick off and remove the steps of a card",
+	return group("steps", "List, add, change, move, tick off and remove the steps of a card",
 		a.newStepsListCmd(),
 		a.newStepsCreateCmd(),
 		a.newStepsEditCmd(),
+		a.newStepsMoveCmd(),
 		a.newStepsCompleteCmd(),
 		a.newStepsReopenCmd(),
 		a.newStepsDeleteCmd(),
@@ -132,27 +153,29 @@ adds one. Give them afterwards with minka steps edit.`,
 }
 
 func (a *app) newStepsEditCmd() *cobra.Command {
-	var due string
+	var title, due string
 	var assignees []string
 	var noAssignees bool
 
 	cmd := &cobra.Command{
 		Use:   "edit <cardId> <step>",
-		Short: "Change who is on a step and the day it is due",
-		Long: `Changes the people on a step, the day it is due or both, in one write. What is
-not given stays as it is. --due is a day as YYYY-MM-DD; --due "" takes it off.
+		Short: "Change the text of a step, who is on it and the day it is due",
+		Long: `Changes the text of a step, the people on it, the day it is due or several of
+them, in one request. What is not given stays as it is. --title is one line of
+at most 500 characters; --title "" does not empty it: exit 9 (validation) with
+stepMissing. --due is a day as YYYY-MM-DD; --due "" takes it off.
 
 --assignee gives the WHOLE set of people: whoever is on the step and not named
 again is taken off. --no-assignees takes everybody off. ` + personHelp + ` Only a
 member of the project who sees the board can be put on a step: anybody else
 refuses the whole write with 9 (validation) and meta.apiCode
-personNotAProjectMember, and nothing is written.
+personNotAProjectMember, and nothing is written, the text neither.
 
 A card in the archive of its board takes no change: exit 9 with cardArchived.
-The text of a step cannot be changed here; Minka's API has no address for it.
 
 ` + stepHelp,
 		Example: `  minka steps edit 0199... 2 --assignee me --due 2026-10-09
+  minka steps edit 0199... 2 --title "Call the caterer about the tent"
   minka steps edit 0199... "Call the caterer" --assignee me --assignee anke@example.com
   minka steps edit 0199... 2 --no-assignees --due ""`,
 		Args: requireArgs("cardId", "step"),
@@ -161,6 +184,9 @@ The text of a step cannot be changed here; Minka's API has no address for it.
 				return usageErrorf(cmd, "--assignee and --no-assignees contradict each other")
 			}
 			var input api.UpdateStepInput
+			if cmd.Flags().Changed("title") {
+				input.Title = &title
+			}
 			if cmd.Flags().Changed("due") {
 				input.DueOn = &due
 			}
@@ -168,7 +194,7 @@ The text of a step cannot be changed here; Minka's API has no address for it.
 				input.AssigneeIDs = &[]string{}
 			}
 			if input == (api.UpdateStepInput{}) && len(assignees) == 0 {
-				return usageErrorf(cmd, "nothing to change, give --assignee, --no-assignees or --due")
+				return usageErrorf(cmd, "nothing to change, give --title, --assignee, --no-assignees or --due")
 			}
 
 			s, err := a.session()
@@ -197,10 +223,31 @@ The text of a step cannot be changed here; Minka's API has no address for it.
 
 			changed, err := s.client.UpdateStep(a.ctx, card.Value.ID, step.ID, input)
 			if err != nil {
-				return stepRefusal(s, err)
+				e := stepRefusal(s, err)
+				// A Minka that does not rename a step yet reads a text alone
+				// as no change at all.
+				if input.Title != nil && e.APICode == apiCodeNothingToChange {
+					e.Hint = stepsWithoutRenamingHint
+				}
+				return e
 			}
 
 			summary := fmt.Sprintf("Changed step %q on card %s", step.Title, card.Value.Title)
+			if input.Title != nil {
+				at := slices.IndexFunc(changed.Value.Steps, func(now api.Step) bool { return now.ID == step.ID })
+				if at >= 0 {
+					now := changed.Value.Steps[at]
+					// Such a Minka writes the rest beside the text and passes
+					// over the text, with a 200 that would otherwise pass for
+					// success.
+					if now.Title != stepTextAsKept(*input.Title) {
+						return textPassedOver(now, input, changed.Raw)
+					}
+					if now.Title != step.Title {
+						summary = fmt.Sprintf("Changed step %q to %q on card %s", step.Title, now.Title, card.Value.Title)
+					}
+				}
+			}
 			return a.ok(success{
 				data:        changed.Raw,
 				summary:     summary,
@@ -218,11 +265,138 @@ The text of a step cannot be changed here; Minka's API has no address for it.
 	}
 
 	flags := cmd.Flags()
+	flags.StringVar(&title, "title", "", "New text of the step")
 	flags.StringVar(&due, "due", "", "Day the step is due as YYYY-MM-DD, empty to take it off")
 	flags.StringArrayVar(&assignees, "assignee", nil, "Person to be on the step, the whole set (repeatable)")
 	flags.BoolVar(&noAssignees, "no-assignees", false, "Take everybody off the step")
 
 	return cmd
+}
+
+func (a *app) newStepsMoveCmd() *cobra.Command {
+	var after, before string
+	var top, bottom bool
+
+	cmd := &cobra.Command{
+		Use:   "move <cardId> <step>",
+		Short: "Move a step to another place on its card",
+		Long: `Puts a step elsewhere among the steps of its card: --top puts it first,
+--bottom last, --after below the step named, --before above it. Exactly one of
+the four is required. A step never leaves its card. Moving a step to where it
+stands already succeeds.
+
+The step named with --after or --before has to be another step of the same
+card; the step itself is refused with exit 9 (validation) and meta.apiCode
+stepPlaceUnknown, and nothing moves. A card in the archive of its board takes
+no move: exit 9 with cardArchived.
+
+` + stepHelp,
+		Example: `  minka steps move 0199... 3 --top
+  minka steps move 0199... "Call the caterer" --after 1
+  minka steps move 0199... 1 --bottom`,
+		Args: requireArgs("cardId", "step"),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			placements := 0
+			for _, given := range []bool{top, bottom, after != "", before != ""} {
+				if given {
+					placements++
+				}
+			}
+			if placements != 1 {
+				return usageErrorf(cmd, "say where the step goes: give exactly one of --top, --bottom, --after and --before")
+			}
+
+			s, err := a.session()
+			if err != nil {
+				return err
+			}
+			if err := s.resolveCard(a.ctx, &args[0]); err != nil {
+				return err
+			}
+			card, err := s.client.Card(a.ctx, args[0])
+			if err != nil {
+				return s.fail(err)
+			}
+			step, err := resolveStep(card.Value.Steps, args[1])
+			if err != nil {
+				return err
+			}
+			var input api.MoveStepInput
+			for _, neighbour := range []struct {
+				value string
+				id    *string
+			}{{after, &input.PreviousStepID}, {before, &input.NextStepID}} {
+				if neighbour.value == "" {
+					continue
+				}
+				found, err := resolveStep(card.Value.Steps, neighbour.value)
+				if err != nil {
+					return err
+				}
+				*neighbour.id = found.ID
+			}
+			// Minka has no word for the end: a step goes there behind the
+			// last of the others, or to the top where there is no other.
+			if bottom {
+				for _, other := range card.Value.Steps {
+					if other.ID != step.ID {
+						input.PreviousStepID = other.ID
+					}
+				}
+			}
+
+			moved, err := s.client.MoveStep(a.ctx, card.Value.ID, step.ID, input)
+			if err != nil {
+				e := stepRefusal(s, err)
+				wasOnCard := slices.ContainsFunc(card.Value.Steps, func(read api.Step) bool { return read.ID == step.ID })
+				switch {
+				case e.APICode == apiCodeStepPlaceUnknown && bottom:
+					// The last step as read can leave the card before the move.
+					e.Hint = "The step that was last on the card when it was read is gone from it since. The steps as they stand now: minka steps list " + card.Value.ID
+				case e.APICode == apiCodeStepPlaceUnknown:
+					e.Hint = "The step named with --after or --before is the step itself or none of this card. The steps in their order: minka steps list " + card.Value.ID
+				case e.Code == CodeNotFound && wasOnCard:
+					// A Minka without the address answers like one without the
+					// step, but this step was just read on the card.
+					e.Hint = stepsWithoutMovingHint
+				}
+				return e
+			}
+
+			summary := fmt.Sprintf("Moved step %q on card %s", step.Title, card.Value.Title)
+			return a.ok(success{
+				data:        moved.Raw,
+				summary:     summary,
+				breadcrumbs: stepBreadcrumbs(card.Value.ID),
+				text: func(w io.Writer) {
+					fmt.Fprintf(w, "%s.\n", summary)
+					for i, now := range moved.Value.Steps {
+						if now.ID == step.ID {
+							fmt.Fprintln(w, stepLine(i, now))
+						}
+					}
+				},
+			})
+		},
+	}
+
+	flags := cmd.Flags()
+	flags.BoolVar(&top, "top", false, "Put the step first")
+	flags.BoolVar(&bottom, "bottom", false, "Put the step last")
+	flags.StringVar(&after, "after", "", "Put the step below this step")
+	flags.StringVar(&before, "before", "", "Put the step above this step")
+
+	return cmd
+}
+
+// textPassedOver is the failure of an edit whose answer does not carry the
+// text sent: it says of the rest only what was sent along.
+func textPassedOver(now api.Step, input api.UpdateStepInput, card json.RawMessage) *Error {
+	message := fmt.Sprintf("this Minka does not rename a step yet: the step still reads %q", now.Title)
+	if input.DueOn != nil || input.AssigneeIDs != nil {
+		message += ", and the rest was written"
+	}
+	return &Error{Code: CodeAPI, Message: message, Hint: stepsWithoutRenamingHint, Data: card}
 }
 
 // stepRefusal classifies a failed change of a step: the people and the
