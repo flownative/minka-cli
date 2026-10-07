@@ -43,6 +43,27 @@ wait in the background again.
   cannot go on from; tell the person rather than looping. A notice that Minka no longer knew the position
   means the wait started from now: read the board to catch up.
 
+## Reading and settling one line
+
+Waiting reads lines and marks none of them read: the bell in Minka on the web
+still counts them. The `id` of a line is what these take:
+
+```bash
+minka notifications show <notificationId> --json       # the line as its push named it
+minka notifications mark-read <notificationId> --json  # mark it read; data.unreadCount is the bell after it
+minka notifications count --json                       # data.unreadCount: the number on the bell
+```
+
+- `show` hands over `title` (the push's own sentence, which may say less than
+  the `summary` of the wait), `body` (the project), `appUrl`, `read` and
+  `unreadCount`. It marks nothing read.
+- `mark-read` of a line already read changes nothing.
+- Exit 2 (`not_found`) means the line is somebody else's, is about something
+  you may no longer see — a project you left or that is archived, something
+  in the trash — or is gone.
+- The count is the bell's: reactions and unread private messages one by one
+  are in it, so it is not the number of lines a wait prints.
+
 ## Coordinating a board
 
 A board has at most one coordinator: one session of one person that decides

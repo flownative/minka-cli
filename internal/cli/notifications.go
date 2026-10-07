@@ -19,9 +19,125 @@ import (
 )
 
 func (a *app) newNotificationsCmd() *cobra.Command {
-	return group("notifications", "Wait for what is new for you",
+	return group("notifications", "Wait for what is new for you, count it, show a line and mark it read",
 		a.newNotificationsWaitCmd(),
+		a.newNotificationsCountCmd(),
+		a.newNotificationsShowCmd(),
+		a.newNotificationsMarkReadCmd(),
 	)
+}
+
+const notificationNotFoundHint = "There is no such notification, it is somebody else's, it is a reaction or of a kind this Minka does not know, or it is about something you may no longer see: a project you left or that is archived, something in the trash or archived, a draft post of somebody else, or what is not shown to you as a client. A line read long ago may be forgotten as well. The ID is the id of a line of minka notifications wait."
+
+func (a *app) newNotificationsCountCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "count",
+		Short: "Count what is unread in your bell",
+		Long: `Prints the number on the bell of the signed-in account, as Minka shows it:
+the unread lines, reactions among them, and the unread messages of private
+conversations one by one. It is not the number of lines minka notifications
+wait would print, and reading it marks nothing read.`,
+		Args: requireArgs(),
+		RunE: func(*cobra.Command, []string) error {
+			s, err := a.session()
+			if err != nil {
+				return err
+			}
+			count, err := s.client.NotificationsCount(a.ctx)
+			if err != nil {
+				return s.fail(err)
+			}
+			summary := plural(count.Value.UnreadCount, "unread notification", "unread notifications")
+			return a.ok(success{
+				data:    count.Raw,
+				summary: summary,
+				text:    func(w io.Writer) { fmt.Fprintln(w, summary) },
+			})
+		},
+	}
+}
+
+func (a *app) newNotificationsShowCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "show <notificationId>",
+		Short: "Show one line of your bell as its push named it",
+		Long: `Shows one line of the bell of the signed-in account by its ID: the push's
+own sentence (title), the project (body, empty for a private conversation),
+the page it leads to (appUrl), whether it is read and the number on the bell.
+The ID is the id of a line of minka notifications wait; its title may say
+less than that line's summary. Showing a line marks nothing read: that is
+minka notifications mark-read.`,
+		Example: `  minka notifications show 0199... --json`,
+		Args:    requireArgs("notificationId"),
+		RunE: func(_ *cobra.Command, args []string) error {
+			s, err := a.session()
+			if err != nil {
+				return err
+			}
+			line, err := s.client.Notification(a.ctx, args[0])
+			if err != nil {
+				return notificationFailure(s, err)
+			}
+			n := line.Value
+			var breadcrumbs []Breadcrumb
+			if !n.Read {
+				breadcrumbs = append(breadcrumbs, Breadcrumb{Action: "mark-read", Cmd: "minka notifications mark-read " + n.ID, Description: "Mark the notification read"})
+			}
+			return a.ok(success{
+				data:        line.Raw,
+				summary:     oneLine(n.Title),
+				breadcrumbs: breadcrumbs,
+				text: func(w io.Writer) {
+					fmt.Fprintln(w, oneLine(n.Title))
+					if n.Body != "" {
+						fmt.Fprintf(w, "Project: %s\n", oneLine(n.Body))
+					}
+					read := "no"
+					if n.Read {
+						read = "yes"
+					}
+					fmt.Fprintf(w, "Read:    %s\nAt:      %s\nID:      %s\nURL:     %s\n", read, n.CreatedAt, n.ID, n.AppURL)
+				},
+			})
+		},
+	}
+}
+
+func (a *app) newNotificationsMarkReadCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "mark-read <notificationId>",
+		Short: "Mark one line of your bell read",
+		Long: `Marks one line of the bell of the signed-in account read and prints the number
+on the bell after it. A line already read stays as it was, so a second run
+changes nothing. The ID is the id of a line of minka notifications wait;
+waiting for lines marks none of them read.`,
+		Example: `  minka notifications mark-read 0199... --json`,
+		Args:    requireArgs("notificationId"),
+		RunE: func(_ *cobra.Command, args []string) error {
+			s, err := a.session()
+			if err != nil {
+				return err
+			}
+			count, err := s.client.MarkNotificationRead(a.ctx, args[0])
+			if err != nil {
+				return notificationFailure(s, err)
+			}
+			summary := fmt.Sprintf("Marked notification %s read; %s", args[0], plural(count.Value.UnreadCount, "unread notification", "unread notifications"))
+			return a.ok(success{
+				data:    count.Raw,
+				summary: summary,
+				text:    func(w io.Writer) { fmt.Fprintf(w, "%s.\n", summary) },
+			})
+		},
+	}
+}
+
+func notificationFailure(s *session, err error) error {
+	e := s.fail(err)
+	if e.Code == CodeNotFound {
+		e.Hint = notificationNotFoundHint
+	}
+	return e
 }
 
 // newsFilter is what --board and --column let through. A line that names no
@@ -63,7 +179,8 @@ func (a *app) newNotificationsWaitCmd() *cobra.Command {
 		Long: fmt.Sprintf(`Waits until something new arrives in the bell of the signed-in account —
 a card of yours was moved, somebody commented, mentioned or assigned you —
 prints one line per notification and exits 0. With --json, data is the list
-of notifications as Minka sent them.
+of notifications as Minka sent them. Waiting marks nothing read: the id of a
+line is what minka notifications show and minka notifications mark-read take.
 
 Use it instead of polling a board: the request is held open by Minka and
 answers the moment something arrives, so a wait costs nothing while it waits.

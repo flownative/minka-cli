@@ -108,6 +108,44 @@ func (c *Client) Notifications(ctx context.Context, after string, wait, limit in
 	return send[NotificationsPage](ctx, c, c.waits, http.MethodGet, "/me/notifications?"+values.Encode(), nil, "", -1)
 }
 
+// UnreadCount is the number on the bell: the unread lines, and the unread
+// messages of private conversations one by one.
+type UnreadCount struct {
+	UnreadCount int `json:"unreadCount"`
+}
+
+// OneNotification is a line of the bell as the push about it named it. Its ID
+// is the id of the same line in the list of notifications.
+type OneNotification struct {
+	ID            string `json:"id"`
+	Title         string `json:"title"` // plain text, the push's own sentence
+	Body          string `json:"body"`  // the project, empty for a private conversation
+	AppURL        string `json:"appUrl"`
+	CreatedAt     string `json:"createdAt"`
+	Read          bool   `json:"read"`
+	ThreadID      string `json:"threadId"`      // the item, else the chat or conversation
+	TimeSensitive bool   `json:"timeSensitive"` // names the person or reminds them
+	UnreadCount   int    `json:"unreadCount"`
+}
+
+// NotificationsCount reads the number on the bell.
+func (c *Client) NotificationsCount(ctx context.Context) (Result[UnreadCount], error) {
+	return request[UnreadCount](ctx, c, http.MethodGet, "/me/notifications/count", nil)
+}
+
+// Notification reads one line of the bell of the person of the token. A line
+// of somebody else, one the person may no longer see and one that is gone are
+// all not found.
+func (c *Client) Notification(ctx context.Context, notificationID string) (Result[OneNotification], error) {
+	return request[OneNotification](ctx, c, http.MethodGet, "/notifications/"+url.PathEscape(notificationID), nil)
+}
+
+// MarkNotificationRead marks one line of the bell read and answers the number
+// on the bell after it. A line already read stays as it was.
+func (c *Client) MarkNotificationRead(ctx context.Context, notificationID string) (Result[UnreadCount], error) {
+	return request[UnreadCount](ctx, c, http.MethodPost, "/notifications/"+url.PathEscape(notificationID)+"/read", nil)
+}
+
 // Coordinator is the one session of a person that coordinates a board.
 type Coordinator struct {
 	Person struct {

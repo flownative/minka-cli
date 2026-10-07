@@ -42,8 +42,10 @@ when stdout is not a terminal, so an agent gets structured output by default.
   `minka setup` or `minka hooks install` does once and for all.
 - To wait for news — a card moved, a comment, an assignment — never poll a
   board: run `minka notifications wait --json` (in Claude Code with
-  `run_in_background`), which exits when something arrives. Coordinating a
-  board and the whole flow: [references/waiting-and-coordinating.md](references/waiting-and-coordinating.md).
+  `run_in_background`), which exits when something arrives. Waiting marks
+  nothing read; `minka notifications mark-read <id>` does, with the `id` of a
+  line. Coordinating a board and the whole flow:
+  [references/waiting-and-coordinating.md](references/waiting-and-coordinating.md).
 - Keep the work steps of a card as steps (`minka steps create <card> "…"`,
   `minka steps complete`), never as a list in the card's description or a
   comment: a step can be ticked off, carries people and a day, and the board
@@ -360,6 +362,10 @@ minka events comments unreact <eventId> <commentId> 👍 --json
 minka reminders list --json
 minka reminders set <kind> <item> (--preset in30Minutes|in1Hour|in3Hours|tomorrow|nextMonday | --at <moment>) --json
 minka reminders delete <kind> <item> [--outcome done|dismissed] --json
+minka notifications wait [--board <boardId>]... [--column <column>]... [--timeout 30m] --json
+minka notifications count --json
+minka notifications show <notificationId> --json
+minka notifications mark-read <notificationId> --json
 minka work start <card> [--session <id>] --json
 minka work stop [<card>] [--all] [--session <id>] --json
 minka work list [--session <id>] --json

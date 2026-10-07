@@ -272,7 +272,7 @@ func TestTheNextWaitOfferedKeepsTheSessionAndFilters(t *testing.T) {
 // One notification is one line of text, whatever its words hold.
 func TestANotificationIsOneLineOfText(t *testing.T) {
 	e := newTestEnv(t)
-	e.aLineArrivesInTheWait(&fakeapi.Notification{PersonID: e.fixture.Bruno.ID, Occasion: "comment.created", CardID: e.fixture.CardInDoing.ID, Summary: "Anke wrote:\nfirst\r\nsecond"})
+	e.aLineArrivesInTheWait(&fakeapi.Notification{PersonID: e.fixture.Bruno.ID, Occasion: "comment.written", CardID: e.fixture.CardInDoing.ID, Summary: "Anke wrote:\nfirst\r\nsecond"})
 
 	r := e.run("", "notifications", "wait", "--styled")
 	expectCode(t, r, ExitOK)

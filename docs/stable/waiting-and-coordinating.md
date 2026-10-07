@@ -3,7 +3,8 @@
 An agent that stays on a board waits for what is new instead of polling it,
 and one session of one person coordinates a board. `notifications wait` does
 the first, `boards coordinator claim|release|show` the second (C-117,
-C-118).
+C-118). `notifications count`, `show` and `mark-read` read the number on the
+bell and one line of it, and settle that line (C-122).
 
 ## What the server offers
 
@@ -12,28 +13,58 @@ lines of the bell of the token's person behind a position, the oldest first,
 at most `limit` (default 50, at most 200), as `{notifications: […], cursor}`,
 with no envelope, as every address of the API answers. A position is a
 string the CLI keeps as it came; every line carries its own, and `cursor` is
-the last line's or, where the answer carries none, the one asked from. Without
+the position of the last row read, which may lie behind the last line, or,
+where no row was read, the one asked from. Without
 `after`, or with an empty one, the answer carries no line and `cursor` is
 where the bell stands now. Where nothing is behind the position, the request
 is held for up to `wait` seconds (0 to 300), at most for Minka's setting
 `notifications.waitAtMost`, 50 seconds by default, and answered as soon as a
-line arrives; a longer wait is answered empty after that. The refusals come in
+line arrives; a longer wait is answered empty after that, its cursor behind
+whatever rows it read meanwhile. The refusals come in
 this order: a `wait` that is no whole number from 0 to 300, an empty one
 included, as 422 `notificationsWaitInvalid`, a `limit` outside 1 to 200 as
 `notificationsLimitInvalid`, then a position Minka did not hand out — no whole
 number, one with a sign or a leading zero, or one beyond where the bell stands
 — as `cursorUnknown`. A request with a `wait` of more than 0 is a sign of life
-of every board the person coordinates and still holds, before its position is
-read; one of 0 is not. Reading the list marks nothing read, and reactions are
-not listed. The lines are those the bell shows: Minka reads up to `limit` lines
-and leaves out what the person may no longer see, so an answer may be shorter
-than `limit` although more follow. This list has nothing to do with the
-address of the native app for one notification and its count.
+of every board the person coordinates, still holds and still sees as one of
+the team — a member of its project, archived or not, who is no client —
+before its position is read; one of 0 is not. Reading the list marks nothing read, and
+reactions are not listed. The lines are those the bell shows. A row the person
+may no longer see — no member of the project any more, the project archived,
+the tool or the item in the trash, the item archived, hidden from a client —
+is left out before `limit` counts and does not move the cursor, and so is a
+reaction. A card in a column in the trash is none of these: the column keeps
+its cards, and the bell does not ask about the column, so the line is listed
+and `card` names that column. A row that
+makes no line, of an occasion this Minka does not know, counts toward `limit`
+and moves the cursor past it: an answer may be shorter than `limit`, even
+empty, although more follow.
 
 A card that changes column gives each of its assignees but the mover a line,
 occasion `card.moved`, its summary naming the card by its short identifier,
-else its title in quotes. A move into Done is told as `card.completed` alone,
-to the subscribers of the card, its summary "Completed: " and the title.
+else its title in quotes, and the column it went into, all as they are called
+when the line is read. A column deleted through the API lies in the trash and
+is named still. Where the row names no column, or the column is gone for
+good, which happens only when its board is purged and then takes the line
+with it, the summary is the bell's own sentence, "Moved to another column: "
+and the title. A move into
+Done is told as `card.completed` alone, to the subscribers of the card, its
+summary "Completed: " and the title.
+
+`GET /me/notifications/count` answers `{unreadCount}`, the number on the bell:
+the unread rows the person may still see, those of an occasion that makes no
+line and reactions included, and the unread messages of private
+conversations one by one. `GET /notifications/{id}` answers one line as its
+push named it — `{id, title, body, appUrl, createdAt, read, threadId,
+timeSensitive, unreadCount}` — and `POST /notifications/{id}/read` marks it
+read, once, and answers `{unreadCount}` after it. `title` is the bell's own
+sentence, not the `summary` of the list: a move says "Moved to another
+column: " and the title. Both look the line up through the bell's own query,
+so a line of somebody else, a malformed or an unknown ID, a line the person
+may no longer see, a reaction and a row that makes no line are all the same
+404, and nothing is marked. The `id` of a line of the list is the ID of the
+same row, so it is what both take. A read line may be forgotten by Minka
+after a while and is then 404 as well.
 
 `GET /boards/{id}` carries `coordinator`: `{person: {id, name, kind}, session,
 since, lastSeenAt, expiresAt}`, or null where nobody coordinates the board or
@@ -106,7 +137,11 @@ prints one line each, what it is about and then Minka's `summary`.
   The HTTP client gives a held request its wait and 30 seconds more; the
   timeout of every other request would cut it off after 30.
 - **Several pages.** A page that comes back full is followed at once by the
-  next, without waiting, so a run prints everything that piled up.
+  next, without waiting, so a run prints everything that piled up. A page
+  that a row without a line made short ends the run like the last page: its
+  cursor stands behind that row, and the next wait, which finds the rest
+  there, prints it at once. Nothing is lost; a run need not print all that
+  piled up.
 - **An ask that comes back early.** An ask that comes back empty in less than
   half the wait it asked for and in less than 5 seconds — a server or a proxy
   that does not hold it — is
@@ -140,6 +175,19 @@ prints one line each, what it is about and then Minka's `summary`.
   one rule holds for every read, and a wait that hung on through a dead
   connection would look the same as one that waits for news. The caller runs
   it again and loses nothing.
+
+## One line, and the number on the bell
+
+Waiting marks nothing read: the bell on the web still counts what a wait
+printed. `notifications show <notificationId>` hands over the line as Minka
+sent it (C-002) and marks nothing; its text view says the title, the project,
+whether it is read, the moment, the ID and the address on the web.
+`notifications mark-read <notificationId>` marks it read and hands over
+`{unreadCount}` as Minka sent it; a line already read stays as it was.
+`notifications count` hands over `{unreadCount}`. The ID is the `id` of a line
+a wait printed, taken in any case and sent in lowercase. A 404 exits 2 with a
+hint that names the reasons Minka has for it. Neither writes into a project:
+a line is one's own, and one of an archived project is not found at all.
 
 ## Coordinating
 
