@@ -56,8 +56,12 @@ minka boards coordinator release <boardId> --json   # give it up
 ```
 
 - A claim needs `--session <name>`: a name you choose for people to read on
-  the board, such as `planning`: 1 to 64 ASCII letters, digits, `.`, `-` and
-  `_`, no spaces. In an archived project it exits 9 with `projectArchived`.
+  the board, such as `planning` or `"Planung März"`: 1 to 64 characters, no
+  control or format character, sent as written. In an archived project it
+  exits 9 with `projectArchived`.
+- `minka boards coordinator show` with `data` null and a notice that the
+  board does not show it means you are a client of the project and are not
+  told who coordinates it; null without that notice means nobody does.
   It is not taken from `$CLAUDE_CODE_SESSION_ID`. Keep the same name for every
   renewal; a new name is a new session.
 - The entry expires 4 hours after its last sign of life. A claim is one, and so

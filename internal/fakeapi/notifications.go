@@ -290,7 +290,7 @@ func (s *Server) noteTheMove(board *Board, card *Card, to *Column, mover *Person
 	}
 	occasion, recipients, summary := "card.moved", card.AssigneeIDs, fmt.Sprintf("%s moved %s to “%s”", mover.Name, name, columnTitle(to))
 	if to.Type == "done" {
-		occasion, recipients, summary = "card.completed", card.SubscriberIDs, fmt.Sprintf("%s completed “%s”", mover.Name, card.Title)
+		occasion, recipients, summary = "card.completed", card.SubscriberIDs, "Completed: "+card.Title
 	}
 	for _, personID := range recipients {
 		if personID == mover.ID {

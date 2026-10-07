@@ -1508,10 +1508,15 @@ func (s *Server) board(w http.ResponseWriter, r *http.Request, person *Person) {
 	for _, column := range board.Columns {
 		columns = append(columns, s.columnResource(board, column))
 	}
-	writeJSON(w, http.StatusOK, map[string]any{
+	fields := map[string]any{
 		"id": board.ID, "projectId": board.ProjectID, "title": board.Title, "appUrl": s.boardURL(board), "columns": columns,
-		"coordinator": s.coordinatorResource(board),
-	})
+	}
+	// A client of the project is not told who coordinates the board, not even
+	// that nobody does.
+	if !s.isAClient(person.ID) {
+		fields["coordinator"] = s.coordinatorResource(board)
+	}
+	writeJSON(w, http.StatusOK, fields)
 }
 
 // archivedCardsLimit is the shape a limit has to have, as the controller reads

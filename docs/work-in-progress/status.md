@@ -469,7 +469,7 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
 
 - Waiting and coordinating (`notifications wait`, `boards coordinator claim`,
   `release`, `show`, the coordinator in `boards show`): the fake is held
-  against Minka's branch `notifications-wait-coordinator` at 9b0554db0, not on
+  against Minka's branch `notifications-wait-coordinator` at b078a753a, not on
   `main` and in no release: `NotificationWaitApiController`,
   `BoardApiController::claimCoordinatorAction` and `releaseCoordinatorAction`,
   `BoardCoordinators`, `CoordinatorResource`, `NotificationLineResource`,
@@ -477,8 +477,10 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   `ApiNotificationWaitTest` and `ApiBoardCoordinatorTest`. **The fake does not
   mirror**: the bell's visibility and the lines it leaves out, reactions,
   subjects other than a card as Minka names them, the translated summaries
-  but that of a move, and the poll interval of a held request. Nothing of it
-  has been seen live.
+  but those of a move and a completion, the poll interval of a held request,
+  and a board in the archive of a project in use, which the fake has not, so
+  the 404 Minka gives a claim on one is not held by a test. Nothing of it has
+  been seen live.
 - Reminders (`reminders list`, `set`, `delete`): Minka's #358 and #359 read
   in `ReminderApiController`, `Rfc3339Moment`, `ReminderKind`,
   `ReminderPreset`, `ReminderQueryService`, `DbalReminderRepository`,

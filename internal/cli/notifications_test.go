@@ -440,7 +440,7 @@ func TestAMovedCardTellsItsAssigneesButTheMover(t *testing.T) {
 	if len(e.server.Notifications) != 2 {
 		t.Fatalf("%d lines, want one more for Theo", len(e.server.Notifications))
 	}
-	if done := e.server.Notifications[1]; done.PersonID != e.fixture.Theo.ID || done.Occasion != "card.completed" {
+	if done := e.server.Notifications[1]; done.PersonID != e.fixture.Theo.ID || done.Occasion != "card.completed" || done.Summary != "Completed: Write the CLI" {
 		t.Fatalf("line %+v", done)
 	}
 }

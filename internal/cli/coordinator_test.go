@@ -66,13 +66,57 @@ func TestAClaimNeedsASessionTheBoardCanKeep(t *testing.T) {
 	for _, args := range [][]string{
 		{"boards", "coordinator", "claim", e.fixture.Board.ID},
 		{"boards", "coordinator", "claim", e.fixture.Board.ID, "--session", strings.Repeat("a", 65)},
-		{"boards", "coordinator", "claim", e.fixture.Board.ID, "--session", "two words"},
+		{"boards", "coordinator", "claim", e.fixture.Board.ID, "--session", strings.Repeat("ä", 65)},
+		{"boards", "coordinator", "claim", e.fixture.Board.ID, "--session", "a\tb"},
+		{"boards", "coordinator", "claim", e.fixture.Board.ID, "--session", "a\u202eb"},
 	} {
 		_, r := e.runJSON("", args...)
 		expectCode(t, r, ExitUsage)
 	}
 	if sent := e.coordinatorRequests(); len(sent) != 1 {
 		t.Fatalf("%d claims went out, want only the first", len(sent))
+	}
+}
+
+// A session is named as Minka takes a name: blanks and umlauts are part of it,
+// at either end as well, and it is sent as written.
+func TestASessionIsNamedAsMinkaTakesAName(t *testing.T) {
+	e := newTestEnv(t)
+	for _, session := range []string{"Planung März", " planning ", strings.Repeat("ä", 64)} {
+		expectCode(t, e.run("", "boards", "coordinator", "claim", e.fixture.Board.ID, "--session", session, "--json"), ExitOK)
+		sent := e.coordinatorRequests()
+		var body map[string]string
+		if err := json.Unmarshal(sent[len(sent)-1].Body, &body); err != nil || body["session"] != session {
+			t.Fatalf("sent %s for %q", sent[len(sent)-1].Body, session)
+		}
+	}
+}
+
+// A client of the project is not shown the coordinator: the board leaves the
+// field out, show says so and hands over null with a notice, and boards show
+// names nobody.
+func TestAClientIsNotShownTheCoordinator(t *testing.T) {
+	e := newTestEnv(t)
+	expectCode(t, e.run("", "boards", "coordinator", "claim", e.fixture.Board.ID, "--session", "planning", "--json"), ExitOK)
+	e.server.Tokens["minka_pat_client"] = e.fixture.Client.ID
+	e.vars["MINKA_TOKEN"] = "minka_pat_client"
+
+	env, r := e.runJSON("", "boards", "coordinator", "show", e.fixture.Board.ID)
+	expectCode(t, r, ExitOK)
+	if string(env.Data) != "null" || !strings.Contains(env.Notice, "does not show you") || strings.Contains(env.Summary, "Nobody") {
+		t.Fatalf("envelope %+v", env)
+	}
+	if r := e.run("", "boards", "coordinator", "show", e.fixture.Board.ID, "--styled"); r.stdout != "This board does not show you who coordinates it.\n" {
+		t.Fatalf("stdout %q", r.stdout)
+	}
+	board := e.run("", "boards", "show", e.fixture.Board.ID, "--styled")
+	expectCode(t, board, ExitOK)
+	if strings.Contains(board.stdout, "Coordinator") {
+		t.Fatalf("boards show names a coordinator to a client:\n%s", board.stdout)
+	}
+	raw, _ := e.runJSON("", "boards", "show", e.fixture.Board.ID)
+	if _, named := decode(t, raw.Data)["coordinator"]; named {
+		t.Fatal("the fake named the coordinator to a client")
 	}
 }
 

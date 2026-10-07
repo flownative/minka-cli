@@ -1947,8 +1947,10 @@ comes back early and empty is followed by a growing pause.
 
 The coordinator is a part of a board, so its commands stand under `boards`
 with the board as `<boardId>`, one verb each, not as `coordinate` with
-`--release` and `show`. A claim needs `--session`, a name of at most 64
-characters sent as written, never `$CLAUDE_CODE_SESSION_ID`.
+`--release` and `show`. A claim needs `--session`, a name as Minka takes it
+(1 to 64 characters, no control or format character, untrimmed), never
+`$CLAUDE_CODE_SESSION_ID`. A board that leaves `coordinator` out shows null
+with a notice that it is not shown, never nobody.
 **Why:** a command is a plural group and an action (C-001), a flag that turns
 a claim into a release would be two commands in one, and people read the name.
 **Implemented as:** `cli.newBoardsCoordinatorCmd`, `cli.coordinatorRefusal`,

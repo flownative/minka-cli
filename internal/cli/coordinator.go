@@ -5,10 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strings"
+	"unicode"
 	"unicode/utf8"
 
 	"github.com/flownative/minka-cli/internal/api"
-	"github.com/flownative/minka-cli/internal/work"
 	"github.com/spf13/cobra"
 )
 
@@ -43,9 +44,10 @@ renews it where it is already. Another session of the same person hands over
 to this one.
 
 --session is required: a name you choose for people to read on the board,
-such as "planning" or "release-2026-10": 1 to %d ASCII letters, digits, ".",
-"-" and "_", no spaces. It is sent as written. $%s is never taken for it:
-a name nobody can read tells the people on the board nothing.
+such as "planning" or "Planung März": 1 to %d characters, blanks and
+umlauts included, none of them a control or format character, as Minka
+takes it. It is sent as written, blanks around it included. $%s is never
+taken for it: a name nobody can read tells the people on the board nothing.
 
 While another person coordinates the board, the claim exits 9 (validation)
 with meta.apiCode coordinatorTaken; data and the hint name the holder and
@@ -56,8 +58,8 @@ until when the entry holds.`, maxCoordinatorSession, sessionVariable),
 			if session == "" {
 				return usageErrorf(cmd, "name the session that coordinates the board with --session, a name people can read on the board, such as planning")
 			}
-			if !work.IsSession(session) || utf8.RuneCountInString(session) > maxCoordinatorSession {
-				return usageErrorf(cmd, "--session takes 1 to %d ASCII letters, digits, \".\", \"-\" and \"_\", not %q", maxCoordinatorSession, session)
+			if !isABoardSession(session) {
+				return usageErrorf(cmd, "--session takes 1 to %d characters, none of them a control or format character, not %q", maxCoordinatorSession, session)
 			}
 
 			s, err := a.session()
@@ -143,7 +145,11 @@ func (a *app) newBoardsCoordinatorShowCmd() *cobra.Command {
 		Short: "Show who coordinates a board",
 		Long: `Shows the coordinator of the board as the board names it: the person, the
 session, since when, when it was last active and when the entry expires.
-data is null where nobody coordinates the board or the entry has expired.`,
+data is null where nobody coordinates the board or the entry has expired.
+
+A client of the project is not shown the coordinator at all: data is null
+then as well, and a notice says that the board does not show it, so null
+alone never means nobody for a client.`,
 		Args: requireArgs("boardId"),
 		RunE: func(_ *cobra.Command, args []string) error {
 			s, err := a.session()
@@ -154,25 +160,37 @@ data is null where nobody coordinates the board or the entry has expired.`,
 			if err != nil {
 				return s.fail(err)
 			}
-			var fields struct {
-				Coordinator json.RawMessage `json:"coordinator"`
-			}
-			if err := json.Unmarshal(board.Raw, &fields); err != nil || len(fields.Coordinator) == 0 {
-				fields.Coordinator = json.RawMessage("null")
+			// A board leaves the field out for a client of its project, which
+			// is not the same as naming nobody.
+			var fields map[string]json.RawMessage
+			_ = json.Unmarshal(board.Raw, &fields)
+			shown, named := fields["coordinator"]
+			if !named || len(shown) == 0 {
+				shown = json.RawMessage("null")
 			}
 			coordinator := board.Value.Coordinator
 			summary := "Nobody coordinates " + board.Value.Title
-			if coordinator != nil {
+			var notices []string
+			switch {
+			case !named:
+				summary = board.Value.Title + " does not show you who coordinates it"
+				notices = append(notices, "the board does not show you who coordinates it, as for a client of its project; data null says nothing about whether somebody does")
+			case coordinator != nil:
 				summary = board.Value.Title + " is coordinated by " + describeCoordinator(*coordinator)
 			}
 			return a.ok(success{
-				data:    fields.Coordinator,
+				data:    shown,
 				summary: summary,
+				notices: notices,
 				breadcrumbs: []Breadcrumb{
 					{Action: "claim", Cmd: "minka boards coordinator claim " + board.Value.ID + " --session <name>", Description: "Coordinate the board, or take it over from another session of yours"},
 				},
 				text: func(w io.Writer) {
-					if coordinator == nil {
+					switch {
+					case !named:
+						fmt.Fprintln(w, "This board does not show you who coordinates it.")
+						return
+					case coordinator == nil:
 						fmt.Fprintln(w, "Nobody coordinates this board.")
 						return
 					}
@@ -182,6 +200,17 @@ data is null where nobody coordinates the board or the entry has expired.`,
 			})
 		},
 	}
+}
+
+// isABoardSession is what Minka keeps as the name of a session: 1 to
+// maxCoordinatorSession characters, none of them a control or a format
+// character. Blanks count, at either end as well, as Minka takes the name
+// untrimmed.
+func isABoardSession(session string) bool {
+	if session == "" || utf8.RuneCountInString(session) > maxCoordinatorSession {
+		return false
+	}
+	return !strings.ContainsFunc(session, func(r rune) bool { return unicode.Is(unicode.Cc, r) || unicode.Is(unicode.Cf, r) })
 }
 
 // describeCoordinator names a coordinator the way the board does: the person,

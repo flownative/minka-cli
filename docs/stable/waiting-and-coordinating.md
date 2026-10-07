@@ -33,20 +33,22 @@ address of the native app for one notification and its count.
 A card that changes column gives each of its assignees but the mover a line,
 occasion `card.moved`, its summary naming the card by its short identifier,
 else its title in quotes. A move into Done is told as `card.completed` alone,
-to the subscribers of the card.
+to the subscribers of the card, its summary "Completed: " and the title.
 
 `GET /boards/{id}` carries `coordinator`: `{person: {id, name, kind}, session,
 since, lastSeenAt, expiresAt}`, or null where nobody coordinates the board or
-the entry has expired. `PUT /boards/{id}/coordinator` with `{"session": …}`
-(1 to 64 characters, none of them a control or format character, else 422
-`coordinatorSessionInvalid`) claims or renews it and answers 200 with the
+the entry has expired. For a client of the project the field is left out, not
+null. `PUT /boards/{id}/coordinator` with `{"session": …}` (1 to 64
+characters, none of them a control or format character, taken as written and
+not trimmed, else 422 `coordinatorSessionInvalid`) claims or renews it and answers 200 with the
 coordinator, bare; another session of the same person takes it over, and
 `since` starts anew; while another person holds it, the answer is 409
 `coordinatorTaken` with the holder as `coordinator` beside the error; and only
 then is a claim in an archived project refused with `projectArchived`.
 `DELETE` takes it off for the holder and for anybody who may edit the board,
 in an archived project as well, and answers 204 also where there is nothing
-to take off. A client of the project and somebody outside it get 404 on both.
+to take off. A client of the project and somebody outside it get 404 on both,
+and so does a claim on a board in the archive of a project in use.
 An entry expires 4 hours after its last sign of life, a claim or a wait.
 
 ## Waiting
@@ -145,19 +147,23 @@ prints one line each, what it is about and then Minka's `summary`.
 board for the session of that name, sent as written. `--session` is required
 and never taken from `$CLAUDE_CODE_SESSION_ID`: the board shows the name to
 people, and an identifier nobody can read tells them nothing. A claim without
-it, or with a name that is not 1 to 64 ASCII letters, digits, `.`, `-` and
-`_`, is refused as usage before a request. The session of a wait is another
+it, or with a name Minka would refuse — empty, longer than 64 characters, or
+with a control or format character — is refused as usage before a request.
+Blanks and umlauts are part of a name, at either end as well, as Minka takes
+it untrimmed: `--session "Planung März"`. The session of a wait is another
 thing: it names a position on this machine and never leaves it.
-Minka takes more, blanks included; the CLI keeps to the names a shell and a
-log read back unchanged. `coordinatorTaken` exits 9: `data` is the holder as
+`coordinatorTaken` exits 9: `data` is the holder as
 Minka sent it, and the hint names them, when they were last active, until
 when the entry holds and the release that clears a stale one. A claim in an
 archived project exits 9 with `projectArchived`.
 
 `boards coordinator release <boardId>` takes the entry off, `boards
 coordinator show <boardId>` hands over `coordinator` of the board, null
-included. `boards show` names the coordinator in its text view; `--json`
-carries it anyway.
+included. Where the board leaves the field out, as for a client, `data` is
+null as well, and a notice and the summary say that the board does not show
+who coordinates it: null with that notice never means nobody. `boards show`
+names the coordinator in its text view and says nothing where the field is
+missing; `--json` carries the board as it came.
 
 ## The skill
 
