@@ -12,7 +12,9 @@ mentioned or assigned you — prints it and exits 0. `data` is the list of
 notifications as Minka sent them, the oldest first; each has `summary` (one
 line: what happened and who did it), `occasion` (such as `card.moved`),
 `actor`, `subject` (`type`, `id`, `shortId`, `title`, `appUrl`) and, for a card
-on a board, `card` with `boardId` and the `column` it stands in now.
+on a board, `card` with `boardId` and the `column` it stands in now. A card of
+yours moved into Done arrives as `card.completed`, and only where you
+subscribe to it, not as `card.moved`.
 
 Never poll a board in a loop: every poll costs tokens, and a wait costs none
 while it waits. Minka holds the request open and answers the moment something
@@ -55,7 +57,7 @@ minka boards coordinator release <boardId> --json   # give it up
 
 - A claim needs `--session <name>`: a name you choose for people to read on
   the board, such as `planning`: 1 to 64 ASCII letters, digits, `.`, `-` and
-  `_`, no spaces.
+  `_`, no spaces. In an archived project it exits 9 with `projectArchived`.
   It is not taken from `$CLAUDE_CODE_SESSION_ID`. Keep the same name for every
   renewal; a new name is a new session.
 - The entry expires 4 hours after its last sign of life. A claim is one, and so

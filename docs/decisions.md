@@ -1931,7 +1931,8 @@ The position Minka hands out is kept beside the configuration per host, token
 and session (C-103, no session included), moved on only after the lines are
 printed and only from the one the process read; the first wait starts from
 now, a forgotten one from now with a notice. Filters read what they leave
-out. `--timeout` asks in waits of at most 300 s and ends with exit 12
+out. It asks in waits of at most 50 s, as long as Minka holds one, and
+`--timeout` ends with exit 12
 (`timeout`); a failed ask is no retry but a retryable exit, and an ask that
 comes back early and empty is followed by a growing pause.
 **Why:** a line may be printed twice but never lost, and basecamp-cli uses 10.

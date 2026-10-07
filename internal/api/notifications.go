@@ -9,12 +9,15 @@ import (
 	"time"
 )
 
-// NotificationsWaitMax is the longest the list of notifications holds a
-// request open for, in seconds. NotificationsPageMax is the most lines one
-// answer carries.
+// NotificationsWaitMax is the longest wait the list of notifications takes,
+// in seconds. NotificationsHeldAtMost is the longest Minka holds a request
+// by default: a longer wait is answered empty after that, below the read
+// timeout of a proxy in front of it. NotificationsPageMax is the most lines
+// one answer carries.
 const (
-	NotificationsWaitMax = 300
-	NotificationsPageMax = 200
+	NotificationsWaitMax    = 300
+	NotificationsHeldAtMost = 50
+	NotificationsPageMax    = 200
 )
 
 // CodeCursorUnknown is what the list of notifications answers for a position

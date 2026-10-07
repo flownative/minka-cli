@@ -552,8 +552,12 @@ type Server struct {
 	// lock of the server, so that a test can let a line arrive in the wait.
 	WhileWaiting func(*Person)
 
-	notificationSeq int
-	arrival         chan struct{} // closed when a line arrives
+	// HoldsAtMost, where set, is the longest the server holds a request of
+	// the bell instead of WaitAtMost, as an installation configured otherwise.
+	HoldsAtMost time.Duration
+
+	notificationSeqs map[string]int // person ID → the number of their last line
+	arrival          chan struct{}  // closed when a line arrives
 
 	mu       sync.Mutex
 	requests []RecordedRequest

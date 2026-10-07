@@ -137,7 +137,7 @@ func TestTheFirstWaitStartsFromNowAndPrintsWhatArrives(t *testing.T) {
 	if len(asked) != 2 || asked[0].Has("after") || asked[0].Get("wait") != "0" {
 		t.Fatalf("the wait did not start by asking where the bell stands: %v", asked)
 	}
-	if asked[1].Get("after") == "" || asked[1].Get("wait") != "300" || asked[1].Get("limit") != "200" {
+	if asked[1].Get("after") == "" || asked[1].Get("wait") != "50" || asked[1].Get("limit") != "200" {
 		t.Fatalf("the wait asked %v", asked[1])
 	}
 	if mark, _ := e.markOf(sessionOfTheWait); mark != fakeapi.CursorOf(arriving) {
@@ -307,24 +307,24 @@ func TestAWaitWhoseFilterLetsNothingThroughGoesOnWaiting(t *testing.T) {
 	}
 }
 
-// --timeout waits in asks of at most 300 seconds, the last one for what is
-// left, and ends with exit 12 when nothing arrived. Without it every ask
-// waits the longest Minka holds one.
-func TestATimeoutWaitsInAsksOfAtMostFiveMinutes(t *testing.T) {
+// --timeout waits in asks of at most 50 seconds, as long as Minka holds one,
+// the last one for what is left, and ends with exit 12 when nothing arrived.
+// Without it every ask waits the longest Minka holds one.
+func TestATimeoutWaitsInAsksOfAtMostFiftySeconds(t *testing.T) {
 	e := newTestEnv(t)
 	clock := e.waitsPassAtOnce()
 
-	env, r := e.runWaitJSON(clock, "--timeout", "12m")
+	env, r := e.runWaitJSON(clock, "--timeout", "2m")
 	expectCode(t, r, ExitTimeout)
-	if env.OK || env.Code != CodeTimeout || !env.Retryable || !strings.Contains(env.Error, "12m0s") {
+	if env.OK || env.Code != CodeTimeout || !env.Retryable || !strings.Contains(env.Error, "2m0s") {
 		t.Fatalf("envelope %+v", env)
 	}
 	var waits []string
 	for _, asked := range e.waitRequests()[1:] {
 		waits = append(waits, asked.Get("wait"))
 	}
-	if got := strings.Join(waits, ","); got != "300,300,120" {
-		t.Fatalf("waits %s, want 300,300,120", got)
+	if got := strings.Join(waits, ","); got != "50,50,20" {
+		t.Fatalf("waits %s, want 50,50,20", got)
 	}
 
 	for _, timeout := range []string{"0s", "-1m"} {
@@ -419,7 +419,8 @@ func TestAWaitRefusesASessionThatCannotBeOne(t *testing.T) {
 }
 
 // Moving a card tells its assignees but the mover, with a line that names
-// the column the card stands in now.
+// the card by its short identifier, else its title in quotes, and the column
+// it stands in now.
 func TestAMovedCardTellsItsAssigneesButTheMover(t *testing.T) {
 	e := newTestEnv(t)
 	e.fixture.CardInTriage.AssigneeIDs = []string{e.fixture.Bruno.ID, e.fixture.Anke.ID}
@@ -429,7 +430,17 @@ func TestAMovedCardTellsItsAssigneesButTheMover(t *testing.T) {
 		t.Fatalf("%d lines, want one for Anke", len(e.server.Notifications))
 	}
 	line := e.server.Notifications[0]
-	if line.PersonID != e.fixture.Anke.ID || line.Occasion != "card.moved" || line.Summary != "Bruno moved Write the CLI to “Doing”" {
+	if line.PersonID != e.fixture.Anke.ID || line.Occasion != "card.moved" || line.Summary != "Bruno moved “Write the CLI” to “Doing”" {
 		t.Fatalf("line %+v", line)
+	}
+
+	// A move into Done is told as the completion alone, to the subscribers.
+	e.fixture.CardInTriage.SubscriberIDs = []string{e.fixture.Bruno.ID, e.fixture.Theo.ID}
+	expectCode(t, e.run("", "cards", "move", e.fixture.CardInTriage.ID, "--column", e.fixture.Done.ID, "--json"), ExitOK)
+	if len(e.server.Notifications) != 2 {
+		t.Fatalf("%d lines, want one more for Theo", len(e.server.Notifications))
+	}
+	if done := e.server.Notifications[1]; done.PersonID != e.fixture.Theo.ID || done.Occasion != "card.completed" {
+		t.Fatalf("line %+v", done)
 	}
 }

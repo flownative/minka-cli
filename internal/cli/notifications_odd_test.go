@@ -81,7 +81,7 @@ func TestAnAskThatComesBackEarlyAndEmptyIsFollowedByAPause(t *testing.T) {
 // wait as an error of the server instead of starting anew for ever.
 func TestAPositionRefusedRightAfterItWasHandedOutEndsTheWait(t *testing.T) {
 	e := newTestEnv(t)
-	e.server.ForgottenCursors = []string{"ntf0"}
+	e.server.ForgottenCursors = []string{"0"}
 
 	env, r := e.runWaitJSON(nil)
 	expectCode(t, r, ExitAPI)
@@ -204,14 +204,14 @@ func TestOddAnswersOfTheListAreRefusedOrMadeSenseOf(t *testing.T) {
 func TestTheLastAskOfATimeoutIsRoundedUp(t *testing.T) {
 	e := newTestEnv(t)
 	clock := e.waitsPassAtOnce()
-	_, r := e.runWaitJSON(clock, "--timeout", "610500ms")
+	_, r := e.runWaitJSON(clock, "--timeout", "110500ms")
 	expectCode(t, r, ExitTimeout)
 	var waits []string
 	for _, asked := range e.waitRequests()[1:] {
 		waits = append(waits, asked.Get("wait"))
 	}
-	if got := strings.Join(waits, ","); got != "300,300,11" {
-		t.Fatalf("waits %s, want 300,300,11", got)
+	if got := strings.Join(waits, ","); got != "50,50,11" {
+		t.Fatalf("waits %s, want 50,50,11", got)
 	}
 }
 
@@ -219,7 +219,7 @@ func TestTheLastAskOfATimeoutIsRoundedUp(t *testing.T) {
 // now and says so.
 func TestAMarkKeptTooLongStartsTheWaitFromNow(t *testing.T) {
 	e := newTestEnv(t)
-	e.keepMark("", "ntf0", time.Now().Add(-newsmark.ForgottenAfter-time.Hour))
+	e.keepMark("", "0", time.Now().Add(-newsmark.ForgottenAfter-time.Hour))
 	e.aLineArrivesInTheWait(e.aMove(e.fixture.CardInDoing))
 
 	env, r := e.runWaitJSON(nil)
@@ -324,12 +324,12 @@ func TestAMarkMovedByAnotherWaitIsLeftToIt(t *testing.T) {
 func TestAWaitOfDaysKeepsTheMarkItStartedFrom(t *testing.T) {
 	e := newTestEnv(t)
 	clock := e.waitsPassAtOnce()
-	e.keepMark("", "ntf0", clock.Now().Add(-newsmark.ForgottenAfter+time.Hour))
+	e.keepMark("", "0", clock.Now().Add(-newsmark.ForgottenAfter+time.Hour))
 	asks := 0
 	var line *fakeapi.Notification
 	e.server.WhileWaiting = func(*fakeapi.Person) {
 		asks++
-		if asks == 300 {
+		if asks == 1800 {
 			line = e.server.Notify(e.aMove(e.fixture.CardInDoing))
 		}
 	}
@@ -375,13 +375,13 @@ func TestAMarkTakenOutByARewrittenFileIsWrittenAgain(t *testing.T) {
 func TestAMarkPrunedUnderARunningWaitIsWrittenAgain(t *testing.T) {
 	e := newTestEnv(t)
 	clock := e.waitsPassAtOnce()
-	e.keepMark("", "ntf0", clock.Now().Add(-newsmark.ForgottenAfter+time.Hour))
+	e.keepMark("", "0", clock.Now().Add(-newsmark.ForgottenAfter+time.Hour))
 	path := newsmark.Path(e.vars["MINKA_CONFIG"])
 	asks := 0
 	var line *fakeapi.Notification
 	e.server.WhileWaiting = func(*fakeapi.Person) {
 		asks++
-		if asks == 400 {
+		if asks == 2400 {
 			if _, err := newsmark.MoveOn(context.Background(), path, e.vars["MINKA_HOST"], readmark.Reader(e.vars["MINKA_TOKEN"]), "b", "", "x", clock.Now()); err != nil {
 				t.Error(err)
 			}
@@ -482,5 +482,23 @@ func TestAnAskOfOneSecondThatComesBackAtOnceIsEarly(t *testing.T) {
 	expectCode(t, r, ExitTimeout)
 	if len(pauses) != 1 || pauses[0] != time.Second {
 		t.Fatalf("pauses %v, want one of the second that is left", pauses)
+	}
+}
+
+// The safeguard: an installation that holds a request for less than it was
+// asked holds all the same. An empty answer after it is no early one, and no
+// pause follows it.
+func TestAnAskHeldShorterThanAskedIsNotEarly(t *testing.T) {
+	e := newTestEnv(t)
+	e.server.HoldsAtMost = 20 * time.Second
+	clock := e.waitsPassAtOnce()
+	var pauses []time.Duration
+	_, r := e.runPausingJSON(clock, &pauses, "--timeout", "2m")
+	expectCode(t, r, ExitTimeout)
+	if len(pauses) != 0 {
+		t.Fatalf("pauses %v after answers that were held", pauses)
+	}
+	if asked := len(e.waitRequests()) - 1; asked != 6 {
+		t.Fatalf("%d asks, want one per 20 seconds held", asked)
 	}
 }

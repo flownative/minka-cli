@@ -10,34 +10,44 @@ C-118).
 `GET /me/notifications?after=<cursor>&wait=<seconds>&limit=<n>` lists the
 lines of the bell of the token's person behind a position, the oldest first,
 at most `limit` (default 50, at most 200), as `{notifications: […], cursor}`,
-with no envelope, as every address of the API answers. A position is an opaque
-string; every line carries its own, and `cursor` is
+with no envelope, as every address of the API answers. A position is a
+string the CLI keeps as it came; every line carries its own, and `cursor` is
 the last line's or, where the answer carries none, the one asked from. Without
-`after` the answer carries no line and `cursor` is where the bell stands
-now. Where nothing is behind the position, the request is held for up to
-`wait` seconds (0 to 300) and answered as soon as a line arrives. A position
-Minka does not know is refused as 422 `cursorUnknown`, a `wait` outside 0 to
-300 as `notificationsWaitInvalid`, a `limit` outside 1 to 200 as
-`notificationsLimitInvalid`. Reading the list marks nothing read. A request
-with a `wait` of more than 0 is a sign of life of every board the person
-coordinates; one of 0 is not. This list has nothing to do with the address of
-the native app for one notification and its count.
+`after`, or with an empty one, the answer carries no line and `cursor` is
+where the bell stands now. Where nothing is behind the position, the request
+is held for up to `wait` seconds (0 to 300), at most for Minka's setting
+`notifications.waitAtMost`, 50 seconds by default, and answered as soon as a
+line arrives; a longer wait is answered empty after that. The refusals come in
+this order: a `wait` that is no whole number from 0 to 300, an empty one
+included, as 422 `notificationsWaitInvalid`, a `limit` outside 1 to 200 as
+`notificationsLimitInvalid`, then a position Minka did not hand out — no whole
+number, one with a sign or a leading zero, or one beyond where the bell stands
+— as `cursorUnknown`. A request with a `wait` of more than 0 is a sign of life
+of every board the person coordinates and still holds, before its position is
+read; one of 0 is not. Reading the list marks nothing read, and reactions are
+not listed. The lines are those the bell shows: Minka reads up to `limit` lines
+and leaves out what the person may no longer see, so an answer may be shorter
+than `limit` although more follow. This list has nothing to do with the
+address of the native app for one notification and its count.
 
 A card that changes column gives each of its assignees but the mover a line,
-occasion `card.moved`.
+occasion `card.moved`, its summary naming the card by its short identifier,
+else its title in quotes. A move into Done is told as `card.completed` alone,
+to the subscribers of the card.
 
 `GET /boards/{id}` carries `coordinator`: `{person: {id, name, kind}, session,
 since, lastSeenAt, expiresAt}`, or null where nobody coordinates the board or
 the entry has expired. `PUT /boards/{id}/coordinator` with `{"session": …}`
-(1 to 64 characters, else 422 `coordinatorSessionInvalid`) claims or renews
-it and answers 200 with the coordinator, bare; another session of the same
-person takes it over, and `since` starts anew; while another person holds it,
-the
-answer is 409 `coordinatorTaken` with the holder as `coordinator` beside the
-error. `DELETE` takes it off for the holder and for anybody who may edit the
-board, and answers 204 also where there is nothing to take off. A client of the
-project gets 404 on both. An entry
-expires 4 hours after its last sign of life, a claim or a wait.
+(1 to 64 characters, none of them a control or format character, else 422
+`coordinatorSessionInvalid`) claims or renews it and answers 200 with the
+coordinator, bare; another session of the same person takes it over, and
+`since` starts anew; while another person holds it, the answer is 409
+`coordinatorTaken` with the holder as `coordinator` beside the error; and only
+then is a claim in an archived project refused with `projectArchived`.
+`DELETE` takes it off for the holder and for anybody who may edit the board,
+in an archived project as well, and answers 204 also where there is nothing
+to take off. A client of the project and somebody outside it get 404 on both.
+An entry expires 4 hours after its last sign of life, a claim or a wait.
 
 ## Waiting
 
@@ -87,7 +97,8 @@ prints one line each, what it is about and then Minka's `summary`.
   wait goes on, and a notice counts it. A filter is no part of the position,
   so a later wait of the same session without it does not see those lines.
 - **How long.** Without `--timeout` as long as it takes, asking with
-  `wait=300`. With `--timeout` in asks of at most 300 seconds, the last for
+  `wait=50`, as long as Minka holds a request by default: asking for more
+  gains nothing. With `--timeout` in asks of at most 50 seconds, the last for
   what is left, rounded up to a second; nothing by then exits 12 (`timeout`),
   retryable. Every ask is a sign of life of the boards the person coordinates.
   The HTTP client gives a held request its wait and 30 seconds more; the
@@ -95,11 +106,14 @@ prints one line each, what it is about and then Minka's `summary`.
 - **Several pages.** A page that comes back full is followed at once by the
   next, without waiting, so a run prints everything that piled up.
 - **An ask that comes back early.** An ask that comes back empty in less than
-  half the wait it asked for — a server or a proxy that does not hold it — is
+  half the wait it asked for and in less than 5 seconds — a server or a proxy
+  that does not hold it — is
   followed by a pause of 5 seconds, doubled with every such ask up to a
   minute, up to a quarter more at random, never past the end of `--timeout`.
   Half, not a fixed margin: the last ask of a timeout may ask for one second,
-  and one answered at once is as early as any. An
+  and one answered at once is as early as any. And never 5 seconds or more:
+  an installation configured to hold a request for less than it is asked
+  holds all the same, and its next ask costs nothing worth a pause. An
   ask that was held, or brought lines, starts the pause anew. Without it such
   a server is asked thousands of times a second.
 - **Odd answers.** A page that names no position goes on from its last line.
@@ -134,8 +148,11 @@ people, and an identifier nobody can read tells them nothing. A claim without
 it, or with a name that is not 1 to 64 ASCII letters, digits, `.`, `-` and
 `_`, is refused as usage before a request. The session of a wait is another
 thing: it names a position on this machine and never leaves it.
-`coordinatorTaken` exits 9: `data` is the holder as Minka sent it, and the hint names them, when they were last
-active, until when the entry holds and the release that clears a stale one.
+Minka takes more, blanks included; the CLI keeps to the names a shell and a
+log read back unchanged. `coordinatorTaken` exits 9: `data` is the holder as
+Minka sent it, and the hint names them, when they were last active, until
+when the entry holds and the release that clears a stale one. A claim in an
+archived project exits 9 with `projectArchived`.
 
 `boards coordinator release <boardId>` takes the entry off, `boards
 coordinator show <boardId>` hands over `coordinator` of the board, null
@@ -149,7 +166,3 @@ polling; the flow — claim, pull only assigned cards, wait in the background,
 hand over — is in `references/waiting-and-coordinating.md` beside it, which
 travels and is installed with it ([The skill](skill.md)).
 
-## What is not laid down
-
-What Minka answers for the coordinator of a board in an archived project is
-not part of the contract; the fake lets it through.

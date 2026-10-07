@@ -89,7 +89,7 @@ that time. A network failure exits 6, a server error 7, both retryable; the
 position is safe. Where Minka no longer knows the position, the wait starts
 from now again and says so in a notice: what came in between is not shown.
 An ask that comes back empty before its time, from a server or a proxy that
-does not hold it, is followed by a pause of 5 seconds that grows to a minute.`, sessionVariable, api.NotificationsWaitMax),
+does not hold it, is followed by a pause of 5 seconds that grows to a minute.`, sessionVariable, api.NotificationsHeldAtMost),
 		Example: `  minka notifications wait --json
   minka notifications wait --board 0199... --column "Als nächstes" --json
   minka notifications wait --timeout 30m --json`,
@@ -144,6 +144,7 @@ does not hold it, is followed by a pause of 5 seconds that grows to a minute.`, 
 const (
 	earlyAnswerPause    = 5 * time.Second
 	earlyAnswerPauseMax = time.Minute
+	heldLongEnough      = 5 * time.Second
 )
 
 // newsWait is one run of notifications wait.
@@ -265,14 +266,19 @@ func (w *newsWait) notice(text string) {
 }
 
 // pauseIfEarly waits before the next ask where this one came back empty in
-// less than half the time it asked to be held. Half, not a second less: the
-// last ask of a timeout may ask for a single second, and an answer at once
-// to that is as early as one to five minutes. The pause grows from
+// less than half the time it asked to be held, and in less than
+// heldLongEnough. Half, not a second less: the last ask of a timeout may ask
+// for a single second, and an answer at once to that is as early as any. And
+// never more than heldLongEnough, because an installation may hold a request
+// for less than it was asked, as Minka does past its setting; an answer that
+// was held that long is a server that holds, and the next ask costs nothing
+// worth a pause. The pause grows from
 // earlyAnswerPause to earlyAnswerPauseMax, by up to a quarter more at random
 // so that the waits of many machines do not fall into step, and never
 // reaches past the end of the wait.
 func (w *newsWait) pauseIfEarly(asked time.Time, wait int) error {
-	if 2*w.a.now().Sub(asked) >= time.Duration(wait)*time.Second {
+	held := w.a.now().Sub(asked)
+	if 2*held >= time.Duration(wait)*time.Second || held >= heldLongEnough {
 		w.pause = 0
 		return nil
 	}
@@ -307,17 +313,19 @@ func (w *newsWait) startFromNow() (string, error) {
 	return cursor, nil
 }
 
-// nextWait is how long the next ask may be held: the most Minka holds one,
-// or what is left of the time given, rounded up to a whole second.
+// nextWait is how long the next ask may be held: as long as Minka holds one
+// by default, or what is left of the time given, rounded up to a whole
+// second. Asking for more would gain nothing, since Minka answers empty after
+// its own time, and would make an answer that held for all of it look early.
 func (w *newsWait) nextWait() (int, bool) {
 	if w.deadline.IsZero() {
-		return api.NotificationsWaitMax, true
+		return api.NotificationsHeldAtMost, true
 	}
 	left := w.deadline.Sub(w.a.now())
 	if left <= 0 {
 		return 0, false
 	}
-	return min(api.NotificationsWaitMax, int(math.Ceil(left.Seconds()))), true
+	return min(api.NotificationsHeldAtMost, int(math.Ceil(left.Seconds()))), true
 }
 
 // drain reads on without waiting while a page comes back full, so that a run

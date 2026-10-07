@@ -441,10 +441,11 @@ runs it is not measured.
 An agent waits for what is new with `notifications wait` instead of polling a
 board, and one session of a person coordinates a board with `boards
 coordinator claim`, `release` and `show` (C-117, C-118); the rule is
-[Waiting and coordinating](../stable/waiting-and-coordinating.md). Minka
-builds its side, the list of the bell, `card.moved` and the coordinator, as
-MNK-B3; it is on no branch of Minka's with a commit yet, so everything of it is
-checked against the fake only, see below.
+[Waiting and coordinating](../stable/waiting-and-coordinating.md). Minka's
+side, the list of the bell, `card.moved` and the coordinator, is MNK-B3, on
+its branch `notifications-wait-coordinator` and in review there; the commands
+are checked against that code and its tests and the fake, not live, see
+below.
 
 Everything else is tested against the fake API and checked live — the chain
 upload → attachment in the text → display → the bytes back, as well as private
@@ -467,14 +468,17 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
 ## Checked against the fake only
 
 - Waiting and coordinating (`notifications wait`, `boards coordinator claim`,
-  `release`, `show`, the coordinator in `boards show`): built against the
-  contract the coordination set for MNK-B3 alone, as long as Minka has no code
-  for it; its branch `notifications-wait-coordinator` holds no commit beyond
-  `main`. The fake follows that contract, the answers of the list as
-  `{notifications, cursor}` and the 200 of a claim as the coordinator bare.
-  Only what Minka answers for an archived project is not laid down; the fake
-  lets it through. Once the code exists it decides, and the fake is checked
-  against it.
+  `release`, `show`, the coordinator in `boards show`): the fake is held
+  against Minka's branch `notifications-wait-coordinator` at 9b0554db0, not on
+  `main` and in no release: `NotificationWaitApiController`,
+  `BoardApiController::claimCoordinatorAction` and `releaseCoordinatorAction`,
+  `BoardCoordinators`, `CoordinatorResource`, `NotificationLineResource`,
+  `NotificationOutboxListener`, `NotificationRecipients`,
+  `ApiNotificationWaitTest` and `ApiBoardCoordinatorTest`. **The fake does not
+  mirror**: the bell's visibility and the lines it leaves out, reactions,
+  subjects other than a card as Minka names them, the translated summaries
+  but that of a move, and the poll interval of a held request. Nothing of it
+  has been seen live.
 - Reminders (`reminders list`, `set`, `delete`): Minka's #358 and #359 read
   in `ReminderApiController`, `Rfc3339Moment`, `ReminderKind`,
   `ReminderPreset`, `ReminderQueryService`, `DbalReminderRepository`,

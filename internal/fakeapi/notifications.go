@@ -8,17 +8,28 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 	"unicode/utf8"
 )
 
 // NotificationsOnAPage is how many lines an answer carries without a limit,
-// MostNotificationsOnAPage the most it carries at all, and MostWaitSeconds the
-// longest a request is held.
+// MostNotificationsOnAPage the most it carries at all, MostWaitSeconds the
+// longest wait it takes and WaitAtMost the longest it holds a request, which
+// is Minka's setting notifications.waitAtMost.
 const (
 	NotificationsOnAPage     = 50
 	MostNotificationsOnAPage = 200
 	MostWaitSeconds          = 300
+	WaitAtMost               = 50 * time.Second
 )
+
+// waitAtMost is how long this server holds a request.
+func (s *Server) waitAtMost() time.Duration {
+	if s.HoldsAtMost > 0 {
+		return s.HoldsAtMost
+	}
+	return WaitAtMost
+}
 
 // CoordinatorExpiresAfter is how long a coordinator holds a board after its
 // last sign of life.
@@ -77,8 +88,11 @@ func (s *Server) Notify(n *Notification) *Notification {
 }
 
 func (s *Server) notify(n *Notification) *Notification {
-	s.notificationSeq++
-	n.seq = s.notificationSeq
+	if s.notificationSeqs == nil {
+		s.notificationSeqs = map[string]int{}
+	}
+	s.notificationSeqs[n.PersonID]++
+	n.seq = s.notificationSeqs[n.PersonID]
 	if n.ID == "" {
 		n.ID = newID()
 	}
@@ -93,48 +107,32 @@ func (s *Server) notify(n *Notification) *Notification {
 	return n
 }
 
-// CursorOf is the position of a line, the one an answer hands out for it.
+// CursorOf is the position of a line, the one an answer hands out for it:
+// its number in the sequence of its person.
 func CursorOf(n *Notification) string {
-	return cursorOfSeq(n.seq)
+	return strconv.Itoa(n.seq)
 }
 
-func cursorOfSeq(seq int) string {
-	return "ntf" + strconv.Itoa(seq)
-}
+// listNumber is a number as the list reads one, without a sign or a leading
+// zero.
+var listNumber = regexp.MustCompile(`^(0|[1-9][0-9]{0,17})$`)
 
-var cursorPattern = regexp.MustCompile(`^ntf(0|[1-9][0-9]{0,17})$`)
-
-// knownCursor reads a position this person was handed: the start of a bell
-// that never had a line, or the position of one of their own lines.
-func (s *Server) knownCursor(cursor string, person *Person) (int, bool) {
-	match := cursorPattern.FindStringSubmatch(cursor)
-	if match == nil || slices.Contains(s.ForgottenCursors, cursor) {
+// wholeNumberIn reads a whole number between two bounds, or says it is none.
+func wholeNumberIn(value string, lowest, highest int) (int, bool) {
+	if !listNumber.MatchString(value) {
 		return 0, false
 	}
-	seq, err := strconv.Atoi(match[1])
-	if err != nil {
+	number, err := strconv.Atoi(value)
+	if err != nil || number < lowest || number > highest {
 		return 0, false
 	}
-	if seq == 0 {
-		return 0, true
-	}
-	for _, n := range s.Notifications {
-		if n.seq == seq && n.PersonID == person.ID {
-			return seq, true
-		}
-	}
-	return 0, false
+	return number, true
 }
 
-// positionOf is where the bell of a person stands now.
-func (s *Server) positionOf(person *Person) string {
-	seq := 0
-	for _, n := range s.Notifications {
-		if n.PersonID == person.ID {
-			seq = n.seq
-		}
-	}
-	return cursorOfSeq(seq)
+// positionOf is where the bell of a person stands now: the number of their
+// last line, 0 before the first.
+func (s *Server) positionOf(person *Person) int {
+	return s.notificationSeqs[person.ID]
 }
 
 func (s *Server) linesAfter(seq int, person *Person, limit int) []*Notification {
@@ -148,50 +146,49 @@ func (s *Server) linesAfter(seq int, person *Person, limit int) []*Notification 
 	return lines[:min(len(lines), limit)]
 }
 
-var waitOrLimit = regexp.MustCompile(`^[0-9]{1,18}$`)
-
-// notifications answers the lines of the bell behind a position. Without one
-// it answers none and where the bell stands. With nothing behind the position
-// it holds the request for up to wait seconds and answers as soon as a line
-// arrives; a held request is a sign of life of every board its person
-// coordinates.
+// notifications answers the lines of the bell behind a position, in the
+// order of the controller: the wait, the limit, the sign of life of a wait of
+// more than nothing, then the position. Without one it answers none and where
+// the bell stands. A position is any whole number up to where the bell stands.
+// With nothing behind it the request is held for the wait, at most WaitAtMost,
+// and answered as soon as a line arrives.
 //
 // The handler runs with the lock of the server held; it lets go of it while it
 // waits, so that a line can arrive.
 func (s *Server) notifications(w http.ResponseWriter, r *http.Request, person *Person) {
 	query := r.URL.Query()
 	wait := 0
-	if given := query.Get("wait"); given != "" {
-		value, err := strconv.Atoi(given)
-		if !waitOrLimit.MatchString(given) || err != nil || value > MostWaitSeconds {
-			unprocessable(w, "notificationsWaitInvalid", "The wait is a whole number of seconds from 0 to 300.")
+	if query.Has("wait") {
+		value, ok := wholeNumberIn(query.Get("wait"), 0, MostWaitSeconds)
+		if !ok {
+			unprocessable(w, "notificationsWaitInvalid", `"wait" is a whole number of seconds from 0 to 300.`)
 			return
 		}
 		wait = value
 	}
 	limit := NotificationsOnAPage
 	if given := query.Get("limit"); given != "" {
-		value, err := strconv.Atoi(given)
-		if !waitOrLimit.MatchString(given) || err != nil || value < 1 || value > MostNotificationsOnAPage {
-			unprocessable(w, "notificationsLimitInvalid", "The limit is a whole number from 1 to 200.")
+		value, ok := wholeNumberIn(given, 1, MostNotificationsOnAPage)
+		if !ok {
+			unprocessable(w, "notificationsLimitInvalid", `"limit" is a whole number from 1 to 200.`)
 			return
 		}
 		limit = value
 	}
-
-	if !query.Has("after") {
-		writeJSON(w, http.StatusOK, s.notificationsPage(nil, s.positionOf(person), person))
-		return
-	}
-	after := query.Get("after")
-	seq, known := s.knownCursor(after, person)
-	if !known {
-		unprocessable(w, "cursorUnknown", "The position to read on from is not one this list handed out.")
-		return
-	}
-
 	if wait > 0 {
 		s.seenAlive(person)
+	}
+
+	position := s.positionOf(person)
+	after := query.Get("after")
+	if after == "" {
+		writeJSON(w, http.StatusOK, s.notificationsPage(nil, strconv.Itoa(position), person))
+		return
+	}
+	seq, known := wholeNumberIn(after, 0, position)
+	if !known || slices.Contains(s.ForgottenCursors, after) {
+		unprocessable(w, "cursorUnknown", `The cursor is not one this list handed out. Start again without "after".`)
+		return
 	}
 
 	lines := s.linesAfter(seq, person, limit)
@@ -200,12 +197,16 @@ func (s *Server) notifications(w http.ResponseWriter, r *http.Request, person *P
 		return
 	}
 
+	held := time.Duration(wait) * time.Second
+	if most := s.waitAtMost(); held > most {
+		held = most
+	}
 	waitsOut := s.WaitsOut
 	if waitsOut == nil {
 		waitsOut = time.After
 	}
 	whileWaiting := s.WhileWaiting
-	timer := waitsOut(time.Duration(wait) * time.Second)
+	timer := waitsOut(held)
 	for first := true; ; first = false {
 		if s.arrival == nil {
 			s.arrival = make(chan struct{})
@@ -280,19 +281,23 @@ func (s *Server) notificationResource(n *Notification, person *Person) map[strin
 }
 
 // noteTheMove tells every assignee of a card but the mover that it changed
-// column.
+// column. A move into Done is told as the completion alone, to the
+// subscribers of the card but the mover.
 func (s *Server) noteTheMove(board *Board, card *Card, to *Column, mover *Person) {
 	name := card.ShortID
 	if name == "" {
-		name = card.Title
+		name = "“" + card.Title + "”"
 	}
-	for _, assigneeID := range card.AssigneeIDs {
-		if assigneeID == mover.ID {
+	occasion, recipients, summary := "card.moved", card.AssigneeIDs, fmt.Sprintf("%s moved %s to “%s”", mover.Name, name, columnTitle(to))
+	if to.Type == "done" {
+		occasion, recipients, summary = "card.completed", card.SubscriberIDs, fmt.Sprintf("%s completed “%s”", mover.Name, card.Title)
+	}
+	for _, personID := range recipients {
+		if personID == mover.ID {
 			continue
 		}
 		s.notify(&Notification{
-			PersonID: assigneeID, Occasion: "card.moved", ActorID: mover.ID, CardID: card.ID, ProjectID: board.ProjectID,
-			Summary: fmt.Sprintf("%s moved %s to “%s”", mover.Name, name, columnTitle(to)),
+			PersonID: personID, Occasion: occasion, ActorID: mover.ID, CardID: card.ID, ProjectID: board.ProjectID, Summary: summary,
 		})
 	}
 }
@@ -337,8 +342,11 @@ func (s *Server) boardToCoordinate(r *http.Request, person *Person) *Board {
 }
 
 // claimCoordinator makes a session of the person the coordinator of a board,
-// or renews it. Another session of the same person takes it over; another
-// person's that has not expired is refused with the holder.
+// or renews it, in the order of the controller: the board, a client, the
+// session, then the claim. Another session of the same person takes it over
+// and since starts anew; another person's entry that has not expired is
+// refused with the holder; and only then is an archived project refused,
+// where nothing can be written.
 func (s *Server) claimCoordinator(w http.ResponseWriter, r *http.Request, person *Person) {
 	board := s.boardToCoordinate(r, person)
 	if board == nil {
@@ -353,17 +361,20 @@ func (s *Server) claimCoordinator(w http.ResponseWriter, r *http.Request, person
 	if !ok {
 		return
 	}
-	if session == nil || strings.TrimSpace(*session) == "" || utf8.RuneCountInString(*session) > maxCoordinatorSession {
-		unprocessable(w, "coordinatorSessionInvalid", "The session is named by 1 to 64 characters.")
+	if session == nil || !isASessionName(*session) {
+		unprocessable(w, "coordinatorSessionInvalid", "A session is a readable name of 1 to 64 characters without control characters.")
 		return
 	}
 
 	holder := s.coordinatorOf(board)
 	if holder != nil && holder.PersonID != person.ID {
 		writeJSON(w, http.StatusConflict, map[string]any{
-			"error":       map[string]string{"code": "coordinatorTaken", "message": "Somebody else coordinates this board."},
+			"error":       map[string]string{"code": "coordinatorTaken", "message": "Somebody else coordinates this board. Nothing was written; \"coordinator\" names them."},
 			"coordinator": s.coordinatorResource(board),
 		})
+		return
+	}
+	if s.refusedAsArchived(w, s.projectOf(board)) {
 		return
 	}
 	if holder == nil || holder.Session != *session {
@@ -372,6 +383,16 @@ func (s *Server) claimCoordinator(w http.ResponseWriter, r *http.Request, person
 		holder.LastSeenAt = s.now
 	}
 	writeJSON(w, http.StatusOK, s.coordinatorResource(board))
+}
+
+// isASessionName is what a board keeps as the name of a session: 1 to 64
+// characters, none of them a control or a format character. Blanks are names
+// as well.
+func isASessionName(session string) bool {
+	if session == "" || utf8.RuneCountInString(session) > maxCoordinatorSession {
+		return false
+	}
+	return !strings.ContainsFunc(session, func(r rune) bool { return unicode.Is(unicode.Cc, r) || unicode.Is(unicode.Cf, r) })
 }
 
 // releaseCoordinator takes the coordinator off a board, whoever holds it. A
