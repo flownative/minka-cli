@@ -2072,3 +2072,16 @@ last step is known without a request of its own; Minka's tests send the end
 the same way. Which neighbour a step may have is Minka's rule, as in
 [C-070](#c-070). **Implemented as:** `cli.app.newStepsMoveCmd`,
 `api.MoveStepInput`, see [Steps](stable/steps.md).
+
+<a id="c-124"></a>
+## C-124 — The files of a back are `cards notes attachments`, shown as text only where they are text
+
+*Applies to: `cards notes attachments list|create|show|download|delete`, `/api/v1/cards/{cardId}/attachments…`*
+
+The files sit under the notes as a plural group with the usual actions; `create` does both requests and reads card
+and back first, `show` prints a text alone and refuses a non-text with exit 1, `download` writes any file as `uploads
+download` does. An attachment is named by ID, position or file name.
+
+**Why:** A back is one thing with two parts, a group keeps the names of C-001, and a picture on a terminal is noise
+while a text an agent reads back must arrive unchanged. **Implemented as:** `cli.newCardsNotesAttachmentsCmd`,
+`api.CardBackFile`, see [The back of a card](stable/card-back.md).

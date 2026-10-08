@@ -599,13 +599,18 @@ func (c *Client) File(ctx context.Context, blobID string) (Result[File], error) 
 // rendering: scheme, host and path are the client's own, so nothing a server
 // writes into a field decides where the bytes are fetched from.
 func (c *Client) FileBytes(ctx context.Context, blobID, variant string) (*FileBytes, error) {
-	path := "/uploads/" + url.PathEscape(blobID) + "/" + url.PathEscape(variant)
+	return c.fetchBytes(ctx, "/uploads/"+url.PathEscape(blobID)+"/"+url.PathEscape(variant))
+}
+
+// fetchBytes opens the bytes at a path below /api/v1 for reading, following
+// a store that serves them itself. The caller closes them.
+func (c *Client) fetchBytes(ctx context.Context, path string) (*FileBytes, error) {
 	req, err := c.newRequest(ctx, http.MethodGet, path, nil, "", -1)
 	if err != nil {
 		return nil, err
 	}
-	// The answer is a file and not JSON, and this is the one address of the
-	// API that says so.
+	// The answer is a file and not JSON, and these are the addresses of the
+	// API that say so.
 	req.Header.Set("Accept", "*/*")
 
 	resp, err := c.downloads.Do(req)

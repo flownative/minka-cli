@@ -506,9 +506,10 @@ func (s *Server) storedFileOf(projectID, blobID string) *Upload {
 }
 
 // fileIsInUse says whether an upload of any tool stands for the file, an
-// earlier version of one holds it, or a saved text carries it.
+// earlier version of one holds it, a saved text carries it, or it is on the
+// back of a card.
 func (s *Server) fileIsInUse(file *Upload) bool {
-	if file.StandsInAText {
+	if file.StandsInAText || s.heldByACardBack(file.ID) {
 		return true
 	}
 	for _, tool := range s.FilesTools {

@@ -69,6 +69,10 @@ the documentation says what holds; how it came about is in git.
   hands over and which one is the newest, the guards that keep a comment from
   being written past an unread answer, what counts as read and where the marks
   lie, the settings of `config` — before any work on `comments` or `config`.
+- [The back of a card](stable/card-back.md): The rule for the notes, the
+  back that is the team's alone, what an attachment is and how a file goes on
+  the back in two requests, the text `show` prints and what it refuses, the
+  order of the refusals — before any work on `cards notes`.
 - [Steps](stable/steps.md): What a step of a card carries, the people given as
   a whole set and who may be among them, the day, why `steps create` takes
   neither, the text that changes, the move and its end, what an older Minka

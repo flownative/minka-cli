@@ -182,6 +182,9 @@ type Card struct {
 	Notes            string
 	NotesUpdatedAt   *time.Time // nil while nobody has written notes
 	NotesUpdatedByID string
+	// BackFiles are the files on the back beside the notes, in the order they
+	// were first put there.
+	BackFiles []*CardBackFile
 }
 
 type Step struct {
@@ -993,6 +996,7 @@ func New(t testing.TB) (*Server, *Fixture) {
 	mux.HandleFunc("POST /api/v1/cards/{cardId}/assignees", s.authenticated(s.assignCard))
 	mux.HandleFunc("DELETE /api/v1/cards/{cardId}/assignees/{personId}", s.authenticated(s.unassignCard))
 	mux.HandleFunc("PUT /api/v1/cards/{cardId}/notes", s.authenticated(s.writeCardNotes))
+	s.registerCardBackRoutes(mux)
 	mux.HandleFunc("POST /api/v1/cards/{cardId}/steps", s.authenticated(s.addStep))
 	mux.HandleFunc("PATCH /api/v1/cards/{cardId}/steps/{stepId}", s.authenticated(s.updateStep))
 	mux.HandleFunc("POST /api/v1/cards/{cardId}/steps/{stepId}/moves", s.authenticated(s.moveStep))
@@ -2268,7 +2272,7 @@ func (s *Server) shortIdentifierOrNotes(w http.ResponseWriter, r *http.Request, 
 }
 
 func (s *Server) cardNotes(w http.ResponseWriter, r *http.Request, person *Person) {
-	board, _, card, _ := s.cardToWrite(r.PathValue("cardId"), person)
+	board, card, _ := s.cardOfTheBack(r.PathValue("cardId"), person)
 	if card == nil {
 		notFound(w)
 		return
@@ -2281,7 +2285,7 @@ func (s *Server) cardNotes(w http.ResponseWriter, r *http.Request, person *Perso
 // that say the sent text already are no conflict, and notes nobody has
 // written yet are created whatever was expected.
 func (s *Server) writeCardNotes(w http.ResponseWriter, r *http.Request, person *Person) {
-	board, _, card, archived := s.cardToWrite(r.PathValue("cardId"), person)
+	board, card, archived := s.cardOfTheBack(r.PathValue("cardId"), person)
 	if card == nil {
 		notFound(w)
 		return
