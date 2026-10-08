@@ -671,6 +671,13 @@ and Minka applies the kinds in an order of its own.
   and named in `titlesMadeToFit` (C-111). The list has no pages and answers every page
   with all of it, so it is read once and without a page, and only for a
   project with a message board that is extracted.
+  Categories are never merged by name here: two boards' categories of one name
+  both come, each by its own ID. Minka makes one kind of them, and of a
+  category named as a kind the project already has, comparing the names
+  without blanks, case or a leading emoji. Every project with a Posts tool is
+  born in Minka with the six kinds a Basecamp message board offers, so
+  Basecamp's Announcement and Question meet theirs there and are not offered
+  twice.
 - **Posts** are the messages of every message board, and the archived and
   trashed ones. Basecamp lists the messages of a board itself, and the
   archived and the trashed ones of a project in one list across all its
@@ -702,8 +709,10 @@ and Minka applies the kinds in an order of its own.
   nothing is shortened.
   A bundle has a word for four kinds of line: `Chat::Lines::Text`,
   `Chat::Lines::RichText`, `Chat::Lines::Upload` and
-  `Chat::Lines::Integration`. Basecamp grows kinds of its own, and a line of
-  one of them is left out and counted, as is one whose status is not `active`,
+  `Chat::Lines::Integration`. Basecamp grows kinds of its own, such as
+  `Chat::Lines::Play`, a sound somebody played into the room, which a real
+  account holds and Minka has no place for; a line of one of them is left out
+  and counted, as is one whose status is not `active`,
   see What a bundle cannot carry. The kind of a line is looked at before its
   status and before its times, so such a line is left out for its kind whatever
   else is wrong with it, and it is counted once. Whoever adds a word for a kind
@@ -838,8 +847,8 @@ and Minka applies the kinds in an order of its own.
   Minka knows Basecamp's eleven names and warns about any other (C-086).
   `white` goes along too, since Basecamp says it of every group nobody
   coloured and it is the one word that takes a colour away in Minka on a later
-  run. Where the source names no colour, `null` or nothing, the field is left
-  out, and Minka leaves the colour it holds alone. A list carries none:
+  run. Where the source names no colour, `null`, `""` or nothing, the field is
+  left out, and Minka leaves the colour it holds alone. A list carries none:
   Basecamp says `null` for every list.
 - **To-dos** are those of every list and of every group, and the archived
   and the trashed ones. Basecamp lists what is open apart from what is done,
@@ -883,7 +892,12 @@ and Minka applies the kinds in an order of its own.
   of its own and only the newest carries the schedule: an older one, open or
   done, comes as a to-do that does not repeat, as it is at the source, and
   nothing ties it to the series. A done to-do that still carries one carries it
-  into the bundle too; Minka brings it without a series and says so.
+  into the bundle too; Minka brings it without a series and says so. So the
+  newest occurrence a later run brings is a new open to-do with a schedule.
+  Minka lets it join a series only where its list holds exactly one running
+  series an import made, with an imported to-do of the same title; otherwise
+  it makes a new series. Basecamp knows no lead time, so the bundle carries
+  none, and Minka shows each occurrence 7 days before it is due.
   `todosThatRepeat` counts the to-dos with a schedule, `todosWithASeries` the
   open ones carried with one; a part a done one leaves off is named as costing
   the series.
@@ -947,7 +961,8 @@ and Minka applies the kinds in an order of its own.
   becomes the trash** (C-058), counted in `forwards.fromTheShelf` and named in
   a `notice`: Minka gives a forward no shelf, its trash holds the mail with
   everything on it, and a bundle that said `archived` would stop the run.
-  The body is the mail as the source holds it, **line breaks and all**: Minka
+  The body is the mail as the source holds it, **line breaks and all**:
+  Basecamp keeps a mail as text with line breaks and a few tags in it. Minka
   turns a blank line into a paragraph and a single break into a `<br>`, so the
   extractor rewrites nothing but the files, the mentions, the references and
   the embeds, the way it does in every text. Where the body would reach Minka
@@ -1228,8 +1243,13 @@ and Minka applies the kinds in an order of its own.
   `week_instance` for -1, which is Basecamp's last week and not the last such
   weekday, for one outside 1 to 4 and for one the first day does not lie in;
   `frequency` for one nobody knows; and `recurrence_schedule` for a schedule of
-  a shape nobody expected. `calendars.calendars[]` counts per calendar the
-  events written and the trashed ones among them, those that repeat
+  a shape nobody expected. Three of these checks are the event's alone: that
+  the first day falls on the schedule's days, that it lies in the
+  `week_instance`, and that a rhythm of every other or every n-th week names
+  one weekday. A to-do's schedule is held to none of them: where this section
+  calls the schedule a to-do's, the fields and their values are meant, not
+  these checks. `calendars.calendars[]` counts per calendar the events
+  written and the trashed ones among them, those that repeat
   (`thatRepeat`) and those with their series (`withASeries`), names each part
   with how many events held it and the first ten of them, and counts the
   descriptions longer than Minka holds, which Minka passes over on every run.
@@ -1241,15 +1261,19 @@ and Minka applies the kinds in an order of its own.
   and counts those whose parent is a `Schedule::Entry::Occurrence` in
   `calendars.commentsUnderSingleDays`, with the days they hang on (unsampled:
   whether that list names them has not been seen). The comments, boosts and
-  followers asked for are always the entry's own.
+  followers asked for are always the entry's own, at addresses the run builds
+  from the project and the entry's ID.
 - **Comments** are those of cards, of posts, of answers, of to-do lists, of
   to-dos, of forwarded mail, of documents, of uploads and of events, `parentKind`
   `card`, `post`, `answer`, `todolist`, `todo`, `forward`, `document`,
-  `upload` or `event`, per parent oldest first, by `created_at` and then by ID: the applier reads
-  the order of the comments of a parent from the file. Basecamp hands out the
-  rendered text of a comment only, and a control character Minka refuses in
-  it is taken out (C-112). A comment in the trash is left out with
-  its boosts and counted (`commentsTrashed`); any other comes, the archived
+  `upload` or `event`, per parent oldest first, by `created_at` and then by
+  ID: the applier reads the order of the comments of a parent from the file.
+  Basecamp hands out the rendered text of a comment only, and a control
+  character Minka refuses in it is taken out (C-112). A comment that says
+  nothing comes as it stands — Basecamp stores an empty one as
+  `<div dir="auto"></div>` — and Minka takes it as the files the bundle names
+  for it, or passes it over. A comment in the trash is left out with its
+  boosts and counted (`commentsTrashed`); any other comes, the archived
   comment of an archived card as well.
 - **Subscribers** are whom the source says follow a post, a card, a to-do, a
   document, an upload or an event (C-084). They come from
@@ -1317,8 +1341,8 @@ and Minka applies the kinds in an order of its own.
   `updatedAt`.
 
 Left out besides: the colours of the columns, wormholes between boards, whom
-a post told, being on hold as anything more than the flag, and the earlier
-copies of the file of an upload.
+a post told, being on hold as anything more than the flag, and, without
+`--upload-versions`, the earlier copies of the file of an upload.
 
 What Basecamp does not hand out, so that no bundle carries it:
 
@@ -1328,6 +1352,12 @@ What Basecamp does not hand out, so that no bundle carries it:
   run.
 - A line somebody deleted, and the lines Basecamp writes itself, such as who
   joined a chat.
+- What hangs on a single day of a series of a calendar: the comments under
+  one day, which are counted (see Events), who follows one day, and a day
+  that was changed or cancelled, if Basecamp has such a thing.
+- Whom Basecamp notified when an entry of a calendar was made.
+- Earlier versions of a document: Basecamp's API has no version, revision or
+  change log of a document, and the events of a recording carry no body.
 - Whom a forwarded mail was addressed to, who was copied on it, and when it was
   sent: Basecamp keeps the sender, the subject, the words and the moment
   somebody forwarded it, and nothing else of the mail. The secret address an
@@ -1353,8 +1383,8 @@ project with such a tool six more for the records it has put away, one per kind
 and status, whatever the tool. A folder the bundle **cannot** carry costs three
 more, for counting what fell with it, and a folder of that folder three again.
 Comments are asked for only where a card, a post, a to-do list, a to-do, an
-answer, a document or an upload says it has some, and boosts only where one of
-those, a comment or a line says so; the answers
+answer, a document, an upload or an event says it has some, and boosts only
+where one of those, a comment or a line says so; the answers
 of a mail are asked for only where it says it has some. A **mail** says how many comments and
 how many boosts it has as little as Basecamp knows, so both of its lists are
 asked for whatever they hold: two requests a mail, and one more where it has
@@ -1514,7 +1544,8 @@ record (C-031):
   message, of a chat, which is also the ID of the chat's tool, and of an
   entry, which is the `sourceId` of its event. `href` is
   the address as it stood, escaped as an attribute value once, an anchor
-  included. Nothing else of the link comes along.
+  such as Basecamp's `#__recording_<n>` included. Nothing else of the link
+  comes along.
 - The words of the link stand between the tags as plain text, escaped once:
   the text of the link without any tag, a blank for a line break. An embed
   in them gives its words and refers to nothing: a mention the name the
@@ -1591,9 +1622,12 @@ addresses, with or without padding. A global ID counts as a whole: nothing of
 a word before it, nothing of a number or a path after it.
 
 Every other token passes through with the bytes it was read from: Minka
-sanitises a body, and the extractor adds no second opinion. A text is read
-only when it holds `bc-attachment` or `<iframe`, or `<a` followed by
-whitespace, `>` or `/`, all in any case; any other text passes as it is.
+sanitises a body, and the extractor adds no second opinion. The empty
+paragraph Basecamp's editor sets paragraphs apart with, `<p><br></p>`, passes
+through as well: Minka drops the first one after a block and keeps a second
+one in a row. A text is read only when it holds `bc-attachment` or
+`<iframe`, or `<a` followed by whitespace, `>` or `/`, all in any case; any
+other text passes as it is.
 What goes besides an embed is what belongs to one: whitespace between an
 embed and its rendering, an end tag of an embed without its beginning, and
 an embed or a frame the text breaks off in. Any other tag a text breaks off
