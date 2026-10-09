@@ -397,19 +397,21 @@ Owed with it: a dry run that meets the lists of who follows an item. How
 `subscription.json` answers was measured read-only, see below; a list longer
 than seven people has not been seen.
 
-A step carries the people on it and the day it is due: `steps list` and
-`cards show` name them, and `steps edit` changes them, the people as a whole
-set; `steps create` takes neither (C-100). The rule the commands follow is
+The steps of a card live under `cards`, beside its notes, with no group of
+their own at the top (C-125). A step carries the people on it and the day it
+is due: `cards steps list` and `cards show` name them, and `cards steps edit`
+changes them, the people as a whole set; `cards steps create` takes neither
+(C-100). The rule the commands follow is
 [Steps](../stable/steps.md). Minka's side is on its `main` and in no release
 yet, so the commands are checked against Minka's code and tests and the fake
-only, see below; a Minka without it answers `steps edit` with
+only, see below; a Minka without it answers `cards steps edit` with
 `stepCompletedMissing`, which the hint names. The extractor writes `dueOn` and
 `assignees` on every step. The shape of a Basecamp step was read in the Basecamp
 CLI's response cache of the account, not asked for: no run has carried the two
 fields yet.
 
-`steps edit --title` changes the text of a step in the same request as its
-people and its day, and `steps move` puts it elsewhere on its card with
+`cards steps edit --title` changes the text of a step in the same request as
+its people and its day, and `cards steps move` puts it elsewhere on its card with
 exactly one of `--top`, `--bottom`, `--after` and `--before` (C-123). Minka's
 side is #390, on its `main` and in no release yet, so production gets it with
 the next Minka release; until then a released Minka answers `--title` alone
@@ -662,8 +664,8 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   the fixture set up without a colour, where Minka gives every new one a
   colour; and the race in which a neighbour read on the board leaves it
   before the move, which Minka would answer by putting the column first.
-- `steps edit` and the people and the day of a step: no request has gone to a
-  real Minka. Read in `BoardApiController::updateStepAction`,
+- `cards steps edit` and the people and the day of a step: no request has gone
+  to a real Minka. Read in `BoardApiController::updateStepAction`,
   `EditStepHandler`, `DbalCardStepRepository` and `ApiStepAssigneesTest` on
   Minka's `main`, and mirrored by the fake in the order of
   [Steps](../stable/steps.md). The fake has no board hidden from clients, so a
@@ -671,7 +673,8 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   it writes the day, the people and the tick of one request together, where
   Minka writes the tick in a second transaction; and it shows no overdue for a
   step, which Minka's API does not either.
-- `steps edit --title` and `steps move`: no request has gone to a real Minka.
+- `cards steps edit --title` and `cards steps move`: no request has gone to a
+  real Minka.
   Read in `BoardApiController::updateStepAction` and `moveStepAction`,
   `StepTitle`, `RenameStepHandler`, `MoveStepHandler`, `Gap` and
   `ApiCardStepsTest` on Minka's `main` (da3fb0250), and mirrored by the fake in

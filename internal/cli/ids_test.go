@@ -99,22 +99,22 @@ var idsInCapitals = []idInCapitals{
 	{command: "cards move", inputs: []string{"--before"}, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
 		return []string{f.CardInTriage.ID, "--column", f.Doing.ID, "--before", up(f.CardInDoing.ID)}
 	}},
-	{command: "steps complete", inputs: []string{"<step>"}, prepare: withStepsSpelledInLetters, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
+	{command: "cards steps complete", inputs: []string{"<step>"}, prepare: withStepsSpelledInLetters, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
 		return []string{f.CardInTriage.ID, up(openStepID)}
 	}},
-	{command: "steps edit", inputs: []string{"<step>", "--assignee"}, prepare: withStepsSpelledInLetters, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
+	{command: "cards steps edit", inputs: []string{"<step>", "--assignee"}, prepare: withStepsSpelledInLetters, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
 		return []string{f.CardInTriage.ID, up(openStepID), "--assignee", up(f.Anke.ID)}
 	}},
-	{command: "steps move", inputs: []string{"<step>", "--after"}, prepare: withStepsSpelledInLetters, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
+	{command: "cards steps move", inputs: []string{"<step>", "--after"}, prepare: withStepsSpelledInLetters, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
 		return []string{f.CardInTriage.ID, up(openStepID), "--after", up(doneStepID)}
 	}},
-	{command: "steps move", inputs: []string{"--before"}, prepare: withStepsSpelledInLetters, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
+	{command: "cards steps move", inputs: []string{"--before"}, prepare: withStepsSpelledInLetters, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
 		return []string{f.CardInTriage.ID, doneStepID, "--before", up(openStepID)}
 	}},
-	{command: "steps reopen", inputs: []string{"<step>"}, prepare: withStepsSpelledInLetters, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
+	{command: "cards steps reopen", inputs: []string{"<step>"}, prepare: withStepsSpelledInLetters, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
 		return []string{f.CardInTriage.ID, up(doneStepID)}
 	}},
-	{command: "steps delete", inputs: []string{"<step>"}, prepare: withStepsSpelledInLetters, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
+	{command: "cards steps delete", inputs: []string{"<step>"}, prepare: withStepsSpelledInLetters, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
 		return []string{f.CardInTriage.ID, up(openStepID)}
 	}},
 	{command: "columns on-hold", inputs: []string{"<column>"}, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
@@ -377,7 +377,7 @@ func TestAStepNamedInCapitalsIsReallyDeleted(t *testing.T) {
 	e := newTestEnv(t)
 	withStepsSpelledInLetters(e)
 
-	env, r := e.runJSON("", "steps", "delete", e.fixture.CardInTriage.ID, up(openStepID))
+	env, r := e.runJSON("", "cards", "steps", "delete", e.fixture.CardInTriage.ID, up(openStepID))
 	expectCode(t, r, ExitOK)
 	if data := decode(t, env.Data); data["wasOnCard"] != true || data["stepId"] != openStepID {
 		t.Errorf("the step was not found on the card: %s", env.Data)

@@ -145,7 +145,7 @@ top, and a neighbour that is no other subtask of the to-do is
 `todoPlaceUnknown`. `DELETE …` takes a subtask off for good, with 204 for one
 that is gone already.
 
-`todos subtasks` names a subtask as `steps` names a step: by ID, by position
+`todos subtasks` names a subtask as `cards steps` names a step: by ID, by position
 from 1 or by its text, which needs the to-do, so every subtask command but
 `create` reads it first. An ID that is on no subtask goes out as it is.
 

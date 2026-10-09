@@ -137,8 +137,8 @@ func TestWhatIsNeitherAnIDNorAShortIdentifierSendsNothing(t *testing.T) {
 // with the ID: nothing but the lookup may carry the short identifier.
 func TestEveryCommandThatTakesACardTakesItsShortIdentifier(t *testing.T) {
 	reading := map[string][]string{
-		"cards show": {"cards", "show", "CARD"},
-		"steps list": {"steps", "list", "CARD"},
+		"cards show":       {"cards", "show", "CARD"},
+		"cards steps list": {"cards", "steps", "list", "CARD"},
 	}
 
 	names := map[string]bool{}

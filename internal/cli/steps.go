@@ -26,9 +26,9 @@ const apiCodeStepCompletedMissing = "stepCompletedMissing"
 // the step itself or no other step of the card.
 const apiCodeStepPlaceUnknown = "stepPlaceUnknown"
 
-const stepsOfAnOlderMinkaHint = "The Minka of this host is older than the people and the due day of a step and takes only a tick: minka steps complete or reopen."
+const stepsOfAnOlderMinkaHint = "The Minka of this host is older than the people and the due day of a step and takes only a tick: minka cards steps complete or reopen."
 
-const stepsWithoutRenamingHint = "The Minka of this host does not rename a step yet. Until it does, add the step anew with minka steps create and delete the old one."
+const stepsWithoutRenamingHint = "The Minka of this host does not rename a step yet. Until it does, add the step anew with minka cards steps create and delete the old one."
 
 const stepsWithoutMovingHint = "The step was on the card a moment ago: the Minka of this host may not move a step yet, which it answers like a step that is not there."
 
@@ -44,19 +44,19 @@ func stepTextAsKept(text string) string {
 	return strings.Trim(received, phpBlanks)
 }
 
-func (a *app) newStepsCmd() *cobra.Command {
+func (a *app) newCardsStepsCmd() *cobra.Command {
 	return group("steps", "List, add, change, move, tick off and remove the steps of a card",
-		a.newStepsListCmd(),
-		a.newStepsCreateCmd(),
-		a.newStepsEditCmd(),
-		a.newStepsMoveCmd(),
-		a.newStepsCompleteCmd(),
-		a.newStepsReopenCmd(),
-		a.newStepsDeleteCmd(),
+		a.newCardsStepsListCmd(),
+		a.newCardsStepsCreateCmd(),
+		a.newCardsStepsEditCmd(),
+		a.newCardsStepsMoveCmd(),
+		a.newCardsStepsCompleteCmd(),
+		a.newCardsStepsReopenCmd(),
+		a.newCardsStepsDeleteCmd(),
 	)
 }
 
-func (a *app) newStepsListCmd() *cobra.Command {
+func (a *app) newCardsStepsListCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "list <cardId>",
 		Short: "List the steps of a card",
@@ -86,8 +86,8 @@ func (a *app) newStepsListCmd() *cobra.Command {
 				data:    raw.Steps,
 				summary: fmt.Sprintf("%d of %s completed on card %s", completedSteps(card.Value.Steps), plural(len(card.Value.Steps), "step", "steps"), card.Value.Title),
 				breadcrumbs: []Breadcrumb{
-					{Action: "create", Cmd: "minka steps create " + card.Value.ID + " <text>", Description: "Add a step"},
-					{Action: "complete", Cmd: "minka steps complete " + card.Value.ID + " <step>", Description: "Tick a step off"},
+					{Action: "create", Cmd: "minka cards steps create " + card.Value.ID + " <text>", Description: "Add a step"},
+					{Action: "complete", Cmd: "minka cards steps complete " + card.Value.ID + " <step>", Description: "Tick a step off"},
 				},
 				text: func(w io.Writer) {
 					if len(card.Value.Steps) == 0 {
@@ -103,7 +103,7 @@ func (a *app) newStepsListCmd() *cobra.Command {
 	}
 }
 
-func (a *app) newStepsCreateCmd() *cobra.Command {
+func (a *app) newCardsStepsCreateCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "create <cardId> <text|->",
 		Short: "Add a step at the end of the list of a card",
@@ -111,8 +111,8 @@ func (a *app) newStepsCreateCmd() *cobra.Command {
 500 characters. Give - as the text to read it from stdin.
 
 A step comes without people and without a due day: Minka takes neither when it
-adds one. Give them afterwards with minka steps edit.`,
-		Example: `  minka steps create 0199... "Call the caterer"`,
+adds one. Give them afterwards with minka cards steps edit.`,
+		Example: `  minka cards steps create 0199... "Call the caterer"`,
 		Args:    requireArgs("cardId", "text"),
 		RunE: func(_ *cobra.Command, args []string) error {
 			text, err := a.readValue("the step", args[1])
@@ -135,7 +135,7 @@ adds one. Give them afterwards with minka steps edit.`,
 			summary := fmt.Sprintf("Added a step to card %s", card.Value.Title)
 			breadcrumbs := stepBreadcrumbs(card.Value.ID)
 			if n := len(card.Value.Steps); n > 0 {
-				breadcrumbs = append(breadcrumbs, Breadcrumb{Action: "edit", Cmd: fmt.Sprintf("minka steps edit %s %d --assignee <person> --due <YYYY-MM-DD>", card.Value.ID, n), Description: "Give the step people and a due day"})
+				breadcrumbs = append(breadcrumbs, Breadcrumb{Action: "edit", Cmd: fmt.Sprintf("minka cards steps edit %s %d --assignee <person> --due <YYYY-MM-DD>", card.Value.ID, n), Description: "Give the step people and a due day"})
 			}
 			return a.ok(success{
 				data:        card.Raw,
@@ -152,7 +152,7 @@ adds one. Give them afterwards with minka steps edit.`,
 	}
 }
 
-func (a *app) newStepsEditCmd() *cobra.Command {
+func (a *app) newCardsStepsEditCmd() *cobra.Command {
 	var title, due string
 	var assignees []string
 	var noAssignees bool
@@ -174,10 +174,10 @@ personNotAProjectMember, and nothing is written, the text neither.
 A card in the archive of its board takes no change: exit 9 with cardArchived.
 
 ` + stepHelp,
-		Example: `  minka steps edit 0199... 2 --assignee me --due 2026-10-09
-  minka steps edit 0199... 2 --title "Call the caterer about the tent"
-  minka steps edit 0199... "Call the caterer" --assignee me --assignee anke@example.com
-  minka steps edit 0199... 2 --no-assignees --due ""`,
+		Example: `  minka cards steps edit 0199... 2 --assignee me --due 2026-10-09
+  minka cards steps edit 0199... 2 --title "Call the caterer about the tent"
+  minka cards steps edit 0199... "Call the caterer" --assignee me --assignee anke@example.com
+  minka cards steps edit 0199... 2 --no-assignees --due ""`,
 		Args: requireArgs("cardId", "step"),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if noAssignees && len(assignees) > 0 {
@@ -273,7 +273,7 @@ A card in the archive of its board takes no change: exit 9 with cardArchived.
 	return cmd
 }
 
-func (a *app) newStepsMoveCmd() *cobra.Command {
+func (a *app) newCardsStepsMoveCmd() *cobra.Command {
 	var after, before string
 	var top, bottom bool
 
@@ -291,9 +291,9 @@ stepPlaceUnknown, and nothing moves. A card in the archive of its board takes
 no move: exit 9 with cardArchived.
 
 ` + stepHelp,
-		Example: `  minka steps move 0199... 3 --top
-  minka steps move 0199... "Call the caterer" --after 1
-  minka steps move 0199... 1 --bottom`,
+		Example: `  minka cards steps move 0199... 3 --top
+  minka cards steps move 0199... "Call the caterer" --after 1
+  minka cards steps move 0199... 1 --bottom`,
 		Args: requireArgs("cardId", "step"),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			placements := 0
@@ -352,9 +352,9 @@ no move: exit 9 with cardArchived.
 				switch {
 				case e.APICode == apiCodeStepPlaceUnknown && bottom:
 					// The last step as read can leave the card before the move.
-					e.Hint = "The step that was last on the card when it was read is gone from it since. The steps as they stand now: minka steps list " + card.Value.ID
+					e.Hint = "The step that was last on the card when it was read is gone from it since. The steps as they stand now: minka cards steps list " + card.Value.ID
 				case e.APICode == apiCodeStepPlaceUnknown:
-					e.Hint = "The step named with --after or --before is the step itself or none of this card. The steps in their order: minka steps list " + card.Value.ID
+					e.Hint = "The step named with --after or --before is the step itself or none of this card. The steps in their order: minka cards steps list " + card.Value.ID
 				case e.Code == CodeNotFound && wasOnCard:
 					// A Minka without the address answers like one without the
 					// step, but this step was just read on the card.
@@ -416,15 +416,15 @@ func stepRefusal(s *session, err error) *Error {
 	return e
 }
 
-func (a *app) newStepsCompleteCmd() *cobra.Command {
-	return a.newStepsSetCompletedCmd("complete", "Tick a step off", true)
+func (a *app) newCardsStepsCompleteCmd() *cobra.Command {
+	return a.newCardsStepsSetCompletedCmd("complete", "Tick a step off", true)
 }
 
-func (a *app) newStepsReopenCmd() *cobra.Command {
-	return a.newStepsSetCompletedCmd("reopen", "Open a ticked off step again", false)
+func (a *app) newCardsStepsReopenCmd() *cobra.Command {
+	return a.newCardsStepsSetCompletedCmd("reopen", "Open a ticked off step again", false)
 }
 
-func (a *app) newStepsSetCompletedCmd(name, short string, completed bool) *cobra.Command {
+func (a *app) newCardsStepsSetCompletedCmd(name, short string, completed bool) *cobra.Command {
 	return &cobra.Command{
 		Use:   name + " <cardId> <step>",
 		Short: short,
@@ -432,7 +432,7 @@ func (a *app) newStepsSetCompletedCmd(name, short string, completed bool) *cobra
 command succeeds.
 
 ` + stepHelp,
-		Example: fmt.Sprintf("  minka steps %s 0199... 2", name),
+		Example: fmt.Sprintf("  minka cards steps %s 0199... 2", name),
 		Args:    requireArgs("cardId", "step"),
 		RunE: func(_ *cobra.Command, args []string) error {
 			s, err := a.session()
@@ -476,7 +476,7 @@ command succeeds.
 	}
 }
 
-func (a *app) newStepsDeleteCmd() *cobra.Command {
+func (a *app) newCardsStepsDeleteCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "delete <cardId> <step>",
 		Short: "Remove a step from a card",
@@ -484,7 +484,7 @@ func (a *app) newStepsDeleteCmd() *cobra.Command {
 card succeeds as well.
 
 ` + stepHelp,
-		Example: `  minka steps delete 0199... 3`,
+		Example: `  minka cards steps delete 0199... 3`,
 		Args:    requireArgs("cardId", "step"),
 		RunE: func(_ *cobra.Command, args []string) error {
 			s, err := a.session()
@@ -651,7 +651,7 @@ func completedSteps(steps []api.Step) int {
 
 func stepBreadcrumbs(cardID string) []Breadcrumb {
 	return []Breadcrumb{
-		{Action: "list", Cmd: "minka steps list " + cardID, Description: "List the steps of the card"},
+		{Action: "list", Cmd: "minka cards steps list " + cardID, Description: "List the steps of the card"},
 		{Action: "show", Cmd: "minka cards show " + cardID, Description: "Show the card"},
 	}
 }
