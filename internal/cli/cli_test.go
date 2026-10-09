@@ -1608,7 +1608,7 @@ func TestTheCatalogListsEveryCommandWithItsFlags(t *testing.T) {
 	for _, cmd := range catalog.Commands {
 		byName[cmd.Command] = cmd
 	}
-	for _, name := range []string{"minka auth login", "minka me", "minka projects list", "minka boards list", "minka boards show", "minka cards show", "minka cards create", "minka cards edit", "minka cards move", "minka cards done", "minka cards delete", "minka cards assign", "minka cards unassign", "minka people list", "minka steps list", "minka steps create", "minka steps complete", "minka steps reopen", "minka steps delete", "minka comments create", "minka chats list", "minka chats mark-read", "minka messages list", "minka messages create", "minka messages edit", "minka messages delete", "minka cards subscribe", "minka cards unsubscribe", "minka comments edit", "minka comments delete", "minka uploads create", "minka uploads download", "minka cards mine", "minka cards restore", "minka conversations list", "minka conversations with", "minka conversations people", "minka trash list", "minka comments react", "minka comments unreact", "minka messages react", "minka messages unreact", "minka columns on-hold"} {
+	for _, name := range []string{"minka auth login", "minka me", "minka projects list", "minka boards list", "minka boards show", "minka cards show", "minka cards create", "minka cards edit", "minka cards move", "minka cards done", "minka cards delete", "minka cards assign", "minka cards unassign", "minka people list", "minka cards steps list", "minka cards steps create", "minka cards steps complete", "minka cards steps reopen", "minka cards steps delete", "minka comments create", "minka chats list", "minka chats mark-read", "minka messages list", "minka messages create", "minka messages edit", "minka messages delete", "minka cards subscribe", "minka cards unsubscribe", "minka comments edit", "minka comments delete", "minka uploads create", "minka uploads download", "minka cards mine", "minka cards restore", "minka conversations list", "minka conversations with", "minka conversations people", "minka trash list", "minka comments react", "minka comments unreact", "minka messages react", "minka messages unreact", "minka columns on-hold"} {
 		if _, ok := byName[name]; !ok {
 			t.Errorf("catalog misses %q", name)
 		}
@@ -2385,7 +2385,7 @@ func TestStepsListShowsTheStepsInOrder(t *testing.T) {
 	e := newTestEnv(t)
 	withSteps(e)
 
-	env, r := e.runJSON("", "steps", "list", e.fixture.CardInTriage.ID)
+	env, r := e.runJSON("", "cards", "steps", "list", e.fixture.CardInTriage.ID)
 	expectCode(t, r, ExitOK)
 	var steps []api.Step
 	if err := json.Unmarshal(env.Data, &steps); err != nil || len(steps) != 3 || !steps[1].Completed || steps[0].Title != "Call the caterer" {
@@ -2395,7 +2395,7 @@ func TestStepsListShowsTheStepsInOrder(t *testing.T) {
 		t.Errorf("summary %q", env.Summary)
 	}
 
-	r = e.run("", "steps", "list", e.fixture.CardInTriage.ID, "--styled")
+	r = e.run("", "cards", "steps", "list", e.fixture.CardInTriage.ID, "--styled")
 	expectCode(t, r, ExitOK)
 	if !strings.Contains(r.stdout, "2. [x] Book the tent") {
 		t.Errorf("text:\n%s", r.stdout)
@@ -2406,7 +2406,7 @@ func TestStepsCreateAddsAStepAtTheEnd(t *testing.T) {
 	e := newTestEnv(t)
 	withSteps(e)
 
-	env, r := e.runJSON("", "steps", "create", e.fixture.CardInTriage.ID, "Zeltverleih anrufen")
+	env, r := e.runJSON("", "cards", "steps", "create", e.fixture.CardInTriage.ID, "Zeltverleih anrufen")
 	expectCode(t, r, ExitOK)
 	if body := e.lastWriteBody(); len(body) != 1 || body["title"] != "Zeltverleih anrufen" {
 		t.Errorf("body sent %v", body)
@@ -2416,7 +2416,7 @@ func TestStepsCreateAddsAStepAtTheEnd(t *testing.T) {
 		t.Errorf("card %s", env.Data)
 	}
 
-	_, r = e.runJSON("Aufbau\n", "steps", "create", e.fixture.CardInTriage.ID, "-")
+	_, r = e.runJSON("Aufbau\n", "cards", "steps", "create", e.fixture.CardInTriage.ID, "-")
 	expectCode(t, r, ExitOK)
 	if got := e.lastWriteBody()["title"]; got != "Aufbau\n" {
 		t.Errorf("title sent %q", got)
@@ -2430,7 +2430,7 @@ func TestAStepThatIsNoLineIsRefused(t *testing.T) {
 		strings.Repeat("ä", 501): "stepTooLong",
 		"first\tsecond":          "stepHasControlCharacters",
 	} {
-		env, r := e.runJSON("", "steps", "create", e.fixture.CardInTriage.ID, value)
+		env, r := e.runJSON("", "cards", "steps", "create", e.fixture.CardInTriage.ID, value)
 		expectCode(t, r, ExitValidation)
 		if env.Meta["apiCode"] != code {
 			t.Errorf("%q: meta %v, want %s", value, env.Meta, code)
@@ -2446,7 +2446,7 @@ func TestCompleteAndReopenFindTheStepByPositionTextOrID(t *testing.T) {
 	steps := withSteps(e)
 	card := e.fixture.CardInTriage.ID
 
-	_, r := e.runJSON("", "steps", "complete", card, "1")
+	_, r := e.runJSON("", "cards", "steps", "complete", card, "1")
 	expectCode(t, r, ExitOK)
 	writes := e.server.WritingRequests()
 	if last := writes[len(writes)-1]; last.Method != http.MethodPatch || last.Path != "/api/v1/cards/"+card+"/steps/"+steps[0].ID {
@@ -2456,13 +2456,13 @@ func TestCompleteAndReopenFindTheStepByPositionTextOrID(t *testing.T) {
 		t.Errorf("body sent %v", body)
 	}
 
-	env, r := e.runJSON("", "steps", "complete", card, "call THE caterer")
+	env, r := e.runJSON("", "cards", "steps", "complete", card, "call THE caterer")
 	expectCode(t, r, ExitOK)
 	if !strings.Contains(env.Summary, "already") {
 		t.Errorf("summary %q", env.Summary)
 	}
 
-	_, r = e.runJSON("", "steps", "reopen", card, steps[1].ID)
+	_, r = e.runJSON("", "cards", "steps", "reopen", card, steps[1].ID)
 	expectCode(t, r, ExitOK)
 	if body := e.lastWriteBody(); body["completed"] != false || steps[1].Completed {
 		t.Errorf("body sent %v", body)
@@ -2473,7 +2473,7 @@ func TestAStepTextOfTwoStepsIsAmbiguous(t *testing.T) {
 	e := newTestEnv(t)
 	withSteps(e)
 
-	env, r := e.runJSON("", "steps", "complete", e.fixture.CardInTriage.ID, "book the tent")
+	env, r := e.runJSON("", "cards", "steps", "complete", e.fixture.CardInTriage.ID, "book the tent")
 	expectCode(t, r, ExitAmbiguous)
 	if !strings.Contains(env.Error, "2 and 3") {
 		t.Errorf("error %q", env.Error)
@@ -2487,7 +2487,7 @@ func TestAPositionOutsideTheListIsRefused(t *testing.T) {
 	e := newTestEnv(t)
 	withSteps(e)
 	for _, position := range []string{"0", "4", "-1"} {
-		_, r := e.runJSON("", "steps", "delete", e.fixture.CardInTriage.ID, position)
+		_, r := e.runJSON("", "cards", "steps", "delete", e.fixture.CardInTriage.ID, position)
 		expectCode(t, r, ExitUsage)
 	}
 	if n := len(e.server.WritingRequests()); n != 0 {
@@ -2501,7 +2501,7 @@ func TestStepsDeleteRemovesAStep(t *testing.T) {
 	removedID := withSteps(e)[1].ID
 	card := e.fixture.CardInTriage
 
-	env, r := e.runJSON("", "steps", "delete", card.ID, "2")
+	env, r := e.runJSON("", "cards", "steps", "delete", card.ID, "2")
 	expectCode(t, r, ExitOK)
 	writes := e.server.WritingRequests()
 	if len(writes) != 1 || writes[0].Method != http.MethodDelete || writes[0].Path != "/api/v1/cards/"+card.ID+"/steps/"+removedID {

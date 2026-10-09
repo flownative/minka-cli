@@ -3,11 +3,14 @@
 A **step** is one line of work on a card: a text of at most 500 characters,
 ticked off or open, with the **people** on it and the **day it is due**. It is
 no item of its own: it has no comments and no address but under its card,
-and nobody is told when put on one. `steps list` reads the steps of a card, `steps create` adds
-one, `steps edit` changes its text, its people and its day
-([C-100](../decisions.md#c-100)), `steps move` puts it elsewhere in the list
-([C-123](../decisions.md#c-123)), `steps complete` and `steps reopen` tick it
-off and open it again, and `steps delete` takes it off.
+and nobody is told when put on one. So its commands live under `cards`, beside
+`cards notes`, and nowhere else ([C-125](../decisions.md#c-125)).
+`cards steps list` reads the steps of a card, `cards steps create` adds one,
+`cards steps edit` changes its text, its people and its day
+([C-100](../decisions.md#c-100)), `cards steps move` puts it elsewhere in the
+list ([C-123](../decisions.md#c-123)), `cards steps complete` and
+`cards steps reopen` tick it off and open it again, and `cards steps delete`
+takes it off.
 
 Everything here was read in Minka's code — `BoardApiController::addStepAction`,
 `updateStepAction`, `moveStepAction` and `removeStepAction`, `StepResource`,
@@ -24,7 +27,7 @@ stays on a step and is named there until taken off. `dueOn` is `YYYY-MM-DD` or
 null; a step says nothing about being overdue. A board carries only
 `stepCount` and `completedStepCount` per card.
 
-The text view of `steps list` and `cards show` puts the people and the day
+The text view of `cards steps list` and `cards show` puts the people and the day
 behind the line: `2. [ ] Call the caterer (Anke, due 2026-10-09)`.
 
 A step is named by its ID, by its position from 1 or by its text, which needs
@@ -34,7 +37,7 @@ no step goes out as it is, and Minka gives its answer.
 ## Writing a step
 
 `POST cards/{cardId}/steps` adds a step **at the end** from `title` alone and
-answers the card (201). People and a day come with `steps edit` afterwards.
+answers the card (201). People and a day come with `cards steps edit` afterwards.
 
 `PATCH cards/{cardId}/steps/{stepId}` changes any of `title`, `completed`,
 `dueOn` and `assigneeIds` in one request, tested by key: what the body leaves
@@ -45,17 +48,17 @@ already writes nothing and succeeds.
 
 **The text.** `title` follows the rules of a new step: trimmed at both ends,
 at most 500 characters, no control characters, line breaks and tabs included,
-and not empty; `null` counts as empty. `steps edit --title` sends what it is
+and not empty; `null` counts as empty. `cards steps edit --title` sends what it is
 given, `""` too, so Minka refuses it with `stepMissing`. Unlike the text of
-`steps create`, `--title -` reads nothing from stdin, as no `--title` of the
+`cards steps create`, `--title -` reads nothing from stdin, as no `--title` of the
 CLI does. The same text again is written again and succeeds.
 
 **The day.** `dueOn` is a day as `YYYY-MM-DD`; null and `""` take it off. So
-`steps edit --due ""` sends null.
+`cards steps edit --due ""` sends null.
 
 **The people.** `assigneeIds` is **the whole set** the step is to carry: whoever
 stays keeps their place, whoever is new comes behind in the order named, and
-whoever is not named again is taken off. So `steps edit --assignee` names the
+whoever is not named again is taken off. So `cards steps edit --assignee` names the
 whole set, and `--no-assignees` sends an empty list — never null, which Minka
 reads as no change. A person is an ID, `me`, an e-mail address or a name; the
 members of the card's project are read only where a name, an address or `me`
@@ -67,7 +70,7 @@ already may be named again without a refusal.
 
 The day and the people are one write, the text a second one behind it, and a
 tick named beside them a third. So a person refused leaves the text as it
-was. `steps edit` never sends the tick.
+was. `cards steps edit` never sends the tick.
 
 **An older Minka.** A Minka from before the text of a step could change does
 not know `title`: it answers `--title` alone with `nothingToChange`, and
@@ -88,7 +91,7 @@ decides and the next one is only checked: the step goes right behind the
 previous step, whatever the next one says. The end has no word of its own:
 the last of the other steps is the previous one.
 
-`steps move` takes exactly one of `--top`, `--bottom`, `--after <step>` and
+`cards steps move` takes exactly one of `--top`, `--bottom`, `--after <step>` and
 `--before <step>`, the neighbour named like the step. `--top` sends neither
 neighbour, `--after` the previous one, `--before` the next one. `--bottom`
 means behind the last step **as read**: it sends the last step of the card
@@ -149,15 +152,15 @@ ID before a request.
 
 | Answer | Command | Exit |
 |---|---|---|
-| 404 | every command, for a card that is unknown, foreign or in the trash; `steps edit`, `move`, `complete` and `reopen` for a step that is not on the card; `steps move` against a Minka without the move | 2 |
-| 422 `stepMissing`, `stepTooLong`, `stepHasControlCharacters` | `steps create`, `steps edit --title` | 9 |
-| 422 `stepPlaceUnknown` | `steps move` with the step itself as its neighbour; the hint names `minka steps list` | 9 |
-| 422 `stepDueDateNotADate` | `steps edit` | 9 |
-| 422 `personNotAProjectMember` | `steps edit`; the hint names `minka people list` | 9 |
+| 404 | every command, for a card that is unknown, foreign or in the trash; `cards steps edit`, `move`, `complete` and `reopen` for a step that is not on the card; `cards steps move` against a Minka without the move | 2 |
+| 422 `stepMissing`, `stepTooLong`, `stepHasControlCharacters` | `cards steps create`, `cards steps edit --title` | 9 |
+| 422 `stepPlaceUnknown` | `cards steps move` with the step itself as its neighbour; the hint names `minka cards steps list` | 9 |
+| 422 `stepDueDateNotADate` | `cards steps edit` | 9 |
+| 422 `personNotAProjectMember` | `cards steps edit`; the hint names `minka people list` | 9 |
 | 422 `projectArchived`, `cardArchived` | every write; for `cardArchived` the hint names `cards unarchive` | 9 |
-| 422 `stepCompletedMissing` | `steps edit` against a Minka older than the people and the day of a step, which reads every change as a tick; the hint says so | 9 |
-| 422 `nothingToChange` | `steps edit --title` alone against a Minka without the text of a step, which the hint says; otherwise unreachable: an edit without a change is a usage error here | 9 |
-| 200 without the text sent | `steps edit --title` beside other flags against a Minka without the text of a step | 7 |
+| 422 `stepCompletedMissing` | `cards steps edit` against a Minka older than the people and the day of a step, which reads every change as a tick; the hint says so | 9 |
+| 422 `nothingToChange` | `cards steps edit --title` alone against a Minka without the text of a step, which the hint says; otherwise unreachable: an edit without a change is a usage error here | 9 |
+| 200 without the text sent | `cards steps edit --title` beside other flags against a Minka without the text of a step | 7 |
 
-`steps delete` answers 204 for a step that is not on the card as well, and is
+`cards steps delete` answers 204 for a step that is not on the card as well, and is
 refused only for an archived project or card.

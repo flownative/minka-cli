@@ -76,7 +76,7 @@ minka cards assign <cardId> me
 minka cards done <cardId>
 minka cards notes show <cardId>        # the working notes on the back of a card
 minka cards notes set <cardId> - --expect <updatedAt> < notes.md
-minka steps create <cardId> "Write the test"
+minka cards steps create <cardId> "Write the test"
 minka comments create <cardId> "Done in abc1234"
 minka chats list <projectId>
 minka messages list <chatId>

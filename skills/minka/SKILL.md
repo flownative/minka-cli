@@ -46,8 +46,8 @@ when stdout is not a terminal, so an agent gets structured output by default.
   nothing read; `minka notifications mark-read <id>` does, with the `id` of a
   line. Coordinating a board and the whole flow:
   [references/waiting-and-coordinating.md](references/waiting-and-coordinating.md).
-- Keep the work steps of a card as steps (`minka steps create <card> "…"`,
-  `minka steps complete`), never as a list in the card's description or a
+- Keep the work steps of a card as steps (`minka cards steps create <card> "…"`,
+  `minka cards steps complete`), never as a list in the card's description or a
   comment: a step can be ticked off, carries people and a day, and the board
   counts it.
 - Take a card up from its back: `minka cards notes show <card>` before you
@@ -225,14 +225,14 @@ minka cards notes attachments create <cardId> (<file> | --blob <blobId>) [--name
 minka cards notes attachments show <cardId> <attachment> --json
 minka cards notes attachments download <cardId> <attachment> [-o <path>|-] [--force] --json
 minka cards notes attachments delete <cardId> <attachment> --json
-minka steps list <cardId> --json
-minka steps create <cardId> "Text" --json
-minka steps edit <cardId> <step> --assignee me --due 2026-10-09 --json
-minka steps edit <cardId> <step> --title "Text" --json
-minka steps move <cardId> <step> (--top | --bottom | --after <step> | --before <step>) --json
-minka steps complete <cardId> <step> --json
-minka steps reopen <cardId> <step> --json
-minka steps delete <cardId> <step> --json
+minka cards steps list <cardId> --json
+minka cards steps create <cardId> "Text" --json
+minka cards steps edit <cardId> <step> --assignee me --due 2026-10-09 --json
+minka cards steps edit <cardId> <step> --title "Text" --json
+minka cards steps move <cardId> <step> (--top | --bottom | --after <step> | --before <step>) --json
+minka cards steps complete <cardId> <step> --json
+minka cards steps reopen <cardId> <step> --json
+minka cards steps delete <cardId> <step> --json
 minka comments list <cardId> --json
 minka comments unread <cardId> --json
 minka comments create <cardId> - [--if-latest <commentId|none> | --force] --json < comment.txt
@@ -644,12 +644,12 @@ such as `Doing`.
 - `<step>` is a step ID, its position starting at 1, or its text
   (case-insensitive; a number always means a position; a text on two steps
   gives exit 8 with the positions).
-- `steps create` adds a step at the end. A step is one line of at most 500
+- `cards steps create` adds a step at the end. A step is one line of at most 500
   characters: `stepMissing`, `stepTooLong` and `stepHasControlCharacters` exit 9.
-  It comes without people and without a due day; give them with `steps edit`.
-- `steps edit <cardId> <step>` changes the text, the people and the due day in
+  It comes without people and without a due day; give them with `cards steps edit`.
+- `cards steps edit <cardId> <step>` changes the text, the people and the due day in
   one request; what is not given stays. `--title` follows the rules of
-  `steps create`; `--title ""` exits 9 with `stepMissing`. `--assignee` (repeatable) is the WHOLE set: whoever
+  `cards steps create`; `--title ""` exits 9 with `stepMissing`. `--assignee` (repeatable) is the WHOLE set: whoever
   is on the step and not named again is taken off; `--no-assignees` takes
   everybody off. `--due YYYY-MM-DD`, `--due ""` takes the day off. A person is
   an ID, `me`, an e-mail address or a name. Only a member of the project who
@@ -661,7 +661,7 @@ such as `Doing`.
   `stepCompletedMissing`, and the hint says so.
 - Completing a completed step, reopening an open one and deleting a step that
   is gone all succeed. Deleting does not ask.
-- `steps move <cardId> <step>` needs exactly one of `--top`, `--bottom`,
+- `cards steps move <cardId> <step>` needs exactly one of `--top`, `--bottom`,
   `--after <step>` and `--before <step>`; the neighbour is named like `<step>`.
   Moving a step where it stands succeeds. The step itself as its neighbour is
   `stepPlaceUnknown` (exit 9). `--bottom` goes behind the last step as read;
@@ -1483,7 +1483,7 @@ one optional assignee and one optional due day.
   `--group`. Anything else is exit 9 `todoPlaceUnknown`; another tool or
   project is done on the web.
 - `todos delete` puts a to-do into the trash with its subtasks.
-- `todos subtasks …` name a subtask as `steps` do: by ID, by position from 1
+- `todos subtasks …` name a subtask as `cards steps` do: by ID, by position from 1
   or by its text. `create` adds one at the end; `edit` changes the text,
   `--assignee` (one person, `""` for nobody) or `--due` (`""` takes it off);
   `complete` and `reopen` succeed twice; `move` needs exactly one of `--top`,

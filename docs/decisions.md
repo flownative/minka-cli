@@ -1641,15 +1641,16 @@ file, and without an expectation nothing is lost: Minka keeps the old file.
 `cli.uploadVersionRefusal`, see [Docs & Files](stable/docs-and-files.md).
 
 <a id="c-100"></a>
-## C-100 — The people and the day of a step are `steps edit`, never `steps create`
+## C-100 — The people and the day of a step are `cards steps edit`, never `cards steps create`
 
 *Applies to: the steps of a card*
 
-`steps edit` sends `--assignee` as the whole set, `--no-assignees` as `[]` and
-`--due ""` as null, as `todos edit` does; `steps create` takes neither.
+`cards steps edit` sends `--assignee` as the whole set, `--no-assignees` as
+`[]` and `--due ""` as null, as `todos edit` does; `cards steps create` takes
+neither.
 **Why:** Minka adds a step from its line alone, and a second request behind it
 could be refused after the step stands, leaving half of one command written.
-**Implemented as:** `cli.newStepsEditCmd`, `api.UpdateStepInput`,
+**Implemented as:** `cli.newCardsStepsEditCmd`, `api.UpdateStepInput`,
 `cli.stepRefusal`, see [Steps](stable/steps.md).
 
 <a id="c-101"></a>
@@ -2055,7 +2056,7 @@ mark-read` already names the same act (C-009). **Implemented as:**
 <a id="c-123"></a>
 ## C-123 — A step is moved to a place that is named, its end found in the card
 
-*Applies to: `steps move`, `POST /api/v1/cards/{cardId}/steps/{stepId}/moves`*
+*Applies to: `cards steps move`, `POST /api/v1/cards/{cardId}/steps/{stepId}/moves`*
 
 Exactly one of `--top`, `--bottom`, `--after <step>` and `--before <step>`, as
 for a group and a to-do ([C-072](#c-072), [C-074](#c-074)), but with
@@ -2070,7 +2071,7 @@ given both neighbours it places the step behind the previous one alone. Unlike
 a group, a step is named through the card the command reads anyway, so the
 last step is known without a request of its own; Minka's tests send the end
 the same way. Which neighbour a step may have is Minka's rule, as in
-[C-070](#c-070). **Implemented as:** `cli.app.newStepsMoveCmd`,
+[C-070](#c-070). **Implemented as:** `cli.app.newCardsStepsMoveCmd`,
 `api.MoveStepInput`, see [Steps](stable/steps.md).
 
 <a id="c-124"></a>
@@ -2085,3 +2086,16 @@ download` does. An attachment is named by ID, position or file name.
 **Why:** A back is one thing with two parts, a group keeps the names of C-001, and a picture on a terminal is noise
 while a text an agent reads back must arrive unchanged. **Implemented as:** `cli.newCardsNotesAttachmentsCmd`,
 `api.CardBackFile`, see [The back of a card](stable/card-back.md).
+
+<a id="c-125"></a>
+## C-125 — The steps of a card are `cards steps`, with no top-level alias
+
+*Applies to: `cards steps list|create|edit|move|complete|reopen|delete`*
+
+What hangs on a card alone lives under `cards`, beside `cards notes`; `minka
+steps` is an unknown command. What hangs on everything, such as `comments`,
+keeps its own group.
+
+**Why:** A step hangs on a card alone, like its notes, and an alias would keep
+two names for one thing. **Implemented as:**
+`cli.newCardsStepsCmd`, see [Steps](stable/steps.md).
