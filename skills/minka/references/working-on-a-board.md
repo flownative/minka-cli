@@ -26,8 +26,8 @@ inside that order and does not make its own.
   Never pick from intake on your own, even when ready is empty and you think
   you know what comes next. If ready is empty, say so and wait. Until then,
   only finish or tidy what is already in hand. If you coordinate the board,
-  hand the card out: assign it to someone, or have agents you lead do it.
-  Either way you move it to doing and keep its back.
+  hand the card out: assign it to someone, who then begins it as below, or
+  have agents you lead do it; then you begin it yourself and keep its back.
 - **Never put a card into the ready column yourself,** and never reorder it
   unless you were asked to. A card you create goes to intake. A follow-up that
   someone already approved names that approval in its description, as a quote
