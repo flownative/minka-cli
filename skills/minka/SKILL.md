@@ -19,8 +19,11 @@ when stdout is not a terminal, so an agent gets structured output by default.
 
 ## Agent invariants
 
-This file holds the commands an agent needs every day; what else there is
-stands in the references listed under "Where the rest stands".
+**Before you take up a card, comment on one or stay on a board, read
+[references/working-on-a-board.md](references/working-on-a-board.md):** how to
+work on a board so that its people can follow and steer the work. This file
+holds the commands an agent needs every day; what else there is stands in the
+references listed under "Where the rest stands".
 
 - Pass `--json` explicitly. Read `ok`, then `data`; on failure read `code`,
   `retryable`, `hint` and `meta.apiCode`.
@@ -247,6 +250,7 @@ they stand at its top. Read the one you need, not all of them.
 
 | For | Read |
 |-----|------|
+| How to work on a board: the roles of the columns, taking up a card, asking a person, handing over | [references/working-on-a-board.md](references/working-on-a-board.md) |
 | Waiting for news instead of polling, a line of the bell, coordinating a board | [references/waiting-and-coordinating.md](references/waiting-and-coordinating.md) |
 | Your own cards and the trash, projects, boards and short identifiers, columns and their commands, cards on hold, the archive of a board, people, assignments and subscribers, steps, due dates | [references/cards.md](references/cards.md) |
 | The back of a card: how to keep the working notes, their commands, the attachments | [references/working-notes.md](references/working-notes.md) |

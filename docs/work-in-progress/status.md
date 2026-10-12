@@ -509,8 +509,10 @@ Versions are released by publishing a release in GitHub and installed through
 the Homebrew tap; `setup`, `doctor` and the skill inside the binary cover the
 first steps.
 
-The skill is a core of about three hundred lines with fourteen references by
-subject (C-126, [The skill](../stable/skill.md)).
+The skill is a core of about three hundred lines with fifteen references by
+subject (C-126, [The skill](../stable/skill.md)); `working-on-a-board.md` says
+how an agent works on a board, beside `waiting-and-coordinating.md`, which
+holds the mechanics of waiting and coordinating.
 
 Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
 (account Bruno, local instance) gets revoked then.

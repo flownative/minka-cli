@@ -18,10 +18,11 @@ is loaded in exactly those moments.
 Everything else stands in a reference of its own subject: the detail of cards,
 the back of a card, texts, saying what one works on, chats, files, Docs &
 Files, to-dos, check-ins, posts, calendars, reminders, the Basecamp import,
-waiting and coordinating. Where a reference has commands of its own, they
-stand at its top. SKILL.md points to every reference, and a pointer between
-the files names the file it leads to and, where it names a section, one the
-file has; a test holds all of it against the files the binary carries.
+waiting and coordinating, and how to work on a board. Where a reference has
+commands of its own, they stand at its top. SKILL.md points to every
+reference, and a pointer between the files names the file it leads to and,
+where it names a section, one the file has; a test holds all of it against
+the files the binary carries.
 
 A reference is never renamed or removed lightly: `skill install` leaves a file
 it no longer carries where it is, so an installed copy would keep it, stale.
