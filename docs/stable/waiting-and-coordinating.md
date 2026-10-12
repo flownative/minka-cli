@@ -218,5 +218,8 @@ missing; `--json` carries the board as it came.
 The main part of the skill says in a few lines when to wait instead of
 polling; the flow — claim, pull only assigned cards, wait in the background,
 hand over — is in `references/waiting-and-coordinating.md` beside it, which
-travels and is installed with it ([The skill](skill.md)).
+travels and is installed with it ([The skill](skill.md)). How an agent works
+on a board — which column it takes work from, how it asks a person, how it
+hands over — is in `references/working-on-a-board.md` beside that one, which
+points to it for the mechanics.
 

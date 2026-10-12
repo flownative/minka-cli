@@ -2099,3 +2099,17 @@ keeps its own group.
 **Why:** A step hangs on a card alone, like its notes, and an alias would keep
 two names for one thing. **Implemented as:**
 `cli.newCardsStepsCmd`, see [Steps](stable/steps.md).
+
+<a id="c-126"></a>
+## C-126 — The skill is a small core, the rest stands in references by subject
+
+*Applies to: `skills/minka/SKILL.md`, `skills/minka/references/`*
+
+SKILL.md holds the invariants, the daily commands of a board and a table that
+names the reference for every other subject; where a reference has commands of
+its own, they stand at its top. Text moves between the files, it is not kept
+twice.
+
+**Why:** Every agent that touches a card loads SKILL.md whole, and most need
+none of the tools beside the board. **Implemented as:** `skills/minka/`, see
+[The skill](stable/skill.md).

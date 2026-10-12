@@ -23,9 +23,10 @@ the documentation says what holds; how it came about is in git.
 - [First steps](stable/first-steps.md): What `setup` asks and in which order,
   why it needs a terminal, what `doctor` checks and why it always exits 0 —
   before any work on `setup`, `doctor` or the sign-in.
-- [The skill](stable/skill.md): How the skill travels inside the binary, how it
-  gets installed, what happens after an upgrade, the test against the command
-  tree — before any work on a command's name or on `skill`.
+- [The skill](stable/skill.md): How the skill travels inside the binary, what
+  stands in its core and what in its references, how it gets installed, what
+  happens after an upgrade, the test against the command tree — before any
+  work on a command's name, on the skill's text or on `skill`.
 - [Releases](stable/releases.md): What publishing a release in GitHub sets off,
   why Homebrew and no install script, why the formula builds from source —
   before any work on the workflows, the Makefile's `dist` or the formula.

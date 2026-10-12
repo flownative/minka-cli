@@ -2,10 +2,30 @@
 
 `skills/minka/SKILL.md` is the contract for agents (C-014). It travels inside
 the binary, so that what an agent reads fits the commands of the version that
-is installed (C-016). What only some agents need, such as waiting and
-coordinating a board, stands in a reference beside it under
-`skills/minka/references/`, which SKILL.md points to; the references travel,
-install and count with it.
+is installed (C-016). The references beside it under
+`skills/minka/references/` travel, install and count with it.
+
+## A small core and its references
+
+An agent loads SKILL.md whole whenever the skill applies, so it holds only what
+an agent on a board needs every day (C-126): the invariants, output modes,
+exit codes, introspection, the commands for cards, boards, columns, steps,
+comments, notifications and `work`, and a table that names, for each subject,
+the reference to read. Its `description` names taking up, moving and
+commenting on a card and coordinating or waiting on a board, so that the skill
+is loaded in exactly those moments.
+
+Everything else stands in a reference of its own subject: the detail of cards,
+the back of a card, texts, saying what one works on, chats, files, Docs &
+Files, to-dos, check-ins, posts, calendars, reminders, the Basecamp import,
+waiting and coordinating, and how to work on a board. Where a reference has
+commands of its own, they stand at its top. SKILL.md points to every
+reference, and a pointer between the files names the file it leads to and,
+where it names a section, one the file has; a test holds all of it against
+the files the binary carries.
+
+A reference is never renamed or removed lightly: `skill install` leaves a file
+it no longer carries where it is, so an installed copy would keep it, stale.
 
 ## Commands
 

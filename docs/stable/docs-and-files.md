@@ -223,7 +223,7 @@ The round trip is safe: the `updatedAt` a read hands over is the column the
 write is held against. What it cannot do is notice a change made **in the same
 second as the read**: that change carries the moment that was read and passes
 for it. Minka decided against microseconds for now, so every guarded write says
-so in a `notice`, the help says it, and the SKILL.md says it where agents read
+so in a `notice`, the help says it, and the skill says it where agents read
 — after a write that matters, read the document back.
 
 A refused write is 409 `documentChanged` with the document under `"document"`,

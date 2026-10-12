@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"maps"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -397,6 +398,38 @@ func TestEveryReferenceOfTheSkillIsCarriedAndPointedTo(t *testing.T) {
 	for name := range files {
 		if name != "SKILL.md" && !pointed[name] {
 			t.Errorf("the skill carries %s and points nowhere to it", name)
+		}
+	}
+}
+
+// A reference that points to another file of the skill, or back to SKILL.md,
+// leads to a file the binary carries, wherever the pointer stands. A section
+// named in quotes right behind the link is a heading of that file, so that a
+// renamed heading cannot leave a pointer to nothing behind.
+func TestEveryLinkBetweenTheFilesOfTheSkillLeadsToOne(t *testing.T) {
+	files := skills.MinkaFiles()
+	link := regexp.MustCompile(`\]\(([^)#:]+\.md)(?:#[^)]*)?\)(?:,\s+"([^"]+)")?`)
+	heading := regexp.MustCompile(`(?m)^#+ (.+)$`)
+	for name, content := range files {
+		for _, match := range link.FindAllStringSubmatch(string(content), -1) {
+			target := path.Join(path.Dir(name), match[1])
+			if files[target] == nil {
+				t.Errorf("%s points to %s, which the skill does not carry", name, match[1])
+				continue
+			}
+			if match[2] == "" {
+				continue
+			}
+			section := strings.Join(strings.Fields(match[2]), " ")
+			found := false
+			for _, h := range heading.FindAllStringSubmatch(string(files[target]), -1) {
+				if strings.TrimSpace(h[1]) == section {
+					found = true
+				}
+			}
+			if !found {
+				t.Errorf("%s points to the section %q of %s, which has no such heading", name, section, match[1])
+			}
 		}
 	}
 }
