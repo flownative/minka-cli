@@ -197,7 +197,7 @@ func renderCard(w io.Writer, card api.Card) {
 		}
 		fmt.Fprintf(w, "Completed: %s%s\n", formatTime(*card.CompletedAt), by)
 	}
-	fmt.Fprintf(w, "URL: %s\n", card.AppURL)
+	fmt.Fprintf(w, "URL: %s\n", cardAddress(card))
 
 	if len(card.Steps) > 0 {
 		fmt.Fprintf(w, "\n## Steps (%d/%d)\n\n", completedSteps(card.Steps), len(card.Steps))
@@ -314,6 +314,16 @@ func plural(n int, one, many string) string {
 		return "1 " + one
 	}
 	return fmt.Sprintf("%d %s", n, many)
+}
+
+// cardAddress is the address a person copies to name a card elsewhere: the
+// short one, which a renamed prefix keeps leading to, and the long one for a
+// board without a prefix or a Minka that does not hand the short one out.
+func cardAddress(card api.Card) string {
+	if card.ShortURL != nil {
+		return *card.ShortURL
+	}
+	return card.AppURL
 }
 
 // shortIDBefore puts the short identifier of a card in front of its title in

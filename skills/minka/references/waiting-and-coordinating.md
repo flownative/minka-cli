@@ -11,10 +11,11 @@ bell of your account — a card assigned to you was moved, somebody commented,
 mentioned or assigned you — prints it and exits 0. `data` is the list of
 notifications as Minka sent them, the oldest first; each has `summary` (one
 line: what happened and who did it), `occasion` (such as `card.moved`),
-`actor`, `subject` (`type`, `id`, `shortId`, `title`, `appUrl`) and, for a card
-on a board, `card` with `boardId` and the `column` it stands in now. A card of
-yours moved into Done arrives as `card.completed`, and only where you
-subscribe to it, not as `card.moved`.
+`actor`, `subject` (`type`, `id`, `shortId`, `title`, `appUrl`, `shortUrl`)
+and, for a card on a board, `card` with `boardId` and the `column` it stands
+in now. `shortUrl` is the card's short address, as on the card itself, and
+null for anything else. A card of yours moved into Done arrives as
+`card.completed`, and only where you subscribe to it, not as `card.moved`.
 
 Never poll a board in a loop: every poll costs tokens, and a wait costs none
 while it waits. Minka holds the request open and answers the moment something

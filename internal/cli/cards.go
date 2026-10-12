@@ -93,7 +93,7 @@ the next signal of that session.`,
 				summary:     summary,
 				breadcrumbs: cardBreadcrumbs(card.Value.ID),
 				text: func(w io.Writer) {
-					fmt.Fprintf(w, "%s, out of %s.\n%s\n", summary, card.Value.Column.Title, card.Value.AppURL)
+					fmt.Fprintf(w, "%s, out of %s.\n%s\n", summary, card.Value.Column.Title, cardAddress(card.Value))
 				},
 			})
 		},
@@ -138,7 +138,7 @@ cardNotArchived. A card in the trash exits 2 (not_found) and comes back with
 				notices:     []string{"a card out of the archive comes back off hold, whatever it was when it was put away"},
 				breadcrumbs: cardBreadcrumbs(card.Value.ID),
 				text: func(w io.Writer) {
-					fmt.Fprintf(w, "%s.\n%s\n", summary, card.Value.AppURL)
+					fmt.Fprintf(w, "%s.\n%s\n", summary, cardAddress(card.Value))
 				},
 			})
 		},
@@ -239,7 +239,7 @@ A card in the trash goes by no short identifier, so give its ID, which
 				summary:     summary,
 				breadcrumbs: cardBreadcrumbs(card.Value.ID),
 				text: func(w io.Writer) {
-					fmt.Fprintf(w, "%s.\n%s\n", summary, card.Value.AppURL)
+					fmt.Fprintf(w, "%s.\n%s\n", summary, cardAddress(card.Value))
 				},
 			})
 		},
@@ -373,7 +373,7 @@ func (a *app) newCardsCreateCmd() *cobra.Command {
 				notices:     notices,
 				breadcrumbs: cardBreadcrumbs(card.Value.ID),
 				text: func(w io.Writer) {
-					fmt.Fprintf(w, "Created card %s in %s: %s%s\n%s\n", card.Value.ID, card.Value.Column.Title, shortIDBefore(card.Value.ShortID), card.Value.Title, card.Value.AppURL)
+					fmt.Fprintf(w, "Created card %s in %s: %s%s\n%s\n", card.Value.ID, card.Value.Column.Title, shortIDBefore(card.Value.ShortID), card.Value.Title, cardAddress(card.Value))
 				},
 			})
 		},
@@ -469,7 +469,7 @@ func (a *app) newCardsEditCmd() *cobra.Command {
 				notices:     notices,
 				breadcrumbs: cardBreadcrumbs(card.Value.ID),
 				text: func(w io.Writer) {
-					fmt.Fprintf(w, "Updated card %s: %s\n%s\n", card.Value.ID, card.Value.Title, card.Value.AppURL)
+					fmt.Fprintf(w, "Updated card %s: %s\n%s\n", card.Value.ID, card.Value.Title, cardAddress(card.Value))
 				},
 			})
 		},
@@ -636,7 +636,7 @@ takes a card up moves it first and says 'minka work start' afterwards.
 				notices:     notices,
 				breadcrumbs: cardBreadcrumbs(moved.Value.ID),
 				text: func(w io.Writer) {
-					fmt.Fprintf(w, "Moved card %s to %s: %s\n%s\n", moved.Value.ID, where, moved.Value.Title, moved.Value.AppURL)
+					fmt.Fprintf(w, "Moved card %s to %s: %s\n%s\n", moved.Value.ID, where, moved.Value.Title, cardAddress(moved.Value))
 				},
 			})
 		},
@@ -689,7 +689,7 @@ that does not get through, with the next signal of the session that held it.`,
 					notices:     notices,
 					breadcrumbs: cardBreadcrumbs(card.Value.ID),
 					text: func(w io.Writer) {
-						fmt.Fprintf(w, "Card %s is already done: %s\n%s\n", card.Value.ID, card.Value.Title, card.Value.AppURL)
+						fmt.Fprintf(w, "Card %s is already done: %s\n%s\n", card.Value.ID, card.Value.Title, cardAddress(card.Value))
 					},
 				})
 			}
@@ -723,7 +723,7 @@ that does not get through, with the next signal of the session that held it.`,
 				notices:     notices,
 				breadcrumbs: cardBreadcrumbs(moved.Value.ID),
 				text: func(w io.Writer) {
-					fmt.Fprintf(w, "Completed card %s: %s\n%s\n", moved.Value.ID, moved.Value.Title, moved.Value.AppURL)
+					fmt.Fprintf(w, "Completed card %s: %s\n%s\n", moved.Value.ID, moved.Value.Title, cardAddress(moved.Value))
 				},
 			})
 		},

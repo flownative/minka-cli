@@ -512,7 +512,13 @@ first steps.
 The skill is a core of about three hundred lines with fifteen references by
 subject (C-126, [The skill](../stable/skill.md)); `working-on-a-board.md` says
 how an agent works on a board, beside `waiting-and-coordinating.md`, which
-holds the mechanics of waiting and coordinating.
+holds the mechanics of waiting and coordinating. It names a card outside
+Minka by its `shortUrl` (C-127), which Minka's `main` hands out on the single
+card, the card in a column, the card in the archive and the subject of a
+notification about a card, and no release yet; against a released Minka the
+skill builds the address from `shortId`. The CLI passes the field through and
+gives it in the text views of a card, checked against Minka's code and the
+fake, not live.
 
 Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
 (account Bruno, local instance) gets revoked then.

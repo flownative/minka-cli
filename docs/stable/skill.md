@@ -44,6 +44,19 @@ or to the store of another tool, and writing through it would change a file
 there. Links further up, such as a home directory kept elsewhere, are where
 somebody chose to keep their own files.
 
+## Naming a card outside Minka
+
+The skill tells an agent to name a card in a commit, a pull request or any
+other text outside Minka by its `shortUrl`, such as
+`https://<host>/go/card/MNK-1`, and by its `appUrl` only where its board has no
+prefix and `shortUrl` is null (C-127). Minka hands `shortUrl` out on the single
+card, the card in a column, the card in the archive and the `subject` of a
+notification about a card, and the CLI passes it through as served (C-002).
+The text views of a card, `cards show` and the answers of its writes, give
+`shortUrl` where it is there and not null, and `appUrl` otherwise. Against a
+Minka that leaves the field out, the skill says to build the address from the
+host and `shortId`.
+
 ## After an upgrade
 
 The installed copy is compared by content with the one the binary carries,

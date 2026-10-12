@@ -87,6 +87,7 @@ type BoardCard struct {
 	Assignees          []PersonReference `json:"assignees"` // in the order they were assigned
 	DueOn              *string           `json:"dueOn"`     // the day it is due as YYYY-MM-DD, nil for a card without one
 	AppURL             string            `json:"appUrl"`
+	ShortURL           *string           `json:"shortUrl"` // see Card.ShortURL
 }
 
 // TrashEntry is one thing that was taken out of a project, of whichever kind.
@@ -126,11 +127,13 @@ const (
 // its own address and carries everything else.
 type ArchivedCard struct {
 	ID         string           `json:"id"`
+	ProjectID  string           `json:"projectId"`
 	ShortID    *string          `json:"shortId"` // such as "MNK-1A", nil where the board shows no short identifiers
 	Title      string           `json:"title"`
 	ArchivedAt *string          `json:"archivedAt"` // nil for a card put away before the moment was noted
 	ArchivedBy *PersonReference `json:"archivedBy"` // nil where nobody is known
 	AppURL     string           `json:"appUrl"`
+	ShortURL   *string          `json:"shortUrl"` // see Card.ShortURL
 }
 
 // LeftOutCard is a card the host did not take into the set an agent says it is
@@ -205,6 +208,11 @@ type Card struct {
 	Subscribers  []PersonReference `json:"subscribers"` // everybody the card notifies, by name; only a single card carries them
 	Comments     []Comment         `json:"comments"`
 	AppURL       string            `json:"appUrl"`
+	// ShortURL is the card's short address, such as
+	// "https://<host>/go/card/MNK-1A", which a renamed prefix keeps leading to.
+	// It is nil where ShortID is, and nil from a Minka that does not hand it
+	// out yet.
+	ShortURL *string `json:"shortUrl"`
 }
 
 type Step struct {

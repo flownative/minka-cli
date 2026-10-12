@@ -55,6 +55,10 @@ type NotificationSubject struct {
 	Title   string  `json:"title"`
 	URL     string  `json:"url"`
 	AppURL  string  `json:"appUrl"`
+	// ShortURL is the short address of a card, as on the card itself: nil for
+	// anything else, for a card without a short identifier, and from a Minka
+	// that does not hand it out yet.
+	ShortURL *string `json:"shortUrl"`
 }
 
 // NotificationCard is where the card of a notification stands now, which is
