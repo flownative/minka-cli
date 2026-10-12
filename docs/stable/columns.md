@@ -3,7 +3,7 @@
 A board has three **system columns** — Triage, Not now and Done — and any
 number of **working columns** between Triage and Not now, in an order of
 their own. `columns create`, `edit`, `move` and `delete` write them; `columns
-on-hold` switches the area for cards on hold, which [the skill](../../skills/minka/SKILL.md)
+on-hold` switches the area for cards on hold, which [the skill](../../skills/minka/references/cards.md)
 describes with the cards. A column is read with its board: the API has no
 address that reads one alone and none that names the board of a column.
 

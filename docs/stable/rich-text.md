@@ -159,4 +159,4 @@ are `action-text-attachment` elements with a freshly signed handle.
   the read and the write is written without the guard.
 - A handle is valid only within its circle — project or conversation. In a
   text elsewhere the server silently removes it on saving, which is why the
-  help and the SKILL.md advise reading the text back afterwards.
+  help and the skill advise reading the text back afterwards.
