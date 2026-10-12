@@ -349,12 +349,14 @@ func (s *Server) notificationResource(n *Notification, person *Person) map[strin
 	}
 
 	subject := map[string]any{"type": n.SubjectType, "id": n.SubjectID, "shortId": nil, "title": n.SubjectTitle, "url": "", "appUrl": ""}
+	shortID := ""
 	var card any
 	if n.CardID != "" {
 		subject["type"], subject["id"] = "card", n.CardID
 		subject["url"] = s.URL + "/api/v1/cards/" + n.CardID
 		if board, column, c := s.cardOfTheBell(n.CardID, person); c != nil {
 			subject["shortId"], subject["title"], subject["appUrl"] = nullable(c.ShortID), c.Title, s.cardURL(board, c)
+			shortID = c.ShortID
 			card = map[string]any{"boardId": board.ID, "column": map[string]any{"id": column.ID, "title": columnTitle(column)}}
 			if project == nil {
 				p := s.projectOf(board)
@@ -362,6 +364,7 @@ func (s *Server) notificationResource(n *Notification, person *Person) map[strin
 			}
 		}
 	}
+	s.withShortURL(shortID, subject)
 
 	return map[string]any{
 		"id": n.ID, "cursor": CursorOf(n), "occasion": n.Occasion, "createdAt": timestamp(n.CreatedAt), "read": n.Read,

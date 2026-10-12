@@ -79,7 +79,9 @@ references listed under "Where the rest stands".
   them stays plain text or a plain link, and nothing points back. Example:
   `Blocked by #MNK-AS; the spec is in https://<host>/projects/…/posts/…/<postId>`.
   See [references/texts.md](references/texts.md), "Pointing at a card or
-  another record", for every kind of address.
+  another record", for every kind of address. Outside Minka, in a commit or a
+  pull request, a card is named by its short address: the same section says
+  how.
 - Read before you answer: comment with
   `minka comments create <card> - --if-latest <newest commentId|none>`, the
   newest comment you read. Where somebody commented since, nothing is written

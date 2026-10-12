@@ -118,3 +118,10 @@ printf '%s please have a look' "$MARKUP" | minka comments create <cardId> - --fo
   card, or the element itself. A hidden one is kept only by the element, so an
   edit of its view is refused (exit 1) unless `--drop-attachments` is given;
   send the source back as HTML instead.
+- Outside Minka — a commit, a pull request, any other text — name a card by
+  its `shortUrl`, or by its `appUrl` where `shortUrl` is null: its board has no
+  prefix. A changed prefix redirects, so the short address stays valid.
+  Example: `Resolves: https://<host>/go/card/MNK-1`. The text views of a card
+  give that same address. A Minka that leaves the field out entirely is
+  older; there, build the address from the host and the card's `shortId` as
+  `https://<host>/go/card/<shortId>`, where `shortId` is not null.

@@ -88,6 +88,11 @@ minka cards unsubscribe <cardId> <person> --json
   short identifiers. It is what people call a card by. The text views show it
   beside the title; it is no part of the title. It is no lasting address: it
   changes when the board changes its prefix, and the `id` never does.
+- A card carries `shortUrl` beside `appUrl`: its short address, such as
+  `https://<host>/go/card/MNK-1A`, null where `shortId` is. A former prefix
+  keeps leading to the card, so the address stays valid. A Minka from before
+  it leaves the field out. The text views give a card's `shortUrl` where it
+  has one and its `appUrl` otherwise.
 - Wherever a command takes `<cardId>`, the short identifier works as well, in
   any case: `minka cards show mnk-1a`, `minka comments create MNK-1A -`,
   `minka cards move MNK-1A --column Doing --after MNK-2B`. The command looks
@@ -202,8 +207,9 @@ minka cards unsubscribe <cardId> <person> --json
 
 - `boards archive <boardId> [--before <cardId>] [--limit <n>] [--all]` lists the
   cards a board has put away, the one put away last first. Each carries `id`,
-  `shortId`, `title`, `archivedAt`, `archivedBy` and `appUrl` — and nothing
-  else: the card itself is read with `cards show <cardId>`.
+  `projectId`, `shortId`, `title`, `archivedAt`, `archivedBy`, `appUrl` and
+  `shortUrl` — and nothing else: the card itself is read with
+  `cards show <cardId>`.
 - A page holds 50 cards by default and **at most 100**. A larger `--limit` is
   refused here with exit 1 (`usage`), and that refusal is a safeguard, not a
   restriction: the server cuts a larger page down to 100 without saying so, and

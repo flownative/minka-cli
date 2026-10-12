@@ -2113,3 +2113,18 @@ twice.
 **Why:** Every agent that touches a card loads SKILL.md whole, and most need
 none of the tools beside the board. **Implemented as:** `skills/minka/`, see
 [The skill](stable/skill.md).
+
+<a id="c-127"></a>
+## C-127 — Outside Minka a card is named by its short address
+
+*Applies to: `skills/minka/references/texts.md`, commits and pull requests, the text views of a card*
+
+A commit, a pull request or any text outside Minka names a card by `shortUrl`,
+and by `appUrl` only where the board has no prefix; against a Minka without
+the field, the skill builds it as `https://<host>/go/card/<shortId>`. The CLI
+passes `shortUrl` through, on a card and on the subject of a notification, and
+its text views give it in place of `appUrl` where it is there and not null.
+
+**Why:** The short address reads at a glance and stays valid when the prefix
+changes, while `appUrl` carries two IDs nobody can read. **Implemented as:**
+`skills/minka/`, `cli.cardAddress`, see [The skill](stable/skill.md).

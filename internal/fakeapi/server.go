@@ -506,6 +506,11 @@ type Server struct {
 	// Minka allows, so that a client cannot take the page size for granted.
 	MessagesPerPage int
 
+	// HandsOutNoShortURL makes the server answer like a Minka from before a
+	// card and the subject of a notification carried shortUrl: the field is
+	// missing, not null.
+	HandsOutNoShortURL bool
+
 	// AnswersCardsWithoutID makes the lookup of a short identifier answer with
 	// a card that has no ID, which no Minka does: what a client does with an
 	// answer it cannot use must not depend on that.
@@ -1638,11 +1643,11 @@ func (s *Server) inTheArchiveOf(board *Board, cardID string) *ArchivedCard {
 }
 
 func (s *Server) archivedCardResource(board *Board, archived *ArchivedCard) map[string]any {
-	return map[string]any{
+	return s.withShortURL(archived.Card.ShortID, map[string]any{
 		"id": archived.Card.ID, "projectId": board.ProjectID, "shortId": nullable(archived.Card.ShortID), "title": archived.Card.Title,
 		"archivedAt": timestampOrNil(nilIfZero(archived.At)), "archivedBy": s.personReferenceOrNil(archived.ByID),
 		"appUrl": s.cardURL(board, archived.Card),
-	}
+	})
 }
 
 // archiveCard takes a card off its board into the archive of the board. A card
@@ -1726,14 +1731,14 @@ func (s *Server) columnResource(board *Board, column *Column) map[string]any {
 func (s *Server) boardCardResources(board *Board, cards []*Card) []any {
 	list := []any{}
 	for _, card := range cards {
-		list = append(list, map[string]any{
+		list = append(list, s.withShortURL(card.ShortID, map[string]any{
 			"id": card.ID, "shortId": nullable(card.ShortID), "title": card.Title, "hasDescription": card.Description != "",
 			"stepCount": len(card.Steps), "completedStepCount": completedStepCount(card),
 			"commentCount": len(card.Comments), "createdAt": timestamp(card.CreatedAt),
 			"creator": s.personReference(card.CreatorID), "completedAt": timestampOrNil(card.CompletedAt),
 			"completedBy": s.personReferenceOrNil(card.CompletedByID), "assignees": s.assigneeReferences(card),
 			"dueOn": card.DueOn, "appUrl": s.cardURL(board, card),
-		})
+		}))
 	}
 	return list
 }
@@ -3923,7 +3928,7 @@ func (s *Server) cardResource(board *Board, column *Column, card *Card) map[stri
 		comments = append(comments, s.commentResource(board.ProjectID, comment))
 	}
 	project := s.projectOf(board)
-	return map[string]any{
+	return s.withShortURL(card.ShortID, map[string]any{
 		"id": card.ID, "shortId": nullable(card.ShortID), "projectId": board.ProjectID, "boardId": board.ID,
 		"project":     map[string]any{"id": project.ID, "name": project.Name},
 		"board":       map[string]any{"id": board.ID, "title": board.Title},
@@ -3938,7 +3943,7 @@ func (s *Server) cardResource(board *Board, column *Column, card *Card) map[stri
 		"dueOn": card.DueOn, "onHold": card.OnHold, "steps": s.stepResources(card), "subscribers": s.subscriberReferences(card),
 		"comments": comments,
 		"appUrl":   s.cardURL(board, card),
-	}
+	})
 }
 
 func (s *Server) reactionResources(reactions []*Reaction) []any {
@@ -3971,6 +3976,20 @@ func (s *Server) personReferenceOrNil(id string) any {
 		return nil
 	}
 	return s.personReference(id)
+}
+
+// withShortURL adds the address of a card by its short identifier, which keeps
+// leading to it after the board's prefix is renamed, and null for a card of a
+// board without a prefix.
+func (s *Server) withShortURL(shortID string, resource map[string]any) map[string]any {
+	if s.HandsOutNoShortURL {
+		return resource
+	}
+	resource["shortUrl"] = nil
+	if shortID != "" {
+		resource["shortUrl"] = s.URL + "/go/card/" + shortID
+	}
+	return resource
 }
 
 func (s *Server) boardURL(b *Board) string {

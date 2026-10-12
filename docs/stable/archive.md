@@ -10,10 +10,11 @@ card missing from either is not necessarily done.
 
 ## The page, and why its size is bounded here
 
-`GET boards/{b}/archive` takes `before` and `limit`, answers a plain list of six
-fields per card — `id`, `shortId`, `title`, `archivedAt`, `archivedBy`, `appUrl`
-— newest put away first, and carries **no other sign for the end of the list**:
-a caller knows the end by getting fewer cards than it asked for.
+`GET boards/{b}/archive` takes `before` and `limit`, answers a plain list of
+eight fields per card — `id`, `projectId`, `shortId`, `title`, `archivedAt`,
+`archivedBy`, `appUrl`, `shortUrl` — newest put away first, and carries **no
+other sign for the end of the list**: a caller knows the end by getting fewer
+cards than it asked for.
 
 A `limit` above 100 is **cut down to 100 without a word**. The two together are
 the danger of this feature: whoever asks for 500 gets a full page that reads as a

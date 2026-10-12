@@ -145,7 +145,7 @@ succeeds.
 				summary:     summary,
 				breadcrumbs: cardBreadcrumbs(assigned.Value.ID),
 				text: func(w io.Writer) {
-					fmt.Fprintf(w, "%s.\n%s\n", summary, assigned.Value.AppURL)
+					fmt.Fprintf(w, "%s.\n%s\n", summary, cardAddress(assigned.Value))
 				},
 			})
 		},
@@ -202,7 +202,7 @@ nothing and succeeds. Somebody who left the project can still be taken off.
 				summary:     summary,
 				breadcrumbs: cardBreadcrumbs(card.Value.ID),
 				text: func(w io.Writer) {
-					fmt.Fprintf(w, "%s.\n%s\n", summary, card.Value.AppURL)
+					fmt.Fprintf(w, "%s.\n%s\n", summary, cardAddress(card.Value))
 				},
 			})
 		},
