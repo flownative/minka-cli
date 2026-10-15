@@ -77,10 +77,25 @@ create` and `--ask` of `checkins create` take names and e-mail addresses
 looked up there; `--project` of `docs uploads create` is hidden and checked
 (C-092). The rule the commands follow is
 [Docs & Files](../stable/docs-and-files.md) (C-067, C-068, C-085, C-092).
-Everything the API does not offer — deleting, archiving and moving an entry,
-folders, the archive of a tool, drafts, making an earlier version current — is
-named there and nowhere pretended. None of it has been seen live: the whole
-feature is checked against the fake, see below.
+What the API does not offer — drafts above all — is named there and nowhere
+pretended. None of it has been seen live: the whole feature is checked against
+the fake, see below.
+
+A tool is kept in order with `delete`, `restore`, `archive`, `unarchive` and
+`move` in `docs`, `docs uploads` and `docs folders`, beside `docs folders
+create` and `edit`, `docs versions restore` and `docs list --archived`; `trash
+list` names the restore of each entry it holds (C-130, E-298). Minka's side is
+#480, on its `main` and in no release yet, so production gets it with the next
+Minka release; the commands are checked against Minka's code and tests and the
+fake, and #480 as merged was checked live against a local Minka. The fake
+follows Minka's branch `files-api-refusals-in-order` (128317a25) ahead of its
+merge: an archived project refuses a move after its field and an unknown
+target but before an archived target, `folderIntoItself` and the place the
+entry stands, an archived folder in an archived project is `projectArchived`
+for every write into it, and a version that is none of the document's is 404
+whatever is archived. The fake does not model whether a project works with
+clients, so a folder made at the top with `--visible-to-clients` is shown to
+clients wherever the team asks.
 
 The versions of a document are read with `docs versions list` and `show`, the
 files of an upload with `docs uploads versions list`, and `docs uploads
@@ -586,9 +601,8 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   the fake has the blocks on lines of their own, line breaks, the tags gone
   and the entities decoded, but not the source of `script`, `style` and their
   like dropped, an embed read as its address, nor the leniency of an HTML5
-  parser with broken markup; the bell and its read mark; and a document or an upload in the
-  trash. That an archived card in an archived project and one's own draft
-  take a reminder, and somebody else's draft not, is what Minka's
+  parser with broken markup; and the bell and its read mark. That an archived
+  card in an archived project and one's own draft take a reminder, and somebody else's draft not, is what Minka's
   `ApiRemindersTest` says
   (`aReminderMayPointAtAnArchivedCardInAnArchivedProject`,
   `aReminderMayPointAtOnesOwnDraftButNotAtAnothersDraft`).
@@ -1910,8 +1924,15 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   after the file was stored and the retry with `--blob`, `fileInUse` for the
   same blob twice, `fileUnknown` for a blob of another project, a description
   with a mention, its change guarded and conflicting, `--description ""`, and a
-  change of an upload of the archive. The uploads stay behind: there is no
-  delete in the API, so a live run writes them into a project kept for tests.
+  change of an upload of the archive. What a run puts in goes into the trash
+  with `docs uploads delete` afterwards.
+- Check keeping a tool in order live, against a Minka with #480: each kind into
+  the trash and back, into the archive and back, `docs list --archived` with an
+  entry archived below an archived folder, a move with `--folder` and
+  `--top-level`, `folderIntoItself`, a folder made at the top with
+  `--visible-to-clients` and renamed, `docs versions restore` of the first
+  version and of the current one, and, as a client, somebody else's entry
+  refused and one's own folder archived and trashed.
 - See the three refusals over whom a document reaches answered by a running
   instance: `notifyIdsMissing`, `notifyIdsWithoutChosenAudience` and
   `personCannotSeeIt`. All three are reachable with `docs create` now that the

@@ -55,6 +55,7 @@ type Folder struct {
 
 	CreatedAt time.Time
 	CreatorID string
+	EntryState
 }
 
 // Document is a page of a tool. Its moment is kept to the whole second, as the
@@ -76,6 +77,7 @@ type Document struct {
 	// it says now. A document set up without any is taken to have been written
 	// before versions were kept: its first version names no author.
 	Versions []*DocumentVersion
+	EntryState
 }
 
 // FilesUpload is a file standing on its own in a tool. The bytes are an
@@ -96,6 +98,7 @@ type FilesUpload struct {
 	// up without any starts with the file it shows, given by whoever stored
 	// it, at the moment the upload was made.
 	Versions []*UploadVersion
+	EntryState
 }
 
 func (s *Server) registerFilesRoutes(mux *http.ServeMux) {
@@ -109,6 +112,7 @@ func (s *Server) registerFilesRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/files-uploads/{uploadId}", s.authenticated(s.filesUpload))
 	mux.HandleFunc("PATCH /api/v1/files-uploads/{uploadId}", s.authenticated(s.updateFilesUpload))
 	s.registerVersionRoutes(mux)
+	s.registerFilesOrderRoutes(mux)
 
 	s.registerCommentRoutes(mux, "documents/{documentId}")
 	s.registerCommentRoutes(mux, "files-uploads/{uploadId}")
@@ -153,7 +157,7 @@ func (s *Server) filesEntries(w http.ResponseWriter, r *http.Request, person *Pe
 	folderID := strings.ToLower(r.URL.Query().Get("folderId"))
 	var folder *Folder
 	if folderID != "" {
-		if folder = folderIn(tool, folderID); folder == nil {
+		if folder = folderInUse(tool, folderID); folder == nil {
 			notFound(w)
 			return
 		}
@@ -201,7 +205,7 @@ func (s *Server) addDocument(w http.ResponseWriter, r *http.Request, person *Per
 	if !ok {
 		return
 	}
-	folder, ok := folderToWriteIn(w, tool, deref(folderID))
+	folder, ok := s.folderToWriteIn(w, tool, deref(folderID))
 	if !ok {
 		return
 	}
@@ -383,7 +387,7 @@ func (s *Server) addFilesUpload(w http.ResponseWriter, r *http.Request, person *
 	if !ok {
 		return
 	}
-	folder, ok := folderToWriteIn(w, tool, deref(folderID))
+	folder, ok := s.folderToWriteIn(w, tool, deref(folderID))
 	if !ok {
 		return
 	}
@@ -605,17 +609,20 @@ func expectedUpdatedAt(w http.ResponseWriter, fields map[string]any) (time.Time,
 
 // folderToWriteIn is the folder a new entry goes into, and nil for the top of
 // the tool. A folder this tool has not got is unknown; one in the archive
-// takes nothing new.
-func folderToWriteIn(w http.ResponseWriter, tool *FilesTool, folderID string) (*Folder, bool) {
+// takes nothing new, and in an archived project the project says so first.
+func (s *Server) folderToWriteIn(w http.ResponseWriter, tool *FilesTool, folderID string) (*Folder, bool) {
 	if folderID == "" {
 		return nil, true
 	}
-	folder := folderIn(tool, folderID)
+	folder := folderInUse(tool, folderID)
 	if folder == nil {
 		unprocessable(w, "folderUnknown", "This Docs & Files tool has no such folder.")
 		return nil, false
 	}
 	if folderIsOutOfUse(tool, folder.ID) {
+		if s.refusedAsArchived(w, s.projectWithID(tool.ProjectID)) {
+			return nil, false
+		}
 		unprocessable(w, "folderArchived", "This folder is archived. Nothing new is written in it until it is back among the folders.")
 		return nil, false
 	}
@@ -728,7 +735,7 @@ func (s *Server) visibleDocument(documentID string, person *Person) (*FilesTool,
 	}
 	for _, tool := range s.FilesTools {
 		for _, document := range tool.Documents {
-			if document.ID != documentID || document.Draft {
+			if document.ID != documentID || document.Draft || document.Trashed || folderIsInTheTrash(tool, document.FolderID) {
 				continue
 			}
 			if s.visibleProject(tool.ProjectID, person) == nil {
@@ -746,7 +753,7 @@ func (s *Server) visibleFilesUpload(uploadID string, person *Person) (*FilesTool
 	}
 	for _, tool := range s.FilesTools {
 		for _, upload := range tool.Uploads {
-			if upload.ID != uploadID {
+			if upload.ID != uploadID || upload.Trashed || folderIsInTheTrash(tool, upload.FolderID) {
 				continue
 			}
 			if s.visibleProject(tool.ProjectID, person) == nil {
@@ -768,19 +775,40 @@ func folderIn(tool *FilesTool, folderID string) *Folder {
 }
 
 // folderIsOutOfUse says whether this folder or one above it lies in the
-// archive. The top of a tool never is.
+// archive or in the trash. The top of a tool never is.
 func folderIsOutOfUse(tool *FilesTool, folderID string) bool {
+	return folderChainHolds(tool, folderID, func(folder *Folder) bool { return folder.Archived || folder.Trashed })
+}
+
+// folderIsInTheTrash says whether this folder or one above it lies in the
+// trash, which takes everything below it out of sight.
+func folderIsInTheTrash(tool *FilesTool, folderID string) bool {
+	return folderChainHolds(tool, folderID, func(folder *Folder) bool { return folder.Trashed })
+}
+
+// folderChainHolds says whether this folder or one above it is as asked.
+func folderChainHolds(tool *FilesTool, folderID string, holds func(*Folder) bool) bool {
 	for seen := 0; folderID != "" && seen <= len(tool.Folders); seen++ {
 		folder := folderIn(tool, folderID)
 		if folder == nil {
 			return false
 		}
-		if folder.Archived {
+		if holds(folder) {
 			return true
 		}
 		folderID = folder.ParentID
 	}
 	return false
+}
+
+// folderInUse is a folder of the tool that is out of the trash, and no
+// folder above it is in the trash: one in the archive is still found.
+func folderInUse(tool *FilesTool, folderID string) *Folder {
+	folder := folderIn(tool, folderID)
+	if folder == nil || folderIsInTheTrash(tool, folder.ID) {
+		return nil
+	}
+	return folder
 }
 
 func folderIDOf(folder *Folder) string {
@@ -809,7 +837,7 @@ func (s *Server) entriesResource(tool *FilesTool, folder *Folder) map[string]any
 
 	folders := []any{}
 	for _, entry := range tool.Folders {
-		if entry.ParentID != folderID || entry.Archived {
+		if entry.ParentID != folderID || entry.Archived || entry.Trashed {
 			continue
 		}
 		folders = append(folders, map[string]any{
@@ -821,7 +849,7 @@ func (s *Server) entriesResource(tool *FilesTool, folder *Folder) map[string]any
 
 	documents := []any{}
 	for _, document := range tool.Documents {
-		if document.FolderID != folderID || document.Draft || document.Archived {
+		if document.FolderID != folderID || document.Draft || document.Archived || document.Trashed {
 			continue
 		}
 		documents = append(documents, map[string]any{
@@ -834,7 +862,7 @@ func (s *Server) entriesResource(tool *FilesTool, folder *Folder) map[string]any
 
 	uploads := []any{}
 	for _, upload := range tool.Uploads {
-		if upload.FolderID != folderID || upload.Archived {
+		if upload.FolderID != folderID || upload.Archived || upload.Trashed {
 			continue
 		}
 		uploads = append(uploads, map[string]any{
@@ -861,17 +889,17 @@ func (s *Server) entriesResource(tool *FilesTool, folder *Folder) map[string]any
 func entriesIn(tool *FilesTool, folderID string) int {
 	count := 0
 	for _, folder := range tool.Folders {
-		if folder.ParentID == folderID && !folder.Archived {
+		if folder.ParentID == folderID && !folder.Archived && !folder.Trashed {
 			count++
 		}
 	}
 	for _, document := range tool.Documents {
-		if document.FolderID == folderID && !document.Draft && !document.Archived {
+		if document.FolderID == folderID && !document.Draft && !document.Archived && !document.Trashed {
 			count++
 		}
 	}
 	for _, upload := range tool.Uploads {
-		if upload.FolderID == folderID && !upload.Archived {
+		if upload.FolderID == folderID && !upload.Archived && !upload.Trashed {
 			count++
 		}
 	}

@@ -7,13 +7,15 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/flownative/minka-cli/internal/fakeapi"
 	"github.com/spf13/cobra"
 )
 
 // everyWrite is one call per command that writes into a project, against the
-// fixture of e. It first puts there what some of them need: a comment, a step
-// and a card in the trash.
+// fixture of e. It first puts there what some of them need: a comment, a step,
+// a card in the trash and entries of Docs & Files in the trash and the archive.
 func everyWrite(e *testEnv) map[string][]string {
 	e.t.Helper()
 	f := e.fixture
@@ -21,6 +23,7 @@ func everyWrite(e *testEnv) map[string][]string {
 	message := f.Chat.Messages[0].ID
 
 	document, upload := f.Document.ID, f.FilesUpload.ID
+	trashedDocument, trashedUpload, trashedFolder, archivedUpload := putDocsAndFilesAway(e)
 	dueOn := "2026-09-20"
 	f.LooseTodo.DueOn = &dueOn
 
@@ -39,6 +42,7 @@ func everyWrite(e *testEnv) map[string][]string {
 	todoComment := f.LooseTodo.Comments[len(f.LooseTodo.Comments)-1].ID
 	listComment := f.TodoList.Comments[len(f.TodoList.Comments)-1].ID
 	eventComment := f.OnceEvent.Comments[len(f.OnceEvent.Comments)-1].ID
+	version := listOfObjects(e.t, runOK(e.t, e, "docs", "versions", "list", document).Data)[0]["id"].(string)
 
 	return map[string][]string{
 		"projects edit":     {"projects", "edit", f.Project.ID, "--name", "Renamed"},
@@ -86,6 +90,24 @@ func everyWrite(e *testEnv) map[string][]string {
 		"docs uploads create":          {"docs", "uploads", "create", aFileToUpload(e), "--tool", f.Files.ID, "--project", f.Project.ID},
 		"docs uploads edit":            {"docs", "uploads", "edit", upload, "--title", "Renamed", "--force"},
 		"docs uploads versions create": {"docs", "uploads", "versions", "create", upload, aFileToUpload(e)},
+		"docs delete":                  {"docs", "delete", f.DocumentInFolder.ID},
+		"docs restore":                 {"docs", "restore", trashedDocument},
+		"docs archive":                 {"docs", "archive", document},
+		"docs unarchive":               {"docs", "unarchive", f.ArchivedDocument.ID},
+		"docs move":                    {"docs", "move", document, "--folder", f.Folder.ID},
+		"docs versions restore":        {"docs", "versions", "restore", document, version},
+		"docs uploads delete":          {"docs", "uploads", "delete", upload},
+		"docs uploads restore":         {"docs", "uploads", "restore", trashedUpload},
+		"docs uploads archive":         {"docs", "uploads", "archive", upload},
+		"docs uploads unarchive":       {"docs", "uploads", "unarchive", archivedUpload},
+		"docs uploads move":            {"docs", "uploads", "move", upload, "--top-level"},
+		"docs folders create":          {"docs", "folders", "create", "--tool", f.Files.ID, "--title", "Offers"},
+		"docs folders edit":            {"docs", "folders", "edit", f.Folder.ID, "--title", "Renamed"},
+		"docs folders delete":          {"docs", "folders", "delete", f.FolderShownToClients.ID},
+		"docs folders restore":         {"docs", "folders", "restore", trashedFolder},
+		"docs folders archive":         {"docs", "folders", "archive", f.Folder.ID},
+		"docs folders unarchive":       {"docs", "folders", "unarchive", f.ArchivedFolder.ID},
+		"docs folders move":            {"docs", "folders", "move", f.FolderShownToClients.ID, "--folder", f.Folder.ID},
 		"docs comments create":         {"docs", "comments", "create", "--document", document, "Another comment"},
 		"docs comments edit":           {"docs", "comments", "edit", "--document", document, entryComment, "Other words"},
 		"docs comments delete":         {"docs", "comments", "delete", "--document", document, entryComment},
@@ -423,4 +445,20 @@ func commandPaths(root *cobra.Command) []string {
 	}
 	walk(root, "")
 	return paths
+}
+
+// putDocsAndFilesAway puts a document, an upload and a folder of the fixture's
+// tool into the trash and an upload into the archive, for the writes that
+// bring them back.
+func putDocsAndFilesAway(e *testEnv) (document, upload, folder, archivedUpload string) {
+	f := e.fixture
+	trashed := fakeapi.EntryState{Trashed: true, TrashedAt: time.Now(), TrashedBy: f.Bruno.ID}
+	document, upload, folder, archivedUpload = "0192f3a4-5b6c-4d7e-8f90-a1b2c3d4e601", "0192f3a4-5b6c-4d7e-8f90-a1b2c3d4e602",
+		"0192f3a4-5b6c-4d7e-8f90-a1b2c3d4e603", "0192f3a4-5b6c-4d7e-8f90-a1b2c3d4e604"
+	f.Files.Documents = append(f.Files.Documents, &fakeapi.Document{ID: document, Title: "Gone", CreatorID: f.Bruno.ID, EntryState: trashed})
+	f.Files.Uploads = append(f.Files.Uploads,
+		&fakeapi.FilesUpload{ID: upload, Title: "gone.pdf", BlobID: f.FilesUpload.BlobID, CreatorID: f.Bruno.ID, EntryState: trashed},
+		&fakeapi.FilesUpload{ID: archivedUpload, Title: "away.pdf", BlobID: f.FilesUpload.BlobID, CreatorID: f.Bruno.ID, Archived: true})
+	f.Files.Folders = append(f.Files.Folders, &fakeapi.Folder{ID: folder, Title: "Gone", CreatorID: f.Bruno.ID, EntryState: trashed})
+	return document, upload, folder, archivedUpload
 }

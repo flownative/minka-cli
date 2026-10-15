@@ -312,3 +312,141 @@ func (c *Client) UploadVersions(ctx context.Context, uploadID string) (Result[[]
 func (c *Client) AddUploadVersion(ctx context.Context, uploadID string, input AddUploadVersionInput) (Result[FilesUpload], error) {
 	return request[FilesUpload](ctx, c, http.MethodPost, "/files-uploads/"+url.PathEscape(uploadID)+"/versions", input)
 }
+
+// ArchivedFilesEntry is one folder, document or upload in the archive of a
+// Docs & Files tool, from whichever folder. The entry itself is read at its
+// own address.
+type ArchivedFilesEntry struct {
+	ID         string           `json:"id"`
+	ProjectID  string           `json:"projectId"`
+	Kind       string           `json:"kind"` // "folder", "document" or "upload"
+	Title      string           `json:"title"`
+	ArchivedAt string           `json:"archivedAt"`
+	ArchivedBy *PersonReference `json:"archivedBy"` // nil where nobody is known
+	// ArchivedWithAFolderAbove says that a folder above it lies in the archive
+	// too, and only that folder brings it back.
+	ArchivedWithAFolderAbove bool   `json:"archivedWithAFolderAbove"`
+	AppURL                   string `json:"appUrl"`
+}
+
+// CreateFolderInput makes a folder on top of a tool, or of the folder FolderID
+// names. VisibleToClients shows it to the clients of the project at once; it
+// counts only at the top of the tool and only from the team.
+type CreateFolderInput struct {
+	Title            string `json:"title"`
+	FolderID         string `json:"folderId,omitempty"` // left out for the top of the tool
+	VisibleToClients bool   `json:"visibleToClients,omitempty"`
+}
+
+// UpdateFolderInput renames a folder; an empty Title is refused.
+type UpdateFolderInput struct {
+	Title string `json:"title"`
+}
+
+// MoveFilesEntryInput names where an entry moves to. FolderID nil is the top
+// of the tool and travels as null: a move without the field is refused.
+type MoveFilesEntryInput struct {
+	FolderID *string `json:"folderId"`
+}
+
+// FilesArchive lists the archive of a Docs & Files tool at any depth, the one
+// archived last first. Nothing of it is paged.
+func (c *Client) FilesArchive(ctx context.Context, toolID string) (Result[[]ArchivedFilesEntry], error) {
+	return request[[]ArchivedFilesEntry](ctx, c, http.MethodGet, "/files-tools/"+url.PathEscape(toolID)+"/archive", nil)
+}
+
+// CreateFolder answers with the new folder in the shape FilesEntriesOf reads
+// one.
+func (c *Client) CreateFolder(ctx context.Context, toolID string, input CreateFolderInput) (Result[FilesEntries], error) {
+	return request[FilesEntries](ctx, c, http.MethodPost, "/files-tools/"+url.PathEscape(toolID)+"/folders", input)
+}
+
+func (c *Client) UpdateFolder(ctx context.Context, folderID string, input UpdateFolderInput) (Result[FilesEntries], error) {
+	return request[FilesEntries](ctx, c, http.MethodPatch, folderPath(folderID), input)
+}
+
+// RestoreDocumentVersion writes what an earlier version said as the newest
+// version of its document. One that says what the document says already is
+// answered the same and adds no version.
+func (c *Client) RestoreDocumentVersion(ctx context.Context, documentID, versionID string) (Result[Document], error) {
+	return request[Document](ctx, c, http.MethodPost, documentPath(documentID)+"/versions/"+url.PathEscape(versionID)+"/restore", nil)
+}
+
+// The writes that put a tool in order, for each kind of entry: into the
+// trash and back, into the archive and back, and to another place in the
+// same tool. A folder answers with what stands in it.
+
+func (c *Client) DeleteDocument(ctx context.Context, documentID string) error {
+	_, err := request[struct{}](ctx, c, http.MethodDelete, documentPath(documentID), nil)
+	return err
+}
+
+func (c *Client) RestoreDocument(ctx context.Context, documentID string) (Result[Document], error) {
+	return request[Document](ctx, c, http.MethodPost, documentPath(documentID)+"/restore", nil)
+}
+
+func (c *Client) ArchiveDocument(ctx context.Context, documentID string) (Result[Document], error) {
+	return request[Document](ctx, c, http.MethodPost, documentPath(documentID)+"/archive", nil)
+}
+
+func (c *Client) UnarchiveDocument(ctx context.Context, documentID string) (Result[Document], error) {
+	return request[Document](ctx, c, http.MethodPost, documentPath(documentID)+"/unarchive", nil)
+}
+
+func (c *Client) MoveDocument(ctx context.Context, documentID string, input MoveFilesEntryInput) (Result[Document], error) {
+	return request[Document](ctx, c, http.MethodPost, documentPath(documentID)+"/moves", input)
+}
+
+func (c *Client) DeleteFilesUpload(ctx context.Context, uploadID string) error {
+	_, err := request[struct{}](ctx, c, http.MethodDelete, filesUploadPath(uploadID), nil)
+	return err
+}
+
+func (c *Client) RestoreFilesUpload(ctx context.Context, uploadID string) (Result[FilesUpload], error) {
+	return request[FilesUpload](ctx, c, http.MethodPost, filesUploadPath(uploadID)+"/restore", nil)
+}
+
+func (c *Client) ArchiveFilesUpload(ctx context.Context, uploadID string) (Result[FilesUpload], error) {
+	return request[FilesUpload](ctx, c, http.MethodPost, filesUploadPath(uploadID)+"/archive", nil)
+}
+
+func (c *Client) UnarchiveFilesUpload(ctx context.Context, uploadID string) (Result[FilesUpload], error) {
+	return request[FilesUpload](ctx, c, http.MethodPost, filesUploadPath(uploadID)+"/unarchive", nil)
+}
+
+func (c *Client) MoveFilesUpload(ctx context.Context, uploadID string, input MoveFilesEntryInput) (Result[FilesUpload], error) {
+	return request[FilesUpload](ctx, c, http.MethodPost, filesUploadPath(uploadID)+"/moves", input)
+}
+
+func (c *Client) DeleteFolder(ctx context.Context, folderID string) error {
+	_, err := request[struct{}](ctx, c, http.MethodDelete, folderPath(folderID), nil)
+	return err
+}
+
+func (c *Client) RestoreFolder(ctx context.Context, folderID string) (Result[FilesEntries], error) {
+	return request[FilesEntries](ctx, c, http.MethodPost, folderPath(folderID)+"/restore", nil)
+}
+
+func (c *Client) ArchiveFolder(ctx context.Context, folderID string) (Result[FilesEntries], error) {
+	return request[FilesEntries](ctx, c, http.MethodPost, folderPath(folderID)+"/archive", nil)
+}
+
+func (c *Client) UnarchiveFolder(ctx context.Context, folderID string) (Result[FilesEntries], error) {
+	return request[FilesEntries](ctx, c, http.MethodPost, folderPath(folderID)+"/unarchive", nil)
+}
+
+func (c *Client) MoveFolder(ctx context.Context, folderID string, input MoveFilesEntryInput) (Result[FilesEntries], error) {
+	return request[FilesEntries](ctx, c, http.MethodPost, folderPath(folderID)+"/moves", input)
+}
+
+func documentPath(documentID string) string {
+	return "/documents/" + url.PathEscape(documentID)
+}
+
+func filesUploadPath(uploadID string) string {
+	return "/files-uploads/" + url.PathEscape(uploadID)
+}
+
+func folderPath(folderID string) string {
+	return "/files-folders/" + url.PathEscape(folderID)
+}
