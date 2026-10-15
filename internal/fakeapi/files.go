@@ -899,7 +899,7 @@ func (s *Server) documentResource(tool *FilesTool, document *Document) map[strin
 		"commentCount": len(document.Comments),
 		"createdAt":    timestamp(document.CreatedAt), "editedAt": editedAt(document.CreatedAt, document.UpdatedAt),
 		"updatedAt": timestamp(document.UpdatedAt), "creator": s.personReference(document.CreatorID),
-		"comments": s.commentResources(tool.ProjectID, document.Comments),
+		"comments": s.commentResources(tool.ProjectID, s.documentURL(tool, document), document.Comments),
 		"appUrl":   s.documentURL(tool, document),
 	}
 }
@@ -916,7 +916,7 @@ func (s *Server) filesUploadResource(tool *FilesTool, upload *FilesUpload) map[s
 		"commentCount": len(upload.Comments),
 		"createdAt":    timestamp(upload.CreatedAt), "editedAt": editedAt(upload.CreatedAt, upload.UpdatedAt),
 		"updatedAt": timestamp(upload.UpdatedAt), "creator": s.personReference(upload.CreatorID),
-		"comments": s.commentResources(tool.ProjectID, upload.Comments),
+		"comments": s.commentResources(tool.ProjectID, s.filesUploadURL(tool, upload), upload.Comments),
 		"appUrl":   s.filesUploadURL(tool, upload),
 	}
 }

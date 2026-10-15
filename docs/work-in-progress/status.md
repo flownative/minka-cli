@@ -37,6 +37,13 @@ card](../stable/comments.md) (C-101). The guards are cards only. Minka's side
 is what it already serves; the commands are checked against its code and the
 fake, not live.
 
+Every comment, under a card and under every other item, carries `appUrl`: its
+item's page anchored at `#comment-<id>`. The text views give it below each
+comment and below the confirmation of `comments create` and `edit`, and leave
+it out against a Minka without the field (C-128). Minka's `main` hands it out,
+no release yet; checked against Minka's code and tests, the fake
+and live against a local Minka on its `main`.
+
 The archive of a board is read with `boards archive`, and `cards archive` and
 `cards unarchive` move a card in and out of it. `--all` walks every page in one
 run and works around the weakness Minka carries in its own debts: a cursor that

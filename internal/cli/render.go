@@ -235,6 +235,9 @@ func renderCard(w io.Writer, card api.Card) {
 			if line := reactionLine(comment.Reactions); line != "" {
 				fmt.Fprintf(w, "%s\n", line)
 			}
+			if line := commentAddressLine(comment); line != "" {
+				fmt.Fprintf(w, "%s\n", line)
+			}
 		}
 	}
 }
@@ -260,6 +263,24 @@ func fileLine(attachments []api.Attachment) string {
 		parts[i] = fmt.Sprintf("%s (%s, %s, %s)", file.Filename, file.ContentType, fileSize(file.ByteSize), file.ID)
 	}
 	return "Files: " + strings.Join(parts, "; ")
+}
+
+// commentAddressLine gives the address that opens the comment's item at the
+// comment, to point somebody at it, and nothing where Minka hands none out.
+func commentAddressLine(comment api.Comment) string {
+	if comment.AppURL == "" {
+		return ""
+	}
+	return "URL: " + comment.AppURL
+}
+
+// writtenComment confirms a comment just written or changed and gives its
+// address on the line below, as the writes of a card give the card's.
+func writtenComment(w io.Writer, summary string, comment api.Comment) {
+	fmt.Fprintf(w, "%s.\n", summary)
+	if comment.AppURL != "" {
+		fmt.Fprintln(w, comment.AppURL)
+	}
 }
 
 // reactionLine says what people said about a comment or a message, in one

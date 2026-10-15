@@ -22,6 +22,21 @@ and the CLI takes that order as it comes instead of sorting again.
 served, `comments unread` the part of it not yet shown. The text view of both
 names each comment with its ID, which the guard below takes.
 
+## The address of a comment
+
+Minka hands out `appUrl` on every comment, under a card and under every other
+item, and on the answer to writing, changing and reacting to one: the page of
+the item with `#comment-<id>`, which opens the item scrolled to the comment.
+There is no short form; under a card it is the card's long `appUrl` with the
+anchor. The CLI passes the field through as served (C-002). Every text view of
+comments gives it as a `URL:` line below the comment — `cards show`, `comments
+list` and `unread`, the `comments list` of a post, to-do, to-do list and event,
+and the `show` of a post, to-do, to-do list, document, upload and check-in
+answer — and `comments create` and `edit`, of a card, an item and `docs
+comments`, give it on the line below their confirmation. Against a Minka that
+leaves the field out there is no line, neither empty nor in error
+([C-128](../decisions.md#c-128)).
+
 ## Reading before writing
 
 A comment answers what was said before it. Two guards keep one from being

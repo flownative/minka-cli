@@ -125,3 +125,10 @@ printf '%s please have a look' "$MARKUP" | minka comments create <cardId> - --fo
   give that same address. A Minka that leaves the field out entirely is
   older; there, build the address from the host and the card's `shortId` as
   `https://<host>/go/card/<shortId>`, where `shortId` is not null.
+- One comment is named by its `appUrl`: the page of its item with
+  `#comment-<id>`, which opens the item scrolled to the comment. Every comment
+  carries it, under a card and under any other item, and so does the answer to
+  `comments create` and `edit`; the text views give it as `URL:` below each
+  comment and below the confirmation of a write. Pasted into a text of Minka,
+  it is a reference to the item. A Minka that leaves the field out is older;
+  there, name the item instead.

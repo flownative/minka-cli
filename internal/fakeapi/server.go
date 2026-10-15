@@ -511,6 +511,10 @@ type Server struct {
 	// missing, not null.
 	HandsOutNoShortURL bool
 
+	// HandsOutNoCommentURL makes the server answer like a Minka from before a
+	// comment carried appUrl: the field is missing.
+	HandsOutNoCommentURL bool
+
 	// AnswersCardsWithoutID makes the lookup of a short identifier answer with
 	// a card that has no ID, which no Minka does: what a client does with an
 	// answer it cannot use must not depend on that.
@@ -3007,7 +3011,7 @@ func (s *Server) reactToComment(w http.ResponseWriter, r *http.Request, person *
 		return
 	}
 	status := reactTo(&comment.Reactions, content, person.ID)
-	writeJSON(w, status, s.commentResource(board.ProjectID, comment))
+	writeJSON(w, status, s.commentResource(board.ProjectID, s.cardURL(board, card), comment))
 }
 
 func (s *Server) unreactFromComment(w http.ResponseWriter, r *http.Request, person *Person) {
@@ -3592,7 +3596,7 @@ func (s *Server) editComment(w http.ResponseWriter, r *http.Request, person *Per
 	// The same text again is a write as well: the moment moves on.
 	now := s.now
 	comment.Body, comment.EditedAt = text, &now
-	writeJSON(w, http.StatusOK, s.commentResource(board.ProjectID, comment))
+	writeJSON(w, http.StatusOK, s.commentResource(board.ProjectID, s.cardURL(board, card), comment))
 }
 
 // isCommentControl is a control character a comment may not hold: all of
@@ -3818,7 +3822,7 @@ func (s *Server) writeComment(w http.ResponseWriter, r *http.Request, person *Pe
 	comment := &Comment{ID: newID(), AuthorID: person.ID, Body: text, CreatedAt: s.now}
 	card.subscribe(person.ID)
 	card.Comments = append(card.Comments, comment)
-	writeJSON(w, http.StatusCreated, s.commentResource(board.ProjectID, comment))
+	writeJSON(w, http.StatusCreated, s.commentResource(board.ProjectID, s.cardURL(board, card), comment))
 }
 
 func (s *Server) visibleProject(id string, person *Person) *Project {
@@ -3925,7 +3929,7 @@ func (s *Server) cardResource(board *Board, column *Column, card *Card) map[stri
 	slices.SortStableFunc(ordered, func(a, b *Comment) int { return a.CreatedAt.Compare(b.CreatedAt) })
 	comments := []any{}
 	for _, comment := range ordered {
-		comments = append(comments, s.commentResource(board.ProjectID, comment))
+		comments = append(comments, s.commentResource(board.ProjectID, s.cardURL(board, card), comment))
 	}
 	project := s.projectOf(board)
 	return s.withShortURL(card.ShortID, map[string]any{
@@ -3958,13 +3962,19 @@ func (s *Server) reactionResources(reactions []*Reaction) []any {
 	return list
 }
 
-func (s *Server) commentResource(circle string, comment *Comment) map[string]any {
-	return map[string]any{
+// commentResource answers a comment with the page of its item opened at it,
+// the address its notification leads to.
+func (s *Server) commentResource(circle, itemURL string, comment *Comment) map[string]any {
+	resource := map[string]any{
 		"id": comment.ID, "author": s.personReference(comment.AuthorID), "body": comment.Body, "bodySource": comment.Body,
 		"attachments": s.attachmentsIn(circle, comment.Body),
 		"reactions":   s.reactionResources(comment.Reactions),
 		"createdAt":   timestamp(comment.CreatedAt), "editedAt": timestampOrNil(comment.EditedAt),
 	}
+	if !s.HandsOutNoCommentURL {
+		resource["appUrl"] = itemURL + "#comment-" + comment.ID
+	}
+	return resource
 }
 
 func (s *Server) personReference(id string) map[string]any {
