@@ -514,7 +514,11 @@ v0.41.0 runs on `minka.flownative.com`, the instance this CLI talks to, since
 
 Versions are released by publishing a release in GitHub and installed through
 the Homebrew tap; `setup`, `doctor` and the skill inside the binary cover the
-first steps.
+first steps. A newer minka is named at most once a day, on stderr or as
+`cliUpdate` in the envelope, from the headers `Minka-CLI-Latest` and
+`Minka-CLI-Minimum` that every answer of Minka's `main` carries where they are
+set (C-129); checked against Minka's middleware and its tests and the fake,
+live by the coordination.
 
 The skill is a core of about three hundred lines with fifteen references by
 subject (C-126, [The skill](../stable/skill.md)); `working-on-a-board.md` says

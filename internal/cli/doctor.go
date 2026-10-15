@@ -30,10 +30,11 @@ type doctorCheck struct {
 func (a *app) newDoctorCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "doctor",
-		Short: "Check the config file, the sign-in, the host and the skill",
+		Short: "Check the config file, the sign-in, the host, the skill and the version",
 		Long: `Checks what a command needs to work: the config file and its permissions,
-the host and the token, whether the host answers and accepts the token, and
-whether the installed skill is the one this minka carries.
+the host and the token, whether the host answers and accepts the token,
+whether the installed skill is the one this minka carries, and how this minka
+stands against the latest and the oldest version Minka names.
 
 It is a report and exits 0 whatever it finds. With --json, data.healthy is
 false when a check failed; every check carries status (ok, warn, fail, or
@@ -119,7 +120,7 @@ func (a *app) doctorChecks() []doctorCheck {
 	}
 	checks = append(checks, signIn, host)
 
-	return append(checks, a.doctorSkillCheck())
+	return append(checks, a.doctorSkillCheck(), a.doctorUpdateCheck())
 }
 
 func hintOf(err error) string {

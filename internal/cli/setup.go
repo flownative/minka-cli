@@ -157,7 +157,7 @@ func (a *app) setupHost(input *bufio.Reader, fallback string) (string, error) {
 // person would have created one for nothing.
 func (a *app) setupSignIn(cmd *cobra.Command, host, path string, file *config.File) (api.Result[api.Me], error) {
 	if saved := file.Hosts[host].Token; saved != "" {
-		me, err := api.New(host, saved, userAgent()).Me(a.ctx)
+		me, err := a.newClient(host, saved).Me(a.ctx)
 		if err == nil {
 			fmt.Fprintf(a.stderr, "Already signed in to %s as %s.\n", host, me.Value.Name)
 			if file.DefaultHost != host {

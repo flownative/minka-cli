@@ -79,7 +79,7 @@ The config file is ~/.config/minka/config.json, or $MINKA_CONFIG.`,
 // host, which becomes the default host. A token the host does not accept is
 // not saved, so the config file never holds one that does not work.
 func (a *app) signIn(host, token string) (string, api.Result[api.Me], error) {
-	me, err := api.New(host, token, userAgent()).Me(a.ctx)
+	me, err := a.newClient(host, token).Me(a.ctx)
 	if err != nil {
 		e := apiError(err, host)
 		if e.Code == CodeAuth {
@@ -346,7 +346,7 @@ func (a *app) revokeToken(host, token string) (alreadyGone bool, err error) {
 			Hint:    "Sign out without --revoke, which takes the entry out as the file writes it, and revoke the token in Minka's account area.",
 		}
 	}
-	err = api.New(address, token, userAgent()).RevokeOwnToken(a.ctx)
+	err = a.newClient(address, token).RevokeOwnToken(a.ctx)
 	if err == nil {
 		return false, nil
 	}
