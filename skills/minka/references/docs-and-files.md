@@ -2,7 +2,8 @@
 
 A Docs & Files tool holds folders, documents and uploads. A **document** is a
 page with a title and a body; an **upload** is a file standing on its own,
-with a description. Both take comments, and the comments take reactions.
+with a description. Both take comments, and the comments take reactions. All
+three go into the trash and the archive, come back and move.
 
 ## Commands
 
@@ -10,17 +11,36 @@ with a description. Both take comments, and the comments take reactions.
 minka docs tools <projectId> --json
 minka docs tool <toolId> --json
 minka docs list <toolId> [--folder <folderId>] --json
+minka docs list <toolId> --archived --json
 minka docs show <documentId> --json
 minka docs create --tool <toolId> --title "Title" --audience everybody|chosen|nobody [--notify <person>]... [--folder <folderId>] [--body - < body.md] --json
 minka docs edit <documentId> [--title "New"] [--body - < body.md] (--expect <updatedAt> | --force) --json
 minka docs versions list <documentId> --json
 minka docs versions show <documentId> <versionId> --json
+minka docs versions restore <documentId> <versionId> --json
+minka docs delete <documentId> --json
+minka docs restore <documentId> --json
+minka docs archive <documentId> --json
+minka docs unarchive <documentId> --json
+minka docs move <documentId> (--folder <folderId> | --top-level) --json
+minka docs folders create --tool <toolId> --title "Title" [--folder <folderId>] [--visible-to-clients] --json
+minka docs folders edit <folderId> --title "New" --json
+minka docs folders delete <folderId> --json
+minka docs folders restore <folderId> --json
+minka docs folders archive <folderId> --json
+minka docs folders unarchive <folderId> --json
+minka docs folders move <folderId> (--folder <folderId> | --top-level) --json
 minka docs uploads show <uploadId> --json
 minka docs uploads create <file> --tool <toolId> [--folder <folderId>] [--title "Title"] [--description - < about.md] --json
 minka docs uploads create --blob <blobId> --tool <toolId> [--folder <folderId>] [--title "Title"] --json
 minka docs uploads edit <uploadId> [--title "New"] [--description - < about.md] (--expect <updatedAt> | --force) --json
 minka docs uploads versions list <uploadId> --json
 minka docs uploads versions create <uploadId> (<file> | --blob <blobId>) [--expect <updatedAt>] --json
+minka docs uploads delete <uploadId> --json
+minka docs uploads restore <uploadId> --json
+minka docs uploads archive <uploadId> --json
+minka docs uploads unarchive <uploadId> --json
+minka docs uploads move <uploadId> (--folder <folderId> | --top-level) --json
 minka docs comments create (--document <documentId> | --upload <uploadId>) - --json < comment.md
 minka docs comments edit (--document <documentId> | --upload <uploadId>) <commentId> - [--format html] --json < comment.md
 minka docs comments delete (--document <documentId> | --upload <uploadId>) <commentId> --json
@@ -147,8 +167,13 @@ minka docs comments unreact (--document <documentId> | --upload <uploadId>) <com
   also for a document or upload it is shown, and so does an earlier file it
   did not store itself.
 - Nothing is paged. A document in the archive, below an archived folder or in
-  an archived project still has its versions read. Making an earlier version
-  of a document the current one is done in Minka on the web.
+  an archived project still has its versions read.
+- `docs versions restore <documentId> <versionId>` writes what an earlier
+  version said, title and body, as the **newest** version and answers with the
+  document. Nothing is removed and nobody is told. A version that says what the
+  document says already exits 0 and adds no version. The team's alone, as
+  reading the versions is; a document in the archive exits 9
+  `documentArchived`.
 - `docs uploads versions create <uploadId> <file>` **replaces the file of an
   upload**: title and description stay, and the file it showed stays as an
   earlier version. It takes the two requests of `docs uploads create`: it reads
@@ -220,13 +245,58 @@ command's `notice` is the only warning you will ever get.
 - Reactions live on the comments alone. A document and an upload themselves
   take none through the API, although the web offers it.
 
+## Keeping a tool in order
+
+Each kind has the same five writes in its own group — `docs …` for a
+document, `docs uploads …` for an upload, `docs folders …` for a folder — so
+an ID is never read as the wrong kind:
+
+- **`delete`** puts it into the trash of the project, from the tool or from its
+  archive; a folder takes everything in it along. It then reads like one that
+  never was (exit 2). `data` is `{id, deleted: true}`.
+- **`restore`** brings back what went into the trash **by itself**, to where it
+  stood, and answers with it. What went in with its folder comes back with the
+  folder, and one whose folder lies in the trash or the archive comes back once
+  the folder does: exit 2. `trash list <projectId>` shows `restorable` and
+  `blockedBy` for each line, and a draft (listed to its author) comes back on
+  the web only.
+- **`archive`** puts it into the archive of its tool; `unarchive` brings it
+  back. Already archived is exit 9 `documentArchived`, `uploadArchived` or
+  `folderArchived`; not archived is `documentNotArchived`, `uploadNotArchived`
+  or `folderNotArchived`. **One archived together with a folder above it comes
+  back only with that folder**: `unarchive` exits 9 `folderArchived`, and
+  `docs list <toolId> --archived` marks it `archivedWithAFolderAbove`.
+- **`move`** takes `--folder <folderId>` or `--top-level`, exactly one; it lands
+  first in its new place. It moves within its tool only (another tool's folder
+  is `folderUnknown`), nothing in the archive moves and nothing goes into an
+  archived folder (`folderArchived`), and a folder cannot go into itself or one
+  below it (`folderIntoItself`). Where it stands already, nothing is written
+  and the answer is the same.
+- What stands **below an archived folder** is not put into the trash on its
+  own: `delete` exits 9 `folderArchived`. Bring the folder back, or put the
+  folder itself away.
+- **Who may:** the team may do all of it. A client of the project puts into
+  the trash and the archive **only what they made**, may make, rename and move,
+  and **brings nothing back** — no `restore`, no `unarchive`, no version: each
+  answers exit 2, as for something that is not there.
+- `docs folders create --tool <toolId> --title …` makes a folder at the top or
+  inside `--folder`; `data` is the folder as `docs list --folder` reads it, its
+  ID under `folder.id`. `--visible-to-clients` counts only at the top of the
+  tool and only from the team; a `notice` says so where `--folder` is given,
+  and no answer says whether it counted. `docs folders edit <folderId> --title`
+  renames one; `--title ""` exits 9 `folderTitleMissing`.
+- `docs list <toolId> --archived` lists the archive of the tool from any
+  folder, the one archived last first, as `{id, projectId, kind, title,
+  archivedAt, archivedBy, archivedWithAFolderAbove, appUrl}`. `kind` is
+  `folder`, `document` or `upload`. Not paged; not with `--folder`.
+- A write in an archived project exits 9 `projectArchived`, a `move` to where
+  the entry stands already and one into an archived folder included.
+
 ## What does not exist
 
-There is no delete, trash, archive, unarchive or move of a document; no
-creating, renaming or deleting a folder, so the CLI writes only into folders
-that already exist; no reading of a tool's archive; no reading of a draft, by
-anybody; no replacing the file of an upload, nor deleting, archiving or moving
-one. All of it is done in Minka on the web.
+No reading of a draft, by anybody; no replacing the file of an upload by an
+earlier one of its versions, other than downloading it and giving it anew;
+removing anything for good. All of it is done in Minka on the web.
 
 ## Codes of this part
 
@@ -236,6 +306,9 @@ one. All of it is done in Minka on the web.
 `personCannotSeeIt` (a person to replace, not input to fix), `notifyIdsMissing`,
 `notifyIdsWithoutChosenAudience`,
 `folderUnknown`, `folderArchived`, `documentArchived`, `uploadArchived`,
+`documentNotArchived`, `uploadNotArchived`, `folderNotArchived`,
+`folderIntoItself`, `folderTitleMissing`, `folderTitleTooLong`,
+`folderTitleHasControlCharacters`,
 `documentChanged` (409, with the document in `data`), `uploadTitleMissing`,
 `uploadTitleTooLong`, `uploadTitleHasControlCharacters`,
 `uploadDescriptionTooLong`, `uploadDescriptionNotReadable`, `uploadChanged`

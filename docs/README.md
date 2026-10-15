@@ -64,8 +64,9 @@ the documentation says what holds; how it came about is in git.
 - [Docs & Files](stable/docs-and-files.md): What a document and an upload are,
   the two requests a file goes into a tool with, the body that is never
   refused, the guard that cannot see one second, whom a new document reaches,
-  the flag that names the kind of entry, the archive of a folder, the refusals
-  — before any work on `docs`.
+  the flag that names the kind of entry, the archive of a folder, how a tool
+  is kept in order — the trash, the archive, moves, folders, a version made the
+  newest — and who may, the refusals — before any work on `docs`.
 - [Comments on a card](stable/comments.md): What a read of the comments
   hands over and which one is the newest, the guards that keep a comment from
   being written past an unread answer, what counts as read and where the marks

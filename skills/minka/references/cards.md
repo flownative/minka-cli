@@ -51,11 +51,13 @@ minka cards unsubscribe <cardId> <person> --json
 - `board` is a board only for a `card` and a `column`. For every other kind the
   same field carries the tool the thing hung in, which the text view marks as a
   tool; `column` is there for a card alone.
-- `restorable` says whether `cards restore` takes the entry, which only a card
-  is. `blockedBy` names what has to come back first: `board`, `column`, `tool`,
-  `todoList`, `todoGroup`, `question`, `folder` or `archivedFolder` — the last
-  one lies in an archive, not in the trash. Everything that is no card comes
-  back in the web only.
+- `restorable` says whether a command brings the entry back: `cards restore`
+  for a card, and `docs restore`, `docs uploads restore` and `docs folders
+  restore` for a `document`, an `upload` and a `folder` (see
+  [docs-and-files.md](docs-and-files.md)). `blockedBy` names what has to come
+  back first: `board`, `column`, `tool`, `todoList`, `todoGroup`, `question`,
+  `folder` or `archivedFolder` — the last one lies in an archive, not in the
+  trash. A draft and everything else come back in the web only.
 
 ## Projects
 

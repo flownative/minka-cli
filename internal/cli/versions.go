@@ -21,9 +21,10 @@ const (
 )
 
 func (a *app) newDocsVersionsCmd() *cobra.Command {
-	return group("versions", "Read the earlier versions of a document",
+	return group("versions", "Read the earlier versions of a document, and make one the newest",
 		a.newDocsVersionsListCmd(),
 		a.newDocsVersionsShowCmd(),
+		a.newDocsVersionsRestoreCmd(),
 	)
 }
 
@@ -41,7 +42,7 @@ before Minka kept who wrote it.
 The versions are the team's alone: a client of the project gets exit 2
 (not_found), even for a document shown to clients. A document in the archive,
 below an archived folder or in an archived project still has its versions read.
-Making an earlier version the current one is done in Minka on the web.`,
+"docs versions restore" makes an earlier version the newest one.`,
 		Args: requireArgs("documentId"),
 		RunE: func(_ *cobra.Command, args []string) error {
 			s, err := a.session()

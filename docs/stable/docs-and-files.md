@@ -13,18 +13,22 @@ of an upload, and `docs uploads versions create` gives an upload another file;
 one tool by its ID alone, with the project it stands in, as `todolists tool`
 reads a To-dos tool ([C-120](../decisions.md#c-120)).
 
+A tool is kept in order with `delete`, `restore`, `archive`, `unarchive` and
+`move` in the group of each kind — `docs …`, `docs uploads …`, `docs folders
+…` — beside `docs folders create` and `edit`, `docs versions restore` and
+`docs list --archived` ([C-130](../decisions.md#c-130)), see below.
+
 ## What is not there, and why nothing pretends otherwise
 
-The API offers no delete, trash, archive, unarchive or move of a document or
-an upload, no creating, renaming or deleting of a folder, no reading of a
-tool's archive and no reading of a draft — a draft is 404 for everybody, its
-author included. Reactions reach the comments alone, although the web offers
-them on an entry as well. A change never replaces the file of an upload: Minka
-ignores a `blobId` sent with it, so `docs uploads edit` has no flag for it
-([C-085](../decisions.md#c-085)); another file goes in as a new version. Making
-an earlier version of a document the current one, giving an upload an earlier
-file back by its version and the marked differences between two versions have
-no address either. The CLI writes only into folders that already exist.
+The API offers no reading of a draft — a draft is 404 for everybody, its
+author included, at every address of an entry, and the trash lists a trashed
+one to its author only, with `restorable: false`. Reactions reach the comments
+alone, although the web offers them on an entry as well. A change never
+replaces the file of an upload: Minka ignores a `blobId` sent with it, so `docs
+uploads edit` has no flag for it ([C-085](../decisions.md#c-085)); another file
+goes in as a new version. Giving an upload an earlier file back by its
+version, the marked differences between two versions and removing anything for
+good have no address either.
 
 ## The body, and the refusal that never comes
 
@@ -273,8 +277,9 @@ An archived folder is in no list, and the entries below it go quiet with it:
 readable, and closed to every write. Its inside **can** be listed by naming it
 as `--folder`, and then the answer and every line of it says `archived: true`.
 A write to an entry inside it answers `documentArchived` or `uploadArchived` —
-never `folderArchived`, which is the answer to writing something **new** into
-it.
+`folderArchived` is the answer to writing something **new** into it, and to
+taking an entry out of it on its own. `docs list --archived` names the folder;
+what stands in it without being archived itself is not listed there.
 
 ## The refusals
 
@@ -320,11 +325,100 @@ often they are named.
 | 422 `notifyIdsMissing`, `notifyIdsWithoutChosenAudience` | `docs create --audience` and `--notify` that do not go together | 9 |
 | 422 `personNotAProjectMember` | `docs create --notify` naming somebody outside the project | 9 |
 | 422 `personCannotSeeIt` | `docs create --notify` naming a client of the project or an agent of one, for a document the clients of it are not shown | 9 |
-| 422 `folderUnknown`, `folderArchived` | `docs create --folder`, `docs uploads create --folder` | 9 |
-| 422 `documentArchived`, `uploadArchived` | every write on an archived entry, or under one, comments and their reactions included, and a folder above the entry counts — but v0.41.0 changes and removes one's own comment below an archived folder | 9 |
-| 422 `projectArchived` | every write; on `docs edit`, `docs uploads edit` and the comments before the codes above but after the title, the description and the moment of `--expect`; on `docs create` after the title, the body, the folder, the audience and `notifyIdsMissing` / `notifyIdsWithoutChosenAudience`, and before `personNotAProjectMember` and `personCannotSeeIt`; on `docs uploads create` with a file when storing it, after the whole transfer, and with `--blob` before `fileUnknown` and again before `fileInUse` | 9 |
+| 422 `folderUnknown`, `folderArchived` | `docs create --folder`, `docs uploads create --folder`, `docs folders create --folder`, every `move --folder` | 9 |
+| 404 | `restore` of an entry not in the trash by itself, below a folder out of use, or a draft; `restore`, `unarchive` and `docs versions restore` for a client; `delete` and `archive` of somebody else's for a client | 2 |
+| 422 `folderArchived` | `delete` below an archived folder; `unarchive` of an entry archived with a folder above; a folder's `archive`, `edit` and `move` where it or a folder above is archived | 9 |
+| 422 `documentNotArchived`, `uploadNotArchived`, `folderNotArchived` | `unarchive` of an entry not in the archive | 9 |
+| 422 `folderIntoItself` | `docs folders move` into the folder itself or one below it | 9 |
+| 422 `folderIdMissing` | unreachable: every `move` names its place | — |
+| 422 `folderTitleMissing`, `folderTitleTooLong`, `folderTitleHasControlCharacters` | `docs folders create`, `docs folders edit` | 9 |
+| 400 `malformedBody` | unreachable for `docs folders create`: `visibleToClients` goes out as a boolean | — |
+| 422 `documentArchived`, `uploadArchived` | every write on an archived entry, or under one, comments and their reactions included, `archive`, `move` and `docs versions restore`, and a folder above the entry counts — but v0.41.0 changes and removes one's own comment below an archived folder; `delete` takes an archived entry, `unarchive` brings it back | 9 |
+| 422 `projectArchived` | every write; on `docs edit`, `docs uploads edit` and the comments before the codes above but after the title, the description and the moment of `--expect`; on `docs create` after the title, the body, an unknown folder (but before an archived one), the audience and `notifyIdsMissing` / `notifyIdsWithoutChosenAudience`, and before `personNotAProjectMember` and `personCannotSeeIt`; on `docs uploads create` with a file when storing it, after the whole transfer, and with `--blob` before `fileUnknown` and again before `fileInUse` | 9 |
 | 404 `variantNotAvailable` | `uploads download --variant` of the file of an upload, as for any file | 2 |
 | 422 the comment codes | `docs comments …`, as under a card | 9 |
+
+## Keeping a tool in order
+
+Minka runs the web's handler for each of these writes, so its statement
+decides who may: the team may do everything; a client of the project puts into
+the trash and the archive only what they made, may make, rename and move, and
+brings nothing back — no restore, no unarchive, no version (E-298). Each
+refusal of a client is the 404 of something that is not there, and the hint of
+every such 404 says so beside what else it can mean.
+
+The three kinds take the same five writes, each in the group of its kind
+([C-130](../decisions.md#c-130)): an ID of one kind is 404 at the address of
+another, as for the comments, and a group per kind is what keeps a command from
+reading it as the wrong one.
+
+- `delete` takes the entry into the trash of its project, from the tool or from
+  its archive, a folder with everything in it; `data` is `{id, deleted: true}`,
+  as for a card. Below an archived folder it is 422 `folderArchived`: what
+  stands there is not taken out on its own.
+- `restore` brings back only what went into the trash by itself, below folders
+  in use. What went in with its folder keeps its own state and comes back with
+  the folder; one whose folder lies in the trash or the archive is 404, and the
+  trash names that under `blockedBy`. `trash list` says `restorable` for each
+  line; its breadcrumbs name the restore of each kind it holds one of.
+- `archive` and `unarchive` answer with the entry, whose `archived` says where
+  it stands. One archived together with a folder above it comes back only with
+  that folder: 422 `folderArchived`, and the archive of the tool marks it
+  `archivedWithAFolderAbove`.
+- `move` takes `--folder <folderId>` or `--top-level`, exactly one, and the
+  CLI refuses neither and both before a request goes out. The top level travels
+  as `"folderId": null`; a body without the field is `folderIdMissing`, which
+  this CLI never sends. The entry lands first in its new place. A move to
+  where the entry stands writes nothing and answers 200, so the answer cannot
+  tell a move from none.
+- `docs folders create` answers 201 with the folder in the shape of `docs
+  list --folder`, its ID under `folder.id`. `visibleToClients` counts only at
+  the top of the tool, in a project open to clients, from the team, and a
+  client's own folder at the top is shown to clients anyway. No answer says
+  whether it counted, so `--visible-to-clients` beside `--folder` draws a
+  `notice` that it does not, and goes out as given. `docs folders edit` needs
+  `--title`: a rename without one writes nothing on Minka's side, so the CLI
+  refuses it as a call that changes nothing.
+- `docs versions restore <documentId> <versionId>` writes what the version
+  said, title and body, as the newest version, and tells nobody. A version that
+  says what the document says already answers 200 and adds none; the CLI cannot
+  tell that answer from a write.
+- `docs list <toolId> --archived` reads `GET files-tools/{id}/archive`: what
+  went into the archive itself, at any depth, the one archived last first,
+  unpaged; what lies below a folder in the trash is not in it. It does not go
+  with `--folder`.
+
+The hints name the write that helps, and one code can mean another folder to
+another write: `folderArchived` is the folder above the entry to `delete` and
+`unarchive`, the entry or a folder above it to a folder's `archive`, `edit` and
+`move`, and the target to a document's or upload's `move` and to `create`.
+
+Minka refuses in this order. Every write first finds the entry at its address
+(404, a draft and an outsider included; for `restore` an entry in the trash by
+itself, for the team), and reads the body where it takes one. Then:
+
+- `delete`, `archive` and `unarchive` learn why the statement wrote nothing
+  only afterwards: `projectArchived`; then, for `unarchive`, a client (404),
+  the entry not archived (`…NotArchived`) and a folder above archived
+  (`folderArchived`); for `archive` the entry archived itself or through a
+  folder above (`documentArchived`, `uploadArchived`, `folderArchived`); for
+  `delete` a folder above archived (`folderArchived`); then 404, which for
+  `delete` and `archive` is a client and somebody else's. `restore` asks
+  `projectArchived`, then a folder above out of use (404).
+- `move`: an archived entry (`projectArchived`, then its own code), the field
+  (`folderIdMissing`, a body Minka cannot read), a target it does not know
+  (`folderUnknown`), then `projectArchived`, and only then an archived target
+  (`folderArchived`), `folderIntoItself` and the place it stands already (200),
+  so an archived project refuses a move to where the entry stands as well.
+- `docs folders create`: the tool (404), the title, the folder above
+  (`folderUnknown`; an archived one is `projectArchived` in an archived
+  project and `folderArchived` otherwise), `visibleToClients` that is no
+  boolean (400), then `projectArchived`. An archived folder given to `docs
+  create` and `docs uploads create` is answered the same way. `docs folders edit`: the folder (404), the
+  title, then `projectArchived` and `folderArchived`.
+- `docs versions restore`: the document (404), a client (404), a version ID
+  that is none or one the document has not got (404), then `projectArchived`
+  and `documentArchived`.
 
 ## What a list promises
 

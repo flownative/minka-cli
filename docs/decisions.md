@@ -2159,3 +2159,17 @@ gets nothing. Below the minimum is a warning in `doctor`, behind is not.
 in the way more often than an old minka is. **Implemented as:**
 `internal/cliupdate`, `cli.settleCLIUpdate`, `cli.doctorUpdateCheck`, see
 [Output](stable/output-contract.md#a-newer-minka).
+
+<a id="c-130"></a>
+## C-130 — Each kind of entry of Docs & Files is kept in order in its own group
+
+*Applies to: `docs`, `docs uploads` and `docs folders` with `delete`, `restore`, `archive`, `unarchive`, `move`; `docs folders create`, `edit`; `docs versions restore`; `docs list --archived`*
+
+A document, an upload and a folder take the same five writes, each in the group
+of its kind; a move names `--folder <folderId>` or `--top-level`, exactly one.
+The archive of a tool is `docs list <toolId> --archived`, as for posts and lists.
+
+**Why:** The ID of one kind is nothing at the address of another, so the group
+says the kind as `--document` and `--upload` do for comments, and the cards'
+`--top` names a position, not a place. **Implemented as:** `cli.orderCommands`,
+`cli.entryOrderRefusal`, see [Docs & Files](stable/docs-and-files.md).

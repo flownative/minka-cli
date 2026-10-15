@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 	"io"
+	"slices"
 	"strings"
 	"text/tabwriter"
 
@@ -26,9 +27,12 @@ forward, and a folder, a document or a file of Docs & Files.
 WHERE says what the thing hung in. Only a card and a column lie on a board;
 everything else belongs to a tool of another sort, which is marked as a tool.
 
-Only a card comes back through this CLI, with cards restore, and only while
-nothing it hung in is in the trash: restorable says whether it does, blockedBy
-what is in the way. Everything else comes back in the web only.`,
+A card comes back with cards restore, and a folder, a document and an upload of
+Docs & Files with docs folders restore, docs restore and docs uploads restore —
+each only while nothing it hung in is in the trash, and an entry of Docs &
+Files only while no folder above it is in the archive either. restorable says
+whether it comes back, blockedBy what is in the way. A draft its author finds
+here, and everything else, comes back in the web only.`,
 		Args: requireArgs("projectId"),
 		RunE: func(_ *cobra.Command, args []string) error {
 			s, err := a.session()
@@ -46,12 +50,10 @@ what is in the way. Everything else comes back in the web only.`,
 			}
 
 			return a.ok(success{
-				data:    trash.Raw,
-				summary: plural(len(trash.Value), "entry", "entries"),
-				notices: notices,
-				breadcrumbs: []Breadcrumb{
-					{Action: "restore", Cmd: "minka cards restore <cardId>", Description: "Put a card back where it was"},
-				},
+				data:        trash.Raw,
+				summary:     plural(len(trash.Value), "entry", "entries"),
+				notices:     notices,
+				breadcrumbs: trashBreadcrumbs(trash.Value),
 				text: func(w io.Writer) {
 					if len(trash.Value) == 0 {
 						fmt.Fprintln(w, "The trash is empty.")
@@ -134,4 +136,20 @@ func whatIsInTheWay(blocker string) string {
 	default:
 		return blocker + " is in the way"
 	}
+}
+
+// trashBreadcrumbs name how a card comes back, and how each kind of entry of
+// Docs & Files does where the trash holds one that can.
+func trashBreadcrumbs(entries []api.TrashEntry) []Breadcrumb {
+	crumbs := []Breadcrumb{{Action: "restore", Cmd: "minka cards restore <cardId>", Description: "Put a card back where it was"}}
+	for _, kind := range []struct{ kind, action, cmd, description string }{
+		{"document", "restore-document", "minka docs restore <documentId>", "Bring a document back"},
+		{"upload", "restore-upload", "minka docs uploads restore <uploadId>", "Bring an upload back"},
+		{"folder", "restore-folder", "minka docs folders restore <folderId>", "Bring a folder back, with what went into the trash with it"},
+	} {
+		if slices.ContainsFunc(entries, func(entry api.TrashEntry) bool { return entry.Kind == kind.kind && entry.Restorable }) {
+			crumbs = append(crumbs, Breadcrumb{Action: kind.action, Cmd: kind.cmd, Description: kind.description})
+		}
+	}
+	return crumbs
 }

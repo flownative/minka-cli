@@ -168,6 +168,18 @@ var idsInCapitals = []idInCapitals{
 	{command: "docs create", inputs: []string{"--tool", "--folder", "--notify"}, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
 		return []string{"--tool", up(f.Files.ID), "--folder", up(f.Folder.ID), "--title", "Costs", "--audience", "chosen", "--notify", up(f.Anke.ID), "--body", "Four hundred."}
 	}},
+	{command: "docs move", inputs: []string{"--folder"}, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
+		return []string{up(f.Document.ID), "--folder", up(f.Folder.ID)}
+	}},
+	{command: "docs uploads move", inputs: []string{"--folder"}, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
+		return []string{up(f.FilesUpload.ID), "--folder", up(f.FolderShownToClients.ID)}
+	}},
+	{command: "docs folders move", inputs: []string{"--folder"}, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
+		return []string{up(f.FolderShownToClients.ID), "--folder", up(f.Folder.ID)}
+	}},
+	{command: "docs folders create", inputs: []string{"--tool", "--folder"}, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
+		return []string{"--tool", up(f.Files.ID), "--folder", up(f.Folder.ID), "--title", "Offers"}
+	}},
 	{command: "docs uploads create", inputs: []string{"--tool", "--project", "--folder"}, args: func(e *testEnv, f *fakeapi.Fixture) []string {
 		return []string{aFileToUpload(e), "--tool", up(f.Files.ID), "--project", up(f.Project.ID), "--folder", up(f.Folder.ID)}
 	}},

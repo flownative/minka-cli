@@ -798,7 +798,8 @@ func New(t testing.TB) (*Server, *Fixture) {
 
 	aWholeSecond := s.now.Truncate(time.Second)
 	folder := &Folder{ID: newID(), Title: "Plans", CreatedAt: aWholeSecond, CreatorID: bruno.ID}
-	archivedFolder := &Folder{ID: newID(), Title: "Last year", ParentID: folder.ID, Archived: true, CreatedAt: aWholeSecond, CreatorID: bruno.ID}
+	archivedFolder := &Folder{ID: newID(), Title: "Last year", ParentID: folder.ID, Archived: true, CreatedAt: aWholeSecond, CreatorID: bruno.ID,
+		EntryState: EntryState{ArchivedAt: aWholeSecond.Add(-2 * time.Hour), ArchivedBy: anke.ID}}
 	folderShownToClients := &Folder{ID: newID(), Title: "For the client", ShownToClients: true, CreatedAt: aWholeSecond, CreatorID: bruno.ID}
 	document := &Document{ID: newID(), Title: "How the stage goes up", Body: "<p>Eight people on <strong>Friday</strong>.</p>",
 		CreatedAt: aWholeSecond, UpdatedAt: aWholeSecond, CreatorID: bruno.ID,
@@ -810,7 +811,8 @@ func New(t testing.TB) (*Server, *Fixture) {
 	draftDocument := &Document{ID: newID(), Title: "Not finished", Body: "<p>Later.</p>", Draft: true,
 		CreatedAt: aWholeSecond, UpdatedAt: aWholeSecond, CreatorID: bruno.ID}
 	archivedDocument := &Document{ID: newID(), Title: "Put away", Body: "<p>Done with.</p>", Archived: true,
-		CreatedAt: aWholeSecond, UpdatedAt: aWholeSecond, CreatorID: bruno.ID}
+		CreatedAt: aWholeSecond, UpdatedAt: aWholeSecond, CreatorID: bruno.ID,
+		EntryState: EntryState{ArchivedAt: aWholeSecond.Add(-time.Hour)}}
 	sitePlan := &Upload{ID: newID(), Circle: project.ID, Filename: "site-plan.pdf", ContentType: "application/pdf", Content: []byte("%PDF-1.4 a plan"), UploaderID: anke.ID}
 	sitePlan.Size = len(sitePlan.Content)
 	filesUpload := &FilesUpload{ID: newID(), Title: "site-plan.pdf", BlobID: sitePlan.ID, FolderID: folder.ID,
@@ -3690,13 +3692,14 @@ func (s *Server) trash(w http.ResponseWriter, r *http.Request, person *Person) {
 		return
 	}
 
-	type entry struct {
-		at       time.Time
-		seq      int
-		resource map[string]any
+	// Every statement of the trash demands the team, so a client reads an
+	// empty one.
+	if s.isAClient(person.ID) {
+		writeJSON(w, http.StatusOK, []any{})
+		return
 	}
 	appURL := s.URL + "/projects/" + project.ID + "/trash"
-	var entries []entry
+	var entries []trashRow
 	for _, trashed := range slices.Backward(s.Trash) {
 		board := s.boardOfColumn(trashed.Column)
 		if board == nil || board.ProjectID != project.ID {
@@ -3708,7 +3711,7 @@ func (s *Server) trash(w http.ResponseWriter, r *http.Request, person *Person) {
 		if s.trashedColumn(trashed.Column) != nil {
 			blockedBy = "column"
 		}
-		entries = append(entries, entry{trashed.TrashedAt, trashed.seq, map[string]any{
+		entries = append(entries, trashRow{trashed.TrashedAt, trashed.seq, map[string]any{
 			"kind": "card", "id": trashed.Card.ID, "title": trashed.Card.Title, "toolType": nil,
 			"board":     map[string]any{"id": board.ID, "title": board.Title},
 			"column":    map[string]any{"id": trashed.Column.ID, "type": trashed.Column.Type, "title": columnTitle(trashed.Column), "customTitle": trashed.Column.CustomTitle},
@@ -3721,7 +3724,7 @@ func (s *Server) trash(w http.ResponseWriter, r *http.Request, person *Person) {
 		if trashed.Board.ProjectID != project.ID {
 			continue
 		}
-		entries = append(entries, entry{trashed.TrashedAt, trashed.seq, map[string]any{
+		entries = append(entries, trashRow{trashed.TrashedAt, trashed.seq, map[string]any{
 			"kind": "column", "id": trashed.Column.ID, "title": trashed.Column.CustomTitle, "toolType": nil,
 			"board":     map[string]any{"id": trashed.Board.ID, "title": trashed.Board.Title},
 			"column":    nil,
@@ -3730,7 +3733,8 @@ func (s *Server) trash(w http.ResponseWriter, r *http.Request, person *Person) {
 			"appUrl": appURL,
 		}})
 	}
-	slices.SortStableFunc(entries, func(a, b entry) int {
+	entries = append(entries, s.trashedFilesEntries(project, person)...)
+	slices.SortStableFunc(entries, func(a, b trashRow) int {
 		if !a.at.Equal(b.at) {
 			return b.at.Compare(a.at)
 		}
@@ -3746,6 +3750,14 @@ func (s *Server) trash(w http.ResponseWriter, r *http.Request, person *Person) {
 		list = append(list, e.resource)
 	}
 	writeJSON(w, http.StatusOK, list)
+}
+
+// trashRow is one line of the trash of a project, with what orders it: the
+// moment it went in, and the count of what went in before for one moment.
+type trashRow struct {
+	at       time.Time
+	seq      int
+	resource map[string]any
 }
 
 // nilIfZero is how a row from before Minka noted the time says nothing.

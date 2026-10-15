@@ -58,7 +58,7 @@ func TestAFileGoesIntoAToolInTheOrderMinkaRefuses(t *testing.T) {
 		{"somebody else's blob in an archived project", func(_ *Server, f *Fixture, file *Upload) {
 			file.UploaderID = f.Anke.ID
 			f.Project.Archived = true
-		}, `{"blobId":"BLOB","folderId":"ARCHIVED"}`, "422 folderArchived"},
+		}, `{"blobId":"BLOB","folderId":"ARCHIVED"}`, "422 projectArchived"},
 		{"somebody else's blob", func(_ *Server, f *Fixture, file *Upload) { file.UploaderID = f.Anke.ID }, `{"blobId":"BLOB"}`, "422 fileUnknown"},
 		{"an own blob in a text, in an archived project", func(_ *Server, f *Fixture, file *Upload) {
 			file.StandsInAText = true

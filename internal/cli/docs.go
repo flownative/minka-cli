@@ -53,14 +53,14 @@ clients, in a tool shown to clients; the topmost folder decides for everything
 below it. Naming them anywhere else is refused with personCannotSeeIt. Nothing
 is written then, and sending it again changes nothing: name somebody else.`
 
-const documentNotFoundHint = "There is no such document, it is a draft, it belongs to a project you are not a member of, or you are a client of the project and it is not shown to you."
+const documentNotFoundHint = "There is no such document, it is a draft, it or a folder above it is in the trash, it belongs to a project you are not a member of, or you are a client of the project and it is not shown to you."
 
 const filesToolNotFoundHint = "There is no such Docs & Files tool, it is in the trash, it belongs to a project you are not a member of, or you are a client of the project and it is not shown to you."
 
-const uploadNotFoundHint = "There is no such upload, it belongs to a project you are not a member of, or you are a client of the project and it is not shown to you."
+const uploadNotFoundHint = "There is no such upload, it or a folder above it is in the trash, it belongs to a project you are not a member of, or you are a client of the project and it is not shown to you."
 
 func (a *app) newDocsCmd() *cobra.Command {
-	return group("docs", "Read and write the documents and uploads of a Docs & Files tool, and comment on them",
+	cmd := group("docs", "Read, write and keep in order the documents, uploads and folders of a Docs & Files tool, and comment on them",
 		a.newDocsToolsCmd(),
 		a.newDocsToolCmd(),
 		a.newDocsListCmd(),
@@ -69,8 +69,11 @@ func (a *app) newDocsCmd() *cobra.Command {
 		a.newDocsEditCmd(),
 		a.newDocsVersionsCmd(),
 		a.newDocsUploadsCmd(),
+		a.newDocsFoldersCmd(),
 		a.newDocsCommentsCmd(),
 	)
+	cmd.AddCommand(orderCommands(a, documentKind)...)
+	return cmd
 }
 
 func (a *app) newDocsToolsCmd() *cobra.Command {
@@ -105,6 +108,7 @@ A project can have more than one. What stands in one is read with
 
 func (a *app) newDocsListCmd() *cobra.Command {
 	var folderID string
+	var archived bool
 
 	cmd := &cobra.Command{
 		Use:   "list <toolId>",
@@ -120,11 +124,25 @@ can be listed by naming it, and then the answer and every line of it says
 archived: true.
 
 Every document carries a lead: the first 240 characters of its body without
-markup, cut where the count runs out and not at a word.`,
+markup, cut where the count runs out and not at a word.
+
+--archived lists the archive of the tool instead: the folders, documents and
+uploads that went into it themselves, from any folder, the one archived last
+first, with when and by whom. archivedWithAFolderAbove marks one whose folder
+went into the archive too, and only that folder brings it back. What stands in
+an archived folder without being archived itself is not listed there; --folder
+lists it. It is not paged, and does not go with --folder.`,
 		Example: `  minka docs list 0199... --json
-  minka docs list 0199... --folder 0199... --json`,
+  minka docs list 0199... --folder 0199... --json
+  minka docs list 0199... --archived`,
 		Args: requireArgs("toolId"),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if archived {
+				if cmd.Flags().Changed("folder") {
+					return usageErrorf(cmd, "--archived lists the whole archive of the tool and takes no --folder")
+				}
+				return a.docsArchive(args[0])
+			}
 			if cmd.Flags().Changed("folder") {
 				if err := requireID(cmd, "--folder", &folderID); err != nil {
 					return err
@@ -153,6 +171,7 @@ markup, cut where the count runs out and not at a word.`,
 		},
 	}
 	cmd.Flags().StringVar(&folderID, "folder", "", "ID of the folder to list; the top of the tool without it")
+	cmd.Flags().BoolVar(&archived, "archived", false, "List the archive of the tool instead")
 
 	return cmd
 }
@@ -387,12 +406,14 @@ them is refused unless --drop-attachments is given.`,
 }
 
 func (a *app) newDocsUploadsCmd() *cobra.Command {
-	return group("uploads", "Read, put in and change the uploads of a Docs & Files tool",
+	cmd := group("uploads", "Read, put in, change and keep in order the uploads of a Docs & Files tool",
 		a.newDocsUploadsShowCmd(),
 		a.newDocsUploadsCreateCmd(),
 		a.newDocsUploadsEditCmd(),
 		a.newDocsUploadsVersionsCmd(),
 	)
+	cmd.AddCommand(orderCommands(a, uploadKind)...)
+	return cmd
 }
 
 func (a *app) newDocsUploadsShowCmd() *cobra.Command {
@@ -1297,13 +1318,13 @@ func documentRefusal(s *session, err error) *Error {
 	case e.APICode == apiCodePersonCannotSeeIt:
 		e.Hint = "Nothing was written, and the same request will be refused again: somebody named with --notify is a client of the project, or an agent working for one, and is told only about a document in a folder shown to clients, in a tool shown to clients. Name somebody else. Which tools and folders the clients are shown is decided in Minka on the web."
 	case e.APICode == apiCodeDocumentArchived:
-		e.Hint = "The document, or a folder above it, lies in the archive. It can be read; nothing is written on it until it is brought back, which is done in Minka on the web."
+		e.Hint = "The document, or a folder above it, lies in the archive. It can be read; nothing is written on it until it is brought back with minka docs unarchive <documentId>, or where a folder above it is archived, minka docs folders unarchive <folderId>."
 	case e.APICode == apiCodeUploadArchived:
-		e.Hint = "The upload, or a folder above it, lies in the archive. It can be read; nothing is written on it until it is brought back, which is done in Minka on the web."
+		e.Hint = "The upload, or a folder above it, lies in the archive. It can be read; nothing is written on it until it is brought back with minka docs uploads unarchive <uploadId>, or where a folder above it is archived, minka docs folders unarchive <folderId>."
 	case e.APICode == apiCodeFolderUnknown:
-		e.Hint = "This Docs & Files tool has no such folder, or you are a client of the project and it is not shown to you. List the folders with: minka docs list <toolId>"
+		e.Hint = "This Docs & Files tool has no such folder, it is in the trash, or you are a client of the project and it is not shown to you. List the folders with: minka docs list <toolId>"
 	case e.APICode == apiCodeFolderArchived:
-		e.Hint = "The folder lies in the archive and takes nothing new. Write at the top of the tool or in another folder; a folder comes back in Minka on the web."
+		e.Hint = "The folder, or one above it, lies in the archive and takes nothing new. Write at the top of the tool or in another folder, or bring the folder back first: minka docs folders unarchive <folderId>"
 	case e.Code == CodeNotFound:
 		e.Hint = documentNotFoundHint
 	}
@@ -1318,9 +1339,9 @@ func commentRefusal(s *session, err error) *Error {
 	e := documentRefusal(s, err)
 	switch {
 	case e.APICode == apiCodeDocumentArchived:
-		e.Hint = "The document, or a folder above it, lies in the archive. Its comments can be read, but not changed, removed or reacted to until it is brought back in Minka on the web."
+		e.Hint = "The document, or a folder above it, lies in the archive. Its comments can be read, but not changed, removed or reacted to until it is brought back with minka docs unarchive <documentId>, or where a folder above it is archived, minka docs folders unarchive <folderId>."
 	case e.APICode == apiCodeUploadArchived:
-		e.Hint = "The upload, or a folder above it, lies in the archive. Its comments can be read, but not changed, removed or reacted to until it is brought back in Minka on the web."
+		e.Hint = "The upload, or a folder above it, lies in the archive. Its comments can be read, but not changed, removed or reacted to until it is brought back with minka docs uploads unarchive <uploadId>, or where a folder above it is archived, minka docs folders unarchive <folderId>."
 	case e.Code == CodeNotFound:
 		e.Hint = "The document or upload does not exist or is not visible to you, the comment was removed, or somebody else wrote it: only the author can change or remove a comment."
 	}

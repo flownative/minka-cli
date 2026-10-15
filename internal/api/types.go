@@ -91,8 +91,8 @@ type BoardCard struct {
 }
 
 // TrashEntry is one thing that was taken out of a project, of whichever kind.
-// Only a card can be put back through the API, and only while nothing it hung
-// in is in the trash.
+// A card and a folder, document or upload of Docs & Files can be put back
+// through the API, and only while nothing they hung in is out of use.
 type TrashEntry struct {
 	// Kind is what the thing is: "tool", "column", "card", "post", "todoList",
 	// "todo", "todoGroup", "checkinQuestion", "checkinAnswer", "forward",
