@@ -85,11 +85,10 @@ A tool is kept in order with `delete`, `restore`, `archive`, `unarchive` and
 `move` in `docs`, `docs uploads` and `docs folders`, beside `docs folders
 create` and `edit`, `docs versions restore` and `docs list --archived`; `trash
 list` names the restore of each entry it holds (C-130, E-298). Minka's side is
-#480, on its `main` and in no release yet, so production gets it with the next
-Minka release; the commands are checked against Minka's code and tests and the
-fake, and #480 as merged was checked live against a local Minka. The fake
-follows Minka's branch `files-api-refusals-in-order` (128317a25) ahead of its
-merge: an archived project refuses a move after its field and an unknown
+#480 and #482, on its `main` and in no release yet, so production gets it with
+the next Minka release; the commands are checked against Minka's code and tests
+and the fake, and #480 was checked live against a local Minka. The fake follows
+Minka's `main` in the order of the refusals: an archived project refuses a move after its field and an unknown
 target but before an archived target, `folderIntoItself` and the place the
 entry stands, an archived folder in an archived project is `projectArchived`
 for every write into it, and a version that is none of the document's is 404
