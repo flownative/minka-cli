@@ -536,7 +536,10 @@ live by the coordination. A stable release sets that version on Minka itself
 (C-131, job `announce`), through `PUT /api/v1/operations/cli-version`, which
 Minka builds as MNK-DW and does not serve yet; until it does and Robert has put
 `MINKA_CLI_VERSION_TOKEN` into the environment `release`, a release ends with
-a warning there instead. The job has only been run against a local stand-in.
+a warning there instead. The warning names the catch-up, `./flow
+cliversion:set --latest x.y.z` on Minka, which comes with MNK-DW like the
+token command `cliversion:createtoken`. The job has only been run against a
+local stand-in.
 
 The skill is a core of about three hundred lines with fifteen references by
 subject (C-126, [The skill](../stable/skill.md)); `working-on-a-board.md` says
