@@ -185,7 +185,7 @@ func (a *app) newItemCommentsCreateCmd(k commentedKind) *cobra.Command {
 				summary:     summary,
 				notices:     notices,
 				breadcrumbs: k.breadcrumbs(args[0]),
-				text:        func(w io.Writer) { fmt.Fprintf(w, "%s.\n", summary) },
+				text:        func(w io.Writer) { writtenComment(w, summary, comment.Value) },
 			})
 		},
 	}
@@ -256,7 +256,7 @@ and projectArchived is the answer.`, k.whereToTakeTheBodySource(), k.noun),
 				summary:     summary,
 				notices:     notices,
 				breadcrumbs: k.breadcrumbs(args[0]),
-				text:        func(w io.Writer) { fmt.Fprintf(w, "%s.\n", summary) },
+				text:        func(w io.Writer) { writtenComment(w, summary, comment.Value) },
 			})
 		},
 	}

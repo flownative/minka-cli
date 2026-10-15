@@ -839,7 +839,7 @@ func (a *app) newDocsCommentsCreateCmd() *cobra.Command {
 				summary:     summary,
 				notices:     notices,
 				breadcrumbs: entryBreadcrumbs(entry),
-				text:        func(w io.Writer) { fmt.Fprintf(w, "%s.\n", summary) },
+				text:        func(w io.Writer) { writtenComment(w, summary, comment.Value) },
 			})
 		},
 	}
@@ -907,7 +907,7 @@ that would drop them is refused unless --drop-attachments is given.`,
 				summary:     summary,
 				notices:     notices,
 				breadcrumbs: entryBreadcrumbs(entry),
-				text:        func(w io.Writer) { fmt.Fprintf(w, "%s.\n", summary) },
+				text:        func(w io.Writer) { writtenComment(w, summary, comment.Value) },
 			})
 		},
 	}
@@ -1501,6 +1501,9 @@ func renderEntryComments(w io.Writer, comments []api.Comment) {
 			fmt.Fprintf(w, "%s\n", line)
 		}
 		if line := reactionLine(comment.Reactions); line != "" {
+			fmt.Fprintf(w, "%s\n", line)
+		}
+		if line := commentAddressLine(comment); line != "" {
 			fmt.Fprintf(w, "%s\n", line)
 		}
 	}

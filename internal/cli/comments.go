@@ -241,9 +241,7 @@ has comments not yet shown on this machine; --force writes it all the same.`,
 				summary:     "Commented on card " + args[0],
 				notices:     notices,
 				breadcrumbs: cardBreadcrumbs(args[0]),
-				text: func(w io.Writer) {
-					fmt.Fprintf(w, "Commented on card %s.\n", args[0])
-				},
+				text:        func(w io.Writer) { writtenComment(w, "Commented on card "+args[0], comment.Value) },
 			})
 		},
 	}
@@ -382,7 +380,7 @@ that would drop them is refused unless --drop-attachments is given.`,
 				summary:     summary,
 				notices:     notices,
 				breadcrumbs: cardBreadcrumbs(args[0]),
-				text:        func(w io.Writer) { fmt.Fprintf(w, "%s.\n", summary) },
+				text:        func(w io.Writer) { writtenComment(w, summary, comment.Value) },
 			})
 		},
 	}

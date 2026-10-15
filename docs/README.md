@@ -69,7 +69,8 @@ the documentation says what holds; how it came about is in git.
 - [Comments on a card](stable/comments.md): What a read of the comments
   hands over and which one is the newest, the guards that keep a comment from
   being written past an unread answer, what counts as read and where the marks
-  lie, the settings of `config` — before any work on `comments` or `config`.
+  lie, the address of a comment under any item, the settings of `config` —
+  before any work on `comments` or `config`.
 - [The back of a card](stable/card-back.md): The rule for the notes, the
   back that is the team's alone, what an attachment is and how a file goes on
   the back in two requests, the text `show` prints and what it refuses, the

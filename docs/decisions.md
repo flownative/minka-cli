@@ -2128,3 +2128,17 @@ its text views give it in place of `appUrl` where it is there and not null.
 **Why:** The short address reads at a glance and stays valid when the prefix
 changes, while `appUrl` carries two IDs nobody can read. **Implemented as:**
 `skills/minka/`, `cli.cardAddress`, see [The skill](stable/skill.md).
+
+<a id="c-128"></a>
+## C-128 — Every text view of a comment gives its address
+
+*Applies to: the text views of comments, the answers of `comments create` and `edit`, `skills/minka/references/texts.md`*
+
+The text views give a comment's `appUrl`, its item's page anchored at the
+comment, as a `URL:` line below it, and the writes of a comment on the line
+below their confirmation; where Minka leaves the field out, nothing stands
+there. Outside Minka, one comment is named by that address.
+
+**Why:** It is the one address that opens the item at the comment, and an older
+Minka must read the same as before. **Implemented as:** `cli.commentAddressLine`,
+`cli.writtenComment`, see [Comments on a card](stable/comments.md).

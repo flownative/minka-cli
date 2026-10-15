@@ -695,7 +695,7 @@ func (s *Server) todoListResource(tool *TodosTool, list *TodoList) map[string]an
 	}
 	comments := []any{}
 	for _, comment := range list.Comments {
-		comments = append(comments, s.commentResource(tool.ProjectID, comment))
+		comments = append(comments, s.commentResource(tool.ProjectID, s.todoListURL(tool, list), comment))
 	}
 	return map[string]any{
 		"id": list.ID, "projectId": tool.ProjectID, "toolId": tool.ID,

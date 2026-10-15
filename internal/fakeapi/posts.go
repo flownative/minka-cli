@@ -757,7 +757,7 @@ func (s *Server) postResource(tool *PostsTool, post *Post) map[string]any {
 		"archived": post.Archived, "pinned": post.PinnedAt != nil, "commentCount": len(post.Comments),
 		"createdAt": timestamp(post.CreatedAt), "editedAt": editedAt(post.CreatedAt, post.UpdatedAt),
 		"creator":  s.personReference(post.CreatorID),
-		"comments": s.commentResources(tool.ProjectID, post.Comments),
+		"comments": s.commentResources(tool.ProjectID, s.postURL(tool, post), post.Comments),
 		"appUrl":   s.postURL(tool, post),
 	}
 }

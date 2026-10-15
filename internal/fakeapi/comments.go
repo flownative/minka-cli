@@ -7,10 +7,11 @@ import (
 
 // commentedItem is what the comments under a post, a document, an upload, a
 // to-do, a to-do list and an event have in common: the project they are
-// written in, why a write under the item wrote nothing, and the comments
-// themselves.
+// written in, the page they stand on, why a write under the item wrote
+// nothing, and the comments themselves.
 type commentedItem struct {
 	projectID string
+	appURL    string
 	// refusedAsClosed answers a write the item takes no more, with the code of
 	// the reason, and says whether it did.
 	refusedAsClosed func(w http.ResponseWriter) bool
@@ -39,35 +40,35 @@ func (s *Server) itemOfTheRequest(r *http.Request, person *Person) *commentedIte
 		if post == nil {
 			return nil
 		}
-		return &commentedItem{projectID: tool.ProjectID, comments: &post.Comments,
+		return &commentedItem{projectID: tool.ProjectID, appURL: s.postURL(tool, post), comments: &post.Comments,
 			refusedAsClosed: func(w http.ResponseWriter) bool { return s.refusedAsAClosedPost(w, tool, post) }}
 	case r.PathValue("documentId") != "":
 		tool, document := s.visibleDocument(r.PathValue("documentId"), person)
 		if document == nil {
 			return nil
 		}
-		return &commentedItem{projectID: tool.ProjectID, comments: &document.Comments,
+		return &commentedItem{projectID: tool.ProjectID, appURL: s.documentURL(tool, document), comments: &document.Comments,
 			refusedAsClosed: s.refusedAsAClosedEntry(tool, document.FolderID, document.Archived, "document")}
 	case r.PathValue("uploadId") != "":
 		tool, upload := s.visibleFilesUpload(r.PathValue("uploadId"), person)
 		if upload == nil {
 			return nil
 		}
-		return &commentedItem{projectID: tool.ProjectID, comments: &upload.Comments,
+		return &commentedItem{projectID: tool.ProjectID, appURL: s.filesUploadURL(tool, upload), comments: &upload.Comments,
 			refusedAsClosed: s.refusedAsAClosedEntry(tool, upload.FolderID, upload.Archived, "upload")}
 	case r.PathValue("todoId") != "":
 		tool, list, todo := s.visibleTodo(r.PathValue("todoId"), person)
 		if todo == nil {
 			return nil
 		}
-		return &commentedItem{projectID: tool.ProjectID, comments: &todo.Comments,
+		return &commentedItem{projectID: tool.ProjectID, appURL: s.todoURL(tool, todo), comments: &todo.Comments,
 			refusedAsClosed: func(w http.ResponseWriter) bool { return s.refusedAsNothingWritten(w, tool, list) }}
 	case r.PathValue("listId") != "":
 		tool, list := s.visibleTodoList(r.PathValue("listId"), person)
 		if list == nil {
 			return nil
 		}
-		return &commentedItem{projectID: tool.ProjectID, comments: &list.Comments,
+		return &commentedItem{projectID: tool.ProjectID, appURL: s.todoListURL(tool, list), comments: &list.Comments,
 			refusedAsClosed: func(w http.ResponseWriter) bool { return s.refusedAsNothingWritten(w, tool, list) }}
 	case r.PathValue("eventId") != "":
 		// An event takes comments in a calendar out of use as well; only the
@@ -76,7 +77,7 @@ func (s *Server) itemOfTheRequest(r *http.Request, person *Person) *commentedIte
 		if event == nil {
 			return nil
 		}
-		return &commentedItem{projectID: tool.ProjectID, comments: &event.Comments,
+		return &commentedItem{projectID: tool.ProjectID, appURL: s.eventURL(tool, event), comments: &event.Comments,
 			refusedAsClosed: func(w http.ResponseWriter) bool { return s.refusedAsArchived(w, s.projectWithID(tool.ProjectID)) }}
 	}
 	return nil
@@ -97,7 +98,7 @@ func (s *Server) commentsOnItem(w http.ResponseWriter, r *http.Request, person *
 		notFound(w)
 		return
 	}
-	writeJSON(w, http.StatusOK, s.commentResources(item.projectID, *item.comments))
+	writeJSON(w, http.StatusOK, s.commentResources(item.projectID, item.appURL, *item.comments))
 }
 
 func (s *Server) writeCommentOnItem(w http.ResponseWriter, r *http.Request, person *Person) {
@@ -124,7 +125,7 @@ func (s *Server) writeCommentOnItem(w http.ResponseWriter, r *http.Request, pers
 
 	comment := &Comment{ID: newID(), AuthorID: person.ID, Body: text, CreatedAt: s.now}
 	*item.comments = append(*item.comments, comment)
-	writeJSON(w, http.StatusCreated, s.commentResource(item.projectID, comment))
+	writeJSON(w, http.StatusCreated, s.commentResource(item.projectID, item.appURL, comment))
 }
 
 // editCommentOnItem changes a comment of the person asking. A comment that is
@@ -162,7 +163,7 @@ func (s *Server) editCommentOnItem(w http.ResponseWriter, r *http.Request, perso
 	// The same text again is a write as well: the moment moves on.
 	now := s.now
 	comment.Body, comment.EditedAt = text, &now
-	writeJSON(w, http.StatusOK, s.commentResource(item.projectID, comment))
+	writeJSON(w, http.StatusOK, s.commentResource(item.projectID, item.appURL, comment))
 }
 
 func (s *Server) removeCommentOnItem(w http.ResponseWriter, r *http.Request, person *Person) {
@@ -211,7 +212,7 @@ func (s *Server) reactToCommentOnItem(w http.ResponseWriter, r *http.Request, pe
 	}
 
 	status := reactTo(&comment.Reactions, content, person.ID)
-	writeJSON(w, status, s.commentResource(item.projectID, comment))
+	writeJSON(w, status, s.commentResource(item.projectID, item.appURL, comment))
 }
 
 func (s *Server) unreactFromCommentOnItem(w http.ResponseWriter, r *http.Request, person *Person) {
@@ -255,10 +256,10 @@ func ownCommentOf(comments []*Comment, commentID string, person *Person) *Commen
 	return nil
 }
 
-func (s *Server) commentResources(projectID string, comments []*Comment) []any {
+func (s *Server) commentResources(projectID, itemURL string, comments []*Comment) []any {
 	resources := []any{}
 	for _, comment := range comments {
-		resources = append(resources, s.commentResource(projectID, comment))
+		resources = append(resources, s.commentResource(projectID, itemURL, comment))
 	}
 	return resources
 }

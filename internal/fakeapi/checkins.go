@@ -858,7 +858,7 @@ func (s *Server) checkinAnswerLineResource(tool *CheckinsTool, question *Checkin
 func (s *Server) checkinAnswerResource(tool *CheckinsTool, question *CheckinQuestion, answer *CheckinAnswer) map[string]any {
 	comments := []any{}
 	for _, comment := range answer.Comments {
-		comments = append(comments, s.commentResource(tool.ProjectID, comment))
+		comments = append(comments, s.commentResource(tool.ProjectID, s.checkinAnswerURL(tool, answer), comment))
 	}
 	return map[string]any{
 		"id": answer.ID, "projectId": tool.ProjectID, "toolId": tool.ID, "questionId": question.ID,

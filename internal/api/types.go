@@ -232,6 +232,9 @@ type Comment struct {
 	CreatedAt   string          `json:"createdAt"`
 	EditedAt    *string         `json:"editedAt"`
 	Reactions   []Reaction      `json:"reactions"`
+	// AppURL opens the page of the comment's item scrolled to the comment; a
+	// Minka that does not hand it out leaves it empty.
+	AppURL string `json:"appUrl"`
 }
 
 // Reaction is what people said about a comment or a message, the same content
