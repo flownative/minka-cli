@@ -143,7 +143,7 @@ jobs:
           VERSION: ${{ needs.build.outputs.version }}
           MINKA_CLI_VERSION_TOKEN: ${{ secrets.MINKA_CLI_VERSION_TOKEN }}
         run: |
-          catch_up="Until the latest version is set on Minka's side, with its flow command, or this job runs again, Minka's update notice names the previous version."
+          catch_up="Until Minka knows it, its update notice names the previous version. To catch up, run ./flow cliversion:set --latest $VERSION on Minka, or re-run this job (within 30 days)."
           if [ -z "$MINKA_CLI_VERSION_TOKEN" ]; then
             echo "::warning::The secret MINKA_CLI_VERSION_TOKEN is missing in the environment 'release', so Minka was not told about minka $VERSION. $catch_up"
             exit 0

@@ -61,8 +61,18 @@ Authorization: Bearer <MINKA_CLI_VERSION_TOKEN>
 ```
 
 The token is the secret `MINKA_CLI_VERSION_TOKEN` in the environment
-`release`, beside the deploy key of the tap. It may do this one thing on Minka
-and nothing else.
+`release`, beside the deploy key of the tap. It is made on Minka with
+`./flow cliversion:createtoken github-release`, which shows it once; it starts
+with `minka_rel_` and may set the CLI versions and nothing else.
+`./flow cliversion:listtokens` lists the tokens with their ids,
+`./flow cliversion:revoketoken <id>` revokes one for good; a new token then
+replaces the secret.
+
+Minka answers 200 with `{"latest", "minimum"}`. A 401 means the token is wrong
+or revoked: make a new one and replace the secret. A 422 (`versionInvalid`)
+comes only for a tag Minka does not accept as x.y.z, with a leading zero or
+more than six digits in a part, such as `v01.2.3`, which the tag check lets
+through; the job then only warns.
 
 Any 2xx answer is success. Transient failures and a refused connection are
 retried a few times, a refusal by Minka is not; each try ends after 30
@@ -70,9 +80,11 @@ seconds. Whatever else happens — the secret is missing,
 Minka refuses, or no answer comes (`HTTP 000`) — the job ends with a warning
 on the run that names the HTTP status, and the release counts as done: the
 archives and the formula are out. Until the version is set, the update notice
-names the previous release. Catching up is setting the version on Minka's side
-with its flow command, or running the job `announce` of that release again in
-GitHub, which GitHub allows within 30 days of the run.
+names the previous release. The warning names the catch-up:
+`./flow cliversion:set --latest x.y.z` on Minka (`--minimum x.y.z` sets the
+oldest fitting version as well, `./flow cliversion:show` shows both), or
+running the job `announce` of that release again in GitHub, which GitHub allows
+within 30 days of the run.
 
 A failed `tap` means `announce` does not run at all. Re-running the failed jobs
 of the run runs `tap` and then `announce`.
