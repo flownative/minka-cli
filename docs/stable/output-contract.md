@@ -37,6 +37,29 @@ woven into the records.
 Warnings are in `notice` with `--json`, on stderr otherwise, so that
 `--quiet | jq` never has anything foreign in the stream.
 
+## A newer minka
+
+Every answer of Minka, a refusal included, may name the latest minka in
+`Minka-CLI-Latest` and the oldest one it supports in `Minka-CLI-Minimum`, each
+a plain `x.y.z` or absent. The CLI remembers both and says, at most once a day,
+that its own version is behind (C-129):
+
+- `--json`: the envelope of a success and of an error carries
+  `"cliUpdate": {"current", "latest", "minimum"}`, each of the last two only
+  where Minka names it. Nothing beside the envelope, on stdout or on stderr.
+- Text: one line on stderr after the output, naming the new version and
+  `brew upgrade minka`; below the minimum a warning of two lines instead. The
+  command runs and exits as it would without it.
+- `--quiet`: nothing, since there is no envelope to carry it.
+
+The text and the envelope each have a day of their own, so an agent's commands
+do not take the line from the person at the terminal. Only a release `x.y.z`
+(with or without the `v` of its tag) compares itself, and every line and
+`current` name it without the `v`, the way Minka names versions: `dev`, a build of a
+checkout that is not a tag, a `-dirty` one or a prerelease never shows the
+notice. `MINKA_NO_UPDATE_NOTICE` set to anything but empty or `0` switches the
+line and the field off; `doctor` reports the state either way.
+
 ## Errors
 
 `{ok: false, error, code, retryable, hint, meta: {apiCode, httpStatus}, data,

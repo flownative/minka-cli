@@ -16,6 +16,7 @@ type Response struct {
 	Summary     string       `json:"summary,omitempty"`
 	Notice      string       `json:"notice,omitempty"`
 	Breadcrumbs []Breadcrumb `json:"breadcrumbs,omitempty"`
+	CLIUpdate   *cliUpdate   `json:"cliUpdate,omitempty"` // at most once a day, where a newer minka exists
 }
 
 // Breadcrumb suggests a command that commonly follows.
@@ -36,6 +37,7 @@ type ErrorResponse struct {
 	Meta      map[string]any `json:"meta,omitempty"` // apiCode and httpStatus when the server answered
 	Data      any            `json:"data,omitempty"` // what an incomplete run got done
 	Notice    string         `json:"notice,omitempty"`
+	CLIUpdate *cliUpdate     `json:"cliUpdate,omitempty"`
 }
 
 type format int
@@ -84,6 +86,7 @@ func (a *app) ok(s success) error {
 		}
 	}
 
+	_, update := a.settleCLIUpdate(a.noticeChannel())
 	switch a.format() {
 	case formatQuiet:
 		a.warn(s.notices)
@@ -95,12 +98,29 @@ func (a *app) ok(s success) error {
 			Summary:     s.summary,
 			Notice:      strings.Join(s.notices, "; "),
 			Breadcrumbs: s.breadcrumbs,
+			CLIUpdate:   update,
 		})
 	default:
 		a.warn(s.notices)
 		s.text(a.stdout)
+		if update != nil {
+			writeUpdateNotice(a.stderr, update)
+		}
 	}
 	return nil
+}
+
+// noticeChannel is where the notice of a newer minka goes in the format of
+// this run. --quiet has no envelope to carry it and keeps stderr for warnings
+// about the data, so it gets none.
+func (a *app) noticeChannel() noticeChannel {
+	switch a.format() {
+	case formatJSON:
+		return jsonChannel
+	case formatText:
+		return textChannel
+	}
+	return noChannel
 }
 
 func (a *app) warn(notices []string) {
@@ -110,8 +130,9 @@ func (a *app) warn(notices []string) {
 }
 
 func (a *app) fail(e *Error) {
+	_, update := a.settleCLIUpdate(a.noticeChannel())
 	if a.format() != formatText {
-		response := ErrorResponse{OK: false, Error: e.Message, Code: e.Code, Retryable: e.Retryable, Hint: e.Hint, Data: e.Data, Notice: strings.Join(e.Notices, "; ")}
+		response := ErrorResponse{OK: false, Error: e.Message, Code: e.Code, Retryable: e.Retryable, Hint: e.Hint, Data: e.Data, Notice: strings.Join(e.Notices, "; "), CLIUpdate: update}
 		if e.APICode != "" || e.HTTPStatus != 0 {
 			response.Meta = map[string]any{"apiCode": e.APICode, "httpStatus": e.HTTPStatus}
 		}
@@ -130,6 +151,9 @@ func (a *app) fail(e *Error) {
 	fmt.Fprintf(a.stderr, "Error: %s\n", message)
 	if e.Hint != "" {
 		fmt.Fprintf(a.stderr, "Hint: %s\n", e.Hint)
+	}
+	if update != nil {
+		writeUpdateNotice(a.stderr, update)
 	}
 }
 

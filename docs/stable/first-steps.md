@@ -50,8 +50,10 @@ is the setup, not the command; `data.healthy` is false when a check failed
 | `sign-in` | no host or token can be found: nobody is signed in, `$MINKA_TOKEN` stands without `$MINKA_HOST`, `--host` is no host. The hint names the step that needs no terminal first, then `setup`. Skipped when the config check failed |
 | `host` | the host does not answer or refuses the token; carries the hint of that error |
 | `skill` | warns when none is installed or the installed one differs; a skill behind a symbolic link is fine |
+| `update` | warns when this minka is older than the minimum Minka named; a newer latest version is `ok` with the hint `brew upgrade minka`. Says that nothing is known yet, or that a build is no release and not compared (C-129) |
 
 A warning leaves the report healthy. A check that was not looked at because
 one before it failed has the status `skip`, so one cause shows up once. `doctor` sends one reading request, and
-none without a sign-in. It reports the state of the skill itself, so it
-carries no notice about it.
+none without a sign-in, whose answer already counts for `update`. It reports
+the state of the skill and of the version itself, so it carries no notice and
+no `cliUpdate` about them.

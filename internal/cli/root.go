@@ -14,6 +14,7 @@ import (
 
 	"github.com/flownative/minka-cli/internal/api"
 	"github.com/flownative/minka-cli/internal/basecamp"
+	"github.com/flownative/minka-cli/internal/cliupdate"
 	"github.com/flownative/minka-cli/internal/config"
 	"github.com/flownative/minka-cli/internal/readmark"
 	"github.com/spf13/cobra"
@@ -110,6 +111,16 @@ type app struct {
 	// itself, so that it does not say the same thing twice.
 	skillIsTheTopic bool
 
+	// ownVersion is the version this minka compares with what Minka names;
+	// tests give it one of their own.
+	ownVersion string
+
+	// seen is what the answers of this run said about the versions of minka,
+	// and updateState what became of it once settled.
+	seen          versionsSeen
+	updateSettled bool
+	updateState   cliupdate.State
+
 	// bytesAreTheOutput is set by a command that writes a file to standard
 	// output. Everything it has to say then goes to standard error, a failure
 	// included: half a file followed by an envelope is neither.
@@ -132,6 +143,7 @@ func newApp(ctx context.Context, stdin io.Reader, stdout, stderr io.Writer, gete
 	a.basecampFiles = basecamp.Downloader{}
 	a.avatarFetcher = basecamp.NewAvatarClient()
 	a.now = time.Now
+	a.ownVersion = version
 	a.markWait = 5 * time.Second
 	a.pause = pauseFor
 	a.runClaude = a.runClaudeCommand
@@ -163,6 +175,8 @@ func (a *app) run(args []string) int {
 
 	err := root.ExecuteContext(a.ctx)
 	if err == nil {
+		// A command that printed nothing still remembers what it learned.
+		a.settleCLIUpdate(noChannel)
 		return ExitOK
 	}
 
@@ -392,7 +406,7 @@ func (a *app) session() (*session, error) {
 			return nil, &Error{Code: CodeUsage, Message: "$MINKA_HOST: " + err.Error()}
 		}
 		if host == envHost {
-			return &session{client: api.New(host, envToken, userAgent()), host: host, tokenSource: tokenFromEnvironment, reader: readmark.Reader(envToken)}, nil
+			return &session{client: a.newClient(host, envToken), host: host, tokenSource: tokenFromEnvironment, reader: readmark.Reader(envToken)}, nil
 		}
 	}
 
@@ -419,7 +433,7 @@ func (a *app) session() (*session, error) {
 		return nil, e
 	}
 
-	return &session{client: api.New(host, token, userAgent()), host: host, tokenSource: tokenFromConfig, configPath: path, reader: readmark.Reader(token)}, nil
+	return &session{client: a.newClient(host, token), host: host, tokenSource: tokenFromConfig, configPath: path, reader: readmark.Reader(token)}, nil
 }
 
 // hostToPaste is the host a hint may put into a command line. Where what may be

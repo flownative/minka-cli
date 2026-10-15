@@ -25,6 +25,13 @@ line.
 - A file that others can read is refused instead of silently used.
 - It holds several hosts with one token each, and a default host.
 
+Beside it, `cli-update.json` (0600, written the same way) remembers the
+versions of minka Minka named last and when the notice of a newer one was
+shown (C-129). It holds no secret. What cannot be read there counts as
+nothing, and a notice whose moment cannot be written is not shown; neither
+fails a command. A version is taken from a header only where it is a plain
+`x.y.z`, so nothing in it can reach a terminal as a control sequence.
+
 ## A token goes to its own host only
 
 `MINKA_TOKEN` counts only together with `MINKA_HOST` and only for that host.

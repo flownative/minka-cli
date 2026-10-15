@@ -56,6 +56,24 @@ type Client struct {
 	uploads   *http.Client
 	downloads *http.Client
 	waits     *http.Client // for a request the server holds open; each sets a deadline of its own
+
+	// observe sees the headers of every answer the host gave, a refusal
+	// included; nil sees nothing.
+	observe func(http.Header)
+}
+
+// ObserveAnswers hands the headers of every answer of the host to observe,
+// whatever the answer was. An answer from anywhere else, such as a store the
+// bytes of a file were fetched from, is not handed on.
+func (c *Client) ObserveAnswers(observe func(http.Header)) {
+	c.observe = observe
+}
+
+func (c *Client) observed(resp *http.Response) {
+	if c.observe == nil || resp.Request == nil || !c.isTheHostSignedInTo(resp.Request.URL) {
+		return
+	}
+	c.observe(resp.Header)
 }
 
 // New returns a client for a host such as "https://minka.localbeach.net".
@@ -626,6 +644,7 @@ func (c *Client) fetchBytes(ctx context.Context, path string) (*FileBytes, error
 		}
 		return nil, &NetworkError{Method: http.MethodGet, Err: err}
 	}
+	c.observed(resp)
 
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		defer resp.Body.Close()
@@ -674,6 +693,7 @@ func send[T any](ctx context.Context, c *Client, httpClient *http.Client, method
 		return result, &NetworkError{Method: method, Err: err}
 	}
 	defer resp.Body.Close()
+	c.observed(resp)
 
 	raw, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes))
 	if err != nil {

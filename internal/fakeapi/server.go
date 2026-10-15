@@ -506,6 +506,13 @@ type Server struct {
 	// Minka allows, so that a client cannot take the page size for granted.
 	MessagesPerPage int
 
+	// CLILatest and CLIMinimum, where set, are sent on every answer as
+	// Minka-CLI-Latest and Minka-CLI-Minimum, the way a Minka does that names
+	// the versions of minka. They are sent as they stand, so that a test can
+	// hand out a value that is no version.
+	CLILatest  string
+	CLIMinimum string
+
 	// HandsOutNoShortURL makes the server answer like a Minka from before a
 	// card and the subject of a notification carried shortUrl: the field is
 	// missing, not null.
@@ -1172,6 +1179,12 @@ func (s *Server) recording(next http.Handler) http.Handler {
 
 		s.mu.Lock()
 		defer s.mu.Unlock()
+		if s.CLILatest != "" {
+			w.Header().Set("Minka-CLI-Latest", s.CLILatest)
+		}
+		if s.CLIMinimum != "" {
+			w.Header().Set("Minka-CLI-Minimum", s.CLIMinimum)
+		}
 		next.ServeHTTP(w, r)
 	})
 }

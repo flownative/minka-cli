@@ -2142,3 +2142,20 @@ there. Outside Minka, one comment is named by that address.
 **Why:** It is the one address that opens the item at the comment, and an older
 Minka must read the same as before. **Implemented as:** `cli.commentAddressLine`,
 `cli.writtenComment`, see [Comments on a card](stable/comments.md).
+
+<a id="c-129"></a>
+## C-129 — A newer minka is named once a day, from what Minka's answers carry
+
+*Applies to: every command, `doctor`, `cli-update.json`, the envelope field `cliUpdate`, `skills/minka/SKILL.md`*
+
+The versions Minka names in `Minka-CLI-Latest` and `Minka-CLI-Minimum` are
+remembered beside the configuration, without a request of their own; an answer
+naming either header stands for both, one naming neither changes nothing.
+Only a release `x.y.z` compares itself. Text gets a line on stderr, `--json`
+the field `cliUpdate`, each at most once a day on a day of its own; `--quiet`
+gets nothing. Below the minimum is a warning in `doctor`, behind is not.
+
+**Why:** A hint that costs a request, breaks a pipe or fails a command would be
+in the way more often than an old minka is. **Implemented as:**
+`internal/cliupdate`, `cli.settleCLIUpdate`, `cli.doctorUpdateCheck`, see
+[Output](stable/output-contract.md#a-newer-minka).

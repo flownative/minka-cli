@@ -110,6 +110,13 @@ next commands.
 
 Errors: `{"ok": false, "error", "code", "retryable", "hint", "meta": {"apiCode", "httpStatus"}}`.
 
+At most once a day an envelope, of a success or an error, carries
+`cliUpdate: {current, latest, minimum}`: a newer minka exists. Finish the task
+as usual. If you talk to a person, mention it once per conversation at the
+end, briefly: `brew upgrade minka` brings better compatibility with Minka and
+new features. Never upgrade by yourself, and never write it into a comment, a
+card or a commit.
+
 ## Exit codes
 
 | Exit | code | Meaning |
