@@ -31,16 +31,51 @@ How the CLI gets from `main` to a machine.
    — `Formula/minka.rb` in `flownative/homebrew-flownative` is written from
    `.github/formula/minka.rb.tpl` and pushed. A version older than the one the
    tap offers is refused.
+6. Once the formula is written, Minka is told the new version, see [Telling
+   Minka the version](#telling-minka-the-version).
 
-The job that writes to the tap runs in the environment `release`, which holds
-the one secret of this repository: a deploy key that can write to the tap and
-nowhere else. The environment only deploys from tags `v*`; that, not the
+The jobs that write to the tap and to Minka run in the environment `release`,
+which holds the secrets of this repository: a deploy key that can write to the
+tap and nowhere else, and a token that can set Minka's latest CLI version and
+nothing else. The environment only deploys from tags `v*`; that, not the
 workflow, is what keeps a branch with a workflow of its own from reaching the
-key. Somebody who may push a tag `v*` can still reach it, with a release from a
-commit whose workflow they changed: a required reviewer would close that, and
-GitHub offers one for private repositories on the Enterprise plan only. The
-tap carries other formulae as well, so who may write to this repository is
-worth that thought.
+secrets. Somebody who may push a tag `v*` can still reach them, with a release
+from a commit whose workflow they changed: a required reviewer would close
+that, and GitHub offers one for private repositories on the Enterprise plan
+only. The tap carries other formulae as well, so who may write to this
+repository is worth that thought.
+
+## Telling Minka the version
+
+Minka names the latest release of the CLI in the header `Minka-CLI-Latest`,
+from which minka tells its users about an update (C-129). The job `announce`
+sets that version once the formula points at it, so the notice never names a
+version `brew upgrade` cannot install yet, and only for a stable release, the
+same as the tap (C-131):
+
+```
+PUT https://minka.flownative.com/api/v1/operations/cli-version
+Authorization: Bearer <MINKA_CLI_VERSION_TOKEN>
+
+{"latest": "1.2.3"}
+```
+
+The token is the secret `MINKA_CLI_VERSION_TOKEN` in the environment
+`release`, beside the deploy key of the tap. It may do this one thing on Minka
+and nothing else.
+
+Any 2xx answer is success. Transient failures and a refused connection are
+retried a few times, a refusal by Minka is not; each try ends after 30
+seconds. Whatever else happens — the secret is missing,
+Minka refuses, or no answer comes (`HTTP 000`) — the job ends with a warning
+on the run that names the HTTP status, and the release counts as done: the
+archives and the formula are out. Until the version is set, the update notice
+names the previous release. Catching up is setting the version on Minka's side
+with its flow command, or running the job `announce` of that release again in
+GitHub, which GitHub allows within 30 days of the run.
+
+A failed `tap` means `announce` does not run at all. Re-running the failed jobs
+of the run runs `tap` and then `announce`.
 
 ## The formula
 

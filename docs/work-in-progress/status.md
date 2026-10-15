@@ -532,7 +532,11 @@ first steps. A newer minka is named at most once a day, on stderr or as
 `cliUpdate` in the envelope, from the headers `Minka-CLI-Latest` and
 `Minka-CLI-Minimum` that every answer of Minka's `main` carries where they are
 set (C-129); checked against Minka's middleware and its tests and the fake,
-live by the coordination.
+live by the coordination. A stable release sets that version on Minka itself
+(C-131, job `announce`), through `PUT /api/v1/operations/cli-version`, which
+Minka builds as MNK-DW and does not serve yet; until it does and Robert has put
+`MINKA_CLI_VERSION_TOKEN` into the environment `release`, a release ends with
+a warning there instead. The job has only been run against a local stand-in.
 
 The skill is a core of about three hundred lines with fifteen references by
 subject (C-126, [The skill](../stable/skill.md)); `working-on-a-board.md` says

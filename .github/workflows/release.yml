@@ -125,3 +125,38 @@ jobs:
           fi
           git commit -m "minka $VERSION"
           git push
+
+  announce:
+    name: Tell Minka the new version
+    # Only once Homebrew offers it: Minka's update notice says `brew upgrade
+    # minka`, and Minka takes only stable versions.
+    needs: [build, tap]
+    if: ${{ !github.event.release.prerelease && !contains(github.event.release.tag_name, '-') }}
+    runs-on: ubuntu-latest
+    environment: release
+    permissions: {}
+    steps:
+      # The release is out either way; a version Minka does not know yet only
+      # delays its update notice, so this warns instead of failing.
+      - name: Report the version to Minka
+        env:
+          VERSION: ${{ needs.build.outputs.version }}
+          MINKA_CLI_VERSION_TOKEN: ${{ secrets.MINKA_CLI_VERSION_TOKEN }}
+        run: |
+          catch_up="Until the latest version is set on Minka's side, with its flow command, or this job runs again, Minka's update notice names the previous version."
+          if [ -z "$MINKA_CLI_VERSION_TOKEN" ]; then
+            echo "::warning::The secret MINKA_CLI_VERSION_TOKEN is missing in the environment 'release', so Minka was not told about minka $VERSION. $catch_up"
+            exit 0
+          fi
+          # The token reaches curl on stdin, so it never stands in a command line.
+          status="$(printf 'header = "Authorization: Bearer %s"\n' "$MINKA_CLI_VERSION_TOKEN" \
+            | curl --config - --silent --output /dev/null --write-out '%{http_code}' \
+              --connect-timeout 10 --max-time 30 --retry 3 --retry-delay 5 --retry-connrefused \
+              --request PUT --header 'Content-Type: application/json' \
+              --data "{\"latest\": \"$VERSION\"}" \
+              https://minka.flownative.com/api/v1/operations/cli-version)" || true
+          if [[ "$status" != 2?? ]]; then
+            echo "::warning::Minka did not take minka $VERSION as its latest version (HTTP ${status:-000}). $catch_up"
+            exit 0
+          fi
+          echo "Minka names minka $VERSION as its latest version."

@@ -2173,3 +2173,18 @@ The archive of a tool is `docs list <toolId> --archived`, as for posts and lists
 says the kind as `--document` and `--upload` do for comments, and the cards'
 `--top` names a position, not a place. **Implemented as:** `cli.orderCommands`,
 `cli.entryOrderRefusal`, see [Docs & Files](stable/docs-and-files.md).
+
+<a id="c-131"></a>
+## C-131 — A release tells Minka its version, and a failed report never fails it
+
+*Applies to: `.github/workflows/release.yml`, the job `announce`*
+
+Once the formula points at a stable version, the release workflow sets it as
+Minka's latest CLI version (`PUT /api/v1/operations/cli-version`), with a token
+that may do nothing else, kept in the environment `release`. A missing token, a
+refusal or no answer is a warning on the run, never a failed release.
+
+**Why:** The update notice of C-129 is only right if nobody has to remember the
+version and never names one `brew upgrade` cannot install, while a release
+whose archives and formula are out is done. **Implemented as:** the job
+`announce`, see [Releases](stable/releases.md#telling-minka-the-version).
