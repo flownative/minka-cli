@@ -72,7 +72,10 @@ Minka answers 200 with `{"latest", "minimum"}`. A 401 means the token is wrong
 or revoked: make a new one and replace the secret. A 422 (`versionInvalid`)
 comes only for a tag Minka does not accept as x.y.z, with a leading zero or
 more than six digits in a part, such as `v01.2.3`, which the tag check lets
-through; the job then only warns.
+through. A 422 (`minimumAboveLatest`) comes for a release below the minimum
+Minka holds, such as a fix to an older line; `./flow cliversion:set` with a
+lower `--minimum` beside `--latest` sets both. In either case the job only
+warns.
 
 Any 2xx answer is success. Transient failures and a refused connection are
 retried a few times, a refusal by Minka is not; each try ends after 30
