@@ -104,6 +104,21 @@ its `main` and in no release yet, so production gets it with the next Minka
 release; the commands are checked against Minka's code and tests and the fake,
 and live only in what addresses that name nothing show, see below.
 
+`search <term>... --tool <toolId> | --folder <folderId>` finds documents and
+uploads within a Files tool or a folder and what lies beneath it, each hit with
+the heading of its match and an address anchored there, read in pages of 25 up
+to `--limit` (C-132, E-304), and an entry in the archive or below an archived
+folder marked `archived`. Minka's side is on its `main` and in no release yet,
+so production gets it with the next Minka release; the command is checked
+against Minka's code and `ApiSearchTest`, the fake, and live against a local
+Minka on its `main`: hits, sections and anchors, `archived`, paging across two
+pages and a cut inside one, and every refusal with the bodies the fake sends.
+A folder outside the tool named was not met live, for want of a second Files
+tool in the test project. The fake finds a term as a substring in any case, not as
+Postgres reads it (no stems, typos, phrases or operators), orders `best` as
+title before text and then the newest, and drops accents from a table of Latin
+letters rather than by Unicode decomposition.
+
 The to-do lists of a project are read with `todolists tools`, `todolists list`
 and `todolists show`, and written with `todolists create`, `edit`, `archive`,
 `unarchive` and `delete`; the groups of a list with `todogroups create`, `edit`,

@@ -66,7 +66,8 @@ the documentation says what holds; how it came about is in git.
   refused, the guard that cannot see one second, whom a new document reaches,
   the flag that names the kind of entry, the archive of a folder, how a tool
   is kept in order — the trash, the archive, moves, folders, a version made the
-  newest — and who may, the refusals — before any work on `docs`.
+  newest — and who may, the refusals, the search within a tool or a folder and
+  its pages — before any work on `docs` or `search`.
 - [Comments on a card](stable/comments.md): What a read of the comments
   hands over and which one is the newest, the guards that keep a comment from
   being written past an unread answer, what counts as read and where the marks

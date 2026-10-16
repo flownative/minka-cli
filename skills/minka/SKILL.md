@@ -246,6 +246,7 @@ minka notifications mark-read <notificationId> --json
 minka work start <card> [--session <id>] --json
 minka work stop [<card>] [--all] [--session <id>] --json
 minka work list [--session <id>] --json
+minka search <term>... (--folder <folderId> | --tool <toolId> | both) [--limit N] --json
 ```
 
 `<column>` is a column ID, a type (`triage`, `not_now`, `done`) or a title
@@ -267,7 +268,7 @@ they stand at its top. Read the one you need, not all of them.
 | Saying which cards you are working on: `work`, `heartbeat`, the mod | [references/work-and-heartbeat.md](references/work-and-heartbeat.md) |
 | Chats of a project and private conversations | [references/chats.md](references/chats.md) |
 | Putting a file into a text, fetching a file back | [references/files.md](references/files.md) |
-| Docs & Files: documents, uploads, folders, versions, the trash and the archive of a tool | [references/docs-and-files.md](references/docs-and-files.md) |
+| Docs & Files: documents, uploads, folders, versions, the trash and the archive of a tool, searching a tool or a folder with `minka search` | [references/docs-and-files.md](references/docs-and-files.md) |
 | To-do lists, groups, to-dos, subtasks, repeating to-dos | [references/todos.md](references/todos.md) |
 | Check-ins: questions and answers | [references/checkins.md](references/checkins.md) |
 | Posts of the message board | [references/posts.md](references/posts.md) |
