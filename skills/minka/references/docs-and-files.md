@@ -19,6 +19,7 @@ minka docs create --tool <toolId> --title "Title" --audience everybody|chosen|no
 minka docs edit <documentId> [--title "New"] [--body - < body.md] (--expect <updatedAt> | --force) --json
 minka docs edit <documentId> (--in-navigation | --not-in-navigation) --json
 minka docs book <folderId> --json
+minka docs export <folderId> --out <dir> [--format markdown|html] [--tool <toolId>] [--force] --json
 minka docs order <toolId> automatic|manual [--folder <folderId>] --json
 minka docs versions list <documentId> --json
 minka docs versions show <documentId> <versionId> --json
@@ -396,6 +397,58 @@ an ID is never read as the wrong kind:
   exits 2 for the whole call. A document in no book takes it as well and a
   `notice` says it counts once the document is in one. `docs show` names the
   `book` and `inNavigation`.
+
+## Reading a book as files
+
+To read a whole book — a handbook, a runbook — or to grep through it, export
+it once and read the files:
+
+```bash
+minka docs export <folderId> --out handbook --json
+```
+
+- The folder can be the book, or a chapter of it (then only what lies below).
+  A folder in no book needs its tool: `--tool <toolId>`; without it exit 2.
+  The book is read in one request and every page in one more, four at a time.
+- `handbook/README.md` is the table of contents: every chapter and page in the
+  book's order, as relative links, a page left out of the navigation marked
+  `(not in navigation)`. Every chapter directory has its own `README.md`.
+  Start there.
+- A chapter is a directory, a page `<name>.md`: the name is the title in lower
+  case, umlauts spelled out, other characters a dash (`Über Größe` →
+  `ueber-groesse.md`); two pages of one title are `tools.md` and
+  `tools-2.md` in the book's order. Each page starts with a frontmatter:
+  `title`, `id` (what `docs show` and `docs edit` take), `appUrl`,
+  `inNavigation`, `updatedAt`.
+- Every heading has the anchor Minka's page gives it, on the line above:
+  `<a id="h-zugang-pruefen"></a>`. A link to a section of another page of the
+  book is a relative link to that anchor (`../setup/tools.md#h-hammer`), so
+  following it lands on the heading; a reference to anything outside the
+  export keeps its Minka address.
+- Pictures and files of a page are downloaded beside it, into
+  `<name>.assets/`, and linked from the page. A book holds no uploads; a
+  walked folder's uploads are downloaded into its directory.
+- `--format html` writes the stored HTML in minimal pages instead, the anchor
+  as the heading's `id`, `index.html` as the index.
+- **Refresh by running the same command again.** It reads every page again,
+  writes only files whose content changed, removes the files of pages gone
+  from Minka (and their emptied directories), and keeps a page's name while
+  its title gives it. `data.written`, `data.removed` and `data.unchanged` say
+  what happened.
+- The directory keeps `.minka-export.json`, the list of what the export
+  wrote. A file it did not write is never written over or removed: a run
+  that would is refused before it writes anything (exit 1, the paths in
+  `data.paths`). A directory that holds files but no manifest, or a file of
+  the export somebody changed since, is refused too; `--force` exports anyway
+  and writes over those changed files, but still never touches a file it did
+  not write. Export each folder into a directory of its own. A run that
+  failed halfway is carried on by running it again; where that run is
+  refused for files that "may have been changed since", keep what is yours
+  of them elsewhere, then `--force` writes over them. A second run into the same directory at the
+  same time is refused (exit 1).
+- The export is for reading. To change a page, use `docs show` and `docs
+  edit` with its `id`; the frontmatter and the anchors are not part of the
+  page in Minka.
 
 ## What does not exist
 

@@ -9,6 +9,8 @@ package fakeapi
 import (
 	"bytes"
 	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"html"
@@ -334,11 +336,13 @@ func (u *Upload) bytesOf(variant string) []byte {
 	return nil
 }
 
-// handle stands for the signature the server puts on the pair of circle and
+// Handle stands for the signature the server puts on the pair of circle and
 // file, which is what makes an attachment belong to a text of that circle and
-// of no other.
-func (u *Upload) handle() string {
-	return "sgid-" + u.Circle + "-" + u.ID
+// of no other. It has Minka's shape: the file's identifier, two dashes and
+// the signature.
+func (u *Upload) Handle() string {
+	signature := sha256.Sum256([]byte(u.Circle))
+	return u.ID + "--" + hex.EncodeToString(signature[:16])
 }
 
 type ChatMessage struct {
@@ -454,17 +458,22 @@ func chatText(text string) string {
 type Server struct {
 	*httptest.Server
 
-	People         map[string]*Person
-	Tokens         map[string]string // token → person ID
-	Projects       []*Project
-	Boards         []*Board
-	Chats          []*Chat
-	FilesTools     []*FilesTool
-	TodosTools     []*TodosTool
-	CheckinsTools  []*CheckinsTool
-	PostsTools     []*PostsTool
-	Calendars      []*CalendarTool
-	Uploads        []*Upload
+	People        map[string]*Person
+	Tokens        map[string]string // token → person ID
+	Projects      []*Project
+	Boards        []*Board
+	Chats         []*Chat
+	FilesTools    []*FilesTool
+	TodosTools    []*TodosTool
+	CheckinsTools []*CheckinsTool
+	PostsTools    []*PostsTool
+	Calendars     []*CalendarTool
+	Uploads       []*Upload
+
+	// LaterBookEntries stand at the end of every book's tree, for a test of an
+	// entry of a kind a later Minka sends.
+	LaterBookEntries []any
+
 	Trash          []*TrashedCard
 	TrashedColumns []*TrashedColumn
 	Archive        []*ArchivedCard
@@ -3310,7 +3319,7 @@ func (s *Server) uploadResource(upload *Upload) map[string]any {
 		"kind": kind, "appUrl": address,
 		"attachmentSource": fmt.Sprintf(
 			`<action-text-attachment sgid=%q content-type=%q url=%q filename=%q filesize="%d" presentation="gallery"></action-text-attachment>`,
-			upload.handle(), upload.ContentType, address, upload.Filename, upload.Size,
+			upload.Handle(), upload.ContentType, address, upload.Filename, upload.Size,
 		),
 	}
 }
@@ -3434,7 +3443,7 @@ func (s *Server) attachmentsIn(circle, text string) []any {
 		if upload.Circle != circle {
 			continue
 		}
-		if at := strings.Index(text, `sgid="`+upload.handle()+`"`); at >= 0 {
+		if at := strings.Index(text, `sgid="`+upload.Handle()+`"`); at >= 0 {
 			found = append(found, hanging{at, upload})
 		}
 	}
@@ -3466,7 +3475,7 @@ func (s *Server) sourceOf(circle, text string) string {
 			return element
 		}
 		for _, upload := range s.Uploads {
-			if upload.Circle == circle && strings.Contains(element, `sgid="`+upload.handle()+`"`) {
+			if upload.Circle == circle && strings.Contains(element, `sgid="`+upload.Handle()+`"`) {
 				return element
 			}
 		}

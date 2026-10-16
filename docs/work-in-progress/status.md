@@ -116,8 +116,8 @@ pages and a cut inside one, and every refusal with the bodies the fake sends.
 A folder outside the tool named was not met live, for want of a second Files
 tool in the test project. The fake finds a term as a substring in any case, not as
 Postgres reads it (no stems, typos, phrases or operators), orders `best` as
-title before text and then the newest, and drops accents from a table of Latin
-letters rather than by Unicode decomposition.
+title before text and then the newest; its anchors are Minka's rule, the one
+`docs export` writes.
 
 A text holds the shapes of a document in Markdown both ways: callouts as
 GitHub alerts, Mermaid diagrams as `mermaid` code blocks, link tiles as a list
@@ -134,8 +134,10 @@ sent, the tiles' addresses turned into references; read back and sent again
 it was stored the same; a document in the editor's shapes sent as HTML, read
 and sent back, kept every element. A tile starting with `#MNK-1` was not met
 live, for want of a board with short identifiers in the test project. A
-section reference (a reference that keeps its `#h-…`) is announced by Minka
-and not merged; until then a link to a section needs words of its own.
+document's address with `#h-…`, bare or as a link showing it, becomes a
+section reference on Minka's `main` (#494, E-309): `<minka-ref … anchor>`,
+read back as the address with the anchor; the CLI needs nothing for it but
+the documentation. Seen live on Minka's `main`.
 
 A folder becomes a book with `docs folders edit --book` (`--no-book` takes the
 mark away), `docs book <folderId>` reads it as one tree of chapters and pages,
@@ -154,6 +156,27 @@ that is no boolean (400) or null (422), a 409 that leaves the navigation
 unwritten, all with the bodies the fake sends. A Minka without books, which
 the commands answer with exit 7, is checked against the fake only. A client and an
 archived project were not met live.
+
+`docs export <folderId> --out <dir> [--format markdown|html] [--tool
+<toolId>] [--force]` writes a book, a chapter or, with `--tool`, a folder in
+no book into a directory: a directory per chapter, a file per page with a
+frontmatter, `README.md` (`index.html`) per directory in Minka's order, the
+headings with Minka's anchors, a page's files in `<page>.assets/`, references
+into the export as relative links, and `.minka-export.json` naming what it
+wrote, so that a run again writes only what changed, removes what Minka
+dropped and never touches anything else (C-135). Checked against Minka's code,
+the fake, and live against a local Minka on its `main`: a book of two
+chapters, a page with a picture, a callout, a Mermaid diagram, a section
+reference into the book, a reference outside and a link with words of its
+own; every relative link and anchor resolved in the files, Markdown and HTML,
+and the anchors were those `search` names; a run again wrote nothing, after
+an edit one file, after a page put into the trash it removed that page's
+file and rewrote the two indexes; a run took 0.3 to 0.7 seconds for four
+pages and a picture. A walked folder with uploads, a client and an archived
+book were not met live; a book large enough to measure the four requests at a
+time neither. The fake gives a reference to a document or an upload its title
+and address, at the section it names, in `GET documents/{id}` alone; a
+reference to any other kind it leaves as a test writes it.
 
 From the Minka release that carries #494 a change of the navigation alone, or
 of the mark alone, writes only the flag: no edit of the title or body, no

@@ -600,7 +600,7 @@ func TestTheNotesOfASeriesAreWrittenAndKeepTheirFiles(t *testing.T) {
 	file := &Upload{ID: newID(), Circle: f.Project.ID, Filename: "plan.pdf", ContentType: "application/pdf", Content: []byte("%PDF"), UploaderID: f.Bruno.ID}
 	foreign := &Upload{ID: newID(), Circle: "conversation:" + newID(), Filename: "other.pdf", ContentType: "application/pdf", Content: []byte("%PDF"), UploaderID: f.Bruno.ID}
 	s.Uploads = append(s.Uploads, file, foreign)
-	notes := `<p>Bring <action-text-attachment sgid="` + file.handle() + `"></action-text-attachment><action-text-attachment sgid="` + foreign.handle() + `"></action-text-attachment></p>`
+	notes := `<p>Bring <action-text-attachment sgid="` + file.Handle() + `"></action-text-attachment><action-text-attachment sgid="` + foreign.Handle() + `"></action-text-attachment></p>`
 
 	written := callSeries(t, s, f.Token, http.MethodPatch, path, map[string]any{"notes": notes})
 	if written.got != "200" || written.body["notes"] != notes {
@@ -608,7 +608,7 @@ func TestTheNotesOfASeriesAreWrittenAndKeepTheirFiles(t *testing.T) {
 	}
 	// The source is what an editor opens: a file of another circle has no
 	// handle to be given again there.
-	if source := `<p>Bring <action-text-attachment sgid="` + file.handle() + `"></action-text-attachment></p>`; written.body["notesSource"] != source {
+	if source := `<p>Bring <action-text-attachment sgid="` + file.Handle() + `"></action-text-attachment></p>`; written.body["notesSource"] != source {
 		t.Errorf("notesSource %v, want %s", written.body["notesSource"], source)
 	}
 	if files := written.body["attachments"].([]any); len(files) != 1 || files[0].(map[string]any)["id"] != file.ID {

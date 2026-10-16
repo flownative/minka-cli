@@ -112,10 +112,17 @@ Drain {{node_name}} first.
 - A marker anywhere else is sent as visible text, with a `notice`; so is a
   variables marker inside a callout, where Minka keeps no such block. An
   empty tile line is left out, with a `notice`.
-- To link a section of a document, write a link with words of its own:
-  `[Setup](https://…/files/<toolId>/<documentId>#h-setup)`. A bare address
-  becomes a reference to the document and loses the `#h-…`. `minka search`
-  names a section's anchor.
+- To point at a section of a document, write its address with the
+  heading's anchor, bare or in angle brackets:
+  `<https://…/files/<toolId>/<documentId>#h-setup>` or
+  `<https://…/go/item/<documentId>#h-setup>`. Minka keeps it as a reference
+  to that section: it reads as the document's title, opens the page at the
+  heading and counts as a backlink; read back, it is the address with the
+  anchor again. A link with words of its own
+  (`[Setup](https://…#h-setup)`) stays a mere link. The anchor is `h-` and
+  the heading in lower case, umlauts spelled out, accents dropped, other
+  characters a dash, a repeat counted on (`h-setup-2`); `minka search` names
+  it for a hit, and `docs export` writes it above every heading.
 
 ## Naming somebody in a text
 

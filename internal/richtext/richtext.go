@@ -357,7 +357,13 @@ func joinParts(parts []part, inListItem bool) string {
 func block(n *html.Node) string {
 	switch n.Data {
 	case "h1", "h2", "h3", "h4", "h5", "h6":
-		return strings.Repeat("#", int(n.Data[1]-'0')) + " " + paragraphLines(inlineChildren(n))
+		heading := strings.Repeat("#", int(n.Data[1]-'0')) + " " + paragraphLines(inlineChildren(n))
+		// An anchor in the form GitHub, VS Code and the static site generators
+		// all honour; Markdown has no anchor of its own.
+		if id := attribute(n, "id"); IsAnchor(id) {
+			return `<a id="` + id + `"></a>` + "\n" + heading
+		}
+		return heading
 	case "hr":
 		return "---"
 	case "table":

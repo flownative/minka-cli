@@ -74,6 +74,7 @@ func (a *app) newDocsCmd() *cobra.Command {
 		a.newDocsUploadsCmd(),
 		a.newDocsFoldersCmd(),
 		a.newDocsBookCmd(),
+		a.newDocsExportCmd(),
 		a.newDocsOrderCmd(),
 		a.newDocsCommentsCmd(),
 	)

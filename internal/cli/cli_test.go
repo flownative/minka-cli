@@ -1445,7 +1445,7 @@ func TestAFileGoesIntoTheCircleTheFlagNames(t *testing.T) {
 	env, r := e.runJSON("", "uploads", "create", path, "--conversation", e.fixture.Conversation.ID)
 	expectCode(t, r, ExitOK)
 	source, _ := decode(t, env.Data)["attachmentSource"].(string)
-	if !strings.Contains(source, "conversation:"+e.fixture.Conversation.ID) {
+	if !strings.Contains(source, "/messages/"+e.fixture.Conversation.ID+"/uploads/") {
 		t.Errorf("the attachment does not belong to the conversation: %q", source)
 	}
 	if request := e.server.Requests()[0]; request.Path != "/api/v1/messages/"+e.fixture.Conversation.ID+"/uploads" {

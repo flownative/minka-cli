@@ -210,6 +210,9 @@ var idsInCapitals = []idInCapitals{
 	{command: "docs book", inputs: []string{"<folderId>"}, prepare: func(e *testEnv) { e.fixture.Folder.IsBook = true }, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
 		return []string{up(f.ArchivedFolder.ID)}
 	}},
+	{command: "docs export", inputs: []string{"<folderId>", "--tool"}, args: func(e *testEnv, f *fakeapi.Fixture) []string {
+		return []string{up(f.Folder.ID), "--tool", up(f.Files.ID), "--out", filepath.Join(e.t.TempDir(), "plans")}
+	}},
 	{command: "docs folders create", inputs: []string{"--tool", "--folder"}, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
 		return []string{"--tool", up(f.Files.ID), "--folder", up(f.Folder.ID), "--title", "Offers"}
 	}},
