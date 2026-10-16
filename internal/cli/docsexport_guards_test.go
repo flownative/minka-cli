@@ -75,8 +75,8 @@ func TestAnExportKeepsTheModesOfItsFiles(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	b.costs.Body = `<p>Changed.</p>`
-	b.tools.Body = `<p>Changed.</p>`
+	b.costs.Edit(`<p>Changed.</p>`)
+	b.tools.Edit(`<p>Changed.</p>`)
 	runOK(t, e, "docs", "export", f.Folder.ID, "--out", out)
 	for name, mode := range map[string]os.FileMode{page: 0o600, open: 0o666} {
 		if !strings.Contains(readFile(t, name), "Changed.") || modeOf(t, name) != mode {
@@ -187,8 +187,8 @@ func TestAnExportNeedsADirectoryOfItsOwn(t *testing.T) {
 		t.Fatalf("error %q", env.Error)
 	}
 
-	// The lock lies beside the config, named after the directory as it
-	// really is, so another name of it meets the same lock.
+	// The lock lies beside the config, named after the directory itself, so
+	// another name of it meets the same lock.
 	base := t.TempDir()
 	out := filepath.Join(base, "book")
 	runOK(t, e, "docs", "export", f.Folder.ID, "--out", out)
@@ -207,7 +207,7 @@ func TestAnExportNeedsADirectoryOfItsOwn(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	b.costs.Body = `<p>Changed.</p>`
+	b.costs.Edit(`<p>Changed.</p>`)
 	env, r = e.runJSON("", "docs", "export", f.Folder.ID, "--out", alias)
 	lock.Release()
 	expectCode(t, r, ExitUsage)
@@ -235,7 +235,7 @@ func TestARunThatFailedHalfwayIsCarriedOn(t *testing.T) {
 	b.picture.Swept = false
 	writeFile(t, filepath.Join(out, ".minka-export-1234"), "half", 0o600)
 	runOK(t, e, "docs", "export", f.Folder.ID, "--out", out)
-	if got := filesIn(t, out); len(got) != 11 || !slices.Contains(got, "setup/tools.assets/plan.png") || slices.Contains(got, ".minka-export-1234") {
+	if got := filesIn(t, out); len(got) != 12 || !slices.Contains(got, "setup/tools.assets/plan.png") || slices.Contains(got, ".minka-export-1234") {
 		t.Fatalf("files %q", got)
 	}
 }
@@ -251,7 +251,7 @@ func TestAnotherFileOfMinkaIsDownloadedAgain(t *testing.T) {
 	newer := &fakeapi.Upload{ID: newToolsID, Circle: f.Project.ID, Filename: "Plan.PNG", ContentType: "image/png",
 		Content: []byte("another picture"), Size: 15, UploaderID: f.Bruno.ID, StandsInAText: true}
 	e.server.Uploads = append(e.server.Uploads, newer)
-	b.tools.Body = strings.Replace(b.tools.Body, b.picture.Handle(), newer.Handle(), 1)
+	b.tools.Edit(strings.Replace(b.tools.Body, b.picture.Handle(), newer.Handle(), 1))
 	runOK(t, e, "docs", "export", f.Folder.ID, "--out", out)
 	if readFile(t, filepath.Join(out, "setup", "tools.assets", "plan.png")) != "another picture" {
 		t.Fatal("the picture was not downloaded again")
@@ -266,7 +266,7 @@ func TestALinkToAnotherHostStaysAsItIs(t *testing.T) {
 	out := filepath.Join(t.TempDir(), "book")
 	// The scheme of the host signed in to, so that only the host differs.
 	elsewhere := strings.Split(e.server.URL, "://")[0] + "://elsewhere.example/go/item/" + b.costs.ID
-	b.tools.Body = `<p><a href="` + elsewhere + `">elsewhere</a> and <a href="/go/item/` + b.costs.ID + `">here</a></p>`
+	b.tools.Edit(`<p><a href="` + elsewhere + `">elsewhere</a> and <a href="/go/item/` + b.costs.ID + `">here</a></p>`)
 	runOK(t, e, "docs", "export", f.Folder.ID, "--out", out)
 	page := readFile(t, filepath.Join(out, "setup", "tools.md"))
 	if !strings.Contains(page, "[elsewhere]("+elsewhere+")") || !strings.Contains(page, "[here](../what-the-tent-costs.md)") {

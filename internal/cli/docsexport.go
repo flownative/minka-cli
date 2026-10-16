@@ -21,22 +21,21 @@ const exportParallel = 4
 func (a *app) newDocsExportCmd() *cobra.Command {
 	var (
 		out, format, toolID string
-		force               bool
+		force, readAll      bool
 	)
 	cmd := &cobra.Command{
-		Use:   "export <folderId> --out <dir> [--format markdown|html] [--tool <toolId>] [--force]",
+		Use:   "export <folderId> --out <dir> [--format markdown|html] [--read-all] [--tool <toolId>] [--force]",
 		Short: "Write a book or a folder into a directory as files, and bring it up to date",
-		Long: `Writes the book a folder is, or the chapter of a book a folder is, into a
-directory: a directory per chapter, a file per page, and in every directory an
-index of what stands in it and below it in the book's order, README.md
-(index.html with --format html). A page left out of the navigation says so in
-the index. The book is read in one request and every page in one request of
-its own, a few at a time.
+		Long: `Writes a folder — a book, a chapter of one, or any other folder — into a
+directory: a directory per folder, a file per page and per upload, and in
+every directory an index of what stands in it and below it in Minka's order,
+README.md (index.html with --format html). A page left out of the navigation
+of its book says so in the index. The folder and the tree below it are read in
+two requests, and every page in one request of its own, a few at a time.
 
-A folder in no book is walked through its tool, one request per folder:
-name the tool with --tool. Its uploads are downloaded beside the pages. A
-book's tree holds no uploads, so a book exports its chapters and pages as its
-readers read them.
+--tool is needed only against a Minka without the tree of a folder: there a
+book is read as a book, without its uploads, and a folder in no book is walked
+through the tool --tool names, one request per folder.
 
 A page is Markdown with a frontmatter (title, id, appUrl, inNavigation,
 updatedAt), or with --format html a minimal page of the HTML Minka stores.
@@ -47,17 +46,27 @@ a directory beside it, <page>.assets/. A reference or a link to a page, a
 chapter or an upload of the export is a link to its file, at the section it
 names; anything else keeps its address in Minka.
 
-Run it again into the same directory to bring it up to date: every page is
-read again, a file whose bytes are the same is left as it is, a file Minka no
-longer holds is removed, and a name stays with its entry while the title
-gives it. The directory keeps a manifest, .minka-export.json, of what the
+Run it again into the same directory to bring it up to date: a page is read
+again only where Minka names a version other than the one read before, or
+where it refers to something outside the export; the rest is rendered anew
+from what the manifest keeps of it, so a page follows the rename or move of a
+page it links to. A file whose bytes are the same is left as it is, a file
+Minka no longer holds is removed, and a name stays with its entry while the
+title gives it. A client of the project is told no versions, and every page
+is read again. Every edit makes a version; a maintenance rewrite of the
+stored texts on the host does not, so --read-all reads every page again
+after one.
+
+An export read from the tree of a folder is not brought up to date from a
+host that answers as a Minka without trees: the run is refused, and --force
+exports the way such a Minka allows. The directory keeps a manifest, .minka-export.json, of what the
 export wrote, and nothing else in the directory is ever written over or
 removed: a path in the way is refused before anything is written. A
 directory that holds files without a manifest, and a file of the export that
 was changed since, are refused unless --force.`,
 		Example: `  minka docs export 0199... --out handbook
   minka docs export 0199... --out handbook --json
-  minka docs export 0199... --tool 0199... --out plans --format html`,
+  minka docs export 0199... --out plans --format html`,
 		Args: requireArgs("folderId"),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if strings.TrimSpace(out) == "" {
@@ -86,7 +95,7 @@ was changed since, are refused unless --force.`,
 			}
 			report, err := export.Run(a.ctx, s.client, export.Options{
 				FolderID: args[0], ToolID: toolID, Out: out, Format: format, Host: host,
-				Force: force, Parallel: exportParallel, LockDir: lockDir,
+				Force: force, ReadAll: readAll, Parallel: exportParallel, LockDir: lockDir,
 			})
 			if err != nil {
 				return exportRefusal(s, err)
@@ -107,8 +116,9 @@ was changed since, are refused unless --force.`,
 	}
 	cmd.Flags().StringVar(&out, "out", "", "directory to export into; made where it does not exist")
 	cmd.Flags().StringVar(&format, "format", export.FormatMarkdown, "markdown or html")
-	cmd.Flags().StringVar(&toolID, "tool", "", "ID of the tool, to walk a folder that stands in no book")
+	cmd.Flags().StringVar(&toolID, "tool", "", "ID of the tool, to walk a folder in no book on a Minka without the tree of a folder")
 	cmd.Flags().BoolVar(&force, "force", false, "export into a directory that holds files without a manifest, and write over or remove files of the export changed since")
+	cmd.Flags().BoolVar(&readAll, "read-all", false, "read every page again, also those Minka names no new version of")
 
 	return cmd
 }
@@ -142,8 +152,8 @@ func exportRefusal(s *session, err error) *Error {
 		return &Error{Code: CodeConfig, Message: "writing the export: " + failedWrite.Error(), Hint: "What was written so far is in the manifest; run again once the directory can be written."}
 	case errors.Is(err, export.ErrNoBook):
 		e := s.fail(err)
-		e.Message = "the folder stands in no book"
-		e.Hint = "A folder in no book is walked through its tool: add --tool <toolId>. " + bookNotFoundHint
+		e.Message = s.host + " answers as a Minka without the tree of a folder, and finds no book the folder stands in"
+		e.Hint = "This Minka is older than this minka expects: a folder in no book is walked through its tool there, add --tool <toolId>. Else there is no such folder, it is in the trash, or it is not yours to read."
 		return e
 	case errors.Is(err, export.ErrNotInTheBook):
 		return &Error{Code: CodeNotFound, Message: "the folder is no chapter of its book in use", Hint: "A chapter in the archive is not part of its book's tree; export the book, or bring the chapter back."}
@@ -169,7 +179,7 @@ func exportSummary(report *export.Report) string {
 func renderExport(w io.Writer, report *export.Report) {
 	fmt.Fprintln(w, exportSummary(report))
 	fmt.Fprintf(w, "Format: %s\n", report.Format)
-	fmt.Fprintf(w, "Folders: %d, pages: %d, uploads: %d, files in pages: %d\n", report.Folders, report.Documents, report.Uploads, report.Assets)
+	fmt.Fprintf(w, "Folders: %d, pages: %d (%d read), uploads: %d, files in pages: %d\n", report.Folders, report.Documents, report.DocumentsRead, report.Uploads, report.Assets)
 	for _, p := range report.Written {
 		fmt.Fprintf(w, "  + %s\n", p)
 	}

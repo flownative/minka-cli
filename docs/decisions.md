@@ -2249,3 +2249,19 @@ before it is written; anything else in the way refuses the run, `--force` or not
 **Why:** a refresh removes what Minka dropped, and only the manifest tells the
 export's files from a person's. **Implemented as:** `export.Run`,
 `cli.newDocsExportCmd`, see [Docs & Files](stable/docs-and-files.md#exporting-a-book-or-a-folder).
+
+<a id="c-136"></a>
+## C-136 — An export reads a tree in two requests and a page only when Minka changed it
+
+*Applies to: `docs export`, `internal/export`*
+
+Folder and tree are read with `…/{id}` and `…/tree`, books too; a page is taken
+from the manifest where the tree names the version read and its references stay
+inside the export; every page is rendered anew against the run's tree. Every
+edit makes a version, a maintenance rewrite does not: `--read-all` reads all.
+An export from a tree is refused, not shrunk, on an answer without trees.
+
+**Why:** a refresh of a large book costs two requests, and a rendering from the
+body kept follows renames and moves that no version of the referring page
+records. **Implemented as:** `export.loadTree`, `export.readDocuments`,
+`export.cachedPageOf`, see [Docs & Files](stable/docs-and-files.md#exporting-a-book-or-a-folder).

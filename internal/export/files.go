@@ -41,7 +41,25 @@ type manifest struct {
 	ExportedAt  string         `json:"exportedAt"`
 	Files       []manifestFile `json:"files"`
 	Directories []string       `json:"directories"`
+	// ReadFrom says how the folder was read: "tree", "book" or "walk".
+	ReadFrom string `json:"readFrom,omitempty"`
+	// Pages are the bodies of the pages as read, by their ID, for the next
+	// run to take where Minka names the same version. A run takes them only
+	// in the format PagesFormat names, which this minka writes.
+	PagesFormat int                   `json:"pagesFormat,omitempty"`
+	Pages       map[string]cachedPage `json:"pages,omitempty"`
 }
+
+// pagesFormat is the shape of the pages a manifest keeps. Another shape is
+// read as none: the pages are read again, the manifest holds as ever.
+const pagesFormat = 1
+
+// How a folder was read.
+const (
+	readFromTree = "tree"
+	readFromBook = "book"
+	readFromWalk = "walk"
+)
 
 // manifestFile is one file the export wrote, with the bytes it wrote as
 // their hash: a file whose bytes differ has been changed since by somebody

@@ -54,9 +54,7 @@ type layout struct {
 }
 
 func newLayout(format string, host *url.URL, root *node) *layout {
-	l := &layout{format: format, host: host, entries: map[string]*node{}}
-	root.each(func(n *node) { l.entries[n.kind+"/"+strings.ToLower(n.id)] = n })
-	return l
+	return &layout{format: format, host: host, entries: entriesBelow(root)}
 }
 
 func (l *layout) extension() string {
@@ -128,16 +126,17 @@ func (l *layout) renderDocument(n *node) rendered {
 		_ = xhtml.Render(&body, top)
 	}
 
-	inNavigation := n.inNavigation
+	// Title, address and navigation are the tree's, as the index shows them,
+	// whether the body was read now or by an earlier run.
 	fields := []field{
-		{"title", document.Title}, {"id", document.ID}, {"appUrl", document.AppURL},
-		{"inNavigation", inNavigation}, {"updatedAt", document.UpdatedAt},
+		{"title", n.title}, {"id", n.id}, {"appUrl", n.appURL},
+		{"inNavigation", n.inNavigation}, {"updatedAt", document.UpdatedAt},
 	}
 	var out string
 	if l.format == FormatHTML {
-		out = htmlPage(document.Title, fields, "<h1>"+html.EscapeString(document.Title)+"</h1>\n"+body.String())
+		out = htmlPage(n.title, fields, "<h1>"+html.EscapeString(n.title)+"</h1>\n"+body.String())
 	} else {
-		out = frontmatter(fields) + "\n# " + markdownLine(document.Title) + "\n"
+		out = frontmatter(fields) + "\n# " + markdownLine(n.title) + "\n"
 		if markdown := richtext.ToMarkdown(body.String()); markdown != "" {
 			out += "\n" + markdown + "\n"
 		}
@@ -243,17 +242,16 @@ func (l *layout) rewriteAttachment(n *xhtml.Node, document *node, files *assetNa
 // file, at the section it names. Any other keeps its address in Minka: as the
 // Markdown view writes it, and as a link in a page.
 func (l *layout) rewriteReference(n *xhtml.Node, document *node) {
-	kind, id := attribute(n, "kind"), strings.ToLower(attribute(n, "id"))
+	kind, id := attribute(n, "kind"), attribute(n, "id")
 	title := strings.TrimSpace(attribute(n, "title"))
 	anchor := attribute(n, "anchor")
 	if kind != "document" || !richtext.IsAnchor(anchor) {
 		anchor = ""
 	}
-	if target := l.entries[kind+"/"+id]; target != nil && (kind == kindDocument || kind == kindUpload) {
-		if title == "" {
-			title = target.title
-		}
-		replaceWith(n, link(l.linkTo(target, document, anchor), title))
+	// The tree's title, not the one Minka gave the reference when the page
+	// was read: a page taken from the cache follows a rename all the same.
+	if target := l.entries[keyOf(kind, id)]; target != nil && (kind == kindDocument || kind == kindUpload) {
+		replaceWith(n, link(l.linkTo(target, document, anchor), target.title))
 		return
 	}
 	if l.format != FormatHTML {
@@ -303,7 +301,7 @@ func (l *layout) entryAt(address string) (*node, string, bool) {
 			continue
 		}
 		for _, kind := range candidate.kinds {
-			if target := l.entries[kind+"/"+strings.ToLower(match[1])]; target != nil {
+			if target := l.entries[keyOf(kind, match[1])]; target != nil {
 				fragment := ""
 				if kind == kindDocument && richtext.IsAnchor(parsed.Fragment) {
 					fragment = parsed.Fragment

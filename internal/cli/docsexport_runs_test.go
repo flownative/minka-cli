@@ -13,20 +13,25 @@ import (
 	"github.com/flownative/minka-cli/internal/fakeapi"
 )
 
-// A second run reads every page again and writes only what changed: a page
-// changed in Minka, the indexes that list a page put away, and that page's
-// file removed. A name stays with its page while the title gives it, so a
-// page of the same title put in front takes the next free name.
+// A second run reads again only the pages Minka changed since, and those that
+// refer to something outside the export, and writes only what changed: a
+// page changed in Minka, the indexes that list a page put away, and that
+// page's file removed. A name stays with its page while the title gives it,
+// so a page of the same title put in front takes the next free name.
 func TestASecondRunBringsTheExportUpToDate(t *testing.T) {
 	b := newExportBook(t)
 	e, f := b.e, b.e.fixture
 	out := filepath.Join(t.TempDir(), "book")
-	runOK(t, e, "docs", "export", f.Folder.ID, "--out", out)
+	first := decodeExport(t, runOK(t, e, "docs", "export", f.Folder.ID, "--out", out).Data)
+	if first.DocumentsRead != 6 {
+		t.Fatalf("the first run read %d pages", first.DocumentsRead)
+	}
 	documentReads := requestsTo(e, "GET", "/api/v1/documents/"+toolsPageID)
+	costsReads := requestsTo(e, "GET", "/api/v1/documents/"+f.DocumentInFolder.ID)
 
 	unchanged := runOK(t, e, "docs", "export", f.Folder.ID, "--out", out).Data
 	again := decodeExport(t, unchanged)
-	if len(again.Written) != 0 || again.Unchanged != 10 || len(again.Removed) != 0 {
+	if len(again.Written) != 0 || again.Unchanged != 11 || len(again.Removed) != 0 || again.DocumentsRead != 1 {
 		t.Fatalf("an unchanged book: %+v", again)
 	}
 	for _, list := range []string{"written", "removed", "gone"} {
@@ -34,16 +39,18 @@ func TestASecondRunBringsTheExportUpToDate(t *testing.T) {
 			t.Fatalf("%s is no list: %s", list, unchanged)
 		}
 	}
-	if requestsTo(e, "GET", "/api/v1/documents/"+toolsPageID) != documentReads+1 {
-		t.Fatal("a page was not read again")
+	// The page that refers to a page outside the book is read again, the
+	// others not.
+	if requestsTo(e, "GET", "/api/v1/documents/"+toolsPageID) != documentReads+1 || requestsTo(e, "GET", "/api/v1/documents/"+f.DocumentInFolder.ID) != costsReads {
+		t.Fatal("the pages read again are not the ones that may have changed")
 	}
 	if requestsTo(e, "GET", "/api/v1/uploads/"+pictureBlobID+"/original") != 1 {
 		t.Fatal("the picture lying there as written was downloaded again")
 	}
 
-	b.costs.Body = `<h2>Prices</h2><p>Five hundred.</p>`
+	b.costs.Edit(`<h2>Prices</h2><p>Five hundred.</p>`)
 	b.other.Trashed = true
-	b.tools.Body = `<p>Only words now.</p>`
+	b.tools.Edit(`<p>Only words now.</p>`)
 	newer := &fakeapi.Document{ID: newToolsID, Title: "Tools", FolderID: setupChapterID, Body: `<p>New.</p>`,
 		CreatedAt: b.tools.CreatedAt, UpdatedAt: b.tools.UpdatedAt, CreatorID: f.Bruno.ID}
 	f.Files.Documents = append(f.Files.Documents, newer)
@@ -53,7 +60,7 @@ func TestASecondRunBringsTheExportUpToDate(t *testing.T) {
 	if want := []string{"README.md", "setup/README.md", "setup/tools-2.md", "setup/tools.md", "what-the-tent-costs.md"}; !slices.Equal(third.Written, want) {
 		t.Fatalf("written %q, want %q", third.Written, want)
 	}
-	if want := []string{"setup/tools.assets/plan.png"}; !slices.Equal(third.Removed, want) || third.Unchanged != 4 {
+	if want := []string{"setup/tools.assets/plan.png"}; !slices.Equal(third.Removed, want) || third.Unchanged != 5 {
 		t.Fatalf("removed %q, unchanged %d", third.Removed, third.Unchanged)
 	}
 	if page := readFile(t, filepath.Join(out, "setup", "tools-2.md")); !strings.Contains(page, `id: "`+newToolsID+`"`) {
@@ -65,7 +72,7 @@ func TestASecondRunBringsTheExportUpToDate(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(out, "setup", "tools.assets")); !os.IsNotExist(err) {
 		t.Fatalf("the emptied directory of the picture stays: %v", err)
 	}
-	if got := filesIn(t, out); slices.Contains(got, "setup/tools.assets/plan.png") || len(got) != 10 {
+	if got := filesIn(t, out); slices.Contains(got, "setup/tools.assets/plan.png") || len(got) != 11 {
 		t.Fatalf("files %q", got)
 	}
 }
@@ -98,7 +105,7 @@ func TestAnExportLeavesWhatItDidNotWriteAlone(t *testing.T) {
 	writeFile(t, filepath.Join(out, "setup", "deep", "new.md"), "my notes", 0o644)
 	f.Files.Documents = append(f.Files.Documents, &fakeapi.Document{ID: newToolsID, Title: "New", FolderID: deepChapterID, Body: `<p>New.</p>`,
 		CreatedAt: b.tools.CreatedAt, UpdatedAt: b.tools.UpdatedAt, CreatorID: f.Bruno.ID})
-	b.costs.Body = `<p>Changed.</p>`
+	b.costs.Edit(`<p>Changed.</p>`)
 	costsBefore := readFile(t, filepath.Join(out, "what-the-tent-costs.md"))
 	for _, args := range [][]string{{}, {"--force"}} {
 		env, r = e.runJSON("", append([]string{"docs", "export", f.Folder.ID, "--out", out}, args...)...)
@@ -225,7 +232,7 @@ func TestABookIsExportedAsHTML(t *testing.T) {
 	want := []string{
 		".minka-export.json", "etc-passwd.html", "index.html", "readme-2.html",
 		"setup/deep/index.html", "setup/deep/ueber-groesse.html", "setup/index.html",
-		"setup/tools-2.html", "setup/tools.assets/plan.png", "setup/tools.html", "what-the-tent-costs.html",
+		"setup/tools-2.html", "setup/tools.assets/plan.png", "setup/tools.html", "site-plan.pdf", "what-the-tent-costs.html",
 	}
 	if got := filesIn(t, out); !slices.Equal(got, want) {
 		t.Fatalf("files %q, want %q", got, want)
@@ -254,23 +261,15 @@ func TestABookIsExportedAsHTML(t *testing.T) {
 	}
 }
 
-// A folder in no book is walked through its tool, its uploads downloaded
-// beside the pages; without the tool it is refused with the way to name it.
-func TestAFolderInNoBookIsWalkedThroughItsTool(t *testing.T) {
+// A folder in no book is read as a tree, the folder and its tree in two
+// requests however deep it goes, its uploads downloaded beside the pages; one
+// in the archive as well.
+func TestAFolderInNoBookIsReadAsATree(t *testing.T) {
 	e := newTestEnv(t)
 	f := e.fixture
 	out := filepath.Join(t.TempDir(), "plans")
 
-	env, r := e.runJSON("", "docs", "export", f.Folder.ID, "--out", out)
-	expectCode(t, r, ExitNotFound)
-	if !strings.Contains(env.Hint, "--tool <toolId>") {
-		t.Fatalf("hint %q", env.Hint)
-	}
-	if _, err := os.Stat(out); !os.IsNotExist(err) {
-		t.Fatal("a refused export made its directory")
-	}
-
-	env = runOK(t, e, "docs", "export", f.Folder.ID, "--tool", f.Files.ID, "--out", out)
+	env := runOK(t, e, "docs", "export", f.Folder.ID, "--out", out)
 	data := decodeExport(t, env.Data)
 	if data.IsBook || data.Uploads != 1 || data.Documents != 1 || !strings.HasPrefix(env.Summary, "Exported folder Plans to ") {
 		t.Fatalf("data %+v, summary %q", data, env.Summary)
@@ -282,8 +281,60 @@ func TestAFolderInNoBookIsWalkedThroughItsTool(t *testing.T) {
 	if !strings.Contains(index, `kind: "folder"`) || !strings.Contains(index, "- [site-plan.pdf](site-plan.pdf) (file)") {
 		t.Fatalf("index:\n%s", index)
 	}
+	var paths []string
+	for _, request := range e.server.Requests() {
+		if request.Method == "GET" && !strings.HasPrefix(request.Path, "/api/v1/documents/") && !strings.HasPrefix(request.Path, "/api/v1/uploads/") {
+			paths = append(paths, request.Path)
+		}
+	}
+	if want := []string{"/api/v1/files-folders/" + f.Folder.ID, "/api/v1/files-folders/" + f.Folder.ID + "/tree"}; !slices.Equal(paths, want) {
+		t.Fatalf("the tree was read with %q", paths)
+	}
+	if crumbFor(t, env.Breadcrumbs, "refresh") != "minka docs export "+f.Folder.ID+" --out "+shellWord(out) {
+		t.Fatalf("breadcrumbs %v", env.Breadcrumbs)
+	}
+
+	archived := filepath.Join(t.TempDir(), "last-year")
+	data = decodeExport(t, runOK(t, e, "docs", "export", f.ArchivedFolder.ID, "--out", archived).Data)
+	if data.Documents != 1 || !slices.Equal(filesIn(t, archived), []string{".minka-export.json", "README.md", "what-the-tent-cost-last-year.md"}) {
+		t.Fatalf("an archived folder: %+v", data)
+	}
+}
+
+// A Minka without the tree of a folder answers its address with a page of its
+// web: a book is read as a book, without uploads, and every page is read on
+// every run, since the book names no version; a folder in no book is walked
+// through its tool, and without the tool refused with the way to name it.
+func TestAnOlderMinkaReadsABookOrWalksAFolder(t *testing.T) {
+	e := newTestEnv(t)
+	f := e.fixture
+	e.server.KnowsNoTree = true
+	out := filepath.Join(t.TempDir(), "plans")
+
+	env, r := e.runJSON("", "docs", "export", f.Folder.ID, "--out", out)
+	expectCode(t, r, ExitNotFound)
+	if !strings.Contains(env.Hint, "--tool <toolId>") || !strings.Contains(env.Hint, "older") {
+		t.Fatalf("hint %q", env.Hint)
+	}
+	if _, err := os.Stat(out); !os.IsNotExist(err) {
+		t.Fatal("a refused export made its directory")
+	}
+
+	env = runOK(t, e, "docs", "export", f.Folder.ID, "--tool", f.Files.ID, "--out", out)
+	data := decodeExport(t, env.Data)
+	if data.IsBook || data.Uploads != 1 || data.Documents != 1 || !slices.Equal(filesIn(t, out), []string{".minka-export.json", "README.md", "site-plan.pdf", "what-the-tent-costs.md"}) {
+		t.Fatalf("data %+v", data)
+	}
 	if crumbFor(t, env.Breadcrumbs, "refresh") != "minka docs export "+f.Folder.ID+" --tool "+f.Files.ID+" --out "+shellWord(out) {
 		t.Fatalf("breadcrumbs %v", env.Breadcrumbs)
+	}
+
+	f.Folder.IsBook = true
+	book := filepath.Join(t.TempDir(), "book")
+	runOK(t, e, "docs", "export", f.Folder.ID, "--out", book)
+	again := decodeExport(t, runOK(t, e, "docs", "export", f.Folder.ID, "--out", book).Data)
+	if !again.IsBook || again.Uploads != 0 || again.DocumentsRead != 1 || again.Unchanged != 2 {
+		t.Fatalf("a book of an older Minka: %+v", again)
 	}
 }
 
@@ -304,7 +355,7 @@ func TestTheTextOfAnExportSaysWhereToStart(t *testing.T) {
 	out := filepath.Join(t.TempDir(), "book")
 	text := b.e.run("", "docs", "export", deepChapterID, "--out", out, "--styled")
 	want := "Exported chapter Deep to " + out + ": 2 written, 0 unchanged, 0 removed\n" +
-		"Format: markdown\nFolders: 1, pages: 1, uploads: 0, files in pages: 0\n" +
+		"Format: markdown\nFolders: 1, pages: 1 (1 read), uploads: 0, files in pages: 0\n" +
 		"  + README.md\n  + ueber-groesse.md\nStart at: " + filepath.Join(out, "README.md") + "\n"
 	if text.stdout != want {
 		t.Fatalf("text:\n%s\nwant:\n%s", text.stdout, want)

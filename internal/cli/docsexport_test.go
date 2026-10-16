@@ -108,7 +108,9 @@ type exportData struct {
 	Assets    int      `json:"assets"`
 	Written   []string `json:"written"`
 	Unchanged int      `json:"unchanged"`
-	Removed   []string `json:"removed"`
+	// DocumentsRead are the pages read from Minka.
+	DocumentsRead int      `json:"documentsRead"`
+	Removed       []string `json:"removed"`
 }
 
 func decodeExport(t *testing.T, raw json.RawMessage) exportData {
@@ -121,9 +123,9 @@ func decodeExport(t *testing.T, raw json.RawMessage) exportData {
 }
 
 // A book goes into a directory as Minka orders it: a directory per chapter, a
-// file per page, an index in each, the picture beside its page, the headings
-// with Minka's anchors, a reference inside the book a link to the file at its
-// section, one outside its address in Minka.
+// file per page and per upload, an index in each, the picture beside its page,
+// the headings with Minka's anchors, a reference inside the book a link to the
+// file at its section, one outside its address in Minka.
 func TestABookIsExportedAsATreeOfFiles(t *testing.T) {
 	b := newExportBook(t)
 	e, f := b.e, b.e.fixture
@@ -144,12 +146,12 @@ func TestABookIsExportedAsATreeOfFiles(t *testing.T) {
 	want := []string{
 		".minka-export.json", "README.md", "etc-passwd.md", "readme-2.md",
 		"setup/README.md", "setup/deep/README.md", "setup/deep/ueber-groesse.md",
-		"setup/tools-2.md", "setup/tools.assets/plan.png", "setup/tools.md", "what-the-tent-costs.md",
+		"setup/tools-2.md", "setup/tools.assets/plan.png", "setup/tools.md", "site-plan.pdf", "what-the-tent-costs.md",
 	}
 	if got := filesIn(t, whole); !slices.Equal(got, want) {
 		t.Fatalf("files %q, want %q", got, want)
 	}
-	if env.Summary != "Exported book Plans to "+whole+": 10 written, 0 unchanged, 0 removed" {
+	if env.Summary != "Exported book Plans to "+whole+": 11 written, 0 unchanged, 0 removed" {
 		t.Fatalf("summary %q", env.Summary)
 	}
 
@@ -174,6 +176,7 @@ bookId: "` + f.Folder.ID + `"
 - [What the tent costs](what-the-tent-costs.md)
 - [README](readme-2.md)
 - [../../etc/passwd](etc-passwd.md)
+- [site-plan.pdf](site-plan.pdf) (file)
 `
 	if index != wantIndex {
 		t.Fatalf("index:\n%s\nwant:\n%s", index, wantIndex)

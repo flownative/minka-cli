@@ -157,26 +157,38 @@ unwritten, all with the bodies the fake sends. A Minka without books, which
 the commands answer with exit 7, is checked against the fake only. A client and an
 archived project were not met live.
 
-`docs export <folderId> --out <dir> [--format markdown|html] [--tool
-<toolId>] [--force]` writes a book, a chapter or, with `--tool`, a folder in
-no book into a directory: a directory per chapter, a file per page with a
-frontmatter, `README.md` (`index.html`) per directory in Minka's order, the
-headings with Minka's anchors, a page's files in `<page>.assets/`, references
-into the export as relative links, and `.minka-export.json` naming what it
-wrote, so that a run again writes only what changed, removes what Minka
-dropped and never touches anything else (C-135). Checked against Minka's code,
-the fake, and live against a local Minka on its `main`: a book of two
-chapters, a page with a picture, a callout, a Mermaid diagram, a section
-reference into the book, a reference outside and a link with words of its
-own; every relative link and anchor resolved in the files, Markdown and HTML,
-and the anchors were those `search` names; a run again wrote nothing, after
-an edit one file, after a page put into the trash it removed that page's
-file and rewrote the two indexes; a run took 0.3 to 0.7 seconds for four
-pages and a picture. A walked folder with uploads, a client and an archived
-book were not met live; a book large enough to measure the four requests at a
-time neither. The fake gives a reference to a document or an upload its title
-and address, at the section it names, in `GET documents/{id}` alone; a
-reference to any other kind it leaves as a test writes it.
+`docs export <folderId> --out <dir> [--format markdown|html] [--read-all] [--force]`
+writes a book, a chapter or any folder into a directory: a directory per
+folder, a file per page with a frontmatter and per upload, `README.md`
+(`index.html`) per directory in Minka's order, the headings with Minka's
+anchors, a page's files in `<page>.assets/`, references into the export as
+relative links, and `.minka-export.json` naming what it wrote, so that a run
+again writes only what changed, removes what Minka dropped and never touches
+anything else (C-135). The folder and its tree take two requests (`GET
+files-folders/{id}` and `…/tree`), and a run again reads only the pages whose
+version changed or that refer outside the export, rendering every page anew
+from the body the manifest keeps (C-136); `--read-all` reads every page
+after a maintenance rewrite on the host, which makes no version, and an
+export read from a tree is refused rather than shrunk when the host answers
+without trees. `--read-all` and that refusal are checked against the fake
+only. `docs folders show <folderId>`
+reads a folder by its ID alone. Minka's side (#495, E-307) is on its `main`
+and in no release yet; against a released Minka the export falls back to
+`…/book` and `--tool`, which the fake's `KnowsNoTree` mirrors. Checked
+against Minka's code and `ApiFilesTreeTest`, the fake, and live against a
+local Minka on its `main`: a book of two chapters with a page referring into
+the book, one referring outside and an upload, and a plain folder with a
+subfolder and two uploads; an unchanged run read no page of the folder and
+only the page referring outside of the book, an edit and a rename read
+those two pages and rewrote the page referring to the renamed one without
+reading it; an unknown address answered 404 with an HTML page, and
+`downloadUrl` is `uploads/{blobId}/original`. Runs took 0.6 to 0.7 seconds
+first and 0.3 to 0.4 again. Seen live as well: a book with a picture, a callout, a Mermaid diagram, a section reference and
+a link with words of its own resolved in Markdown and HTML. A client and a
+book large enough to measure the four requests at a time were not met live.
+The fake gives a reference to a document or an upload its title and address,
+at the section it names, in `GET documents/{id}` alone; a reference to any
+other kind it leaves as a test writes it.
 
 From the Minka release that carries #494 a change of the navigation alone, or
 of the mark alone, writes only the flag: no edit of the title or body, no
