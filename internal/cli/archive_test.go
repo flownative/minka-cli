@@ -206,7 +206,7 @@ var notAWriteIntoAProject = []string{
 	"config get", "config set",
 	"cards mine", "cards show", "cards notes show", "cards notes attachments list", "cards notes attachments show", "cards notes attachments download", "comments list", "comments unread", "cards steps list", "chats list", "chats show", "messages list",
 	"docs tools", "docs tool", "docs list", "docs show", "docs uploads show",
-	"docs versions list", "docs versions show", "docs uploads versions list",
+	"docs versions list", "docs versions show", "docs uploads versions list", "search",
 	"todolists tools", "todolists tool", "todolists list", "todolists show", "todolists templates", "todolists comments list",
 	"todos mine", "todos show", "todos completed", "todos subtasks list", "todos series list", "todos series show",
 	"todos comments list",

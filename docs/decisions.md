@@ -2188,3 +2188,19 @@ refusal or no answer is a warning on the run, never a failed release.
 version and never names one `brew upgrade` cannot install, while a release
 whose archives and formula are out is done. **Implemented as:** the job
 `announce`, see [Releases](stable/releases.md#telling-minka-the-version).
+
+<a id="c-132"></a>
+## C-132 — `search` checks what Minka would let pass and reads only the pages its limit needs
+
+*Applies to: `search`*
+
+A missing `--tool`/`--folder`, a `--sort` other than `best` or `recent` and a
+malformed `--offset` are exit 1 before any request. `--limit` reads Minka's
+pages of 25 only while hits are lacking and may stop inside one; `data` is
+`{hits, next}`, `next` the offset of the first hit left behind. The command to
+read on puts the term first, and behind `--` only where it starts with a dash.
+
+**Why:** Minka takes an unknown order as `best` without a word, and its offset
+counts hits, so a cut page still says where the rest begins. **Implemented
+as:** `cli.newSearchCmd`, `api.SearchUpTo`, see
+[Docs & Files](stable/docs-and-files.md#searching-a-tool-or-a-folder).
