@@ -44,6 +44,7 @@ func (s *Server) registerFilesOrderRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/v1/files-tools/{toolId}/folders", s.authenticated(s.addFolder))
 	mux.HandleFunc("PATCH /api/v1/files-folders/{folderId}", s.authenticated(s.updateFolder))
 	mux.HandleFunc("POST /api/v1/documents/{documentId}/versions/{versionId}/restore", s.authenticated(s.restoreDocumentVersion))
+	s.registerBookRoutes(mux)
 
 	for _, address := range []struct{ kind, base, argument string }{
 		{"folder", "files-folders", "folderId"},
@@ -135,10 +136,16 @@ func (s *Server) addFolder(w http.ResponseWriter, r *http.Request, person *Perso
 		CreatedAt: s.aWholeSecond(), CreatorID: person.ID,
 	}
 	tool.Folders = append([]*Folder{folder}, tool.Folders...)
+	placeAtTheEnd(tool, folder.ParentID, folder.ID)
+	if bookOf(tool, folder.ParentID) != nil {
+		arrangeByHand(tool, folder.ID)
+	}
 	writeJSON(w, http.StatusCreated, s.entriesResource(tool, folder))
 }
 
-// updateFolder renames a folder; without a title it writes nothing.
+// updateFolder renames a folder and marks it as a book or takes the mark
+// away; what the request leaves out it does not write. Every refusal of the
+// mark stands before the title is written.
 func (s *Server) updateFolder(w http.ResponseWriter, r *http.Request, person *Person) {
 	fields, ok := readBody(w, r)
 	if !ok {
@@ -153,6 +160,23 @@ func (s *Server) updateFolder(w http.ResponseWriter, r *http.Request, person *Pe
 	if !ok {
 		return
 	}
+	isBook, ok := s.bookField(w, fields, "isBook")
+	if !ok {
+		return
+	}
+	if isBook != nil {
+		if s.isAClient(person.ID) {
+			notFound(w)
+			return
+		}
+		if s.refusedAsArchived(w, s.projectWithID(entry.tool.ProjectID)) || refusedAsAnArchivedFolder(w, entry) {
+			return
+		}
+		if *isBook && wouldNestABook(entry.tool, entry.folder) {
+			refuseABookWithinABook(w)
+			return
+		}
+	}
 	if title != nil {
 		if !validTitle(w, "folder", "a folder", *title) {
 			return
@@ -161,6 +185,14 @@ func (s *Server) updateFolder(w http.ResponseWriter, r *http.Request, person *Pe
 			return
 		}
 		entry.folder.Title = phpTrim(*title)
+	}
+	// Marking arranges the book and every folder in it by hand; taking the
+	// mark away leaves every order as it is.
+	if isBook != nil && *isBook != entry.folder.IsBook {
+		entry.folder.IsBook = *isBook
+		if *isBook {
+			arrangeByHand(entry.tool, entry.folder.ID)
+		}
 	}
 	writeJSON(w, http.StatusOK, s.entriesResource(entry.tool, entry.folder))
 }
@@ -269,10 +301,12 @@ func (s *Server) unarchiveFilesEntry(kind, argument string) handler {
 	}
 }
 
-// moveFilesEntry moves an entry to the top of a folder of the same tool, or
-// of the tool for a folderId of null. The body and the target are read before
-// an archived project refuses the move, one to where the entry stands already
-// included; there nothing is written.
+// moveFilesEntry moves an entry to a folder of the same tool, or to the top of
+// the tool for a folderId of null: first among its kind in a place ordered
+// automatically, last in one arranged by hand, or next to the neighbours the
+// request names. The body and the target are read before an archived project
+// refuses the move, one to where the entry stands already included; there
+// nothing is written unless neighbours are named.
 func (s *Server) moveFilesEntry(kind, argument string) handler {
 	return func(w http.ResponseWriter, r *http.Request, person *Person) {
 		entry, found := s.visibleEntry(kind, r.PathValue(argument), person)
@@ -300,6 +334,10 @@ func (s *Server) moveFilesEntry(kind, argument string) handler {
 			return
 		}
 		target, ok := s.folderToWriteIn(w, entry.tool, deref(targetID))
+		if !ok {
+			return
+		}
+		neighbours, ok := s.namedNeighbours(w, fields, entry.tool, project, folderIDOf(target))
 		if !ok || s.refusedAsArchived(w, project) {
 			return
 		}
@@ -308,9 +346,21 @@ func (s *Server) moveFilesEntry(kind, argument string) handler {
 			return
 		}
 
-		if folderIDOf(target) != *entry.parent {
-			*entry.parent = folderIDOf(target)
+		if from, to := *entry.parent, folderIDOf(target); to != from {
+			if kind == "folder" && (entry.folder.IsBook || holdsABook(entry.tool, entry.id)) && bookOf(entry.tool, to) != nil {
+				refuseABookWithinABook(w)
+				return
+			}
+			*entry.parent = to
 			entry.putOnTop()
+			takeOutOfPlace(entry.tool, from, entry.id)
+			placeAtTheEnd(entry.tool, to, entry.id)
+			if kind == "folder" && bookOf(entry.tool, to) != nil {
+				arrangeByHand(entry.tool, entry.id)
+			}
+		}
+		if neighbours != nil {
+			placeBetween(entry.tool, *entry.parent, entry.id, neighbours[0], neighbours[1])
 		}
 		writeJSON(w, http.StatusOK, s.entryResource(entry))
 	}

@@ -41,7 +41,19 @@ type FilesEntries struct {
 	Folders   []FolderListItem      `json:"folders"`
 	Documents []DocumentListItem    `json:"documents"`
 	Uploads   []FilesUploadListItem `json:"uploads"`
-	AppURL    string                `json:"appUrl"`
+	// Order is "automatic" or "manual", empty from a Minka that does not say.
+	// Arranged by hand, the three kinds stand mixed, in the order of Entries.
+	Order   string                `json:"order"`
+	IsBook  bool                  `json:"isBook"`
+	Book    *FolderReference      `json:"book"`    // the book this place belongs to, itself or one above; nil outside a book
+	Entries []FilesEntryReference `json:"entries"` // the folders, documents and uploads above in the order shown
+	AppURL  string                `json:"appUrl"`
+}
+
+// FilesEntryReference names one entry of a place in the order it is shown.
+type FilesEntryReference struct {
+	Kind string `json:"kind"` // "folder", "document" or "upload"
+	ID   string `json:"id"`
 }
 
 // FolderListItem is one folder as the folder above it lists it. What it holds
@@ -50,6 +62,7 @@ type FolderListItem struct {
 	ID         string          `json:"id"`
 	Title      string          `json:"title"`
 	EntryCount int             `json:"entryCount"` // the folders, documents and uploads directly in it
+	IsBook     bool            `json:"isBook"`
 	CreatedAt  string          `json:"createdAt"`
 	Creator    PersonReference `json:"creator"`
 	AppURL     string          `json:"appUrl"`
@@ -57,9 +70,12 @@ type FolderListItem struct {
 
 // DocumentListItem is one document as its folder lists it, without the body.
 type DocumentListItem struct {
-	ID           string          `json:"id"`
-	Title        string          `json:"title"`
-	Lead         string          `json:"lead"` // the first 240 characters of the body without markup, cut mid-word
+	ID    string `json:"id"`
+	Title string `json:"title"`
+	Lead  string `json:"lead"` // the first 240 characters of the body without markup, cut mid-word
+	// InNavigation is nil from a Minka that does not say; false leaves the
+	// document out of the navigation of the book it stands in.
+	InNavigation *bool           `json:"inNavigation"`
 	CommentCount int             `json:"commentCount"`
 	Archived     bool            `json:"archived"`
 	CreatedAt    string          `json:"createdAt"`
@@ -100,14 +116,16 @@ type Document struct {
 	Attachments []Attachment `json:"attachments"`
 	// Archived says the document, or a folder above it, lies in the archive:
 	// readable, and closed to every write.
-	Archived     bool            `json:"archived"`
-	CommentCount int             `json:"commentCount"`
-	CreatedAt    string          `json:"createdAt"`
-	EditedAt     *string         `json:"editedAt"` // nil while nobody has written over it
-	UpdatedAt    string          `json:"updatedAt"`
-	Creator      PersonReference `json:"creator"`
-	Comments     []Comment       `json:"comments"` // oldest first
-	AppURL       string          `json:"appUrl"`
+	Archived     bool             `json:"archived"`
+	InNavigation *bool            `json:"inNavigation"` // as on DocumentListItem
+	Book         *FolderReference `json:"book"`         // the book it stands in at any depth, nil outside one
+	CommentCount int              `json:"commentCount"`
+	CreatedAt    string           `json:"createdAt"`
+	EditedAt     *string          `json:"editedAt"` // nil while nobody has written over it
+	UpdatedAt    string           `json:"updatedAt"`
+	Creator      PersonReference  `json:"creator"`
+	Comments     []Comment        `json:"comments"` // oldest first
+	AppURL       string           `json:"appUrl"`
 }
 
 // FilesUpload is a file standing on its own in a Docs & Files tool: what was
@@ -156,10 +174,15 @@ type CreateDocumentInput struct {
 // expectation and the last write wins. Null would mean the same here — unlike
 // the notes of a card, where it means that no notes exist yet — so a write
 // without an expectation leaves the field out rather than sending null.
+//
+// InNavigation false leaves the document out of the navigation of the book it
+// stands in. It is the team's alone: a client is answered 404 for the whole
+// request.
 type UpdateDocumentInput struct {
 	Title             *string `json:"title,omitempty"`
 	Body              *string `json:"body,omitempty"`
 	ExpectedUpdatedAt *string `json:"expectedUpdatedAt,omitempty"`
+	InNavigation      *bool   `json:"inNavigation,omitempty"`
 }
 
 // AddFilesUploadInput puts a stored file into a Docs & Files tool. BlobID
@@ -338,15 +361,54 @@ type CreateFolderInput struct {
 	VisibleToClients bool   `json:"visibleToClients,omitempty"`
 }
 
-// UpdateFolderInput renames a folder; an empty Title is refused.
+// UpdateFolderInput renames a folder, marks it as a book or takes the mark
+// away. What it leaves out stays; an empty Title is refused. IsBook is the
+// team's alone.
 type UpdateFolderInput struct {
-	Title string `json:"title"`
+	Title  *string `json:"title,omitempty"`
+	IsBook *bool   `json:"isBook,omitempty"`
 }
 
 // MoveFilesEntryInput names where an entry moves to. FolderID nil is the top
 // of the tool and travels as null: a move without the field is refused.
+//
+// PreviousEntryID and NextEntryID place the entry next to a neighbour in a
+// place arranged by hand; where both are named, the previous one decides. A
+// neighbour that does not stand in the place counts as none.
 type MoveFilesEntryInput struct {
-	FolderID *string `json:"folderId"`
+	FolderID        *string `json:"folderId"`
+	PreviousEntryID *string `json:"previousEntryId,omitempty"`
+	NextEntryID     *string `json:"nextEntryId,omitempty"`
+}
+
+// ChangeFilesOrderInput says how the top of a tool, or the folder FolderID
+// names, orders its entries: "automatic" or "manual".
+type ChangeFilesOrderInput struct {
+	Order    string `json:"order"`
+	FolderID string `json:"folderId,omitempty"` // left out for the top of the tool
+}
+
+// Book is the whole tree of a book: its chapters and pages in reading order,
+// without bodies, uploads or what lies in the archive.
+type Book struct {
+	ID      string             `json:"id"`
+	Title   string             `json:"title"`
+	Tool    FilesToolReference `json:"tool"`
+	Order   string             `json:"order"` // "automatic" or "manual"
+	Entries []BookEntry        `json:"entries"`
+	AppURL  string             `json:"appUrl"`
+}
+
+// BookEntry is a chapter, which is a folder with entries of its own, or a
+// page, which is a document.
+type BookEntry struct {
+	Kind         string      `json:"kind"` // "chapter" or "page"
+	ID           string      `json:"id"`
+	Title        string      `json:"title"`
+	Order        string      `json:"order,omitempty"`   // a chapter's
+	Entries      []BookEntry `json:"entries,omitempty"` // a chapter's
+	InNavigation bool        `json:"inNavigation"`      // a page's
+	AppURL       string      `json:"appUrl"`
 }
 
 // FilesArchive lists the archive of a Docs & Files tool at any depth, the one
@@ -363,6 +425,18 @@ func (c *Client) CreateFolder(ctx context.Context, toolID string, input CreateFo
 
 func (c *Client) UpdateFolder(ctx context.Context, folderID string, input UpdateFolderInput) (Result[FilesEntries], error) {
 	return request[FilesEntries](ctx, c, http.MethodPatch, folderPath(folderID), input)
+}
+
+// BookOf reads the book a folder belongs to, the folder itself or one above
+// it, as one tree. A folder in no book is 404.
+func (c *Client) BookOf(ctx context.Context, folderID string) (Result[Book], error) {
+	return request[Book](ctx, c, http.MethodGet, folderPath(folderID)+"/book", nil)
+}
+
+// ChangeFilesOrder answers with the place in the shape FilesEntriesOf reads
+// it, also where it ordered so already.
+func (c *Client) ChangeFilesOrder(ctx context.Context, toolID string, input ChangeFilesOrderInput) (Result[FilesEntries], error) {
+	return request[FilesEntries](ctx, c, http.MethodPut, "/files-tools/"+url.PathEscape(toolID)+"/order", input)
 }
 
 // RestoreDocumentVersion writes what an earlier version said as the newest

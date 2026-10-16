@@ -17,6 +17,9 @@ minka search <term>... (--tool <toolId> | --folder <folderId> | both) [--sort be
 minka search --tool <toolId> --json -- -<word> <term>...
 minka docs create --tool <toolId> --title "Title" --audience everybody|chosen|nobody [--notify <person>]... [--folder <folderId>] [--body - < body.md] --json
 minka docs edit <documentId> [--title "New"] [--body - < body.md] (--expect <updatedAt> | --force) --json
+minka docs edit <documentId> (--in-navigation | --not-in-navigation) --json
+minka docs book <folderId> --json
+minka docs order <toolId> automatic|manual [--folder <folderId>] --json
 minka docs versions list <documentId> --json
 minka docs versions show <documentId> <versionId> --json
 minka docs versions restore <documentId> <versionId> --json
@@ -24,14 +27,14 @@ minka docs delete <documentId> --json
 minka docs restore <documentId> --json
 minka docs archive <documentId> --json
 minka docs unarchive <documentId> --json
-minka docs move <documentId> (--folder <folderId> | --top-level) --json
+minka docs move <documentId> (--folder <folderId> | --top-level) [--after <entryId> | --before <entryId>] --json
 minka docs folders create --tool <toolId> --title "Title" [--folder <folderId>] [--visible-to-clients] --json
-minka docs folders edit <folderId> --title "New" --json
+minka docs folders edit <folderId> [--title "New"] [--book | --no-book] --json
 minka docs folders delete <folderId> --json
 minka docs folders restore <folderId> --json
 minka docs folders archive <folderId> --json
 minka docs folders unarchive <folderId> --json
-minka docs folders move <folderId> (--folder <folderId> | --top-level) --json
+minka docs folders move <folderId> (--folder <folderId> | --top-level) [--after <entryId> | --before <entryId>] --json
 minka docs uploads show <uploadId> --json
 minka docs uploads create <file> --tool <toolId> [--folder <folderId>] [--title "Title"] [--description - < about.md] --json
 minka docs uploads create --blob <blobId> --tool <toolId> [--folder <folderId>] [--title "Title"] --json
@@ -42,7 +45,7 @@ minka docs uploads delete <uploadId> --json
 minka docs uploads restore <uploadId> --json
 minka docs uploads archive <uploadId> --json
 minka docs uploads unarchive <uploadId> --json
-minka docs uploads move <uploadId> (--folder <folderId> | --top-level) --json
+minka docs uploads move <uploadId> (--folder <folderId> | --top-level) [--after <entryId> | --before <entryId>] --json
 minka docs comments create (--document <documentId> | --upload <uploadId>) - --json < comment.md
 minka docs comments edit (--document <documentId> | --upload <uploadId>) <commentId> - [--format html] --json < comment.md
 minka docs comments delete (--document <documentId> | --upload <uploadId>) <commentId> --json
@@ -325,7 +328,8 @@ an ID is never read as the wrong kind:
   back only with that folder**: `unarchive` exits 9 `folderArchived`, and
   `docs list <toolId> --archived` marks it `archivedWithAFolderAbove`.
 - **`move`** takes `--folder <folderId>` or `--top-level`, exactly one; it lands
-  first in its new place. It moves within its tool only (another tool's folder
+  first among its kind in a place ordered automatically and last in one
+  arranged by hand (see "Books and the order of a place"). It moves within its tool only (another tool's folder
   is `folderUnknown`), nothing in the archive moves and nothing goes into an
   archived folder (`folderArchived`), and a folder cannot go into itself or one
   below it (`folderIntoItself`). Where it stands already, nothing is written
@@ -350,6 +354,49 @@ an ID is never read as the wrong kind:
 - A write in an archived project exits 9 `projectArchived`, a `move` to where
   the entry stands already and one into an archived folder included.
 
+## Books and the order of a place
+
+- **Each place orders itself.** The top of a tool and every folder are either
+  `automatic` — folders, then documents, then uploads, each newest first — or
+  `manual`, the three kinds mixed in an order set by hand. `docs list` says
+  `order`, and `entries` (`[{kind, id}]`) is the order shown; arranged by hand,
+  the text lists one mixed list instead of three.
+- `docs order <toolId> manual [--folder <folderId>]` arranges a place by hand,
+  keeping the order it showed; `automatic` brings the automatic order back
+  unchanged. A folder does not inherit the order of the one above it. The
+  team's alone: a client exits 2.
+- `docs move <id> --folder <folderId> --after <entryId>` (or `--before`)
+  places a document, upload or folder next to an entry of that place; name the
+  place where it stands to rearrange it there. `--after` and `--before`
+  exclude each other. A place ordered automatically refuses it: exit 9
+  `folderOrderAutomatic`. The entry itself as its own neighbour is exit 1. A
+  neighbour that does not stand there counts as none, and the entry then goes
+  first. Without a neighbour, a move into a place
+  arranged by hand appends at the end, and so does a new entry made there.
+- **A book** is a folder marked with `docs folders edit <folderId> --book`
+  (`--no-book` takes the mark away and leaves every order as it is). Marking
+  arranges the book and every folder in it by hand. A folder below a book, or
+  one holding a book (the trash counts), cannot become one, and a book, or a
+  folder holding one, does not move into a book: exit 9 `bookWithinABook`. The
+  team's alone. `--book` and the other switches here take no `=false`.
+- A Minka that does not know books answers the mark and the navigation with
+  200 and writes neither: the command then exits 7 (`api_error`) with the
+  answer as `data`, and says whether the rest of the change went through.
+- `docs book <folderId>` reads the book a folder belongs to — itself or the
+  one above it — as one tree: `{id, title, tool, order, entries, appUrl}`,
+  each entry a `chapter` (`{id, title, order, entries, appUrl}`) or a `page`
+  (`{id, title, inNavigation, appUrl}`). No bodies, no uploads, nothing in the
+  archive. A folder in no book exits 2.
+- `docs edit <documentId> --not-in-navigation` leaves a page out of the
+  navigation of its book (still reached by link, reference and search; previous
+  and next pass it over), `--in-navigation` lists it again. Alone it writes
+  only the flag — no title or body, no version, `updatedAt` as it was, never
+  409 — so it needs neither `--expect` nor `--force`; `--expect` given is sent
+  as it is. A client
+  exits 2 for the whole call. A document in no book takes it as well and a
+  `notice` says it counts once the document is in one. `docs show` names the
+  `book` and `inNavigation`.
+
 ## What does not exist
 
 No reading of a draft, by anybody; no replacing the file of an upload by an
@@ -366,7 +413,7 @@ removing anything for good. All of it is done in Minka on the web.
 `folderUnknown`, `folderArchived`, `documentArchived`, `uploadArchived`,
 `documentNotArchived`, `uploadNotArchived`, `folderNotArchived`,
 `folderIntoItself`, `folderTitleMissing`, `folderTitleTooLong`,
-`folderTitleHasControlCharacters`,
+`folderTitleHasControlCharacters`, `bookWithinABook`, `folderOrderAutomatic`,
 `documentChanged` (409, with the document in `data`), `uploadTitleMissing`,
 `uploadTitleTooLong`, `uploadTitleHasControlCharacters`,
 `uploadDescriptionTooLong`, `uploadDescriptionNotReadable`, `uploadChanged`

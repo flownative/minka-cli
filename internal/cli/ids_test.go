@@ -50,6 +50,12 @@ func asAgent(e *testEnv) {
 
 var up = strings.ToUpper
 
+// arrangePlansByHand orders the folder Plans by hand, where a move may name a
+// neighbour.
+func arrangePlansByHand(e *testEnv) {
+	runOK(e.t, e, "docs", "order", e.fixture.Files.ID, "manual", "--folder", e.fixture.Folder.ID)
+}
+
 // idsInCapitals names every input that takes an ID, in every command that has
 // one; the test below holds the command tree against it.
 var idsInCapitals = []idInCapitals{
@@ -179,6 +185,30 @@ var idsInCapitals = []idInCapitals{
 	}},
 	{command: "docs folders move", inputs: []string{"--folder"}, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
 		return []string{up(f.FolderShownToClients.ID), "--folder", up(f.Folder.ID)}
+	}},
+	{command: "docs move", inputs: []string{"--after"}, prepare: arrangePlansByHand, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
+		return []string{f.Document.ID, "--folder", f.Folder.ID, "--after", up(f.DocumentInFolder.ID)}
+	}},
+	{command: "docs uploads move", inputs: []string{"--before"}, prepare: arrangePlansByHand, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
+		return []string{f.FilesUpload.ID, "--folder", f.Folder.ID, "--before", up(f.DocumentInFolder.ID)}
+	}},
+	{command: "docs uploads move", inputs: []string{"--after"}, prepare: arrangePlansByHand, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
+		return []string{f.FilesUpload.ID, "--folder", f.Folder.ID, "--after", up(f.DocumentInFolder.ID)}
+	}},
+	{command: "docs move", inputs: []string{"--before"}, prepare: arrangePlansByHand, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
+		return []string{f.Document.ID, "--folder", f.Folder.ID, "--before", up(f.DocumentInFolder.ID)}
+	}},
+	{command: "docs folders move", inputs: []string{"--after"}, prepare: arrangePlansByHand, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
+		return []string{f.FolderShownToClients.ID, "--folder", f.Folder.ID, "--after", up(f.DocumentInFolder.ID)}
+	}},
+	{command: "docs folders move", inputs: []string{"--before"}, prepare: arrangePlansByHand, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
+		return []string{f.FolderShownToClients.ID, "--folder", f.Folder.ID, "--before", up(f.DocumentInFolder.ID)}
+	}},
+	{command: "docs order", inputs: []string{"<toolId>", "--folder"}, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
+		return []string{up(f.Files.ID), "manual", "--folder", up(f.Folder.ID)}
+	}},
+	{command: "docs book", inputs: []string{"<folderId>"}, prepare: func(e *testEnv) { e.fixture.Folder.IsBook = true }, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
+		return []string{up(f.ArchivedFolder.ID)}
 	}},
 	{command: "docs folders create", inputs: []string{"--tool", "--folder"}, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
 		return []string{"--tool", up(f.Files.ID), "--folder", up(f.Folder.ID), "--title", "Offers"}

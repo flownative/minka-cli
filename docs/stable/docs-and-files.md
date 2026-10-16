@@ -21,6 +21,12 @@ A tool is kept in order with `delete`, `restore`, `archive`, `unarchive` and
 `search` finds documents and uploads within a tool or a folder
 ([C-132](../decisions.md#c-132)), see below.
 
+`docs book` reads a book as one tree, `docs folders edit --book` and
+`--no-book` mark one, `docs edit --in-navigation` and `--not-in-navigation`
+place a page in its navigation, `docs order` orders a place automatically or
+by hand, and `move --after` and `--before` place an entry in an order set by
+hand ([C-133](../decisions.md#c-133), E-302, E-307), see below.
+
 ## What is not there, and why nothing pretends otherwise
 
 The API offers no reading of a draft — a draft is 404 for everybody, its
@@ -60,7 +66,8 @@ placeholders. How each is written and shown in Markdown is in
 Minka takes a file into a tool in two steps: `POST projects/{id}/uploads`
 stores the bytes in the project, as `uploads create` does, and `POST
 files-tools/{id}/uploads` with the `blobId` of that answer puts the stored file
-on top of the tool or of a folder. `docs uploads create <file> --tool <toolId>`
+into the tool or a folder, first among the uploads where the order is
+automatic, last where it is set by hand. `docs uploads create <file> --tool <toolId>`
 takes both in one run ([C-085](../decisions.md#c-085)):
 
 1. It reads the tool, `GET files-tools/{id}`, for the project it stands in,
@@ -376,17 +383,19 @@ reading it as the wrong one.
 - `move` takes `--folder <folderId>` or `--top-level`, exactly one, and the
   CLI refuses neither and both before a request goes out. The top level travels
   as `"folderId": null`; a body without the field is `folderIdMissing`, which
-  this CLI never sends. The entry lands first in its new place. A move to
-  where the entry stands writes nothing and answers 200, so the answer cannot
-  tell a move from none.
+  this CLI never sends. The entry lands first among its kind in a place
+  ordered automatically and last in one arranged by hand. A move to where the
+  entry stands, without a neighbour, writes nothing and answers 200, so the
+  answer cannot tell a move from none. `--after` and `--before` are below.
 - `docs folders create` answers 201 with the folder in the shape of `docs
   list --folder`, its ID under `folder.id`. `visibleToClients` counts only at
   the top of the tool, in a project open to clients, from the team, and a
   client's own folder at the top is shown to clients anyway. No answer says
   whether it counted, so `--visible-to-clients` beside `--folder` draws a
   `notice` that it does not, and goes out as given. `docs folders edit` needs
-  `--title`: a rename without one writes nothing on Minka's side, so the CLI
-  refuses it as a call that changes nothing.
+  `--title`, `--book` or `--no-book`: a call without any writes nothing on
+  Minka's side, so the CLI refuses it as a call that changes nothing. It sends
+  only what is given.
 - `docs versions restore <documentId> <versionId>` writes what the version
   said, title and body, as the newest version, and tells nobody. A version that
   says what the document says already answers 200 and adds none; the CLI cannot
@@ -428,12 +437,104 @@ itself, for the team), and reads the body where it takes one. Then:
   that is none or one the document has not got (404), then `projectArchived`
   and `documentArchived`.
 
+## Books and the order of a place
+
+Each place — the top of a tool and every folder — orders itself, and a folder
+does not take the order of the one above it (E-302). `automatic` shows
+folders, then documents, then uploads, each newest first; `manual` mixes the
+three in an order set by hand. Every answer in the shape of `docs list`
+carries `order`, `entries` (`[{kind, id}]` in the order shown), `isBook` and
+`book`, the book the place belongs to, itself or one above; `folders[]` carry
+`isBook` and `documents[]` `inNavigation`. Arranged by hand, the text view
+lists one mixed list in the order of `entries`, each line naming its kind,
+because three lists by kind would lose the order; ordered automatically it
+keeps the three lists. A Minka that sends no `order` is read as automatic, one
+that sends no `inNavigation` as listing the document, and the text says
+nothing about either.
+
+- `docs order <toolId> automatic|manual [--folder <folderId>]` is `PUT
+  files-tools/{id}/order`. Manual keeps the order shown a moment before;
+  automatic drops the order set by hand and the automatic one comes back
+  unchanged. A place that orders so already answers 200 the same. Any other
+  word is exit 1 before a request, so `orderUnknown` is unreachable. A new
+  entry in a place arranged by hand goes to its end, and so does one moved in
+  without a neighbour.
+- `move --after <entryId>` and `--before <entryId>` send `previousEntryId`
+  and `nextEntryId`; they exclude each other, and each is checked as an ID
+  before a request, so `entryPlaceUnknown` is unreachable. Minka places the
+  entry right behind the previous neighbour, or where that does not stand in
+  the place, right before the next one, and where neither does, first. The
+  answer of a document or an upload does not say where it landed, so the
+  summary says what was asked. A place ordered automatically refuses a
+  neighbour with `folderOrderAutomatic`.
+- `docs folders edit --book` and `--no-book` send `isBook`; the two exclude
+  each other. Marking arranges the book and every folder in it by hand, in the
+  order they showed, and a folder made in a book or moved into one is arranged
+  by hand as well; unmarking leaves every order as it is. A folder below a
+  book, or one holding a book at any depth, the trash included, cannot become
+  one, and a book or a folder holding one does not move into a book:
+  `bookWithinABook`. Setting the mark a folder has already answers 200.
+- `docs book <folderId>` is `GET files-folders/{id}/book`, for any folder of
+  the book, and passes Minka's tree through as `data`: chapters
+  `{id, title, order, entries, appUrl, kind}`, pages
+  `{id, title, inNavigation, appUrl, kind}`, folders in use and published
+  documents in use, no uploads, not paged. A book in the archive is read; a
+  folder in no book, and a book a client is not shown, is 404. The text view
+  indents the tree, each line shaped as one of `docs list`, a chapter ending
+  in a slash, and marks a chapter ordered
+  automatically and a page out of the navigation.
+- `docs edit --in-navigation` and `--not-in-navigation` send `inNavigation`;
+  the two exclude each other. A document in no book takes it too, and a
+  `notice` says it counts once the document is in one. A PATCH that carries
+  only the navigation, or only the mark, writes only the flag: no title or
+  body, no version, `updatedAt` as it was, and never 409 (from the Minka
+  release that carries #494). So the guard of `docs edit` stands over the
+  title and the body alone: the navigation alone asks for neither `--expect`
+  nor `--force`, and sends `--expect` where it is given. A 409 over the title
+  or body leaves the navigation as it was.
+- A Minka that does not know books takes `isBook` and `inNavigation` with
+  200 and writes neither, so the commands hold the answer against the
+  request: a folder whose `isBook` is not what was asked, or a document
+  without `inNavigation`, is exit 7 (`api_error`) with the answer as `data`,
+  and the message says whether the rest of the change went through.
+- `--book`, `--no-book`, `--in-navigation` and `--not-in-navigation` take no
+  value: given as `=false`, which would read as not given at all, they are
+  exit 1. A neighbour that is the entry itself is exit 1 as well: Minka takes
+  the entry out of the order before it looks for the neighbour and would put
+  it first without a word.
+- The mark, the navigation and the order are the team's: a client gets 404,
+  for `docs edit` with `inNavigation` also where the call changes the title or
+  the body. The hints of these 404s say so.
+
+Minka refuses the mark of a folder in this order: the folder (404), `title`
+that is no string (400), `isBook` that is no boolean (400 `malformedBody`;
+an explicit null 422 `isBookNotABoolean`), a client (404), `projectArchived`,
+`folderArchived`, `bookWithinABook`, and only then the title. The navigation
+of a document: the document (404), the title, the body, `expectedUpdatedAt`,
+`inNavigation` that is no boolean (400 `malformedBody`; null 422
+`inNavigationNotABoolean`), a client (404), and for an archived document
+`projectArchived` and `documentArchived`. `PUT …/order`: the
+body (400), the tool (404), `orderUnknown`, the folder (`folderUnknown`; an
+archived one `projectArchived`, then `folderArchived`), `projectArchived`, a
+client (404). A move with neighbours, after the target: `entryPlaceUnknown`,
+`projectArchived`, `folderOrderAutomatic`, then `folderIntoItself` and, for a
+folder that changes its place, `bookWithinABook`.
+
+| Answer | Command | Exit |
+|---|---|---|
+| 404 | `docs book` for a folder in no book; `docs order`, `docs folders edit --book`/`--no-book` and `docs edit --in-navigation`/`--not-in-navigation` for a client | 2 |
+| 422 `bookWithinABook` | `docs folders edit --book`, `docs folders move` | 9 |
+| 422 `folderOrderAutomatic` | every `move --after`/`--before` into a place ordered automatically | 9 |
+| 422 `folderUnknown`, `folderArchived` | `docs order --folder` | 9 |
+| 422 `orderUnknown`, `entryPlaceUnknown`, `isBookNotABoolean`, `inNavigationNotABoolean`; 400 `malformedBody` | unreachable: the CLI checks the word and the IDs and sends booleans | — |
+| 200 without the mark or the navigation | `docs folders edit --book`/`--no-book`, `docs edit --in-navigation`/`--not-in-navigation` against a Minka without books | 7 |
+
 ## What a list promises
 
 Nothing here is paged and nothing is silently cut, so a short list is the whole
 list. `entries` reaches one folder deep: going down means calling again with a
-folder. The order is the web's own position, neither alphabetical nor by date,
-and the CLI passes it through. `lead` is the first 240 characters of the body
+folder. The order is the web's own, neither alphabetical nor by date, set by
+hand or automatic, and the CLI passes it through. `lead` is the first 240 characters of the body
 without markup, cut where the count runs out and not at a word.
 
 ## Searching a tool or a folder

@@ -2205,6 +2205,22 @@ counts hits, so a cut page still says where the rest begins. **Implemented
 as:** `cli.newSearchCmd`, `api.SearchUpTo`, see
 [Docs & Files](stable/docs-and-files.md#searching-a-tool-or-a-folder).
 
+<a id="c-133"></a>
+## C-133 — Books and the order set by hand go out only as asked, and only what Minka wrote passes
+
+*Applies to: `docs order`, `docs book`, `docs folders edit --book`/`--no-book`, `docs edit --in-navigation`/`--not-in-navigation`, every `move --after`/`--before`*
+
+Exclusive pairs, `=false` switches, an unknown order and a neighbour that is
+no ID or the entry itself are exit 1. The navigation alone needs neither
+`--expect` nor `--force`. An answer without the mark or navigation asked for
+is exit 7. Arranged by hand, `docs list` prints one mixed list.
+
+**Why:** A flag-only PATCH writes only the flag and never answers 409, a Minka
+without books says 200 to both, and three lists cannot show a mixed order.
+**Implemented as:** `cli.newDocsOrderCmd`,
+`cli.newDocsBookCmd`, `newEntryMoveCmd`, `newDocsEditCmd`, see
+[Docs & Files](stable/docs-and-files.md#books-and-the-order-of-a-place).
+
 <a id="c-134"></a>
 ## C-134 — The shapes of a document travel in conventions other Markdown tools read
 
