@@ -152,6 +152,9 @@ folder outside the tool `--tool` names, exits 2 (`not_found`).
   and of one person `personNotAProjectMember` is answered before this, so a list
   holding both is answered for whichever name comes first.
 - A person named more than once is told once.
+- A body can hold callouts, Mermaid diagrams, link tiles and a block of
+  variables, each in a Markdown convention of its own: see "The shapes of a
+  document" in the reference on texts.
 - `docs edit <documentId>` changes the title, the body or both. `--body ""`
   empties the body. **`--title ""` does not empty the title:** a document needs
   one, so it exits 9 with `documentTitleMissing`. A title can only be replaced.

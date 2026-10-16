@@ -119,6 +119,24 @@ Postgres reads it (no stems, typos, phrases or operators), orders `best` as
 title before text and then the newest, and drops accents from a table of Latin
 letters rather than by Unicode decomposition.
 
+A text holds the shapes of a document in Markdown both ways: callouts as
+GitHub alerts, Mermaid diagrams as `mermaid` code blocks, link tiles as a list
+under `<!-- minka:tiles -->`, a block of variables as a table under
+`<!-- minka:variables -->`, placeholders as `{{name}}`; every code block is
+written as the editor stores it, `pre[data-language]` text with `<br>` (C-134,
+Minka's E-303, E-305, E-306, E-308). Minka's side is on its `main` and in no
+release yet; a released Minka unwraps callouts, tiles and variables and keeps their
+words, so `> [!NOTE]` reaches it as loose text instead of today's quote and the
+tiles run together. **This CLI change may be released only once a Minka
+release carries E-303, E-306 and E-308.** Checked against Minka's code and tests and live against a local Minka
+on its `main`: each shape written from Markdown was stored byte for byte as
+sent, the tiles' addresses turned into references; read back and sent again
+it was stored the same; a document in the editor's shapes sent as HTML, read
+and sent back, kept every element. A tile starting with `#MNK-1` was not met
+live, for want of a board with short identifiers in the test project. A
+section reference (a reference that keeps its `#h-…`) is announced by Minka
+and not merged; until then a link to a section needs words of its own.
+
 The to-do lists of a project are read with `todolists tools`, `todolists list`
 and `todolists show`, and written with `todolists create`, `edit`, `archive`,
 `unarchive` and `delete`; the groups of a list with `todogroups create`, `edit`,

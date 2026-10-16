@@ -293,7 +293,8 @@ func ToMarkdown(fragment string) string {
 
 func isBlock(name string) bool {
 	switch name {
-	case "p", "div", "h1", "h2", "h3", "h4", "h5", "h6", "hr", "blockquote", "pre", "ul", "ol", "li", "table", "figure", "figcaption":
+	case "p", "div", "h1", "h2", "h3", "h4", "h5", "h6", "hr", "blockquote", "pre", "ul", "ol", "li", "table", "figure", "figcaption",
+		"aside", "header", "dl", "dt", "dd":
 		return true
 	}
 	return false
@@ -363,11 +364,24 @@ func block(n *html.Node) string {
 		return table(n)
 	case "blockquote":
 		return prefixLines(blocks(children(n)), "> ", "> ")
+	case "aside":
+		switch {
+		case calloutAlerts[attribute(n, "data-callout")] != "":
+			return calloutBlock(n)
+		case hasAttribute(n, "data-variables"):
+			return variablesBlock(n)
+		}
+		return blocks(children(n))
+	case "dl":
+		if hasAttribute(n, "data-tiles") {
+			return tilesBlock(n)
+		}
+		return blocks(children(n))
 	case "pre":
 		content := strings.TrimRight(textContent(n), "\n")
 		fence := codeFence(content)
 		language := attribute(n, "data-language")
-		if !markdown.AttributePatterns["pre.data-language"].MatchString(language) {
+		if !markdown.AttributePatterns["pre.data-language"].MatchString(language) || language == markdown.PlainLanguage {
 			language = ""
 		}
 		return fence + language + "\n" + content + "\n" + fence
@@ -494,6 +508,7 @@ var unopenedTargets = map[string]string{
 	"document":    "a document you cannot open",
 	"upload":      "a file you cannot open",
 	"question":    "a question you cannot open",
+	"event":       "an event you cannot open",
 }
 
 // reference shows a reference to another record by its address, as an
@@ -534,6 +549,113 @@ func reference(n *html.Node) string {
 // and come back as a link to itself.
 func isAutolinkable(href string) bool {
 	return (strings.HasPrefix(href, "https://") || strings.HasPrefix(href, "http://")) && !strings.ContainsAny(href, " <>\t\n")
+}
+
+// calloutAlerts are the GitHub alerts a callout's kind is written as.
+var calloutAlerts = map[string]string{
+	"note":    markdown.AlertNote,
+	"warning": markdown.AlertWarning,
+}
+
+// calloutBlock renders a callout as a GitHub alert, its title beside the
+// marker as Obsidian writes one. GitHub shows a quote with the title in its
+// first line instead; without a title the alert is GitHub's own.
+func calloutBlock(n *html.Node) string {
+	head := "[!" + calloutAlerts[attribute(n, "data-callout")] + "]"
+	content := children(n)
+	for i, child := range content {
+		if child.Type != html.ElementNode {
+			continue
+		}
+		if child.Data == "header" {
+			if title := oneLine(paragraphLines(inlineChildren(child))); title != "" {
+				head += " " + title
+			}
+			content = append(slices.Clone(content[:i]), content[i+1:]...)
+		}
+		break
+	}
+	if body := blocks(content); body != "" {
+		head += "\n\n" + body
+	}
+	return prefixLines(head, "> ", "> ")
+}
+
+// variablesBlock renders a block of variables as its table under the
+// marker that makes it one again. The columns are the editor's: name,
+// label, hint, default, then a value per profile.
+func variablesBlock(n *html.Node) string {
+	var found *html.Node
+	var find func(*html.Node)
+	find = func(node *html.Node) {
+		for _, child := range children(node) {
+			if found == nil && child.Type == html.ElementNode && child.Data == "table" {
+				found = child
+			}
+			find(child)
+		}
+	}
+	find(n)
+	if found == nil {
+		return blocks(children(n))
+	}
+	return markdown.MarkerVariables + "\n" + table(found)
+}
+
+// tilesBlock renders a group of link tiles as a list under the marker that
+// makes it one again: each tile its reference's address and then its
+// description.
+func tilesBlock(n *html.Node) string {
+	var lines []string
+	tile := func(term, description *html.Node) {
+		line := "- "
+		if term != nil {
+			line += oneLine(paragraphLines(inlineChildren(term)))
+		}
+		if description != nil {
+			if words := oneLine(paragraphLines(inlineChildren(description))); words != "" {
+				line += " " + words
+			}
+		}
+		lines = append(lines, strings.TrimRight(line, " "))
+	}
+	var term *html.Node
+	for _, child := range children(n) {
+		if child.Type != html.ElementNode {
+			continue
+		}
+		switch child.Data {
+		case "div":
+			var dt, dd *html.Node
+			for _, part := range children(child) {
+				if part.Type == html.ElementNode && part.Data == "dt" && dt == nil {
+					dt = part
+				}
+				if part.Type == html.ElementNode && part.Data == "dd" && dd == nil {
+					dd = part
+				}
+			}
+			tile(dt, dd)
+		case "dt":
+			if term != nil {
+				tile(term, nil)
+			}
+			term = child
+			continue
+		case "dd":
+			tile(term, child)
+		}
+		term = nil
+	}
+	if term != nil {
+		tile(term, nil)
+	}
+	return markdown.MarkerTiles + "\n" + strings.Join(lines, "\n")
+}
+
+// oneLine joins the lines of a paragraph, for a place that holds one line.
+func oneLine(paragraph string) string {
+	return strings.ReplaceAll(paragraph, "\\\n", " ")
 }
 
 // table renders a table as a Markdown table. The first row is the header,

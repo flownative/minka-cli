@@ -26,7 +26,12 @@ const everything = "# Title\n\n" +
 	"[bad](javascript:alert(1))\n\n" +
 	"<div onclick=\"alert(1)\">raw block</div>\n\n" +
 	"Inline <span style=\"color:red\">raw</span> html.\n\n" +
-	"Umlaute äöü & <less> \"quotes\" \\*escaped\\*\n"
+	"Umlaute äöü & <less> \"quotes\" \\*escaped\\*\n\n" +
+	"> [!NOTE] A *title*\n> In a callout.\n\n" +
+	"> [!WARNING]\n> Careful.\n\n" +
+	"```mermaid\ngraph LR\nA --> B\n```\n\n" +
+	MarkerTiles + "\n- <https://minka.example/go/card/MNK-1> The card\n- #MNK-2\n- no tile\n\n" +
+	MarkerVariables + "\n| Name | Label | Hint | Default | Live |\n|---|---|---|---|---|\n| host | Host | | localhost | minka.example |\n"
 
 func TestOnlyElementsTheServerKeepsAreWritten(t *testing.T) {
 	result := ToHTML(everything)
@@ -73,9 +78,13 @@ func TestConversions(t *testing.T) {
 		{"emphasis", "*a* **b** ~~c~~", "<p><em>a</em> <strong>b</strong> <del>c</del></p>", nil},
 		{"inline code", "run `make <x>`", "<p>run <code>make &lt;x&gt;</code></p>", nil},
 		{"hard break", "a  \nb", "<p>a<br>b</p>", nil},
-		{"code block with a language", "```Go\n<b>x</b>\n```", `<pre data-language="go"><code>&lt;b&gt;x&lt;/b&gt;</code></pre>`, nil},
-		{"code block with a language the server does not keep", "```{weird}\nx\n```", "<pre><code>x</code></pre>", nil},
-		{"indented code block", "    a < b", "<pre><code>a &lt; b</code></pre>", nil},
+		{"code block with a language", "```Go\n<b>x</b>\n```", `<pre data-language="go">&lt;b&gt;x&lt;/b&gt;</pre>`, nil},
+		{"code block with a language the server does not keep", "```{weird}\nx\n```", `<pre data-language="plain">x</pre>`, nil},
+		{"code block without a language", "```\nx\n```", `<pre data-language="plain">x</pre>`, nil},
+		{"code block of several lines", "```sh\n  a \"b\" & 'c'\n\n\tz\n\n```", `<pre data-language="sh">  a "b" &amp; 'c'<br><br>` + "\t" + `z</pre>`, nil},
+		{"code block with Windows line ends", "```\r\na\r\nb\r\n```", `<pre data-language="plain">a<br>b</pre>`, nil},
+		{"mermaid diagram", "```mermaid\ngraph LR\nA[Start] --> B[\"<b>End</b>\"]\n```", `<pre data-language="mermaid">graph LR<br>A[Start] --&gt; B["&lt;b&gt;End&lt;/b&gt;"]</pre>`, nil},
+		{"indented code block", "    a < b", `<pre data-language="plain">a &lt; b</pre>`, nil},
 		{"tight list", "- a\n- b", "<ul>\n<li>a</li>\n<li>b</li>\n</ul>", nil},
 		{"ordered list starting elsewhere", "3. a", "<ol start=\"3\">\n<li>a</li>\n</ol>", nil},
 		{"ordered list starting at 1", "1. a", "<ol>\n<li>a</li>\n</ol>", nil},
@@ -94,7 +103,8 @@ func TestConversions(t *testing.T) {
 		{"image", "![alt](https://example.com/i.png)", `<p><a href="https://example.com/i.png">alt</a></p>`, []string{WarningImages}},
 		{"rule", "a\n\n---\n\nb", "<p>a</p>\n<hr>\n<p>b</p>", nil},
 		{"inline html is text", "a <b>b</b>", "<p>a &lt;b&gt;b&lt;/b&gt;</p>", []string{WarningRawHTML}},
-		{"html block is text", "<div>x</div>", "<pre>&lt;div&gt;x&lt;/div&gt;</pre>", []string{WarningRawHTML}},
+		{"html block is text", "<div>x</div>", `<pre data-language="plain">&lt;div&gt;x&lt;/div&gt;</pre>`, []string{WarningRawHTML}},
+		{"html comment is text", "<!-- x -->\n\n- a", "<pre data-language=\"plain\">&lt;!-- x --&gt;</pre>\n<ul>\n<li>a</li>\n</ul>", []string{WarningRawHTML}},
 		{"entities and escapes", `AT&T \*x\* &amp;`, "<p>AT&amp;T *x* &amp;</p>", nil},
 		{"umlauts", "äöü ß", "<p>äöü ß</p>", nil},
 		{

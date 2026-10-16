@@ -119,6 +119,7 @@ func TestReferencesAreShownByTheirAddress(t *testing.T) {
 		{"document the reader cannot open", `<p><minka-ref kind="document" id="01a0"></minka-ref></p>`, "(a document you cannot open)"},
 		{"upload the reader cannot open", `<p><minka-ref kind="upload" id="01a0"></minka-ref></p>`, "(a file you cannot open)"},
 		{"question the reader cannot open", `<p><minka-ref kind="question" id="01a0"></minka-ref></p>`, "(a question you cannot open)"},
+		{"event the reader cannot open", `<p><minka-ref kind="event" id="01a0"></minka-ref></p>`, "(an event you cannot open)"},
 		{"kind the CLI does not know yet, visible", `<p><minka-ref kind="poll" id="01a0" title="Wahl" href="https://minka.example/p/1"></minka-ref></p>`, "<https://minka.example/p/1>"},
 		{"kind the CLI does not know yet, hidden", `<p><minka-ref kind="poll" id="01a0"></minka-ref></p>`, "(a reference you cannot open)"},
 		{"hidden without a kind", `<p><minka-ref id="01a0"></minka-ref></p>`, "(a reference you cannot open)"},

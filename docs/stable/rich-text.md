@@ -24,13 +24,21 @@ attribute values that the allowlist of the server keeps. The allowlist in the
 Minka code decides, not this list:
 
 - Headings of all six levels, `ol start`, link titles.
-- Inline code becomes `code`, a block `pre > code` with `data-language` if the
-  language matches the pattern of the server.
+- Inline code becomes `code`. A code block is written as the editor stores
+  one: the text of a `pre` with `data-language`, a `<br>` for each line break
+  and no `code` inside; a block without a language, or with one that misses
+  the pattern of the server, names `plain`, as the editor does. Only `&`, `<`
+  and `>` are escaped in it, as the server stores them, so what is stored is
+  what was sent. The page paints the colours of a language only into a block
+  of this shape ([C-134](../decisions.md#c-134)).
 - Tables come out the way the editor writes them:
   `figure.lexxy-content__table-wrapper > table > tbody`, header cells
   `th.lexxy-content__table-cell--header`. Column alignment is lost.
 - Images become links; an image inside a link becomes its label.
-- Raw HTML in the Markdown becomes visible text.
+- Raw HTML in the Markdown becomes visible text, in a code block, except the
+  two markers of the shapes below.
+- Callouts, link tiles and blocks of variables are written in the
+  conventions of [The shapes of a document](#the-shapes-of-a-document).
 - A link whose target is not http, https, mailto, tel or relative becomes
   plain text — the same rule as `RichText::isSafeUrl`, including the handling
   of a leading `\\` and `/\`.
@@ -51,9 +59,60 @@ hard break, and the way back yields the same HTML.
 
 `CarriesMarkup` decides whether a text carries markup, by the rule of the
 server: markup is only a tag of a served element that is written out up to its
-closing angle bracket. `a<i und b<s` stays plain text. Beside the elements
-Markdown writes, the server keeps three that a text carries rather than
-writes: `action-text-attachment`, `minka-embed` and `minka-ref`.
+closing angle bracket. `a<i und b<s` stays plain text. The elements are those
+of the allowlist in `internal/markdown`, the shapes' `aside`, `header`, `dl`,
+`dt` and `dd` among them, and beside them the three that a text carries rather
+than writes: `action-text-attachment`, `minka-embed` and `minka-ref`.
+
+## The shapes of a document
+
+A document — and any other rich text, since the server keeps the elements
+everywhere — can hold shapes Markdown has no element for. Each is written in a
+convention other Markdown tools read as well, and shown in the same one, so
+the view stays the editable text of C-008 ([C-134](../decisions.md#c-134)):
+
+| Shape (Minka's decision) | Stored | Markdown |
+|---|---|---|
+| Callout (E-303) | `<aside data-callout="note\|warning"><header>Title</header><p>…</p></aside>` | a GitHub alert, `> [!NOTE]` or `> [!WARNING]`, the title beside the marker as Obsidian writes it: `> [!NOTE] Title` |
+| Mermaid diagram (E-305) | `<pre data-language="mermaid">graph LR<br>A --&gt; B</pre>` | a fenced code block of the language `mermaid` |
+| Link tiles (E-306) | `<dl data-tiles=""><div><dt><minka-ref …></dt><dd>Words</dd></div></dl>` | a list under `<!-- minka:tiles -->`, each item the address of the record and then its description: `- <https://…/go/card/MNK-1> Words` |
+| Variables (E-308) | `<aside data-variables="">` around the table in its figure, the first cell of each row a header cell | a table under `<!-- minka:variables -->`: name, label, hint, default, then a value per profile, the profile's label heading its column |
+| Placeholder (E-308) | the text `{{name}}` | the same text; nothing is filled in |
+
+- GitHub shows an alert only with the marker alone on its line; with a title
+  it shows a quote. Obsidian and others take the title. GitHub's other alerts
+  (`TIP`, `IMPORTANT`, `CAUTION`) have no kind in Minka and stay quotes. A
+  callout inside a callout stays a quote, since Minka unwraps it.
+- An HTML comment is hidden by every Markdown tool, which shows the list or
+  table under it as such. A marker counts only right before a block of its
+  kind; anywhere else it is raw HTML and becomes visible text, with the
+  warning. A variables marker inside a callout counts as misplaced, since
+  Minka unwraps a block of variables there.
+- A tile starts with a web address in angle brackets or bare, or with a
+  card's `#MNK-1`; Minka turns that into the reference, as everywhere. The rest of
+  the line is the description. A line without either, a link with words of
+  its own and a `mailto:` address included, cannot be a tile: it is written as a paragraph between
+  two groups, where Minka would put it, with a warning. An address Minka does
+  not turn into a reference — another host, a record the writer cannot see —
+  is sent as a tile all the same, and Minka stores its address and its
+  description as two paragraphs between the groups. An empty item is left
+  out, with a warning. An item of more than
+  one block makes the whole list a list, with a warning. A reference the
+  reader cannot open reads as Minka's words for it and cannot come back.
+- The header words of a block of variables are free; the page reads the
+  columns by position. The CLI writes the cells without the paragraph the
+  editor puts in each; the page reads both.
+- A document in the editor's shapes, read and sent back as Markdown, keeps
+  every element; what differs is the line breaks between blocks, the
+  paragraphs in the cells and the editor's second language attribute
+  (`data-highlight-language`). One loss is known: a callout's title and a
+  tile's description hold one line in Markdown, so a `<br>` in them reads as
+  a space and does not come back.
+- A heading's anchor (`h-…`, E-304) is not stored, and the API serves no
+  heading with an `id`, so there is nothing to show; `search` names the
+  anchor of a hit. A link to a section has to be a link with words of its
+  own: Minka turns a bare address of its own into a reference and drops what
+  follows the `#`.
 
 ## References to another record
 
@@ -98,6 +157,7 @@ The words for a target the reader cannot open are Minka's own, those of its
 | `document` | `(a document you cannot open)` |
 | `upload` | `(a file you cannot open)` |
 | `question` | `(a question you cannot open)` |
+| `event` | `(an event you cannot open)` |
 
 Sent back, `<href>` becomes a link that shows its own address, which Minka
 turns into the reference again. The title is left out, because a link with

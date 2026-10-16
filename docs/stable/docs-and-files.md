@@ -50,6 +50,11 @@ element the server serves draws a `notice` naming what becomes of it
 ([C-068](../decisions.md#c-068)). It is not refused: the server accepts it, and
 a CLI that refused what the server takes would be wrong about it.
 
+A body holds the shapes of a document beside what any rich text holds:
+callouts, Mermaid diagrams, link tiles, blocks of variables and their
+placeholders. How each is written and shown in Markdown is in
+[The shapes of a document](rich-text.md#the-shapes-of-a-document).
+
 ## A file goes into a tool in two requests
 
 Minka takes a file into a tool in two steps: `POST projects/{id}/uploads`

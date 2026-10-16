@@ -2204,3 +2204,19 @@ read on puts the term first, and behind `--` only where it starts with a dash.
 counts hits, so a cut page still says where the rest begins. **Implemented
 as:** `cli.newSearchCmd`, `api.SearchUpTo`, see
 [Docs & Files](stable/docs-and-files.md#searching-a-tool-or-a-folder).
+
+<a id="c-134"></a>
+## C-134 — The shapes of a document travel in conventions other Markdown tools read
+
+*Applies to: `internal/markdown`, `internal/richtext`*
+
+A callout is a GitHub alert with an optional title beside the marker, a Mermaid
+diagram a `mermaid` code block, link tiles a list and a block of variables a
+table, each under an HTML comment naming it; every code block is written as the
+editor stores one, `pre[data-language]` text with `<br>`.
+
+**Why:** elsewhere the alert reads as a quote and the comment is hidden, and
+only the editor's code block gets its colours on the page. A release of the
+CLI waits for a Minka release that keeps the shapes. **Implemented as:**
+`markdown.ToHTML`, `richtext.ToMarkdown`, see
+[Rich text](stable/rich-text.md#the-shapes-of-a-document).
