@@ -184,7 +184,10 @@ func (s *Server) updateFolder(w http.ResponseWriter, r *http.Request, person *Pe
 		if s.refusedAsArchived(w, s.projectWithID(entry.tool.ProjectID)) || refusedAsAnArchivedFolder(w, entry) {
 			return
 		}
-		entry.folder.Title = phpTrim(*title)
+		if renamed := phpTrim(*title); renamed != entry.folder.Title {
+			entry.folder.Title = renamed
+			entry.folder.UpdatedAt = later(s.aWholeSecond(), entry.folder.updatedAt().Add(time.Second))
+		}
 	}
 	// Marking arranges the book and every folder in it by hand; taking the
 	// mark away leaves every order as it is.

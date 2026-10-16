@@ -31,14 +31,21 @@ import (
 // Options say what is exported where.
 type Options struct {
 	FolderID string
-	ToolID   string // walks a folder in no book; without it such a folder is ErrNoBook
-	Out      string
-	Format   string   // FormatMarkdown or FormatHTML
-	Host     *url.URL // the host signed in to, whose addresses name entries of Minka
+	// ToolID walks a folder in no book on a Minka without the tree of a
+	// folder; there, without it, such a folder is ErrNoBook.
+	ToolID string
+	Out    string
+	Format string   // FormatMarkdown or FormatHTML
+	Host   *url.URL // the host signed in to, whose addresses name entries of Minka
 	// Force exports into a directory that holds something without a manifest,
 	// and writes over or removes a file of the export that was changed since.
-	// A file the export did not write is never touched.
+	// A file the export did not write is never touched. It also lets an
+	// export read from a tree be brought up to date the way a Minka without
+	// trees allows.
 	Force bool
+	// ReadAll reads every page again, whatever the manifest keeps of it: a
+	// maintenance rewrite of Minka changes a body without a version.
+	ReadAll bool
 	// Parallel is how many documents are read, and files downloaded, at a time.
 	Parallel int
 	// LockDir holds the locks that keep two runs out of one directory, one
@@ -57,13 +64,16 @@ type Report struct {
 	Format    string               `json:"format"`
 	Folders   int                  `json:"folders"`   // the root included
 	Documents int                  `json:"documents"` // written or unchanged
-	Uploads   int                  `json:"uploads"`
-	Assets    int                  `json:"assets"`    // the files hanging in documents
-	Written   []string             `json:"written"`   // new or changed, relative to Out
-	Unchanged int                  `json:"unchanged"` // left as they were
-	Removed   []string             `json:"removed"`   // written by an earlier run, gone from Minka since
-	Gone      []GoneDocument       `json:"gone"`      // in the tree, but at no address any more when read
-	Manifest  string               `json:"manifest"`
+	// DocumentsRead are the pages read from Minka; the others were the
+	// version an earlier run read.
+	DocumentsRead int            `json:"documentsRead"`
+	Uploads       int            `json:"uploads"`
+	Assets        int            `json:"assets"`    // the files hanging in documents
+	Written       []string       `json:"written"`   // new or changed, relative to Out
+	Unchanged     int            `json:"unchanged"` // left as they were
+	Removed       []string       `json:"removed"`   // written by an earlier run, gone from Minka since
+	Gone          []GoneDocument `json:"gone"`      // in the tree, but at no address any more when read
+	Manifest      string         `json:"manifest"`
 }
 
 // GoneDocument is a document the tree named that was gone when its body was
@@ -133,11 +143,19 @@ func Run(ctx context.Context, source Source, options Options) (*Report, error) {
 		return nil, err
 	}
 
-	t, err := loadTree(ctx, source, options.FolderID, options.ToolID)
+	// An export read from a tree is not shrunk to what a Minka without trees
+	// gives, a book without its uploads, on one answer that may have come
+	// from something in front of Minka.
+	keepTheTree := earlier != nil && earlier.ReadFrom == readFromTree && !options.Force
+	t, err := loadTree(ctx, source, options.FolderID, options.ToolID, keepTheTree)
 	if err != nil {
 		return nil, err
 	}
-	gone, err := readDocuments(ctx, source, t.root, options.Parallel)
+	var cache map[string]cachedPage
+	if earlier != nil && earlier.PagesFormat == pagesFormat && !options.ReadAll {
+		cache = earlier.Pages
+	}
+	gone, read, err := readDocuments(ctx, source, t.root, options.Parallel, cache)
 	if err != nil {
 		return nil, err
 	}
@@ -145,7 +163,7 @@ func Run(ctx context.Context, source Source, options Options) (*Report, error) {
 
 	l := newLayout(options.Format, options.Host, t.root)
 	plan, dirs, report := l.plan(t)
-	report.Out, report.Format, report.Manifest = out, options.Format, ManifestName
+	report.Out, report.Format, report.Manifest, report.DocumentsRead = out, options.Format, ManifestName, read
 	report.Gone = []GoneDocument{}
 	for _, n := range gone {
 		report.Gone = append(report.Gone, GoneDocument{ID: n.id, Title: n.title})
@@ -155,7 +173,8 @@ func Run(ctx context.Context, source Source, options Options) (*Report, error) {
 	if err := w.check(plan, dirs); err != nil {
 		return nil, err
 	}
-	m := manifest{Host: hostName(options.Host), FolderID: options.FolderID, ToolID: t.toolID, Format: options.Format, ExportedAt: options.Now().UTC().Format(time.RFC3339)}
+	m := manifest{Host: hostName(options.Host), FolderID: options.FolderID, ToolID: t.toolID, Format: options.Format, ExportedAt: options.Now().UTC().Format(time.RFC3339),
+		ReadFrom: t.readFrom, PagesFormat: pagesFormat, Pages: cacheOf(t.root)}
 
 	// The manifest names every file before the first is written, so that a
 	// run that dies halfway leaves nothing the next one would take as foreign.
@@ -187,19 +206,20 @@ func Run(ctx context.Context, source Source, options Options) (*Report, error) {
 }
 
 // LockPath is the file a run into a directory holds locked: named after the
-// directory as it really is, links resolved, so that two names of one
-// directory share one lock. It lies outside the directory, which keeps
-// nothing of a run that wrote nothing in it, and it is never taken away,
-// which would let two runs hold a lock each.
+// directory itself, its device and inode, so that every name of it — through
+// a link, in another case or another Unicode form on a file system that
+// takes them as one — shares one lock. It lies outside the directory, which
+// keeps nothing of a run that wrote nothing in it, and it is never taken
+// away, which would let two runs hold a lock each.
 func LockPath(lockDir, out string) (string, error) {
 	if lockDir == "" {
 		return "", errors.New("no place for the lock of an export")
 	}
-	real, err := filepath.EvalSymlinks(out)
+	identity, err := directoryIdentity(out)
 	if err != nil {
 		return "", err
 	}
-	sum := sha256.Sum256([]byte(real))
+	sum := sha256.Sum256([]byte(identity))
 	return filepath.Join(lockDir, hex.EncodeToString(sum[:16])+".lock"), nil
 }
 

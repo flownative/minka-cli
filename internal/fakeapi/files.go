@@ -63,8 +63,19 @@ type Folder struct {
 	IsBook bool
 
 	CreatedAt time.Time
+	// UpdatedAt is when the folder itself last changed, a rename; zero for
+	// one never changed since it was made.
+	UpdatedAt time.Time
 	CreatorID string
 	EntryState
+}
+
+// updatedAt is when the folder itself last changed.
+func (f *Folder) updatedAt() time.Time {
+	if f.UpdatedAt.IsZero() {
+		return f.CreatedAt
+	}
+	return f.UpdatedAt
 }
 
 // Document is a page of a tool. Its moment is kept to the whole second, as the
@@ -935,14 +946,28 @@ func (s *Server) entriesResource(tool *FilesTool, folder *Folder) map[string]any
 	for _, line := range documents {
 		s.withoutBooks(line.(map[string]any), "inNavigation")
 	}
-	return s.withoutBooks(map[string]any{
+	var parent *Folder
+	var updatedAt any
+	if folder != nil {
+		parent = folderIn(tool, folder.ParentID)
+		updatedAt = timestamp(folder.updatedAt())
+	}
+	resource := map[string]any{
+		"projectId": tool.ProjectID, "project": s.projectReference(tool.ProjectID),
 		"tool": map[string]any{"id": tool.ID, "title": tool.Title}, "folder": folderReference(folder),
+		"parent": folderReference(parent), "updatedAt": updatedAt,
 		"archived": archived, "path": s.pathTo(tool, folderID),
 		"folders": folders, "documents": documents, "uploads": uploads,
 		"order": orderOf(tool, folderID), "isBook": folder != nil && folder.IsBook,
 		"book": folderReference(bookOf(tool, folderID)), "entries": entries,
 		"appUrl": appURL,
-	}, "order", "isBook", "book", "entries")
+	}
+	if s.KnowsNoTree {
+		for _, name := range []string{"projectId", "project", "parent", "updatedAt"} {
+			delete(resource, name)
+		}
+	}
+	return s.withoutBooks(resource, "order", "isBook", "book", "entries")
 }
 
 // entriesIn counts what a reader finds on opening a folder: the entries

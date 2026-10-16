@@ -11,7 +11,12 @@ a tool and `docs uploads edit` changes an upload; `docs versions list` and
 of an upload, and `docs uploads versions create` gives an upload another file;
 `docs comments …` write under either kind of entry. `docs tool <toolId>` reads
 one tool by its ID alone, with the project it stands in, as `todolists tool`
-reads a To-dos tool ([C-120](../decisions.md#c-120)).
+reads a To-dos tool ([C-120](../decisions.md#c-120)); `docs folders show
+<folderId>` reads one folder by its ID alone (`GET files-folders/{id}`) in the
+shape of `docs list --folder`, with `projectId`, `project`, `parent` and
+`updatedAt` besides. A Minka without the address answers with a page of its
+web: exit 2, and the message says the host cannot, not that the folder is
+missing.
 
 A tool is kept in order with `delete`, `restore`, `archive`, `unarchive` and
 `move` in the group of each kind — `docs …`, `docs uploads …`, `docs folders
@@ -28,8 +33,8 @@ by hand, and `move --after` and `--before` place an entry in an order set by
 hand ([C-133](../decisions.md#c-133), E-302, E-307), see below.
 
 `docs export` writes a book, a chapter or a folder into a directory as files
-and brings it up to date on the next run ([C-135](../decisions.md#c-135)),
-see below.
+and brings it up to date on the next run, reading only what changed
+([C-135](../decisions.md#c-135), [C-136](../decisions.md#c-136)), see below.
 
 ## What is not there, and why nothing pretends otherwise
 
@@ -481,8 +486,10 @@ nothing about either.
 - `docs book <folderId>` is `GET files-folders/{id}/book`, for any folder of
   the book, and passes Minka's tree through as `data`: chapters
   `{id, title, order, entries, appUrl, kind}`, pages
-  `{id, title, inNavigation, appUrl, kind}`, folders in use and published
-  documents in use, no uploads, not paged. An entry of any other kind, which
+  `{id, title, inNavigation, updatedAt, version, appUrl, kind}` (`version`
+  the number of the newest version, `null` for a client; a Minka before
+  either sends neither), folders in use and published documents in use, no
+  uploads, not paged. The text does not show `updatedAt` or `version`. An entry of any other kind, which
   a later Minka may send, is left out of the text and the counts, and out of
   `docs export`; `--json` carries it as sent. A book in the archive is read; a
   folder in no book, and a book a client is not shown, is 404. The text view
@@ -537,27 +544,49 @@ folder that changes its place, `bookWithinABook`.
 
 ## Exporting a book or a folder
 
-`docs export <folderId> --out <dir> [--format markdown|html] [--tool <toolId>]
+`docs export <folderId> --out <dir> [--format markdown|html] [--read-all] [--tool <toolId>]
 [--force]` writes what stands in a folder into a directory, for an agent or a
-reader who wants the files at hand ([C-135](../decisions.md#c-135)).
+reader who wants the files at hand ([C-135](../decisions.md#c-135),
+[C-136](../decisions.md#c-136)).
 
-**Reading.** The folder is first asked for as a book (`GET
-files-folders/{id}/book`), one request for the whole tree. A chapter is
+**Reading.** The folder is read with `GET files-folders/{id}`, which says
+whether it is a book or stands in one, and its whole tree with `GET
+files-folders/{id}/tree`: two requests for any folder, however deep. The tree
+of a book's folder is read the same way, not with `…/book`, because only
+`…/tree` starts at the folder named and carries the uploads. A chapter is
 exported with what lies below it; a reference to a page of the book outside
-the chapter then keeps its address in Minka. A folder in no book answers 404,
-and is walked through its tool with `--tool`, one `GET
-files-tools/{toolId}/entries?folderId=` per folder, because Minka reads a
-folder's entries only through its tool and has no address for a folder by
-itself. Without `--tool` that is exit 2 with a hint that names it. Then every
-page is read with `GET documents/{id}`, four at a time, and the files are
-downloaded the same way with `GET uploads/{blobId}/original`. Nothing else
-goes out. A page gone between the tree and its body (404) is left out, named
-in `gone` and in a notice.
+the chapter then keeps its address in Minka. A folder in the archive is
+exported with what is in use in it. Then every page not taken from the
+manifest (below) is read with `GET documents/{id}`, four at a time, and the
+files are downloaded the same way with `GET uploads/{blobId}/original` — the
+address the tree names as an upload's `downloadUrl`, built here from the
+file's ID, so the token goes only where the CLI sends every request. Nothing
+else goes out. A page gone between the tree and its body (404) is left out,
+named in `gone` and in a notice.
 
-**What a book holds.** A book's tree carries no uploads and nothing in the
-archive, so a book is exported as its readers read it: chapters and pages. A
-walked folder downloads its uploads into the directory of their folder; the
-listing of a folder leaves out the archived ones as well.
+**An older Minka.** A Minka without the tree of a folder answers `GET
+files-folders/{id}` with a page of its web (a 404 that is no JSON), and only
+then does the export fall back: it asks for the folder as a book (`GET
+files-folders/{id}/book`), and a folder in no book (404) is walked through its
+tool with `--tool`, one `GET files-tools/{toolId}/entries?folderId=` per
+folder; without `--tool` that is exit 2 with a hint that names it. A book of
+such a Minka carries no uploads and no versions, so it is exported without
+uploads and every page is read on every run. Against a Minka with the tree,
+`--tool` is checked as an ID and not used. Where neither the book nor a tool
+reaches the folder, the message says that the host answers as a Minka
+without the tree and finds no book for it.
+
+The manifest names how the folder was read, `readFrom` (`tree`, `book` or
+`walk`). An export read from a tree is not brought up to date from a host
+that answers as a Minka without it: one such answer may come from something
+in front of Minka, and taking it would drop the uploads of a book. The run
+is refused (exit 1) before it writes anything, and `--force` exports the way
+such a Minka allows.
+
+**What it holds.** Folders in use, published pages in use and uploads in use,
+in each folder's order; drafts and what lies in the archive are left out. A
+book is exported with the uploads in its chapters, though its readers' web
+pages do not show them: a page that refers to one then links to the file.
 
 **The tree.** A folder is a directory, a page a file, an upload its file, and
 every directory holds an index, `README.md` (`index.html` in HTML): the
@@ -609,24 +638,57 @@ is the stored HTML in a minimal page: the same fields as `meta` elements and
   and a link to the page of a page, an upload or a folder of the export or to
   its `/go/item/…` on the host signed in to, becomes a relative link to its
   file — at the section a reference names in `anchor`, or a link in its
-  `#h-…`. Anything else keeps its address in Minka: as `docs show` writes it in
+  `#h-…`; a reference's words are the title of its target in the tree.
+  Anything else keeps its address in Minka: as `docs show` writes it in
   Markdown, as a link with the title in HTML, and a target the reader cannot
   open as Minka's words for it.
 
 **Again into the same directory.** The directory keeps `.minka-export.json`:
 the host, the folder, the format, every file the export wrote with the
 SHA-256 of its bytes, the ID it stands for and, for a downloaded file, the
-file of Minka; and the directories it made. A run holds a lock while it
+file of Minka; the directories it made; and under `pages` the body of every
+page as read, with its `updatedAt`, its `attachments` and the `version` and
+`updatedAt` the tree named when it was read. A run holds a lock while it
 works, so a second run into the same directory is refused at once. The lock
 lies beside the config file, in `export-locks/`, named after the directory
-as it really is, links resolved, so that two names of one directory meet the
-same lock; it stays there, as every lock file of minka does, because taking
-it away would let two runs hold a lock each. Nothing of a run that wrote
-nothing is left in the directory. A run reads the tree and every
-page again — the tree carries no `updatedAt`, and a page's file also changes
-with the titles and names of the pages it links to — and writes a file only
-where its bytes differ. A downloaded file whose file of Minka is the same and
-whose bytes are those written is not fetched again. What the manifest names
+itself, its device and inode, so that every name of one directory — through
+a link, in another case or another Unicode form on a file system that takes
+them as one — meets the same lock; it stays there, as every lock file of
+minka does, because taking it away would let two runs hold a lock each.
+Nothing of a run that wrote nothing is left in the directory.
+
+**What a run reads again** ([C-136](../decisions.md#c-136)). A run reads the
+folder and the tree again, and takes a page from the manifest instead of
+reading it where the tree names the same `version` and `updatedAt` as when it
+was read and every reference in its body leads to a page or an upload of the
+export. Every change of a page's title or body makes a new version (E-223),
+and the body kept is at least as new as the version named, since the tree is
+read before the pages. A reference that leads elsewhere — a card, a post, a
+page outside the export — carries the title and address Minka gives it when
+the page is read, which change without the page, so such a page is read on
+every run, and so is one that refers to a page gone when it was read. Every
+page's file is rendered anew from its body, on every run and against this
+run's tree: title, address and navigation come from the tree, and a
+reference into the export takes the title of its target from the tree too.
+So a page follows a page it refers to that was renamed or moved without
+being read itself, and a file that went missing or was changed by hand is
+written from the body kept, as the rules below allow. A client of the
+project is told no versions: every page is read on every run, and the
+manifest keeps none. `data.documentsRead` counts the pages read.
+
+The limit: every edit makes a version, a maintenance rewrite of the stored
+texts on the host (`./flow richtext:tidy`, E-297, or a later migration of the
+markup) does not, and a page kept from before stays as it was read.
+`--read-all` reads every page again, whatever the manifest keeps, and keeps
+what it read for the next run; everything else of the run, the manifest's
+rules on what is the export's included, is as ever. The pages carry a format
+number of their own, `pagesFormat`: pages in another format, or without one,
+are read as none, and the manifest is held as ever.
+
+A file is written only where its bytes differ. A downloaded file whose file
+of Minka is the same and whose bytes are those written is not fetched again:
+a file of Minka never changes, and an upload given another file names
+another one, so the upload's `updatedAt` adds nothing. What the manifest names
 and this run no longer writes is removed, and a directory of the export left
 empty with it; one still holding something stays and is tried again next
 time. A directory of the export in the place of a file of the plan — a
@@ -651,6 +713,8 @@ the first file is written, and a refusal writes nothing (exit 1):
   what is there, which stays untouched;
 - a manifest of another folder or another host — each export has a directory
   of its own, since a run removes what its folder no longer holds;
+- a manifest read from a tree, against a host that answers as a Minka
+  without one — `--force` exports the way such a Minka allows;
 - a manifest that names a path that is not a clean relative path inside the
   directory, or that this minka cannot read — nothing it names is touched.
 
@@ -677,10 +741,11 @@ breaks off is the network's failure (exit 6); one that cannot be written is
 `config`.
 
 **Output.** `data` names `out`, `folderId`, `title`, `isBook`, `book`,
-`format`, the counts of `folders`, `documents`, `uploads` and `assets`, the
-paths `written` and `removed`, the count `unchanged`, `gone` and `manifest`;
-the summary says what was exported where and the three counts, the text adds
-every path written (`+`) or removed (`-`) and the index to start at.
+`format`, the counts of `folders`, `documents`, `documentsRead`, `uploads`
+and `assets`, the paths `written` and `removed`, the count `unchanged`, `gone`
+and `manifest`; the summary says what was exported where and the three
+counts, the text adds the pages read, every path written (`+`) or removed
+(`-`) and the index to start at.
 Breadcrumbs: the same export again, `docs book`, `docs show`. A file that
 cannot be written is `config`, exit 1; a refusal, the lock held included,
 `usage`, exit 1.

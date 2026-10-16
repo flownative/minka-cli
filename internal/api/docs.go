@@ -32,8 +32,12 @@ type FolderReference struct {
 // FilesEntries is what stands at the top of a tool or in one of its folders,
 // one folder deep. Nothing of it is paged and nothing is cut.
 type FilesEntries struct {
-	Tool   FilesToolReference `json:"tool"`
-	Folder *FolderReference   `json:"folder"` // nil at the top of the tool
+	ProjectID string             `json:"projectId"`
+	Project   *ProjectReference  `json:"project"`
+	Tool      FilesToolReference `json:"tool"`
+	Folder    *FolderReference   `json:"folder"`    // nil at the top of the tool
+	Parent    *FolderReference   `json:"parent"`    // the folder it stands in; nil at the top of the tool and for a folder there
+	UpdatedAt *string            `json:"updatedAt"` // when the folder itself last changed; nil at the top of the tool
 	// Archived says that this folder, or one above it, lies in the archive.
 	// Its entries are then readable and take no change.
 	Archived  bool                  `json:"archived"`
@@ -388,8 +392,9 @@ type ChangeFilesOrderInput struct {
 	FolderID string `json:"folderId,omitempty"` // left out for the top of the tool
 }
 
-// Book is the whole tree of a book: its chapters and pages in reading order,
-// without bodies, uploads or what lies in the archive.
+// Book is the whole tree of a book, or of any folder: its chapters and pages
+// in reading order, without bodies or what lies in the archive. The tree of a
+// folder holds its uploads too, a book none.
 type Book struct {
 	ID      string             `json:"id"`
 	Title   string             `json:"title"`
@@ -399,16 +404,25 @@ type Book struct {
 	AppURL  string             `json:"appUrl"`
 }
 
-// BookEntry is a chapter, which is a folder with entries of its own, or a
-// page, which is a document.
+// BookEntry is a chapter, which is a folder with entries of its own, a page,
+// which is a document, or in the tree of a folder an upload.
 type BookEntry struct {
-	Kind         string      `json:"kind"` // "chapter" or "page"
+	Kind         string      `json:"kind"` // "chapter", "page" or "upload"
 	ID           string      `json:"id"`
 	Title        string      `json:"title"`
 	Order        string      `json:"order,omitempty"`   // a chapter's
 	Entries      []BookEntry `json:"entries,omitempty"` // a chapter's
 	InNavigation bool        `json:"inNavigation"`      // a page's
-	AppURL       string      `json:"appUrl"`
+	// UpdatedAt is when a page or an upload last changed, empty from a Minka
+	// that does not say.
+	UpdatedAt string `json:"updatedAt,omitempty"`
+	// Version is the number of a page's newest version: every change of its
+	// title or body makes a new one. Nil for a client, who reads no versions,
+	// and from a Minka that does not say.
+	Version     *int        `json:"version,omitempty"`
+	File        *Attachment `json:"file,omitempty"`        // an upload's
+	DownloadURL string      `json:"downloadUrl,omitempty"` // an upload's: the bytes of its original
+	AppURL      string      `json:"appUrl"`
 }
 
 // FilesArchive lists the archive of a Docs & Files tool at any depth, the one
@@ -425,6 +439,18 @@ func (c *Client) CreateFolder(ctx context.Context, toolID string, input CreateFo
 
 func (c *Client) UpdateFolder(ctx context.Context, folderID string, input UpdateFolderInput) (Result[FilesEntries], error) {
 	return request[FilesEntries](ctx, c, http.MethodPatch, folderPath(folderID), input)
+}
+
+// FilesFolder reads one folder by its identifier alone, in the shape
+// FilesEntriesOf reads it, with the folder it stands in.
+func (c *Client) FilesFolder(ctx context.Context, folderID string) (Result[FilesEntries], error) {
+	return request[FilesEntries](ctx, c, http.MethodGet, folderPath(folderID), nil)
+}
+
+// TreeOf reads any folder as one tree in the shape of a book, starting at the
+// folder, with its uploads.
+func (c *Client) TreeOf(ctx context.Context, folderID string) (Result[Book], error) {
+	return request[Book](ctx, c, http.MethodGet, folderPath(folderID)+"/tree", nil)
 }
 
 // BookOf reads the book a folder belongs to, the folder itself or one above

@@ -19,7 +19,7 @@ minka docs create --tool <toolId> --title "Title" --audience everybody|chosen|no
 minka docs edit <documentId> [--title "New"] [--body - < body.md] (--expect <updatedAt> | --force) --json
 minka docs edit <documentId> (--in-navigation | --not-in-navigation) --json
 minka docs book <folderId> --json
-minka docs export <folderId> --out <dir> [--format markdown|html] [--tool <toolId>] [--force] --json
+minka docs export <folderId> --out <dir> [--format markdown|html] [--read-all] [--tool <toolId>] [--force] --json
 minka docs order <toolId> automatic|manual [--folder <folderId>] --json
 minka docs versions list <documentId> --json
 minka docs versions show <documentId> <versionId> --json
@@ -29,6 +29,7 @@ minka docs restore <documentId> --json
 minka docs archive <documentId> --json
 minka docs unarchive <documentId> --json
 minka docs move <documentId> (--folder <folderId> | --top-level) [--after <entryId> | --before <entryId>] --json
+minka docs folders show <folderId> --json
 minka docs folders create --tool <toolId> --title "Title" [--folder <folderId>] [--visible-to-clients] --json
 minka docs folders edit <folderId> [--title "New"] [--book | --no-book] --json
 minka docs folders delete <folderId> --json
@@ -342,6 +343,11 @@ an ID is never read as the wrong kind:
   the trash and the archive **only what they made**, may make, rename and move,
   and **brings nothing back** — no `restore`, no `unarchive`, no version: each
   answers exit 2, as for something that is not there.
+- `docs folders show <folderId>` reads a folder by its ID alone, without its
+  tool: `data` as `docs list --folder` reads it, with `projectId`, `project`,
+  `parent` (the folder it stands in, `null` at the top) and `updatedAt` (its
+  last rename). An older Minka has no such address: exit 2, and the hint names
+  `docs list <toolId> --folder`.
 - `docs folders create --tool <toolId> --title …` makes a folder at the top or
   inside `--folder`; `data` is the folder as `docs list --folder` reads it, its
   ID under `folder.id`. `--visible-to-clients` counts only at the top of the
@@ -400,20 +406,23 @@ an ID is never read as the wrong kind:
 
 ## Reading a book as files
 
-To read a whole book — a handbook, a runbook — or to grep through it, export
-it once and read the files:
+To read a whole book — a handbook, a runbook — or any folder, or to grep
+through it, export it once and read the files:
 
 ```bash
 minka docs export <folderId> --out handbook --json
 ```
 
-- The folder can be the book, or a chapter of it (then only what lies below).
-  A folder in no book needs its tool: `--tool <toolId>`; without it exit 2.
-  The book is read in one request and every page in one more, four at a time.
-- `handbook/README.md` is the table of contents: every chapter and page in the
-  book's order, as relative links, a page left out of the navigation marked
-  `(not in navigation)`. Every chapter directory has its own `README.md`.
-  Start there.
+- The folder can be a book, a chapter of one (then only what lies below), or
+  any other folder. The folder and its whole tree are read in two requests,
+  and every page in one more, four at a time.
+- `--tool <toolId>` is needed only against an older Minka without the tree of
+  a folder: there a folder in no book exits 2 without it, and a book is read
+  without its uploads.
+- `handbook/README.md` is the table of contents: every folder, page and upload
+  in Minka's order, as relative links, a page left out of the navigation
+  marked `(not in navigation)`, an upload `(file)`. Every directory has its
+  own `README.md`. Start there.
 - A chapter is a directory, a page `<name>.md`: the name is the title in lower
   case, umlauts spelled out, other characters a dash (`Über Größe` →
   `ueber-groesse.md`); two pages of one title are `tools.md` and
@@ -426,15 +435,25 @@ minka docs export <folderId> --out handbook --json
   following it lands on the heading; a reference to anything outside the
   export keeps its Minka address.
 - Pictures and files of a page are downloaded beside it, into
-  `<name>.assets/`, and linked from the page. A book holds no uploads; a
-  walked folder's uploads are downloaded into its directory.
+  `<name>.assets/`, and linked from the page. An upload is downloaded into the
+  directory of its folder, under its title and with its file's extension.
 - `--format html` writes the stored HTML in minimal pages instead, the anchor
   as the heading's `id`, `index.html` as the index.
-- **Refresh by running the same command again.** It reads every page again,
-  writes only files whose content changed, removes the files of pages gone
-  from Minka (and their emptied directories), and keeps a page's name while
-  its title gives it. `data.written`, `data.removed` and `data.unchanged` say
-  what happened.
+- **Refresh by running the same command again.** It reads again only the
+  pages Minka changed since (and those that refer to something outside the
+  export), renders every page anew, so a link follows a page renamed or
+  moved, writes only files whose content changed, removes the files of pages
+  gone from Minka (and their emptied directories), and keeps a page's name
+  while its title gives it. `data.written`, `data.removed`, `data.unchanged`
+  and `data.documentsRead` say what happened. A client of the project is told
+  no versions, so every page is read again.
+- Every edit makes a version; a maintenance rewrite of the stored texts on
+  the host does not, and a page kept from before stays as it was read. After
+  one, add `--read-all`: every page is read again, and the manifest's rules
+  hold as ever.
+- An export read from a folder's tree is refused (exit 1) when the host
+  answers as an older Minka without trees, rather than losing its uploads;
+  try again, and only if the host really is older, `--force`.
 - The directory keeps `.minka-export.json`, the list of what the export
   wrote. A file it did not write is never written over or removed: a run
   that would is refused before it writes anything (exit 1, the paths in

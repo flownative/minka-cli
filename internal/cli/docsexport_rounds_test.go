@@ -94,7 +94,7 @@ func TestAChangeAfterAFailedRunIsStillSeen(t *testing.T) {
 	newer := &fakeapi.Upload{ID: newToolsID, Circle: f.Project.ID, Filename: "Plan.PNG", ContentType: "image/png",
 		Content: []byte("another picture"), Size: 15, UploaderID: f.Bruno.ID, StandsInAText: true, Swept: true}
 	e.server.Uploads = append(e.server.Uploads, newer)
-	b.tools.Body = strings.Replace(b.tools.Body, b.picture.Handle(), newer.Handle(), 1)
+	b.tools.Edit(strings.Replace(b.tools.Body, b.picture.Handle(), newer.Handle(), 1))
 	if _, r := e.runJSON("", "docs", "export", f.Folder.ID, "--out", out); r.code == ExitOK {
 		t.Fatal("an export without its picture went through")
 	}
@@ -170,18 +170,18 @@ func TestADirectoryInAFilesWayKeepsAFileNamedWithoutAHash(t *testing.T) {
 func TestAnEntryOfAnUnknownKindIsLeftOutOfABook(t *testing.T) {
 	b := newExportBook(t)
 	e, f := b.e, b.e.fixture
-	e.server.LaterBookEntries = []any{map[string]any{"kind": "upload", "id": newToolsID, "title": "site-plan.pdf", "appUrl": e.server.URL + "/x"}}
+	e.server.LaterBookEntries = []any{map[string]any{"kind": "diagram", "id": newToolsID, "title": "flow.svg", "appUrl": e.server.URL + "/x"}}
 
 	env := runOK(t, e, "docs", "book", f.Folder.ID)
 	if env.Summary != "Book Plans: 2 chapters and 6 pages" {
 		t.Fatalf("summary %q", env.Summary)
 	}
-	if text := e.run("", "docs", "book", f.Folder.ID, "--styled"); strings.Contains(text.stdout, "site-plan.pdf") {
+	if text := e.run("", "docs", "book", f.Folder.ID, "--styled"); strings.Contains(text.stdout, "flow.svg") {
 		t.Fatalf("text:\n%s", text.stdout)
 	}
 	out := filepath.Join(t.TempDir(), "book")
 	data := decodeExport(t, runOK(t, e, "docs", "export", f.Folder.ID, "--out", out).Data)
-	if data.Documents != 6 || strings.Contains(readFile(t, filepath.Join(out, "README.md")), "site-plan") {
+	if data.Documents != 6 || strings.Contains(readFile(t, filepath.Join(out, "README.md")), "flow") {
 		t.Fatalf("data %+v", data)
 	}
 	if requestsTo(e, "GET", "/api/v1/documents/"+newToolsID) != 0 {

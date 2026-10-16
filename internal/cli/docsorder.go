@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -119,7 +120,8 @@ func orderCommands[T any](a *app, k filesEntryKind[T]) []*cobra.Command {
 }
 
 func (a *app) newDocsFoldersCmd() *cobra.Command {
-	cmd := group("folders", "Make, rename, move, archive and trash the folders of a Docs & Files tool",
+	cmd := group("folders", "Show, make, rename, move, archive and trash the folders of a Docs & Files tool",
+		a.newDocsFoldersShowCmd(),
 		a.newDocsFoldersCreateCmd(),
 		a.newDocsFoldersEditCmd(),
 	)
@@ -365,6 +367,50 @@ every folder in it.`
 	flags.StringVar(&before, "before", "", "ID of the entry to place it right before, in a place arranged by hand")
 
 	return cmd
+}
+
+// folderUnknownToTheHostHint answers a Minka that has no address for a folder
+// by itself.
+const folderUnknownToTheHostHint = "Its Minka is older than this minka expects and reads a folder only through its tool: minka docs list <toolId> --folder <folderId>"
+
+func (a *app) newDocsFoldersShowCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "show <folderId>",
+		Short: "Show a folder by its ID alone: its project, tool, place and what stands in it",
+		Long: `Reads a folder by its ID, without its tool, and answers as "docs list
+<toolId> --folder" does, with projectId and project, parent (the folder it
+stands in, null for a folder at the top of the tool) and updatedAt (when the
+folder itself last changed: a rename) besides. A folder in the archive is
+shown with archived: true; one in the trash is not found.`,
+		Example: `  minka docs folders show 0199... --json`,
+		Args:    requireArgs("folderId"),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			s, err := a.session()
+			if err != nil {
+				return err
+			}
+			folder, err := s.client.FilesFolder(a.ctx, args[0])
+			if err != nil {
+				e := folderRefusal(s, err, args[0], "show")
+				var apiErr *api.Error
+				if e.Code == CodeNotFound && errors.As(err, &apiErr) && apiErr.Body == nil {
+					e.Message = s.host + " has no address for a folder by itself"
+					e.Hint = folderUnknownToTheHostHint
+				}
+				return e
+			}
+			summary := "Folder " + folderFacts(folder.Value).title
+			if folder.Value.Project != nil {
+				summary += " in " + folder.Value.Tool.Title + " of " + folder.Value.Project.Name
+			}
+			return a.ok(success{
+				data:        folder.Raw,
+				summary:     summary + ": " + entriesSummary(folder.Value),
+				breadcrumbs: folderBreadcrumbs(folder.Value),
+				text:        func(w io.Writer) { renderFilesEntries(w, folder.Value) },
+			})
+		},
+	}
 }
 
 func (a *app) newDocsFoldersCreateCmd() *cobra.Command {

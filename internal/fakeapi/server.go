@@ -510,6 +510,13 @@ type Server struct {
 	// what else was sent with 200, and its answers carry none of their fields.
 	KnowsNoBooks bool
 
+	// KnowsNoTree makes the server answer like a Minka from before a folder
+	// could be read by itself and as a tree: both addresses answer with a
+	// page of its web, a folder's answer names neither its project, its
+	// parent nor when it changed, and a page of a book neither when it
+	// changed nor its version.
+	KnowsNoTree bool
+
 	// NeitherRenamesNorMovesSteps makes the server answer like a Minka from
 	// before a step could be renamed or moved: a title names nothing, so it
 	// alone is nothingToChange and beside the rest it is passed over, and the
@@ -1055,12 +1062,7 @@ func New(t testing.TB) (*Server, *Fixture) {
 	s.registerCalendarRoutes(mux)
 	s.registerReminderRoutes(mux)
 	s.registerNotificationsRoutes(mux)
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		// Flow answers an unknown path or a wrong method with an HTML page.
-		w.Header().Set("Content-Type", "text/html")
-		w.WriteHeader(http.StatusNotFound)
-		_, _ = io.WriteString(w, "<html><body>Not found</body></html>")
-	})
+	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) { unknownAddress(w) })
 
 	s.Server = httptest.NewServer(s.recording(mux))
 	t.Cleanup(s.Close)
@@ -4193,6 +4195,14 @@ func indexOf(cards []*Card, id string) int {
 
 func notFound(w http.ResponseWriter) {
 	writeRaw(w, http.StatusNotFound, NotFoundBody)
+}
+
+// unknownAddress is what Flow answers an unknown path or a wrong method with:
+// an HTML page, not the API's error.
+func unknownAddress(w http.ResponseWriter) {
+	w.Header().Set("Content-Type", "text/html")
+	w.WriteHeader(http.StatusNotFound)
+	_, _ = io.WriteString(w, "<html><body>Not found</body></html>")
 }
 
 func malformed(w http.ResponseWriter, message string) {

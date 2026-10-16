@@ -3,6 +3,7 @@ package fakeapi
 import (
 	"net/http"
 	"slices"
+	"time"
 )
 
 // Books and the order set by hand: a folder marked as a book is read as one
@@ -11,8 +12,26 @@ import (
 // — or by hand, all three mixed.
 
 func (s *Server) registerBookRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("GET /api/v1/files-folders/{folderId}", s.authenticated(s.filesFolder))
 	mux.HandleFunc("GET /api/v1/files-folders/{folderId}/book", s.authenticated(s.book))
+	mux.HandleFunc("GET /api/v1/files-folders/{folderId}/tree", s.authenticated(s.filesTree))
 	mux.HandleFunc("PUT /api/v1/files-tools/{toolId}/order", s.authenticated(s.changeFilesOrder))
+}
+
+// filesFolder reads a folder by its identifier alone, in the shape of the
+// entries of its tool. A folder in the archive is read as well, one in the
+// trash or below one is not.
+func (s *Server) filesFolder(w http.ResponseWriter, r *http.Request, person *Person) {
+	if s.KnowsNoTree {
+		unknownAddress(w)
+		return
+	}
+	entry, found := s.visibleEntry("folder", r.PathValue("folderId"), person)
+	if !found {
+		notFound(w)
+		return
+	}
+	writeJSON(w, http.StatusOK, s.entriesResource(entry.tool, entry.folder))
 }
 
 // book reads the book a folder belongs to, itself or one above it, with its
@@ -28,16 +47,39 @@ func (s *Server) book(w http.ResponseWriter, r *http.Request, person *Person) {
 		notFound(w)
 		return
 	}
+	s.writeTree(w, entry.tool, book, person, false)
+}
+
+// filesTree reads any folder as a book is read, starting at the folder, with
+// the uploads in use beside its chapters and pages. A folder in the archive is
+// read as well. Whoever sees the folder sees everything in it: what a client
+// is shown is decided by the topmost folder.
+func (s *Server) filesTree(w http.ResponseWriter, r *http.Request, person *Person) {
+	if s.KnowsNoTree {
+		unknownAddress(w)
+		return
+	}
+	entry, found := s.visibleEntry("folder", r.PathValue("folderId"), person)
+	if !found {
+		notFound(w)
+		return
+	}
+	s.writeTree(w, entry.tool, entry.folder, person, true)
+}
+
+func (s *Server) writeTree(w http.ResponseWriter, tool *FilesTool, root *Folder, person *Person, withUploads bool) {
 	writeJSON(w, http.StatusOK, map[string]any{
-		"id": book.ID, "title": book.Title, "tool": map[string]any{"id": entry.tool.ID, "title": entry.tool.Title},
-		"order": orderOf(entry.tool, book.ID), "entries": append(s.bookEntriesOf(entry.tool, book.ID, map[string]bool{book.ID: true}), s.LaterBookEntries...),
-		"appUrl": s.filesToolURL(entry.tool) + "/folders/" + book.ID,
+		"id": root.ID, "title": root.Title, "tool": map[string]any{"id": tool.ID, "title": tool.Title},
+		"order": orderOf(tool, root.ID), "entries": append(s.bookEntriesOf(tool, root.ID, map[string]bool{root.ID: true}, person, withUploads), s.LaterBookEntries...),
+		"appUrl": s.filesToolURL(tool) + "/folders/" + root.ID,
 	})
 }
 
-// bookEntriesOf are the chapters and pages of one place of a book in its
-// order: folders in use and published documents in use, nothing else.
-func (s *Server) bookEntriesOf(tool *FilesTool, chapterID string, seen map[string]bool) []any {
+// bookEntriesOf are the chapters, pages and, where asked for, uploads of one
+// place of a tree in its order: folders in use, published documents in use
+// and uploads in use, nothing else. A page names its newest version to the
+// team alone.
+func (s *Server) bookEntriesOf(tool *FilesTool, chapterID string, seen map[string]bool, person *Person, withUploads bool) []any {
 	var shown []filesEntry
 	for _, folder := range tool.Folders {
 		if folder.ParentID == chapterID && !folder.Archived && !folder.Trashed && !seen[folder.ID] {
@@ -49,24 +91,65 @@ func (s *Server) bookEntriesOf(tool *FilesTool, chapterID string, seen map[strin
 			shown = append(shown, filesEntry{kind: "document", id: document.ID, document: document})
 		}
 	}
+	for _, upload := range tool.Uploads {
+		if withUploads && upload.FolderID == chapterID && !upload.Archived && !upload.Trashed {
+			shown = append(shown, filesEntry{kind: "upload", id: upload.ID, upload: upload})
+		}
+	}
 
 	entries := []any{}
 	for _, entry := range inTheOrderShown(tool, chapterID, shown) {
-		if entry.kind == "document" {
-			entries = append(entries, map[string]any{
+		switch entry.kind {
+		case "document":
+			var version any
+			if !s.isAClient(person.ID) {
+				version = max(1, len(entry.document.Versions))
+			}
+			page := map[string]any{
 				"id": entry.id, "title": entry.document.Title, "inNavigation": !entry.document.OutOfNavigation,
+				"updatedAt": timestamp(entry.document.UpdatedAt), "version": version,
 				"appUrl": s.documentURL(tool, entry.document), "kind": "page",
+			}
+			if s.KnowsNoTree {
+				delete(page, "updatedAt")
+				delete(page, "version")
+			}
+			entries = append(entries, page)
+		case "upload":
+			entries = append(entries, map[string]any{
+				"id": entry.id, "title": entry.upload.Title, "file": s.attachmentResource(entry.upload.BlobID),
+				"downloadUrl": s.URL + "/api/v1/uploads/" + entry.upload.BlobID + "/original",
+				"updatedAt":   timestamp(entry.upload.UpdatedAt),
+				"appUrl":      s.filesUploadURL(tool, entry.upload), "kind": "upload",
 			})
-			continue
+		default:
+			seen[entry.id] = true
+			entries = append(entries, map[string]any{
+				"id": entry.id, "title": entry.folder.Title, "order": orderOf(tool, entry.id),
+				"entries": s.bookEntriesOf(tool, entry.id, seen, person, withUploads),
+				"appUrl":  s.filesToolURL(tool) + "/folders/" + entry.id, "kind": "chapter",
+			})
 		}
-		seen[entry.id] = true
-		entries = append(entries, map[string]any{
-			"id": entry.id, "title": entry.folder.Title, "order": orderOf(tool, entry.id),
-			"entries": s.bookEntriesOf(tool, entry.id, seen),
-			"appUrl":  s.filesToolURL(tool) + "/folders/" + entry.id, "kind": "chapter",
-		})
 	}
 	return entries
+}
+
+// Edit writes over a document's body as a save does: a moment later, and a
+// version more.
+func (d *Document) Edit(body string) {
+	d.save(d.Title, body)
+}
+
+// Rename gives a document another title as a save does.
+func (d *Document) Rename(title string) {
+	d.save(title, d.Body)
+}
+
+func (d *Document) save(title, body string) {
+	d.versions()
+	d.Title, d.Body = title, body
+	d.UpdatedAt = d.UpdatedAt.Add(time.Second)
+	d.keepAVersion("", d.UpdatedAt)
 }
 
 // changeFilesOrder sets how the top of a tool, or a folder of it, orders its

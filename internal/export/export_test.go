@@ -126,9 +126,17 @@ func TestOnlyAPathInsideBelongsToTheExport(t *testing.T) {
 	}
 }
 
-// stubSource answers with a book of two pages, one of which is gone when it
-// is read.
+// stubSource is a Minka without the tree of a folder that answers with a book
+// of two pages, one of which is gone when it is read.
 type stubSource struct{}
+
+func (stubSource) FilesFolder(context.Context, string) (api.Result[api.FilesEntries], error) {
+	return api.Result[api.FilesEntries]{}, &api.Error{StatusCode: http.StatusNotFound}
+}
+
+func (stubSource) TreeOf(context.Context, string) (api.Result[api.Book], error) {
+	return api.Result[api.Book]{}, errors.New("a Minka without the tree of a folder was asked for it")
+}
 
 func (stubSource) BookOf(context.Context, string) (api.Result[api.Book], error) {
 	return api.Result[api.Book]{Value: api.Book{ID: "book", Title: "Book", Entries: []api.BookEntry{
@@ -266,7 +274,7 @@ func TestPagesAreReadAFewAtATime(t *testing.T) {
 	source := &countingSource{full: make(chan struct{}), beyond: make(chan struct{}), released: make(chan struct{})}
 	done := make(chan error)
 	go func() {
-		_, err := readDocuments(context.Background(), source, root, 4)
+		_, _, err := readDocuments(context.Background(), source, root, 4, nil)
 		done <- err
 	}()
 
