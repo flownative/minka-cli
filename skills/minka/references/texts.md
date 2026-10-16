@@ -5,7 +5,8 @@
 - Descriptions are Markdown by default and sent as HTML. Minka keeps every
   heading level, bold, italic, strikethrough, inline code, links with titles,
   lists (numbered ones also from another start), quotes, code blocks with
-  their language, tables and horizontal rules. Images become links, links
+  their language, tables, horizontal rules and the shapes of a document (see
+  below). Images become links, links
   other than http, https, mailto, tel and relative ones become plain text.
   These changes are reported in `notice`, and on stderr for text output and
   `--quiet`.
@@ -65,6 +66,57 @@
   `--drop-attachments` is given; send the comment's `bodySource` back with
   `--format html` to keep them.
 
+## The shapes of a document
+
+Minka keeps these in every text and draws them on a document's page. They are
+written and shown in Markdown like this, so a text read with `--styled` can be
+sent back as it is:
+
+````markdown
+> [!NOTE] Optional title
+> A callout. The kinds are NOTE and WARNING; other alerts stay quotes.
+
+```mermaid
+graph LR
+A[Start] --> B[End]
+```
+
+<!-- minka:tiles -->
+- <https://minka.example/go/card/MNK-1> Words that say what it is
+- #MNK-2 A card by its short identifier
+
+<!-- minka:variables -->
+| Name | Label | Hint | Default | Staging | Production |
+| --- | --- | --- | --- | --- | --- |
+| node_name | Node | e.g. wk-1 |  | wk-s | wk-a |
+
+Drain {{node_name}} first.
+````
+
+- A callout is a GitHub alert; the title beside the marker is optional.
+- A diagram is a code block of the language `mermaid`; the page draws it.
+  Every code block is stored the way the editor stores one.
+- Link tiles are a list right under `<!-- minka:tiles -->`. Each line starts
+  with the address of a record of the same Minka (or a card's `#MNK-1`),
+  which Minka turns into a reference; the rest of the line describes it. An
+  address of another host, or of a record you cannot see, becomes two
+  paragraphs instead. A
+  line without such a start is written as a paragraph between two groups, and
+  a list item of more than one block makes the whole list a plain list; both
+  come with a `notice`.
+- A block of variables is a table right under `<!-- minka:variables -->`:
+  the columns name, label, hint and default, then a value per profile, the
+  profile's name heading its column. The header words are free; only the
+  order counts. `{{name}}` in the text and in code stands for the value a
+  reader picks on the page; Minka stores the placeholder, never a value.
+- A marker anywhere else is sent as visible text, with a `notice`; so is a
+  variables marker inside a callout, where Minka keeps no such block. An
+  empty tile line is left out, with a `notice`.
+- To link a section of a document, write a link with words of its own:
+  `[Setup](https://…/files/<toolId>/<documentId>#h-setup)`. A bare address
+  becomes a reference to the document and loses the `#h-…`. `minka search`
+  names a section's anchor.
+
 ## Naming somebody in a text
 
 - `people list <projectId>` and `conversations people <conversationId>` give
@@ -112,7 +164,8 @@ printf '%s please have a look' "$MARKUP" | minka comments create <cardId> - --fo
   every reference carries `title` and `short-id`. A target you cannot open, one
   in the trash or one that does not exist reads `(a card you cannot open)`, and
   likewise a post, chat, chat message, to-do, to-do list, document, file
-  (`upload`) or question; any other kind reads `(a reference you cannot open)`.
+  (`upload`), question or event; any other kind reads `(a reference you cannot
+  open)`.
 - The guard against dropping counts references: a new text keeps a visible one
   when it holds its address (in the words or as `<address>`), `#MNK-1` for a
   card, or the element itself. A hidden one is kept only by the element, so an

@@ -264,7 +264,7 @@ they stand at its top. Read the one you need, not all of them.
 | Waiting for news instead of polling, a line of the bell, coordinating a board | [references/waiting-and-coordinating.md](references/waiting-and-coordinating.md) |
 | Your own cards and the trash, projects, boards and short identifiers, columns and their commands, cards on hold, the archive of a board, people, assignments and subscribers, steps, due dates | [references/cards.md](references/cards.md) |
 | The back of a card: how to keep the working notes, their commands, the attachments | [references/working-notes.md](references/working-notes.md) |
-| Descriptions and comments in detail, reactions, naming somebody in a text, pointing at a card or another record | [references/texts.md](references/texts.md) |
+| Descriptions and comments in detail, reactions, naming somebody in a text, pointing at a card or another record, callouts, diagrams, link tiles and variables | [references/texts.md](references/texts.md) |
 | Saying which cards you are working on: `work`, `heartbeat`, the mod | [references/work-and-heartbeat.md](references/work-and-heartbeat.md) |
 | Chats of a project and private conversations | [references/chats.md](references/chats.md) |
 | Putting a file into a text, fetching a file back | [references/files.md](references/files.md) |

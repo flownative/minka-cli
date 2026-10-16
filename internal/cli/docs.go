@@ -36,9 +36,12 @@ const theGuardIsKeptToTheSecond = "the guard is kept to the whole second: a chan
 
 const documentBodyHelp = `The body is Markdown by default and is sent as HTML, the way a description is.
 Minka keeps headings, bold, italic, strikethrough, inline code, links, lists,
-quotes, code blocks with their language, tables and horizontal rules. Images
-become links and links Minka does not keep become plain text, each with a
-warning. Use --body - to read it from stdin.
+quotes, code blocks with their language, tables and horizontal rules, and the
+shapes of a document: a callout as "> [!NOTE] Title" or "> [!WARNING]", a
+Mermaid diagram as a code block of the language mermaid, link tiles as a list
+under "<!-- minka:tiles -->" and a block of variables as a table under
+"<!-- minka:variables -->". Images become links and links Minka does not keep
+become plain text, each with a warning. Use --body - to read it from stdin.
 
 --body-format html sends HTML as it is. Minka refuses no body: one that
 carries no element it serves is kept as the characters it consists of, so

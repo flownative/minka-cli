@@ -30,11 +30,15 @@ import (
 // the attributes it may carry.
 var AllowedElements = map[string][]string{
 	"a":          {"href", "title"},
+	"aside":      {"data-callout", "data-variables"},
 	"blockquote": nil,
 	"br":         nil,
 	"code":       nil,
+	"dd":         nil,
 	"del":        nil,
 	"div":        nil,
+	"dl":         {"data-tiles"},
+	"dt":         nil,
 	"em":         nil,
 	"figure":     {"class"},
 	"h1":         nil,
@@ -43,6 +47,7 @@ var AllowedElements = map[string][]string{
 	"h4":         nil,
 	"h5":         nil,
 	"h6":         nil,
+	"header":     nil,
 	"hr":         nil,
 	"i":          nil,
 	"li":         {"value"},
@@ -66,6 +71,9 @@ var AllowedElements = map[string][]string{
 // AttributePatterns are the values the server accepts for the attributes that
 // are checked, keyed "element.attribute". Any other value is removed.
 var AttributePatterns = map[string]*regexp.Regexp{
+	"aside.data-callout":          regexp.MustCompile(`^(?:note|warning)$`),
+	"aside.data-variables":        regexp.MustCompile(`^$`),
+	"dl.data-tiles":               regexp.MustCompile(`^$`),
 	"figure.class":                regexp.MustCompile(`^lexxy-content__table-wrapper$`),
 	"li.value":                    regexp.MustCompile(`^-?\d{1,9}$`),
 	"ol.start":                    regexp.MustCompile(`^-?\d{1,9}$`),
@@ -117,6 +125,7 @@ func ToHTML(source string, options ...Option) Result {
 
 	src := []byte(source)
 	document := markdownParser.Parse(text.NewReader(src), parser.WithContext(parser.NewContext()))
+	markCallouts(document, src)
 
 	var out bytes.Buffer
 	c := &converter{source: src, w: bufio.NewWriter(&out), writer: ghtml.DefaultWriter}
@@ -149,7 +158,26 @@ func (c *converter) visit(node ast.Node, entering bool) (ast.WalkStatus, error) 
 		c.tag(entering, "p")
 	case *ast.Blockquote:
 		c.containerTag(entering, "blockquote")
+	case *callout:
+		if entering {
+			c.write(`<aside data-callout="` + n.kind + `">` + "\n")
+		} else {
+			c.write("</aside>\n")
+		}
+	case *calloutTitle:
+		c.tag(entering, "header")
 	case *ast.List:
+		if c.markerBefore(n) == markerTiles {
+			switch {
+			case isOfTiles(n) && entering:
+				c.tiles(n)
+				return ast.WalkSkipChildren, nil
+			case isOfTiles(n):
+				return ast.WalkContinue, nil
+			case entering:
+				c.warn(WarningTileOfOneLine)
+			}
+		}
 		switch {
 		case !n.IsOrdered():
 			c.containerTag(entering, "ul")
@@ -164,26 +192,26 @@ func (c *converter) visit(node ast.Node, entering bool) (ast.WalkStatus, error) 
 		c.tag(entering, "li")
 	case *ast.FencedCodeBlock:
 		if entering {
-			open := "<pre><code>"
-			if language := strings.ToLower(string(n.Language(c.source))); AttributePatterns["pre.data-language"].MatchString(language) {
-				open = `<pre data-language="` + language + `"><code>`
+			language := strings.ToLower(string(n.Language(c.source)))
+			if !AttributePatterns["pre.data-language"].MatchString(language) {
+				language = PlainLanguage
 			}
-			c.preformatted(n.Lines(), open, "</code></pre>")
+			c.codeBlock(n.Lines(), language)
 		}
 		return ast.WalkSkipChildren, nil
 	case *ast.CodeBlock:
 		if entering {
-			c.preformatted(n.Lines(), "<pre><code>", "</code></pre>")
+			c.codeBlock(n.Lines(), PlainLanguage)
 		}
 		return ast.WalkSkipChildren, nil
 	case *ast.HTMLBlock:
-		if entering {
+		if entering && !isMarkerOfTheNextBlock(n, c.source) {
 			c.warn(WarningRawHTML)
 			lines := n.Lines()
 			if n.HasClosure() {
 				lines.Append(n.ClosureLine)
 			}
-			c.preformatted(lines, "<pre>", "</pre>")
+			c.codeBlock(lines, PlainLanguage)
 		}
 		return ast.WalkSkipChildren, nil
 	case *ast.ThematicBreak:
@@ -214,9 +242,15 @@ func (c *converter) visit(node ast.Node, entering bool) (ast.WalkStatus, error) 
 	case *east.Strikethrough:
 		c.inlineTag(entering, "del")
 	case *east.Table:
-		if entering {
+		variables := c.markerBefore(n) == markerVariables
+		switch {
+		case entering && variables:
+			c.write(`<aside data-variables=""><figure class="` + tableWrapperClass + `"><table><tbody>` + "\n")
+		case entering:
 			c.write(`<figure class="` + tableWrapperClass + `"><table><tbody>` + "\n")
-		} else {
+		case variables:
+			c.write("</tbody></table></figure></aside>\n")
+		default:
 			c.write("</tbody></table></figure>\n")
 		}
 	case *east.TableHeader, *east.TableRow:
@@ -227,6 +261,8 @@ func (c *converter) visit(node ast.Node, entering bool) (ast.WalkStatus, error) 
 		}
 	case *east.TableCell:
 		_, inHeader := n.Parent().(*east.TableHeader)
+		// The editor writes the name of a variable as the header of its row.
+		inHeader = inHeader || (n.PreviousSibling() == nil && c.markerBefore(n.Parent().Parent()) == markerVariables)
 		switch {
 		case inHeader && entering:
 			c.write(`<th class="` + headerCellClass + `">`)
@@ -325,17 +361,28 @@ func (c *converter) text(n *ast.Text) {
 	}
 }
 
-// preformatted writes lines between the given tags, escaped.
-func (c *converter) preformatted(lines *text.Segments, open, close string) {
+// codeBlock writes lines as the editor stores a code block: the text of a
+// pre that names its language, a break for each line break and no code
+// element inside. The page paints the colours of the language only into a
+// block of that shape. The text is escaped as the server escapes it, so that
+// what is stored is what was sent.
+func (c *converter) codeBlock(lines *text.Segments, language string) {
 	var content bytes.Buffer
 	for i := 0; i < lines.Len(); i++ {
 		segment := lines.At(i)
 		content.Write(segment.Value(c.source))
 	}
-	c.write(open)
-	c.writer.RawWrite(c.w, bytes.TrimRight(content.Bytes(), "\n"))
-	c.write(close + "\n")
+	code := strings.ReplaceAll(strings.TrimRight(content.String(), "\r\n"), "\r\n", "\n")
+	c.write(`<pre data-language="` + language + `">`)
+	c.write(strings.ReplaceAll(codeEscaper.Replace(code), "\n", "<br>"))
+	c.write("</pre>\n")
 }
+
+// PlainLanguage is the language the editor names for a code block without
+// one.
+const PlainLanguage = "plain"
+
+var codeEscaper = strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;")
 
 // openLink writes the start of a link. A title longer than the server keeps is
 // left out.
