@@ -496,6 +496,11 @@ type Server struct {
 	// it alone is nothingToChange and beside a title the colour stays.
 	KeepsColumnColorOnNull bool
 
+	// KnowsNoBooks makes the server answer like a Minka from before books and
+	// the order set by hand: it reads neither isBook nor inNavigation, writes
+	// what else was sent with 200, and its answers carry none of their fields.
+	KnowsNoBooks bool
+
 	// NeitherRenamesNorMovesSteps makes the server answer like a Minka from
 	// before a step could be renamed or moved: a title names nothing, so it
 	// alone is nothingToChange and beside the rest it is passed over, and the

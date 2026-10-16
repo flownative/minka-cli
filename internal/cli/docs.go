@@ -73,6 +73,8 @@ func (a *app) newDocsCmd() *cobra.Command {
 		a.newDocsVersionsCmd(),
 		a.newDocsUploadsCmd(),
 		a.newDocsFoldersCmd(),
+		a.newDocsBookCmd(),
+		a.newDocsOrderCmd(),
 		a.newDocsCommentsCmd(),
 	)
 	cmd.AddCommand(orderCommands(a, documentKind)...)
@@ -121,7 +123,11 @@ top, or those in the folder --folder names. It reaches one folder deep, so
 going down means calling it again with a folder of the answer.
 
 Nothing here is paged and nothing is cut. The order is the one the web shows,
-which is neither alphabetical nor by date. Drafts and entries in the archive
+which is neither alphabetical nor by date: order says whether it is automatic,
+folders before documents before uploads, or set by hand, where the three are
+mixed and the text lists them in one list. entries gives the order shown, and
+"docs order" chooses it. isBook and book say whether the place is a book or
+belongs to one ("docs book" reads it). Drafts and entries in the archive
 are not listed, and neither is a folder in the archive — but the inside of one
 can be listed by naming it, and then the answer and every line of it says
 archived: true.
@@ -295,11 +301,11 @@ func (a *app) newDocsCreateCmd() *cobra.Command {
 
 func (a *app) newDocsEditCmd() *cobra.Command {
 	var title, body, bodyFormat, expect string
-	var force, dropAttachments bool
+	var force, dropAttachments, inNavigation, notInNavigation bool
 
 	cmd := &cobra.Command{
 		Use:   "edit <documentId>",
-		Short: "Change the title or the body of a document",
+		Short: "Change the title or the body of a document, or its place in the navigation of a book",
 		Long: "Changes the title, the body or both. What is not given stays as it is, and\n" +
 			"changing a document tells nobody.\n\n" +
 			`--body "" empties the body. --title "" does not empty the title: a document
@@ -321,18 +327,47 @@ not noticed. After a write that matters, read the document back.
 Files and mentions stand in a body as action-text-attachment elements, which
 Markdown cannot hold. To keep them, take the bodySource from docs show --json,
 change it and send it back with --body-format html. A new body that would drop
-them is refused unless --drop-attachments is given.`,
+them is refused unless --drop-attachments is given.
+
+--not-in-navigation leaves the document out of the navigation of the book it
+stands in: it stays in the book and is reached by link, reference and search,
+and previous and next pass it over. --in-navigation lists it again. It may be
+set on a document in no book and counts once the document is in one. Alone,
+it writes only the flag: not the title or the body, no version, updatedAt as
+it was, and never a 409. So it needs neither --expect nor --force; --expect,
+where given, is sent as it is. Only the team chooses it: a client of the
+project exits 2 (not_found), whatever else the call changes. A refused title
+or body leaves the navigation as it was. An answer that does not carry the
+navigation, as from a Minka that does not know books, is exit 7 (api_error).`,
 		Example: `  minka docs edit 0199... --title "How the stage goes up" --expect 2026-09-26T14:03:12.000000Z
   minka docs edit 0199... --body - --expect 2026-09-26T14:03:12.000000Z < body.md
-  minka docs edit 0199... --body "" --force`,
+  minka docs edit 0199... --body "" --force
+  minka docs edit 0199... --not-in-navigation --json`,
 		Args: requireArgs("documentId"),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := checkBodyFormat(cmd, bodyFormat); err != nil {
 				return err
 			}
-			guard, err := entryGuard(cmd, "document", "minka docs show <documentId>", expect, force)
-			if err != nil {
+			if err := refuseAnExplicitFalse(cmd, "in-navigation", "not-in-navigation"); err != nil {
 				return err
+			}
+			if inNavigation && notInNavigation {
+				return usageErrorf(cmd, "--in-navigation and --not-in-navigation exclude each other")
+			}
+			text := cmd.Flags().Changed("title") || cmd.Flags().Changed("body")
+			if !text && !inNavigation && !notInNavigation {
+				return usageErrorf(cmd, "nothing to change, give --title, --body, --in-navigation or --not-in-navigation")
+			}
+			// The guard stands over the title and the body. A change of the
+			// navigation alone writes only the flag and is never answered
+			// with 409, so it asks for neither flag, and sends --expect where
+			// it is given.
+			var guard *string
+			if text || cmd.Flags().Changed("expect") || force {
+				var err error
+				if guard, err = entryGuard(cmd, "document", "minka docs show <documentId>", expect, force); err != nil {
+					return err
+				}
 			}
 
 			input := api.UpdateDocumentInput{ExpectedUpdatedAt: guard}
@@ -347,8 +382,8 @@ them is refused unless --drop-attachments is given.`,
 				}
 				input.Body, notices = &html, warnings
 			}
-			if input.Title == nil && input.Body == nil {
-				return usageErrorf(cmd, "nothing to change, give --title or --body")
+			if inNavigation || notInNavigation {
+				input.InNavigation = &inNavigation
 			}
 
 			s, err := a.session()
@@ -377,14 +412,29 @@ them is refused unless --drop-attachments is given.`,
 
 			document, err := s.client.UpdateDocument(a.ctx, args[0], input)
 			if err != nil {
-				return entryConflict(a, documentRefusal(s, err), err, apiCodeDocumentChanged, "document",
+				e := documentRefusal(s, err)
+				if e.Code == CodeNotFound && input.InNavigation != nil {
+					e.Hint = documentNotFoundHint + " Only the team chooses the navigation of a book: a client of the project meets the same, whatever else the call changes."
+				}
+				return entryConflict(a, e, err, apiCodeDocumentChanged, "document",
 					func(d api.Document) string { return d.UpdatedAt }, renderDocument)
 			}
 
-			if guard != nil {
+			// A Minka without books answers 200 and writes no navigation; only
+			// the missing field tells.
+			if input.InNavigation != nil && document.Value.InNavigation == nil {
+				return booksUnknown("the navigation", text, document.Raw)
+			}
+			if guard != nil && text {
 				notices = append(notices, theGuardIsKeptToTheSecond)
 			}
+			if input.InNavigation != nil && document.Value.Book == nil && document.Value.InNavigation != nil {
+				notices = append(notices, "the document stands in no book: whether it is in the navigation counts once it is in one")
+			}
 			summary := "Wrote over document " + document.Value.Title
+			if !text {
+				summary = "Document " + document.Value.Title + " is " + map[bool]string{true: "in", false: "out of"}[inNavigation] + " the navigation of its book"
+			}
 			return a.ok(success{
 				data:        document.Raw,
 				summary:     summary,
@@ -404,6 +454,8 @@ them is refused unless --drop-attachments is given.`,
 	flags.StringVar(&expect, "expect", "", "The updatedAt of the document you read")
 	flags.BoolVar(&force, "force", false, "Write over the document whatever stands")
 	flags.BoolVar(&dropAttachments, "drop-attachments", false, "Replace a body that has attachments, mentions or references, which drops them")
+	flags.BoolVar(&inNavigation, "in-navigation", false, "List the document in the navigation of its book")
+	flags.BoolVar(&notInNavigation, "not-in-navigation", false, "Leave the document out of the navigation of its book")
 
 	return cmd
 }
@@ -466,8 +518,9 @@ func (a *app) newDocsUploadsCreateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "create (<file> | --blob <blobId>) --tool <toolId>",
 		Short: "Put a file into a Docs & Files tool",
-		Long: `Puts a file on top of a Docs & Files tool, or of the folder --folder names, as an
-upload of its own.
+		Long: `Puts a file into a Docs & Files tool, or into the folder --folder names, as an
+upload of its own: first among the uploads where the order is automatic, last
+where it is set by hand.
 
 Minka takes it in two requests: the file is stored in the project of the tool
 first, and then put into the tool. Given a file, the command does both, and
@@ -1400,14 +1453,30 @@ func renderFilesEntries(w io.Writer, entries api.FilesEntries) {
 	if entries.Archived {
 		fmt.Fprintln(w, "Archived: yes, this folder or one above it")
 	}
+	switch {
+	case entries.IsBook:
+		fmt.Fprintln(w, "Book: yes, this folder")
+	case entries.Book != nil:
+		fmt.Fprintf(w, "Book: %s (%s)\n", entries.Book.Title, entries.Book.ID)
+	}
+	if entries.Order != "" {
+		fmt.Fprintf(w, "Order: %s\n", entries.Order)
+	}
 	fmt.Fprintf(w, "URL: %s\n", entries.AppURL)
+
+	// Arranged by hand, the three kinds stand mixed, and only one list keeps
+	// the order the web shows.
+	if entries.Order == orderManual {
+		renderEntriesArrangedByHand(w, entries)
+		return
+	}
 
 	fmt.Fprintf(w, "\n## Folders (%d)\n\n", len(entries.Folders))
 	if len(entries.Folders) == 0 {
 		fmt.Fprintln(w, "(none)")
 	}
 	for _, folder := range entries.Folders {
-		fmt.Fprintf(w, "- %s  %s (%s)\n", folder.ID, folder.Title, plural(folder.EntryCount, "entry", "entries"))
+		renderFolderLine(w, folder, "")
 	}
 
 	fmt.Fprintf(w, "\n## Documents (%d)\n\n", len(entries.Documents))
@@ -1415,10 +1484,7 @@ func renderFilesEntries(w io.Writer, entries api.FilesEntries) {
 		fmt.Fprintln(w, "(none)")
 	}
 	for _, document := range entries.Documents {
-		fmt.Fprintf(w, "- %s  %s%s\n", document.ID, document.Title, entryDetails(document.CommentCount, document.Archived))
-		if document.Lead != "" {
-			fmt.Fprintf(w, "  %s\n", oneLine(document.Lead))
-		}
+		renderDocumentLine(w, document, "")
 	}
 
 	fmt.Fprintf(w, "\n## Files (%d)\n\n", len(entries.Uploads))
@@ -1426,14 +1492,69 @@ func renderFilesEntries(w io.Writer, entries api.FilesEntries) {
 		fmt.Fprintln(w, "(none)")
 	}
 	for _, upload := range entries.Uploads {
-		fmt.Fprintf(w, "- %s  %s%s\n", upload.ID, upload.Title, entryDetails(upload.CommentCount, upload.Archived))
-		fmt.Fprintf(w, "  %s, %s, file %s\n", upload.File.ContentType, fileSize(upload.File.ByteSize), upload.File.ID)
+		renderUploadLine(w, upload, "")
 	}
 }
 
+// renderEntriesArrangedByHand lists the three kinds in the one order the
+// place keeps, each line naming its kind.
+func renderEntriesArrangedByHand(w io.Writer, entries api.FilesEntries) {
+	folders := map[string]api.FolderListItem{}
+	for _, folder := range entries.Folders {
+		folders[folder.ID] = folder
+	}
+	documents := map[string]api.DocumentListItem{}
+	for _, document := range entries.Documents {
+		documents[document.ID] = document
+	}
+	uploads := map[string]api.FilesUploadListItem{}
+	for _, upload := range entries.Uploads {
+		uploads[upload.ID] = upload
+	}
+
+	fmt.Fprintf(w, "\n## Entries (%d), in the order set by hand\n\n", len(entries.Entries))
+	if len(entries.Entries) == 0 {
+		fmt.Fprintln(w, "(none)")
+	}
+	for _, entry := range entries.Entries {
+		switch entry.Kind {
+		case "folder":
+			renderFolderLine(w, folders[entry.ID], "folder ")
+		case "document":
+			renderDocumentLine(w, documents[entry.ID], "document ")
+		case "upload":
+			renderUploadLine(w, uploads[entry.ID], "file ")
+		}
+	}
+}
+
+func renderFolderLine(w io.Writer, folder api.FolderListItem, kind string) {
+	book := ""
+	if folder.IsBook {
+		book = ", book"
+	}
+	fmt.Fprintf(w, "- %s  %s%s (%s%s)\n", folder.ID, kind, folder.Title, plural(folder.EntryCount, "entry", "entries"), book)
+}
+
+func renderDocumentLine(w io.Writer, document api.DocumentListItem, kind string) {
+	details := entryDetails(document.CommentCount, document.Archived)
+	if document.InNavigation != nil && !*document.InNavigation {
+		details = entryDetails(document.CommentCount, document.Archived, "not in navigation")
+	}
+	fmt.Fprintf(w, "- %s  %s%s%s\n", document.ID, kind, document.Title, details)
+	if document.Lead != "" {
+		fmt.Fprintf(w, "  %s\n", oneLine(document.Lead))
+	}
+}
+
+func renderUploadLine(w io.Writer, upload api.FilesUploadListItem, kind string) {
+	fmt.Fprintf(w, "- %s  %s%s%s\n", upload.ID, kind, upload.Title, entryDetails(upload.CommentCount, upload.Archived))
+	fmt.Fprintf(w, "  %s, %s, file %s\n", upload.File.ContentType, fileSize(upload.File.ByteSize), upload.File.ID)
+}
+
 // entryDetails says what a line of a folder has to add: how much was said
-// under it, and whether it takes any change at all.
-func entryDetails(commentCount int, archived bool) string {
+// under it, whether it takes any change at all, and what else holds of it.
+func entryDetails(commentCount int, archived bool, more ...string) string {
 	var details []string
 	if commentCount > 0 {
 		details = append(details, plural(commentCount, "comment", "comments"))
@@ -1441,6 +1562,7 @@ func entryDetails(commentCount int, archived bool) string {
 	if archived {
 		details = append(details, "archived")
 	}
+	details = append(details, more...)
 	if len(details) == 0 {
 		return ""
 	}
@@ -1451,6 +1573,12 @@ func renderDocument(w io.Writer, document api.Document) {
 	fmt.Fprintf(w, "# %s\n", document.Title)
 	fmt.Fprintf(w, "Document: %s\nTool: %s\nProject: %s\n", document.ID, document.ToolID, document.ProjectID)
 	renderEntryPlace(w, document.Folder, document.Path, document.Archived)
+	if document.Book != nil {
+		fmt.Fprintf(w, "Book: %s (%s)\n", document.Book.Title, document.Book.ID)
+	}
+	if document.InNavigation != nil && !*document.InNavigation {
+		fmt.Fprintln(w, "Navigation: left out of the navigation of its book")
+	}
 	fmt.Fprintf(w, "Created: %s by %s\n", formatTime(document.CreatedAt), document.Creator.Name)
 	if document.EditedAt != nil {
 		fmt.Fprintf(w, "Edited: %s\n", formatTime(*document.EditedAt))
@@ -1604,12 +1732,16 @@ func entriesBreadcrumbs(toolID string, entries api.FilesEntries) []Breadcrumb {
 }
 
 func documentBreadcrumbs(document api.Document) []Breadcrumb {
-	return []Breadcrumb{
+	crumbs := []Breadcrumb{
 		{Action: "edit", Cmd: "minka docs edit " + document.ID + " --body - --expect " + document.UpdatedAt, Description: "Write over the document, unless somebody wrote since"},
 		{Action: "comment", Cmd: "minka docs comments create --document " + document.ID + " <text|->", Description: "Comment on the document"},
 		{Action: "versions", Cmd: "minka docs versions list " + document.ID, Description: "List the earlier versions of the document"},
 		{Action: "folder", Cmd: "minka docs list " + document.ToolID + folderFlagOf(document.Folder), Description: "List what stands beside it"},
 	}
+	if document.Book != nil {
+		crumbs = append(crumbs, Breadcrumb{Action: "book", Cmd: "minka docs book " + document.Book.ID, Description: "Read the book it stands in as one tree"})
+	}
+	return crumbs
 }
 
 func uploadBreadcrumbs(upload api.FilesUpload) []Breadcrumb {

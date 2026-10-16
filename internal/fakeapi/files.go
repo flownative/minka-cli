@@ -37,6 +37,11 @@ type FilesTool struct {
 	// Without it no entry of the tool is shown to them, whatever its folder
 	// says.
 	ShownToClients bool
+
+	// Arranged are the places ordered by hand, keyed by folder ID and "" for
+	// the top, each with its entries in the order set. An entry the list does
+	// not name stands behind the rest in the automatic order.
+	Arranged map[string][]string
 }
 
 // Folder holds entries of a tool. A folder in the archive is in no list, and
@@ -53,6 +58,10 @@ type Folder struct {
 	// is the only place a new one reaches a client.
 	ShownToClients bool
 
+	// IsBook marks the folder to be read as a book. No book stands inside
+	// another.
+	IsBook bool
+
 	CreatedAt time.Time
 	CreatorID string
 	EntryState
@@ -62,16 +71,20 @@ type Folder struct {
 // column behind it is, so the updatedAt a reader gets back is the one a guarded
 // write sends in again.
 type Document struct {
-	ID        string
-	FolderID  string // empty at the top of the tool
-	Title     string
-	Body      string // the HTML as stored
-	Draft     bool   // at no address, its author included
-	Archived  bool
-	CreatedAt time.Time
-	UpdatedAt time.Time
-	CreatorID string
-	Comments  []*Comment
+	ID       string
+	FolderID string // empty at the top of the tool
+	Title    string
+	Body     string // the HTML as stored
+	Draft    bool   // at no address, its author included
+	Archived bool
+	// OutOfNavigation leaves the document out of the navigation of the book
+	// it stands in; it may be set on one in no book, and counts once it is in
+	// one.
+	OutOfNavigation bool
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+	CreatorID       string
+	Comments        []*Comment
 
 	// Versions are the texts the document had, oldest first, the last one what
 	// it says now. A document set up without any is taken to have been written
@@ -256,6 +269,7 @@ func (s *Server) addDocument(w http.ResponseWriter, r *http.Request, person *Per
 	}
 	document.keepAVersion(person.ID, document.UpdatedAt)
 	tool.Documents = append([]*Document{document}, tool.Documents...)
+	placeAtTheEnd(tool, document.FolderID, document.ID)
 	writeJSON(w, http.StatusCreated, s.documentResource(tool, document))
 }
 
@@ -297,6 +311,24 @@ func (s *Server) updateDocument(w http.ResponseWriter, r *http.Request, person *
 	if !ok {
 		return
 	}
+	inNavigation, ok := s.bookField(w, fields, "inNavigation")
+	if !ok {
+		return
+	}
+	// Every refusal of the navigation stands before anything is written: a
+	// client is told nothing is there, whatever else the request changes.
+	if inNavigation != nil {
+		if s.isAClient(person.ID) {
+			notFound(w)
+			return
+		}
+		if isArchivedOrBelowTheArchive(filesEntry{tool: tool, parent: &document.FolderID, archived: &document.Archived}) {
+			if !s.refusedAsArchived(w, s.projectWithID(tool.ProjectID)) {
+				s.refusedAsAnArchivedEntry(w, tool, document.FolderID, document.Archived, "document")
+			}
+			return
+		}
+	}
 
 	if s.refusedAsArchived(w, s.projectWithID(tool.ProjectID)) {
 		return
@@ -305,8 +337,12 @@ func (s *Server) updateDocument(w http.ResponseWriter, r *http.Request, person *
 		return
 	}
 	// The text that stands already is no write and no conflict, whatever the
-	// expectation: nothing was lost.
+	// expectation: nothing was lost. The navigation is written all the same,
+	// and touches no moment of the document.
 	if newTitle == document.Title && newBody == document.Body {
+		if inNavigation != nil {
+			document.OutOfNavigation = !*inNavigation
+		}
 		writeJSON(w, http.StatusOK, s.documentResource(tool, document))
 		return
 	}
@@ -322,6 +358,9 @@ func (s *Server) updateDocument(w http.ResponseWriter, r *http.Request, person *
 	document.Title, document.Body = newTitle, newBody
 	document.UpdatedAt = later(s.aWholeSecond(), document.UpdatedAt.Add(time.Second))
 	document.keepAVersion(person.ID, document.UpdatedAt)
+	if inNavigation != nil {
+		document.OutOfNavigation = !*inNavigation
+	}
 	writeJSON(w, http.StatusOK, s.documentResource(tool, document))
 }
 
@@ -416,6 +455,7 @@ func (s *Server) addFilesUpload(w http.ResponseWriter, r *http.Request, person *
 	}
 	upload.keepAVersion(file.ID, person.ID, upload.CreatedAt)
 	tool.Uploads = append([]*FilesUpload{upload}, tool.Uploads...)
+	placeAtTheEnd(tool, upload.FolderID, upload.ID)
 	writeJSON(w, http.StatusCreated, s.filesUploadResource(tool, upload))
 }
 
@@ -835,13 +875,16 @@ func (s *Server) entriesResource(tool *FilesTool, folder *Folder) map[string]any
 	archived := folder != nil && folderIsOutOfUse(tool, folder.ID)
 	folderID := folderIDOf(folder)
 
+	var shown []filesEntry
 	folders := []any{}
 	for _, entry := range tool.Folders {
 		if entry.ParentID != folderID || entry.Archived || entry.Trashed {
 			continue
 		}
+		shown = append(shown, filesEntry{kind: "folder", id: entry.ID})
 		folders = append(folders, map[string]any{
 			"id": entry.ID, "projectId": tool.ProjectID, "title": entry.Title, "entryCount": entriesIn(tool, entry.ID),
+			"isBook":    entry.IsBook,
 			"createdAt": timestamp(entry.CreatedAt), "creator": s.personReference(entry.CreatorID),
 			"appUrl": s.filesToolURL(tool) + "/folders/" + entry.ID,
 		})
@@ -852,8 +895,10 @@ func (s *Server) entriesResource(tool *FilesTool, folder *Folder) map[string]any
 		if document.FolderID != folderID || document.Draft || document.Archived || document.Trashed {
 			continue
 		}
+		shown = append(shown, filesEntry{kind: "document", id: document.ID})
 		documents = append(documents, map[string]any{
 			"id": document.ID, "projectId": tool.ProjectID, "title": document.Title, "lead": leadOf(document.Body),
+			"inNavigation": !document.OutOfNavigation,
 			"commentCount": len(document.Comments), "archived": archived,
 			"createdAt": timestamp(document.CreatedAt), "updatedAt": timestamp(document.UpdatedAt),
 			"creator": s.personReference(document.CreatorID), "appUrl": s.documentURL(tool, document),
@@ -865,6 +910,7 @@ func (s *Server) entriesResource(tool *FilesTool, folder *Folder) map[string]any
 		if upload.FolderID != folderID || upload.Archived || upload.Trashed {
 			continue
 		}
+		shown = append(shown, filesEntry{kind: "upload", id: upload.ID})
 		uploads = append(uploads, map[string]any{
 			"id": upload.ID, "projectId": tool.ProjectID, "title": upload.Title, "file": s.attachmentResource(upload.BlobID),
 			"commentCount": len(upload.Comments), "archived": archived,
@@ -877,11 +923,24 @@ func (s *Server) entriesResource(tool *FilesTool, folder *Folder) map[string]any
 	if folder != nil {
 		appURL += "/folders/" + folder.ID
 	}
-	return map[string]any{
+	entries := []any{}
+	for _, entry := range inTheOrderShown(tool, folderID, shown) {
+		entries = append(entries, map[string]any{"kind": entry.kind, "id": entry.id})
+	}
+	for _, line := range folders {
+		s.withoutBooks(line.(map[string]any), "isBook")
+	}
+	for _, line := range documents {
+		s.withoutBooks(line.(map[string]any), "inNavigation")
+	}
+	return s.withoutBooks(map[string]any{
 		"tool": map[string]any{"id": tool.ID, "title": tool.Title}, "folder": folderReference(folder),
 		"archived": archived, "path": s.pathTo(tool, folderID),
-		"folders": folders, "documents": documents, "uploads": uploads, "appUrl": appURL,
-	}
+		"folders": folders, "documents": documents, "uploads": uploads,
+		"order": orderOf(tool, folderID), "isBook": folder != nil && folder.IsBook,
+		"book": folderReference(bookOf(tool, folderID)), "entries": entries,
+		"appUrl": appURL,
+	}, "order", "isBook", "book", "entries")
 }
 
 // entriesIn counts what a reader finds on opening a folder: the entries
@@ -917,19 +976,20 @@ func leadOf(body string) string {
 }
 
 func (s *Server) documentResource(tool *FilesTool, document *Document) map[string]any {
-	return map[string]any{
+	return s.withoutBooks(map[string]any{
 		"id": document.ID, "projectId": tool.ProjectID, "toolId": tool.ID,
 		"project": s.projectReference(tool.ProjectID), "tool": map[string]any{"id": tool.ID, "title": tool.Title},
 		"folder": folderReference(folderIn(tool, document.FolderID)), "path": s.pathTo(tool, document.FolderID),
 		"title": document.Title, "body": document.Body, "bodySource": document.Body,
 		"attachments":  s.attachmentsIn(tool.ProjectID, document.Body),
 		"archived":     document.Archived || folderIsOutOfUse(tool, document.FolderID),
+		"inNavigation": !document.OutOfNavigation, "book": folderReference(bookOf(tool, document.FolderID)),
 		"commentCount": len(document.Comments),
 		"createdAt":    timestamp(document.CreatedAt), "editedAt": editedAt(document.CreatedAt, document.UpdatedAt),
 		"updatedAt": timestamp(document.UpdatedAt), "creator": s.personReference(document.CreatorID),
 		"comments": s.commentResources(tool.ProjectID, s.documentURL(tool, document), document.Comments),
 		"appUrl":   s.documentURL(tool, document),
-	}
+	}, "inNavigation", "book")
 }
 
 func (s *Server) filesUploadResource(tool *FilesTool, upload *FilesUpload) map[string]any {

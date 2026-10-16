@@ -137,6 +137,34 @@ live, for want of a board with short identifiers in the test project. A
 section reference (a reference that keeps its `#h-…`) is announced by Minka
 and not merged; until then a link to a section needs words of its own.
 
+A folder becomes a book with `docs folders edit --book` (`--no-book` takes the
+mark away), `docs book <folderId>` reads it as one tree of chapters and pages,
+and `docs edit --not-in-navigation` / `--in-navigation` place a page in its
+navigation; `docs order <toolId> automatic|manual [--folder]` orders a place,
+and every `move` takes `--after` / `--before` in a place arranged by hand
+(C-133, E-302, E-307). `docs list` and `docs show` carry `order`, `entries`,
+`isBook`, `book` and `inNavigation`. Minka's side is on its `main` and in no
+release yet; the commands are checked against Minka's code and
+`ApiFilesBookTest`, the fake, and live against a local Minka on its `main`:
+marking, the tree from a chapter, the navigation, placing before, after and
+next to a neighbour from elsewhere (first), a folder moved into a book arranged
+by hand, `bookWithinABook` by a mark and by a move, `folderOrderAutomatic`,
+`orderUnknown`, `folderUnknown`, `entryPlaceUnknown`, a mark or navigation
+that is no boolean (400) or null (422), a 409 that leaves the navigation
+unwritten, all with the bodies the fake sends. A Minka without books, which
+the commands answer with exit 7, is checked against the fake only. A client and an
+archived project were not met live.
+
+From the Minka release that carries #494 a change of the navigation alone, or
+of the mark alone, writes only the flag: no edit of the title or body, no
+version, `updatedAt` as it was, no 409; and an archived project refuses the
+mark before `bookWithinABook`. A Minka between #493 and #494 still passed the
+title and body it had just read through its edit beside the navigation. Live
+on Minka's `main` with #494 the navigation alone, beside a stale
+`expectedUpdatedAt`, answered 200, added no version and left `updatedAt`; the
+order of the refusals in an archived project was not met live, for want of
+an archived project of the test's own.
+
 The to-do lists of a project are read with `todolists tools`, `todolists list`
 and `todolists show`, and written with `todolists create`, `edit`, `archive`,
 `unarchive` and `delete`; the groups of a list with `todogroups create`, `edit`,
