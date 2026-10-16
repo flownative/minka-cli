@@ -7,7 +7,8 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-	"unicode"
+
+	"github.com/flownative/minka-cli/internal/richtext"
 )
 
 // What a search serves: a page of a fixed size, a term cut to a length, and
@@ -23,27 +24,6 @@ var searchOffsetForm = regexp.MustCompile(`^\d{0,6}$`)
 
 // headingForm finds the headings of a body in the order they stand.
 var headingForm = regexp.MustCompile(`(?is)<h[1-6][^>]*>(.*?)</h[1-6]>`)
-
-// spelledOut are the letters an anchor writes out before it drops accents.
-var spelledOut = strings.NewReplacer("ä", "ae", "ö", "oe", "ü", "ue", "ß", "ss")
-
-// withoutAccents stands in for decomposing a letter and dropping its marks: a
-// letter of the Latin alphabets with a canonical decomposition, and its base.
-var withoutAccents = func() map[rune]rune {
-	bases := map[rune]string{
-		'a': "àáâãåāăąǎ", 'c': "çćĉċč", 'd': "ď", 'e': "èéêëēĕėęě", 'g': "ĝğġģ",
-		'h': "ĥ", 'i': "ìíîïĩīĭįǐ", 'j': "ĵ", 'k': "ķ", 'l': "ĺļľ", 'n': "ñńņňǹ",
-		'o': "òóôõōŏőǒ", 'r': "ŕŗř", 's': "śŝşš", 't': "ţť", 'u': "ùúûũūŭůűųǔ",
-		'w': "ŵ", 'y': "ýÿŷ", 'z': "źżž",
-	}
-	table := map[rune]rune{}
-	for base, accented := range bases {
-		for _, letter := range accented {
-			table[letter] = base
-		}
-	}
-	return table
-}()
 
 func (s *Server) registerSearchRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/search", s.authenticated(s.search))
@@ -233,7 +213,7 @@ func sectionsOf(body string) []searchSection {
 	for i, match := range matches {
 		headings[i] = plainText(body[match[2]:match[3]])
 	}
-	anchors := headingAnchors(headings)
+	anchors := richtext.HeadingAnchors(headings)
 
 	sections := []searchSection{}
 	start := len(body)
@@ -253,51 +233,6 @@ func sectionsOf(body string) []searchSection {
 			excerpt: strings.TrimLeft(strings.TrimPrefix(text, headings[i]), "\n ")})
 	}
 	return sections
-}
-
-// headingAnchors are the anchors of the headings of one text, in their order:
-// "h-" and the heading as a slug, a repeated one counted on from "-2".
-func headingAnchors(headings []string) []string {
-	taken := map[string]bool{}
-	anchors := make([]string, len(headings))
-	for i, heading := range headings {
-		base := "h-" + slugOf(heading)
-		anchor := base
-		for count := 2; taken[anchor]; count++ {
-			anchor = base + "-" + strconv.Itoa(count)
-		}
-		taken[anchor] = true
-		anchors[i] = anchor
-	}
-	return anchors
-}
-
-// slugOf is a heading in lower case, umlauts spelled out, accents dropped and
-// every run of other characters one dash; letters of other scripts stay.
-func slugOf(heading string) string {
-	var slug strings.Builder
-	dash := false
-	for _, r := range spelledOut.Replace(strings.ToLower(phpTrim(heading))) {
-		if base, ok := withoutAccents[r]; ok {
-			r = base
-		}
-		switch {
-		case unicode.Is(unicode.Mn, r):
-			continue
-		case unicode.IsLetter(r) || unicode.IsNumber(r):
-			if dash && slug.Len() > 0 {
-				slug.WriteByte('-')
-			}
-			dash = false
-			slug.WriteRune(r)
-		default:
-			dash = true
-		}
-	}
-	if slug.Len() == 0 {
-		return "section"
-	}
-	return slug.String()
 }
 
 // plainText is a piece of HTML as words, without markup.

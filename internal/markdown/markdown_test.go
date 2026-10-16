@@ -147,6 +147,21 @@ func TestKeepLineBreaksKeepsEveryLine(t *testing.T) {
 	}
 }
 
+// An address of a document at a heading reaches Minka as a link showing that
+// address, the anchor included, which Minka keeps on the reference it makes.
+func TestASectionOfADocumentReachesMinkaWithItsAnchor(t *testing.T) {
+	const item = "https://minka.example/go/item/01a0#h-zugang-pruefen"
+	const page = "https://minka.example/projects/p/files/t/01a0#h-setup-2"
+	for source, want := range map[string]string{
+		"<" + item + ">": `<p><a href="` + item + `">` + item + `</a></p>`,
+		page + ".":       `<p><a href="` + page + `">` + page + `</a>.</p>`,
+	} {
+		if got := ToHTML(source); got.HTML != want || len(got.Warnings) != 0 {
+			t.Errorf("%q\n got: %q %v\nwant: %q", source, got.HTML, got.Warnings, want)
+		}
+	}
+}
+
 // Minka turns "#MNK-1" in the words, and an address of its own that stands in
 // the words or as a link showing that address, into a reference on saving. A
 // link with words of its own and anything in code stay as written. The

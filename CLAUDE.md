@@ -49,14 +49,16 @@ belongs in the same commit as the code change.
 Go (see `go.mod`), [cobra](https://github.com/spf13/cobra) for commands,
 [goldmark](https://github.com/yuin/goldmark) for Markdown,
 `golang.org/x/net/html` for HTML, `golang.org/x/term` for the hidden token
-prompt.
+prompt, `golang.org/x/text` for the Unicode decomposition and case folding
+of Minka's heading anchors and the names of an export.
 
 ```
 cmd/minka/            main: calls cli.Run and exits with its exit code
 internal/api/         HTTP client and the types of the resources
 internal/config/      hosts and tokens in one file with 0600
 internal/markdown/    Markdown → HTML, only elements the server keeps
-internal/richtext/    HTML of a text → Markdown for reading
+internal/richtext/    HTML of a text → Markdown for reading, heading anchors
+internal/export/      a book or a folder of Docs & Files as files in a directory
 internal/cli/         commands, output, exit codes
 internal/fakeapi/     in-memory Minka API for tests (httptest)
 skills/               SKILL.md for agents, embedded into the binary

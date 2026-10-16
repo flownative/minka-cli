@@ -30,7 +30,7 @@ func (s *Server) book(w http.ResponseWriter, r *http.Request, person *Person) {
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"id": book.ID, "title": book.Title, "tool": map[string]any{"id": entry.tool.ID, "title": entry.tool.Title},
-		"order": orderOf(entry.tool, book.ID), "entries": s.bookEntriesOf(entry.tool, book.ID, map[string]bool{book.ID: true}),
+		"order": orderOf(entry.tool, book.ID), "entries": append(s.bookEntriesOf(entry.tool, book.ID, map[string]bool{book.ID: true}), s.LaterBookEntries...),
 		"appUrl": s.filesToolURL(entry.tool) + "/folders/" + book.ID,
 	})
 }

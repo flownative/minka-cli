@@ -184,7 +184,9 @@ func (s *Server) document(w http.ResponseWriter, r *http.Request, person *Person
 		notFound(w)
 		return
 	}
-	writeJSON(w, http.StatusOK, s.documentResource(tool, document))
+	resource := s.documentResource(tool, document)
+	resource["body"] = s.servedReferences(document.Body, person)
+	writeJSON(w, http.StatusOK, resource)
 }
 
 // addDocument writes a published document, refusing in the order the

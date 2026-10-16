@@ -109,10 +109,17 @@ the view stays the editable text of C-008 ([C-134](../decisions.md#c-134)):
   tile's description hold one line in Markdown, so a `<br>` in them reads as
   a space and does not come back.
 - A heading's anchor (`h-…`, E-304) is not stored, and the API serves no
-  heading with an `id`, so there is nothing to show; `search` names the
-  anchor of a hit. A link to a section has to be a link with words of its
-  own: Minka turns a bare address of its own into a reference and drops what
-  follows the `#`.
+  heading with an `id`, so `docs show` shows none; `search` names the anchor
+  of a hit. `richtext.HeadingAnchors` is Minka's rule, ported with Unicode
+  decomposition, and the fake's search takes it from there. A heading that
+  carries such an anchor as its `id` — only `docs export` gives it one — is
+  written with `<a id="h-…"></a>` on the line above it.
+- A section of a document is linked by its address with the anchor, bare or
+  as a link showing that address (`<https://…/files/<toolId>/<documentId>#h-setup>`
+  or `/go/item/<documentId>#h-setup`): Minka keeps it as a section reference,
+  `<minka-ref kind="document" id anchor>` (E-309), which reads as the
+  document's title and counts as a backlink. The conversion has nothing to do
+  for it, see below. A link with words of its own stays a mere link.
 
 ## References to another record
 
@@ -127,10 +134,15 @@ a link whose words are that address (what Minka looks for), trailing
 punctuation stays outside, and code stays code. A link with words of its own
 is kept as a link by Minka, not turned into a reference.
 
+Minka keeps the anchor of a heading (`#h-…`) that follows the address of a
+document as `anchor` on the reference (E-309); any other fragment, and one on
+another kind, goes.
+
 Every answer of the API adds `title`, `short-id` (only for a card whose board
-shows short identifiers) and an absolute `href` for the reader; a target the
+shows short identifiers) and an absolute `href` for the reader, a document's
+ending in `#anchor` where the reference names a section; a target the
 reader cannot open, one in the trash and one that does not exist keep only
-`kind` and `id`, alike on purpose. Saving drops the additions, so a text sent
+what is stored, `kind`, `id` and a section's `anchor`, alike on purpose. Saving drops the additions, so a text sent
 back as read is safe. `--json` carries the text exactly as served.
 
 `internal/richtext` shows a reference so that the view stays the editable

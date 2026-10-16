@@ -188,16 +188,6 @@ func TestATieIsSettledByTheIdentifier(t *testing.T) {
 	}
 }
 
-// The anchors of the headings are Minka's: "h-" and a slug, umlauts spelled
-// out, accents dropped, other characters a dash, a repeat counted on.
-func TestTheAnchorsOfHeadingsAreMinkas(t *testing.T) {
-	headings := []string{"Setup", "Setup", "Über die Größe", "Café crème", " ¿? ", "Привет, мир", "A -- b", "h-setup-2", "Setup"}
-	want := []string{"h-setup", "h-setup-2", "h-ueber-die-groesse", "h-cafe-creme", "h-section", "h-привет-мир", "h-a-b", "h-h-setup-2", "h-setup-3"}
-	if got := headingAnchors(headings); !slices.Equal(got, want) {
-		t.Fatalf("anchors %q, want %q", got, want)
-	}
-}
-
 func hitIDs(answer map[string]any) []string {
 	hits, _ := answer["hits"].([]any)
 	ids := []string{}

@@ -144,6 +144,9 @@ func renderBook(w io.Writer, book api.Book) {
 func renderBookEntries(w io.Writer, entries []api.BookEntry, depth int) {
 	indent := strings.Repeat("  ", depth)
 	for _, entry := range entries {
+		if entry.Kind != "chapter" && entry.Kind != "page" {
+			continue // a kind a later Minka knows; --json carries it
+		}
 		if entry.Kind == "chapter" {
 			details := ""
 			if entry.Order == orderAutomatic {
@@ -190,10 +193,11 @@ func booksUnknown(what string, restAsked bool, raw any) *Error {
 
 func countBook(entries []api.BookEntry) (chapters, pages int) {
 	for _, entry := range entries {
-		if entry.Kind == "chapter" {
+		switch entry.Kind {
+		case "chapter":
 			c, p := countBook(entry.Entries)
 			chapters, pages = chapters+1+c, pages+p
-		} else {
+		case "page":
 			pages++
 		}
 	}

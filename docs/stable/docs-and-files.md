@@ -27,6 +27,10 @@ place a page in its navigation, `docs order` orders a place automatically or
 by hand, and `move --after` and `--before` place an entry in an order set by
 hand ([C-133](../decisions.md#c-133), E-302, E-307), see below.
 
+`docs export` writes a book, a chapter or a folder into a directory as files
+and brings it up to date on the next run ([C-135](../decisions.md#c-135)),
+see below.
+
 ## What is not there, and why nothing pretends otherwise
 
 The API offers no reading of a draft — a draft is 404 for everybody, its
@@ -478,7 +482,9 @@ nothing about either.
   the book, and passes Minka's tree through as `data`: chapters
   `{id, title, order, entries, appUrl, kind}`, pages
   `{id, title, inNavigation, appUrl, kind}`, folders in use and published
-  documents in use, no uploads, not paged. A book in the archive is read; a
+  documents in use, no uploads, not paged. An entry of any other kind, which
+  a later Minka may send, is left out of the text and the counts, and out of
+  `docs export`; `--json` carries it as sent. A book in the archive is read; a
   folder in no book, and a book a client is not shown, is 404. The text view
   indents the tree, each line shaped as one of `docs list`, a chapter ending
   in a slash, and marks a chapter ordered
@@ -528,6 +534,156 @@ folder that changes its place, `bookWithinABook`.
 | 422 `folderUnknown`, `folderArchived` | `docs order --folder` | 9 |
 | 422 `orderUnknown`, `entryPlaceUnknown`, `isBookNotABoolean`, `inNavigationNotABoolean`; 400 `malformedBody` | unreachable: the CLI checks the word and the IDs and sends booleans | — |
 | 200 without the mark or the navigation | `docs folders edit --book`/`--no-book`, `docs edit --in-navigation`/`--not-in-navigation` against a Minka without books | 7 |
+
+## Exporting a book or a folder
+
+`docs export <folderId> --out <dir> [--format markdown|html] [--tool <toolId>]
+[--force]` writes what stands in a folder into a directory, for an agent or a
+reader who wants the files at hand ([C-135](../decisions.md#c-135)).
+
+**Reading.** The folder is first asked for as a book (`GET
+files-folders/{id}/book`), one request for the whole tree. A chapter is
+exported with what lies below it; a reference to a page of the book outside
+the chapter then keeps its address in Minka. A folder in no book answers 404,
+and is walked through its tool with `--tool`, one `GET
+files-tools/{toolId}/entries?folderId=` per folder, because Minka reads a
+folder's entries only through its tool and has no address for a folder by
+itself. Without `--tool` that is exit 2 with a hint that names it. Then every
+page is read with `GET documents/{id}`, four at a time, and the files are
+downloaded the same way with `GET uploads/{blobId}/original`. Nothing else
+goes out. A page gone between the tree and its body (404) is left out, named
+in `gone` and in a notice.
+
+**What a book holds.** A book's tree carries no uploads and nothing in the
+archive, so a book is exported as its readers read it: chapters and pages. A
+walked folder downloads its uploads into the directory of their folder; the
+listing of a folder leaves out the archived ones as well.
+
+**The tree.** A folder is a directory, a page a file, an upload its file, and
+every directory holds an index, `README.md` (`index.html` in HTML): the
+name GitHub, GitLab and every file browser open first, and the one an agent
+looks for. The index lists what stands in the directory and below it, in
+Minka's order, as relative links; a page out of the navigation of its book is
+marked `(not in navigation)`, an upload `(file)`. Its frontmatter names
+`title`, `id`, `appUrl`, `kind` (`book`, `chapter` or `folder`), `order` and,
+in a book, `book` and `bookId`.
+
+**Names.** A name is the title as the slug of a heading's anchor without the
+`h-` — lower case, umlauts spelled out, accents dropped, every run of other
+characters one dash, cut at 80 bytes — so it holds only letters, digits and
+dashes: no name is a path, starts with a dot, or differs from another in case
+alone, and a reader can guess it from the title. A title without a letter or
+digit is `untitled`. Within one directory the pages, folders and uploads share
+the names, each taken once as a case-insensitive file system compares them;
+`readme`, `index` and the device names of Windows are taken from the start.
+The first entry in Minka's order gets the title, the next `-2`, `-3`. A name
+an earlier run gave stays with its entry while its title still gives it and
+nobody took it first, so a new page of the same title put in front takes the
+next free name instead of moving the others. An upload keeps the extension of
+its file, in lower case.
+
+**A page.** In Markdown (the default) a page is a frontmatter (`title`, `id`,
+`appUrl`, `inNavigation`, `updatedAt`), the title as `#`, and the body as
+`docs show` writes it, with the shapes of a document as
+[Rich text](rich-text.md#the-shapes-of-a-document) writes them. In HTML it
+is the stored HTML in a minimal page: the same fields as `meta` elements and
+`link rel="canonical"`, the title as `h1`, no script and no style.
+
+- **Headings** carry the anchors Minka's page gives them (E-304), counted over
+  every heading of the body in document order, as `search` names them. In
+  Markdown the anchor is `<a id="h-…"></a>` on the line above the heading:
+  GitHub (which prefixes and resolves it), VS Code, pandoc and the
+  static site generators honour an `id` in raw HTML, while `{#h-…}` is read by
+  a few of them only and the heading's own slug differs from Minka's. It is
+  the form this repository's documentation uses for its own anchors. In HTML
+  the anchor is the `id` of the heading.
+- **Files hanging in a page** are downloaded beside it, into
+  `<page>.assets/`, named after the file and counted on where two meet; a
+  picture becomes an image, any other file a link, both with the caption or
+  the file's name as words. The handle of a file is its ID, two dashes and a
+  signature, and the ID is looked up in the page's `attachments`; a file the
+  page no longer lists stays as `docs show` shows it. One directory per page
+  keeps a page and its files together, and no name of an entry holds a dot, so
+  no entry is ever called so.
+- **References and links.** A reference to a page or an upload of the export,
+  and a link to the page of a page, an upload or a folder of the export or to
+  its `/go/item/…` on the host signed in to, becomes a relative link to its
+  file — at the section a reference names in `anchor`, or a link in its
+  `#h-…`. Anything else keeps its address in Minka: as `docs show` writes it in
+  Markdown, as a link with the title in HTML, and a target the reader cannot
+  open as Minka's words for it.
+
+**Again into the same directory.** The directory keeps `.minka-export.json`:
+the host, the folder, the format, every file the export wrote with the
+SHA-256 of its bytes, the ID it stands for and, for a downloaded file, the
+file of Minka; and the directories it made. A run holds a lock while it
+works, so a second run into the same directory is refused at once. The lock
+lies beside the config file, in `export-locks/`, named after the directory
+as it really is, links resolved, so that two names of one directory meet the
+same lock; it stays there, as every lock file of minka does, because taking
+it away would let two runs hold a lock each. Nothing of a run that wrote
+nothing is left in the directory. A run reads the tree and every
+page again — the tree carries no `updatedAt`, and a page's file also changes
+with the titles and names of the pages it links to — and writes a file only
+where its bytes differ. A downloaded file whose file of Minka is the same and
+whose bytes are those written is not fetched again. What the manifest names
+and this run no longer writes is removed, and a directory of the export left
+empty with it; one still holding something stays and is tried again next
+time. A directory of the export in the place of a file of the plan — a
+chapter whose name an upload without an extension takes — goes first, where
+it holds nothing but files of the export that go. A run in the other format
+replaces the files of the first.
+
+A new file gets the mode any program gives one, `0666` less the umask, and a
+new directory `0777` less the umask; a file written over keeps the mode it
+has.
+
+**What is never touched.** Everything is read and every path checked before
+the first file is written, and a refusal writes nothing (exit 1):
+
+- a path the run would write, or a directory it would make, where something
+  stands that the manifest does not name — a file of somebody else is never
+  written over, `--force` or not; the paths are in `data.paths`;
+- a file of the manifest whose bytes are no longer those written, to be
+  written over or removed — somebody changed it; `--force` writes over it or
+  removes it;
+- a directory that holds anything and no manifest — `--force` exports beside
+  what is there, which stays untouched;
+- a manifest of another folder or another host — each export has a directory
+  of its own, since a run removes what its folder no longer holds;
+- a manifest that names a path that is not a clean relative path inside the
+  directory, or that this minka cannot read — nothing it names is touched.
+
+A link is never followed: a file or directory of the manifest behind a link,
+or no longer a file, is left alone and given up, and a file is written by
+renaming a temporary file into its place, which replaces a link rather than
+writing through it.
+
+Once the checks are through, the manifest names every file of the plan
+before the first is written: a file it knew keeps the hash it was written
+with, a new one has none yet. A run that fails halfway — a download, the
+disk — or is killed, leaves nothing the manifest does not name, and the next
+run carries on, without `--force` where no such file landed. A file
+without a hash is the export's while it is not there, or, a page or an
+index, while its bytes are those the plan writes. Anything else there may be
+the broken run's or a person's: the run is refused as for a file changed
+since, and `--force` writes over it or removes it. Such a file stays in the
+manifest while it lies there, and a directory in a file's way that holds one
+stays. A file whose bytes are those the plan writes is no change, whatever
+hash the manifest names. Where a manifest was there before, the next run
+also removes the temporary files a broken run left in the directories of the
+export. A run that fails removes nothing. A download that
+breaks off is the network's failure (exit 6); one that cannot be written is
+`config`.
+
+**Output.** `data` names `out`, `folderId`, `title`, `isBook`, `book`,
+`format`, the counts of `folders`, `documents`, `uploads` and `assets`, the
+paths `written` and `removed`, the count `unchanged`, `gone` and `manifest`;
+the summary says what was exported where and the three counts, the text adds
+every path written (`+`) or removed (`-`) and the index to start at.
+Breadcrumbs: the same export again, `docs book`, `docs show`. A file that
+cannot be written is `config`, exit 1; a refusal, the lock held included,
+`usage`, exit 1.
 
 ## What a list promises
 

@@ -117,6 +117,8 @@ func TestReferencesAreShownByTheirAddress(t *testing.T) {
 		{"to-do the reader cannot open", `<p><minka-ref kind="todo" id="01a0"></minka-ref></p>`, "(a to-do you cannot open)"},
 		{"to-do list the reader cannot open", `<p><minka-ref kind="todolist" id="01a0"></minka-ref></p>`, "(a to-do list you cannot open)"},
 		{"document the reader cannot open", `<p><minka-ref kind="document" id="01a0"></minka-ref></p>`, "(a document you cannot open)"},
+		{"section of a document", `<p><minka-ref kind="document" id="01a0" anchor="h-zugang-pruefen" title="Runbook" href="https://minka.example/projects/p/files/t/01a0#h-zugang-pruefen"></minka-ref></p>`, "<https://minka.example/projects/p/files/t/01a0#h-zugang-pruefen>"},
+		{"section of a document the reader cannot open", `<p><minka-ref kind="document" id="01a0" anchor="h-zugang-pruefen"></minka-ref></p>`, "(a document you cannot open)"},
 		{"upload the reader cannot open", `<p><minka-ref kind="upload" id="01a0"></minka-ref></p>`, "(a file you cannot open)"},
 		{"question the reader cannot open", `<p><minka-ref kind="question" id="01a0"></minka-ref></p>`, "(a question you cannot open)"},
 		{"event the reader cannot open", `<p><minka-ref kind="event" id="01a0"></minka-ref></p>`, "(an event you cannot open)"},
@@ -156,6 +158,20 @@ func TestAReferenceComesBackAsALinkShowingItsAddress(t *testing.T) {
 	}
 	if loss := Dropped(served, back); loss.Any() {
 		t.Errorf("the reference counts as lost after its own view came back: %+v", loss)
+	}
+}
+
+// A reference to a section of a document comes back with its anchor, which
+// Minka keeps on the reference it turns the address into again.
+func TestASectionReferenceComesBackWithItsAnchor(t *testing.T) {
+	const address = "https://minka.example/projects/p/files/t/01a0#h-zugang-pruefen"
+	served := `<p>See <minka-ref kind="document" id="01a0" anchor="h-zugang-pruefen" title="Runbook" href="` + address + `"></minka-ref>.</p>`
+	back := markdown.ToHTML(ToMarkdown(served)).HTML
+	if want := `<p>See <a href="` + address + `">` + address + `</a>.</p>`; back != want {
+		t.Errorf("\n got: %q\nwant: %q", back, want)
+	}
+	if loss := Dropped(served, back); loss.Any() {
+		t.Errorf("the section reference counts as lost: %+v", loss)
 	}
 }
 

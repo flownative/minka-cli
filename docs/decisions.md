@@ -2236,3 +2236,16 @@ only the editor's code block gets its colours on the page. A release of the
 CLI waits for a Minka release that keeps the shapes. **Implemented as:**
 `markdown.ToHTML`, `richtext.ToMarkdown`, see
 [Rich text](stable/rich-text.md#the-shapes-of-a-document).
+
+<a id="c-135"></a>
+## C-135 — An export writes only what its manifest names, and its links stay among its files
+
+*Applies to: `docs export`, `internal/export`, `richtext.HeadingAnchors`*
+
+Pages are files named by their title's slug, headings carry Minka's anchors,
+references into the export are relative links. A manifest names every file
+before it is written; anything else in the way refuses the run, `--force` or not.
+
+**Why:** a refresh removes what Minka dropped, and only the manifest tells the
+export's files from a person's. **Implemented as:** `export.Run`,
+`cli.newDocsExportCmd`, see [Docs & Files](stable/docs-and-files.md#exporting-a-book-or-a-folder).

@@ -63,13 +63,13 @@ func TestTheFilesOfAVersionAreListedBesideItsBody(t *testing.T) {
 	e := newTestEnv(t)
 	document := e.fixture.Document
 	file := storedFile(e)
-	tag := `<action-text-attachment sgid="sgid-` + file.Circle + `-` + file.ID + `" content-type="text/plain" url="` + e.server.URL +
+	tag := `<action-text-attachment sgid="` + file.Handle() + `" content-type="text/plain" url="` + e.server.URL +
 		`/x" filename="notes.txt" filesize="13" presentation="gallery"></action-text-attachment>`
 	document.Versions = []*fakeapi.DocumentVersion{{ID: "0192f3a4-5b6c-4d7e-8f90-a1b2c3d4e5f0", Title: document.Title,
 		Body: "<p>See the notes</p>" + tag, WrittenAt: document.UpdatedAt}}
 
 	shown := decode(t, runOK(t, e, "docs", "versions", "show", document.ID, document.Versions[0].ID).Data)
-	if body := shown["body"].(string); strings.Contains(body, "filename=") || !strings.Contains(body, `sgid="sgid-`) {
+	if body := shown["body"].(string); strings.Contains(body, "filename=") || !strings.Contains(body, `sgid="`+file.Handle()+`"`) {
 		t.Fatalf("body %q is not the stored form", body)
 	}
 	attachments, _ := shown["attachments"].([]any)
