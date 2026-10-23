@@ -14,6 +14,10 @@
   definitions, for example) is refused, so it cannot remove a description by
   accident. To remove a description, give `--description ""`.
 - `--description-format html` sends HTML as it is; the server sanitizes it.
+- HTML inside Markdown is sent as visible text, in a code block, with a
+  `notice`. A text that is mostly HTML is refused (exit 1, `usage`) and nothing
+  is sent: give the command's format flag with `html`, or put HTML meant to be
+  shown into a fenced code block between lines of three backticks.
 - **HTML that carries no element Minka serves is not refused.** It is escaped
   and kept as the characters it consists of, with the same answer as any other,
   so Markdown sent with `--description-format html` or `--format html` stands

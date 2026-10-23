@@ -33,6 +33,10 @@ references listed under "Where the rest stands".
 - Pass long or multi-line text through stdin with `-`, never through shell
   quoting: `--description -` for cards, `<text>` = `-` for comments. Stdin
   has to be a pipe or a file, not a terminal.
+- Texts are Markdown. Send HTML only with the text's own `…format html` flag
+  (`--format`, `--description-format`, `--body-format`, `--notes-format`); a
+  text that is mostly HTML without it is refused with exit 1. After every
+  write read `notice` in full, never cut the output off with `head`.
 - IDs are UUIDs. Take them from earlier output, never guess them. A card may
   also be named by its short identifier, such as `MNK-1A`. A value that is
   neither is refused with exit 1 before any request. An ID may be written in

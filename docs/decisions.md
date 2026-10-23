@@ -2265,3 +2265,18 @@ An export from a tree is refused, not shrunk, on an answer without trees.
 body kept follows renames and moves that no version of the referring page
 records. **Implemented as:** `export.loadTree`, `export.readDocuments`,
 `export.cachedPageOf`, see [Docs & Files](stable/docs-and-files.md#exporting-a-book-or-a-folder).
+
+<a id="c-137"></a>
+## C-137 — A text that is mostly HTML is not sent as Markdown
+
+*Applies to: every command that converts Markdown, `internal/markdown`*
+
+When more than half of the non-blank source lines belong to HTML blocks (the
+markers of the shapes, code and inline HTML not counted), the command sends
+nothing and exits 1 with `usage`, naming its own `…format html` flag and the
+fenced code block. Below that, HTML stays visible text with a `notice`.
+
+**Why:** such a text was meant as HTML and would arrive as its source code,
+with a `notice` that is easily cut off; one snippet in Markdown is an example.
+**Implemented as:** `markdown.Result.MostlyHTML`, `cli.markdownToHTML`, see
+[Rich text](stable/rich-text.md#html-given-as-markdown).

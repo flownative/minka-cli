@@ -188,3 +188,36 @@ func TestNamesAndAddressesReachMinkaInTheFormItTurnsIntoReferences(t *testing.T)
 		}
 	}
 }
+
+// A text written in HTML and sent as Markdown would arrive as its own source
+// code. Only HTML blocks count towards it: HTML shown in code, inline HTML in
+// the words and the markers of the shapes stay what they are.
+func TestATextOfMoreThanHalfHTMLBlocksIsMostlyHTML(t *testing.T) {
+	tests := []struct {
+		name     string
+		markdown string
+		mostly   bool
+	}{
+		{"only HTML", "<p>Done</p>\n<ul><li>x</li></ul>", true},
+		{"HTML of several blocks", "<h2>Status</h2>\n\n<p>Done.</p>\n\n<ul>\n<li>one</li>\n<li>two</li>\n</ul>", true},
+		{"HTML comment", "<!--\nnote\n-->", true},
+		{"mostly HTML", "<div>\n<p>a</p>\n<p>b</p>\n</div>\n\nSome words.", true},
+		{"exactly half", "<div>x</div>\n\nSome words.", false},
+		{"one HTML block in a long text", "# Title\n\nFirst paragraph\nwith two lines.\n\n<details><summary>More</summary></details>\n\n- one\n- two\n\nThe end.", false},
+		{"inline HTML", "<b>Bold</b> words and <i>more</i>\n<span>x</span> here", false},
+		{"HTML in a fenced code block", "```html\n<p>Done</p>\n<ul><li>x</li></ul>\n```", false},
+		{"HTML in an indented code block", "    <p>Done</p>\n    <ul><li>x</li></ul>", false},
+		{"markers of the shapes", MarkerTiles + "\n- <https://minka.example/go/card/MNK-1>\n\n" + MarkerVariables + "\n| a |\n|---|", false},
+		{"marker over several lines", "<!--\nminka:tiles\n-->\n- <https://minka.example/go/card/MNK-1>", false},
+		{"blank lines do not count", "<p>a</p>\n\n  \n\nwords", false},
+		{"empty", "", false},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := ToHTML(test.markdown).MostlyHTML; got != test.mostly {
+				t.Errorf("MostlyHTML of %q is %v, want %v", test.markdown, got, test.mostly)
+			}
+		})
+	}
+}
