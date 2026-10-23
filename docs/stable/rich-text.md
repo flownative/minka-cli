@@ -36,7 +36,8 @@ Minka code decides, not this list:
   `th.lexxy-content__table-cell--header`. Column alignment is lost.
 - Images become links; an image inside a link becomes its label.
 - Raw HTML in the Markdown becomes visible text, in a code block, except the
-  two markers of the shapes below.
+  two markers of the shapes below. A text that is mostly HTML is refused
+  instead, see [HTML given as Markdown](#html-given-as-markdown).
 - Callouts, link tiles and blocks of variables are written in the
   conventions of [The shapes of a document](#the-shapes-of-a-document).
 - A link whose target is not http, https, mailto, tel or relative becomes
@@ -50,6 +51,24 @@ silently emptying a description. Emptying is done with `--description ""`.
 
 Comments and messages keep every line break, so that plain text arrives the
 way it was typed.
+
+## HTML given as Markdown
+
+A text written in HTML and sent without its format flag would arrive as its
+own source code, in a code block, and the `notice` saying so is easily cut off.
+So a text that is **mostly HTML** is refused before anything is sent: exit 1,
+code `usage`, a hint naming the command's own flag (`--format html`,
+`--description-format html`, `--body-format html` or `--notes-format html`)
+and the fenced code block for HTML meant to be shown
+([C-137](../decisions.md#c-137)).
+
+Mostly HTML means: more than half of the source lines that are not blank belong
+to HTML blocks, the closing line of a block included. Not counted are the
+markers of the shapes, HTML in fenced or indented code and inline HTML inside a
+paragraph. Below the threshold the HTML is sent as visible text, with the
+`notice`. Every command that converts Markdown goes through
+`cli.markdownToHTML`, which turns `markdown.Result.MostlyHTML` into the
+refusal.
 
 ## HTML → Markdown
 

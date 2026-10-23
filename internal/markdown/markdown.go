@@ -92,13 +92,18 @@ const (
 
 const (
 	WarningImages      = "images are not supported and are sent as links"
-	WarningRawHTML     = "HTML inside Markdown is sent as visible text; use --description-format html or --format html to send HTML"
+	WarningRawHTML     = "HTML inside Markdown is sent as visible text; to send HTML, set the format flag of the text to html (--format, --description-format, --body-format or --notes-format)"
 	WarningUnsafeLinks = "links Minka does not keep (only http, https, mailto, tel and relative URLs) were sent as plain text"
 )
 
 type Result struct {
 	HTML     string
 	Warnings []string // each at most once, in the order they came up
+
+	// MostlyHTML says that more than half of the lines that hold anything
+	// belong to HTML blocks: a text written in HTML and sent as Markdown by
+	// mistake, which would arrive as its own source code.
+	MostlyHTML bool
 }
 
 var markdownParser = goldmark.New(
@@ -135,7 +140,21 @@ func ToHTML(source string, options ...Option) Result {
 	_ = ast.Walk(document, c.visit)
 	_ = c.w.Flush()
 
-	return Result{HTML: strings.TrimSpace(out.String()), Warnings: c.warnings}
+	return Result{
+		HTML:       strings.TrimSpace(out.String()),
+		Warnings:   c.warnings,
+		MostlyHTML: 2*c.htmlLines > nonBlankLines(source),
+	}
+}
+
+func nonBlankLines(source string) int {
+	count := 0
+	for _, line := range strings.Split(source, "\n") {
+		if strings.TrimSpace(line) != "" {
+			count++
+		}
+	}
+	return count
 }
 
 type converter struct {
@@ -144,6 +163,7 @@ type converter struct {
 	writer    ghtml.Writer
 	warnings  []string
 	linkDepth int // greater than 0 inside a link, where no further link may start
+	htmlLines int // the lines that hold anything inside HTML blocks shown as text
 
 	keepLineBreaks bool
 }
@@ -211,6 +231,7 @@ func (c *converter) visit(node ast.Node, entering bool) (ast.WalkStatus, error) 
 			if n.HasClosure() {
 				lines.Append(n.ClosureLine)
 			}
+			c.countHTMLLines(lines)
 			c.codeBlock(lines, PlainLanguage)
 		}
 		return ast.WalkSkipChildren, nil
@@ -307,6 +328,15 @@ func (c *converter) visit(node ast.Node, entering bool) (ast.WalkStatus, error) 
 	}
 
 	return ast.WalkContinue, nil
+}
+
+func (c *converter) countHTMLLines(lines *text.Segments) {
+	for i := 0; i < lines.Len(); i++ {
+		segment := lines.At(i)
+		if len(bytes.TrimSpace(segment.Value(c.source))) > 0 {
+			c.htmlLines++
+		}
+	}
 }
 
 func (c *converter) write(s string) {

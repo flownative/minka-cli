@@ -14,8 +14,9 @@ import (
 
 const commentFormatHelp = `The text is Markdown by default and is sent as HTML, the way a description is,
 except that every line break is kept: plain text arrives as it was typed.
---format html sends HTML as it is; the server reduces it to what it keeps. Give
-- as the text to read it from stdin.`
+--format html sends HTML as it is; the server reduces it to what it keeps. A
+text that is mostly HTML is refused without it. Give - as the text to read it
+from stdin.`
 
 const commentAuthorHint = "It does not exist, was removed, or somebody else wrote it: only the author can change or remove a comment."
 
@@ -37,7 +38,10 @@ func commentBody(cmd *cobra.Command, text, format string) (string, []string, err
 	case "html":
 		return text, markupNotice(text), nil
 	case "markdown":
-		result := markdown.ToHTML(text, markdown.KeepLineBreaks())
+		result, err := markdownToHTML(text, "the comment", "--format", markdown.KeepLineBreaks())
+		if err != nil {
+			return "", nil, err
+		}
 		if result.HTML == "" && strings.TrimSpace(text) != "" {
 			return "", nil, &Error{Code: CodeUsage, Message: "the comment has nothing Minka keeps"}
 		}

@@ -8,7 +8,6 @@ import (
 	"text/tabwriter"
 
 	"github.com/flownative/minka-cli/internal/api"
-	"github.com/flownative/minka-cli/internal/markdown"
 	"github.com/flownative/minka-cli/internal/richtext"
 	"github.com/spf13/cobra"
 )
@@ -580,7 +579,10 @@ func (a *app) postBody(value, format string) (string, []string, error) {
 	if format == "html" {
 		return text, markupNotice(text), nil
 	}
-	result := markdown.ToHTML(text)
+	result, err := markdownToHTML(text, "the body", "--body-format")
+	if err != nil {
+		return "", nil, err
+	}
 	if result.HTML == "" && strings.TrimSpace(text) != "" {
 		return "", nil, &Error{
 			Code:    CodeUsage,

@@ -260,7 +260,8 @@ const messageFormatHelp = `The text is Markdown by default and is sent as HTML, 
 every line break is kept, and addresses become links. --format text sends the
 text as it is, and the server keeps it as plain text with paragraphs, line
 breaks and links. --format html sends HTML as it is; the server reduces it to
-what it keeps. Give - as the text to read it from stdin.`
+what it keeps. A text that is mostly HTML is refused without it. Give - as the
+text to read it from stdin.`
 
 // messageBody turns the text of a chat message into what is sent.
 func messageBody(cmd *cobra.Command, text, format string) (string, []string, error) {
@@ -268,7 +269,10 @@ func messageBody(cmd *cobra.Command, text, format string) (string, []string, err
 	case "text", "html":
 		return text, nil, nil
 	case "markdown":
-		result := markdown.ToHTML(text, markdown.KeepLineBreaks())
+		result, err := markdownToHTML(text, "the message", "--format", markdown.KeepLineBreaks())
+		if err != nil {
+			return "", nil, err
+		}
 		if result.HTML == "" && strings.TrimSpace(text) != "" {
 			return "", nil, &Error{Code: CodeUsage, Message: "the message has nothing Minka keeps"}
 		}

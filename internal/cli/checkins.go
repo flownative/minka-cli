@@ -700,7 +700,10 @@ func answerBody(cmd *cobra.Command, text, format string) (string, []string, erro
 	case "html":
 		return text, markupNotice(text), nil
 	case "markdown":
-		result := markdown.ToHTML(text, markdown.KeepLineBreaks())
+		result, err := markdownToHTML(text, "the answer", "--format", markdown.KeepLineBreaks())
+		if err != nil {
+			return "", nil, err
+		}
 		if result.HTML == "" && strings.TrimSpace(text) != "" {
 			return "", nil, &Error{Code: CodeUsage, Message: "the answer has nothing Minka keeps"}
 		}

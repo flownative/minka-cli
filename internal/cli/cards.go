@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/flownative/minka-cli/internal/api"
-	"github.com/flownative/minka-cli/internal/markdown"
 	"github.com/spf13/cobra"
 )
 
@@ -786,7 +785,8 @@ func (a *app) descriptionHTML(cmd *cobra.Command, value, format string) (string,
 }
 
 // richTextHTML reads and converts a text written with the editor, named by
-// what it is and the flag that carries it.
+// what it is and the flag that carries it. The flag of its format is that
+// flag's name followed by "-format".
 func (a *app) richTextHTML(what, flag, value, format string) (string, []string, error) {
 	text, err := a.readValue(what, value)
 	if err != nil {
@@ -796,7 +796,10 @@ func (a *app) richTextHTML(what, flag, value, format string) (string, []string, 
 		return text, markupNotice(text), nil
 	}
 
-	result := markdown.ToHTML(text)
+	result, err := markdownToHTML(text, what, flag+"-format")
+	if err != nil {
+		return "", nil, err
+	}
 	if result.HTML == "" && strings.TrimSpace(text) != "" {
 		return "", nil, &Error{
 			Code:    CodeUsage,
