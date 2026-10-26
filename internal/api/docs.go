@@ -85,6 +85,7 @@ type DocumentListItem struct {
 	CreatedAt    string          `json:"createdAt"`
 	UpdatedAt    string          `json:"updatedAt"`
 	Creator      PersonReference `json:"creator"`
+	Labels       []Label         `json:"labels"` // the tool's labels first, then the project's
 	AppURL       string          `json:"appUrl"`
 }
 
@@ -99,6 +100,7 @@ type FilesUploadListItem struct {
 	CreatedAt    string          `json:"createdAt"`
 	UpdatedAt    string          `json:"updatedAt"`
 	Creator      PersonReference `json:"creator"`
+	Labels       []Label         `json:"labels"` // the tool's labels first, then the project's
 	AppURL       string          `json:"appUrl"`
 }
 
@@ -129,6 +131,7 @@ type Document struct {
 	UpdatedAt    string           `json:"updatedAt"`
 	Creator      PersonReference  `json:"creator"`
 	Comments     []Comment        `json:"comments"` // oldest first
+	Labels       []Label          `json:"labels"`   // the tool's labels first, then the project's
 	AppURL       string           `json:"appUrl"`
 }
 
@@ -155,6 +158,7 @@ type FilesUpload struct {
 	UpdatedAt         string             `json:"updatedAt"`
 	Creator           PersonReference    `json:"creator"`
 	Comments          []Comment          `json:"comments"`
+	Labels            []Label            `json:"labels"` // the tool's labels first, then the project's
 	AppURL            string             `json:"appUrl"`
 }
 
