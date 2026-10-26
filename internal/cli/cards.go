@@ -30,6 +30,8 @@ func (a *app) newCardsCmd() *cobra.Command {
 		a.newCardsUnassignCmd(),
 		a.newCardsSubscribeCmd(),
 		a.newCardsUnsubscribeCmd(),
+		a.newItemLabelCmd(a.cardLabelsTarget(), "cardId", true),
+		a.newItemLabelCmd(a.cardLabelsTarget(), "cardId", false),
 		a.newCardsDoneCmd(),
 		a.newCardsArchiveCmd(),
 		a.newCardsUnarchiveCmd(),

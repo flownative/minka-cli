@@ -66,6 +66,18 @@ server before it takes the entry out, and keeps the entry when that fails
 (C-119). Minka serves all of it from v0.53.0 on (replies from v0.26.0 on); the
 commands are checked against Minka's code and tests and the fake, not live.
 
+Labels are kept with `labels list`, `create`, `edit`, `move` and `delete`
+under `--project`, `--board` or `--tool`, and put on and taken off with `cards
+label`/`unlabel`, `docs label`/`unlabel` and `docs uploads label`/`unlabel`;
+the text views of cards, boards, documents, uploads and folders show them. The
+rule the commands follow is [Labels](../stable/labels.md) (C-138 to C-140).
+Minka serves the label routes from its first release containing #515, which is
+on its `main` and in no release yet; a released Minka answers every label
+address with its page for an unknown address, and its items carry no `labels`.
+The commands are checked against Minka's code and tests and the fake, not live.
+The fake does not mirror the 404 Minka gives a label write on a card in a
+column out of use.
+
 The Docs & Files of a project are read with `docs tools`, `docs list`,
 `docs show` and `docs uploads show`; `docs create` and `docs edit` write a
 document, `docs uploads create` puts a file into a tool — both requests Minka

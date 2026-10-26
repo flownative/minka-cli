@@ -1444,13 +1444,13 @@ change Minka silently ignores.
 ## C-086 — The colour of a group goes as it is named, and Minka is the one to refuse it
 
 *Applies to: `import`, the `color` of `todogroups`; `todogroups create`,
-`todogroups edit` and `columns edit`*
+`todogroups edit`, `columns edit`, `labels create` and `labels edit`*
 
 The extractor writes the colour of a group as Basecamp names it whenever it is
 a string with something in it, `white` included, unchecked, never lowercased
 or mapped; where Basecamp names none, the field is left out. The CLI sends
-what `--color` says, `""` included, and names the eleven colours in the hint
-once Minka has refused one. `--color white` takes a colour away, and so does
+what `--color` says, `""` included, and names the colours in the hint once
+Minka has refused one: eleven for a group or a column, twelve for a label. `--color white` takes a colour away, and so does
 `columns edit --no-color`, which sends Minka's `null`; there is no `--color
 none`.
 
@@ -1466,7 +1466,7 @@ carries a copy of Minka's eleven names, and no test holds it against Minka,
 only against the fake: that is accepted knowingly, because the copy only feeds
 a hint and never a refusal.
 **Implemented as:** `basecamp.groupColor`, `cli.newTodoGroupsEditCmd`,
-`cli.todoGroupColorUnknownHint`, `cli.columnRefusal`, see [Importing from
+`cli.todoGroupColorUnknownHint`, `cli.columnRefusal`, `cli.labelRefusal`, see [Importing from
 Basecamp](stable/import.md), [To-do lists and groups](stable/todo-lists.md) and
 [Columns](stable/columns.md).
 
@@ -2280,3 +2280,51 @@ fenced code block. Below that, HTML stays visible text with a `notice`.
 with a `notice` that is easily cut off; one snippet in Markdown is an example.
 **Implemented as:** `markdown.Result.MostlyHTML`, `cli.markdownToHTML`, see
 [Rich text](stable/rich-text.md#html-given-as-markdown).
+
+<a id="c-138"></a>
+## C-138 — A label named by its name is looked up in the list of its place
+
+*Applies to: `labels edit`, `move` and `delete`, the neighbour of `move`*
+
+A `<label>` that is no ID is found in `GET …/labels` of the place, compared as
+Minka compares names (composed, spacing tidied, case-folded), among the place's
+own labels only; a label of the project under a board, or none, exits 2 with a
+hint naming the place to use. An ID is sent as it is, and nothing is read.
+
+**Why:** the place routes take only an ID, and a name is what a person and an
+agent know a label by; a lookup that matched otherwise than Minka would find a
+label Minka would not, or miss one it would.
+**Implemented as:** `cli.resolveLabel`, `cli.labelNameKey`, see
+[Labels](stable/labels.md#naming-a-label).
+
+<a id="c-139"></a>
+## C-139 — On an item, an ID goes as labelId and anything else as name
+
+*Applies to: `cards label`, `cards unlabel`, `docs label`, `docs unlabel`,
+`docs uploads label`, `docs uploads unlabel`*
+
+A `<label>` that is a UUID goes as `labelId` (path for `unlabel`), lowercased;
+anything else as `name` (`?name=` for `unlabel`), and Minka resolves it. Never
+both, and an empty name is refused with exit 1 before any request.
+
+**Why:** Minka resolves names on items itself, among exactly the labels the
+item can take, so a lookup here would only add a request and a second matcher;
+both fields at once and an empty one are refusals Minka would answer anyway.
+**Implemented as:** `cli.newItemLabelCmd`, `api.AssignLabel`,
+`api.UnassignLabel`, see [Labels](stable/labels.md#labels-on-items).
+
+<a id="c-140"></a>
+## C-140 — Several labels go one request each, and the first refusal stops the run
+
+*Applies to: the `label` and `unlabel` commands of items*
+
+The labels are sent in the order given, one request each. The first refusal
+ends the run with its code; the error names that label and carries
+`data.applied` and `data.notApplied`. On success `data` is the item's labels
+afterwards.
+
+**Why:** the API takes one label per request; going on after a refusal would
+leave a set nobody asked for, while stopping leaves a prefix the caller can
+read off and finish.
+**Implemented as:** `cli.newItemLabelCmd`, see
+[Labels](stable/labels.md#labels-on-items).

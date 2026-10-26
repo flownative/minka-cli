@@ -69,6 +69,8 @@ func (a *app) newDocsCmd() *cobra.Command {
 		a.newDocsShowCmd(),
 		a.newDocsCreateCmd(),
 		a.newDocsEditCmd(),
+		a.newItemLabelCmd(a.documentLabelsTarget(), "documentId", true),
+		a.newItemLabelCmd(a.documentLabelsTarget(), "documentId", false),
 		a.newDocsVersionsCmd(),
 		a.newDocsUploadsCmd(),
 		a.newDocsFoldersCmd(),
@@ -465,6 +467,8 @@ func (a *app) newDocsUploadsCmd() *cobra.Command {
 		a.newDocsUploadsShowCmd(),
 		a.newDocsUploadsCreateCmd(),
 		a.newDocsUploadsEditCmd(),
+		a.newItemLabelCmd(a.uploadLabelsTarget(), "uploadId", true),
+		a.newItemLabelCmd(a.uploadLabelsTarget(), "uploadId", false),
 		a.newDocsUploadsVersionsCmd(),
 	)
 	cmd.AddCommand(orderCommands(a, uploadKind)...)
@@ -1544,14 +1548,14 @@ func renderDocumentLine(w io.Writer, document api.DocumentListItem, kind string)
 	if document.InNavigation != nil && !*document.InNavigation {
 		details = entryDetails(document.CommentCount, document.Archived, "not in navigation")
 	}
-	fmt.Fprintf(w, "- %s  %s%s%s\n", document.ID, kind, document.Title, details)
+	fmt.Fprintf(w, "- %s  %s%s%s%s\n", document.ID, kind, document.Title, labelTags(document.Labels), details)
 	if document.Lead != "" {
 		fmt.Fprintf(w, "  %s\n", oneLine(document.Lead))
 	}
 }
 
 func renderUploadLine(w io.Writer, upload api.FilesUploadListItem, kind string) {
-	fmt.Fprintf(w, "- %s  %s%s%s\n", upload.ID, kind, upload.Title, entryDetails(upload.CommentCount, upload.Archived))
+	fmt.Fprintf(w, "- %s  %s%s%s%s\n", upload.ID, kind, upload.Title, labelTags(upload.Labels), entryDetails(upload.CommentCount, upload.Archived))
 	fmt.Fprintf(w, "  %s, %s, file %s\n", upload.File.ContentType, fileSize(upload.File.ByteSize), upload.File.ID)
 }
 
@@ -1582,6 +1586,7 @@ func renderDocument(w io.Writer, document api.Document) {
 	if document.InNavigation != nil && !*document.InNavigation {
 		fmt.Fprintln(w, "Navigation: left out of the navigation of its book")
 	}
+	labelLine(w, document.Labels)
 	fmt.Fprintf(w, "Created: %s by %s\n", formatTime(document.CreatedAt), document.Creator.Name)
 	if document.EditedAt != nil {
 		fmt.Fprintf(w, "Edited: %s\n", formatTime(*document.EditedAt))
@@ -1601,6 +1606,7 @@ func renderFilesUpload(w io.Writer, upload api.FilesUpload) {
 	fmt.Fprintf(w, "Upload: %s\nTool: %s\nProject: %s\n", upload.ID, upload.ToolID, upload.ProjectID)
 	renderEntryPlace(w, upload.Folder, upload.Path, upload.Archived)
 	fmt.Fprintf(w, "File: %s (%s, %s, %s)\n", upload.File.Filename, upload.File.ContentType, fileSize(upload.File.ByteSize), upload.File.ID)
+	labelLine(w, upload.Labels)
 	fmt.Fprintf(w, "Created: %s by %s\n", formatTime(upload.CreatedAt), upload.Creator.Name)
 	if upload.EditedAt != nil {
 		fmt.Fprintf(w, "Edited: %s\n", formatTime(*upload.EditedAt))

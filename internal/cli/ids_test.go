@@ -381,6 +381,72 @@ var idsInCapitals = []idInCapitals{
 	}, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
 		return []string{"post", up(f.Post.ID)}
 	}},
+	{command: "labels list", inputs: []string{"--project"}, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
+		return []string{"--project", up(f.Project.ID)}
+	}},
+	{command: "labels list", inputs: []string{"--board"}, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
+		return []string{"--board", up(f.Board.ID)}
+	}},
+	{command: "labels list", inputs: []string{"--tool"}, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
+		return []string{"--tool", up(f.Files.ID)}
+	}},
+	{command: "labels create", inputs: []string{"--project"}, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
+		return []string{"Fresh", "--project", up(f.Project.ID)}
+	}},
+	{command: "labels create", inputs: []string{"--board"}, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
+		return []string{"Fresh", "--board", up(f.Board.ID)}
+	}},
+	{command: "labels create", inputs: []string{"--tool"}, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
+		return []string{"Fresh", "--tool", up(f.Files.ID)}
+	}},
+	{command: "labels edit", inputs: []string{"<label>", "--board"}, prepare: withLabels, args: func(e *testEnv, f *fakeapi.Fixture) []string {
+		return []string{up(labelNamed(e, "Stage::Ready").ID), "--board", up(f.Board.ID), "--color", "teal"}
+	}},
+	{command: "labels edit", inputs: []string{"--project"}, prepare: withLabels, args: func(e *testEnv, f *fakeapi.Fixture) []string {
+		return []string{"Plain", "--project", up(f.Project.ID), "--color", "teal"}
+	}},
+	{command: "labels edit", inputs: []string{"--tool"}, prepare: withLabels, args: func(e *testEnv, f *fakeapi.Fixture) []string {
+		return []string{"Draft", "--tool", up(f.Files.ID), "--color", "teal"}
+	}},
+	{command: "labels move", inputs: []string{"<label>", "--board", "--after"}, prepare: withLabels, args: func(e *testEnv, f *fakeapi.Fixture) []string {
+		return []string{up(labelNamed(e, "Stage::Ready").ID), "--board", up(f.Board.ID), "--after", up(labelNamed(e, "Stage::Late").ID)}
+	}},
+	{command: "labels move", inputs: []string{"--before"}, prepare: withLabels, args: func(e *testEnv, f *fakeapi.Fixture) []string {
+		return []string{"Stage::Late", "--board", f.Board.ID, "--before", up(labelNamed(e, "Stage::Ready").ID)}
+	}},
+	{command: "labels move", inputs: []string{"--project"}, prepare: withLabels, args: func(e *testEnv, f *fakeapi.Fixture) []string {
+		return []string{"Plain", "--project", up(f.Project.ID), "--first"}
+	}},
+	{command: "labels move", inputs: []string{"--tool"}, prepare: withLabels, args: func(e *testEnv, f *fakeapi.Fixture) []string {
+		return []string{"Draft", "--tool", up(f.Files.ID), "--first"}
+	}},
+	{command: "labels delete", inputs: []string{"<label>", "--project"}, prepare: withLabels, args: func(e *testEnv, f *fakeapi.Fixture) []string {
+		return []string{up(labelNamed(e, "Plain").ID), "--project", up(f.Project.ID)}
+	}},
+	{command: "labels delete", inputs: []string{"--board"}, prepare: withLabels, args: func(e *testEnv, f *fakeapi.Fixture) []string {
+		return []string{"Stage::Late", "--board", up(f.Board.ID)}
+	}},
+	{command: "labels delete", inputs: []string{"--tool"}, prepare: withLabels, args: func(e *testEnv, f *fakeapi.Fixture) []string {
+		return []string{"Draft", "--tool", up(f.Files.ID)}
+	}},
+	{command: "cards label", inputs: []string{"<label>"}, prepare: withLabels, args: func(e *testEnv, f *fakeapi.Fixture) []string {
+		return []string{up(f.CardInDoing.ID), up(labelNamed(e, "Stage::Ready").ID)}
+	}},
+	{command: "cards unlabel", inputs: []string{"<label>"}, prepare: withLabels, args: func(e *testEnv, f *fakeapi.Fixture) []string {
+		return []string{up(f.CardInDoing.ID), up(labelNamed(e, "Plain").ID)}
+	}},
+	{command: "docs label", inputs: []string{"<label>"}, prepare: withLabels, args: func(e *testEnv, f *fakeapi.Fixture) []string {
+		return []string{up(f.Document.ID), up(labelNamed(e, "Draft").ID)}
+	}},
+	{command: "docs unlabel", inputs: []string{"<label>"}, prepare: withLabels, args: func(e *testEnv, f *fakeapi.Fixture) []string {
+		return []string{up(f.Document.ID), up(labelNamed(e, "Draft").ID)}
+	}},
+	{command: "docs uploads label", inputs: []string{"<label>"}, prepare: withLabels, args: func(e *testEnv, f *fakeapi.Fixture) []string {
+		return []string{up(f.FilesUpload.ID), up(labelNamed(e, "Plain").ID)}
+	}},
+	{command: "docs uploads unlabel", inputs: []string{"<label>"}, prepare: withLabels, args: func(e *testEnv, f *fakeapi.Fixture) []string {
+		return []string{up(f.FilesUpload.ID), up(labelNamed(e, "Plain").ID)}
+	}},
 }
 
 func aFileToUpload(e *testEnv) string {
@@ -508,7 +574,7 @@ var idFlagNames = []string{"after", "before", "assignee", "notify-when-done", "n
 // idPositions are the positions that take an ID among other names for a thing;
 // a position whose name ends in "Id" takes nothing else and is held by the
 // test of the arguments above.
-var idPositions = []string{"<person>", "<card>", "<step>", "<subtask>", "<column>", "<item>", "<attachment>"}
+var idPositions = []string{"<person>", "<card>", "<step>", "<subtask>", "<column>", "<item>", "<attachment>", "<label>"}
 
 // A command that takes an ID is run with it in capitals above, or said here
 // why it is not.
