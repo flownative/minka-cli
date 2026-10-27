@@ -288,7 +288,7 @@ comments create.`,
 
 func (a *app) newCardsCreateCmd() *cobra.Command {
 	var boardID, column, title, description, descriptionFormat, due string
-	var assignees []string
+	var assignees, labels []string
 
 	cmd := &cobra.Command{
 		Use:   "create",
@@ -298,8 +298,10 @@ func (a *app) newCardsCreateCmd() *cobra.Command {
 			columnHelp + "\n\n" + descriptionHelp + "\n\n" +
 			"--assignee assigns a member of the project and can be given more than once.\n" +
 			"The card is created together with its people, or not at all. " + personHelp + "\n\n" +
+			newCardLabelHelp + "\n\n" +
 			"--due sets the day the card is due, as YYYY-MM-DD.",
 		Example: `  minka cards create --board 0199... --title "Fix the login"
+  minka cards create --board 0199... --title "Fix the login" --label "Priority::High" --label Bug
   minka cards create --board 0199... --column Doing --title "Review" --description - < notes.md`,
 		Args: requireArgs(),
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -307,6 +309,9 @@ func (a *app) newCardsCreateCmd() *cobra.Command {
 				return err
 			}
 			if err := checkDescriptionFormat(cmd, descriptionFormat); err != nil {
+				return err
+			}
+			if err := checkLabelValues(cmd, labels); err != nil {
 				return err
 			}
 
@@ -340,6 +345,9 @@ func (a *app) newCardsCreateCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			if input.LabelIDs, err = a.labelsForANewCard(s, boardID, labels); err != nil {
+				return err
+			}
 
 			if cmd.Flags().Changed("column") {
 				target, err := resolveColumn(*board, column)
@@ -365,7 +373,7 @@ func (a *app) newCardsCreateCmd() *cobra.Command {
 
 			card, err := s.client.CreateCard(a.ctx, boardID, input)
 			if err != nil {
-				return s.fail(err)
+				return newCardLabelRefusal(s.fail(err), boardID)
 			}
 
 			return a.ok(success{
@@ -375,6 +383,7 @@ func (a *app) newCardsCreateCmd() *cobra.Command {
 				breadcrumbs: cardBreadcrumbs(card.Value.ID),
 				text: func(w io.Writer) {
 					fmt.Fprintf(w, "Created card %s in %s: %s%s\n%s\n", card.Value.ID, card.Value.Column.Title, shortIDBefore(card.Value.ShortID), card.Value.Title, cardAddress(card.Value))
+					labelLine(w, card.Value.Labels)
 				},
 			})
 		},
@@ -385,6 +394,7 @@ func (a *app) newCardsCreateCmd() *cobra.Command {
 	flags.StringVar(&title, "title", "", "Title of the card")
 	flags.StringVar(&column, "column", "", "Column for the card (default: Triage)")
 	flags.StringArrayVar(&assignees, "assignee", nil, "Person to assign: ID, me, e-mail address or name (repeatable)")
+	flags.StringArrayVar(&labels, "label", nil, "Label to put on: ID or name of a label of the board or its project (repeatable)")
 	flags.StringVar(&due, "due", "", "Day the card is due, as YYYY-MM-DD")
 	flags.StringVar(&description, "description", "", "Description, or - to read it from stdin")
 	flags.StringVar(&descriptionFormat, "description-format", "markdown", "Format of the description: markdown or html")

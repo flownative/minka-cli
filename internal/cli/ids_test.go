@@ -99,6 +99,9 @@ var idsInCapitals = []idInCapitals{
 	{command: "cards create", inputs: []string{"--board", "--column", "--assignee"}, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
 		return []string{"--board", up(f.Board.ID), "--column", up(f.Doing.ID), "--assignee", up(f.Anke.ID), "--title", "Pack"}
 	}},
+	{command: "cards create", inputs: []string{"--label"}, prepare: withLabels, args: func(e *testEnv, f *fakeapi.Fixture) []string {
+		return []string{"--board", f.Board.ID, "--label", up(labelNamed(e, "Plain").ID), "--title", "Pack"}
+	}},
 	{command: "cards move", inputs: []string{"--column", "--after"}, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
 		return []string{f.CardInTriage.ID, "--column", up(f.Doing.ID), "--after", up(f.CardInDoing.ID)}
 	}},

@@ -70,7 +70,10 @@ Labels are kept with `labels list`, `create`, `edit`, `move` and `delete`
 under `--project`, `--board` or `--tool`, and put on and taken off with `cards
 label`/`unlabel`, `docs label`/`unlabel` and `docs uploads label`/`unlabel`;
 the text views of cards, boards, documents, uploads and folders show them. The
-rule the commands follow is [Labels](../stable/labels.md) (C-138 to C-140).
+rule the commands follow is [Labels](../stable/labels.md) (C-138 to C-141).
+`cards create --label` needs Minka's first release containing #520 (labels on
+a new card), on its `main` and in no release yet; an older Minka ignores
+`labelIds` and creates the card without labels.
 Minka serves the label routes from its first release containing #515, which is
 on its `main` and in no release yet; a released Minka answers every label
 address with its page for an unknown address, and its items carry no `labels`.

@@ -2328,3 +2328,17 @@ leave a set nobody asked for, while stopping leaves a prefix the caller can
 read off and finish.
 **Implemented as:** `cli.newItemLabelCmd`, see
 [Labels](stable/labels.md#labels-on-items).
+
+<a id="c-141"></a>
+## C-141 — The labels of a new card are named here and sent as IDs, each once
+
+*Applies to: `cards create --label`*
+
+An ID is sent as it is; a name is found in `GET /boards/{id}/labels`, read once
+and only for a name, as Minka compares names: one found nowhere exits 2 before
+any write. A label named twice goes once; two of one scope are left to Minka.
+
+**Why:** the card route takes only IDs, and a scope check here would be a
+second rule beside Minka's that the list alone cannot always decide.
+**Implemented as:** `cli.labelsForANewCard`, see
+[Labels](stable/labels.md#labels-on-a-new-card).

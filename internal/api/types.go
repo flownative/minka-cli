@@ -326,14 +326,15 @@ type MessagesQuery struct {
 	Limit  *int // at most this many, the server allows up to 200
 }
 
-// CreateCardInput creates a card with its description, due date and people in
-// one transaction.
+// CreateCardInput creates a card with its description, due date, people and
+// labels in one transaction.
 type CreateCardInput struct {
 	Title       string   `json:"title"`
 	ColumnID    *string  `json:"columnId,omitempty"`    // nil lands the card in Triage
 	Description *string  `json:"description,omitempty"` // HTML
 	DueOn       *string  `json:"dueOn,omitempty"`       // YYYY-MM-DD
 	AssigneeIDs []string `json:"assigneeIds,omitempty"` // members of the project
+	LabelIDs    []string `json:"labelIds,omitempty"`    // labels of the board or its project, one per scope
 }
 
 type UpdateCardInput struct {

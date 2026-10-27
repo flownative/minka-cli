@@ -265,6 +265,8 @@ minka cards unsubscribe <cardId> <person> --json
 - `cards create --assignee <person>` (repeatable) looks the people up first
   and creates the card together with them in one request. Somebody outside
   the project leaves no card behind (exit 9, `personNotAProjectMember`).
+- `cards create --label <label>` (repeatable) gives the card labels of its
+  board or project, by ID or name; see [Labels](labels.md).
 - New cards go to the top of their column.
 - A card read by itself carries `subscribers` as `{id, name}`, sorted by
   name: the people it notifies about comments, its due date and completion.

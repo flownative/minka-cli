@@ -8,6 +8,7 @@ minka labels create <name> (--project <projectId> | --board <boardId> | --tool <
 minka labels edit <label> (--project … | --board … | --tool …) [--name <name>] [--color <colour>] --json
 minka labels move <label> (--project … | --board … | --tool …) (--first | --after <label> | --before <label>) --json
 minka labels delete <label> (--project … | --board … | --tool …) --json
+minka cards create --board <boardId> --title "Title" --label <label> [--label <label>...] --json
 minka cards label <cardId> <label> [<label>...] --json
 minka cards unlabel <cardId> <label> [<label>...] --json
 minka docs label <documentId> <label> [<label>...] --json
@@ -53,6 +54,10 @@ minka docs uploads unlabel <uploadId> <label> [<label>...] --json
   card that carries `Priority::High` takes `Priority::High` off. Plain labels
   never replace one another. A rename into a scope takes nothing off, so an
   item can then carry two labels of one scope.
+- `cards create --label <label>` (repeatable) creates the card with its labels
+  or not at all. A name is looked up among the board's and the project's
+  labels first: one found nowhere exits 2, and nothing is written. Two labels of one scope exit 9 with
+  `labelsShareAScope`: a new card takes one label of each scope.
 - Several labels go in one request each, in the order given. The first refusal
   stops the run; `data.applied` and `data.notApplied` of the error say how far
   it got. On success `data` is every label the item carries afterwards.

@@ -197,6 +197,47 @@ func (s *Server) updateLabel(w http.ResponseWriter, r *http.Request, person *Per
 	writeJSON(w, http.StatusOK, s.labelResource(label))
 }
 
+// labelsForANewCard are the labels a new card is to carry, each named by the
+// exact ID of a label of its board or its project. A client of the project
+// hears of no label, but only where labels are sent.
+func (s *Server) labelsForANewCard(w http.ResponseWriter, board *Board, person *Person, labelIDs []string) ([]*Label, bool) {
+	if len(labelIDs) == 0 {
+		return nil, true
+	}
+	if s.isAClient(person.ID) {
+		notFound(w)
+		return nil, false
+	}
+	choices := append(s.labelsOf(board.ProjectID, board.ID), s.labelsOf(board.ProjectID, "")...)
+	var labels []*Label
+	for _, id := range labelIDs {
+		at := slices.IndexFunc(choices, func(l *Label) bool { return l.ID == id })
+		if at < 0 {
+			unprocessable(w, "labelUnknown", "Neither this board nor its project has such a label.")
+			return nil, false
+		}
+		labels = append(labels, choices[at])
+	}
+	return labels, true
+}
+
+// labelsShareAScope says whether two different labels of one scope are
+// among those named; one label named twice counts once.
+func labelsShareAScope(labels []*Label) bool {
+	seen := map[string]*Label{}
+	for _, label := range labels {
+		scope := labelScopeKey(label.Name)
+		if scope == "" {
+			continue
+		}
+		if other, taken := seen[scope]; taken && other != label {
+			return true
+		}
+		seen[scope] = label
+	}
+	return false
+}
+
 // moveLabel puts a label right behind previousLabelId, which alone decides
 // where both are given, else right in front of nextLabelId, else at the front.
 // Either has to be another label of the same place. An archived project

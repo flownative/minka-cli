@@ -219,7 +219,7 @@ minka boards list <projectId> --json
 minka boards show <boardId> --json
 minka cards mine --json
 minka cards show <cardId> --json
-minka cards create --board <boardId> --title "Title" [--column <column>] [--assignee <person>]... [--due YYYY-MM-DD] [--description - < body.md] --json
+minka cards create --board <boardId> --title "Title" [--column <column>] [--assignee <person>]... [--label <label>]... [--due YYYY-MM-DD] [--description - < body.md] --json
 minka cards edit <cardId> [--title "New"] [--due YYYY-MM-DD] [--description - < body.md] --json
 minka cards move <cardId> --column <column> [--on-hold] [--top | --bottom | --after <cardId> | --before <cardId>] --json
 minka cards done <cardId> --json

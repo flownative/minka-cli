@@ -378,3 +378,61 @@ func TestTheFakeRefusesLabelWritesInAnArchivedProject(t *testing.T) {
 		}
 	}
 }
+
+// A new card takes labels of its board and of its project by their IDs, one
+// named twice once; what refuses them is judged in Minka's order, and a
+// refusal leaves no card behind.
+func TestTheFakeCreatesACardWithItsLabels(t *testing.T) {
+	s, f := New(t)
+	s.Tokens[clientToken] = f.Client.ID
+	high := s.AddLabel(f.Project.ID, "", "Priority::High", "red")
+	low := s.AddLabel(f.Project.ID, "", "Priority::Low", "blue")
+	verify := s.AddLabel(f.Project.ID, f.Board.ID, "devops::verify", "teal")
+	create := s.AddLabel(f.Project.ID, f.Board.ID, "DevOps::create", "teal")
+	ofTheTool := s.AddLabel(f.Project.ID, f.Files.ID, "Draft", "gray")
+	ofAnotherProject := s.AddLabel(f.OtherProject.ID, f.OtherBoard.ID, "Elsewhere", "gray")
+	path := "/api/v1/boards/" + f.Board.ID + "/cards"
+	cardsBefore := len(f.Triage.Cards) + len(f.Doing.Cards)
+
+	for _, c := range []struct{ body, want string }{
+		{`{"title":"","labelIds":["nowhere"]}`, "422 cardTitleMissing"},
+		{`{"title":"T","assigneeIds":["nobody"],"labelIds":"` + high.ID + `"}`, "422 personNotAProjectMember"},
+		{`{"title":"T","labelIds":"` + high.ID + `"}`, "400 malformedBody"},
+		{`{"title":"T","labelIds":[1]}`, "400 malformedBody"},
+		{`{"title":"T","labelIds":["nowhere"]}`, "422 labelUnknown"},
+		{`{"title":"T","labelIds":["` + strings.ToUpper(high.ID) + `"]}`, "422 labelUnknown"},
+		{`{"title":"T","labelIds":["` + ofTheTool.ID + `"]}`, "422 labelUnknown"},
+		{`{"title":"T","labelIds":["` + ofAnotherProject.ID + `"]}`, "422 labelUnknown"},
+		{`{"title":"T","columnId":"` + f.Done.ID + `","labelIds":["nowhere"]}`, "422 labelUnknown"},
+		{`{"title":"T","columnId":"` + f.Done.ID + `","labelIds":["` + high.ID + `","` + low.ID + `"]}`, "404"},
+		{`{"title":"T","assigneeIds":["` + f.Stranger.ID + `"],"labelIds":["` + high.ID + `","` + low.ID + `"]}`, "422 personNotAProjectMember"},
+		{`{"title":"T","labelIds":["` + high.ID + `","` + low.ID + `"]}`, "422 labelsShareAScope"},
+		{`{"title":"T","labelIds":["` + verify.ID + `","` + create.ID + `"]}`, "422 labelsShareAScope"},
+	} {
+		if got := sendAs(t, s, f.Token, "POST", path, "application/json", c.body); got != c.want {
+			t.Errorf("%s: %s, want %s", c.body, got, c.want)
+		}
+	}
+	if got := sendAs(t, s, clientToken, "POST", path, "application/json", `{"title":"T","labelIds":["`+high.ID+`"]}`); got != "404" {
+		t.Errorf("a client sending labels: %s", got)
+	}
+	if after := len(f.Triage.Cards) + len(f.Doing.Cards); after != cardsBefore {
+		t.Fatalf("%d cards after refusals only, %d before", after, cardsBefore)
+	}
+
+	status, answer := sendFor(t, s, f.Token, "POST", path, `{"title":"T","labelIds":["`+high.ID+`","`+verify.ID+`","`+high.ID+`"]}`)
+	if status != http.StatusCreated {
+		t.Fatalf("status %d: %v", status, answer)
+	}
+	if got := labelNames(answer.(map[string]any)["labels"]); !slices.Equal(got, []string{"devops::verify", "Priority::High"}) {
+		t.Fatalf("labels %v", got)
+	}
+	if got := len(s.ItemLabels[answer.(map[string]any)["id"].(string)]); got != 2 {
+		t.Fatalf("the card carries %d labels", got)
+	}
+
+	f.Project.Archived = true
+	if got := sendAs(t, s, f.Token, "POST", path, "application/json", `{"title":"T","labelIds":["`+high.ID+`","`+low.ID+`"]}`); got != "422 projectArchived" {
+		t.Errorf("an archived project: %s", got)
+	}
+}

@@ -401,3 +401,102 @@ func TestANeighbourOfAnotherPlaceIsNamedAsSuch(t *testing.T) {
 		t.Fatal("the move was sent")
 	}
 }
+
+// labelReads counts the requests that read the labels of a place.
+func labelReads(e *testEnv) int {
+	reads := 0
+	for _, r := range e.server.Requests() {
+		if r.Method == http.MethodGet && strings.HasSuffix(r.Path, "/labels") {
+			reads++
+		}
+	}
+	return reads
+}
+
+// A new card takes labels by ID and by name, a name found among the board's
+// and the project's labels the way Minka compares names; each goes once, and
+// only IDs are sent.
+func TestANewCardTakesLabelsByIDAndByName(t *testing.T) {
+	e := newTestEnv(t)
+	withLabels(e)
+	f := e.fixture
+	plain, ready := labelNamed(e, "Plain"), labelNamed(e, "Stage::Ready")
+
+	env := runOK(t, e, "cards", "create", "--board", f.Board.ID, "--title", "Labelled",
+		"--label", strings.ToUpper(plain.ID), "--label", "stage :: READY", "--label", "plain")
+	ids, _ := e.lastWriteBody()["labelIds"].([]any)
+	if len(ids) != 2 || ids[0] != plain.ID || ids[1] != ready.ID {
+		t.Fatalf("labelIds %v", ids)
+	}
+	if got := labelNamesOf(t, rawField(env.Data, "labels")); !slices.Equal(got, []string{"Stage::Ready", "Plain"}) {
+		t.Fatalf("the card carries %v", got)
+	}
+	if labelReads(e) != 1 {
+		t.Fatalf("the labels were read %d times", labelReads(e))
+	}
+
+	r := e.run("", "cards", "create", "--board", f.Board.ID, "--title", "Text", "--label", "Plain", "--styled")
+	if !strings.Contains(r.stdout, "Labels: Plain") {
+		t.Errorf("no labels line in:\n%s", r.stdout)
+	}
+}
+
+// Without --label nothing about labels is sent or read; IDs alone are sent
+// without reading the labels either.
+func TestANewCardWithoutNamedLabelsReadsNoLabels(t *testing.T) {
+	e := newTestEnv(t)
+	withLabels(e)
+	f := e.fixture
+	runOK(t, e, "cards", "create", "--board", f.Board.ID, "--title", "Bare")
+	if _, sent := e.lastWriteBody()["labelIds"]; sent {
+		t.Fatalf("labelIds sent without --label: %v", e.lastWriteBody())
+	}
+	runOK(t, e, "cards", "create", "--board", f.Board.ID, "--title", "By ID", "--label", labelNamed(e, "Plain").ID)
+	if labelReads(e) != 0 {
+		t.Fatalf("the labels were read %d times", labelReads(e))
+	}
+}
+
+// A label that cannot be named is refused before the card is created: an
+// empty name, a name found nowhere or ambiguous, a label of the Docs & Files
+// tool; two of one scope are Minka's refusal, with a hint.
+func TestANewCardsLabelsAreRefusedBeforeAnyWrite(t *testing.T) {
+	e := newTestEnv(t)
+	withLabels(e)
+	f := e.fixture
+	create := func(labels ...string) (envelope, result) {
+		args := []string{"cards", "create", "--board", f.Board.ID, "--title", "Refused"}
+		for _, label := range labels {
+			args = append(args, "--label", label)
+		}
+		return e.runJSON("", args...)
+	}
+
+	_, r := create("Plain", "  ")
+	expectCode(t, r, ExitUsage)
+	env, r := create("Plain", "Draft")
+	expectCode(t, r, ExitNotFound)
+	if !strings.Contains(env.Error, "Draft") || !strings.Contains(env.Hint, "labels list --board "+f.Board.ID) {
+		t.Errorf("error %q, hint %q", env.Error, env.Hint)
+	}
+	e.server.AddLabel(f.Project.ID, "", "PLAIN", "gray")
+	_, r = create("plain")
+	expectCode(t, r, ExitAmbiguous)
+	if len(e.server.WritingRequests()) != 0 {
+		t.Fatalf("a refused label wrote: %v", e.server.WritingRequests())
+	}
+
+	env, r = create("Stage::Ready", "stage::late")
+	expectCode(t, r, ExitValidation)
+	if env.Meta["apiCode"] != "labelsShareAScope" || !strings.Contains(env.Hint, "one label of each scope") {
+		t.Fatalf("apiCode %v, hint %q", env.Meta["apiCode"], env.Hint)
+	}
+	env, r = create(labelNamed(e, "Draft").ID)
+	expectCode(t, r, ExitValidation)
+	if env.Meta["apiCode"] != "labelUnknown" || !strings.Contains(env.Hint, "--board "+f.Board.ID) {
+		t.Fatalf("apiCode %v, hint %q", env.Meta["apiCode"], env.Hint)
+	}
+	if got := len(f.Triage.Cards); got != 1 {
+		t.Fatalf("%d cards in Triage after refusals only", got)
+	}
+}

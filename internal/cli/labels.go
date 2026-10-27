@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"regexp"
+	"slices"
 	"strings"
 	"text/tabwriter"
 	"unicode"
@@ -30,6 +31,7 @@ const (
 	apiCodeLabelNameTaken     = "labelNameTaken"
 	apiCodeLabelPlaceUnknown  = "labelPlaceUnknown"
 	apiCodeLabelUnknown       = "labelUnknown"
+	apiCodeLabelsShareAScope  = "labelsShareAScope"
 
 	labelNameRules = `A label name holds letters, digits, spaces, "-", "+" and "*", at most 50
 characters, with at most one "::" between a scope and a value, such as
@@ -52,6 +54,15 @@ project, case and spacing aside. Several labels go in one request each, in the
 order given; the first refusal stops the run, and the error says which labels
 were applied before it ("applied" in data). On success the answer is every
 label the item carries afterwards.`
+
+	newCardLabelHelp = `--label puts a label of the board or of its project on the card and can be
+given more than once; the card is created with its labels, or not at all. A
+label is its ID or its name: a name is looked up in "minka labels list --board"
+the way Minka compares names, case and spacing aside, and one found nowhere
+exits 2 (not_found) before anything is written. A label named twice goes once.
+A card takes one label of each scope: two such as "Priority::High" and
+"Priority::Low" exit 9 (validation) with meta.apiCode labelsShareAScope, and a
+label of another board, tool or project with labelUnknown.`
 
 	labelScopeHelp = `A scoped label such as "Priority::High" takes any other label of the same
 scope off the item: putting on "Priority::Low" replaces it. Plain labels never
@@ -202,6 +213,87 @@ func (a *app) resolveLabel(s *session, place api.LabelPlace, value, neighbourFla
 	return "", nil, &Error{Code: CodeNotFound,
 		Message: fmt.Sprintf("%s has no label %q", placeName(place), value),
 		Hint:    "List its labels with: minka labels list " + placeFlag(place)}
+}
+
+// checkLabelValues refuses an empty label name before anything is sent: it
+// names no label.
+func checkLabelValues(cmd *cobra.Command, values []string) error {
+	for _, value := range values {
+		if strings.TrimFunc(value, unicode.IsSpace) == "" {
+			return usageErrorf(cmd, "a label is named by its ID or its name, and an empty name names none")
+		}
+	}
+	return nil
+}
+
+// labelsForANewCard turns the labels given for a new card into IDs, each
+// once. An ID goes as it is; a name is looked up among the labels the cards
+// of the board can take, its own and the project's, which are read once and
+// only for a name. Two labels of one scope are left to Minka to refuse.
+func (a *app) labelsForANewCard(s *session, boardID string, values []string) ([]string, error) {
+	var ids []string
+	var labels []api.Label
+	place := api.LabelPlace{Kind: "boards", ID: boardID}
+	for _, value := range values {
+		id, isID := asID(value)
+		if !isID {
+			if labels == nil {
+				listed, err := s.client.Labels(a.ctx, place)
+				if err != nil {
+					return nil, labelRefusal(s, err)
+				}
+				labels = append([]api.Label{}, listed.Value...)
+			}
+			label, err := labelNamedOnABoard(labels, boardID, value)
+			if err != nil {
+				return nil, err
+			}
+			id = label.ID
+		}
+		if !slices.Contains(ids, id) {
+			ids = append(ids, id)
+		}
+	}
+	return ids, nil
+}
+
+// labelNamedOnABoard is the one label of the list a name names, compared the
+// way Minka compares names.
+func labelNamedOnABoard(labels []api.Label, boardID, name string) (api.Label, error) {
+	key := labelNameKey(name)
+	var matches []api.Label
+	for _, label := range labels {
+		if labelNameKey(label.Name) == key {
+			matches = append(matches, label)
+		}
+	}
+	switch len(matches) {
+	case 1:
+		return matches[0], nil
+	case 0:
+		return api.Label{}, &Error{Code: CodeNotFound,
+			Message: fmt.Sprintf("neither board %s nor its project has a label %q", boardID, name),
+			Hint:    "A card takes the labels of its board and of its project. List them with: minka labels list --board " + boardID}
+	}
+	var candidates []string
+	for _, label := range matches {
+		candidates = append(candidates, label.Name+" ("+label.ID+")")
+	}
+	return api.Label{}, &Error{Code: CodeAmbiguous,
+		Message: fmt.Sprintf("%q matches %d labels", name, len(matches)),
+		Hint:    "Give the label's ID. Candidates: " + strings.Join(candidates, ", ")}
+}
+
+// newCardLabelRefusal names the way on where Minka refused the labels of a
+// new card, and leaves every other refusal as it is.
+func newCardLabelRefusal(e *Error, boardID string) *Error {
+	switch e.APICode {
+	case apiCodeLabelsShareAScope:
+		e.Hint = "A card takes one label of each scope, the part before \"::\": give only one of them. The scopes of the board's labels show in: minka labels list --board " + boardID
+	case apiCodeLabelUnknown:
+		e.Hint = "A card takes the labels of its board and of its project. List them with: minka labels list --board " + boardID
+	}
+	return e
 }
 
 func labelBreadcrumbs(place api.LabelPlace, labelID string) []Breadcrumb {
