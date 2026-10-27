@@ -99,6 +99,9 @@ var idsInCapitals = []idInCapitals{
 	{command: "cards create", inputs: []string{"--board", "--column", "--assignee"}, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
 		return []string{"--board", up(f.Board.ID), "--column", up(f.Doing.ID), "--assignee", up(f.Anke.ID), "--title", "Pack"}
 	}},
+	{command: "cards create", inputs: []string{"--label"}, prepare: withLabels, args: func(e *testEnv, f *fakeapi.Fixture) []string {
+		return []string{"--board", f.Board.ID, "--label", up(labelNamed(e, "Plain").ID), "--title", "Pack"}
+	}},
 	{command: "cards move", inputs: []string{"--column", "--after"}, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
 		return []string{f.CardInTriage.ID, "--column", up(f.Doing.ID), "--after", up(f.CardInDoing.ID)}
 	}},
@@ -407,6 +410,19 @@ var idsInCapitals = []idInCapitals{
 	}},
 	{command: "labels edit", inputs: []string{"--tool"}, prepare: withLabels, args: func(e *testEnv, f *fakeapi.Fixture) []string {
 		return []string{"Draft", "--tool", up(f.Files.ID), "--color", "teal"}
+	}},
+	{command: "labels rename-scope", inputs: []string{"--board"}, prepare: withLabels, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
+		return []string{"Stage", "Phase", "--board", up(f.Board.ID)}
+	}},
+	{command: "labels rename-scope", inputs: []string{"--project"}, prepare: func(e *testEnv) {
+		e.server.AddLabel(e.fixture.Project.ID, "", "Priority::High", "red")
+	}, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
+		return []string{"Priority", "Urgency", "--project", up(f.Project.ID)}
+	}},
+	{command: "labels rename-scope", inputs: []string{"--tool"}, prepare: func(e *testEnv) {
+		e.server.AddLabel(e.fixture.Project.ID, e.fixture.Files.ID, "State::Draft", "red")
+	}, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
+		return []string{"State", "Phase", "--tool", up(f.Files.ID)}
 	}},
 	{command: "labels move", inputs: []string{"<label>", "--board", "--after"}, prepare: withLabels, args: func(e *testEnv, f *fakeapi.Fixture) []string {
 		return []string{up(labelNamed(e, "Stage::Ready").ID), "--board", up(f.Board.ID), "--after", up(labelNamed(e, "Stage::Late").ID)}

@@ -3,9 +3,10 @@
 A **label** belongs to a project, or to one of its boards or Docs & Files
 tools. A card carries labels of its board and of its project, a document or an
 upload labels of its tool and of its project. `labels list`, `create`, `edit`,
-`move` and `delete` keep the labels of a place; `cards label` and `unlabel`,
-`docs label` and `unlabel`, `docs uploads label` and `unlabel` put them on items
-and take them off. [The skill](../../skills/minka/references/labels.md)
+`rename-scope`, `move` and `delete` keep the labels of a place;
+`cards create --label` gives a new card its labels; `cards label` and
+`unlabel`, `docs label` and `unlabel`, `docs uploads label` and `unlabel` put
+them on items and take them off. [The skill](../../skills/minka/references/labels.md)
 describes them for agents.
 
 ## The place
@@ -56,6 +57,24 @@ exits 2 and points to `labels list` (C-138).
 - **`edit`** sends `--name` and `--color` as given; at least one, or it exits 1
   before any request. A rename that changes only the case is allowed. A rename
   into a scope takes nothing off the items.
+- **`rename-scope <scope> <newScope>`** sends `{"scope", "newScope"}` as
+  typed to `POST P/labels/scope-renames`, with nothing read first (C-142).
+  Every label of `scope` among the place's own labels takes `newScope`, in
+  the case it is written in; scopes compare case aside, so a rename into the
+  same scope changes only its case. Colour, position and the items that carry
+  the labels stay; the project's labels are not renamed under a board or a
+  tool. All or none: a resulting name over 50 characters is
+  `labelNameTooLong`, an empty scope `labelScopeMissing`, one with `::` or
+  another character a name refuses `labelScopeMalformed`, a scope no label of
+  the place has 404 (exit 2). The answer is the place's own labels afterwards,
+  without the project's, and the text view lists them.
+
+  A rename into a scope already in use **joins** it: `cull::select` renamed to
+  `auswahl` stands beside an existing `auswahl::keep`. Only a resulting full
+  name that exists already anywhere in the project, compared case-folded,
+  refuses the rename with `labelNameTaken`, and then nothing is renamed. An
+  item that carried a label of each scope keeps both until it takes the next
+  label of that scope, which replaces them.
 - **`move`** takes exactly one of `--first`, `--after` and `--before`. It sends
   `{}` for `--first`, `{"previousLabelId"}` for `--after` and
   `{"nextLabelId"}` for `--before`, never both: Minka places by the previous
@@ -86,6 +105,22 @@ label of the same scope, case-folded, in the same write; plain labels never
 displace. A label the item carries already answers 200 instead of 201, and a
 label taken off that it does not carry is a 204 as well.
 
+## Labels on a new card
+
+`cards create --label <label>` (repeatable) creates the card with its labels in
+one request, or not at all. The API takes only IDs, as `labelIds`. A label in
+the shape of a UUID is sent lowercased; a name is looked up in
+`GET /boards/{id}/labels`, the board's own labels and the project's, compared
+the way Minka compares names. The list is read once, and only when a name is
+given; without `--label` no `labelIds` is sent and nothing is read. A name
+found nowhere exits 2 and an empty one exits 1, each before anything is
+written. A label named twice is sent once (C-141).
+
+Two labels of one scope are left to Minka: `labelsShareAScope`, exit 9, with a
+hint that a card takes one label of each scope. A label ID of another board, a
+Docs & Files tool or another project is Minka's `labelUnknown`. A client of the
+project who sends labels gets 404.
+
 ## Where labels show
 
 Minka hands `labels` out on every card answer — `cards show`, the card of a
@@ -107,9 +142,11 @@ items are shown to whoever sees the item.
 
 | Route | Order |
 |---|---|
+| `POST /boards/{id}/cards` with `labelIds` | board (404) · body · title · `dueOn` · `assigneeIds` (400, malformed ID `personNotAProjectMember`) · `labelIds` not a list of strings (400) · a client (404, only where labels are sent) · `labelUnknown`, compared by exact ID · description · column (`projectArchived`, 404) · `personNotAProjectMember` · `labelsShareAScope`, a label named twice counting once |
 | `GET P/labels` | place (404, client 404) · list; an archived project reads |
 | `POST P/labels` | place · body (415, 400) · name (`labelNameMissing`, `labelNameTooLong`, `labelNameMalformed`) · `labelColorUnknown` · `labelNameTaken` · `projectArchived` |
 | `PATCH P/labels/{id}` | place · label of this place (404) · body · `nothingToChange` · name · colour · `labelNameTaken` · `projectArchived` |
+| `POST P/labels/scope-renames` | place · body · `scope`, then `newScope` (`labelScopeMissing`, `labelNameTooLong`, `labelScopeMalformed`) · then label by label in the place's order: `labelNameTooLong` · `labelNameTaken` · `projectArchived` · no label of the scope: `projectArchived`, else 404 |
 | `POST P/labels/{id}/moves` | place · label · body · `labelPlaceUnknown`, previous first · `projectArchived`, a move that changes nothing included |
 | `DELETE P/labels/{id}` | place · label · `projectArchived` |
 | `POST I/labels` | item (404: draft, trash, client) · body · `labelAmbiguous` · `labelMissing` · `labelUnknown` · `projectArchived` · `cardArchived`, `documentArchived`, `uploadArchived` |

@@ -1928,6 +1928,14 @@ func (s *Server) addCard(w http.ResponseWriter, r *http.Request, person *Person)
 			return
 		}
 	}
+	labelIDs, ok := stringListField(w, fields, "labelIds")
+	if !ok {
+		return
+	}
+	labels, ok := s.labelsForANewCard(w, board, person, labelIDs)
+	if !ok {
+		return
+	}
 	if description != nil && !validDescription(w, *description) {
 		return
 	}
@@ -1945,13 +1953,17 @@ func (s *Server) addCard(w http.ResponseWriter, r *http.Request, person *Person)
 		return
 	}
 
-	// Card and people are one transaction: somebody outside the project
-	// leaves no card behind.
+	// Card, people and labels are one transaction: somebody outside the
+	// project or two labels of one scope leave no card behind.
 	for _, id := range assigneeIDs {
 		if !slices.Contains(s.visibleProject(board.ProjectID, person).MemberIDs, id) {
 			notAProjectMember(w)
 			return
 		}
+	}
+	if labelsShareAScope(labels) {
+		unprocessable(w, "labelsShareAScope", "A card takes only one label of each scope.")
+		return
 	}
 
 	card := &Card{ID: newID(), Title: phpTrim(*title), Description: phpTrim(deref(description)), CreatedAt: s.now, CreatorID: person.ID, DueOn: dueDate(dueOn)}
@@ -1960,6 +1972,11 @@ func (s *Server) addCard(w http.ResponseWriter, r *http.Request, person *Person)
 		if !slices.Contains(card.AssigneeIDs, id) {
 			card.AssigneeIDs = append(card.AssigneeIDs, id)
 			card.subscribe(id)
+		}
+	}
+	for _, label := range labels {
+		if !slices.Contains(s.ItemLabels[card.ID], label.ID) {
+			s.PutLabelOn(card.ID, label)
 		}
 	}
 	column.Cards = append([]*Card{card}, column.Cards...)

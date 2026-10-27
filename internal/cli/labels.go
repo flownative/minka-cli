@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"regexp"
+	"slices"
 	"strings"
 	"text/tabwriter"
 	"unicode"
@@ -23,13 +24,16 @@ var labelColors = []string{"red", "orange", "yellow", "lime", "green", "teal", "
 var labelColorHint = "A label takes one of " + strings.Join(labelColors, ", ") + ", spelt exactly so."
 
 const (
-	apiCodeLabelNameMissing   = "labelNameMissing"
-	apiCodeLabelNameTooLong   = "labelNameTooLong"
-	apiCodeLabelNameMalformed = "labelNameMalformed"
-	apiCodeLabelColorUnknown  = "labelColorUnknown"
-	apiCodeLabelNameTaken     = "labelNameTaken"
-	apiCodeLabelPlaceUnknown  = "labelPlaceUnknown"
-	apiCodeLabelUnknown       = "labelUnknown"
+	apiCodeLabelNameMissing    = "labelNameMissing"
+	apiCodeLabelNameTooLong    = "labelNameTooLong"
+	apiCodeLabelNameMalformed  = "labelNameMalformed"
+	apiCodeLabelColorUnknown   = "labelColorUnknown"
+	apiCodeLabelNameTaken      = "labelNameTaken"
+	apiCodeLabelPlaceUnknown   = "labelPlaceUnknown"
+	apiCodeLabelUnknown        = "labelUnknown"
+	apiCodeLabelsShareAScope   = "labelsShareAScope"
+	apiCodeLabelScopeMissing   = "labelScopeMissing"
+	apiCodeLabelScopeMalformed = "labelScopeMalformed"
 
 	labelNameRules = `A label name holds letters, digits, spaces, "-", "+" and "*", at most 50
 characters, with at most one "::" between a scope and a value, such as
@@ -52,6 +56,22 @@ project, case and spacing aside. Several labels go in one request each, in the
 order given; the first refusal stops the run, and the error says which labels
 were applied before it ("applied" in data). On success the answer is every
 label the item carries afterwards.`
+
+	newCardLabelHelp = `--label puts a label of the board or of its project on the card and can be
+given more than once; the card is created with its labels, or not at all. A
+label is its ID or its name: a name is looked up in "minka labels list --board"
+the way Minka compares names, case and spacing aside, and one found nowhere
+exits 2 (not_found) before anything is written. A label named twice goes once.
+A card takes one label of each scope: two such as "Priority::High" and
+"Priority::Low" exit 9 (validation) with meta.apiCode labelsShareAScope, and a
+label of another board, tool or project with labelUnknown.`
+
+	labelScopeRenameMergeHelp = `Renaming into a scope already in use joins the two: "cull::select" renamed to
+"auswahl" stands beside an existing "auswahl::keep". Only a resulting name that
+exists already anywhere in the project, such as "auswahl::select", refuses the
+rename: exit 9 (validation) with meta.apiCode labelNameTaken, and no label is
+renamed. An item that carried a label of each scope keeps both until it takes
+the next label of that scope, which replaces them.`
 
 	labelScopeHelp = `A scoped label such as "Priority::High" takes any other label of the same
 scope off the item: putting on "Priority::Low" replaces it. Plain labels never
@@ -204,6 +224,87 @@ func (a *app) resolveLabel(s *session, place api.LabelPlace, value, neighbourFla
 		Hint:    "List its labels with: minka labels list " + placeFlag(place)}
 }
 
+// checkLabelValues refuses an empty label name before anything is sent: it
+// names no label.
+func checkLabelValues(cmd *cobra.Command, values []string) error {
+	for _, value := range values {
+		if strings.TrimFunc(value, unicode.IsSpace) == "" {
+			return usageErrorf(cmd, "a label is named by its ID or its name, and an empty name names none")
+		}
+	}
+	return nil
+}
+
+// labelsForANewCard turns the labels given for a new card into IDs, each
+// once. An ID goes as it is; a name is looked up among the labels the cards
+// of the board can take, its own and the project's, which are read once and
+// only for a name. Two labels of one scope are left to Minka to refuse.
+func (a *app) labelsForANewCard(s *session, boardID string, values []string) ([]string, error) {
+	var ids []string
+	var labels []api.Label
+	place := api.LabelPlace{Kind: "boards", ID: boardID}
+	for _, value := range values {
+		id, isID := asID(value)
+		if !isID {
+			if labels == nil {
+				listed, err := s.client.Labels(a.ctx, place)
+				if err != nil {
+					return nil, labelRefusal(s, err)
+				}
+				labels = append([]api.Label{}, listed.Value...)
+			}
+			label, err := labelNamedOnABoard(labels, boardID, value)
+			if err != nil {
+				return nil, err
+			}
+			id = label.ID
+		}
+		if !slices.Contains(ids, id) {
+			ids = append(ids, id)
+		}
+	}
+	return ids, nil
+}
+
+// labelNamedOnABoard is the one label of the list a name names, compared the
+// way Minka compares names.
+func labelNamedOnABoard(labels []api.Label, boardID, name string) (api.Label, error) {
+	key := labelNameKey(name)
+	var matches []api.Label
+	for _, label := range labels {
+		if labelNameKey(label.Name) == key {
+			matches = append(matches, label)
+		}
+	}
+	switch len(matches) {
+	case 1:
+		return matches[0], nil
+	case 0:
+		return api.Label{}, &Error{Code: CodeNotFound,
+			Message: fmt.Sprintf("neither board %s nor its project has a label %q", boardID, name),
+			Hint:    "A card takes the labels of its board and of its project. List them with: minka labels list --board " + boardID}
+	}
+	var candidates []string
+	for _, label := range matches {
+		candidates = append(candidates, label.Name+" ("+label.ID+")")
+	}
+	return api.Label{}, &Error{Code: CodeAmbiguous,
+		Message: fmt.Sprintf("%q matches %d labels", name, len(matches)),
+		Hint:    "Give the label's ID. Candidates: " + strings.Join(candidates, ", ")}
+}
+
+// newCardLabelRefusal names the way on where Minka refused the labels of a
+// new card, and leaves every other refusal as it is.
+func newCardLabelRefusal(e *Error, boardID string) *Error {
+	switch e.APICode {
+	case apiCodeLabelsShareAScope:
+		e.Hint = "A card takes one label of each scope, the part before \"::\": give only one of them. The scopes of the board's labels show in: minka labels list --board " + boardID
+	case apiCodeLabelUnknown:
+		e.Hint = "A card takes the labels of its board and of its project. List them with: minka labels list --board " + boardID
+	}
+	return e
+}
+
 func labelBreadcrumbs(place api.LabelPlace, labelID string) []Breadcrumb {
 	crumbs := []Breadcrumb{{Action: "list", Cmd: "minka labels list " + placeFlag(place), Description: "List the labels of the place"}}
 	if labelID != "" {
@@ -217,6 +318,7 @@ func (a *app) newLabelsCmd() *cobra.Command {
 		a.newLabelsListCmd(),
 		a.newLabelsCreateCmd(),
 		a.newLabelsEditCmd(),
+		a.newLabelsRenameScopeCmd(),
 		a.newLabelsMoveCmd(),
 		a.newLabelsDeleteCmd(),
 	)
@@ -465,6 +567,76 @@ The answer is the moved label with its new position.
 	cmd.Flags().StringVar(&after, "after", "", "Put the label right behind this label (ID or name) of the same place")
 	cmd.Flags().StringVar(&before, "before", "", "Put the label right in front of this label (ID or name) of the same place")
 	return cmd
+}
+
+func (a *app) newLabelsRenameScopeCmd() *cobra.Command {
+	var placeFlags labelPlaceFlags
+	cmd := &cobra.Command{
+		Use:   "rename-scope <scope> <newScope>",
+		Short: "Rename the scope of every label of that scope at a place",
+		Long: `Gives every label of <scope> among the place's own labels the scope
+<newScope>: with "Priority" renamed to "Urgency", "Priority::High" becomes
+"Urgency::High". Labels keep their colour, their position and the items that
+carry them; the project's labels are not renamed under a board or a tool, nor
+the other way round. Scopes compare case aside, and <newScope> takes the case
+it is written in, so renaming a scope into itself changes only its case.
+
+` + labelScopeRenameMergeHelp + `
+
+A scope follows the rules of one side of a name and holds no "::": an empty one
+exits 9 (validation) with meta.apiCode labelScopeMissing, a malformed one with
+labelScopeMalformed, and a resulting name over 50 characters with
+labelNameTooLong. A scope that no label of the place has exits 2 (not_found).
+The answer is the place's own labels afterwards, without the project's.
+
+` + labelPlaceHelp + `
+
+` + labelWritersHelp,
+		Example: `  minka labels rename-scope Priority Urgency --board 0199...
+  minka labels rename-scope cull auswahl --project 0199... --json`,
+		Args: requireArgs("scope", "newScope"),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			place, err := placeFlags.place(cmd)
+			if err != nil {
+				return err
+			}
+			s, err := a.session()
+			if err != nil {
+				return err
+			}
+			labels, err := s.client.RenameLabelScope(a.ctx, place, api.RenameLabelScopeInput{Scope: args[0], NewScope: args[1]})
+			if err != nil {
+				return scopeRenameRefusal(s, err, place, args[0])
+			}
+			summary := fmt.Sprintf("Renamed scope %s to %s in %s", args[0], args[1], placeName(place))
+			return a.ok(success{
+				data:        labels.Raw,
+				summary:     summary,
+				breadcrumbs: labelBreadcrumbs(place, ""),
+				text: func(w io.Writer) {
+					fmt.Fprintf(w, "%s.\n", summary)
+					renderLabels(w, labels.Value)
+				},
+			})
+		},
+	}
+	placeFlags.register(cmd)
+	return cmd
+}
+
+// scopeRenameRefusal classifies a refused rename of a scope; nothing was
+// renamed then, whatever the reason.
+func scopeRenameRefusal(s *session, err error, place api.LabelPlace, scope string) *Error {
+	e := labelRefusal(s, err)
+	switch {
+	case e.APICode == apiCodeLabelScopeMissing || e.APICode == apiCodeLabelScopeMalformed:
+		e.Hint = `A scope is the part before "::" of a label name: letters, digits, spaces, "-", "+" and "*", at most 50 characters.`
+	case e.APICode == apiCodeLabelNameTaken:
+		e.Hint = "A name the rename would give exists already somewhere in the project, so nothing was renamed. List the labels with: minka labels list --project <projectId>"
+	case e.Code == CodeNotFound:
+		e.Hint = fmt.Sprintf("No label of %s has the scope %q, or the place belongs to a project you are not on the team of. List its labels with: minka labels list %s", placeName(place), scope, placeFlag(place))
+	}
+	return e
 }
 
 func (a *app) newLabelsDeleteCmd() *cobra.Command {
