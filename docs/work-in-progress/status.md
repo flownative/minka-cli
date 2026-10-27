@@ -44,6 +44,12 @@ it out against a Minka without the field (C-128). Minka's `main` hands it out,
 no release yet; checked against Minka's code and tests, the fake
 and live against a local Minka on its `main`.
 
+A server error of the API answers 500 with error code `serverError` and the
+key of its log entry in `meta.reference`; the CLI keeps exit 7, passes the key
+on in `meta.reference` and names it in the hint. Minka's `main` answers so
+(#533), no release yet; a released Minka answers HTML, which the CLI reports as
+before. Checked against Minka's code and the fake, not live.
+
 The archive of a board is read with `boards archive`, and `cards archive` and
 `cards unarchive` move a card in and out of it. `--all` walks every page in one
 run and works around the weakness Minka carries in its own debts: a cursor that

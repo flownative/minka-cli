@@ -62,9 +62,12 @@ line and the field off; `doctor` reports the state either way.
 
 ## Errors
 
-`{ok: false, error, code, retryable, hint, meta: {apiCode, httpStatus}, data,
-notice}`. `meta.apiCode` is the case code of Minka (`cardTitleTooLong`), `code`
-the class, `hint` the next step. `meta` is there when a server answered.
+`{ok: false, error, code, retryable, hint, meta: {apiCode, httpStatus,
+reference}, data, notice}`. `meta.apiCode` is the case code of Minka
+(`cardTitleTooLong`), `code` the class, `hint` the next step. `meta` is there
+when a server answered. `meta.reference` is there when Minka answered a server
+error with the key of its log entry; the hint ends by naming it, for a person
+to quote when they report the error.
 `data` and `notice` are there only when a command got its work done but not
 all of it: `data` is the result it would have printed, `notice` its warnings —
 or, for `unread`, when it wrote nothing because of what it read: `data` is the

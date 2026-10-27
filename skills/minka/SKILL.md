@@ -116,7 +116,9 @@ references listed under "Where the rest stands".
 formatting the Markdown conversion had to change. `breadcrumbs` suggest the
 next commands.
 
-Errors: `{"ok": false, "error", "code", "retryable", "hint", "meta": {"apiCode", "httpStatus"}}`.
+Errors: `{"ok": false, "error", "code", "retryable", "hint", "meta": {"apiCode", "httpStatus", "reference"}}`.
+`meta.reference` comes with a server error Minka logged: quote it when you
+report the error.
 
 At most once a day an envelope, of a success or an error, carries
 `cliUpdate: {current, latest, minimum}`: a newer minka exists. Finish the task
