@@ -1983,21 +1983,16 @@ comes back early and empty is followed by a growing pause.
 [Waiting and coordinating](stable/waiting-and-coordinating.md).
 
 <a id="c-118"></a>
-## C-118 — The coordinator of a board is `boards coordinator claim|release|show`
+## C-118 — The own coordinator entry of a board is `boards coordinator claim|release|show`
 
-*Applies to: `boards coordinator claim`, `boards coordinator release`,
-`boards coordinator show`, `boards show`*
+*Applies to: `boards coordinator claim|release|show`, `boards show`*
 
-The coordinator is a part of a board, so its commands stand under `boards`
-with the board as `<boardId>`, one verb each, not as `coordinate` with
-`--release` and `show`. A claim needs `--session`, a name as Minka takes it
-(1 to 64 characters, no control or format character, untrimmed), never
-`$CLAUDE_CODE_SESSION_ID`. A board that leaves `coordinator` out shows null
-with a notice that it is not shown, never nobody.
-**Why:** a command is a plural group and an action (C-001), a flag that turns
-a claim into a release would be two commands in one, and people read the name.
-**Implemented as:** `cli.newBoardsCoordinatorCmd`, `cli.coordinatorRefusal`,
-see [Waiting and coordinating](stable/waiting-and-coordinating.md).
+One verb each under `boards`, for the own entry: no takeover, an entry named
+as it came, an older Minka's 409 reported as is. `--session` is required.
+**Why:** a group and an action (C-001), and Minka keeps one entry per account
+and board that nobody else sees.
+**Implemented as:** `cli.newBoardsCoordinatorCmd`, see
+[Waiting and coordinating](stable/waiting-and-coordinating.md#coordinating).
 
 <a id="c-119"></a>
 ## C-119 — `auth logout --revoke` revokes first and keeps the entry when that fails
@@ -2356,3 +2351,28 @@ the text view lists them.
 one transaction; a lookup here would only add a request and a second matcher.
 **Implemented as:** `cli.newLabelsRenameScopeCmd`, see
 [Labels](stable/labels.md#writing-a-places-labels).
+
+<a id="c-144"></a>
+## C-144 — `cards mine --board --column` narrows on the server and here
+
+*Applies to: `cards mine --board`, `cards mine --column`*
+
+Both go as `boardId` and `columnId`, checked as IDs first; a column title needs
+`--board` and is looked up there. The answer is narrowed again by each card's
+`boardId` and `column.id`; a card without them refuses the filters, exit 7.
+**Why:** an agent knows the ready column by its title, and a Minka that ignores
+the filters must not hand an agent a card nobody released to it.
+**Implemented as:** `cli.newCardsMineCmd`, see
+[Waiting and coordinating](stable/waiting-and-coordinating.md#coordinating).
+
+<a id="c-145"></a>
+## C-145 — The skill lets an agent take only its own cards in the ready column
+
+*Applies to: the skill and its references on boards and coordinating*
+
+Every agent takes only a card in the ready column assigned to its own account,
+hands out no work, asks on a card of several agents, puts follow-ups
+unassigned into intake, and writes the back of its own cards.
+**Why:** the column says what is released and in which order, the assignment
+for whom, so agents need no coordinator to keep them apart.
+**Implemented as:** `skills/minka`, see [The skill](stable/skill.md).

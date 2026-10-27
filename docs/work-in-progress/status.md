@@ -617,15 +617,25 @@ version that loads a mod; that a version between 2.1.270 and 2.1.286 really
 runs it is not measured.
 
 An agent waits for what is new with `notifications wait` instead of polling a
-board, and one session of a person coordinates a board with `boards
-coordinator claim`, `release` and `show` (C-117, C-118); `notifications
-count`, `show` and `mark-read` read the number on the bell and one line, and
-settle it (C-122). The rule is
+board, and every account coordinates a board with one session of its own,
+several accounts side by side, with `boards coordinator claim`, `release` and
+`show` (C-117, C-118); `cards mine --board --column` lists the cards released
+to the account (C-144); `notifications count`, `show` and `mark-read` read the
+number on the bell and one line, and settle it (C-122). The rule is
 [Waiting and coordinating](../stable/waiting-and-coordinating.md). Minka's
 side, the list of the bell, `card.moved` and the coordinator, is MNK-B3, on
-Minka's `main` since #381 and in no release yet; the routes of one line and
-the count are E-241 and older. The commands are checked against that code and
-its tests and the fake, not live, see below.
+Minka's `main` since #381; the entry per account and board and the filters of
+`/me/cards` are E-319, Minka's #522, on `main` at 121467d7b. Neither is in a
+release yet. Until the first release with #522, a released Minka still refuses
+a claim with 409 `coordinatorTaken` while another account holds the board,
+names the holder on the board, and ignores `boardId` and `columnId`. The CLI
+reports the 409 as Minka sent it and adds nothing (C-118), and narrows the
+cards of `cards mine` by their `boardId` and `column.id` itself, which v0.93.0
+sends, so the filters hold against it as well (C-144). It names the
+coordinator a board shows as it came, never as "you", since such a Minka names
+whoever holds the board. The routes of one line and the count are E-241 and
+older. The commands are checked against that code and its tests and the fake,
+not live, see below.
 
 Everything else is tested against the fake API and checked live — the chain
 upload → attachment in the text → display → the bytes back, as well as private
@@ -671,7 +681,10 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
 
 - Waiting and coordinating (`notifications wait`, `count`, `show`,
   `mark-read`, `boards coordinator claim`, `release`, `show`, the coordinator
-  in `boards show`): the fake is held against Minka's `main` at b2011b254:
+  in `boards show`, the filters of `cards mine`): the fake is held against
+  Minka's `main` at b2011b254, its coordinator entries and `/me/cards` at
+  121467d7b (`BoardCoordinators`, `BoardResource`,
+  `BoardApiController::myCardsAction`):
   `NotificationWaitApiController`, `NotificationsApiController`,
   `NotificationResource`, `UnreadCountResource`,
   `NotificationQueryService::findAfter`, `findOneFor`, `countNewFor` and
@@ -684,7 +697,10 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   occasion uses up a page and moves the cursor, that a row the person may no
   longer see and a reaction do neither, that a line about a card in a column
   in the trash stays listed and names that column, that a sign of life renews
-  only a board the person still sees as one of the team, that a move names its
+  only the person's own entries on a board they still see as one of the team,
+  that a claim, a release and a board touch only the reader's own entry, that
+  `/me/cards` narrows to an ID in any case and to none for a malformed one,
+  that a move names its
   column from the trash as well and says the bell's own sentence where it
   names none or the column is gone, and the lookup of one line with its 404s. **The fake does not mirror**: of what the bell hides,
   more than a project the person left or that is archived and a card in the

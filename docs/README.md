@@ -42,12 +42,13 @@ the documentation says what holds; how it came about is in git.
   `setup` and `hooks install` install it, and how the old hook is taken out —
   before any work on `work`, `heartbeat`, `hooks`, `setup` or `mod/`.
 - [Waiting and coordinating](stable/waiting-and-coordinating.md): What the
-  bell's list, one line of it, its count and the coordinator of a board
-  offer, which rows a page leaves out and which it counts, where a wait starts and
+  bell's list, one line of it, its count and the own coordinator entry of a
+  board offer, which rows a page leaves out and which it counts, where a wait starts and
   which session it goes by, where the position lies and when it moves on, the
-  filters, the timeout and exit 12, a position Minka forgot, who claims and
-  releases a board — before any work on `notifications` or `boards
-  coordinator`.
+  filters, the timeout and exit 12, a position Minka forgot, the entry per
+  account and board and what an older Minka's 409 does, the filters of `cards
+  mine` — before any work on `notifications`, `boards coordinator` or `cards
+  mine`.
 - [Projects](stable/projects.md): What a project carries, the edit that sends
   only what was given and needs no guard, the description that is plain text,
   the client who gets the same 404 as an outsider, the order of the refusals —

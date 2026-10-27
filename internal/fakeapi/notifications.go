@@ -90,7 +90,6 @@ var timeSensitiveKinds = []string{
 
 // Coordinator is the session of a person that coordinates a board.
 type Coordinator struct {
-	PersonID   string
 	Session    string
 	Since      time.Time
 	LastSeenAt time.Time
@@ -526,31 +525,31 @@ func (s *Server) noteTheMove(board *Board, card *Card, to *Column, mover *Person
 	}
 }
 
-// coordinatorOf is the coordinator of a board while it holds it.
-func (s *Server) coordinatorOf(board *Board) *Coordinator {
-	if board.Coordinator == nil || !s.now.Before(board.Coordinator.expiresAt()) {
+// coordinatorOf is the person's own entry on a board while it holds.
+func (s *Server) coordinatorOf(board *Board, person *Person) *Coordinator {
+	c := board.Coordinators[person.ID]
+	if c == nil || !s.now.Before(c.expiresAt()) {
 		return nil
 	}
-	return board.Coordinator
+	return c
 }
 
-func (s *Server) coordinatorResource(board *Board) any {
-	c := s.coordinatorOf(board)
+func (s *Server) coordinatorResource(board *Board, person *Person) any {
+	c := s.coordinatorOf(board, person)
 	if c == nil {
 		return nil
 	}
-	holder := s.People[c.PersonID]
 	return map[string]any{
-		"person":  map[string]any{"id": holder.ID, "name": holder.Name, "kind": kindOf(holder)},
+		"person":  map[string]any{"id": person.ID, "name": person.Name, "kind": kindOf(person)},
 		"session": c.Session, "since": timestamp(c.Since), "lastSeenAt": timestamp(c.LastSeenAt), "expiresAt": timestamp(c.expiresAt()),
 	}
 }
 
-// seenAlive renews every board a person coordinates and still sees as one of
-// the team.
+// seenAlive renews every entry a person still holds on a board they still
+// see as one of the team.
 func (s *Server) seenAlive(person *Person) {
 	for _, board := range s.Boards {
-		if c := s.coordinatorOf(board); c != nil && c.PersonID == person.ID && s.seesOnTheTeam(board, person) {
+		if c := s.coordinatorOf(board, person); c != nil && s.seesOnTheTeam(board, person) {
 			c.LastSeenAt = s.now
 		}
 	}
@@ -572,11 +571,11 @@ func (s *Server) boardToCoordinate(r *http.Request, person *Person) *Board {
 	return board
 }
 
-// claimCoordinator makes a session of the person the coordinator of a board,
-// or renews it, in the order of the controller: the board, a client, the
-// session, then the claim. Another session of the same person takes it over
-// and since starts anew; another person's entry that has not expired is
-// refused with the holder; and only then is an archived project refused,
+// claimCoordinator claims, renews or relays the person's own entry on a
+// board, in the order of the controller: the board, a client, the session,
+// then the claim. Another session of the same person takes the entry over and
+// since starts anew; other people's entries are neither read nor touched, so
+// nothing is ever refused for them. Only then is an archived project refused,
 // where nothing can be written.
 func (s *Server) claimCoordinator(w http.ResponseWriter, r *http.Request, person *Person) {
 	board := s.boardToCoordinate(r, person)
@@ -596,24 +595,20 @@ func (s *Server) claimCoordinator(w http.ResponseWriter, r *http.Request, person
 		unprocessable(w, "coordinatorSessionInvalid", "A session is a readable name of 1 to 64 characters without control characters.")
 		return
 	}
-
-	holder := s.coordinatorOf(board)
-	if holder != nil && holder.PersonID != person.ID {
-		writeJSON(w, http.StatusConflict, map[string]any{
-			"error":       map[string]string{"code": "coordinatorTaken", "message": "Somebody else coordinates this board. Nothing was written; \"coordinator\" names them."},
-			"coordinator": s.coordinatorResource(board),
-		})
-		return
-	}
 	if s.refusedAsArchived(w, s.projectOf(board)) {
 		return
 	}
-	if holder == nil || holder.Session != *session {
-		board.Coordinator = &Coordinator{PersonID: person.ID, Session: *session, Since: s.now, LastSeenAt: s.now}
+
+	own := s.coordinatorOf(board, person)
+	if own == nil || own.Session != *session {
+		if board.Coordinators == nil {
+			board.Coordinators = map[string]*Coordinator{}
+		}
+		board.Coordinators[person.ID] = &Coordinator{Session: *session, Since: s.now, LastSeenAt: s.now}
 	} else {
-		holder.LastSeenAt = s.now
+		own.LastSeenAt = s.now
 	}
-	writeJSON(w, http.StatusOK, s.coordinatorResource(board))
+	writeJSON(w, http.StatusOK, s.coordinatorResource(board, person))
 }
 
 // isASessionName is what a board keeps as the name of a session: 1 to 64
@@ -626,15 +621,15 @@ func isASessionName(session string) bool {
 	return !strings.ContainsFunc(session, func(r rune) bool { return unicode.Is(unicode.Cc, r) || unicode.Is(unicode.Cf, r) })
 }
 
-// releaseCoordinator takes the coordinator off a board, whoever holds it. A
-// board nobody coordinates answers the same.
+// releaseCoordinator removes the person's own entry on a board and nobody
+// else's. Without one it answers the same.
 func (s *Server) releaseCoordinator(w http.ResponseWriter, r *http.Request, person *Person) {
 	board := s.boardToCoordinate(r, person)
 	if board == nil {
 		notFound(w)
 		return
 	}
-	board.Coordinator = nil
+	delete(board.Coordinators, person.ID)
 	w.WriteHeader(http.StatusNoContent)
 }
 

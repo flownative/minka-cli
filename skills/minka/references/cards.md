@@ -25,6 +25,13 @@ minka cards unsubscribe <cardId> <person> --json
   every project it is a member of, as a bare array of the same cards
   `cards show` gives. Each carries `project {id, name}` and `board {id, title}`
   besides `projectId` and `boardId`.
+- `--board <boardId>` keeps the cards of one board, `--column <column>` those
+  of one column, each by itself; an ID that matches nothing lists none. The
+  column is its ID, or its type or title together with `--board`, looked up on
+  that board: `minka cards mine --board <boardId> --column "Als nächstes"`
+  lists your released cards on a board whose ready column has that title.
+  Exit 7 with a hint to list without the filters means this Minka cannot say
+  where its cards stand: then read a card with `cards show` before taking it.
 - Cards in Done, cards completed in another column, cards in the trash, cards
   in the archive of their board, cards of an archived project and cards of a
   project that was left are not among them, so the list is what is still to

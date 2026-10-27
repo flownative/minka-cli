@@ -281,9 +281,21 @@ func (c *Client) Trash(ctx context.Context, projectID string) (Result[[]TrashEnt
 }
 
 // MyCards lists the cards the person of the token is responsible for, across
-// the projects they are a member of. Cards in Done are not among them.
-func (c *Client) MyCards(ctx context.Context) (Result[[]Card], error) {
-	return request[[]Card](ctx, c, http.MethodGet, "/me/cards", nil)
+// the projects they are a member of, narrowed to a board and a column where
+// their IDs are given. Cards in Done are not among them.
+func (c *Client) MyCards(ctx context.Context, boardID, columnID string) (Result[[]Card], error) {
+	values := url.Values{}
+	if boardID != "" {
+		values.Set("boardId", boardID)
+	}
+	if columnID != "" {
+		values.Set("columnId", columnID)
+	}
+	path := "/me/cards"
+	if len(values) > 0 {
+		path += "?" + values.Encode()
+	}
+	return request[[]Card](ctx, c, http.MethodGet, path, nil)
 }
 
 func (c *Client) Card(ctx context.Context, cardID string) (Result[Card], error) {

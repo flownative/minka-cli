@@ -17,8 +17,10 @@ import (
 func renderBoard(w io.Writer, board api.Board) {
 	fmt.Fprintf(w, "# %s\n", board.Title)
 	fmt.Fprintf(w, "Board: %s\nProject: %s\nURL: %s\n", board.ID, board.ProjectID, board.AppURL)
+	// Named as it came: Minka names the reader's own entry, and a Minka without
+	// entries per account names whoever coordinates the board.
 	if board.Coordinator != nil {
-		fmt.Fprintf(w, "Coordinator: %s, last active %s\n", describeCoordinator(*board.Coordinator), formatTime(board.Coordinator.LastSeenAt))
+		fmt.Fprintf(w, "Coordinated by %s since %s, last active %s\n", describeCoordinator(*board.Coordinator), formatTime(board.Coordinator.Since), formatTime(board.Coordinator.LastSeenAt))
 	}
 
 	for _, column := range board.Columns {

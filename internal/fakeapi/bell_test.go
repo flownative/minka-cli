@@ -120,13 +120,13 @@ func TestASignOfLifeRenewsOnlyABoardThePersonStillSeesOnTheTeam(t *testing.T) {
 	members := slices.Clone(fixture.Project.MemberIDs)
 	renews := func(change, undo func()) bool {
 		t.Helper()
-		fixture.Board.Coordinator = &Coordinator{PersonID: fixture.Bruno.ID, Session: "planning", Since: began, LastSeenAt: began}
+		fixture.Board.Coordinators = map[string]*Coordinator{fixture.Bruno.ID: {Session: "planning", Since: began, LastSeenAt: began}}
 		change()
 		defer undo()
 		server.SetNow(began.Add(time.Hour))
 		defer server.SetNow(began)
 		getNotifications(t, server, fixture.Token, "after=0&wait=1")
-		return fixture.Board.Coordinator.LastSeenAt.After(began)
+		return fixture.Board.Coordinators[fixture.Bruno.ID].LastSeenAt.After(began)
 	}
 
 	if !renews(func() { fixture.Project.Archived = true }, func() { fixture.Project.Archived = false }) {
