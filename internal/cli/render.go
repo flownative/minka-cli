@@ -71,7 +71,7 @@ func renderBoardCards(w io.Writer, cards []api.BoardCard) {
 		if card.CompletedAt != nil {
 			details = append(details, "completed "+formatTime(*card.CompletedAt))
 		}
-		line := fmt.Sprintf("- %s  %s%s", card.ID, shortIDBefore(card.ShortID), card.Title)
+		line := fmt.Sprintf("- %s  %s%s%s", card.ID, shortIDBefore(card.ShortID), card.Title, labelTags(card.Labels))
 		if len(details) > 0 {
 			line += " (" + strings.Join(details, ", ") + ")"
 		}
@@ -147,7 +147,7 @@ func renderMyCards(w io.Writer, cards []api.Card, today string) {
 		if open := openSteps(card.Steps); open > 0 {
 			details = append(details, fmt.Sprintf("steps %d/%d", len(card.Steps)-open, len(card.Steps)))
 		}
-		fmt.Fprintf(w, "- %s  %s%s (%s)\n", card.ID, shortIDBefore(card.ShortID), card.Title, strings.Join(details, ", "))
+		fmt.Fprintf(w, "- %s  %s%s%s (%s)\n", card.ID, shortIDBefore(card.ShortID), card.Title, labelTags(card.Labels), strings.Join(details, ", "))
 	}
 }
 
@@ -190,6 +190,7 @@ func renderCard(w io.Writer, card api.Card) {
 	if card.DueOn != nil {
 		fmt.Fprintf(w, "Due: %s\n", *card.DueOn)
 	}
+	labelLine(w, card.Labels)
 	if card.CompletedAt != nil {
 		by := ""
 		if card.CompletedBy != nil {

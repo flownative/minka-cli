@@ -16,7 +16,7 @@ commenting on a card and coordinating or waiting on a board, so that the skill
 is loaded in exactly those moments.
 
 Everything else stands in a reference of its own subject: the detail of cards,
-the back of a card, texts, saying what one works on, chats, files, Docs &
+the back of a card, texts, saying what one works on, chats, files, labels, Docs &
 Files, to-dos, check-ins, posts, calendars, reminders, the Basecamp import,
 waiting and coordinating, and how to work on a board. Where a reference has
 commands of its own, they stand at its top. SKILL.md points to every

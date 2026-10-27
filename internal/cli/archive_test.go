@@ -43,6 +43,7 @@ func everyWrite(e *testEnv) map[string][]string {
 	listComment := f.TodoList.Comments[len(f.TodoList.Comments)-1].ID
 	eventComment := f.OnceEvent.Comments[len(f.OnceEvent.Comments)-1].ID
 	version := listOfObjects(e.t, runOK(e.t, e, "docs", "versions", "list", document).Data)[0]["id"].(string)
+	withLabels(e)
 
 	return map[string][]string{
 		"projects edit":     {"projects", "edit", f.Project.ID, "--name", "Renamed"},
@@ -190,6 +191,17 @@ func everyWrite(e *testEnv) map[string][]string {
 		"events comments unreact": {"events", "comments", "unreact", f.OnceEvent.ID, eventComment, "👍"},
 
 		"boards coordinator claim": {"boards", "coordinator", "claim", f.Board.ID, "--session", "planning"},
+
+		"labels create":        {"labels", "create", "Fresh", "--board", f.Board.ID},
+		"labels edit":          {"labels", "edit", "Stage::Ready", "--board", f.Board.ID, "--color", "teal"},
+		"labels move":          {"labels", "move", "Stage::Late", "--board", f.Board.ID, "--first"},
+		"labels delete":        {"labels", "delete", "Plain", "--project", f.Project.ID},
+		"cards label":          {"cards", "label", card, "Stage::Ready"},
+		"cards unlabel":        {"cards", "unlabel", card, "Plain"},
+		"docs label":           {"docs", "label", document, "Draft"},
+		"docs unlabel":         {"docs", "unlabel", document, "Draft"},
+		"docs uploads label":   {"docs", "uploads", "label", upload, "Plain"},
+		"docs uploads unlabel": {"docs", "uploads", "unlabel", upload, "Draft"},
 	}
 }
 
@@ -203,7 +215,7 @@ func everyWrite(e *testEnv) map[string][]string {
 var notAWriteIntoAProject = []string{
 	"auth login", "auth logout", "auth status", "setup", "doctor", "me", "version", "commands",
 	"skill show", "skill install", "skill status",
-	"projects list", "boards list", "boards show", "boards archive", "people list", "trash list",
+	"projects list", "labels list", "boards list", "boards show", "boards archive", "people list", "trash list",
 	"config get", "config set",
 	"cards mine", "cards show", "cards notes show", "cards notes attachments list", "cards notes attachments show", "cards notes attachments download", "comments list", "comments unread", "cards steps list", "chats list", "chats show", "messages list",
 	"docs tools", "docs tool", "docs list", "docs show", "docs uploads show", "docs book", "docs export", "docs folders show",

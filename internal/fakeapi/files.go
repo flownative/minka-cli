@@ -914,7 +914,8 @@ func (s *Server) entriesResource(tool *FilesTool, folder *Folder) map[string]any
 			"inNavigation": !document.OutOfNavigation,
 			"commentCount": len(document.Comments), "archived": archived,
 			"createdAt": timestamp(document.CreatedAt), "updatedAt": timestamp(document.UpdatedAt),
-			"creator": s.personReference(document.CreatorID), "appUrl": s.documentURL(tool, document),
+			"creator": s.personReference(document.CreatorID), "labels": s.labelResources(s.LabelsOn(document.ID)),
+			"appUrl": s.documentURL(tool, document),
 		})
 	}
 
@@ -928,7 +929,8 @@ func (s *Server) entriesResource(tool *FilesTool, folder *Folder) map[string]any
 			"id": upload.ID, "projectId": tool.ProjectID, "title": upload.Title, "file": s.attachmentResource(upload.BlobID),
 			"commentCount": len(upload.Comments), "archived": archived,
 			"createdAt": timestamp(upload.CreatedAt), "updatedAt": timestamp(upload.UpdatedAt),
-			"creator": s.personReference(upload.CreatorID), "appUrl": s.filesUploadURL(tool, upload),
+			"creator": s.personReference(upload.CreatorID), "labels": s.labelResources(s.LabelsOn(upload.ID)),
+			"appUrl": s.filesUploadURL(tool, upload),
 		})
 	}
 
@@ -1015,6 +1017,7 @@ func (s *Server) documentResource(tool *FilesTool, document *Document) map[strin
 		"createdAt":    timestamp(document.CreatedAt), "editedAt": editedAt(document.CreatedAt, document.UpdatedAt),
 		"updatedAt": timestamp(document.UpdatedAt), "creator": s.personReference(document.CreatorID),
 		"comments": s.commentResources(tool.ProjectID, s.documentURL(tool, document), document.Comments),
+		"labels":   s.labelResources(s.LabelsOn(document.ID)),
 		"appUrl":   s.documentURL(tool, document),
 	}, "inNavigation", "book")
 }
@@ -1032,6 +1035,7 @@ func (s *Server) filesUploadResource(tool *FilesTool, upload *FilesUpload) map[s
 		"createdAt":    timestamp(upload.CreatedAt), "editedAt": editedAt(upload.CreatedAt, upload.UpdatedAt),
 		"updatedAt": timestamp(upload.UpdatedAt), "creator": s.personReference(upload.CreatorID),
 		"comments": s.commentResources(tool.ProjectID, s.filesUploadURL(tool, upload), upload.Comments),
+		"labels":   s.labelResources(s.LabelsOn(upload.ID)),
 		"appUrl":   s.filesUploadURL(tool, upload),
 	}
 }

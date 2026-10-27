@@ -470,6 +470,12 @@ type Server struct {
 	Calendars     []*CalendarTool
 	Uploads       []*Upload
 
+	// Labels are the labels of every project and tool, each place's in its
+	// order; ItemLabels are the IDs of the labels every card, document and
+	// upload carries, by the ID of the item.
+	Labels     []*Label
+	ItemLabels map[string][]string
+
 	// LaterBookEntries stand at the end of every book's tree, for a test of an
 	// entry of a kind a later Minka sends.
 	LaterBookEntries []any
@@ -612,11 +618,12 @@ type Server struct {
 	notificationSeqs map[string]int // person ID → the number of their last line
 	arrival          chan struct{}  // closed when a line arrives
 
-	mu       sync.Mutex
-	requests []RecordedRequest
-	failWith int
-	now      time.Time
-	atWork   []AtWork
+	mu           sync.Mutex
+	requests     []RecordedRequest
+	failWith     int
+	failReadWith int
+	now          time.Time
+	atWork       []AtWork
 }
 
 // Fixture names the data New seeds, for tests to refer to.
@@ -761,9 +768,10 @@ type Fixture struct {
 // somebody else. The server stops when the test ends.
 func New(t testing.TB) (*Server, *Fixture) {
 	s := &Server{
-		People: map[string]*Person{},
-		Tokens: map[string]string{},
-		now:    time.Date(2026, 9, 13, 14, 2, 11, 123456000, time.UTC),
+		People:     map[string]*Person{},
+		Tokens:     map[string]string{},
+		ItemLabels: map[string][]string{},
+		now:        time.Date(2026, 9, 13, 14, 2, 11, 123456000, time.UTC),
 	}
 
 	bruno := &Person{ID: newID(), Name: "Bruno", Email: "bruno@example.com"}
@@ -1062,6 +1070,7 @@ func New(t testing.TB) (*Server, *Fixture) {
 	s.registerCalendarRoutes(mux)
 	s.registerReminderRoutes(mux)
 	s.registerNotificationsRoutes(mux)
+	s.registerLabelRoutes(mux)
 	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) { unknownAddress(w) })
 
 	s.Server = httptest.NewServer(s.recording(mux))
@@ -1167,6 +1176,14 @@ func (s *Server) columnToUnarchiveInto(archived *ArchivedCard) *Column {
 	return archived.Column
 }
 
+// FailNextReadWith makes the next GET answer as FailNextWith does, so that a
+// test can let a read fail after the writes before it went through.
+func (s *Server) FailNextReadWith(status int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.failReadWith = status
+}
+
 // FailNextWith makes the next request answer with this status and a body that
 // is not JSON, like a proxy in front of the server would.
 func (s *Server) FailNextWith(status int) {
@@ -1184,6 +1201,9 @@ func (s *Server) recording(next http.Handler) http.Handler {
 		s.requests = append(s.requests, RecordedRequest{Method: r.Method, Path: r.URL.EscapedPath(), Query: r.URL.RawQuery, Header: r.Header.Clone(), Body: body})
 		failWith := s.failWith
 		s.failWith = 0
+		if r.Method == http.MethodGet && s.failReadWith != 0 {
+			failWith, s.failReadWith = s.failReadWith, 0
+		}
 		s.mu.Unlock()
 
 		if failWith != 0 {
@@ -1773,7 +1793,7 @@ func (s *Server) boardCardResources(board *Board, cards []*Card) []any {
 			"commentCount": len(card.Comments), "createdAt": timestamp(card.CreatedAt),
 			"creator": s.personReference(card.CreatorID), "completedAt": timestampOrNil(card.CompletedAt),
 			"completedBy": s.personReferenceOrNil(card.CompletedByID), "assignees": s.assigneeReferences(card),
-			"dueOn": card.DueOn, "appUrl": s.cardURL(board, card),
+			"dueOn": card.DueOn, "labels": s.labelResources(s.LabelsOn(card.ID)), "appUrl": s.cardURL(board, card),
 		}))
 	}
 	return list
@@ -3987,8 +4007,8 @@ func (s *Server) cardResource(board *Board, column *Column, card *Card) map[stri
 		"creator": s.personReference(card.CreatorID), "completedAt": timestampOrNil(card.CompletedAt),
 		"completedBy": s.personReferenceOrNil(card.CompletedByID), "assignees": s.assigneeReferences(card),
 		"dueOn": card.DueOn, "onHold": card.OnHold, "steps": s.stepResources(card), "subscribers": s.subscriberReferences(card),
-		"comments": comments,
-		"appUrl":   s.cardURL(board, card),
+		"comments": comments, "labels": s.labelResources(s.LabelsOn(card.ID)),
+		"appUrl": s.cardURL(board, card),
 	})
 }
 

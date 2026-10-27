@@ -69,6 +69,11 @@ the documentation says what holds; how it came about is in git.
   newest — and who may, the refusals, books and the order set by hand, the
   search within a tool or a folder and its pages, the export of a book into
   files and what a run never touches — before any work on `docs` or `search`.
+- [Labels](stable/labels.md): Where a label is kept and reached, its name
+  rules and colours, how a label is named by ID or name, the move by one
+  neighbour, putting several on an item and the scope that replaces, where
+  labels show, the order of the refusals — before any work on `labels` or the
+  `label` and `unlabel` commands of cards, documents and uploads.
 - [Comments on a card](stable/comments.md): What a read of the comments
   hands over and which one is the newest, the guards that keep a comment from
   being written past an unread answer, what counts as read and where the marks

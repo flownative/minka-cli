@@ -86,6 +86,7 @@ type BoardCard struct {
 	CompletedBy        *PersonReference  `json:"completedBy"`
 	Assignees          []PersonReference `json:"assignees"` // in the order they were assigned
 	DueOn              *string           `json:"dueOn"`     // the day it is due as YYYY-MM-DD, nil for a card without one
+	Labels             []Label           `json:"labels"`    // the board's labels first, then the project's; nil from a Minka without labels
 	AppURL             string            `json:"appUrl"`
 	ShortURL           *string           `json:"shortUrl"` // see Card.ShortURL
 }
@@ -207,6 +208,7 @@ type Card struct {
 	Steps        []Step            `json:"steps"`       // in the order the card shows them; only a single card carries them
 	Subscribers  []PersonReference `json:"subscribers"` // everybody the card notifies, by name; only a single card carries them
 	Comments     []Comment         `json:"comments"`
+	Labels       []Label           `json:"labels"` // the board's labels first, then the project's; nil from a Minka without labels
 	AppURL       string            `json:"appUrl"`
 	// ShortURL is the card's short address, such as
 	// "https://<host>/go/card/MNK-1A", which a renamed prefix keeps leading to.
