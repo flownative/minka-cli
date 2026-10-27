@@ -195,6 +195,7 @@ func everyWrite(e *testEnv) map[string][]string {
 		"labels create":        {"labels", "create", "Fresh", "--board", f.Board.ID},
 		"labels edit":          {"labels", "edit", "Stage::Ready", "--board", f.Board.ID, "--color", "teal"},
 		"labels move":          {"labels", "move", "Stage::Late", "--board", f.Board.ID, "--first"},
+		"labels rename-scope":  {"labels", "rename-scope", "Stage", "Phase", "--board", f.Board.ID},
 		"labels delete":        {"labels", "delete", "Plain", "--project", f.Project.ID},
 		"cards label":          {"cards", "label", card, "Stage::Ready"},
 		"cards unlabel":        {"cards", "unlabel", card, "Plain"},

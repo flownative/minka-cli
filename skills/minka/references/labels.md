@@ -6,6 +6,7 @@
 minka labels list (--project <projectId> | --board <boardId> | --tool <toolId>) --json
 minka labels create <name> (--project <projectId> | --board <boardId> | --tool <toolId>) [--color <colour>] --json
 minka labels edit <label> (--project … | --board … | --tool …) [--name <name>] [--color <colour>] --json
+minka labels rename-scope <scope> <newScope> (--project … | --board … | --tool …) --json
 minka labels move <label> (--project … | --board … | --tool …) (--first | --after <label> | --before <label>) --json
 minka labels delete <label> (--project … | --board … | --tool …) --json
 minka cards create --board <boardId> --title "Title" --label <label> [--label <label>...] --json
@@ -47,6 +48,13 @@ minka docs uploads unlabel <uploadId> <label> [<label>...] --json
   another value with exit 9 and `labelColorUnknown`. Without `--color` Minka
   picks one that stands out from the labels in reach.
 - Deleting a label takes it off every item; there is no trash for labels.
+- `labels rename-scope Priority Urgency --board <boardId>` renames every
+  `Priority::…` label of that place (not the project's) to `Urgency::…`, all
+  or none; `data` is the place's own labels afterwards. Renaming into a scope
+  already in use joins the two scopes. Only a resulting name that exists
+  already in the project refuses it (exit 9, `labelNameTaken`). An item that
+  carried one label of each keeps both until it takes the next label of that
+  scope. A scope no label of the place has exits 2.
 
 ## Labels on items
 

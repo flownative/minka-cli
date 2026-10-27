@@ -47,6 +47,7 @@ func (s *Server) registerLabelRoutes(mux *http.ServeMux) {
 	for _, place := range []string{"projects/{projectId}", "boards/{boardId}", "files-tools/{toolId}"} {
 		mux.HandleFunc("GET /api/v1/"+place+"/labels", s.authenticated(s.labels))
 		mux.HandleFunc("POST /api/v1/"+place+"/labels", s.authenticated(s.addLabel))
+		mux.HandleFunc("POST /api/v1/"+place+"/labels/scope-renames", s.authenticated(s.renameLabelScope))
 		mux.HandleFunc("PATCH /api/v1/"+place+"/labels/{labelId}", s.authenticated(s.updateLabel))
 		mux.HandleFunc("POST /api/v1/"+place+"/labels/{labelId}/moves", s.authenticated(s.moveLabel))
 		mux.HandleFunc("DELETE /api/v1/"+place+"/labels/{labelId}", s.authenticated(s.removeLabel))
@@ -195,6 +196,71 @@ func (s *Server) updateLabel(w http.ResponseWriter, r *http.Request, person *Per
 
 	label.Name, label.Color = newName, newColor
 	writeJSON(w, http.StatusOK, s.labelResource(label))
+}
+
+// renameLabelScope gives every label of one scope at exactly this place the
+// new scope, or none of them: a resulting name another label of the project
+// bears refuses the whole rename. A scope already in use is joined, and the
+// items keep whatever they carry, two labels of one scope included. The
+// answer is the place's own labels, without the project's under a board or
+// a tool.
+func (s *Server) renameLabelScope(w http.ResponseWriter, r *http.Request, person *Person) {
+	project, toolID, ok := s.labelPlace(w, r, person)
+	if !ok {
+		return
+	}
+	fields, ok := readBody(w, r)
+	if !ok {
+		return
+	}
+	scope, ok := stringField(w, fields, "scope")
+	if !ok {
+		return
+	}
+	newScope, ok := stringField(w, fields, "newScope")
+	if !ok {
+		return
+	}
+	if !validLabelScope(w, deref(scope)) || !validLabelScope(w, deref(newScope)) {
+		return
+	}
+	scopeKey, tidiedScope := labelNameKey(*scope), tidiedLabelName(*newScope)
+
+	// Each label is judged in the order of its place against the names
+	// before the rename, and the archive answers at the first label that
+	// would change: the server renames one after the other and stops at the
+	// first refusal.
+	renames := map[*Label]string{}
+	for _, label := range s.labelsOf(project.ID, toolID) {
+		if labelScopeKey(label.Name) != scopeKey {
+			continue
+		}
+		_, value, _ := strings.Cut(label.Name, "::")
+		renamed := tidiedScope + "::" + value
+		if utf8.RuneCountInString(renamed) > maxLabelNameLength {
+			unprocessable(w, "labelNameTooLong", "With this scope a label name would have more than 50 characters.")
+			return
+		}
+		if s.labelNameTaken(project.ID, renamed, label) {
+			labelNameTaken(w)
+			return
+		}
+		if s.refusedAsArchived(w, project) {
+			return
+		}
+		renames[label] = renamed
+	}
+	if len(renames) == 0 {
+		if !s.refusedAsArchived(w, project) {
+			notFound(w)
+		}
+		return
+	}
+
+	for label, renamed := range renames {
+		label.Name = renamed
+	}
+	writeJSON(w, http.StatusOK, s.labelResources(s.labelsOf(project.ID, toolID)))
 }
 
 // labelsForANewCard are the labels a new card is to carry, each named by the
@@ -617,6 +683,25 @@ func validLabelName(w http.ResponseWriter, name string) bool {
 		return false
 	}
 	return true
+}
+
+// validLabelScope refuses what makes no scope: a scope follows the rules of
+// a name and holds no "::".
+func validLabelScope(w http.ResponseWriter, scope string) bool {
+	switch labelNameRefusal(scope) {
+	case "":
+		if !strings.Contains(tidiedLabelName(scope), "::") {
+			return true
+		}
+	case "labelNameMissing":
+		unprocessable(w, "labelScopeMissing", `Name the scope in "scope" and its new name in "newScope".`)
+		return false
+	case "labelNameTooLong":
+		unprocessable(w, "labelNameTooLong", "A label scope has at most 50 characters.")
+		return false
+	}
+	unprocessable(w, "labelScopeMalformed", `A label scope holds letters, digits, spaces, "-", "+" and "*", and no "::".`)
+	return false
 }
 
 func labelColorUnknown(w http.ResponseWriter) {

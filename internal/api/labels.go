@@ -77,6 +77,19 @@ func (c *Client) MoveLabel(ctx context.Context, place LabelPlace, labelID string
 	return request[Label](ctx, c, http.MethodPost, place.path()+"/"+url.PathEscape(labelID)+"/moves", input)
 }
 
+// RenameLabelScopeInput names the scope whose labels are renamed and the
+// scope they take.
+type RenameLabelScopeInput struct {
+	Scope    string `json:"scope"`
+	NewScope string `json:"newScope"`
+}
+
+// RenameLabelScope gives every label of one scope at exactly this place the
+// new scope, or none of them, and answers with the place's own labels.
+func (c *Client) RenameLabelScope(ctx context.Context, place LabelPlace, input RenameLabelScopeInput) (Result[[]Label], error) {
+	return request[[]Label](ctx, c, http.MethodPost, place.path()+"/scope-renames", input)
+}
+
 // DeleteLabel deletes a label and takes it off every item; there is no trash.
 func (c *Client) DeleteLabel(ctx context.Context, place LabelPlace, labelID string) error {
 	_, err := request[struct{}](ctx, c, http.MethodDelete, place.path()+"/"+url.PathEscape(labelID), nil)

@@ -411,6 +411,19 @@ var idsInCapitals = []idInCapitals{
 	{command: "labels edit", inputs: []string{"--tool"}, prepare: withLabels, args: func(e *testEnv, f *fakeapi.Fixture) []string {
 		return []string{"Draft", "--tool", up(f.Files.ID), "--color", "teal"}
 	}},
+	{command: "labels rename-scope", inputs: []string{"--board"}, prepare: withLabels, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
+		return []string{"Stage", "Phase", "--board", up(f.Board.ID)}
+	}},
+	{command: "labels rename-scope", inputs: []string{"--project"}, prepare: func(e *testEnv) {
+		e.server.AddLabel(e.fixture.Project.ID, "", "Priority::High", "red")
+	}, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
+		return []string{"Priority", "Urgency", "--project", up(f.Project.ID)}
+	}},
+	{command: "labels rename-scope", inputs: []string{"--tool"}, prepare: func(e *testEnv) {
+		e.server.AddLabel(e.fixture.Project.ID, e.fixture.Files.ID, "State::Draft", "red")
+	}, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
+		return []string{"State", "Phase", "--tool", up(f.Files.ID)}
+	}},
 	{command: "labels move", inputs: []string{"<label>", "--board", "--after"}, prepare: withLabels, args: func(e *testEnv, f *fakeapi.Fixture) []string {
 		return []string{up(labelNamed(e, "Stage::Ready").ID), "--board", up(f.Board.ID), "--after", up(labelNamed(e, "Stage::Late").ID)}
 	}},

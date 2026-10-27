@@ -436,3 +436,86 @@ func TestTheFakeCreatesACardWithItsLabels(t *testing.T) {
 		t.Errorf("an archived project: %s", got)
 	}
 }
+
+// A scope is renamed for every label of it at exactly this place, or for
+// none: a resulting name the project has already refuses the whole rename,
+// while a scope in use is joined, and an item carrying a label of each keeps
+// both. The answer is the place's own labels.
+func TestTheFakeRenamesAScopeAtOnePlace(t *testing.T) {
+	s, f := New(t)
+	s.Tokens[clientToken] = f.Client.ID
+	selected := s.AddLabel(f.Project.ID, f.Board.ID, "cull::select", "red")
+	s.AddLabel(f.Project.ID, f.Board.ID, "Plain", "gray")
+	rejected := s.AddLabel(f.Project.ID, f.Board.ID, "Cull::reject", "blue")
+	kept := s.AddLabel(f.Project.ID, f.Board.ID, "auswahl::keep", "teal")
+	ofTheProject := s.AddLabel(f.Project.ID, "", "cull::later", "lime")
+	taken := s.AddLabel(f.Project.ID, f.Files.ID, "taken::reject", "gray")
+	s.PutLabelOn(f.CardInDoing.ID, selected)
+	s.PutLabelOn(f.CardInDoing.ID, kept)
+	path := "/api/v1/boards/" + f.Board.ID + "/labels/scope-renames"
+
+	for _, c := range []struct{ body, want string }{
+		{`{}`, "422 labelScopeMissing"},
+		{`{"scope":"  ","newScope":"x"}`, "422 labelScopeMissing"},
+		{`{"scope":"cull"}`, "422 labelScopeMissing"},
+		{`{"scope":"a::b","newScope":"x"}`, "422 labelScopeMalformed"},
+		{`{"scope":"cull","newScope":"a::b"}`, "422 labelScopeMalformed"},
+		{`{"scope":"cull","newScope":"v1.2"}`, "422 labelScopeMalformed"},
+		{`{"scope":"cull","newScope":"` + strings.Repeat("x", 51) + `"}`, "422 labelNameTooLong"},
+		{`{"scope":"cull","newScope":"` + strings.Repeat("x", 44) + `"}`, "422 labelNameTooLong"},
+		{`{"scope":"cull","newScope":"Taken"}`, "422 labelNameTaken"},
+		{`{"scope":"none","newScope":"other"}`, "404"},
+		{`{"scope":"Plain","newScope":"other"}`, "404"},
+		{`{"scope":1,"newScope":"other"}`, "400 malformedBody"},
+	} {
+		if got := sendAs(t, s, f.Token, "POST", path, "application/json", c.body); got != c.want {
+			t.Errorf("%s: %s, want %s", c.body, got, c.want)
+		}
+	}
+	if got := sendAs(t, s, clientToken, "POST", path, "application/json", `{"scope":"cull","newScope":"x"}`); got != "404" {
+		t.Errorf("a client: %s", got)
+	}
+	if selected.Name != "cull::select" || rejected.Name != "Cull::reject" || taken.Name != "taken::reject" {
+		t.Fatalf("a refused rename changed %s, %s, %s", selected.Name, rejected.Name, taken.Name)
+	}
+
+	status, answer := sendFor(t, s, f.Token, "POST", path, `{"scope":"CULL","newScope":" auswahl "}`)
+	if status != http.StatusOK {
+		t.Fatalf("status %d: %v", status, answer)
+	}
+	if got := labelNames(answer); !slices.Equal(got, []string{"auswahl::select", "Plain", "auswahl::reject", "auswahl::keep"}) {
+		t.Fatalf("the answer lists %v", got)
+	}
+	if ofTheProject.Name != "cull::later" || selected.Color != "red" {
+		t.Fatalf("project's label %s, colour %s", ofTheProject.Name, selected.Color)
+	}
+	var carried []string
+	for _, label := range s.LabelsOn(f.CardInDoing.ID) {
+		carried = append(carried, label.Name)
+	}
+	if !slices.Equal(carried, []string{"auswahl::select", "auswahl::keep"}) {
+		t.Fatalf("the card carries %v", carried)
+	}
+	if got := sendAs(t, s, f.Token, "POST", path, "application/json", `{"scope":"auswahl","newScope":"Auswahl"}`); got != "200" {
+		t.Errorf("a rename into the same scope: %s", got)
+	}
+	if selected.Name != "Auswahl::select" {
+		t.Errorf("name %s", selected.Name)
+	}
+
+	// Each label is judged and then renamed before the next one is looked
+	// at: a collision of the first label answers before the archive, one of
+	// a later label after it.
+	s.AddLabel(f.Project.ID, "", "other::select", "gray")
+	f.Project.Archived = true
+	for body, want := range map[string]string{
+		`{"scope":"auswahl","newScope":"Other"}`: "422 labelNameTaken",
+		`{"scope":"auswahl","newScope":"Taken"}`: "422 projectArchived",
+		`{"scope":"auswahl","newScope":"x"}`:     "422 projectArchived",
+		`{"scope":"none","newScope":"x"}`:        "422 projectArchived",
+	} {
+		if got := sendAs(t, s, f.Token, "POST", path, "application/json", body); got != want {
+			t.Errorf("archived, %s: %s, want %s", body, got, want)
+		}
+	}
+}

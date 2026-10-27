@@ -500,3 +500,68 @@ func TestANewCardsLabelsAreRefusedBeforeAnyWrite(t *testing.T) {
 		t.Fatalf("%d cards in Triage after refusals only", got)
 	}
 }
+
+// A scope is renamed for the place's own labels and the answer is those
+// labels afterwards; a scope in use is joined, and an item carrying a label
+// of each keeps both.
+func TestAScopeIsRenamedAtItsPlace(t *testing.T) {
+	e := newTestEnv(t)
+	withLabels(e)
+	f := e.fixture
+	phase := e.server.AddLabel(f.Project.ID, f.Board.ID, "Phase::Early", "lime")
+	e.server.PutLabelOn(f.CardInDoing.ID, labelNamed(e, "Stage::Ready"))
+	e.server.PutLabelOn(f.CardInDoing.ID, phase)
+
+	env := runOK(t, e, "labels", "rename-scope", "stage", "Phase", "--board", f.Board.ID)
+	if body := e.lastWriteBody(); len(body) != 2 || body["scope"] != "stage" || body["newScope"] != "Phase" {
+		t.Fatalf("body %v", body)
+	}
+	if path := e.server.WritingRequests()[0].Path; path != "/api/v1/boards/"+f.Board.ID+"/labels/scope-renames" {
+		t.Fatalf("path %s", path)
+	}
+	if got := labelNamesOf(t, env.Data); !slices.Equal(got, []string{"Phase::Ready", "Phase::Late", "Phase::Early"}) {
+		t.Fatalf("answer %v", got)
+	}
+	if got := namesOn(e, f.CardInDoing.ID); !slices.Equal(got, []string{"Phase::Ready", "Phase::Early"}) {
+		t.Fatalf("the card carries %v", got)
+	}
+
+	r := e.run("", "labels", "rename-scope", "phase", "Stufe", "--board", f.Board.ID, "--styled")
+	for _, want := range []string{"Renamed scope phase to Stufe", "Stufe::Early", "NAME"} {
+		if !strings.Contains(r.stdout, want) {
+			t.Errorf("missing %q in:\n%s", want, r.stdout)
+		}
+	}
+}
+
+// What Minka refuses comes back with its code and a hint; nothing is renamed.
+func TestARefusedScopeRenameSaysWhy(t *testing.T) {
+	e := newTestEnv(t)
+	withLabels(e)
+	f := e.fixture
+	e.server.AddLabel(f.Project.ID, f.Files.ID, "Phase::Late", "gray")
+	for _, c := range []struct {
+		args          []string
+		exit          int
+		apiCode, hint string
+	}{
+		{[]string{"Stage", "Phase"}, ExitValidation, "labelNameTaken", "nothing was renamed"},
+		{[]string{"Stage", "a::b"}, ExitValidation, "labelScopeMalformed", "part before"},
+		{[]string{"Stage", " "}, ExitValidation, "labelScopeMissing", "part before"},
+		{[]string{"Plain", "Other"}, ExitNotFound, "", `has the scope "Plain"`},
+	} {
+		env, r := e.runJSON("", append([]string{"labels", "rename-scope", "--board", f.Board.ID}, c.args...)...)
+		expectCode(t, r, c.exit)
+		if c.apiCode != "" && env.Meta["apiCode"] != c.apiCode || !strings.Contains(env.Hint, c.hint) {
+			t.Errorf("%v: apiCode %v, hint %q", c.args, env.Meta["apiCode"], env.Hint)
+		}
+	}
+	if labelNamed(e, "Stage::Ready").Name != "Stage::Ready" {
+		t.Fatal("a refused rename renamed")
+	}
+	_, r := e.runJSON("", "labels", "rename-scope", "Stage", "--board", f.Board.ID)
+	expectCode(t, r, ExitUsage)
+	if len(e.server.WritingRequests()) != 4 {
+		t.Fatalf("%d writes", len(e.server.WritingRequests()))
+	}
+}

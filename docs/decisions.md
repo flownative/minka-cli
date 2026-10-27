@@ -2342,3 +2342,17 @@ any write. A label named twice goes once; two of one scope are left to Minka.
 second rule beside Minka's that the list alone cannot always decide.
 **Implemented as:** `cli.labelsForANewCard`, see
 [Labels](stable/labels.md#labels-on-a-new-card).
+
+<a id="c-142"></a>
+## C-142 — A scope rename goes as typed and answers with the place's labels
+
+*Applies to: `labels rename-scope`*
+
+`<scope>` and `<newScope>` are sent as typed, nothing is read first, and Minka
+judges both; `data` is Minka's answer, the place's own labels afterwards, and
+the text view lists them.
+
+**Why:** Minka compares scopes, finds the labels and checks every new name in
+one transaction; a lookup here would only add a request and a second matcher.
+**Implemented as:** `cli.newLabelsRenameScopeCmd`, see
+[Labels](stable/labels.md#writing-a-places-labels).
