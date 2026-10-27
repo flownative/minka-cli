@@ -2352,6 +2352,20 @@ one transaction; a lookup here would only add a request and a second matcher.
 **Implemented as:** `cli.newLabelsRenameScopeCmd`, see
 [Labels](stable/labels.md#writing-a-places-labels).
 
+<a id="c-143"></a>
+## C-143 — The icon of a label goes as it is named, and Minka is the one to refuse it
+
+*Applies to: `labels create --icon`, `labels edit --icon` and `--no-icon`*
+
+`--icon` is sent as typed, `""` included, and `--no-icon` as `null`; the CLI
+keeps no list of Lucide's names and points to https://lucide.dev/icons once
+Minka has refused one with `labelIconUnknown`.
+
+**Why:** Minka bundles the whole Lucide set with its aliases and moves with
+it, so a list here would only go stale beside it, as for colours (C-086).
+**Implemented as:** `api.LabelInput`, `cli.labelRefusal`, see
+[Labels](stable/labels.md#icons).
+
 <a id="c-144"></a>
 ## C-144 — `cards mine --board --column` narrows on the server and here
 

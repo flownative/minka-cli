@@ -27,6 +27,16 @@ var labelColorPlane = map[string][2]float64{
 
 const maxLabelNameLength = 50
 
+// lucideIconNames is a sample of the Lucide icons Minka accepts, aliases
+// among them ("check-circle" beside "circle-check", "home" beside "house"),
+// the names Minka's tests use. Minka itself takes every name of the Lucide set
+// it bundles.
+var lucideIconNames = map[string]bool{
+	"check": true, "bug": true, "flag": true, "star": true, "rocket": true,
+	"circle-check": true, "check-circle": true, "house": true, "home": true,
+	"square-function": true, "function-square": true,
+}
+
 // labelNamePart is what each side of a scoped name, or a plain name, may hold.
 var labelNamePart = regexp.MustCompile(`^[\p{L}\p{M}\p{Nd} +*\-]+$`)
 
@@ -41,6 +51,7 @@ type Label struct {
 	ToolID    string // empty for a label of the project
 	Name      string // tidied, in the case it was written in
 	Color     string
+	Icon      string // a Lucide name, empty for none; one the fake does not know reads as none
 }
 
 func (s *Server) registerLabelRoutes(mux *http.ServeMux) {
@@ -115,14 +126,11 @@ func (s *Server) addLabel(w http.ResponseWriter, r *http.Request, person *Person
 		return
 	}
 	name, ok := stringField(w, fields, "name")
-	if !ok {
+	if !ok || !validLabelName(w, deref(name)) {
 		return
 	}
 	color, ok := stringField(w, fields, "color")
 	if !ok {
-		return
-	}
-	if !validLabelName(w, deref(name)) {
 		return
 	}
 	chosen := ""
@@ -136,6 +144,10 @@ func (s *Server) addLabel(w http.ResponseWriter, r *http.Request, person *Person
 		labelColorUnknown(w)
 		return
 	}
+	icon, ok := stringField(w, fields, "icon")
+	if !ok || icon != nil && !validLabelIcon(w, *icon) {
+		return
+	}
 	tidied := tidiedLabelName(*name)
 	if s.labelNameTaken(project.ID, tidied, nil) {
 		labelNameTaken(w)
@@ -146,11 +158,13 @@ func (s *Server) addLabel(w http.ResponseWriter, r *http.Request, person *Person
 	}
 
 	label := s.AddLabel(project.ID, toolID, tidied, chosen)
+	label.Icon = deref(icon)
 	writeJSON(w, http.StatusCreated, s.labelResource(label))
 }
 
-// updateLabel renames and recolours a label of exactly this place; what the
-// body leaves out stays. A rename into a scope takes nothing off the items.
+// updateLabel renames a label of exactly this place, recolours it and sets or
+// takes off its icon; what the body leaves out stays, and an icon of null
+// takes it off. A rename into a scope takes nothing off the items.
 func (s *Server) updateLabel(w http.ResponseWriter, r *http.Request, person *Person) {
 	project, label, ok := s.labelOfPlace(w, r, person)
 	if !ok {
@@ -168,11 +182,16 @@ func (s *Server) updateLabel(w http.ResponseWriter, r *http.Request, person *Per
 	if !ok {
 		return
 	}
-	if name == nil && color == nil {
-		unprocessable(w, "nothingToChange", `Name "name" or "color" to change a label.`)
+	icon, ok := stringField(w, fields, "icon")
+	if !ok {
 		return
 	}
-	newName, newColor := label.Name, label.Color
+	_, iconGiven := fields["icon"]
+	if name == nil && color == nil && !iconGiven {
+		unprocessable(w, "nothingToChange", `Name "name", "color" or "icon" to change a label.`)
+		return
+	}
+	newName, newColor, newIcon := label.Name, label.Color, knownLabelIcon(label.Icon)
 	if name != nil {
 		if !validLabelName(w, *name) {
 			return
@@ -186,6 +205,12 @@ func (s *Server) updateLabel(w http.ResponseWriter, r *http.Request, person *Per
 		}
 		newColor = *color
 	}
+	if iconGiven {
+		if icon != nil && !validLabelIcon(w, *icon) {
+			return
+		}
+		newIcon = deref(icon)
+	}
 	if s.labelNameTaken(project.ID, newName, label) {
 		labelNameTaken(w)
 		return
@@ -194,7 +219,7 @@ func (s *Server) updateLabel(w http.ResponseWriter, r *http.Request, person *Per
 		return
 	}
 
-	label.Name, label.Color = newName, newColor
+	label.Name, label.Color, label.Icon = newName, newColor, newIcon
 	writeJSON(w, http.StatusOK, s.labelResource(label))
 }
 
@@ -224,12 +249,14 @@ func (s *Server) renameLabelScope(w http.ResponseWriter, r *http.Request, person
 	if !validLabelScope(w, deref(scope)) || !validLabelScope(w, deref(newScope)) {
 		return
 	}
+	if s.refusedAsArchived(w, project) {
+		return
+	}
 	scopeKey, tidiedScope := labelNameKey(*scope), tidiedLabelName(*newScope)
 
 	// Each label is judged in the order of its place against the names
-	// before the rename, and the archive answers at the first label that
-	// would change: the server renames one after the other and stops at the
-	// first refusal.
+	// before the rename; the server renames one after the other and stops
+	// at the first refusal.
 	renames := map[*Label]string{}
 	for _, label := range s.labelsOf(project.ID, toolID) {
 		if labelScopeKey(label.Name) != scopeKey {
@@ -245,15 +272,10 @@ func (s *Server) renameLabelScope(w http.ResponseWriter, r *http.Request, person
 			labelNameTaken(w)
 			return
 		}
-		if s.refusedAsArchived(w, project) {
-			return
-		}
 		renames[label] = renamed
 	}
 	if len(renames) == 0 {
-		if !s.refusedAsArchived(w, project) {
-			notFound(w)
-		}
+		notFound(w)
 		return
 	}
 
@@ -622,7 +644,7 @@ func (s *Server) labelResource(label *Label) map[string]any {
 	position := slices.Index(s.labelsOf(label.ProjectID, label.ToolID), label) + 1
 	return map[string]any{
 		"id": label.ID, "name": label.Name, "scope": scope, "value": value, "color": label.Color,
-		"projectId": label.ProjectID, "toolId": nullable(label.ToolID), "position": position,
+		"icon": nullable(knownLabelIcon(label.Icon)), "projectId": label.ProjectID, "toolId": nullable(label.ToolID), "position": position,
 	}
 }
 
@@ -702,6 +724,24 @@ func validLabelScope(w http.ResponseWriter, scope string) bool {
 	}
 	unprocessable(w, "labelScopeMalformed", `A label scope holds letters, digits, spaces, "-", "+" and "*", and no "::".`)
 	return false
+}
+
+// validLabelIcon refuses a name that is no Lucide icon, the empty one included.
+func validLabelIcon(w http.ResponseWriter, icon string) bool {
+	if !lucideIconNames[icon] {
+		unprocessable(w, "labelIconUnknown", `A label icon is the name of a Lucide icon, such as "check".`)
+		return false
+	}
+	return true
+}
+
+// knownLabelIcon is a stored icon as Minka reads it: a name Lucide no longer
+// has is none, so the label stays readable and editable.
+func knownLabelIcon(icon string) string {
+	if lucideIconNames[icon] {
+		return icon
+	}
+	return ""
 }
 
 func labelColorUnknown(w http.ResponseWriter) {

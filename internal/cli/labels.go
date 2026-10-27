@@ -28,6 +28,7 @@ const (
 	apiCodeLabelNameTooLong    = "labelNameTooLong"
 	apiCodeLabelNameMalformed  = "labelNameMalformed"
 	apiCodeLabelColorUnknown   = "labelColorUnknown"
+	apiCodeLabelIconUnknown    = "labelIconUnknown"
 	apiCodeLabelNameTaken      = "labelNameTaken"
 	apiCodeLabelPlaceUnknown   = "labelPlaceUnknown"
 	apiCodeLabelUnknown        = "labelUnknown"
@@ -38,6 +39,12 @@ const (
 	labelNameRules = `A label name holds letters, digits, spaces, "-", "+" and "*", at most 50
 characters, with at most one "::" between a scope and a value, such as
 "Priority::High". Spaces around "::" and runs of spaces are tidied away.`
+
+	labelIconHelp = `--icon names a Lucide icon shown in front of the label's name, such as
+"check" or "bug"; Lucide's aliases are icons too, and Minka answers with the
+name as it was given. The CLI does not judge the name: one Minka does not know,
+"" included, exits 9 (validation) with meta.apiCode labelIconUnknown. The
+names are listed at https://lucide.dev/icons.`
 
 	labelPlaceHelp = `The place is given by exactly one of --project, --board and --tool (a Docs &
 Files tool). A label of a board or a tool is reached under that board or tool
@@ -86,6 +93,8 @@ func labelRefusal(s *session, err error) *Error {
 		e.Hint = strings.ReplaceAll(labelNameRules, "\n", " ")
 	case apiCodeLabelColorUnknown:
 		e.Hint = labelColorHint
+	case apiCodeLabelIconUnknown:
+		e.Hint = "A label icon is the name of a Lucide icon, lowercase with hyphens, such as check or circle-alert; see https://lucide.dev/icons."
 	case apiCodeLabelNameTaken:
 		e.Hint = "Label names are unique across the project and all its boards and tools, case aside. List them with: minka labels list --project <projectId>"
 	case apiCodeLabelPlaceUnknown:
@@ -368,7 +377,7 @@ An archived project still lists its labels. ` + labelWritersHelp,
 
 func (a *app) newLabelsCreateCmd() *cobra.Command {
 	var placeFlags labelPlaceFlags
-	var color string
+	var color, icon string
 	cmd := &cobra.Command{
 		Use:   "create <name>",
 		Short: "Add a label at the end of a project, board or Docs & Files tool",
@@ -384,10 +393,12 @@ labelNameTooLong or labelNameMalformed.
 spelt exactly so. Minka refuses any other value: exit 9 (validation) with
 meta.apiCode labelColorUnknown.
 
+` + labelIconHelp + ` Without --icon the label has none.
+
 ` + labelPlaceHelp + `
 
 ` + labelWritersHelp,
-		Example: `  minka labels create "Priority::High" --board 0199... --color red
+		Example: `  minka labels create "Priority::High" --board 0199... --color red --icon flag
   minka labels create Blocked --project 0199... --json`,
 		Args: requireArgs("name"),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -398,6 +409,9 @@ meta.apiCode labelColorUnknown.
 			input := api.LabelInput{Name: &args[0]}
 			if cmd.Flags().Changed("color") {
 				input.Color = &color
+			}
+			if cmd.Flags().Changed("icon") {
+				input.Icon = &icon
 			}
 			s, err := a.session()
 			if err != nil {
@@ -418,21 +432,27 @@ meta.apiCode labelColorUnknown.
 	}
 	placeFlags.register(cmd)
 	cmd.Flags().StringVar(&color, "color", "", "Colour of the label, one of Minka's twelve (see above); Minka suggests one without it")
+	cmd.Flags().StringVar(&icon, "icon", "", "Lucide icon in front of the label's name, such as check")
 	return cmd
 }
 
 func (a *app) newLabelsEditCmd() *cobra.Command {
 	var placeFlags labelPlaceFlags
-	var name, color string
+	var name, color, icon string
+	var noIcon bool
 	cmd := &cobra.Command{
 		Use:   "edit <label>",
-		Short: "Rename or recolour a label",
-		Long: `Gives a label a new name, a new colour or both; at least one of --name and
---color is required. What is not given stays as it is. A rename that changes
-only the case is allowed. Renaming a label into a scope takes nothing off the
-items: one may then carry two labels of the same scope.
+		Short: "Rename or recolour a label, or change its icon",
+		Long: `Gives a label a new name, a new colour, a new icon or several of them; at
+least one of --name, --color, --icon and --no-icon is required, and --icon and
+--no-icon exclude each other. What is not given stays as it is; --no-icon takes
+the icon off. A rename that changes only the case is allowed. Renaming a label
+into a scope takes nothing off the items: one may then carry two labels of the
+same scope.
 
 ` + labelNameRules + `
+
+` + labelIconHelp + `
 
 ` + labelArgHelp + `
 
@@ -440,7 +460,8 @@ items: one may then carry two labels of the same scope.
 
 ` + labelWritersHelp,
 		Example: `  minka labels edit "Priority::High" --board 0199... --color orange
-  minka labels edit 0199... --project 0199... --name "Priority::Urgent"`,
+  minka labels edit Blocked --board 0199... --icon octagon-x
+  minka labels edit 0199... --project 0199... --name "Priority::Urgent" --no-icon`,
 		Args: requireArgs("label"),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			var input api.LabelInput
@@ -450,8 +471,15 @@ items: one may then carry two labels of the same scope.
 			if cmd.Flags().Changed("color") {
 				input.Color = &color
 			}
-			if input.Name == nil && input.Color == nil {
-				return usageErrorf(cmd, "nothing to change, give --name or --color")
+			if noIcon && cmd.Flags().Changed("icon") {
+				return usageErrorf(cmd, "--icon and --no-icon exclude each other")
+			}
+			if cmd.Flags().Changed("icon") {
+				input.Icon = &icon
+			}
+			input.NoIcon = noIcon
+			if input.Name == nil && input.Color == nil && input.Icon == nil && !input.NoIcon {
+				return usageErrorf(cmd, "nothing to change, give --name, --color, --icon or --no-icon")
 			}
 			place, err := placeFlags.place(cmd)
 			if err != nil {
@@ -470,7 +498,7 @@ items: one may then carry two labels of the same scope.
 			if err != nil {
 				return labelRefusal(s, err)
 			}
-			summary := fmt.Sprintf("Changed label %s: %s, %s", label.Value.ID, label.Value.Name, label.Value.Color)
+			summary := fmt.Sprintf("Changed label %s: %s, %s, %s", label.Value.ID, label.Value.Name, label.Value.Color, iconName(label.Value))
 			return a.ok(success{
 				data:        label.Raw,
 				summary:     summary,
@@ -482,6 +510,8 @@ items: one may then carry two labels of the same scope.
 	placeFlags.register(cmd)
 	cmd.Flags().StringVar(&name, "name", "", "New name of the label")
 	cmd.Flags().StringVar(&color, "color", "", "New colour of the label, one of Minka's twelve (see above)")
+	cmd.Flags().StringVar(&icon, "icon", "", "New Lucide icon in front of the label's name, such as check")
+	cmd.Flags().BoolVar(&noIcon, "no-icon", false, "Take the icon off the label")
 	return cmd
 }
 
@@ -697,15 +727,23 @@ func renderLabels(w io.Writer, labels []api.Label) {
 		return
 	}
 	table := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(table, "ID\tNAME\tCOLOR\tOF\tPOSITION")
+	fmt.Fprintln(table, "ID\tNAME\tCOLOR\tICON\tOF\tPOSITION")
 	for _, label := range labels {
 		of := "project"
 		if label.ToolID != nil {
 			of = "tool"
 		}
-		fmt.Fprintf(table, "%s\t%s\t%s\t%s\t%d\n", label.ID, label.Name, label.Color, of, label.Position)
+		fmt.Fprintf(table, "%s\t%s\t%s\t%s\t%s\t%d\n", label.ID, label.Name, label.Color, iconName(label), of, label.Position)
 	}
 	_ = table.Flush()
+}
+
+// iconName is a label's icon for a line of text, "-" for none.
+func iconName(label api.Label) string {
+	if label.Icon == nil {
+		return "-"
+	}
+	return *label.Icon
 }
 
 // labelTags are the names of labels in brackets, for one line of a list, and
