@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 
 	"github.com/flownative/minka-cli/internal/api"
 	"github.com/flownative/minka-cli/internal/config"
@@ -74,6 +75,8 @@ type Error struct {
 	Retryable  bool
 	APICode    string
 	HTTPStatus int
+	// Reference names the entry of a server error in Minka's log.
+	Reference string
 
 	// Data is what a command got done before it failed, for a run that ends
 	// incomplete: the caller still gets the result, and the exit code says
@@ -85,6 +88,15 @@ type Error struct {
 
 func (e *Error) Error() string {
 	return e.Message
+}
+
+// fullHint is the hint followed by the reference of a server error, so that
+// the reference survives whatever hint a command put in place.
+func (e *Error) fullHint() string {
+	if e.Reference == "" {
+		return e.Hint
+	}
+	return strings.TrimSpace(e.Hint + " Minka logged this error as " + e.Reference + "; quote it when you report it.")
 }
 
 func (e *Error) ExitCode() int {
@@ -146,6 +158,7 @@ func apiError(err error, host string) *Error {
 			} else {
 				e.Hint = writeMayHaveHappened
 			}
+			e.Reference = apiErr.Reference
 		}
 		return e
 	}

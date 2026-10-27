@@ -179,6 +179,10 @@ type Error struct {
 	Message    string
 	Body       json.RawMessage // the answer as sent, for a refusal that carries more than its error
 
+	// Reference names the entry of a server error in Minka's log, for a
+	// person to quote when they report it. Empty if Minka named none.
+	Reference string
+
 	// RefusedByMinka is true for the 401 of Minka's own sign-in, which says
 	// the token is not accepted there. A 401 of anything in front of Minka,
 	// such as a proxy asking for a password, says nothing about the token.
@@ -783,9 +787,12 @@ func errorFromResponse(statusCode int, raw []byte) *Error {
 			Code    string `json:"code"`
 			Message string `json:"message"`
 		} `json:"error"`
+		Meta struct {
+			Reference string `json:"reference"`
+		} `json:"meta"`
 	}
 	if json.Unmarshal(raw, &body) == nil && body.Error.Code != "" {
-		return &Error{StatusCode: statusCode, Code: body.Error.Code, Message: body.Error.Message}
+		return &Error{StatusCode: statusCode, Code: body.Error.Code, Message: body.Error.Message, Reference: body.Meta.Reference}
 	}
 
 	// Answers that do not come from the API itself, such as a redirect, Flow's

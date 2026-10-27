@@ -1943,6 +1943,71 @@ func TestAFailedWriteTellsToReadBackBeforeRetrying(t *testing.T) {
 	}
 }
 
+// A server error that names its entry in Minka's log hands the reference on,
+// so that a person can quote it when they report the error.
+func TestAServerErrorNamesItsReference(t *testing.T) {
+	const reference = "20261027101530a1b2c3"
+
+	e := newTestEnv(t)
+	e.server.FailNextWithServerError(reference)
+	env, r := e.runJSON("", "me")
+	expectCode(t, r, ExitAPI)
+	if env.Code != CodeAPI || !env.Retryable || env.Meta["apiCode"] != "serverError" || env.Meta["reference"] != reference {
+		t.Errorf("envelope %+v", env)
+	}
+	if !strings.Contains(env.Hint, "Minka logged this error as "+reference) {
+		t.Errorf("hint %q", env.Hint)
+	}
+
+	e.server.FailNextWithServerError(reference)
+	env, r = e.runJSON("", "comments", "create", e.fixture.CardInTriage.ID, "hi")
+	expectCode(t, r, ExitAPI)
+	if env.Retryable || !strings.HasPrefix(env.Hint, writeMayHaveHappened) || !strings.Contains(env.Hint, reference) {
+		t.Errorf("envelope %+v", env)
+	}
+
+	e.server.FailNextWithServerError(reference)
+	r = e.run("", "me", "--styled")
+	expectCode(t, r, ExitAPI)
+	if !strings.Contains(r.stderr, "Hint: Minka logged this error as "+reference+"; quote it when you report it.") {
+		t.Errorf("stderr %q", r.stderr)
+	}
+}
+
+// A 500 without a reference, such as the HTML of an older Minka or of a proxy,
+// tells of none.
+// The reference follows whatever hint a command gives, and the command's own
+// hint stays as it would be without one.
+func TestAServerErrorKeepsItsReferenceBehindTheHintOfMessagesCreate(t *testing.T) {
+	const reference = "20261027101530a1b2c3"
+	logged := "Minka logged this error as " + reference + "; quote it when you report it."
+
+	e := newTestEnv(t)
+	e.server.FailNextWithServerError(reference)
+	env, r := e.runJSON("", "messages", "create", e.fixture.Chat.ID, "A word")
+	expectCode(t, r, ExitAPI)
+	if env.Hint != writeMayHaveHappened+" With --client-message-id, sending again is safe. "+logged {
+		t.Errorf("hint %q", env.Hint)
+	}
+
+	e.server.FailNextWithServerError(reference)
+	r = e.run("", "messages", "create", e.fixture.Chat.ID, "A word", "--client-message-id", "7f1c2b9e-5d4a-4e3b-9c8d-1a2b3c4d5e6f", "--styled")
+	expectCode(t, r, ExitAPI)
+	if !strings.Contains(r.stderr, "Hint: Send it again with the same --client-message-id: the message is written only once. "+logged) {
+		t.Errorf("stderr %q", r.stderr)
+	}
+}
+
+func TestAServerErrorWithoutAReferenceNamesNone(t *testing.T) {
+	e := newTestEnv(t)
+	e.server.FailNextWith(http.StatusInternalServerError)
+	env, r := e.runJSON("", "me")
+	expectCode(t, r, ExitAPI)
+	if _, ok := env.Meta["reference"]; ok || env.Hint != "" || !env.Retryable {
+		t.Errorf("envelope %+v", env)
+	}
+}
+
 func TestQuietPrintsWarningsToStderr(t *testing.T) {
 	e := newTestEnv(t)
 	r := e.run("", "cards", "create", "--board", e.fixture.Board.ID, "--title", "x", "--description", "![i](https://example.com/i.png)", "--quiet")

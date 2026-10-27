@@ -624,8 +624,10 @@ type Server struct {
 	requests     []RecordedRequest
 	failWith     int
 	failReadWith int
-	now          time.Time
-	atWork       []AtWork
+	// failWithServerError takes precedence over a pending failWith.
+	failWithServerError string
+	now                 time.Time
+	atWork              []AtWork
 }
 
 // Fixture names the data New seeds, for tests to refer to.
@@ -1194,6 +1196,16 @@ func (s *Server) FailNextWith(status int) {
 	s.failWith = status
 }
 
+// FailNextWithServerError makes the next request answer as Minka answers an
+// exception under the API: 500 with the error code serverError and the
+// reference of the entry in its log. It takes precedence over a pending
+// FailNextWith.
+func (s *Server) FailNextWithServerError(reference string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.failWithServerError = reference
+}
+
 func (s *Server) recording(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
@@ -1206,7 +1218,17 @@ func (s *Server) recording(next http.Handler) http.Handler {
 		if r.Method == http.MethodGet && s.failReadWith != 0 {
 			failWith, s.failReadWith = s.failReadWith, 0
 		}
+		reference := s.failWithServerError
+		s.failWithServerError = ""
 		s.mu.Unlock()
+
+		if reference != "" {
+			writeJSON(w, http.StatusInternalServerError, map[string]any{
+				"error": map[string]any{"code": "serverError", "message": "Something went wrong on the server. The reference names the entry in its log."},
+				"meta":  map[string]any{"reference": reference},
+			})
+			return
+		}
 
 		if failWith != 0 {
 			w.Header().Set("Content-Type", "text/html")
