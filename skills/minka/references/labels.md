@@ -4,8 +4,8 @@
 
 ```bash
 minka labels list (--project <projectId> | --board <boardId> | --tool <toolId>) --json
-minka labels create <name> (--project <projectId> | --board <boardId> | --tool <toolId>) [--color <colour>] --json
-minka labels edit <label> (--project … | --board … | --tool …) [--name <name>] [--color <colour>] --json
+minka labels create <name> (--project <projectId> | --board <boardId> | --tool <toolId>) [--color <colour>] [--icon <icon>] --json
+minka labels edit <label> (--project … | --board … | --tool …) [--name <name>] [--color <colour>] [--icon <icon> | --no-icon] --json
 minka labels rename-scope <scope> <newScope> (--project … | --board … | --tool …) --json
 minka labels move <label> (--project … | --board … | --tool …) (--first | --after <label> | --before <label>) --json
 minka labels delete <label> (--project … | --board … | --tool …) --json
@@ -47,6 +47,12 @@ minka docs uploads unlabel <uploadId> <label> [<label>...] --json
   `indigo`, `purple`, `pink`, `brown`, `gray`, spelt exactly so. Minka refuses
   another value with exit 9 and `labelColorUnknown`. Without `--color` Minka
   picks one that stands out from the labels in reach.
+- `--icon` names a Lucide icon shown in front of the label's name, such as
+  `check`, `bug` or `flag` (names at https://lucide.dev/icons); aliases are
+  accepted and answered as given. Minka refuses an unknown name, `""`
+  included, with exit 9 and `labelIconUnknown`. `labels edit --no-icon` takes
+  the icon off; an icon alone is a change. Every label in JSON carries `icon`,
+  `null` for none.
 - Deleting a label takes it off every item; there is no trash for labels.
 - `labels rename-scope Priority Urgency --board <boardId>` renames every
   `Priority::…` label of that place (not the project's) to `Urgency::…`, all

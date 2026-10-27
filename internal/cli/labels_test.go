@@ -565,3 +565,64 @@ func TestARefusedScopeRenameSaysWhy(t *testing.T) {
 		t.Fatalf("%d writes", len(e.server.WritingRequests()))
 	}
 }
+
+// --icon goes as it is written, --no-icon as null, and either alone is a
+// change; the list shows the icon, and Minka's refusal of a name comes back
+// with a hint to Lucide's names.
+func TestALabelCarriesAnIcon(t *testing.T) {
+	e := newTestEnv(t)
+	f := e.fixture
+	env := runOK(t, e, "labels", "create", "Done", "--project", f.Project.ID, "--icon", "check-circle")
+	if body := e.lastWriteBody(); len(body) != 2 || body["icon"] != "check-circle" {
+		t.Fatalf("body %v", body)
+	}
+	if decode(t, env.Data)["icon"] != "check-circle" {
+		t.Fatalf("data %s", env.Data)
+	}
+	runOK(t, e, "labels", "create", "Plain", "--project", f.Project.ID)
+	if _, sent := e.lastWriteBody()["icon"]; sent {
+		t.Fatalf("an icon was sent without --icon: %v", e.lastWriteBody())
+	}
+
+	runOK(t, e, "labels", "edit", "Plain", "--project", f.Project.ID, "--icon", "bug")
+	if body := e.lastWriteBody(); len(body) != 1 || body["icon"] != "bug" {
+		t.Fatalf("body %v", body)
+	}
+	r := e.run("", "labels", "list", "--project", f.Project.ID, "--styled")
+	for _, want := range []string{"ICON", "bug", "check-circle"} {
+		if !strings.Contains(r.stdout, want) {
+			t.Errorf("missing %q in:\n%s", want, r.stdout)
+		}
+	}
+
+	env = runOK(t, e, "labels", "edit", "Plain", "--project", f.Project.ID, "--no-icon")
+	body := e.lastWriteBody()
+	if icon, sent := body["icon"]; len(body) != 1 || !sent || icon != nil {
+		t.Fatalf("--no-icon sent %v", body)
+	}
+	if icon, present := decode(t, env.Data)["icon"]; !present || icon != nil {
+		t.Fatalf("data %s", env.Data)
+	}
+	if labelNamed(e, "Plain").Icon != "" {
+		t.Fatal("the icon stayed")
+	}
+
+	env, r2 := e.runJSON("", "labels", "edit", "Plain", "--project", f.Project.ID, "--icon", "no-such-icon")
+	expectCode(t, r2, ExitValidation)
+	if env.Meta["apiCode"] != "labelIconUnknown" || !strings.Contains(env.Hint, "lucide.dev/icons") {
+		t.Fatalf("apiCode %v, hint %q", env.Meta["apiCode"], env.Hint)
+	}
+	_, r2 = e.runJSON("", "labels", "create", "Other", "--project", f.Project.ID, "--icon", "")
+	expectCode(t, r2, ExitValidation)
+}
+
+// --icon and --no-icon together are refused before anything is sent.
+func TestIconAndNoIconExcludeEachOther(t *testing.T) {
+	e := newTestEnv(t)
+	withLabels(e)
+	_, r := e.runJSON("", "labels", "edit", "Plain", "--project", e.fixture.Project.ID, "--icon", "bug", "--no-icon")
+	expectCode(t, r, ExitUsage)
+	if len(e.server.Requests()) != 0 {
+		t.Fatalf("requests %v", e.server.Requests())
+	}
+}

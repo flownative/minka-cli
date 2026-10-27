@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/url"
 )
@@ -15,6 +16,7 @@ type Label struct {
 	Scope     *string `json:"scope"` // the part before "::", nil for a plain label
 	Value     string  `json:"value"` // the part after "::", the whole name for a plain label
 	Color     string  `json:"color"`
+	Icon      *string `json:"icon"` // a Lucide icon name, nil for none
 	ProjectID string  `json:"projectId"`
 	ToolID    *string `json:"toolId"`   // the board or Files tool, nil for a label of the project
 	Position  int     `json:"position"` // counted from 1 within its own place
@@ -41,11 +43,32 @@ func (i LabelledItem) path() string {
 	return "/" + i.Kind + "/" + url.PathEscape(i.ID) + "/labels"
 }
 
-// LabelInput names a label's new name, colour or both; what is nil is not
-// sent. A new label without a colour gets the one Minka suggests.
+// LabelInput names a label's new name, colour, icon or several of them; what
+// is nil is not sent. A new label without a colour gets the one Minka
+// suggests. NoIcon takes the icon off and is sent as null; an empty Icon is
+// sent as it is, and Minka refuses it.
 type LabelInput struct {
-	Name  *string `json:"name,omitempty"`
-	Color *string `json:"color,omitempty"`
+	Name   *string
+	Color  *string
+	Icon   *string
+	NoIcon bool
+}
+
+func (in LabelInput) MarshalJSON() ([]byte, error) {
+	fields := map[string]any{}
+	if in.Name != nil {
+		fields["name"] = *in.Name
+	}
+	if in.Color != nil {
+		fields["color"] = *in.Color
+	}
+	if in.Icon != nil {
+		fields["icon"] = *in.Icon
+	}
+	if in.NoIcon {
+		fields["icon"] = nil
+	}
+	return json.Marshal(fields)
 }
 
 // MoveLabelInput names where a label goes within its place: right behind

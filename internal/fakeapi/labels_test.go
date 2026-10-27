@@ -503,19 +503,99 @@ func TestTheFakeRenamesAScopeAtOnePlace(t *testing.T) {
 		t.Errorf("name %s", selected.Name)
 	}
 
-	// Each label is judged and then renamed before the next one is looked
-	// at: a collision of the first label answers before the archive, one of
-	// a later label after it.
+	// An archived project refuses once, after the body and before any
+	// label, so a collision or an unknown scope does not decide the answer.
 	s.AddLabel(f.Project.ID, "", "other::select", "gray")
 	f.Project.Archived = true
 	for body, want := range map[string]string{
-		`{"scope":"auswahl","newScope":"Other"}`: "422 labelNameTaken",
-		`{"scope":"auswahl","newScope":"Taken"}`: "422 projectArchived",
+		`{"scope":"auswahl","newScope":"a::b"}`:  "422 labelScopeMalformed",
+		`{"scope":"auswahl","newScope":"Other"}`: "422 projectArchived",
 		`{"scope":"auswahl","newScope":"x"}`:     "422 projectArchived",
 		`{"scope":"none","newScope":"x"}`:        "422 projectArchived",
 	} {
 		if got := sendAs(t, s, f.Token, "POST", path, "application/json", body); got != want {
 			t.Errorf("archived, %s: %s, want %s", body, got, want)
+		}
+	}
+}
+
+// A label takes a Lucide icon, an alias as it is named; an edit keeps it
+// where the body leaves it out, sets it from a string, takes it off with
+// null, and an icon alone is a change. An unknown name is refused after the
+// name and the colour, a stored one Lucide dropped reads as none, and every
+// label shape carries the field.
+func TestTheFakeKeepsTheIconOfALabel(t *testing.T) {
+	s, f := New(t)
+	place := "/api/v1/projects/" + f.Project.ID + "/labels"
+	for body, want := range map[string]string{
+		`{"name":"a::b::c","icon":7}`:            "422 labelNameMalformed",
+		`{"name":"Fine","color":"Red","icon":7}`: "422 labelColorUnknown",
+		`{"name":"Fine","icon":7}`:               "400 malformedBody",
+		`{"name":"Fine","icon":""}`:              "422 labelIconUnknown",
+		`{"name":"Fine","icon":"../check"}`:      "422 labelIconUnknown",
+		`{"name":"Fine","icon":"Check"}`:         "422 labelIconUnknown",
+	} {
+		if got := sendAs(t, s, f.Token, "POST", place, "application/json", body); got != want {
+			t.Errorf("%s: %s, want %s", body, got, want)
+		}
+	}
+	if len(s.Labels) != 0 {
+		t.Fatalf("%d labels after refusals only", len(s.Labels))
+	}
+
+	_, answer := sendFor(t, s, f.Token, "POST", place, `{"name":"Done","icon":"check-circle"}`)
+	if icon := answer.(map[string]any)["icon"]; icon != "check-circle" {
+		t.Fatalf("an alias came back as %v", icon)
+	}
+	_, answer = sendFor(t, s, f.Token, "POST", place, `{"name":"cull::select","icon":null}`)
+	label := answer.(map[string]any)
+	if icon, present := label["icon"]; !present || icon != nil {
+		t.Fatalf("a label without an icon: %v", label)
+	}
+	address := place + "/" + label["id"].(string)
+	for _, step := range []struct {
+		body string
+		want any
+	}{
+		{`{"icon":"bug"}`, "bug"},
+		{`{"color":"blue"}`, "bug"},
+		{`{"name":"a::b::c","icon":"nope"}`, "422 labelNameMalformed"},
+		{`{"color":"Red","icon":"nope"}`, "422 labelColorUnknown"},
+		{`{"icon":"nope"}`, "422 labelIconUnknown"},
+		{`{"icon":""}`, "422 labelIconUnknown"},
+		{`{"icon":7}`, "400 malformedBody"},
+		{`{"icon":null}`, nil},
+	} {
+		if refusal, refused := step.want.(string); refused && strings.Contains(refusal, " ") {
+			if got := sendAs(t, s, f.Token, "PATCH", address, "application/json", step.body); got != refusal {
+				t.Errorf("%s: %s, want %s", step.body, got, refusal)
+			}
+			continue
+		}
+		_, answer := sendFor(t, s, f.Token, "PATCH", address, step.body)
+		if icon := answer.(map[string]any)["icon"]; icon != step.want {
+			t.Errorf("%s: icon %v, want %v", step.body, icon, step.want)
+		}
+	}
+
+	stored := s.Labels[1]
+	stored.Icon = "retired-icon"
+	s.PutLabelOn(f.CardInDoing.ID, stored)
+	_, answer = sendFor(t, s, f.Token, "GET", "/api/v1/cards/"+f.CardInDoing.ID, "")
+	carried := answer.(map[string]any)["labels"].([]any)[0].(map[string]any)
+	if icon, present := carried["icon"]; !present || icon != nil {
+		t.Fatalf("a label on a card: %v", carried)
+	}
+	if got := sendAs(t, s, f.Token, "PATCH", address, "application/json", `{"color":"red"}`); got != "200" {
+		t.Fatalf("a label with a dropped icon: %s", got)
+	}
+	if stored.Icon != "" {
+		t.Fatalf("an edit kept the dropped icon %q", stored.Icon)
+	}
+	_, answer = sendFor(t, s, f.Token, "GET", place, "")
+	for _, entry := range answer.([]any) {
+		if _, present := entry.(map[string]any)["icon"]; !present {
+			t.Fatalf("a listed label without the field: %v", entry)
 		}
 	}
 }
