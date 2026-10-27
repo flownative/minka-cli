@@ -22,7 +22,8 @@ func (e *testEnv) coordinatorRequests() []fakeapi.RecordedRequest {
 }
 
 // A claim sends the session named with --session as written, and the board
-// names it from then on: in data, in coordinator show and in boards show.
+// names it to its account from then on: in data, in coordinator show and in
+// boards show.
 func TestAClaimMakesTheSessionTheCoordinatorOfTheBoard(t *testing.T) {
 	e := newAgentEnv(t)
 	e.vars[sessionVariable] = "0199aaaa-0000-7000-8000-000000000000"
@@ -46,7 +47,7 @@ func TestAClaimMakesTheSessionTheCoordinatorOfTheBoard(t *testing.T) {
 
 	r = e.run("", "boards", "show", e.fixture.Board.ID, "--styled")
 	expectCode(t, r, ExitOK)
-	if !strings.Contains(r.stdout, "Coordinator: Claude (Bruno) (agent, session "+sessionOfTheWait+")") {
+	if !strings.Contains(r.stdout, "Coordinated by Claude (Bruno) (agent, session "+sessionOfTheWait+") since ") {
 		t.Fatalf("boards show does not name the coordinator:\n%s", r.stdout)
 	}
 }
@@ -92,9 +93,9 @@ func TestASessionIsNamedAsMinkaTakesAName(t *testing.T) {
 	}
 }
 
-// A client of the project is not shown the coordinator: the board leaves the
+// A client of the project is not shown a coordinator: the board leaves the
 // field out, show says so and hands over null with a notice, and boards show
-// names nobody.
+// names none.
 func TestAClientIsNotShownTheCoordinator(t *testing.T) {
 	e := newTestEnv(t)
 	expectCode(t, e.run("", "boards", "coordinator", "claim", e.fixture.Board.ID, "--session", "planning", "--json"), ExitOK)
@@ -103,15 +104,15 @@ func TestAClientIsNotShownTheCoordinator(t *testing.T) {
 
 	env, r := e.runJSON("", "boards", "coordinator", "show", e.fixture.Board.ID)
 	expectCode(t, r, ExitOK)
-	if string(env.Data) != "null" || !strings.Contains(env.Notice, "does not show you") || strings.Contains(env.Summary, "Nobody") {
+	if string(env.Data) != "null" || !strings.Contains(env.Notice, "does not show you") || strings.Contains(env.Summary, "No session") {
 		t.Fatalf("envelope %+v", env)
 	}
-	if r := e.run("", "boards", "coordinator", "show", e.fixture.Board.ID, "--styled"); r.stdout != "This board does not show you who coordinates it.\n" {
+	if r := e.run("", "boards", "coordinator", "show", e.fixture.Board.ID, "--styled"); r.stdout != "This board does not show you a coordinator.\n" {
 		t.Fatalf("stdout %q", r.stdout)
 	}
 	board := e.run("", "boards", "show", e.fixture.Board.ID, "--styled")
 	expectCode(t, board, ExitOK)
-	if strings.Contains(board.stdout, "Coordinator") {
+	if strings.Contains(board.stdout, "coordinate") {
 		t.Fatalf("boards show names a coordinator to a client:\n%s", board.stdout)
 	}
 	raw, _ := e.runJSON("", "boards", "show", e.fixture.Board.ID)
@@ -120,26 +121,46 @@ func TestAClientIsNotShownTheCoordinator(t *testing.T) {
 	}
 }
 
-// The safeguard: while another person coordinates the board, a claim exits 9
-// with the holder in data and in the hint, and takes nothing over.
-func TestAClaimWhileAnotherPersonHoldsTheBoardNamesThem(t *testing.T) {
+// The safeguard: two accounts coordinate one board side by side. Neither
+// claim is refused, each account is shown its own entry alone, and a release
+// takes off the own entry and leaves the other.
+func TestTwoAccountsCoordinateABoardSideBySide(t *testing.T) {
 	e := newAgentEnv(t)
 	expectCode(t, e.run("", "boards", "coordinator", "claim", e.fixture.Board.ID, "--session", "agent-session", "--json"), ExitOK)
 
 	e.vars["MINKA_TOKEN"] = e.fixture.Token
 	env, r := e.runJSON("", "boards", "coordinator", "claim", e.fixture.Board.ID, "--session", "brunos")
+	expectCode(t, r, ExitOK)
+	if decode(t, env.Data)["session"] != "brunos" {
+		t.Fatalf("data %s", env.Data)
+	}
+	env, _ = e.runJSON("", "boards", "coordinator", "show", e.fixture.Board.ID)
+	if decode(t, env.Data)["session"] != "brunos" {
+		t.Fatalf("Bruno is shown %s", env.Data)
+	}
+
+	expectCode(t, e.run("", "boards", "coordinator", "release", e.fixture.Board.ID, "--json"), ExitOK)
+	env, _ = e.runJSON("", "boards", "coordinator", "show", e.fixture.Board.ID)
+	if string(env.Data) != "null" || !strings.Contains(env.Summary, "No session of yours") {
+		t.Fatalf("after his release Bruno is shown %s, %q", env.Data, env.Summary)
+	}
+
+	e.vars["MINKA_TOKEN"] = e.fixture.AgentToken
+	env, _ = e.runJSON("", "boards", "coordinator", "show", e.fixture.Board.ID)
+	if decode(t, env.Data)["session"] != "agent-session" {
+		t.Fatalf("Bruno's release took the agent's entry: %s", env.Data)
+	}
+}
+
+// A Minka that still refuses a claim for somebody else's entry is reported as
+// it answered: exit 9 with its code, and nothing of a takeover offered.
+func TestAnOlderMinkaRefusingAClaimIsReportedAsItAnswered(t *testing.T) {
+	e := newTestEnv(t)
+	e.answeredBy(&bell{answers: []string{`409 {"error":{"code":"coordinatorTaken","message":"Somebody else coordinates this board."},"coordinator":{"person":{"id":"x","name":"Anke","kind":"human"},"session":"hers"}}`}})
+	env, r := e.runJSON("", "boards", "coordinator", "claim", "0192f3a4-5b6c-4d7e-8f90-a1b2c3d4e5f6", "--session", "planning")
 	expectCode(t, r, ExitValidation)
-	if env.Code != CodeValidation || env.Meta["apiCode"] != "coordinatorTaken" {
-		t.Fatalf("code %q, apiCode %v", env.Code, env.Meta["apiCode"])
-	}
-	if holder := decode(t, env.Data); holder["session"] != "agent-session" {
-		t.Fatalf("data %s does not name the holder", env.Data)
-	}
-	if !strings.Contains(env.Hint, "Claude (Bruno) (agent, session agent-session)") || !strings.Contains(env.Hint, "minka boards coordinator release "+e.fixture.Board.ID) {
-		t.Fatalf("hint %q", env.Hint)
-	}
-	if e.fixture.Board.Coordinator.Session != "agent-session" {
-		t.Fatal("the claim took the board over")
+	if env.Meta["apiCode"] != "coordinatorTaken" || strings.Contains(env.Hint, "release") || strings.Contains(string(env.Data), "Anke") {
+		t.Fatalf("envelope %+v", env)
 	}
 }
 
@@ -154,13 +175,12 @@ func TestAnotherSessionOfThePersonTakesTheBoardOver(t *testing.T) {
 	}
 }
 
-// A release takes the entry off whoever holds it, and a second one succeeds
-// as well; show then says nobody, with data null.
-func TestAReleaseTakesTheCoordinatorOffAndCanBeRepeated(t *testing.T) {
+// A release takes the own entry off, and a second one succeeds as well; show
+// then says that no session of yours coordinates the board, with data null.
+func TestAReleaseTakesTheOwnEntryOffAndCanBeRepeated(t *testing.T) {
 	e := newAgentEnv(t)
 	expectCode(t, e.run("", "boards", "coordinator", "claim", e.fixture.Board.ID, "--session", "agent-session", "--json"), ExitOK)
 
-	e.vars["MINKA_TOKEN"] = e.fixture.Token
 	for range 2 {
 		env, r := e.runJSON("", "boards", "coordinator", "release", e.fixture.Board.ID)
 		expectCode(t, r, ExitOK)
@@ -177,7 +197,7 @@ func TestAReleaseTakesTheCoordinatorOffAndCanBeRepeated(t *testing.T) {
 	if string(env.Data) != "" && string(env.Data) != "null" {
 		t.Fatalf("data %s, want null", env.Data)
 	}
-	if r := e.run("", "boards", "coordinator", "show", e.fixture.Board.ID, "--styled"); !strings.Contains(r.stdout, "Nobody coordinates this board.") {
+	if r := e.run("", "boards", "coordinator", "show", e.fixture.Board.ID, "--styled"); !strings.Contains(r.stdout, "No session of yours coordinates this board.") {
 		t.Fatalf("stdout %q", r.stdout)
 	}
 }

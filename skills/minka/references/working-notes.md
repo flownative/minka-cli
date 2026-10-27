@@ -52,8 +52,9 @@ How to keep the notes:
   it again with their `updatedAt`. Take `--force` only where the person you work
   for has asked for it — whether anybody else writes these notes is not
   something you can know.
-- Where a project has one session keep the backs — a coordinator, say — leave
-  them to it, and hand it what you would have written.
+- The agent the card is assigned to writes its back. On a card that is not
+  yours, leave the back alone and say on the front what you would have
+  written.
 
 The back is the team's alone. A client of the project gets exit 2
 (`not_found`) for the notes and the attachments of a card whose front it sees,

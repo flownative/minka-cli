@@ -28,10 +28,10 @@ they stay when the card is done. What still holds after the card is done goes
 into the repository before the card reaches Done. Every attachment is named in
 the notes with one line of what it holds.
 
-E-276 also says that in Minka's own development only the coordinator writes
-the backs. That is a rule of one project and not of the tool, so the skill
-says it generally: where one session keeps the backs, the others leave them to
-it.
+Who writes a back is a rule of how agents work on a board, not of the tool:
+the skill says that the agent the card is assigned to writes it, and that any
+other agent leaves it alone and says on the front what it would have written
+(C-145).
 
 ## Only the team
 

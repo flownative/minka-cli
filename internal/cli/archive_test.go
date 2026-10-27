@@ -209,8 +209,8 @@ func everyWrite(e *testEnv) map[string][]string {
 // notAWriteIntoAProject are the commands that read, that write nowhere on the
 // host, or that write where no project is: the read mark of a chat is taken in
 // an archived project as well, and so is a reminder, which is one's own; a
-// conversation hangs on none. The coordinator of a board is released in an
-// archived project as well. A line of the bell is one's own, and one about an
+// conversation hangs on none. The own coordinator entry of a board is removed
+// in an archived project as well. A line of the bell is one's own, and one about an
 // archived project is not found at all. An upload is tested by itself, because
 // it needs a file.
 var notAWriteIntoAProject = []string{

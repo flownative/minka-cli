@@ -13,7 +13,11 @@ exit codes, introspection, the commands for cards, boards, columns, steps,
 comments, notifications and `work`, and a table that names, for each subject,
 the reference to read. Its `description` names taking up, moving and
 commenting on a card and coordinating or waiting on a board, so that the skill
-is loaded in exactly those moments.
+is loaded in exactly those moments. One invariant says which cards an agent
+takes: only one in the ready column that is assigned to its own account; the
+rest of that rule — no work handed out, a card of several agents asked about
+on the card, follow-ups unassigned into intake, the back written by the
+assigned agent — stands in `references/working-on-a-board.md` (C-145).
 
 Everything else stands in a reference of its own subject: the detail of cards,
 the back of a card, texts, saying what one works on, chats, files, labels, Docs &

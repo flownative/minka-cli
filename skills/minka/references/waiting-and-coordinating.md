@@ -1,7 +1,7 @@
 # Waiting for news and coordinating a board
 
 Read this when you are to stay on a board for longer than one task: as the
-session that hands out the work of a board, or as one that waits for its next
+session that coordinates your account's work on a board and waits for its next
 card.
 
 ## Waiting instead of polling
@@ -67,53 +67,58 @@ minka notifications count --json                       # data.unreadCount: the n
 
 ## Coordinating a board
 
-A board has at most one coordinator: one session of one person that decides
-who works on what. The board shows it with the session and when it was last
-active.
+Every account coordinates a board with one session at a time: one
+coordinating session per agent account and board. Several agents coordinate
+the same board side by side, each with an entry of its own that only it sees.
+The entry keeps two sessions of the same account from working the board at
+once; it decides nothing about who works on what. Assignment does that: a
+person releases a card by putting it into the ready column and assigning it.
 
 ```bash
-minka boards coordinator show <boardId> --json      # data null: nobody
-minka boards coordinator claim <boardId> --session planning --json  # take it, or renew it
-minka boards coordinator release <boardId> --json   # give it up
+minka boards coordinator show <boardId> --json      # data null: no session of yours
+minka boards coordinator claim <boardId> --session planning --json  # take it, renew it, take it over
+minka boards coordinator release <boardId> --json   # remove your entry
 ```
 
-- A claim needs `--session <name>`: a name you choose for people to read on
-  the board, such as `planning` or `"Planung März"`: 1 to 64 characters, no
-  control or format character, sent as written. In an archived project it
-  exits 9 with `projectArchived`.
-- `minka boards coordinator show` with `data` null and a notice that the
-  board does not show it means you are a client of the project and are not
-  told who coordinates it; null without that notice means nobody does.
-  It is not taken from `$CLAUDE_CODE_SESSION_ID`. Keep the same name for every
-  renewal; a new name is a new session.
+- A claim needs `--session <name>`: a name you choose, such as `planning` or
+  `"Planung März"`: 1 to 64 characters, no control or format character, sent
+  as written. It is not taken from `$CLAUDE_CODE_SESSION_ID`. Keep the same
+  name for every renewal; a new name is a new session. In an archived project
+  a claim exits 9 with `projectArchived`.
+- A claim is never refused for another account. A claim of a new session of
+  your own account takes the entry over at once.
 - The entry expires 4 hours after its last sign of life. A claim is one, and so
-  is every `minka notifications wait` of the same person, so a coordinator that
-  keeps waiting keeps the board.
-- Exit 9 with `meta.apiCode` `coordinatorTaken`: another person coordinates the
-  board. `data` is the holder (`person`, `session`, `lastSeenAt`,
-  `expiresAt`), and so is the hint. Do not take it over; tell the person who
-  asked you, or wait for the entry to expire.
-- `minka boards show <boardId>` names the coordinator as well.
+  is every `minka notifications wait` of the same account, so a session that
+  keeps waiting keeps its entry. A forgotten entry blocks nobody.
+- `data` null with a notice that the board does not show it means you are a
+  client of the project, who cannot coordinate.
+- `minka boards show <boardId>` names the entry as well, as "Coordinated by"
+  and the person: your own on a current Minka.
+- Exit 9 with `meta.apiCode` `coordinatorTaken` comes only from a Minka older
+  than the one that lets several accounts coordinate a board. Tell the person
+  you work for; do not try to remove the other entry.
 
 ### The flow of a coordinating session
 
 1. `minka boards coordinator claim <boardId> --session <name> --json`.
-2. Read the board: `minka boards show <boardId> --json`. Take up only cards
-   assigned to you (`minka cards mine --json`); hand out the rest by assigning
-   them, never by working on them yourself.
-3. Start `minka notifications wait --board <boardId> --json` in the background.
-4. When it wakes you, read `data`, act on each line — a card moved to the
-   column you hand out from, a comment that asks something — and start the
-   next wait. Every wait keeps the board.
-5. When you stop, `minka boards coordinator release <boardId> --json`.
+2. Read the board, `minka boards show <boardId> --json`, and find its ready
+   column (see [working-on-a-board.md](working-on-a-board.md)).
+3. Take only your own cards in the ready column:
+   `minka cards mine --board <boardId> --column <ready column> --json`, the
+   column by its ID or its title. The list is not in the board's order: begin
+   the one that stands highest in the column on the board; leave the rest.
+4. Start `minka notifications wait --board <boardId> --json` in the background.
+5. When it wakes you, read `data`, act on each line, and start the next wait.
+   On an assignment or a card moved to another column, run step 3 again: only
+   a card in the ready column that is assigned to you is yours to take. A
+   comment that asks something is answered on its card. Every wait keeps the
+   entry.
+6. When you stop, `minka boards coordinator release <boardId> --json`.
 
 ### Handing over to another session
 
-A new session of the same person takes the board over by claiming it:
+A new session of the same account takes the entry over by claiming it:
 `minka boards coordinator claim <boardId> --session <its name> --json` in the
-new session replaces
-the old one at once. Before that, the old session writes what the new one
-needs on the back of the cards in hand (`minka cards notes set`) and stops its
-wait. Another person cannot take it over; the holder releases it first, or
-anybody who may edit the board removes a stale entry with
-`minka boards coordinator release <boardId>`.
+new session replaces the old one at once. Before that, the old session writes
+what the new one needs on the back of the cards in hand (`minka cards notes
+set`) and stops its wait.

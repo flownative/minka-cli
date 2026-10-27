@@ -25,6 +25,10 @@ work on a board so that its people can follow and steer the work. This file
 holds the commands an agent needs every day; what else there is stands in the
 references listed under "Where the rest stands".
 
+- Take up only a card that stands in the board's ready column and is assigned
+  to your own account. An assignment elsewhere is not yet a release, and a
+  card in ready assigned to others is not yours.
+
 - Pass `--json` explicitly. Read `ok`, then `data`; on failure read `code`,
   `retryable`, `hint` and `meta.apiCode`.
 - Never put a token on the command line. Sign in once with
@@ -148,7 +152,7 @@ fine), `commentNotReadable`, `cardDueDateNotADate`, `personNotAProjectMember`, `
 `chatMessageNotReadable`, `chatMessageDraftNotAnIdentifier`, `chatMessagesLimitNotANumber`,
 `chatReadSeqMissing`, `nothingToChange`, `columnIdMissing`, `onHoldEnabledMissing`,
 `columnHasNoOnHoldArea`, `systemColumnHasNoOnHoldArea`, `malformedBody`,
-`unsupportedMediaType`, `projectArchived`, `coordinatorTaken`,
+`unsupportedMediaType`, `projectArchived`,
 `coordinatorSessionInvalid`, `cursorUnknown`, `notificationsWaitInvalid`,
 `notificationsLimitInvalid`.
 
@@ -217,7 +221,7 @@ minka me --json
 minka projects list [--archived] --json
 minka boards list <projectId> --json
 minka boards show <boardId> --json
-minka cards mine --json
+minka cards mine [--board <boardId>] [--column <column>] --json
 minka cards show <cardId> --json
 minka cards create --board <boardId> --title "Title" [--column <column>] [--assignee <person>]... [--label <label>]... [--due YYYY-MM-DD] [--description - < body.md] --json
 minka cards edit <cardId> [--title "New"] [--due YYYY-MM-DD] [--description - < body.md] --json

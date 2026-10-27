@@ -1,9 +1,11 @@
 # Waiting and coordinating
 
 An agent that stays on a board waits for what is new instead of polling it,
-and one session of one person coordinates a board. `notifications wait` does
-the first, `boards coordinator claim|release|show` the second (C-117,
-C-118). `notifications count`, `show` and `mark-read` read the number on the
+and coordinates the board with one session of its account at a time; several
+accounts coordinate one board side by side. `notifications wait` does the
+first, `boards coordinator claim|release|show` the second (C-117, C-118), and
+`cards mine --board --column` finds the cards released to the account
+(C-144). `notifications count`, `show` and `mark-read` read the number on the
 bell and one line of it, and settle that line (C-122).
 
 ## What the server offers
@@ -26,9 +28,10 @@ included, as 422 `notificationsWaitInvalid`, a `limit` outside 1 to 200 as
 `notificationsLimitInvalid`, then a position Minka did not hand out — no whole
 number, one with a sign or a leading zero, or one beyond where the bell stands
 — as `cursorUnknown`. A request with a `wait` of more than 0 is a sign of life
-of every board the person coordinates, still holds and still sees as one of
+of every entry the person still holds on a board they still see as one of
 the team — a member of its project, archived or not, who is no client —
-before its position is read; one of 0 is not. Reading the list marks nothing read, and
+before its position is read; nobody else's entry is renewed, and a request
+with a `wait` of 0 renews nothing. Reading the list marks nothing read, and
 reactions are not listed. The lines are those the bell shows. A row the person
 may no longer see — no member of the project any more, the project archived,
 the tool or the item in the trash, the item archived, hidden from a client —
@@ -66,21 +69,27 @@ may no longer see, a reaction and a row that makes no line are all the same
 same row, so it is what both take. A read line may be forgotten by Minka
 after a while and is then 404 as well.
 
-`GET /boards/{id}` carries `coordinator`: `{person: {id, name, kind}, session,
-since, lastSeenAt, expiresAt}`, or null where nobody coordinates the board or
-the entry has expired. For a client of the project the field is left out, not
+An entry belongs to a board and a person: every person, human or agent,
+coordinates a board with one session at a time, and only that person sees and
+removes the entry. `GET /boards/{id}` carries `coordinator`, the reader's own
+entry: `{person: {id, name, kind}, session, since, lastSeenAt, expiresAt}`, or
+null where the reader holds none or it has expired; nobody else's is named.
+For a client of the project, who cannot coordinate, the field is left out, not
 null. `PUT /boards/{id}/coordinator` with `{"session": …}` (1 to 64
 characters, none of them a control or format character, taken as written and
-not trimmed, else 422 `coordinatorSessionInvalid`) claims or renews it and answers 200 with the
-coordinator, bare; another session of the same person takes it over, and
-`since` starts anew; while another person holds it, the answer is 409
-`coordinatorTaken` with the holder as `coordinator` beside the error; and only
-then is a claim in an archived project refused with `projectArchived`.
-`DELETE` takes it off for the holder and for anybody who may edit the board,
-in an archived project as well, and answers 204 also where there is nothing
-to take off. A client of the project and somebody outside it get 404 on both,
-and so does a claim on a board in the archive of a project in use.
+not trimmed, else 422 `coordinatorSessionInvalid`) claims or renews the own
+entry and answers 200 with it, bare; another session of the same person takes
+it over, and `since` starts anew. Nobody else's entry plays a part: the claim
+is never refused for one, and Minka answers no `coordinatorTaken`. Only then
+is a claim in an archived project refused with `projectArchived`. `DELETE`
+removes the own entry, in an archived project as well, and answers 204 also
+where there is none. A client of the project and somebody outside it get 404
+on both, and so does a claim on a board in the archive of a project in use.
 An entry expires 4 hours after its last sign of life, a claim or a wait.
+
+`GET /me/cards` takes `boardId` and `columnId`, each optional and each by
+itself, compared in lowercase as given: an ID that matches nothing, malformed
+or not, answers `[]`, never a refusal.
 
 ## Waiting
 
@@ -133,7 +142,7 @@ prints one line each, what it is about and then Minka's `summary`.
   `wait=50`, as long as Minka holds a request by default: asking for more
   gains nothing. With `--timeout` in asks of at most 50 seconds, the last for
   what is left, rounded up to a second; nothing by then exits 12 (`timeout`),
-  retryable. Every ask is a sign of life of the boards the person coordinates.
+  retryable. Every ask is a sign of life of the entries of the person.
   The HTTP client gives a held request its wait and 30 seconds more; the
   timeout of every other request would cut it off after 30.
 - **Several pages.** A page that comes back full is followed at once by the
@@ -191,35 +200,59 @@ a line is one's own, and one of an archived project is not found at all.
 
 ## Coordinating
 
-`boards coordinator claim <boardId> --session <name>` claims or renews the
-board for the session of that name, sent as written. `--session` is required
-and never taken from `$CLAUDE_CODE_SESSION_ID`: the board shows the name to
-people, and an identifier nobody can read tells them nothing. A claim without
-it, or with a name Minka would refuse — empty, longer than 64 characters, or
-with a control or format character — is refused as usage before a request.
-Blanks and umlauts are part of a name, at either end as well, as Minka takes
-it untrimmed: `--session "Planung März"`. The session of a wait is another
-thing: it names a position on this machine and never leaves it.
-`coordinatorTaken` exits 9: `data` is the holder as
-Minka sent it, and the hint names them, when they were last active, until
-when the entry holds and the release that clears a stale one. A claim in an
-archived project exits 9 with `projectArchived`.
+`boards coordinator claim <boardId> --session <name>` claims, renews or takes
+over the entry of the account for the session of that name, sent as written.
+`--session` is required and never taken from `$CLAUDE_CODE_SESSION_ID`: the
+entry is looked up by people as well, and an identifier nobody can read tells
+them nothing. A claim without it, or with a name Minka would refuse — empty,
+longer than 64 characters, or with a control or format character — is refused
+as usage before a request. Blanks and umlauts are part of a name, at either
+end as well, as Minka takes it untrimmed: `--session "Planung März"`. The
+session of a wait is another thing: it names a position on this machine and
+never leaves it. A claim in an archived project exits 9 with
+`projectArchived`.
 
-`boards coordinator release <boardId>` takes the entry off, `boards
+There is no conflict to handle: a claim is never refused for another account,
+so the CLI offers no takeover of a foreign entry and shows none. A Minka that
+predates entries per account still answers a claim with 409
+`coordinatorTaken`; the CLI reports that as Minka sent it, exit 9 with the
+code in `meta.apiCode` and Minka's message, nothing added (C-118).
+
+`boards coordinator release <boardId>` removes the own entry, `boards
 coordinator show <boardId>` hands over `coordinator` of the board, null
-included. Where the board leaves the field out, as for a client, `data` is
-null as well, and a notice and the summary say that the board does not show
-who coordinates it: null with that notice never means nobody. `boards show`
-names the coordinator in its text view and says nothing where the field is
-missing; `--json` carries the board as it came.
+included, and says "no session of yours" for null. Where the board leaves the
+field out, as for a client, `data` is null as well, and a notice and the
+summary say that the board does not show a coordinator. `show` and `boards
+show` name an entry as it came, "coordinated by" and the person, never "you":
+a Minka without entries per account names whoever holds the board. `boards
+show` names it in its text view and says nothing where there is none or the
+field is missing; `--json` carries the board as it came.
+
+`cards mine --board <boardId> --column <column>` sends `boardId` and
+`columnId`, each by itself, in lowercase. Both are checked before a request: a
+board that is no ID is refused as usage, and so is a column that is no ID
+without `--board`. With `--board`, a column given by its type or title is
+looked up on that board first, as for `cards create`, and its ID is sent
+(C-144): the ready column of a board is a column of its own title, and an
+agent knows it by that title. The answer is narrowed once more by the
+`boardId` and `column.id` of every card, compared in any case, each card kept
+as Minka sent it: a Minka that predates the filters ignores them and sends
+every card, and an agent would take one that nobody released to it. Where a
+card lacks either field that a filter needs, the command exits 7 (`api_error`)
+with a hint to list without the filters, never handing over the list
+unfiltered. Minka v0.93.0 and later send both fields on every card.
 
 ## The skill
 
 The main part of the skill says in a few lines when to wait instead of
-polling; the flow — claim, pull only assigned cards, wait in the background,
-hand over — is in `references/waiting-and-coordinating.md` beside it, which
+polling, and that an agent takes only a card in the ready column assigned to
+its own account; the flow — claim, take only the own cards in the ready column
+with `cards mine --board --column`, wait in the background, take them again on
+an assignment or a move, hand over — is in
+`references/waiting-and-coordinating.md` beside it, which
 travels and is installed with it ([The skill](skill.md)). How an agent works
-on a board — which column it takes work from, how it asks a person, how it
-hands over — is in `references/working-on-a-board.md` beside that one, which
-points to it for the mechanics.
+on a board — which cards it takes, that it hands out no work, how it asks a
+person, who writes the back, how it hands over — is in
+`references/working-on-a-board.md` beside that one, which points to it for the
+mechanics.
 

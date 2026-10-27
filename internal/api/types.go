@@ -51,8 +51,8 @@ type Board struct {
 	Title     string   `json:"title"`
 	AppURL    string   `json:"appUrl"`
 	Columns   []Column `json:"columns"`
-	// Coordinator is the session that coordinates the board, nil where nobody
-	// does or the last one has expired.
+	// Coordinator is the reader's own entry as coordinator of the board, nil
+	// where they hold none or it has expired. Other people's are never named.
 	Coordinator *Coordinator `json:"coordinator"`
 }
 

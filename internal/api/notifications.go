@@ -24,10 +24,6 @@ const (
 // it does not know, or no longer knows.
 const CodeCursorUnknown = "cursorUnknown"
 
-// CodeCoordinatorTaken is what claiming the coordinator of a board answers
-// while somebody else holds it. The answer carries the holder.
-const CodeCoordinatorTaken = "coordinatorTaken"
-
 // waitGrace is what an answer to a held request may take beyond the wait it
 // asked for: the server answers at the end of the wait, and the answer still
 // has to travel.
@@ -150,7 +146,8 @@ func (c *Client) MarkNotificationRead(ctx context.Context, notificationID string
 	return request[UnreadCount](ctx, c, http.MethodPost, "/notifications/"+url.PathEscape(notificationID)+"/read", nil)
 }
 
-// Coordinator is the one session of a person that coordinates a board.
+// Coordinator is the entry of the session of a person that coordinates a
+// board; every person has one of their own, and only they see it.
 type Coordinator struct {
 	Person struct {
 		ID   string `json:"id"`
@@ -163,15 +160,15 @@ type Coordinator struct {
 	ExpiresAt  string `json:"expiresAt"`
 }
 
-// ClaimCoordinator makes a session of the person of the token the coordinator
-// of a board, or renews it. Another session of the same person takes it over;
-// while another person holds it, the answer is a conflict that names them.
+// ClaimCoordinator makes a session of the person of the token coordinate a
+// board, or renews its entry. Another session of the same person takes the
+// entry over; other people's entries play no part.
 func (c *Client) ClaimCoordinator(ctx context.Context, boardID, session string) (Result[Coordinator], error) {
 	return request[Coordinator](ctx, c, http.MethodPut, "/boards/"+url.PathEscape(boardID)+"/coordinator", map[string]string{"session": session})
 }
 
-// ReleaseCoordinator takes the coordinator off a board. A board nobody
-// coordinates succeeds as well.
+// ReleaseCoordinator removes the entry of the person of the token from a
+// board, and nobody else's. Without one it succeeds as well.
 func (c *Client) ReleaseCoordinator(ctx context.Context, boardID string) error {
 	_, err := request[struct{}](ctx, c, http.MethodDelete, "/boards/"+url.PathEscape(boardID)+"/coordinator", nil)
 	return err

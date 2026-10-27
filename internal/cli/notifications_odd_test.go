@@ -108,7 +108,7 @@ func (e *testEnv) answeredBy(b *bell) {
 		b.mu.Lock()
 		defer b.mu.Unlock()
 		w.Header().Set("Content-Type", "application/json")
-		if strings.HasPrefix(r.URL.Path, "/api/v1/boards/") {
+		if r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/api/v1/boards/") {
 			_, _ = w.Write([]byte(b.board))
 			return
 		}
@@ -281,9 +281,9 @@ func TestANotificationIsOneLineOfText(t *testing.T) {
 	}
 }
 
-// A board whose coordinator is null shows nobody, as null and without a
-// notice.
-func TestABoardWithANullCoordinatorShowsNobody(t *testing.T) {
+// A board whose coordinator is null shows no entry of yours, as null and
+// without a notice.
+func TestABoardWithANullCoordinatorShowsNoEntry(t *testing.T) {
 	e := newTestEnv(t)
 	e.answeredBy(&bell{board: `{"id":"0192f3a4-5b6c-4d7e-8f90-a1b2c3d4e5f6","projectId":"p","title":"B","columns":[],"coordinator":null}`})
 	env, r := e.runJSON("", "boards", "coordinator", "show", "0192f3a4-5b6c-4d7e-8f90-a1b2c3d4e5f6")
@@ -291,7 +291,7 @@ func TestABoardWithANullCoordinatorShowsNobody(t *testing.T) {
 	if string(env.Data) != "null" && len(env.Data) != 0 {
 		t.Fatalf("data %s, want null", env.Data)
 	}
-	if !strings.Contains(env.Summary, "Nobody") || env.Notice != "" {
+	if !strings.Contains(env.Summary, "No session of yours") || env.Notice != "" {
 		t.Fatalf("summary %q, notice %q", env.Summary, env.Notice)
 	}
 }

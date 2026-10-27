@@ -140,11 +140,13 @@ type Project struct {
 }
 
 type Board struct {
-	ID          string
-	ProjectID   string
-	Title       string
-	Columns     []*Column
-	Coordinator *Coordinator // kept after it expired, and read as nobody from then on
+	ID        string
+	ProjectID string
+	Title     string
+	Columns   []*Column
+	// Coordinators are the entries of the people who coordinate the board, by
+	// person; one is kept after it expired, and read as none from then on.
+	Coordinators map[string]*Coordinator
 }
 
 type Column struct {
@@ -1599,10 +1601,10 @@ func (s *Server) board(w http.ResponseWriter, r *http.Request, person *Person) {
 	fields := map[string]any{
 		"id": board.ID, "projectId": board.ProjectID, "title": board.Title, "appUrl": s.boardURL(board), "columns": columns,
 	}
-	// A client of the project is not told who coordinates the board, not even
-	// that nobody does.
+	// The board names the reader's own entry and nobody else's; a client, who
+	// may not coordinate, gets no field at all.
 	if !s.isAClient(person.ID) {
-		fields["coordinator"] = s.coordinatorResource(board)
+		fields["coordinator"] = s.coordinatorResource(board, person)
 	}
 	writeJSON(w, http.StatusOK, fields)
 }
@@ -1802,8 +1804,11 @@ func (s *Server) boardCardResources(board *Board, cards []*Card) []any {
 // myCards lists the cards the person is assigned to, in the order the server
 // gives them: projects by name, then by due date with the ones without a date
 // last, then by title. Done is left out, as are cards of a project the person
-// is not a member of.
-func (s *Server) myCards(w http.ResponseWriter, _ *http.Request, person *Person) {
+// is not a member of. boardId and columnId narrow them, compared in lowercase
+// as given: an ID that matches nothing, malformed or not, leaves none.
+func (s *Server) myCards(w http.ResponseWriter, r *http.Request, person *Person) {
+	boardID := strings.ToLower(r.URL.Query().Get("boardId"))
+	columnID := strings.ToLower(r.URL.Query().Get("columnId"))
 	type assigned struct {
 		board  *Board
 		column *Column
@@ -1818,7 +1823,8 @@ func (s *Server) myCards(w http.ResponseWriter, _ *http.Request, person *Person)
 		}
 		for _, column := range board.Columns {
 			for _, card := range column.Cards {
-				if openCard(column, card) && slices.Contains(card.AssigneeIDs, person.ID) {
+				if openCard(column, card) && slices.Contains(card.AssigneeIDs, person.ID) &&
+					(boardID == "" || board.ID == boardID) && (columnID == "" || column.ID == columnID) {
 					mine = append(mine, assigned{board, column, card})
 				}
 			}

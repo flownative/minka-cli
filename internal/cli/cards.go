@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"strings"
@@ -164,8 +165,9 @@ func cardArchiveRefusal(s *session, err error) *Error {
 }
 
 func (a *app) newCardsMineCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "mine",
+	var boardID, column string
+	cmd := &cobra.Command{
+		Use:   "mine [--board <boardId>] [--column <columnId|title>]",
 		Short: "List the cards you are responsible for, across all projects",
 		Long: `Lists the cards the account of the token is assigned to, in every project it is
 a member of. Cards in Done, cards completed in another column, cards in the
@@ -173,18 +175,62 @@ trash, cards in the archive of their board and cards of a project that was
 left are not among them. A card that is missing here is therefore not
 necessarily done: it may have been archived.
 
+--board keeps the cards of one board, --column those of one column; each
+works alone, and an ID that matches nothing lists no card. Minka narrows the
+list, and the answer is narrowed here once more, so that a Minka that ignores
+the filters never hands over a card from elsewhere; where a card does not say
+where it stands, the filters are refused with exit 7 instead. --column takes the
+column's ID, or, together with --board, its type or title, such as
+"Als nächstes", looked up on that board first.
+
 The order is the one the web page has: projects by name, and inside a project
 the cards by due date, the overdue ones first and those without a date last.
 Every card names the project and the board it hangs on.`,
+		Example: `  minka cards mine --json
+  minka cards mine --board 0199... --column "Als nächstes" --json`,
 		Args: requireArgs(),
-		RunE: func(_ *cobra.Command, _ []string) error {
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			if cmd.Flags().Changed("board") {
+				if err := requireID(cmd, "--board", &boardID); err != nil {
+					return err
+				}
+			}
+			columnID, byName := "", false
+			if cmd.Flags().Changed("column") {
+				if id, ok := asID(column); ok {
+					columnID = id
+				} else if strings.TrimSpace(column) == "" {
+					return usageErrorf(cmd, "--column needs a column: its ID, or its type or title with --board")
+				} else if boardID == "" {
+					return usageErrorf(cmd, "--column %q is not an ID; a column named by its type or title needs --board, the board it is looked up on", column)
+				} else {
+					byName = true
+				}
+			}
+
 			s, err := a.session()
 			if err != nil {
 				return err
 			}
-			cards, err := s.client.MyCards(a.ctx)
+			if byName {
+				board, err := s.client.Board(a.ctx, boardID)
+				if err != nil {
+					return s.fail(err)
+				}
+				target, err := resolveColumn(board.Value, column)
+				if err != nil {
+					return err
+				}
+				columnID = target.ID
+			}
+			cards, err := s.client.MyCards(a.ctx, boardID, columnID)
 			if err != nil {
 				return s.fail(err)
+			}
+			if boardID != "" || columnID != "" {
+				if cards.Raw, cards.Value, err = onlyCardsAt(cards.Raw, boardID, columnID); err != nil {
+					return err
+				}
 			}
 
 			return a.ok(success{
@@ -200,6 +246,51 @@ Every card names the project and the board it hangs on.`,
 			})
 		},
 	}
+	cmd.Flags().StringVar(&boardID, "board", "", "Only the cards of this board")
+	cmd.Flags().StringVar(&column, "column", "", "Only the cards of this column: its ID, or its type or title with --board")
+	return cmd
+}
+
+// onlyCardsAt keeps the cards of a board and a column, each where given, every
+// card as Minka sent it. Minka narrows the list itself, but one that predates
+// the filters ignores them and sends every card, and an agent would take a card
+// that nobody released to it. A card that does not say where it stands cannot
+// be told apart, so the list is refused rather than handed over unfiltered.
+func onlyCardsAt(raw json.RawMessage, boardID, columnID string) (json.RawMessage, []api.Card, error) {
+	var items []json.RawMessage
+	if err := json.Unmarshal(raw, &items); err != nil {
+		return nil, nil, &Error{Code: CodeAPI, Message: "Minka's list of your cards is no list: " + err.Error()}
+	}
+	kept, cards := []json.RawMessage{}, []api.Card{}
+	for _, item := range items {
+		var place struct {
+			ID      string  `json:"id"`
+			BoardID *string `json:"boardId"`
+			Column  *struct {
+				ID *string `json:"id"`
+			} `json:"column"`
+		}
+		var card api.Card
+		if json.Unmarshal(item, &place) != nil || json.Unmarshal(item, &card) != nil {
+			return nil, nil, &Error{Code: CodeAPI, Message: "Minka's list of your cards holds something that is no card"}
+		}
+		if (boardID != "" && place.BoardID == nil) || (columnID != "" && (place.Column == nil || place.Column.ID == nil)) {
+			return nil, nil, &Error{
+				Code:    CodeAPI,
+				Message: fmt.Sprintf("Minka does not say on which board and in which column card %s stands, so --board and --column cannot be held to", place.ID),
+				Hint:    "This Minka is older than the filters of minka cards mine. List all your cards without --board and --column, and take a card only after reading where it stands with minka cards show.",
+			}
+		}
+		if (boardID == "" || strings.EqualFold(*place.BoardID, boardID)) && (columnID == "" || strings.EqualFold(*place.Column.ID, columnID)) {
+			kept = append(kept, item)
+			cards = append(cards, card)
+		}
+	}
+	narrowed, err := json.Marshal(kept)
+	if err != nil {
+		return nil, nil, err
+	}
+	return narrowed, cards, nil
 }
 
 func (a *app) newCardsRestoreCmd() *cobra.Command {

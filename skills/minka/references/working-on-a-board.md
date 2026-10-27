@@ -22,14 +22,23 @@ inside that order and does not make its own.
 
   If you cannot tell from the titles which column has which role, ask the
   person you work for. Do not guess.
-- **Take work from the top of the ready column, or what is assigned to you.**
-  Never pick from intake on your own, even when ready is empty and you think
-  you know what comes next. If ready is empty, say so and wait. Until then,
-  only finish or tidy what is already in hand. If you coordinate the board,
-  hand the card out: assign it to someone, who then begins it as below, or
-  have agents you lead do it; then you begin it yourself and keep its back.
+- **Take only cards in the ready column that are assigned to your own
+  account,** the one highest in the column first: `minka cards mine --board
+  <boardId> --column <ready column>` lists them, not in the board's order, so
+  take the order from `minka boards show`. The column says that a card is
+  released and in which order, the assignment says for whom. A card assigned
+  to you in intake is not yet released, and a card in ready assigned to
+  somebody else, or to nobody, is not yours. This holds for every agent, a
+  coordinating one included. If none is there, say so and wait. Until then,
+  only finish or tidy what is already in hand. Subagents you start yourself
+  work under your account and on your cards.
+- **Hand out no work.** People decide who works on what, by assigning. Do not
+  assign a card to somebody else to have it done.
+- **A card assigned to several agents:** ask on the card which of them takes
+  it, instead of guessing, and leave it until the answer is there.
 - **Never put a card into the ready column yourself,** and never reorder it
-  unless you were asked to. A card you create goes to intake. A follow-up that
+  unless you were asked to. A card you create, a follow-up included, goes to
+  intake and is assigned to nobody. A follow-up that
   someone already approved names that approval in its description, as a quote
   with the person and the date.
 - **A proposal that nobody answered is not a release.**
@@ -57,7 +66,7 @@ the work itself, never later.
   question, a result, where to look.
 - **The back is the work's memory:** plan, state, decisions, handover (see
   [working-notes.md](working-notes.md)). Read it before you begin, and rewrite
-  it at every milestone.
+  it at every milestone. The agent the card is assigned to writes it.
 - **Write each in the language of the card's front.**
 - **What outlives the card** (a decision and its reason, a rule, a how-to)
   goes into the project's own documentation before the card goes to done.
@@ -78,12 +87,13 @@ the work itself, never later.
 
 ## Staying on a board
 
-- **One coordinator per board.** Claim the board and keep exactly one
-  `minka notifications wait` running in the background. Every wait keeps the
-  claim alive. Do not poll on a timer. The commands and the flow are in
-  [waiting-and-coordinating.md](waiting-and-coordinating.md).
-- **When a wait wakes you,** read each line, act, and start the next wait. Also
-  look at the waiting column, because an answer is a comment, not a move.
+- **One coordinating session per account and board.** Claim the board and
+  keep exactly one `minka notifications wait` running in the background. Every
+  wait keeps the entry alive. Do not poll on a timer. The commands and the
+  flow are in [waiting-and-coordinating.md](waiting-and-coordinating.md).
+- **When a wait wakes you,** read each line, act, and start the next wait. On
+  an assignment or a move, look again for your own cards in the ready column.
+  Also look at the waiting column, because an answer is a comment, not a move.
 - **Read the board fresh** before you choose the next card, never from memory.
 - **Your session ID changes when your session restarts.** The wait then starts
   from now, so read the board; the cards in hand need `minka work start` again.
@@ -98,8 +108,9 @@ When your context grows large, or you stop:
 3. Tell the next session which board it takes over and where to start
    reading.
 
-The new session claims the board under its own name. After the handover, the
-old session touches nothing more.
+The new session of the same account claims the board under its own name and
+takes the entry over. After the handover, the old session touches nothing
+more.
 
 ## Spending context with care
 
