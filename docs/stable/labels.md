@@ -20,11 +20,13 @@ then the project's, each group counted from 1 in `position`.
 
 ## What a label carries
 
-`id`, `name`, `scope`, `value`, `color`, `projectId`, `toolId` and `position`,
-the same in a list, in the answer of a write and on an item. `name` is the
-tidied name in the case it was written in; `scope` is the part before `::` and
-`null` for a plain label, `value` the part after it or the whole name. `toolId`
-is `null` for a label of the project.
+`id`, `name`, `scope`, `value`, `color`, `icon`, `projectId`, `toolId` and
+`position`, the same in a list, in the answer of a write and on an item.
+`name` is the tidied name in the case it was written in; `scope` is the part
+before `::` and `null` for a plain label, `value` the part after it or the
+whole name. `toolId` is `null` for a label of the project. `icon` is the name
+of a Lucide icon shown in front of the name, `null` for none; a stored name the
+Lucide set of the server no longer has reads as `null`.
 
 A name holds letters, combining marks, decimal digits, spaces, `-`, `+` and
 `*`, at most 50 characters, with at most one `::`. Minka tidies it first:
@@ -39,6 +41,17 @@ The twelve colours are `red`, `orange`, `yellow`, `lime`, `green`, `teal`,
 `labelColorUnknown`, exit 9, with a hint naming the twelve. Without `--color`,
 `create` sends no colour and Minka suggests one.
 
+## Icons
+
+An icon is the name of a Lucide icon, such as `check`, `bug` or `flag`; the
+names are at https://lucide.dev/icons. Lucide's aliases are icons too
+(`check-circle` beside `circle-check`), and Minka answers with the name as it
+was given. `--icon` goes to Minka as typed, `""` included, and Minka is the one
+to refuse it: `labelIconUnknown`, exit 9, with a hint pointing to Lucide's
+names (C-143). The text view of `labels list` shows the icon in its own
+column, `-` for none; the other text views show labels by name only, and JSON
+carries `icon` everywhere.
+
 ## Naming a label
 
 `<label>`, and the neighbour of `move`, is an ID or a name; a text in the
@@ -52,11 +65,13 @@ exits 2 and points to `labels list` (C-138).
 
 ## Writing a place's labels
 
-- **`create`** sends `{"name"}` and `"color"` where given; 201 with the label at
-  the end of its place.
-- **`edit`** sends `--name` and `--color` as given; at least one, or it exits 1
-  before any request. A rename that changes only the case is allowed. A rename
-  into a scope takes nothing off the items.
+- **`create`** sends `{"name"}`, and `"color"` and `"icon"` where given; 201
+  with the label at the end of its place, without an icon where none is given.
+- **`edit`** sends `--name`, `--color` and `--icon` as given and `--no-icon` as
+  `"icon": null`, which takes the icon off; at least one, or it exits 1 before
+  any request, and an icon alone is a change. `--icon` and `--no-icon`
+  together exit 1 before any request. A rename that changes only the case is
+  allowed. A rename into a scope takes nothing off the items.
 - **`rename-scope <scope> <newScope>`** sends `{"scope", "newScope"}` as
   typed to `POST P/labels/scope-renames`, with nothing read first (C-142).
   Every label of `scope` among the place's own labels takes `newScope`, in
@@ -144,9 +159,9 @@ items are shown to whoever sees the item.
 |---|---|
 | `POST /boards/{id}/cards` with `labelIds` | board (404) · body · title · `dueOn` · `assigneeIds` (400, malformed ID `personNotAProjectMember`) · `labelIds` not a list of strings (400) · a client (404, only where labels are sent) · `labelUnknown`, compared by exact ID · description · column (`projectArchived`, 404) · `personNotAProjectMember` · `labelsShareAScope`, a label named twice counting once |
 | `GET P/labels` | place (404, client 404) · list; an archived project reads |
-| `POST P/labels` | place · body (415, 400) · name (`labelNameMissing`, `labelNameTooLong`, `labelNameMalformed`) · `labelColorUnknown` · `labelNameTaken` · `projectArchived` |
-| `PATCH P/labels/{id}` | place · label of this place (404) · body · `nothingToChange` · name · colour · `labelNameTaken` · `projectArchived` |
-| `POST P/labels/scope-renames` | place · body · `scope`, then `newScope` (`labelScopeMissing`, `labelNameTooLong`, `labelScopeMalformed`) · then label by label in the place's order: `labelNameTooLong` · `labelNameTaken` · `projectArchived` · no label of the scope: `projectArchived`, else 404 |
+| `POST P/labels` | place · body (415) · `name` (400, `labelNameMissing`, `labelNameTooLong`, `labelNameMalformed`) · `color` (400, `labelColorUnknown`) · `icon` (400, `labelIconUnknown`) · `labelNameTaken` · `projectArchived` |
+| `PATCH P/labels/{id}` | place · label of this place (404) · body (415, 400 for any field) · `nothingToChange` · name · colour · `labelIconUnknown` · `labelNameTaken` · `projectArchived` |
+| `POST P/labels/scope-renames` | place · body · `scope`, then `newScope` (`labelScopeMissing`, `labelNameTooLong`, `labelScopeMalformed`) · `projectArchived`, once · no label of the scope (404) · label by label in the place's order: `labelNameTooLong` · `labelNameTaken` |
 | `POST P/labels/{id}/moves` | place · label · body · `labelPlaceUnknown`, previous first · `projectArchived`, a move that changes nothing included |
 | `DELETE P/labels/{id}` | place · label · `projectArchived` |
 | `POST I/labels` | item (404: draft, trash, client) · body · `labelAmbiguous` · `labelMissing` · `labelUnknown` · `projectArchived` · `cardArchived`, `documentArchived`, `uploadArchived` |

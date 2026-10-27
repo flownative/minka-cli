@@ -70,11 +70,16 @@ Labels are kept with `labels list`, `create`, `edit`, `move` and `delete`
 under `--project`, `--board` or `--tool`, and put on and taken off with `cards
 label`/`unlabel`, `docs label`/`unlabel` and `docs uploads label`/`unlabel`;
 the text views of cards, boards, documents, uploads and folders show them. The
-rule the commands follow is [Labels](../stable/labels.md) (C-138 to C-142).
+rule the commands follow is [Labels](../stable/labels.md) (C-138 to C-143).
 `cards create --label` needs Minka's first release containing #520 (labels on
 a new card), `labels rename-scope` the first containing #519; both are on its
 `main` and in no release yet. An older Minka ignores `labelIds` and creates
 the card without labels, and answers a scope rename as an unknown address.
+The icons of labels (`--icon`, `--no-icon`, `icon` on every label, C-143) need
+Minka's first release containing #521, which also refuses a scope rename in
+an archived project once before its labels; an older Minka carries no `icon`
+and ignores one sent, an icon alone answering `nothingToChange`. The fake
+knows a sample of Lucide's names only.
 Minka serves the label routes from its first release containing #515, which is
 on its `main` and in no release yet; a released Minka answers every label
 address with its page for an unknown address, and its items carry no `labels`.
