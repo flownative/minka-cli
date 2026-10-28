@@ -4,6 +4,8 @@ import (
 	"html"
 	"strings"
 	"unicode"
+
+	"github.com/flownative/minka-cli/internal/richtext"
 )
 
 // harmlessCharacters are what Minka strips without a word from a card's title
@@ -18,10 +20,15 @@ func harmlessStripped(text string) string {
 }
 
 // hasInvisibleCharactersInMarkup looks for invisible characters where Minka
-// does, in the reduced markup, so that an entity counts as its character. The
-// fake keeps markup as it was sent and reads its entities here instead.
-func hasInvisibleCharactersInMarkup(markup string) bool {
-	return hasInvisibleCharacters(harmlessStripped(html.UnescapeString(markup)))
+// does, in the reduced markup, so that an entity of a text with markup counts
+// as its character. The fake keeps markup as it was sent and reads its
+// entities here instead; a text without markup is plain, and its entity is
+// only text, as Minka escapes it.
+func hasInvisibleCharactersInMarkup(text string) bool {
+	if richtext.CarriesMarkup(text) {
+		text = html.UnescapeString(text)
+	}
+	return hasInvisibleCharacters(harmlessStripped(text))
 }
 
 // hasInvisibleCharacters finds what Minka refuses in the texts agents read: a

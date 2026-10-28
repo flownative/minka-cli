@@ -594,20 +594,28 @@ func storedDescription(w http.ResponseWriter, value string) (string, bool) {
 const commentInvisibleMessage = "A comment must not contain invisible format characters such as direction overrides, isolates or tag characters; the zero-width joiner and non-joiner are fine."
 
 // commentText is a comment as the server keeps it, the harmless characters
-// stripped, or the refusal it draws; invisible characters come last.
+// stripped, or the refusal it draws, in Minka's order: the length of what was
+// sent, control characters, the length of what is kept, nothing at all, then
+// invisible characters. Minka reduces the markup before it judges the rest;
+// the fake keeps what was sent, so the second length never refuses here, and
+// nothing at all is a body that is empty once trimmed. A body of harmless
+// characters alone is therefore kept empty, as Minka answers it today.
 func commentText(w http.ResponseWriter, body string) (string, bool) {
-	text := phpTrim(harmlessStripped(body))
+	sent := phpTrim(body)
+	kept := phpTrim(harmlessStripped(body))
 	switch {
-	case strings.IndexFunc(text, isCommentControl) >= 0:
-		unprocessable(w, "commentHasControlCharacters", "A comment must not contain control characters other than line breaks and tabs.")
-	case utf8.RuneCountInString(text) > maxCommentLength:
+	case utf8.RuneCountInString(sent) > maxCommentLength:
 		unprocessable(w, "commentTooLong", "The comment is too long.")
-	case text == "":
+	case strings.IndexFunc(sent, isCommentControl) >= 0:
+		unprocessable(w, "commentHasControlCharacters", "A comment must not contain control characters other than line breaks and tabs.")
+	case utf8.RuneCountInString(kept) > maxCommentLength:
+		unprocessable(w, "commentTooLong", "The comment is too long.")
+	case sent == "":
 		unprocessable(w, "commentMissing", "A comment needs a body.")
-	case hasInvisibleCharactersInMarkup(text):
+	case hasInvisibleCharactersInMarkup(kept):
 		unprocessable(w, "commentHasInvisibleCharacters", commentInvisibleMessage)
 	default:
-		return text, true
+		return kept, true
 	}
 	return "", false
 }

@@ -165,9 +165,10 @@ breaks and tabs are fine), `commentNotReadable`,
 
 In a card's title and description and in a comment, Minka strips soft
 hyphens, zero-width spaces, word joiners, byte order marks and direction
-marks without a word, and refuses a direction override or isolate, a tag
-character or a run of joiners or variation selectors with the
-`…HasInvisibleCharacters` code; the notes and the conventions refuse all of
+marks without a word, and refuses other format characters — direction
+overrides and isolates, tag characters, runs of joiners or variation
+selectors — with the `…HasInvisibleCharacters` code; a single zero-width
+joiner or non-joiner passes. The notes and the conventions refuse all of
 them.
 
 That is not all of them: Minka has a code for every refusal of every endpoint,

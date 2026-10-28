@@ -540,8 +540,6 @@ func todoPlaceUnknown(w http.ResponseWriter) {
 	unprocessable(w, "todoPlaceUnknown", "The list, group or neighbours named are not in this To-dos tool; taking something into another tool is done on the web.")
 }
 
-// validTitle holds a title against what the server keeps, and names the
-// case after what carries it and the message after the same with its article.
 // cardTitle is a card's title as Minka keeps it, the harmless characters
 // stripped, or the refusal it draws: the refusals of every title, then
 // invisible characters.
@@ -557,6 +555,8 @@ func cardTitle(w http.ResponseWriter, title string) (string, bool) {
 	return phpTrim(stripped), true
 }
 
+// validTitle holds a title against what the server keeps, and names the
+// case after what carries it and the message after the same with its article.
 func validTitle(w http.ResponseWriter, thing, aThing, title string) bool {
 	title = phpTrim(title)
 	switch {

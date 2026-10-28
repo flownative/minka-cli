@@ -128,7 +128,7 @@ const apiCodeVariantNotAvailable = "variantNotAvailable"
 
 // hiddenCharactersHint names what Minka refuses in a card's title and
 // description and in a comment, and what it strips there by itself.
-const hiddenCharactersHint = "Nothing was written. The text holds a hidden format character: a direction override or isolate, a tag character, a supplement variation selector, a run of two or more joiners or variation selectors, or another invisible format character. Remove it and send the text again. Minka strips soft hyphens, zero-width spaces, word joiners, byte order marks and direction marks there by itself; a single zero-width joiner or variation selector, as in emoji, is fine."
+const hiddenCharactersHint = "Nothing was written. The text holds a hidden format character: a direction override or isolate, a tag character, a supplement variation selector, a run of two or more joiners or variation selectors, or another invisible format character. Remove it and send the text again. Minka strips soft hyphens, zero-width spaces, word joiners, byte order marks and direction marks there by itself; a single zero-width joiner or non-joiner or a single variation selector, as in emoji, is fine."
 
 // apiError classifies a failed request.
 //

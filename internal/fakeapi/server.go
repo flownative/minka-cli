@@ -3938,23 +3938,9 @@ func (s *Server) writeComment(w http.ResponseWriter, r *http.Request, person *Pe
 	if !ok {
 		return
 	}
-	// The server stores the comment as rich text; the fake keeps what was sent,
-	// the harmless characters stripped.
-	text := phpTrim(harmlessStripped(deref(body)))
-	if strings.IndexFunc(text, func(r rune) bool { return unicode.IsControl(r) && r != '\t' && r != '\n' && r != '\r' }) >= 0 {
-		unprocessable(w, "commentHasControlCharacters", "A comment must not contain control characters other than line breaks and tabs.")
-		return
-	}
-	if utf8.RuneCountInString(text) > maxCommentLength {
-		unprocessable(w, "commentTooLong", "The comment is too long.")
-		return
-	}
-	if text == "" {
-		unprocessable(w, "commentMissing", "A comment needs a body.")
-		return
-	}
-	if hasInvisibleCharactersInMarkup(text) {
-		unprocessable(w, "commentHasInvisibleCharacters", commentInvisibleMessage)
+	// The server stores the comment as rich text; the fake keeps what was sent.
+	text, ok := commentText(w, deref(body))
+	if !ok {
 		return
 	}
 	if s.refusedAsAClosedCard(w, board, archived) {
