@@ -1958,7 +1958,11 @@ func (s *Server) addCard(w http.ResponseWriter, r *http.Request, person *Person)
 	title, ok1 := stringField(w, fields, "title")
 	columnID, ok2 := stringField(w, fields, "columnId")
 	description, ok3 := stringField(w, fields, "description")
-	if !ok1 || !ok2 || !ok3 || !validTitle(w, "card", "a card", deref(title)) {
+	if !ok1 || !ok2 || !ok3 {
+		return
+	}
+	storedTitle, ok := cardTitle(w, deref(title))
+	if !ok {
 		return
 	}
 	dueOn, ok := stringField(w, fields, "dueOn")
@@ -2013,7 +2017,7 @@ func (s *Server) addCard(w http.ResponseWriter, r *http.Request, person *Person)
 		return
 	}
 
-	card := &Card{ID: newID(), Title: phpTrim(*title), Description: phpTrim(deref(description)), CreatedAt: s.now, CreatorID: person.ID, DueOn: dueDate(dueOn)}
+	card := &Card{ID: newID(), Title: storedTitle, Description: phpTrim(harmlessStripped(deref(description))), CreatedAt: s.now, CreatorID: person.ID, DueOn: dueDate(dueOn)}
 	card.subscribe(person.ID)
 	for _, id := range assigneeIDs {
 		if !slices.Contains(card.AssigneeIDs, id) {
@@ -2054,8 +2058,11 @@ func (s *Server) updateCard(w http.ResponseWriter, r *http.Request, person *Pers
 		unprocessable(w, "nothingToChange", "The body names neither a title nor a description nor a due date.")
 		return
 	}
-	if title != nil && !validTitle(w, "card", "a card", *title) {
-		return
+	var storedTitle string
+	if title != nil {
+		if storedTitle, ok = cardTitle(w, *title); !ok {
+			return
+		}
 	}
 	dueOn, ok := stringField(w, fields, "dueOn")
 	if !ok || !validDueDate(w, dueOn, "cardDueDateNotADate") {
@@ -2068,10 +2075,10 @@ func (s *Server) updateCard(w http.ResponseWriter, r *http.Request, person *Pers
 		return
 	}
 	if title != nil {
-		card.Title = phpTrim(*title)
+		card.Title = storedTitle
 	}
 	if description != nil {
-		card.Description = phpTrim(*description)
+		card.Description = phpTrim(harmlessStripped(*description))
 	}
 	if dueDateNamed {
 		card.DueOn = dueDate(dueOn)
@@ -3931,8 +3938,9 @@ func (s *Server) writeComment(w http.ResponseWriter, r *http.Request, person *Pe
 	if !ok {
 		return
 	}
-	// The server stores the comment as rich text; the fake keeps what was sent.
-	text := phpTrim(deref(body))
+	// The server stores the comment as rich text; the fake keeps what was sent,
+	// the harmless characters stripped.
+	text := phpTrim(harmlessStripped(deref(body)))
 	if strings.IndexFunc(text, func(r rune) bool { return unicode.IsControl(r) && r != '\t' && r != '\n' && r != '\r' }) >= 0 {
 		unprocessable(w, "commentHasControlCharacters", "A comment must not contain control characters other than line breaks and tabs.")
 		return
@@ -3943,6 +3951,10 @@ func (s *Server) writeComment(w http.ResponseWriter, r *http.Request, person *Pe
 	}
 	if text == "" {
 		unprocessable(w, "commentMissing", "A comment needs a body.")
+		return
+	}
+	if hasInvisibleCharactersInMarkup(text) {
+		unprocessable(w, "commentHasInvisibleCharacters", commentInvisibleMessage)
 		return
 	}
 	if s.refusedAsAClosedCard(w, board, archived) {
@@ -4266,11 +4278,16 @@ func booleanField(w http.ResponseWriter, fields map[string]any, name string) (*b
 	return &b, true
 }
 
-// validDescription checks the length of what was sent. The server counts the
+// validDescription checks the length of what was sent, then invisible
+// characters once the harmless ones are stripped. The server counts the
 // sanitized HTML instead, which only differs for markup it removes.
 func validDescription(w http.ResponseWriter, description string) bool {
 	if utf8.RuneCountInString(phpTrim(description)) > maxDescriptionLength {
 		unprocessable(w, "cardDescriptionTooLong", "The description of a card is too long.")
+		return false
+	}
+	if hasInvisibleCharactersInMarkup(description) {
+		unprocessable(w, "cardDescriptionHasInvisibleCharacters", "The description of a card must not contain invisible format characters such as direction overrides, isolates or tag characters; the zero-width joiner and non-joiner are fine.")
 		return false
 	}
 	return true

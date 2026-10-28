@@ -590,9 +590,13 @@ func storedDescription(w http.ResponseWriter, value string) (string, bool) {
 	return storedRichText(w, "uploadDescriptionTooLong", "The description of an upload is too long.", maxUploadDescriptionLength, value)
 }
 
-// commentText is a comment as the server keeps it, or the refusal it draws.
+// commentInvisibleMessage is what a comment with invisible characters draws.
+const commentInvisibleMessage = "A comment must not contain invisible format characters such as direction overrides, isolates or tag characters; the zero-width joiner and non-joiner are fine."
+
+// commentText is a comment as the server keeps it, the harmless characters
+// stripped, or the refusal it draws; invisible characters come last.
 func commentText(w http.ResponseWriter, body string) (string, bool) {
-	text := phpTrim(body)
+	text := phpTrim(harmlessStripped(body))
 	switch {
 	case strings.IndexFunc(text, isCommentControl) >= 0:
 		unprocessable(w, "commentHasControlCharacters", "A comment must not contain control characters other than line breaks and tabs.")
@@ -600,6 +604,8 @@ func commentText(w http.ResponseWriter, body string) (string, bool) {
 		unprocessable(w, "commentTooLong", "The comment is too long.")
 	case text == "":
 		unprocessable(w, "commentMissing", "A comment needs a body.")
+	case hasInvisibleCharactersInMarkup(text):
+		unprocessable(w, "commentHasInvisibleCharacters", commentInvisibleMessage)
 	default:
 		return text, true
 	}

@@ -1,6 +1,28 @@
 package fakeapi
 
-import "unicode"
+import (
+	"html"
+	"strings"
+	"unicode"
+)
+
+// harmlessCharacters are what Minka strips without a word from a card's title
+// and description and from a comment: the soft hyphen, the zero-width space,
+// the word joiner, the byte order mark and the two direction marks. They
+// cannot carry an instruction, and pasted text is full of them.
+var harmlessCharacters = strings.NewReplacer("\u00ad", "", "\u200b", "", "\u2060", "", "\ufeff", "", "\u200e", "", "\u200f", "")
+
+// harmlessStripped is a text without the harmless characters.
+func harmlessStripped(text string) string {
+	return harmlessCharacters.Replace(text)
+}
+
+// hasInvisibleCharactersInMarkup looks for invisible characters where Minka
+// does, in the reduced markup, so that an entity counts as its character. The
+// fake keeps markup as it was sent and reads its entities here instead.
+func hasInvisibleCharactersInMarkup(markup string) bool {
+	return hasInvisibleCharacters(harmlessStripped(html.UnescapeString(markup)))
+}
 
 // hasInvisibleCharacters finds what Minka refuses in the texts agents read: a
 // format character other than the joiners, a supplement variation selector,

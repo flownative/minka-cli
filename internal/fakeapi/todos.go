@@ -542,6 +542,21 @@ func todoPlaceUnknown(w http.ResponseWriter) {
 
 // validTitle holds a title against what the server keeps, and names the
 // case after what carries it and the message after the same with its article.
+// cardTitle is a card's title as Minka keeps it, the harmless characters
+// stripped, or the refusal it draws: the refusals of every title, then
+// invisible characters.
+func cardTitle(w http.ResponseWriter, title string) (string, bool) {
+	stripped := harmlessStripped(title)
+	if !validTitle(w, "card", "a card", stripped) {
+		return "", false
+	}
+	if hasInvisibleCharacters(phpTrim(stripped)) {
+		unprocessable(w, "cardTitleHasInvisibleCharacters", "The title of a card must not contain invisible format characters such as direction overrides, isolates or tag characters; the zero-width joiner and non-joiner are fine.")
+		return "", false
+	}
+	return phpTrim(stripped), true
+}
+
 func validTitle(w http.ResponseWriter, thing, aThing, title string) bool {
 	title = phpTrim(title)
 	switch {

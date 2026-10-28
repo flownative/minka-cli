@@ -75,3 +75,41 @@ func TestTheFakeRefusesInvisibleCharactersInTheirPlace(t *testing.T) {
 		t.Error("a refused text was written")
 	}
 }
+
+// On a card's front and in a comment the harmless characters are stripped
+// without a word and come back so; what may hide something is refused after
+// every other refusal of the text, and nothing is written.
+func TestTheFakeStripsTheHarmlessAndRefusesTheHiddenOnAFront(t *testing.T) {
+	s, f := New(t)
+	cards := "/api/v1/boards/" + f.Board.ID + "/cards"
+
+	got, card := answerTo(t, s, f.Token, "POST", cards, `{"title":"Plan\u200b the\u00ad tent\u200e","description":"<p>Bring\u2060 it\ufeff</p>"}`)
+	if got != "201" || card["title"] != "Plan the tent" || card["description"] != "<p>Bring it</p>" {
+		t.Fatalf("stripped: %s %v %v", got, card["title"], card["description"])
+	}
+	cardPath := "/api/v1/cards/" + card["id"].(string)
+	for _, step := range []struct{ name, method, path, body, want string }{
+		{"an override in a new title", "POST", cards, `{"title":"Plan \u202eeht"}`, "422 cardTitleHasInvisibleCharacters"},
+		{"a title of a mark alone", "POST", cards, `{"title":"\u200b"}`, "422 cardTitleMissing"},
+		{"a control character before the override", "POST", cards, `{"title":"a\tb\u202e"}`, "422 cardTitleHasControlCharacters"},
+		{"a tag in a new description", "POST", cards, `{"title":"Ok","description":"<p>Go\udb40\udc41</p>"}`, "422 cardDescriptionHasInvisibleCharacters"},
+		{"an isolate as an entity", "POST", cards, `{"title":"Ok","description":"<p>Go &#x2066;on</p>"}`, "422 cardDescriptionHasInvisibleCharacters"},
+		{"an override in an edited title", "PATCH", cardPath, `{"title":"Plan \u202eeht"}`, "422 cardTitleHasInvisibleCharacters"},
+		{"a run of joiners in an edited description", "PATCH", cardPath, `{"description":"<p>a\u200d\u200db</p>"}`, "422 cardDescriptionHasInvisibleCharacters"},
+		{"an override in a comment", "POST", cardPath + "/comments", `{"body":"<p>Fine \u202eenif</p>"}`, "422 commentHasInvisibleCharacters"},
+		{"a comment of a mark alone", "POST", cardPath + "/comments", `{"body":"\u200b"}`, "422 commentMissing"},
+		{"an override in a comment on a document", "POST", "/api/v1/documents/" + f.Document.ID + "/comments", `{"body":"<p>\u2067x</p>"}`, "422 commentHasInvisibleCharacters"},
+	} {
+		if got := sendAs(t, s, f.Token, step.method, step.path, "application/json", step.body); got != step.want {
+			t.Errorf("%s: %s, want %s", step.name, got, step.want)
+		}
+	}
+	if len(s.Boards[0].Columns[0].Cards) != 2 {
+		t.Errorf("a refused card was created")
+	}
+
+	got, comment := answerTo(t, s, f.Token, "POST", cardPath+"/comments", `{"body":"<p>Done\u200b, \ud83d\udc69\u200d\ud83d\udcbb</p>"}`)
+	if got != "201" || comment["body"] != "<p>Done, \U0001f469\u200d\U0001f4bb</p>" {
+		t.Errorf("comment: %s %v", got, comment["body"])
+	}
+}
