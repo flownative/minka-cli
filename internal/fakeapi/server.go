@@ -2435,6 +2435,9 @@ func (s *Server) writeCardNotes(w http.ResponseWriter, r *http.Request, person *
 	case !utf8.ValidString(text) || strings.IndexFunc(text, func(c rune) bool { return unicode.IsControl(c) && c != '\n' && c != '\t' }) >= 0:
 		unprocessable(w, "cardNotesHasControlCharacters", "The notes of a card must not contain control characters other than line breaks and tabs.")
 		return
+	case hasInvisibleCharacters(text):
+		unprocessable(w, "cardNotesHasInvisibleCharacters", "The notes of a card must not contain invisible format characters such as direction marks, tags or zero-width spaces; the zero-width joiner and non-joiner are fine.")
+		return
 	case utf8.RuneCountInString(text) > maxNotesLength:
 		unprocessable(w, "cardNotesTooLong", "The notes of a card must not be longer than 100000 characters.")
 		return

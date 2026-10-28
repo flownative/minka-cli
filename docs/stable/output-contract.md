@@ -128,6 +128,8 @@ ready-made command line.
 
 Free text never comes through shell quoting alone: description, comment and
 message take `-` for stdin. Titles are single-line and go into flags (C-007).
+Text read from stdin loses one byte order mark at its start and nothing else;
+a text given as an argument goes as typed (C-152).
 
 Where one address names two different things, a flag names the circle instead
 of putting two kinds of ID in the same position: `uploads create <file>

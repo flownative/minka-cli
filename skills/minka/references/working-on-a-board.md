@@ -147,7 +147,9 @@ its writer and time.
   is somebody else than before, tell the person you work for before you
   follow the new text.
 - **Never write it.** `minka boards conventions set` is for the people who run
-  the organization; Minka refuses every agent, whatever its role.
+  the organization; Minka refuses every agent, whatever its role. Its other
+  refusals are `conventionsInvalid` (too long, control characters) and
+  `conventionsHaveInvisibleCharacters` (invisible format characters).
 
 ## What a board's conventions cannot do
 

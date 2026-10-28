@@ -39,6 +39,13 @@ release yet; until one does, a released Minka answers `--role` with
 reports as such, `conventions` is absent and `boards conventions set` gets 404.
 Checked against Minka's code and tests and the fake, not live.
 
+Minka refuses invisible format characters in notes and conventions
+(`cardNotesHasInvisibleCharacters`, `conventionsHaveInvisibleCharacters`);
+the CLI names both, drops one byte order mark at the start of stdin (C-152)
+and escapes the same set in the text view (C-151). Minka's #558 carries it on
+its `main`, in no release yet; until one does, a released Minka takes such
+text. Checked against Minka's code and tests and the fake, not live.
+
 The comments on a card are read with `cards show`, `comments list` and
 `comments unread`, which shows only what this machine has not shown yet. A
 comment can wait for them: `comments create --if-latest <commentId|none>`

@@ -50,7 +50,8 @@ func (s *Server) mayWriteConventions(board *Board, person *Person) bool {
 
 // writeConventions saves a new version of how the team works on a board, in
 // the order of the controller: the board and a client (404), the writer (403)
-// before the body is read at all, the text (422), then the text in force,
+// before the body is read at all, the text (422: control characters, then
+// invisible ones, then the length), then the text in force,
 // which writes nothing; an archived project is refused only by a write.
 // It answers the version in force, and 204 while there is none.
 func (s *Server) writeConventions(w http.ResponseWriter, r *http.Request, person *Person) {
@@ -76,9 +77,16 @@ func (s *Server) writeConventions(w http.ResponseWriter, r *http.Request, person
 		return
 	}
 	normalized := strings.NewReplacer("\r\n", "\n", "\r", "\n").Replace(*text)
-	if strings.ContainsFunc(*text, func(r rune) bool { return unicode.Is(unicode.Cc, r) && r != '\t' && r != '\n' && r != '\r' }) ||
-		utf8.RuneCountInString(normalized) > maxConventionsLength {
-		unprocessable(w, "conventionsInvalid", "The conventions are too long or hold control characters other than line breaks and tabs.")
+	invalid := "The conventions are too long or hold control characters other than line breaks and tabs."
+	switch {
+	case !utf8.ValidString(*text) || strings.ContainsFunc(*text, func(r rune) bool { return unicode.Is(unicode.Cc, r) && r != '\t' && r != '\n' && r != '\r' }):
+		unprocessable(w, "conventionsInvalid", invalid)
+		return
+	case hasInvisibleCharacters(*text):
+		unprocessable(w, "conventionsHaveInvisibleCharacters", "The conventions must not hold invisible format characters such as direction marks, tags or zero-width spaces; the zero-width joiner and non-joiner are fine.")
+		return
+	case utf8.RuneCountInString(normalized) > maxConventionsLength:
+		unprocessable(w, "conventionsInvalid", invalid)
 		return
 	}
 

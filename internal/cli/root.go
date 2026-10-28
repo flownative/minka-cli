@@ -503,7 +503,13 @@ func (s *session) fail(err error) *Error {
 	return e
 }
 
-// readValue returns a text argument, or stdin when the argument is "-".
+// byteOrderMark is what an editor may put in front of a file.
+const byteOrderMark = "\ufeff"
+
+// readValue returns a text argument, or stdin when the argument is "-". One
+// byte order mark at the start of stdin is dropped: an editor puts it in front
+// of a file and nobody means it, while Minka refuses it in some texts. Any
+// other is left for Minka to judge.
 func (a *app) readValue(what, value string) (string, error) {
 	if value != "-" {
 		return value, nil
@@ -518,7 +524,7 @@ func (a *app) readValue(what, value string) (string, error) {
 	if len(content) > maxInputBytes {
 		return "", &Error{Code: CodeUsage, Message: fmt.Sprintf("%s on stdin is longer than %d bytes", what, maxInputBytes)}
 	}
-	return string(content), nil
+	return strings.TrimPrefix(string(content), byteOrderMark), nil
 }
 
 func (a *app) newVersionCmd() *cobra.Command {

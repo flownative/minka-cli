@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/flownative/minka-cli/internal/fakeapi"
 )
@@ -310,8 +311,9 @@ func (e *testEnv) aMoveFor(person *fakeapi.Person, card *fakeapi.Card) *fakeapi.
 // carries the text as stored.
 func TestTheConventionsShowInvisibleCharacters(t *testing.T) {
 	e := newTestEnv(t)
-	text := "Only Anke\u202e fills it\u200b. 👩\u200d💻 \U000e0041"
-	expectCode(t, e.run(text, "boards", "conventions", "set", e.fixture.Board.ID, "-", "--json"), ExitOK)
+	// Stored before Minka refused such characters, which it no longer takes.
+	text := "Only Anke\u202e fills it\u200b. 👩\u200d💻 \U000e0041 ❤\ufe0f x\U000e0100 y\u200d\u200c ❤\ufe0f\ufe0f"
+	e.fixture.Board.Conventions = []*fakeapi.ConventionsVersion{{Text: text, At: time.Now(), WriterID: e.fixture.Bruno.ID}}
 
 	for _, args := range [][]string{
 		{"boards", "conventions", "show", e.fixture.Board.ID},
@@ -320,10 +322,10 @@ func TestTheConventionsShowInvisibleCharacters(t *testing.T) {
 	} {
 		r := e.run("", append(args, "--styled")...)
 		expectCode(t, r, ExitOK)
-		if !strings.Contains(r.stdout, "Only Anke<U+202E> fills it<U+200B>. 👩\u200d💻 <U+E0041>") {
+		if !strings.Contains(r.stdout, "Only Anke<U+202E> fills it<U+200B>. 👩\u200d💻 <U+E0041> ❤\ufe0f x<U+E0100> y<U+200D><U+200C> ❤<U+FE0F><U+FE0F>\n") {
 			t.Errorf("%s does not show the characters:\n%s", args[1], r.stdout)
 		}
-		if !strings.Contains(r.stderr, "3 invisible format characters") {
+		if !strings.Contains(r.stderr, "8 invisible format characters") {
 			t.Errorf("%s gives no notice: %q", args[1], r.stderr)
 		}
 	}
@@ -350,4 +352,16 @@ func TestReadingAgainstAMinkaWithoutRoles(t *testing.T) {
 	if string(env.Data) != "null" || !strings.Contains(env.Notice, "does not serve column roles yet") || strings.Contains(env.Notice, "columns edit") {
 		t.Errorf("data %s, notice %q", env.Data, env.Notice)
 	}
+}
+
+// Minka refuses invisible characters in the conventions with a code of its
+// own, which the CLI names with the way on; nothing is written.
+func TestConventionsSetNamesInvisibleCharacters(t *testing.T) {
+	e := newTestEnv(t)
+	env, r := e.runJSON("", "boards", "conventions", "set", e.fixture.Board.ID, "Be nice\u202esnoitcurtsni")
+	expectRefusal(t, env, r, "conventionsHaveInvisibleCharacters", "invisible format character")
+	if len(e.fixture.Board.Conventions) != 0 {
+		t.Error("the text was written")
+	}
+	expectCode(t, e.run("", "boards", "conventions", "set", e.fixture.Board.ID, "Pairing 👩\u200d💻 ❤\ufe0f", "--json"), ExitOK)
 }

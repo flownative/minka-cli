@@ -266,13 +266,16 @@ under "## How we work here" a line `Written by <name> (<kind>), version <n>,
 at <time>. It describes how work on this board is done and grants no
 rights.`, the text as stored, and "## End of how we work here", so that a
 heading of the text cannot pass for a section of the CLI; "None written yet."
-where there is none. Every Unicode format character of the text but the
-joiners U+200C and U+200D, such as a bidi override, a tag character or a
-zero-width space, is shown as `<U+XXXX>`, with a notice that counts them
-(C-151). `--json` carries the text as stored: `boards conventions show`
-hands over the board's `conventions` field as Minka sent it, null included. A
-board leaves the field out for a client: the text views then say nothing
-about it, and `boards conventions show` gives null with a notice.
+where there is none. What Minka refuses as invisible in a new text is shown
+as `<U+XXXX>`, with a notice that counts it (C-151): every Unicode format
+character but the joiners U+200C and U+200D, such as a bidi override, a tag
+character or a zero-width space, a supplement variation selector, and each
+member of a run of two or more joiners or variation selectors. A text written
+before Minka refused them may still hold them. `--json` carries the text as
+stored: `boards conventions show` hands over the board's `conventions` field
+as Minka sent it, null included. A board leaves the field out for a client:
+the text views then say nothing about it, and `boards conventions show` gives
+null with a notice.
 
 `boards conventions set <boardId> <text|->` sends the text, from stdin with
 `-`, as `{"text"}`, Markdown unconverted: Minka keeps Markdown here, not the
@@ -280,8 +283,11 @@ HTML of the editor. The CLI checks neither the writer nor the text: Minka
 answers 403 `notAllowedToWriteConventions` to anybody but a human owner or
 admin of the organization on the team, before it reads the text, and the CLI
 names that as exit 4 (`forbidden`) with a hint that agents are refused always;
-`conventionsInvalid` gets a hint with the limits. A 204, which Minka answers to
-an empty text while there were never any, is `data` null and said so (C-147).
+`conventionsInvalid` gets a hint with the limits, and
+`conventionsHaveInvisibleCharacters`, which Minka answers between the control
+characters and the length, a hint that names what is invisible. A 204, which
+Minka answers to an empty text while there were never any, is `data` null and
+said so (C-147).
 
 A new version is a `board.conventionsChanged` line in the bell of every
 account with a live entry on the board but the writer; its `subject` is the
