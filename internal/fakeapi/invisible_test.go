@@ -117,9 +117,9 @@ func TestTheFakeStripsTheHarmlessAndRefusesTheHiddenOnAFront(t *testing.T) {
 }
 
 // A comment is judged in the order of Minka's CommentBody: the length of what
-// was sent, control characters, nothing at all, then invisible characters. A
-// comment of a harmless character alone is kept, empty, with 201: that is how
-// Minka answers it today, as its markup is not empty before the strip.
+// was sent, control characters, a comment that says nothing, then invisible
+// characters. Markup without words, a file, a mention, an embed or a
+// reference says nothing.
 func TestTheFakeJudgesACommentInMinkasOrder(t *testing.T) {
 	s, f := New(t)
 	path := "/api/v1/cards/" + f.CardInTriage.ID + "/comments"
@@ -129,13 +129,18 @@ func TestTheFakeJudgesACommentInMinkasOrder(t *testing.T) {
 		{"too long with harmless characters to strip", `{"body":"` + strings.Repeat("x", 9999) + `\u200b\u200b\u200b"}`, "422 commentTooLong"},
 		{"a control character with an override", `{"body":"a\u0007\u202e"}`, "422 commentHasControlCharacters"},
 		{"nothing", `{"body":"  "}`, "422 commentMissing"},
-		{"a harmless character alone", `{"body":"\u200b"}`, "201"},
+		{"a harmless character alone", `{"body":"\u200b"}`, "422 commentMissing"},
+		{"a soft hyphen as an entity in a paragraph", `{"body":"<p>&shy;</p>"}`, "422 commentMissing"},
+		{"an empty paragraph", `{"body":"<p></p>"}`, "422 commentMissing"},
+		{"blanks and a no-break space in markup", `{"body":"<p> &nbsp; </p><p><br></p>"}`, "422 commentMissing"},
+		{"a reference of an unknown kind", `{"body":"<p><minka-ref kind=\"nothing\" id=\"` + f.Document.ID + `\"></minka-ref></p>"}`, "422 commentMissing"},
+		{"a plain entity", `{"body":"&shy;"}`, "201"},
+		{"a reference", `{"body":"<p><minka-ref kind=\"document\" id=\"` + f.Document.ID + `\"></minka-ref></p>"}`, "201"},
+		{"a mention", `{"body":"<p><action-text-attachment content-type=\"application/vnd.minka.person\"></action-text-attachment></p>"}`, "201"},
+		{"an embed", `{"body":"<minka-embed url=\"https://example.com/v\"></minka-embed>"}`, "201"},
 	} {
 		if got := sendAs(t, s, f.Token, "POST", path, "application/json", step.body); got != step.want {
 			t.Errorf("%s: %s, want %s", step.name, got, step.want)
 		}
-	}
-	if last := f.CardInTriage.Comments[len(f.CardInTriage.Comments)-1]; last.Body != "" {
-		t.Errorf("kept %q", last.Body)
 	}
 }

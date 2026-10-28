@@ -595,11 +595,10 @@ const commentInvisibleMessage = "A comment must not contain invisible format cha
 
 // commentText is a comment as the server keeps it, the harmless characters
 // stripped, or the refusal it draws, in Minka's order: the length of what was
-// sent, control characters, the length of what is kept, nothing at all, then
-// invisible characters. Minka reduces the markup before it judges the rest;
-// the fake keeps what was sent, so the second length never refuses here, and
-// nothing at all is a body that is empty once trimmed. A body of harmless
-// characters alone is therefore kept empty, as Minka answers it today.
+// sent, control characters, the length of what is kept, a comment that says
+// nothing, then invisible characters. Minka reduces the markup before it
+// judges the rest; the fake keeps what was sent, so the second length never
+// refuses here.
 func commentText(w http.ResponseWriter, body string) (string, bool) {
 	sent := phpTrim(body)
 	kept := phpTrim(harmlessStripped(body))
@@ -610,7 +609,7 @@ func commentText(w http.ResponseWriter, body string) (string, bool) {
 		unprocessable(w, "commentHasControlCharacters", "A comment must not contain control characters other than line breaks and tabs.")
 	case utf8.RuneCountInString(kept) > maxCommentLength:
 		unprocessable(w, "commentTooLong", "The comment is too long.")
-	case sent == "":
+	case commentSaysNothing(kept):
 		unprocessable(w, "commentMissing", "A comment needs a body.")
 	case hasInvisibleCharactersInMarkup(kept):
 		unprocessable(w, "commentHasInvisibleCharacters", commentInvisibleMessage)

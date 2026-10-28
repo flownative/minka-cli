@@ -2,10 +2,12 @@ package fakeapi
 
 import (
 	"html"
+	"slices"
 	"strings"
 	"unicode"
 
 	"github.com/flownative/minka-cli/internal/richtext"
+	xhtml "golang.org/x/net/html"
 )
 
 // harmlessCharacters are what Minka strips without a word from a card's title
@@ -59,4 +61,41 @@ func hasInvisibleCharacters(text string) bool {
 		}
 	}
 	return false
+}
+
+// referenceKinds are the kinds of record a reference may name.
+var referenceKinds = []string{"card", "post", "chat", "chatmessage", "todo", "todolist", "document", "upload", "question", "event"}
+
+// commentSaysNothing says whether a comment shows nothing, as Minka judges it:
+// no words once the harmless characters are stripped and white space and
+// no-break spaces are left aside, no file or mention, no embed with an
+// address and no reference to a record of a known kind. An empty paragraph
+// says nothing; an entity counts as its character only in markup.
+func commentSaysNothing(text string) bool {
+	blank := func(r rune) bool { return unicode.IsSpace(r) || r == '\u00a0' }
+	if !richtext.CarriesMarkup(text) {
+		return strings.TrimFunc(harmlessStripped(text), blank) == ""
+	}
+	root, err := xhtml.Parse(strings.NewReader(text))
+	if err != nil {
+		return false
+	}
+	attribute := func(n *xhtml.Node, name string) string {
+		for _, a := range n.Attr {
+			if a.Key == name {
+				return a.Val
+			}
+		}
+		return ""
+	}
+	for n := range root.Descendants() {
+		switch {
+		case n.Type == xhtml.TextNode && strings.TrimFunc(harmlessStripped(n.Data), blank) != "",
+			n.Type == xhtml.ElementNode && n.Data == "action-text-attachment",
+			n.Type == xhtml.ElementNode && n.Data == "minka-embed" && attribute(n, "url") != "",
+			n.Type == xhtml.ElementNode && n.Data == "minka-ref" && slices.Contains(referenceKinds, attribute(n, "kind")) && uuidPattern.MatchString(attribute(n, "id")):
+			return false
+		}
+	}
+	return true
 }
