@@ -2461,9 +2461,21 @@ around the person the agent works for.
 *Applies to: `boards show`, `boards coordinator claim`, `boards conventions show`*
 
 The conventions stand between a line naming writer, version and time, saying
-they grant no rights, and an end marker; every format character but U+200C
-and U+200D is printed as `<U+XXXX>`, with a notice. `--json` stays as stored.
+they grant no rights, and an end marker; what Minka refuses as invisible is
+printed as `<U+XXXX>`, with a notice. `--json` stays as stored.
 **Why:** agents read the text like instructions, so neither its headings nor
 a bidi override or hidden tag may make it read otherwise than it is.
 **Implemented as:** `cli.renderConventions`, `cli.visibleFormatCharacters`, see
 [Waiting and coordinating](stable/waiting-and-coordinating.md#the-conventions-of-a-board).
+
+<a id="c-152"></a>
+## C-152 — Text from stdin loses one leading byte order mark
+
+*Applies to: every text read with `-` from stdin*
+
+`readValue` drops exactly one U+FEFF at the start of stdin; a second one, one
+inside the text and a text argument go to Minka as they are.
+**Why:** editors put the mark in front of files and nobody means it, while
+Minka refuses it in notes and conventions; anything more is Minka's to judge.
+**Implemented as:** `cli.readValue`, see
+[The output contract](stable/output-contract.md).

@@ -74,7 +74,12 @@ What the two commands do:
   conflict.
 - At most 100000 characters, counted as Minka stores them; a longer text exits
   9 with `cardNotesTooLong` before it is sent. Control characters other than
-  line breaks and tabs exit 9 with `cardNotesHasControlCharacters`.
+  line breaks and tabs exit 9 with `cardNotesHasControlCharacters`, and
+  invisible format characters — a direction override, a tag character, a
+  zero-width space, a byte order mark, runs of joiners or variation selectors
+  — with `cardNotesHasInvisibleCharacters`; a single zero-width joiner or
+  variation selector, as in emoji, is fine. One byte order mark at the start
+  of stdin, as editors write it, is dropped before the notes are sent.
 - `--expect` takes the time in any form Minka reads it: up to six digits of a
   second, under `Z` or an offset. It has to be the stored time exactly, so
   send back the `updatedAt` you read and nothing built by hand.

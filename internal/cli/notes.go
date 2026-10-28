@@ -100,7 +100,10 @@ func (a *app) newCardsNotesSetCmd() *cobra.Command {
 		Short: "Replace the working notes of a card",
 		Long: `Replaces the working notes of a card as a whole with the text, read as light
 Markdown and stored as it is sent. An empty text clears them. Give - as the
-text to read it from stdin. Writing notifies nobody.
+text to read it from stdin; one byte order mark at its start is dropped.
+Writing notifies nobody. Invisible format characters, such as a direction
+override, a tag character, a zero-width space or a byte order mark inside the
+text, exit 9 with meta.apiCode cardNotesHasInvisibleCharacters.
 
 Somebody else may have changed the notes since you read them. Give the
 updatedAt you read with --expect, or --expect none for notes nobody had

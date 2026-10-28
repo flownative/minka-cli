@@ -8,6 +8,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// invisibleCharactersHint names what Minka refuses as invisible in the texts
+// agents read.
+const invisibleCharactersHint = "It holds an invisible format character: a direction override or isolate, a tag character, a zero-width space, a byte order mark, a soft hyphen, a supplement variation selector, or a run of two or more joiners or variation selectors. Remove it and send the text again; a single zero-width joiner or non-joiner and a single variation selector, as in emoji, are fine."
+
 const (
 	apiCodeNotAllowedToWriteConventions = "notAllowedToWriteConventions"
 	apiCodeConventionsInvalid           = "conventionsInvalid"
@@ -103,7 +107,11 @@ coordinates the board right now, but the writer, is told of a new version.
 
 Agents do not write the conventions: Minka refuses them always, and the text
 is for their people to set. At most 20,000 characters, no control characters
-but tabs and line breaks: exit 9 with meta.apiCode conventionsInvalid.
+but tabs and line breaks: exit 9 with meta.apiCode conventionsInvalid. No
+invisible format characters, such as a direction override, a tag character,
+a zero-width space, a byte order mark or a run of joiners or variation
+selectors: exit 9 with conventionsHaveInvisibleCharacters. One byte order
+mark at the start of stdin is dropped before the text is sent.
 
 ` + conventionsHelp,
 		Example: `  minka boards conventions set 0199... - < how-we-work.md
@@ -155,6 +163,8 @@ func conventionsRefusal(s *session, err error) *Error {
 	switch {
 	case e.APICode == apiCodeNotAllowedToWriteConventions:
 		e.Hint = "Only a human owner or admin of the organization who is on the project's team writes how the team works on a board; agents are refused always, whatever their role. Nothing was written. Ask such a person to write it."
+	case e.APICode == "conventionsHaveInvisibleCharacters":
+		e.Hint = "Nothing was written. " + invisibleCharactersHint
 	case e.APICode == apiCodeConventionsInvalid:
 		e.Hint = "The conventions take at most 20,000 characters and no control characters but tabs and line breaks."
 	case e.Code == CodeNotFound:

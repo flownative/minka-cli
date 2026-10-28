@@ -148,9 +148,11 @@ card or a commit.
 
 Validation codes in `meta.apiCode`: `cardTitleMissing`, `cardTitleTooLong`,
 `cardTitleHasControlCharacters` (a title is one line: no line breaks or tabs),
-`cardDescriptionTooLong`, `cardDescriptionNotReadable`, `commentMissing`,
-`commentTooLong`, `commentHasControlCharacters` (line breaks and tabs are
-fine), `commentNotReadable`, `cardDueDateNotADate`, `personNotAProjectMember`, `personIdMissing`,
+`cardTitleHasInvisibleCharacters`, `cardDescriptionTooLong`,
+`cardDescriptionNotReadable`, `cardDescriptionHasInvisibleCharacters`,
+`commentMissing`, `commentTooLong`, `commentHasControlCharacters` (line
+breaks and tabs are fine), `commentNotReadable`,
+`commentHasInvisibleCharacters`, `cardDueDateNotADate`, `personNotAProjectMember`, `personIdMissing`,
 `stepMissing`, `stepTooLong`, `stepHasControlCharacters`, `stepCompletedMissing`,
 `stepDueDateNotADate`, `stepPlaceUnknown`, `cardArchived`,
 `chatMessageMissing`, `chatMessageTooLong`, `chatMessageHasControlCharacters`,
@@ -160,6 +162,14 @@ fine), `commentNotReadable`, `cardDueDateNotADate`, `personNotAProjectMember`, `
 `unsupportedMediaType`, `projectArchived`,
 `coordinatorSessionInvalid`, `cursorUnknown`, `notificationsWaitInvalid`,
 `notificationsLimitInvalid`.
+
+In a card's title and description and in a comment, Minka strips soft
+hyphens, zero-width spaces, word joiners, byte order marks and direction
+marks without a word, and refuses other format characters — direction
+overrides and isolates, tag characters, runs of joiners or variation
+selectors — with the `…HasInvisibleCharacters` code; a single zero-width
+joiner or non-joiner passes. The notes and the conventions refuse all of
+them.
 
 That is not all of them: Minka has a code for every refusal of every endpoint,
 far more than the CLI can meet, and the list above holds the ones that come up

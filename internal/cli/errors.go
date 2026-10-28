@@ -126,6 +126,10 @@ const apiCodeColumnHasNoOnHoldArea = "columnHasNoOnHoldArea"
 // not got, and for a name that is no rendering at all.
 const apiCodeVariantNotAvailable = "variantNotAvailable"
 
+// hiddenCharactersHint names what Minka refuses in a card's title and
+// description and in a comment, and what it strips there by itself.
+const hiddenCharactersHint = "Nothing was written. The text holds a hidden format character: a direction override or isolate, a tag character, a supplement variation selector, a run of two or more joiners or variation selectors, or another invisible format character. Remove it and send the text again. Minka strips soft hyphens, zero-width spaces, word joiners, byte order marks and direction marks there by itself; a single zero-width joiner or non-joiner or a single variation selector, as in emoji, is fine."
+
 // apiError classifies a failed request.
 //
 // Only a failed read is retryable. A write can have been applied before the
@@ -149,8 +153,11 @@ func apiError(err error, host string) *Error {
 			status == http.StatusRequestEntityTooLarge || status == http.StatusUnprocessableEntity ||
 			status == http.StatusConflict:
 			e.Code = CodeValidation
-			if apiErr.Code == apiCodeProjectArchived {
+			switch apiErr.Code {
+			case apiCodeProjectArchived:
 				e.Hint = "The project can still be read. Nothing is written in it until it is put back in use, which is done in Minka on the web. List archived projects with: minka projects list --archived"
+			case "cardTitleHasInvisibleCharacters", "cardDescriptionHasInvisibleCharacters", "commentHasInvisibleCharacters":
+				e.Hint = hiddenCharactersHint
 			}
 		case status >= 500:
 			if apiErr.Method == http.MethodGet {

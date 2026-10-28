@@ -220,6 +220,22 @@ the server accepts it, and refusing what the server takes would be wrong about
 it. The Markdown path cannot meet the case at all, because the conversion
 happens here.
 
+## Hidden characters on a card's front and in a comment
+
+Minka strips the soft hyphen, the zero-width space, the word joiner, the byte
+order mark and the two direction marks from a card's title and description
+and from every comment, on a card or any other item, and answers the text as
+it keeps it. What may still hide something it refuses, after every other
+refusal of the text: every other Unicode format character but a single
+zero-width joiner or non-joiner — direction overrides and isolates, tag
+characters — supplement variation selectors, and runs of two or more joiners
+or variation selectors, with `cardTitleHasInvisibleCharacters`,
+`cardDescriptionHasInvisibleCharacters` and `commentHasInvisibleCharacters`.
+In markup an entity counts as its character. The CLI sends the text as it is
+and gives the three codes one hint that names what is refused and what Minka
+strips by itself. The notes of a card and a board's conventions strip nothing
+and refuse all of these ([The back of a card](card-back.md)).
+
 ## Sources, files and mentions
 
 Every text comes twice: as stored (`description`, `body`, `bodyHtml`) and as

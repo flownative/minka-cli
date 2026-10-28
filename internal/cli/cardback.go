@@ -609,6 +609,8 @@ func cardBackRefusal(s *session, err error, notFoundHint string) *Error {
 		e.Hint = notFoundHint
 	case e.APICode == apiCodeCardArchived:
 		e.Hint = cardBackArchivedHint
+	case e.APICode == "cardNotesHasInvisibleCharacters":
+		e.Hint = "The notes were not written. " + invisibleCharactersHint
 	case e.APICode == apiCodeCardTakesNoChanges:
 		e.Hint = "The card takes no changes: its column or its board is no longer in use. Its back can still be read."
 	}

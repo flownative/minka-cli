@@ -272,3 +272,29 @@ func TestTheFakeReadsAGuardsTimeNoWiderThanMinka(t *testing.T) {
 		}
 	}
 }
+
+// One byte order mark at the start of stdin is dropped, as an editor puts it
+// in front of a file; one inside the text, or a second one, goes to Minka,
+// which refuses it with the cause named. A text argument is sent as typed.
+func TestNotesSetDropsTheByteOrderMarkOfAFileAndNothingElse(t *testing.T) {
+	e := newTestEnv(t)
+
+	_, r := e.runJSON("\ufeff## Plan\n", "cards", "notes", "set", e.fixture.CardInTriage.ID, "-", "--force")
+	expectCode(t, r, ExitOK)
+	if body := e.lastWriteBody(); body["body"] != "## Plan\n" {
+		t.Errorf("sent %q", body["body"])
+	}
+
+	env, r := e.runJSON("\ufeff\ufeff## Plan\n", "cards", "notes", "set", e.fixture.CardInTriage.ID, "-", "--force")
+	expectRefusal(t, env, r, "cardNotesHasInvisibleCharacters", "byte order mark")
+	if body := e.lastWriteBody(); body["body"] != "\ufeff## Plan\n" {
+		t.Errorf("sent %q, want one mark kept", body["body"])
+	}
+	env, r = e.runJSON("## Plan\ufeff\n", "cards", "notes", "set", e.fixture.CardInTriage.ID, "-", "--force")
+	expectRefusal(t, env, r, "cardNotesHasInvisibleCharacters", "The notes were not written")
+	if body := e.lastWriteBody(); body["body"] != "## Plan\ufeff\n" {
+		t.Errorf("sent %q", body["body"])
+	}
+	_, r = e.runJSON("", "cards", "notes", "set", e.fixture.CardInTriage.ID, "\ufeffon the command line", "--force")
+	expectCode(t, r, ExitValidation)
+}

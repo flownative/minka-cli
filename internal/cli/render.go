@@ -89,15 +89,22 @@ func renderConventions(w io.Writer, conventions *api.Conventions) {
 	fmt.Fprintf(w, "\n%s\n", conventionsEnd)
 }
 
-// visibleFormatCharacters writes every Unicode format character as <U+XXXX>
-// and counts them: a bidi override, a tag character or a zero-width space
-// would let a text read otherwise than it says. The joiners stay, since emoji
-// and scripts need them.
+// visibleFormatCharacters writes as <U+XXXX>, and counts, what Minka refuses
+// as invisible in a new text: a format character other than the joiners, a
+// supplement variation selector, and every member of a run of two or more
+// joiners or variation selectors. A bidi override, a tag character or a
+// zero-width space would let a text read otherwise than it says; a single
+// joiner and a single variation selector stay, since emoji and scripts need
+// them. A text stored before Minka refused them may still hold them.
 func visibleFormatCharacters(text string) (string, int) {
+	runes := []rune(text)
+	inRun := func(i int, member func(rune) bool) bool {
+		return member(runes[i]) && ((i > 0 && member(runes[i-1])) || (i+1 < len(runes) && member(runes[i+1])))
+	}
 	var b strings.Builder
 	replaced := 0
-	for _, r := range text {
-		if unicode.Is(unicode.Cf, r) && r != '\u200c' && r != '\u200d' {
+	for i, r := range runes {
+		if (unicode.Is(unicode.Cf, r) && !isJoiner(r)) || (r >= 0xe0100 && r <= 0xe01ef) || inRun(i, isJoiner) || inRun(i, isVariationSelector) {
 			fmt.Fprintf(&b, "<U+%04X>", r)
 			replaced++
 			continue
@@ -106,6 +113,10 @@ func visibleFormatCharacters(text string) (string, int) {
 	}
 	return b.String(), replaced
 }
+
+func isJoiner(r rune) bool { return r == '\u200c' || r == '\u200d' }
+
+func isVariationSelector(r rune) bool { return r >= '\ufe00' && r <= '\ufe0f' }
 
 // conventionsNotices says where the text view made format characters
 // visible.

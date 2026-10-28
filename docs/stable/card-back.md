@@ -33,6 +33,19 @@ the skill says that the agent the card is assigned to writes it, and that any
 other agent leaves it alone and says on the front what it would have written
 (C-145).
 
+## What Minka refuses in the notes
+
+Minka refuses, in this order, control characters other than line break and tab
+(`cardNotesHasControlCharacters`), invisible format characters
+(`cardNotesHasInvisibleCharacters`) and more than 100,000 characters
+(`cardNotesTooLong`). Invisible are the Unicode format characters but a single
+zero-width joiner or non-joiner, supplement variation selectors, and runs of
+two or more joiners or of two or more variation selectors. The CLI gives the
+invisible ones a hint that names them and checks only the length before
+sending, which a text with both refusals therefore hears first; the byte
+order mark editors put in front of a file is dropped from stdin before
+(C-152).
+
 ## Only the team
 
 The whole back is the team's (E-189, E-275): a client of the
