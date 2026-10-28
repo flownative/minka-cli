@@ -141,7 +141,8 @@ func notificationFailure(s *session, err error) error {
 }
 
 // newsFilter is what --board and --column let through. A line that names no
-// card on a board passes only where neither is given.
+// card on a board passes only where neither is given, but for a line about a
+// board itself, which --board alone lets through for that board.
 type newsFilter struct {
 	boards  []string
 	columns []string // IDs in lowercase, or titles
@@ -156,7 +157,7 @@ func (f newsFilter) lets(line api.Notification) bool {
 		return true
 	}
 	if line.Card == nil {
-		return false
+		return len(f.columns) == 0 && line.Subject.Type == "board" && slices.Contains(f.boards, line.Subject.ID)
 	}
 	if len(f.boards) > 0 && !slices.Contains(f.boards, line.Card.BoardID) {
 		return false
@@ -196,7 +197,11 @@ same session at once may both print the same lines.
 
 --board and --column (an ID or a title, each repeatable) keep only lines
 about cards on that board or in that column, where the card stands now; a
-line about anything else is left out under either. What they leave out is
+line about anything else is left out under either, but --board alone keeps a
+line about the board itself: board.conventionsChanged, which says that the
+board's "How we work here" has a new version. Read it then with "minka
+boards conventions show" and compare its writer and time with what you
+worked by. What they leave out is
 read all the same: the next wait of the session does not show it again.
 
 Without --timeout it waits as long as it takes, asking Minka every %d
@@ -534,6 +539,12 @@ func (w *newsWait) result(lines []api.Notification, raw []json.RawMessage) succe
 			break
 		}
 	}
+	for _, line := range lines {
+		if line.Occasion == api.OccasionConventionsChanged {
+			s.breadcrumbs = append(s.breadcrumbs, Breadcrumb{Action: "conventions", Cmd: "minka boards conventions show " + line.Subject.ID, Description: "Read the new version of how the team works on the board"})
+			break
+		}
+	}
 	return s
 }
 
@@ -560,6 +571,10 @@ func waitAgain(sessionFlag string, boards, columns []string, timeout time.Durati
 // newsLine is one notification as a person reads it: what it is about, then
 // what happened and who did it, in Minka's words.
 func newsLine(line api.Notification) string {
+	// The summary names the board already; its ID is what the next command takes.
+	if line.Occasion == api.OccasionConventionsChanged {
+		return oneLine(line.Summary) + " (board " + line.Subject.ID + ")"
+	}
 	about := oneLine(line.Subject.Title)
 	if line.Subject.ShortID != nil && *line.Subject.ShortID != "" {
 		about = oneLine(*line.Subject.ShortID) + " " + about

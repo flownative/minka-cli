@@ -10,7 +10,7 @@ import (
 )
 
 func (a *app) newColumnsCmd() *cobra.Command {
-	return group("columns", "Add, rename, colour, move and delete the columns of a board",
+	return group("columns", "Add, rename, colour, give a role to, move and delete the columns of a board",
 		a.newColumnsCreateCmd(),
 		a.newColumnsEditCmd(),
 		a.newColumnsMoveCmd(),
@@ -35,6 +35,17 @@ title written.
 Triage and Not now carry no colour, Done is always green, and none of the three
 takes one or gives one up: exit 9 with systemColumnHasNoColor.`
 
+// columnRoleHelp says which roles a column takes.
+const columnRoleHelp = `--role says what a working column is for in the way the team works: ready
+(released, to be taken up in board order), in_progress or waiting_for_decision,
+spelt exactly so. Several columns may share a role. Any other value is refused
+with exit 9 (validation) and meta.apiCode columnRoleUnknown, inbox and done
+included: Triage is the board's inbox and Done is done, by type. --no-role takes
+the role away. Triage, Not now and Done take no role and give none up: exit 9
+with systemColumnHasNoRole. A role is judged before the title and the colour,
+so a refused role changes nothing. A role grants nothing: it only tells people
+and agents where work stands. Anybody on the team may set it.`
+
 // columnWritersHelp says who may change the columns of a board.
 const columnWritersHelp = `Only the team of a project changes its columns: a client of the project gets
 exit 2 (not_found) like somebody outside it.`
@@ -49,6 +60,9 @@ const (
 	apiCodeSystemColumnCannotBeRemoved   = "systemColumnCannotBeRemoved"
 	apiCodeNeighbourColumnOnAnotherBoard = "neighbourColumnOnAnotherBoard"
 	apiCodeNothingToChange               = "nothingToChange"
+	apiCodeColumnRoleUnknown             = "columnRoleUnknown"
+	apiCodeSystemColumnHasNoRole         = "systemColumnHasNoRole"
+	columnRolesUnknownHere               = "This Minka does not know column roles yet; the first release that does is needed."
 	columnWhiteInstead                   = "--color white gives the column the same look on any Minka."
 	columnNotFoundHint                   = "It does not exist, lies in the trash, or belongs to a project you are not on the team of."
 	columnBoardNotFoundHint              = "The board does not exist, lies in the trash, or belongs to a project you are not on the team of."
@@ -72,6 +86,10 @@ func columnRefusal(s *session, err error) *Error {
 		e.Hint = "A column takes one of " + strings.Join(minkaColors, ", ") + ", spelt exactly so."
 	case apiCodeSystemColumnHasNoColor:
 		e.Hint = "Triage and Not now carry no colour and Done is always green. Nothing was changed, the title included: rename it without --color or --no-color."
+	case apiCodeColumnRoleUnknown:
+		e.Hint = "A working column takes ready, in_progress or waiting_for_decision, spelt exactly so. Triage is the inbox and Done is done by type. Nothing was changed."
+	case apiCodeSystemColumnHasNoRole:
+		e.Hint = "Triage carries inbox and Done done by type, Not now none; none of them takes or gives up a role. Nothing was changed."
 	case apiCodeSystemColumnCannotMove:
 		e.Hint = columnSystemColumnsKeepTheirPlaces
 	case apiCodeSystemColumnCannotBeRemoved:
@@ -128,6 +146,14 @@ func columnBreadcrumbs(columnID, boardID string) []Breadcrumb {
 		crumbs = append(crumbs, Breadcrumb{Action: "show", Cmd: "minka boards show " + boardID, Description: "Show the board with its columns and cards"})
 	}
 	return crumbs
+}
+
+// columnRole names the role of a column in words.
+func columnRole(column api.Column) string {
+	if column.Role == nil || *column.Role == "" {
+		return "none"
+	}
+	return *column.Role
 }
 
 // columnColor names the colour of a column in words. White is how a column
@@ -201,15 +227,16 @@ columnTitleHasControlCharacters for a line break or a tab.
 }
 
 func (a *app) newColumnsEditCmd() *cobra.Command {
-	var boardID, title, color string
-	var noColor bool
+	var boardID, title, color, role string
+	var noColor, noRole bool
 
 	cmd := &cobra.Command{
 		Use:   "edit <column>",
-		Short: "Rename or recolour a column",
-		Long: `Gives a column a new title, a new colour or both; at least one of --title,
---color and --no-color is required, and --color and --no-color exclude each
-other. What is not given stays as it is.
+		Short: "Rename, recolour or give a role to a column",
+		Long: `Gives a column a new title, a new colour, a new role or any of them; at least
+one of --title, --color, --no-color, --role and --no-role is required. --color
+and --no-color exclude each other, and so do --role and --no-role. What is not
+given stays as it is.
 
 Triage, Not now and Done take a title of their own as well, and --title ""
 gives them back the name of their type. A working column cannot go without a
@@ -220,12 +247,16 @@ columnTitleHasControlCharacters for a line break or a tab.
 ` + columnColorHelp + ` Where both are given, the colour is
 written first, and a refused colour leaves the title as it was.
 
+` + columnRoleHelp + `
+
 ` + columnArgHelp + `
 
 ` + columnWritersHelp,
 		Example: `  minka columns edit 0199... --title "In review"
   minka columns edit Doing --board 0199... --color purple
   minka columns edit Doing --board 0199... --no-color
+  minka columns edit "Als nächstes" --board 0199... --role ready
+  minka columns edit Doing --board 0199... --no-role
   minka columns edit triage --board 0199... --title "Inbox"
   minka columns edit triage --board 0199... --title ""`,
 		Args: requireArgs("column"),
@@ -233,15 +264,21 @@ written first, and a refused colour leaves the title as it was.
 			if noColor && cmd.Flags().Changed("color") {
 				return usageErrorf(cmd, "--color and --no-color exclude each other")
 			}
-			input := api.UpdateColumnInput{NoColor: noColor}
+			if noRole && cmd.Flags().Changed("role") {
+				return usageErrorf(cmd, "--role and --no-role exclude each other")
+			}
+			input := api.UpdateColumnInput{NoColor: noColor, NoRole: noRole}
 			if cmd.Flags().Changed("title") {
 				input.Title = &title
 			}
 			if cmd.Flags().Changed("color") {
 				input.Color = &color
 			}
-			if input.Title == nil && input.Color == nil && !input.NoColor {
-				return usageErrorf(cmd, "nothing to change, give --title, --color or --no-color")
+			if cmd.Flags().Changed("role") {
+				input.Role = &role
+			}
+			if input.Title == nil && input.Color == nil && !input.NoColor && input.Role == nil && !input.NoRole {
+				return usageErrorf(cmd, "nothing to change, give --title, --color, --no-color, --role or --no-role")
 			}
 			if err := checkColumnArg(cmd, &boardID, args[0]); err != nil {
 				return err
@@ -263,7 +300,19 @@ written first, and a refused colour leaves the title as it was.
 				if input.NoColor && e.APICode == apiCodeNothingToChange {
 					e.Hint = "This Minka does not take a colour away yet and read --no-color as no change. " + columnWhiteInstead
 				}
+				if (input.Role != nil || input.NoRole) && e.APICode == apiCodeNothingToChange {
+					e.Hint = columnRolesUnknownHere
+				}
 				return e
+			}
+			// A Minka without roles writes what was sent beside the role and
+			// answers 200 without one; that must not pass for the role written.
+			if input.Role != nil && deref(column.Value.Role) != *input.Role {
+				message := "this Minka did not give the column the role " + *input.Role
+				if input.Title != nil || input.Color != nil || input.NoColor {
+					message += "; the title and colour sent along were written"
+				}
+				return &Error{Code: CodeAPI, Message: message, Hint: columnRolesUnknownHere, Data: column.Raw}
 			}
 			// Such a Minka writes the title sent along and keeps the colour,
 			// with a 200 that would otherwise pass for success.
@@ -276,6 +325,9 @@ written first, and a refused colour leaves the title as it was.
 			}
 
 			summary := "Changed column " + column.Value.ID + ": " + column.Value.Title + ", colour " + columnColor(column.Value)
+			if input.Role != nil || input.NoRole || column.Value.Role != nil {
+				summary += ", role " + columnRole(column.Value)
+			}
 			return a.ok(success{
 				data:        column.Raw,
 				summary:     summary,
@@ -290,6 +342,8 @@ written first, and a refused colour leaves the title as it was.
 	flags.StringVar(&title, "title", "", `New title of the column; "" gives a system column the name of its type back`)
 	flags.StringVar(&color, "color", "", "New colour of a working column, one of Minka's eleven (see above)")
 	flags.BoolVar(&noColor, "no-color", false, "Take the colour off a working column; it is white then")
+	flags.StringVar(&role, "role", "", "Role of a working column: ready, in_progress or waiting_for_decision")
+	flags.BoolVar(&noRole, "no-role", false, "Take the role off a working column")
 
 	return cmd
 }

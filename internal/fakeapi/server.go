@@ -124,6 +124,10 @@ type Person struct {
 	// TimeZone is the zone of the preferences, empty for none: the
 	// installation's is taken then. No resource carries it either.
 	TimeZone string
+
+	// OrganizationRole is owner, admin or member; empty counts as member. No
+	// resource carries it: it decides who writes the conventions of a board.
+	OrganizationRole string
 }
 
 type Project struct {
@@ -147,6 +151,9 @@ type Board struct {
 	// Coordinators are the entries of the people who coordinate the board, by
 	// person; one is kept after it expired, and read as none from then on.
 	Coordinators map[string]*Coordinator
+	// Conventions are the versions of how the team works on the board, the
+	// oldest first; the last is in force.
+	Conventions []*ConventionsVersion
 }
 
 type Column struct {
@@ -159,6 +166,7 @@ type Column struct {
 	Cards         []*Card
 	OnHoldEnabled bool    // only a working column can have an area for cards on hold
 	Color         *string // only a working column keeps one; nil for none
+	Role          *string // only a working column keeps one; Triage and Done carry theirs by type
 }
 
 type Card struct {
@@ -513,6 +521,11 @@ type Server struct {
 	// it alone is nothingToChange and beside a title the colour stays.
 	KeepsColumnColorOnNull bool
 
+	// IgnoresColumnRoles makes the server answer like a Minka from before
+	// column roles: a role in a body names nothing, and no column carries the
+	// field, Triage and Done included.
+	IgnoresColumnRoles bool
+
 	// KnowsNoBooks makes the server answer like a Minka from before books and
 	// the order set by hand: it reads neither isBook nor inNavigation, writes
 	// what else was sent with 200, and its answers carry none of their fields.
@@ -778,7 +791,7 @@ func New(t testing.TB) (*Server, *Fixture) {
 		now:        time.Date(2026, 9, 13, 14, 2, 11, 123456000, time.UTC),
 	}
 
-	bruno := &Person{ID: newID(), Name: "Bruno", Email: "bruno@example.com"}
+	bruno := &Person{ID: newID(), Name: "Bruno", Email: "bruno@example.com", OrganizationRole: "owner"}
 	stranger := &Person{ID: newID(), Name: "Stranger", Email: "stranger@example.com"}
 	agent := &Person{ID: newID(), Name: "Claude (Bruno)", Email: "claude-bruno@agents.invalid", PrincipalID: bruno.ID}
 	anke := &Person{ID: newID(), Name: "Anke", Email: "anke@example.com"}
@@ -1074,6 +1087,7 @@ func New(t testing.TB) (*Server, *Fixture) {
 	s.registerCalendarRoutes(mux)
 	s.registerReminderRoutes(mux)
 	s.registerNotificationsRoutes(mux)
+	s.registerConventionsRoutes(mux)
 	s.registerLabelRoutes(mux)
 	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) { unknownAddress(w) })
 
@@ -1627,6 +1641,7 @@ func (s *Server) board(w http.ResponseWriter, r *http.Request, person *Person) {
 	// may not coordinate, gets no field at all.
 	if !s.isAClient(person.ID) {
 		fields["coordinator"] = s.coordinatorResource(board, person)
+		fields["conventions"] = conventionsResource(board, s)
 	}
 	writeJSON(w, http.StatusOK, fields)
 }
@@ -1801,11 +1816,15 @@ func (s *Server) columnResource(board *Board, column *Column) map[string]any {
 			listed = listed[:25]
 		}
 	}
-	return map[string]any{
+	resource := map[string]any{
 		"id": column.ID, "type": column.Type, "title": columnTitle(column), "customTitle": column.CustomTitle,
 		"color": shownColor(column), "cardCount": count, "cards": s.boardCardResources(board, listed),
 		"onHoldEnabled": column.OnHoldEnabled, "onHoldCardCount": len(onHold), "onHoldCards": s.boardCardResources(board, onHold),
 	}
+	if !s.IgnoresColumnRoles {
+		resource["role"] = roleOf(column)
+	}
+	return resource
 }
 
 func (s *Server) boardCardResources(board *Board, cards []*Card) []any {

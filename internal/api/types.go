@@ -54,6 +54,32 @@ type Board struct {
 	// Coordinator is the reader's own entry as coordinator of the board, nil
 	// where they hold none or it has expired. Other people's are never named.
 	Coordinator *Coordinator `json:"coordinator"`
+	// Conventions say how the team works on the board, nil where nobody has
+	// written any yet; a client of the project is not sent the field.
+	Conventions *Conventions `json:"conventions"`
+}
+
+// Column roles say what a column is for in the way a team works. Triage
+// carries the inbox and Done done by type; Not now carries none.
+const (
+	RoleInbox              = "inbox"
+	RoleReady              = "ready"
+	RoleInProgress         = "in_progress"
+	RoleWaitingForDecision = "waiting_for_decision"
+	RoleDone               = "done"
+)
+
+// Conventions are the version in force of how a team works on a board, a
+// Markdown text written only by a human owner or admin of the organization.
+type Conventions struct {
+	Text      string `json:"text"` // Markdown, "" for an emptied version
+	UpdatedAt string `json:"updatedAt"`
+	UpdatedBy struct {
+		ID   string `json:"id"`
+		Name string `json:"name"`
+		Kind string `json:"kind"` // human, agent or bot
+	} `json:"updatedBy"`
+	Version int `json:"version"` // counted from 1
 }
 
 // Column is one column of a board. A working column can have an area for the
@@ -70,6 +96,7 @@ type Column struct {
 	OnHoldEnabled   bool        `json:"onHoldEnabled"`
 	OnHoldCardCount int         `json:"onHoldCardCount"`
 	OnHoldCards     []BoardCard `json:"onHoldCards"` // in the order they stand on hold; empty where the area is switched off
+	Role            *string     `json:"role"`        // one of the Role constants, nil for none and from a Minka without roles
 }
 
 type BoardCard struct {

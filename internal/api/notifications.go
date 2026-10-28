@@ -43,6 +43,10 @@ type Notification struct {
 	Project   *ProjectReference   `json:"project"`
 }
 
+// OccasionConventionsChanged is the occasion of a new version of how the team
+// works on a board, told to whoever coordinates it; its subject is the board.
+const OccasionConventionsChanged = "board.conventionsChanged"
+
 // NotificationSubject is what a notification is about.
 type NotificationSubject struct {
 	Type    string  `json:"type"` // card, todo, post, document, message, …
@@ -160,11 +164,28 @@ type Coordinator struct {
 	ExpiresAt  string `json:"expiresAt"`
 }
 
+// CoordinatorClaim is the answer to a claim: the entry, and what a
+// coordinator works by, the columns with their roles and the conventions.
+// A Minka older than both sends neither.
+type CoordinatorClaim struct {
+	Coordinator
+	Columns     []ClaimedColumn `json:"columns"` // in board order
+	Conventions *Conventions    `json:"conventions"`
+}
+
+// ClaimedColumn is a column as a claim names it, without its cards.
+type ClaimedColumn struct {
+	ID    string  `json:"id"`
+	Type  string  `json:"type"`
+	Title string  `json:"title"`
+	Role  *string `json:"role"`
+}
+
 // ClaimCoordinator makes a session of the person of the token coordinate a
 // board, or renews its entry. Another session of the same person takes the
 // entry over; other people's entries play no part.
-func (c *Client) ClaimCoordinator(ctx context.Context, boardID, session string) (Result[Coordinator], error) {
-	return request[Coordinator](ctx, c, http.MethodPut, "/boards/"+url.PathEscape(boardID)+"/coordinator", map[string]string{"session": session})
+func (c *Client) ClaimCoordinator(ctx context.Context, boardID, session string) (Result[CoordinatorClaim], error) {
+	return request[CoordinatorClaim](ctx, c, http.MethodPut, "/boards/"+url.PathEscape(boardID)+"/coordinator", map[string]string{"session": session})
 }
 
 // ReleaseCoordinator removes the entry of the person of the token from a

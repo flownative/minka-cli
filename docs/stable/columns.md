@@ -18,7 +18,8 @@ any request. `columns move` always needs `--board` (C-102).
 ## What a column carries
 
 The column resource is `id`, `type`, `title`, `customTitle`, `color`,
-`cardCount`, `cards`, `onHoldEnabled`, `onHoldCardCount` and `onHoldCards`;
+`cardCount`, `cards`, `onHoldEnabled`, `onHoldCardCount`, `onHoldCards` and
+`role`;
 every write but `delete` answers it, a new column with 201 and no `Location`.
 `title` is what a person reads, `customTitle` the stored title or `null` where
 a system column goes by the English name of its type.
@@ -29,6 +30,12 @@ Done and `null` for Triage and Not now. White is how a column without a colour
 looks: `"color": null` takes a working column's colour away, and Minka answers
 `white` for it, the same as for `"color": "white"`. A missing `color` is no
 change.
+
+`role` says what a column is for in the way the team works: `inbox` for
+Triage and `done` for Done by type, `null` for Not now, and for a working
+column `ready`, `in_progress`, `waiting_for_decision` or `null`. `boards show`
+names it behind the title, as `## Doing [role: ready]`; a column without one
+shows none.
 
 ## Writing
 
@@ -47,6 +54,16 @@ change.
   a system column refusing a colour leaves the title as it was. The colour goes
   to Minka as typed and is refused there (C-086); the hint names the eleven.
   Triage, Not now and Done refuse `--no-color` like any colour.
+- **`--role`** goes to Minka as typed and `--no-role` as `"role": null`; the
+  two exclude each other (exit 1 before any request). Minka judges the role
+  before title and colour and writes nothing on a refusal: `columnRoleUnknown`
+  for any value but the three, `inbox` and `done` included, and
+  `systemColumnHasNoRole` for Triage, Not now and Done; each has a hint. A
+  Minka without roles reads `role` as nothing: `--role` alone is
+  `nothingToChange`, whose hint then names that cause, and beside `--title`
+  the answer comes without the role; the CLI holds the answer's role against
+  the one sent and otherwise exits 7 with the answer in `data` (C-146). The
+  summary names the role when one was sent or the column has one.
 - **A Minka that does not take a colour away yet** reads `"color": null` as no
   colour named: `--no-color` alone is `nothingToChange`, whose hint then names
   this cause, and beside `--title` the title is written and the colour stays,

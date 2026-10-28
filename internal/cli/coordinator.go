@@ -41,6 +41,11 @@ func (a *app) newBoardsCoordinatorClaimCmd() *cobra.Command {
 or renews its entry. Another session of your account hands over to this one.
 Other accounts' entries play no part: a claim is never refused for them.
 
+The answer carries what a coordinator works by: the columns in board order
+with their roles, and the board's conventions ("How we work here") with
+version, writer and time. Read them on every claim; see "minka boards show"
+for what roles and conventions are.
+
 --session is required: a name you choose to recognise the session by, such
 as "planning" or "Planung März": 1 to %d characters, blanks and umlauts
 included, none of them a control or format character, as Minka takes it. It
@@ -64,9 +69,13 @@ name nobody can read tells you nothing when you look the entry up.`, maxCoordina
 			if err != nil {
 				return s.fail(err)
 			}
-			coordinator := claimed.Value
+			claim := claimed.Value
+			coordinator := claim.Coordinator
+			// A Minka older than column roles answers the entry alone.
+			worksBy := namesField(claimed.Raw, "columns")
 			return a.ok(success{
 				data:    claimed.Raw,
+				notices: conventionsNotices(claim.Conventions),
 				summary: "You coordinate the board as " + describeCoordinator(coordinator),
 				breadcrumbs: []Breadcrumb{
 					{Action: "wait", Cmd: "minka notifications wait --board " + args[0] + " --json", Description: "Wait for news; every wait keeps the entry alive"},
@@ -75,6 +84,12 @@ name nobody can read tells you nothing when you look the entry up.`, maxCoordina
 				text: func(w io.Writer) {
 					fmt.Fprintf(w, "You coordinate the board as %s.\n", describeCoordinator(coordinator))
 					renderCoordinatorTimes(w, coordinator)
+					if worksBy {
+						fmt.Fprintln(w)
+						renderClaimedColumns(w, claim.Columns)
+						fmt.Fprintln(w)
+						renderConventions(w, claim.Conventions)
+					}
 				},
 			})
 		},
@@ -196,4 +211,17 @@ func describeCoordinator(c api.Coordinator) string {
 
 func renderCoordinatorTimes(w io.Writer, c api.Coordinator) {
 	fmt.Fprintf(w, "Since: %s\nLast active: %s\nExpires: %s\n", formatTime(c.Since), formatTime(c.LastSeenAt), formatTime(c.ExpiresAt))
+}
+
+// renderClaimedColumns lists the columns of a claim in board order with their
+// roles.
+func renderClaimedColumns(w io.Writer, columns []api.ClaimedColumn) {
+	fmt.Fprintln(w, "## Columns")
+	for _, column := range columns {
+		role := "no role"
+		if column.Role != nil && *column.Role != "" {
+			role = "role " + *column.Role
+		}
+		fmt.Fprintf(w, "- %s  %s (%s, %s)\n", column.ID, column.Title, column.Type, role)
+	}
 }

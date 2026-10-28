@@ -67,11 +67,13 @@ func (s *Server) addColumn(w http.ResponseWriter, r *http.Request, person *Perso
 	writeJSON(w, http.StatusCreated, s.columnResource(board, column))
 }
 
-// updateColumn renames and recolours a column. Every field is read and judged
-// before anything is written; then the colour goes first, so that a system
-// column refusing it keeps its title as well. A null colour makes a working
-// column white, which is how a column without a colour looks. A title the
-// column bears already is no write while the project is in use.
+// updateColumn renames, recolours and gives a role to a column. Every field is
+// read and judged before anything is written, the role before the title and
+// the colour; then the role and the colour go first, so that a system column
+// refusing the colour keeps its title as well. A null colour makes a working
+// column white, which is how a column without a colour looks, and a null role
+// takes it away. A title the column bears already is no write while the
+// project is in use; a role or colour it bears already is.
 func (s *Server) updateColumn(w http.ResponseWriter, r *http.Request, person *Person) {
 	board, column := s.visibleColumnOfTheTeam(r.PathValue("columnId"), person)
 	if column == nil {
@@ -95,8 +97,24 @@ func (s *Server) updateColumn(w http.ResponseWriter, r *http.Request, person *Pe
 	if !ok {
 		return
 	}
-	if !titleNamed && !colorNamed {
-		unprocessable(w, "nothingToChange", "The body names neither a title nor a color.")
+	if s.IgnoresColumnRoles {
+		delete(fields, "role")
+	}
+	_, roleNamed := fields["role"]
+	role, ok := stringField(w, fields, "role")
+	if !ok {
+		return
+	}
+	if !titleNamed && !colorNamed && !roleNamed {
+		unprocessable(w, "nothingToChange", "The body names neither a title, a color nor a role.")
+		return
+	}
+	if role != nil && !slices.Contains(workingColumnRoles, *role) {
+		unprocessable(w, "columnRoleUnknown", "The role is none of ready, in_progress and waiting_for_decision.")
+		return
+	}
+	if roleNamed && column.Type != "column" {
+		unprocessable(w, "systemColumnHasNoRole", "Triage and Done carry their role by type, Not now carries none.")
 		return
 	}
 	// Only a system column may go without a title of its own: it is then
@@ -114,6 +132,12 @@ func (s *Server) updateColumn(w http.ResponseWriter, r *http.Request, person *Pe
 		return
 	}
 
+	if roleNamed {
+		if s.columnWriteRefused(w, board, column, "") {
+			return
+		}
+		column.Role = role
+	}
 	if colorNamed {
 		if s.columnWriteRefused(w, board, column, "systemColumnHasNoColor") {
 			return
@@ -300,6 +324,27 @@ func colorForANewColumn(board *Board) string {
 		}
 	}
 	return chosen
+}
+
+// workingColumnRoles are the roles a working column takes by hand. Triage is
+// the board's inbox and Done is done, by type alone.
+var workingColumnRoles = []string{"ready", "in_progress", "waiting_for_decision"}
+
+// roleOf is the role a column reads with: Triage inbox, Done done, Not now
+// none, and a working column the one it was given.
+func roleOf(column *Column) *string {
+	var role string
+	switch column.Type {
+	case "column":
+		return column.Role
+	case "triage":
+		role = "inbox"
+	case "done":
+		role = "done"
+	default:
+		return nil
+	}
+	return &role
 }
 
 // shownColor is the colour a column is drawn in: Done is always green, Triage

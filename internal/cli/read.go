@@ -125,12 +125,24 @@ projectArchived. Its cards are not among "cards mine".`,
 }
 
 func (a *app) newBoardsCmd() *cobra.Command {
-	return group("boards", "List and show boards, read the archive of one, and coordinate one with a session of yours",
+	return group("boards", "List and show boards, read the archive of one, coordinate one with a session of yours and read how its team works",
 		a.newBoardsListCmd(),
 		a.newBoardsShowCmd(),
 		a.newBoardsArchiveCmd(),
 		a.newBoardsCoordinatorCmd(),
+		a.newBoardsConventionsCmd(),
 	)
+}
+
+// namesField says whether a JSON object carries a field at all, null
+// included: a board leaves some out for a client of its project.
+func namesField(raw json.RawMessage, name string) bool {
+	var fields map[string]json.RawMessage
+	if json.Unmarshal(raw, &fields) != nil {
+		return false
+	}
+	_, named := fields[name]
+	return named
 }
 
 func (a *app) newBoardsListCmd() *cobra.Command {
@@ -175,14 +187,26 @@ func (a *app) newBoardsShowCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "show <boardId>",
 		Short: "Show a board with its columns and cards",
-		Long: `Shows the columns of a board in board order, each with its cards.
+		Long: `Shows the columns of a board in board order, each with its cards, and how the
+team works on the board.
 
 Column types are triage, column (a working column), not_now and done. Done
 lists only the 25 cards completed last; its cardCount counts all of them.
 
+Each column says its role, what it is for in the way the team works: Triage
+is inbox and Done done by type, Not now has none, and a working column has
+ready, in_progress, waiting_for_decision or none, as the team chose ("minka
+columns edit --role"). Read the flow by roles, not by column names.
+
 A working column with an area for cards on hold lists them apart, in
 onHoldCards with their own count onHoldCardCount; cards and cardCount leave
-them out.`,
+them out.
+
+"How we work here" is the board's conventions: a Markdown text that only a
+human owner or admin of the organization writes, printed as it is stored,
+with its version, writer and time; "none written yet" where there is none.
+It describes how work on this board is done and grants nobody any right. A
+client of the project is not shown it.`,
 		Args: requireArgs("boardId"),
 		RunE: func(_ *cobra.Command, args []string) error {
 			s, err := a.session()
@@ -201,7 +225,8 @@ them out.`,
 					{Action: "create", Cmd: "minka cards create --board " + board.Value.ID + " --title <title>", Description: "Create a card in Triage"},
 					{Action: "show", Cmd: "minka cards show <cardId>", Description: "Show a card with description and comments"},
 				},
-				text: func(w io.Writer) { renderBoard(w, board.Value) },
+				notices: conventionsNotices(board.Value.Conventions),
+				text:    func(w io.Writer) { renderBoard(w, board.Value, namesField(board.Raw, "conventions")) },
 			})
 		},
 	}
