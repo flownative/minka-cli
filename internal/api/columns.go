@@ -7,14 +7,17 @@ import (
 	"net/url"
 )
 
-// UpdateColumnInput changes the title of a column, its colour or both. An
-// empty Title gives Triage, Not now and Done back the name of their type.
-// NoColor takes the colour away and is sent as null, which Minka shows as
-// white; an empty Color is sent as it is, and Minka refuses it.
+// UpdateColumnInput changes the title of a column, its colour, its role or
+// any of them. An empty Title gives Triage, Not now and Done back the name of
+// their type. NoColor takes the colour away and is sent as null, which Minka
+// shows as white; an empty Color is sent as it is, and Minka refuses it. Role
+// is sent as it is too, and NoRole takes the role away as null.
 type UpdateColumnInput struct {
 	Title   *string
 	Color   *string
 	NoColor bool
+	Role    *string
+	NoRole  bool
 }
 
 func (in UpdateColumnInput) MarshalJSON() ([]byte, error) {
@@ -27,6 +30,12 @@ func (in UpdateColumnInput) MarshalJSON() ([]byte, error) {
 	}
 	if in.NoColor {
 		fields["color"] = nil
+	}
+	if in.Role != nil {
+		fields["role"] = *in.Role
+	}
+	if in.NoRole {
+		fields["role"] = nil
 	}
 	return json.Marshal(fields)
 }
@@ -68,4 +77,14 @@ func (c *Client) DeleteColumn(ctx context.Context, columnID string) error {
 
 func columnPath(columnID string) string {
 	return "/columns/" + url.PathEscape(columnID)
+}
+
+// WriteConventions saves a new version of how the team works on a board. The
+// text in force again writes nothing; the answer is the version in force, and
+// a 204 without a body while there is none.
+func (c *Client) WriteConventions(ctx context.Context, boardID, text string) (Result[Conventions], error) {
+	body := struct {
+		Text string `json:"text"`
+	}{text}
+	return request[Conventions](ctx, c, http.MethodPut, "/boards/"+url.PathEscape(boardID)+"/conventions", body)
 }

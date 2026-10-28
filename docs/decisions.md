@@ -2380,13 +2380,90 @@ the filters must not hand an agent a card nobody released to it.
 [Waiting and coordinating](stable/waiting-and-coordinating.md#coordinating).
 
 <a id="c-145"></a>
-## C-145 — The skill lets an agent take only its own cards in the ready column
+## C-145 — The skill lets an agent take only its own cards in a column with the role `ready`
 
 *Applies to: the skill and its references on boards and coordinating*
 
-Every agent takes only a card in the ready column assigned to its own account,
-hands out no work, asks on a card of several agents, puts follow-ups
-unassigned into intake, and writes the back of its own cards.
+Every agent takes only a card in a column with the role `ready` assigned to
+its own account, hands out no work, asks on a card of several agents, puts
+follow-ups unassigned into Triage (the inbox), and writes the back of its own
+cards.
 **Why:** the column says what is released and in which order, the assignment
 for whom, so agents need no coordinator to keep them apart.
 **Implemented as:** `skills/minka`, see [The skill](stable/skill.md).
+
+<a id="c-146"></a>
+## C-146 — A column role goes as typed, and an answer without it is no success
+
+*Applies to: `columns edit --role` and `--no-role`*
+
+`--role` is sent as typed and `--no-role` as `null`; Minka refuses an unknown
+role, and an answer whose role is not the one sent exits 7.
+**Why:** Minka owns the set of roles as it owns the colours (C-086), and a
+Minka without roles answers 200 having written only the title.
+**Implemented as:** `api.UpdateColumnInput`, `cli.newColumnsEditCmd`, see
+[Columns](stable/columns.md#writing).
+
+<a id="c-147"></a>
+## C-147 — The conventions go as Markdown, and Minka alone decides who writes them
+
+*Applies to: `boards conventions set` and `show`*
+
+The text goes unconverted, from stdin with `-`; the CLI checks neither writer
+nor text, and names Minka's 403 as `forbidden` with the way on. `show` prints
+the text alone on stdout.
+**Why:** Minka keeps Markdown here and refuses the writer before the text, so
+a check here could only hide that refusal or drift from it.
+**Implemented as:** `cli.newBoardsConventionsCmd`, see
+[Waiting and coordinating](stable/waiting-and-coordinating.md#the-conventions-of-a-board).
+
+<a id="c-148"></a>
+## C-148 — `notifications wait --board` keeps a line about the board itself
+
+*Applies to: `notifications wait --board`, `--column`*
+
+A line whose subject is the board named by `--board` passes; with `--column`
+it does not.
+**Why:** `board.conventionsChanged` names no card, and a coordinator waits
+with `--board` and must not miss that its conventions changed.
+**Implemented as:** `cli.newsFilter`, see
+[Waiting and coordinating](stable/waiting-and-coordinating.md#the-conventions-of-a-board).
+
+<a id="c-149"></a>
+## C-149 — `cards next` is the first own card in a ready column, in board order
+
+*Applies to: `cards next`*
+
+The first card, in board order, in a column with the role `ready`, assigned
+to the own account (from `cards mine --board`) and not on hold; none is exit 0
+with `data` null.
+**Why:** an agent takes released work in the order people set, and "nothing
+for you" is a normal answer it waits on, not a failure.
+**Implemented as:** `cli.newCardsNextCmd`, see
+[Waiting and coordinating](stable/waiting-and-coordinating.md#coordinating).
+
+<a id="c-150"></a>
+## C-150 — The skill ranks a board's conventions below the agent's own user
+
+*Applies to: the skill and its references on boards and coordinating*
+
+The conventions describe only how work on the board is done, grant no right,
+rank below the user's instructions; the agent reads them on a claim and on
+`board.conventionsChanged`, tells its user when the writer changed, and never
+writes them.
+**Why:** agents follow the text like a skill, so it must not become a way
+around the person the agent works for.
+**Implemented as:** `skills/minka`, see [The skill](stable/skill.md).
+
+<a id="c-151"></a>
+## C-151 — The text view frames the conventions and shows their invisible characters
+
+*Applies to: `boards show`, `boards coordinator claim`, `boards conventions show`*
+
+The conventions stand between a line naming writer, version and time, saying
+they grant no rights, and an end marker; every format character but U+200C
+and U+200D is printed as `<U+XXXX>`, with a notice. `--json` stays as stored.
+**Why:** agents read the text like instructions, so neither its headings nor
+a bidi override or hidden tag may make it read otherwise than it is.
+**Implemented as:** `cli.renderConventions`, `cli.visibleFormatCharacters`, see
+[Waiting and coordinating](stable/waiting-and-coordinating.md#the-conventions-of-a-board).

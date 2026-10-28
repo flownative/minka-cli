@@ -26,6 +26,19 @@ bad title before the 404, answers a client's no-op with 200, and puts a
 column next to a neighbour on another board first. The commands are checked against Minka's code and tests and the
 fake only, see below.
 
+Column roles and a board's conventions ("How we work here"): `boards show`
+and the claim name each column's role and print the conventions, `columns edit
+--role`/`--no-role` sets a role, `boards conventions show`/`set` read and write
+the text (Minka lets only human owners and admins write), `notifications wait
+--board` keeps the `board.conventionsChanged` line, and `cards next` names the
+first own card in a `ready` column. The rule is [Columns](../stable/columns.md)
+and [Waiting and coordinating](../stable/waiting-and-coordinating.md)
+(C-146…C-151). Minka's #555 carries the server side on its `main`, in no
+release yet; until one does, a released Minka answers `--role` with
+`nothingToChange` (alone) or without a role (beside `--title`), which the CLI
+reports as such, `conventions` is absent and `boards conventions set` gets 404.
+Checked against Minka's code and tests and the fake, not live.
+
 The comments on a card are read with `cards show`, `comments list` and
 `comments unread`, which shows only what this machine has not shown yet. A
 comment can wait for them: `comments create --if-latest <commentId|none>`

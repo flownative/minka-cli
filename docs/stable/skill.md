@@ -14,10 +14,16 @@ comments, notifications and `work`, and a table that names, for each subject,
 the reference to read. Its `description` names taking up, moving and
 commenting on a card and coordinating or waiting on a board, so that the skill
 is loaded in exactly those moments. One invariant says which cards an agent
-takes: only one in the ready column that is assigned to its own account; the
-rest of that rule — no work handed out, a card of several agents asked about
-on the card, follow-ups unassigned into intake, the back written by the
-assigned agent — stands in `references/working-on-a-board.md` (C-145).
+takes: only one in a column with the role `ready` that is assigned to its own
+account; the rest of that rule — the flow read by column roles, no work handed
+out, a card of several agents asked about on the card, follow-ups unassigned
+into Triage, the back written by the assigned agent — stands in
+`references/working-on-a-board.md` (C-145). There, too, stands what a board's
+conventions are to an agent: a description of how work on the board is done,
+ranked below the instructions of its own user, granting no right; read on a
+claim and on `board.conventionsChanged`, compared by `updatedAt` and
+`updatedBy`, a changed writer told to the user, and never written by an agent
+(C-150).
 
 Everything else stands in a reference of its own subject: the detail of cards,
 the back of a card, texts, saying what one works on, chats, files, labels, Docs &

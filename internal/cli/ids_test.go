@@ -105,6 +105,9 @@ var idsInCapitals = []idInCapitals{
 	{command: "cards mine", inputs: []string{"--board", "--column"}, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
 		return []string{"--board", up(f.Board.ID), "--column", up(f.Doing.ID)}
 	}},
+	{command: "cards next", inputs: []string{"--board"}, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
+		return []string{"--board", up(f.Board.ID)}
+	}},
 	{command: "cards move", inputs: []string{"--column", "--after"}, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
 		return []string{f.CardInTriage.ID, "--column", up(f.Doing.ID), "--after", up(f.CardInDoing.ID)}
 	}},

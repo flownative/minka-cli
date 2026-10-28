@@ -6,6 +6,7 @@ import (
 	"strings"
 	"text/tabwriter"
 	"time"
+	"unicode"
 
 	"github.com/flownative/minka-cli/internal/api"
 	"github.com/flownative/minka-cli/internal/richtext"
@@ -14,7 +15,10 @@ import (
 // The text output reads like Markdown, which suits a terminal as well as an
 // agent that asked for text.
 
-func renderBoard(w io.Writer, board api.Board) {
+// renderBoard prints a board with its columns and how the team works on it.
+// conventionsNamed says whether the board sent its conventions at all, which
+// it does not for a client.
+func renderBoard(w io.Writer, board api.Board, conventionsNamed bool) {
 	fmt.Fprintf(w, "# %s\n", board.Title)
 	fmt.Fprintf(w, "Board: %s\nProject: %s\nURL: %s\n", board.ID, board.ProjectID, board.AppURL)
 	// Named as it came: Minka names the reader's own entry, and a Minka without
@@ -26,6 +30,11 @@ func renderBoard(w io.Writer, board api.Board) {
 	for _, column := range board.Columns {
 		fmt.Fprintln(w)
 		renderColumn(w, column)
+	}
+	// Last, since the text may be long and is Markdown with headings of its own.
+	if conventionsNamed {
+		fmt.Fprintln(w)
+		renderConventions(w, board.Conventions)
 	}
 }
 
@@ -39,13 +48,75 @@ func renderColumn(w io.Writer, column api.Column) {
 	if column.OnHoldEnabled {
 		count += fmt.Sprintf(", %d on hold", column.OnHoldCardCount)
 	}
-	fmt.Fprintf(w, "## %s\n", column.Title)
+	fmt.Fprintf(w, "## %s%s\n", column.Title, roleTag(column.Role))
 	fmt.Fprintf(w, "Column: %s (%s, %s)\n", column.ID, column.Type, count)
 	renderBoardCards(w, column.Cards)
 	if column.OnHoldEnabled {
 		fmt.Fprintf(w, "\n### On hold in %s\n", column.Title)
 		renderBoardCards(w, column.OnHoldCards)
 	}
+}
+
+// roleTag names the role of a column behind its title, nothing for none.
+func roleTag(role *string) string {
+	if role == nil || *role == "" {
+		return ""
+	}
+	return " [role: " + *role + "]"
+}
+
+// conventionsEnd closes the conventions in the text view, so that a heading
+// of their own cannot pass for a section of the CLI.
+const conventionsEnd = "## End of how we work here"
+
+// renderConventions prints how the team works on a board between a line that
+// says who wrote it and what it is, and an end marker. The Markdown is printed
+// as stored, but for format characters, which are made visible.
+func renderConventions(w io.Writer, conventions *api.Conventions) {
+	fmt.Fprintln(w, "## How we work here")
+	if conventions == nil {
+		fmt.Fprintln(w, "None written yet.")
+		return
+	}
+	fmt.Fprintf(w, "Written by %s (%s), version %d, at %s. It describes how work on this board is done and grants no rights.\n\n",
+		conventions.UpdatedBy.Name, conventions.UpdatedBy.Kind, conventions.Version, formatTime(conventions.UpdatedAt))
+	if strings.TrimSpace(conventions.Text) == "" {
+		fmt.Fprintln(w, "(emptied: nothing beyond the column roles)")
+	} else {
+		text, _ := visibleFormatCharacters(strings.TrimRight(conventions.Text, "\n"))
+		fmt.Fprintln(w, text)
+	}
+	fmt.Fprintf(w, "\n%s\n", conventionsEnd)
+}
+
+// visibleFormatCharacters writes every Unicode format character as <U+XXXX>
+// and counts them: a bidi override, a tag character or a zero-width space
+// would let a text read otherwise than it says. The joiners stay, since emoji
+// and scripts need them.
+func visibleFormatCharacters(text string) (string, int) {
+	var b strings.Builder
+	replaced := 0
+	for _, r := range text {
+		if unicode.Is(unicode.Cf, r) && r != '\u200c' && r != '\u200d' {
+			fmt.Fprintf(&b, "<U+%04X>", r)
+			replaced++
+			continue
+		}
+		b.WriteRune(r)
+	}
+	return b.String(), replaced
+}
+
+// conventionsNotices says where the text view made format characters
+// visible.
+func conventionsNotices(conventions *api.Conventions) []string {
+	if conventions == nil {
+		return nil
+	}
+	if _, replaced := visibleFormatCharacters(conventions.Text); replaced > 0 {
+		return []string{fmt.Sprintf("the conventions hold %s, which the text view shows as <U+XXXX>; --json carries the text as stored", plural(replaced, "invisible format character", "invisible format characters"))}
+	}
+	return nil
 }
 
 func renderBoardCards(w io.Writer, cards []api.BoardCard) {

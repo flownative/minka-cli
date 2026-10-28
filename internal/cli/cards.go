@@ -23,6 +23,7 @@ Use --description - to read it from stdin.`
 func (a *app) newCardsCmd() *cobra.Command {
 	return group("cards", "Show, create, edit, move, assign, complete and delete cards, their steps and their notes",
 		a.newCardsMineCmd(),
+		a.newCardsNextCmd(),
 		a.newCardsShowCmd(),
 		a.newCardsCreateCmd(),
 		a.newCardsEditCmd(),
@@ -249,6 +250,115 @@ Every card names the project and the board it hangs on.`,
 	cmd.Flags().StringVar(&boardID, "board", "", "Only the cards of this board")
 	cmd.Flags().StringVar(&column, "column", "", "Only the cards of this column: its ID, or its type or title with --board")
 	return cmd
+}
+
+func (a *app) newCardsNextCmd() *cobra.Command {
+	var boardID string
+	cmd := &cobra.Command{
+		Use:   "next --board <boardId>",
+		Short: "Show the next card released to you on a board",
+		Long: `Shows the first card, in board order, that stands in a column with the role
+ready, is assigned to the account of the token and is not on hold: the card to
+take up next. Columns with that role are read from left to right, each from
+the top. data is the card as "minka cards mine" lists it, or null where
+nothing is released to you; that is no failure and exits 0, with a notice
+where the board has no column with the role ready at all.
+
+It reads the board for the order and the roles, and your cards on that board
+for what is yours, so it holds to the same filters as "minka cards mine
+--board". Taking the card up is still yours to do: read it with "minka cards
+show" and move it to a column with the role in_progress.`,
+		Example: `  minka cards next --board 0199... --json`,
+		Args:    requireArgs(),
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			if err := requireID(cmd, "--board", &boardID); err != nil {
+				return err
+			}
+			s, err := a.session()
+			if err != nil {
+				return err
+			}
+			board, err := s.client.Board(a.ctx, boardID)
+			if err != nil {
+				return s.fail(err)
+			}
+			mine, err := s.client.MyCards(a.ctx, boardID, "")
+			if err != nil {
+				return s.fail(err)
+			}
+			raw, cards, err := onlyCardsAt(mine.Raw, boardID, "")
+			if err != nil {
+				return err
+			}
+			var items []json.RawMessage
+			_ = json.Unmarshal(raw, &items)
+			yours := map[string]int{}
+			for i, card := range cards {
+				yours[strings.ToLower(card.ID)] = i
+			}
+
+			released := false
+			for _, column := range board.Value.Columns {
+				if deref(column.Role) != api.RoleReady {
+					continue
+				}
+				released = true
+				for _, card := range column.Cards {
+					i, ok := yours[strings.ToLower(card.ID)]
+					if !ok || cards[i].OnHold {
+						continue
+					}
+					next := cards[i]
+					summary := "Next for you: " + shortIDBefore(next.ShortID) + next.Title + " in " + column.Title
+					return a.ok(success{
+						data:    items[i],
+						summary: summary,
+						breadcrumbs: []Breadcrumb{
+							{Action: "show", Cmd: "minka cards show " + next.ID, Description: "Read the card before taking it up"},
+						},
+						text: func(w io.Writer) { fmt.Fprintf(w, "%s.\nCard: %s\n%s\n", summary, next.ID, next.AppURL) },
+					})
+				}
+			}
+
+			summary := "Nothing on " + board.Value.Title + " is released for you"
+			var notices []string
+			switch {
+			case !servesColumnRoles(board.Raw):
+				notices = append(notices, "this Minka does not serve column roles yet, so nothing on the board counts as released; take your cards with minka cards mine --board and the board's order instead")
+			case !released:
+				notices = append(notices, "the board has no column with the role ready, so nothing on it counts as released; minka columns edit --role ready gives one that role")
+			}
+			return a.ok(success{
+				data:    json.RawMessage("null"),
+				summary: summary,
+				notices: notices,
+				breadcrumbs: []Breadcrumb{
+					{Action: "wait", Cmd: "minka notifications wait --board " + boardID + " --json", Description: "Wait until something arrives for you"},
+				},
+				text: func(w io.Writer) { fmt.Fprintf(w, "%s.\n", summary) },
+			})
+		},
+	}
+	cmd.Flags().StringVar(&boardID, "board", "", "ID of the board (required)")
+	return cmd
+}
+
+// servesColumnRoles says whether any column of a board carries the field
+// role, null included: a Minka from before roles sends it for none.
+func servesColumnRoles(raw json.RawMessage) bool {
+	var board struct {
+		Columns []map[string]json.RawMessage `json:"columns"`
+	}
+	if json.Unmarshal(raw, &board) != nil {
+		return false
+	}
+	for _, column := range board.Columns {
+		if _, named := column["role"]; named {
+			return true
+		}
+	}
+	return false
 }
 
 // onlyCardsAt keeps the cards of a board and a column, each where given, every

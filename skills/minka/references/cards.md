@@ -10,7 +10,7 @@ minka cards unarchive <cardId> --json
 minka cards delete <cardId> --json
 minka cards restore <cardId> --json
 minka columns create --board <boardId> --title "Review" --json
-minka columns edit <column> [--board <boardId>] [--title "New"] [--color <colour> | --no-color] --json
+minka columns edit <column> [--board <boardId>] [--title "New"] [--color <colour> | --no-color] [--role <role> | --no-role] --json
 minka columns move <column> --board <boardId> (--first | --after <column> | --before <column>) --json
 minka columns delete <column> [--board <boardId>] --json
 minka columns on-hold <column> [--board <boardId>] [--off] --json
@@ -29,7 +29,10 @@ minka cards unsubscribe <cardId> <person> --json
   of one column, each by itself; an ID that matches nothing lists none. The
   column is its ID, or its type or title together with `--board`, looked up on
   that board: `minka cards mine --board <boardId> --column "Als nächstes"`
-  lists your released cards on a board whose ready column has that title.
+  lists your cards in the column of that title. `cards next --board
+  <boardId>` names the first of your cards, in board order, in a column with
+  the role `ready` and not on hold, or `data` null when nothing is released
+  for you.
   Exit 7 with a hint to list without the filters means this Minka cannot say
   where its cards stand: then read a card with `cards show` before taking it.
 - Cards in Done, cards completed in another column, cards in the trash, cards
@@ -141,6 +144,15 @@ minka cards unsubscribe <cardId> <person> --json
   `systemColumnHasNoColor` and leaves the title as it was too.
   `columnTitleTooLong` (200 characters) and `columnTitleHasControlCharacters`
   are the other refusals.
+- A column carries `role`: `inbox` for Triage and `done` for Done by type,
+  null for Not now, and for a working column `ready`, `in_progress`,
+  `waiting_for_decision` or null, as the team chose. `columns edit --role
+  <role>` gives a working column one, `--no-role` takes it away; anybody on
+  the team may. Any other word, `inbox` and `done` included, exits 9 with
+  `columnRoleUnknown`, and `--role` or `--no-role` for Triage, Not now or Done
+  with `systemColumnHasNoRole`; both refusals write nothing, the title sent
+  along included. A Minka without roles answers `--role` alone with exit 9
+  and `nothingToChange`, and `--role` with `--title` with exit 7.
 - A Minka that does not take a colour away yet answers `--no-color` alone
   with exit 9 and `nothingToChange`, and `--no-color` with `--title` with exit
   7: the title was written, the colour stayed, and `data` is the column.

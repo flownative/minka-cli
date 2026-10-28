@@ -74,6 +74,7 @@ var notificationKinds = []string{
 	"comment.written", "post.added", "checkinAnswer.added", "checkinQuestion.asked",
 	"calendarEvent.participantAdded", "calendarEvent.moved", "calendarEvent.dayMoved", "calendarEvent.dayCancelled",
 	"calendarEvent.startsSoon", "reminder.due", "person.mentioned", "person.mentionedPrivately",
+	"board.conventionsChanged",
 }
 
 // reactionKind is the occasion of a reaction, which the bell rolls up into one
@@ -348,6 +349,12 @@ func (s *Server) notificationResource(n *Notification, person *Person) map[strin
 	}
 
 	subject := map[string]any{"type": n.SubjectType, "id": n.SubjectID, "shortId": nil, "title": n.SubjectTitle, "url": "", "appUrl": ""}
+	// A line about the conventions leads to their page, in both addresses.
+	if n.Occasion == "board.conventionsChanged" {
+		if board := s.visibleBoard(n.SubjectID, person); board != nil {
+			subject["url"], subject["appUrl"] = s.boardURL(board)+"/conventions", s.boardURL(board)+"/conventions"
+		}
+	}
 	shortID := ""
 	var card any
 	if n.CardID != "" {
@@ -608,7 +615,7 @@ func (s *Server) claimCoordinator(w http.ResponseWriter, r *http.Request, person
 	} else {
 		own.LastSeenAt = s.now
 	}
-	writeJSON(w, http.StatusOK, s.coordinatorResource(board, person))
+	writeJSON(w, http.StatusOK, s.claimResource(board, person))
 }
 
 // isASessionName is what a board keeps as the name of a session: 1 to 64

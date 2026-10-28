@@ -191,6 +191,7 @@ func everyWrite(e *testEnv) map[string][]string {
 		"events comments unreact": {"events", "comments", "unreact", f.OnceEvent.ID, eventComment, "👍"},
 
 		"boards coordinator claim": {"boards", "coordinator", "claim", f.Board.ID, "--session", "planning"},
+		"boards conventions set":   {"boards", "conventions", "set", f.Board.ID, "How we work"},
 
 		"labels create":        {"labels", "create", "Fresh", "--board", f.Board.ID},
 		"labels edit":          {"labels", "edit", "Stage::Ready", "--board", f.Board.ID, "--color", "teal"},
@@ -233,7 +234,7 @@ var notAWriteIntoAProject = []string{
 	"uploads create", "uploads download", "import basecamp",
 	"work start", "work stop", "work list", "heartbeat", "hooks install", "hooks status",
 	"notifications wait", "notifications count", "notifications show", "notifications mark-read",
-	"boards coordinator release", "boards coordinator show",
+	"boards coordinator release", "boards coordinator show", "boards conventions show", "cards next",
 }
 
 // A command that is new has to be put into one of the two lists, so that a way

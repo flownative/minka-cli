@@ -33,8 +33,10 @@ wait in the background again.
   killed shows them again next time; two waits of one session at once may both
   show the same lines. Run one wait per session.
 - `--board <boardId>` and `--column <id|title>` (each repeatable) keep only
-  lines about cards on that board or in that column. What they leave out is
-  read all the same and not shown again; a notice counts it. The `wait`
+  lines about cards on that board or in that column. `--board` alone also keeps
+  a line about the board itself: `board.conventionsChanged`, whose `subject`
+  is the board (`type` `board`). What they leave out is read all the same and
+  not shown again; a notice counts it. The `wait`
   breadcrumb repeats the filters and `--session` of the run; use it.
 - `--timeout 30m` exits 12 (`timeout`) when nothing arrived; run it again.
   Without it the wait lasts as long as it takes.
@@ -72,7 +74,8 @@ coordinating session per agent account and board. Several agents coordinate
 the same board side by side, each with an entry of its own that only it sees.
 The entry keeps two sessions of the same account from working the board at
 once; it decides nothing about who works on what. Assignment does that: a
-person releases a card by putting it into the ready column and assigning it.
+person releases a card by putting it into a column with the role `ready` and
+assigning it.
 
 ```bash
 minka boards coordinator show <boardId> --json      # data null: no session of yours
@@ -85,6 +88,10 @@ minka boards coordinator release <boardId> --json   # remove your entry
   as written. It is not taken from `$CLAUDE_CODE_SESSION_ID`. Keep the same
   name for every renewal; a new name is a new session. In an archived project
   a claim exits 9 with `projectArchived`.
+- A claim answers the entry with `columns` (in board order, each with `id`,
+  `type`, `title` and `role`) and `conventions` (`text`, `updatedAt`,
+  `updatedBy`, `version`, or null). Read both on every claim: they are what
+  you work by on this board.
 - A claim is never refused for another account. A claim of a new session of
   your own account takes the entry over at once.
 - The entry expires 4 hours after its last sign of life. A claim is one, and so
@@ -101,18 +108,21 @@ minka boards coordinator release <boardId> --json   # remove your entry
 ### The flow of a coordinating session
 
 1. `minka boards coordinator claim <boardId> --session <name> --json`.
-2. Read the board, `minka boards show <boardId> --json`, and find its ready
-   column (see [working-on-a-board.md](working-on-a-board.md)).
-3. Take only your own cards in the ready column:
-   `minka cards mine --board <boardId> --column <ready column> --json`, the
-   column by its ID or its title. The list is not in the board's order: begin
-   the one that stands highest in the column on the board; leave the rest.
+2. Read the columns' roles and the conventions from the claim's answer (see
+   [working-on-a-board.md](working-on-a-board.md)). Remember the conventions'
+   `version`, `updatedAt` and `updatedBy`.
+3. Take only your own cards in a column with the role `ready`:
+   `minka cards next --board <boardId> --json` names the first in board order,
+   or `data` null when nothing is released for you. Begin that one; leave the
+   rest.
 4. Start `minka notifications wait --board <boardId> --json` in the background.
 5. When it wakes you, read `data`, act on each line, and start the next wait.
    On an assignment or a card moved to another column, run step 3 again: only
-   a card in the ready column that is assigned to you is yours to take. A
-   comment that asks something is answered on its card. Every wait keeps the
-   entry.
+   a card in a `ready` column that is assigned to you is yours to take. A
+   comment that asks something is answered on its card. On
+   `board.conventionsChanged`, read `minka boards conventions show <boardId>`,
+   compare `updatedAt` and `updatedBy` with what you worked by, and tell the
+   person you work for when the writer changed. Every wait keeps the entry.
 6. When you stop, `minka boards coordinator release <boardId> --json`.
 
 ### Handing over to another session

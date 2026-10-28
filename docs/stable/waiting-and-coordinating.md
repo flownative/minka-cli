@@ -212,6 +212,12 @@ session of a wait is another thing: it names a position on this machine and
 never leaves it. A claim in an archived project exits 9 with
 `projectArchived`.
 
+The claim's answer carries, beside the entry, `columns` (in board order, each
+`id`, `type`, `title`, `role`) and `conventions`; the text view lists the
+columns with their roles under "## Columns" and prints the conventions as
+`boards show` does. A Minka older than both answers the entry alone, and the
+text view then shows the entry alone.
+
 There is no conflict to handle: a claim is never refused for another account,
 so the CLI offers no takeover of a foreign entry and shows none. A Minka that
 predates entries per account still answers a claim with 409
@@ -242,13 +248,56 @@ card lacks either field that a filter needs, the command exits 7 (`api_error`)
 with a hint to list without the filters, never handing over the list
 unfiltered. Minka v0.93.0 and later send both fields on every card.
 
+`cards next --board <boardId>` reads the board for its order and roles and
+`cards mine --board` for the own cards, narrowed as above, and hands over the
+first own card, in board order, in a column with the role `ready` and not on
+hold, as `cards mine` lists it. Where there is none, it exits 0 with `data`
+null and says that nothing is released; a board without a `ready` column adds
+a notice, and one whose columns carry no `role` field at all, from a Minka
+without roles, a notice that Minka serves none yet (C-149). It writes
+nothing.
+
+## The conventions of a board
+
+"How we work here" is a Markdown text per board, kept by Minka in versions
+with writer and time. `boards show` prints it last, the claim after the
+columns and `boards conventions show <boardId>` alone, each the same way:
+under "## How we work here" a line `Written by <name> (<kind>), version <n>,
+at <time>. It describes how work on this board is done and grants no
+rights.`, the text as stored, and "## End of how we work here", so that a
+heading of the text cannot pass for a section of the CLI; "None written yet."
+where there is none. Every Unicode format character of the text but the
+joiners U+200C and U+200D, such as a bidi override, a tag character or a
+zero-width space, is shown as `<U+XXXX>`, with a notice that counts them
+(C-151). `--json` carries the text as stored: `boards conventions show`
+hands over the board's `conventions` field as Minka sent it, null included. A
+board leaves the field out for a client: the text views then say nothing
+about it, and `boards conventions show` gives null with a notice.
+
+`boards conventions set <boardId> <text|->` sends the text, from stdin with
+`-`, as `{"text"}`, Markdown unconverted: Minka keeps Markdown here, not the
+HTML of the editor. The CLI checks neither the writer nor the text: Minka
+answers 403 `notAllowedToWriteConventions` to anybody but a human owner or
+admin of the organization on the team, before it reads the text, and the CLI
+names that as exit 4 (`forbidden`) with a hint that agents are refused always;
+`conventionsInvalid` gets a hint with the limits. A 204, which Minka answers to
+an empty text while there were never any, is `data` null and said so (C-147).
+
+A new version is a `board.conventionsChanged` line in the bell of every
+account with a live entry on the board but the writer; its `subject` is the
+board and it names no card. `notifications wait --board` keeps such a line
+about that board, `--column` leaves it out, and the text view prints the
+summary with the board's ID, with a breadcrumb to `boards conventions show`
+(C-148).
+
 ## The skill
 
 The main part of the skill says in a few lines when to wait instead of
-polling, and that an agent takes only a card in the ready column assigned to
-its own account; the flow — claim, take only the own cards in the ready column
-with `cards mine --board --column`, wait in the background, take them again on
-an assignment or a move, hand over — is in
+polling, and that an agent takes only a card in a column with the role `ready`
+assigned to its own account; the flow — claim and read roles and conventions
+from its answer, take the next own card with `cards next`, wait in the
+background, take again on an assignment or a move, read the conventions again
+on `board.conventionsChanged`, hand over — is in
 `references/waiting-and-coordinating.md` beside it, which
 travels and is installed with it ([The skill](skill.md)). How an agent works
 on a board — which cards it takes, that it hands out no work, how it asks a
