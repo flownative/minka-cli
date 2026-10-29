@@ -117,3 +117,45 @@ func TestTheFakeRefusesTheNextCardAsMinkaDoes(t *testing.T) {
 		t.Errorf("an older Minka: %s (%s)", body, contentType)
 	}
 }
+
+// An archived project still shows its board but releases nothing, as the list
+// of one's cards leaves it out; with no ready column it is still refused.
+func TestTheFakeReleasesNoCardInAnArchivedProject(t *testing.T) {
+	s, f := New(t)
+	ready := "ready"
+	f.Doing.Role = &ready
+	f.Doing.Cards[0].AssigneeIDs = []string{f.Bruno.ID}
+	f.Project.Archived = true
+
+	if board, _ := getBytes(t, s, f.Token, "/api/v1/boards/"+f.Board.ID); board == NotFoundBody {
+		t.Fatal("the board of an archived project is not shown")
+	}
+	if got := nextCardID(t, s, f); got != "null" {
+		t.Errorf("next %s in an archived project", got)
+	}
+	f.Doing.Role = nil
+	if got := sendAs(t, s, f.Token, "GET", nextCardPath(f), "application/json", ""); got != "409 boardHasNoReadyColumn" {
+		t.Errorf("no ready column in an archived project: %s", got)
+	}
+}
+
+// A board in the trash answers the next card as it answers itself: 404 with
+// the same body, and its cards are nobody's.
+func TestTheFakeAnswersABoardInTheTrashAsTheBoardDoes(t *testing.T) {
+	s, f := New(t)
+	ready := "ready"
+	f.Doing.Role = &ready
+	f.Doing.Cards[0].AssigneeIDs = []string{f.Bruno.ID}
+	f.Board.Trashed = true
+
+	board, _ := getBytes(t, s, f.Token, "/api/v1/boards/"+f.Board.ID)
+	next, _ := getBytes(t, s, f.Token, nextCardPath(f))
+	if got := sendAs(t, s, f.Token, "GET", nextCardPath(f), "application/json", ""); got != "404" || next != board || next != NotFoundBody {
+		t.Errorf("next %s %s, the board answers %s", got, next, board)
+	}
+	var mine []json.RawMessage
+	getJSON(t, s, f.Token, "/api/v1/me/cards", &mine)
+	if len(mine) != 0 {
+		t.Errorf("cards of a board in the trash are listed: %s", mine)
+	}
+}

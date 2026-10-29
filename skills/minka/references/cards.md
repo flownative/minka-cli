@@ -32,7 +32,8 @@ minka cards unsubscribe <cardId> <person> --json
   lists your cards in the column of that title. `cards next --board
   <boardId>` names the card Minka releases to you next: in the columns with
   the role `ready` from left to right, each from the bottom, the first of
-  yours that is not on hold; `data` null when nothing is released for you.
+  yours that is not on hold; `data` null when nothing is released for you,
+  always so in an archived project. A board in the trash is exit 2.
   The bottom card is usually the one that has waited longest. Exit 2 with a
   message that the host does not name the next card means the Minka is too
   old; then read the board yourself.

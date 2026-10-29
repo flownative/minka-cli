@@ -12,12 +12,12 @@ func (s *Server) registerNextCardRoutes(mux *http.ServeMux) {
 // nextCard answers the card the person takes up next on a board: of the
 // columns with the role ready from left to right, each read from the bottom
 // as the board shows it, the first card assigned to them that is neither on
-// hold nor completed. It is the card as the list of their cards gives it, or
-// null where nothing is released to them.
+// hold nor completed, and none in an archived project. It is the card as the
+// list of their cards gives it, or null where nothing is released to them.
 //
-// A board this person cannot see answers as the board itself does, before a
-// board without a column with the role ready is refused. A Minka from before
-// column roles has no such address either.
+// A board this person cannot see, or one in the trash, answers as the board
+// itself does, before a board without a column with the role ready is
+// refused. A Minka from before column roles has no such address either.
 func (s *Server) nextCard(w http.ResponseWriter, r *http.Request, person *Person) {
 	if s.KnowsNoNextCard || s.IgnoresColumnRoles {
 		unknownAddress(w)
@@ -29,6 +29,9 @@ func (s *Server) nextCard(w http.ResponseWriter, r *http.Request, person *Person
 		return
 	}
 
+	// A board in the trash is not seen at all; one in an archived project still
+	// is, with its columns, but releases nothing.
+	open := s.openForWork(board)
 	released := false
 	for _, column := range board.Columns {
 		if deref(roleOf(column)) != "ready" {
@@ -36,7 +39,7 @@ func (s *Server) nextCard(w http.ResponseWriter, r *http.Request, person *Person
 		}
 		released = true
 		for _, card := range slices.Backward(column.Cards) {
-			if !card.OnHold && openCard(column, card) && slices.Contains(card.AssigneeIDs, person.ID) {
+			if open && !card.OnHold && openCard(column, card) && slices.Contains(card.AssigneeIDs, person.ID) {
 				writeJSON(w, http.StatusOK, s.cardResource(board, column, card))
 				return
 			}

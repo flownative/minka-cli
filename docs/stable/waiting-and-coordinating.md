@@ -257,7 +257,9 @@ card is usually the one that has waited longest; whoever wants a card taken up
 sooner moves it down. Where Minka names none (body `null`), it exits 0 with
 `data` null and says that nothing is released; a board without a `ready`
 column (409 `boardHasNoReadyColumn`) is the same answer with a notice. A board
-that is not there or not the caller's is Minka's own 404 (exit 2). A Minka
+of an archived project releases nothing, as `cards mine` lists none of its
+cards. A board that is not there, not the caller's or in the trash is Minka's
+own 404 (exit 2). A Minka
 without the address answers with a page of its web, a 404 that is no JSON:
 exit 2, and the message says that the host does not name the next card. The
 CLI never works the order out in its place (C-149). It writes nothing.
