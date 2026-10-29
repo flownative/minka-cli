@@ -248,14 +248,21 @@ card lacks either field that a filter needs, the command exits 7 (`api_error`)
 with a hint to list without the filters, never handing over the list
 unfiltered. Minka v0.93.0 and later send both fields on every card.
 
-`cards next --board <boardId>` reads the board for its order and roles and
-`cards mine --board` for the own cards, narrowed as above, and hands over the
-first own card, in board order, in a column with the role `ready` and not on
-hold, as `cards mine` lists it. Where there is none, it exits 0 with `data`
-null and says that nothing is released; a board without a `ready` column adds
-a notice, and one whose columns carry no `role` field at all, from a Minka
-without roles, a notice that Minka serves none yet (C-149). It writes
-nothing.
+`cards next --board <boardId>` asks Minka which card is next
+(`GET /boards/{boardId}/next-card`) and hands over what it names, as Minka
+sent it, in the shape `cards mine` lists: of the columns with the role
+`ready`, from left to right, the first card assigned to the own account that
+is neither on hold nor completed, each column read from the bottom. The bottom
+card is usually the one that has waited longest; whoever wants a card taken up
+sooner moves it down. Where Minka names none (body `null`), it exits 0 with
+`data` null and says that nothing is released; a board without a `ready`
+column (409 `boardHasNoReadyColumn`) is the same answer with a notice. A board
+of an archived project releases nothing, as `cards mine` lists none of its
+cards. A board that is not there, not the caller's or in the trash is Minka's
+own 404 (exit 2). A Minka
+without the address answers with a page of its web, a 404 that is no JSON:
+exit 2, and the message says that the host does not name the next card. The
+CLI never works the order out in its place (C-149). It writes nothing.
 
 ## The conventions of a board
 

@@ -262,42 +262,6 @@ func TestColumnsEditDoesNotTakeAMinkaWithoutRolesForOneThatSetIt(t *testing.T) {
 	}
 }
 
-// The next card is the first in board order in a column with the role ready
-// that is the account's own and not on hold; cards of others, on hold or in
-// columns of another role are passed over.
-func TestCardsNextTakesTheFirstReleasedCardOfYoursInBoardOrder(t *testing.T) {
-	e := newAgentEnv(t)
-	agent := e.fixture.Agent.ID
-
-	env, r := e.runJSON("", "cards", "next", "--board", e.fixture.Board.ID)
-	expectCode(t, r, ExitOK)
-	if string(env.Data) != "null" || !strings.Contains(env.Notice, "no column with the role ready") {
-		t.Errorf("no ready column: %s, notice %q", env.Data, env.Notice)
-	}
-
-	ready(e)
-	second := e.fixture.Doing.Cards[1]
-	e.fixture.CardInTriage.AssigneeIDs = []string{agent}
-	e.fixture.CardInDoing.AssigneeIDs = []string{e.fixture.Bruno.ID}
-	second.AssigneeIDs = []string{agent}
-	env, r = e.runJSON("", "cards", "next", "--board", e.fixture.Board.ID)
-	expectCode(t, r, ExitOK)
-	if decode(t, env.Data)["id"] != second.ID || env.Notice != "" {
-		t.Errorf("next %s, notice %q", env.Data, env.Notice)
-	}
-
-	second.OnHold = true
-	e.fixture.Doing.OnHoldEnabled = true
-	env, r = e.runJSON("", "cards", "next", "--board", e.fixture.Board.ID)
-	expectCode(t, r, ExitOK)
-	if string(env.Data) != "null" || !strings.HasPrefix(env.Summary, "Nothing on API-3 Abnahme is released for you") {
-		t.Errorf("on hold: %s, %q", env.Data, env.Summary)
-	}
-	if writes := e.server.WritingRequests(); len(writes) != 0 {
-		t.Errorf("cards next wrote: %v", writes)
-	}
-}
-
 // aMoveFor is a line that a card was moved into Doing, in somebody's bell.
 func (e *testEnv) aMoveFor(person *fakeapi.Person, card *fakeapi.Card) *fakeapi.Notification {
 	line := e.aMove(card)
@@ -335,8 +299,7 @@ func TestTheConventionsShowInvisibleCharacters(t *testing.T) {
 	}
 }
 
-// Against a Minka without roles the board shows no role, and cards next says
-// that Minka serves none instead of pointing at columns edit.
+// Against a Minka without roles the board shows no role.
 func TestReadingAgainstAMinkaWithoutRoles(t *testing.T) {
 	e := newAgentEnv(t)
 	e.server.IgnoresColumnRoles = true
@@ -346,11 +309,6 @@ func TestReadingAgainstAMinkaWithoutRoles(t *testing.T) {
 	expectCode(t, r, ExitOK)
 	if strings.Contains(r.stdout, "[role:") {
 		t.Errorf("a role is shown:\n%s", r.stdout)
-	}
-	env, r := e.runJSON("", "cards", "next", "--board", e.fixture.Board.ID)
-	expectCode(t, r, ExitOK)
-	if string(env.Data) != "null" || !strings.Contains(env.Notice, "does not serve column roles yet") || strings.Contains(env.Notice, "columns edit") {
-		t.Errorf("data %s, notice %q", env.Data, env.Notice)
 	}
 }
 

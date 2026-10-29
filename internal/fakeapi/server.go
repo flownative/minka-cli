@@ -154,6 +154,10 @@ type Board struct {
 	// Conventions are the versions of how the team works on the board, the
 	// oldest first; the last is in force.
 	Conventions []*ConventionsVersion
+	// Trashed stands for a board in the trash: the board, the archive of its
+	// cards and the next card answer 404, and neither the list of the
+	// project's boards nor anybody's cards name it. Nothing else knows it.
+	Trashed bool
 }
 
 type Column struct {
@@ -525,6 +529,10 @@ type Server struct {
 	// column roles: a role in a body names nothing, and no column carries the
 	// field, Triage and Done included.
 	IgnoresColumnRoles bool
+
+	// KnowsNoNextCard makes the server answer like a Minka from before it
+	// named the card somebody takes up next on a board: the address is none.
+	KnowsNoNextCard bool
 
 	// KnowsNoBooks makes the server answer like a Minka from before books and
 	// the order set by hand: it reads neither isBook nor inNavigation, writes
@@ -1089,6 +1097,7 @@ func New(t testing.TB) (*Server, *Fixture) {
 	s.registerNotificationsRoutes(mux)
 	s.registerConventionsRoutes(mux)
 	s.registerLabelRoutes(mux)
+	s.registerNextCardRoutes(mux)
 	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) { unknownAddress(w) })
 
 	s.Server = httptest.NewServer(s.recording(mux))
@@ -1616,7 +1625,7 @@ func (s *Server) boards(w http.ResponseWriter, r *http.Request, person *Person) 
 	}
 	list := []any{}
 	for _, b := range s.Boards {
-		if b.ProjectID == project.ID {
+		if b.ProjectID == project.ID && !b.Trashed {
 			list = append(list, map[string]any{"id": b.ID, "title": b.Title, "appUrl": s.boardURL(b)})
 		}
 	}
@@ -1857,9 +1866,7 @@ func (s *Server) myCards(w http.ResponseWriter, r *http.Request, person *Person)
 	}
 	var mine []assigned
 	for _, board := range s.Boards {
-		// An archived project has nothing left to do, so its cards are not
-		// among them, although each can still be read by itself.
-		if project := s.visibleProject(board.ProjectID, person); project == nil || project.Archived {
+		if s.visibleProject(board.ProjectID, person) == nil || !s.openForWork(board) {
 			continue
 		}
 		for _, column := range board.Columns {
@@ -1895,6 +1902,14 @@ func dayOrLast(dueOn *string) string {
 		return "9999-99-99"
 	}
 	return *dueOn
+}
+
+// openForWork says whether a card on a board can be somebody's to do. A board
+// in the trash and an archived project have nothing left to do, so their
+// cards are neither among anybody's nor released, although each card can
+// still be read by itself in an archived project.
+func (s *Server) openForWork(board *Board) bool {
+	return !board.Trashed && !s.projectOf(board).Archived
 }
 
 func (s *Server) projectOf(board *Board) *Project {
@@ -3963,7 +3978,7 @@ func (s *Server) visibleProject(id string, person *Person) *Project {
 
 func (s *Server) visibleBoard(id string, person *Person) *Board {
 	for _, b := range s.Boards {
-		if b.ID == id && s.visibleProject(b.ProjectID, person) != nil {
+		if b.ID == id && !b.Trashed && s.visibleProject(b.ProjectID, person) != nil {
 			return b
 		}
 	}

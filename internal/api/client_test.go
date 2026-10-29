@@ -38,6 +38,7 @@ func TestIdentifiersAreEscapedInThePath(t *testing.T) {
 	_, _ = client.ConversationPeople(context.Background(), "../p")
 	_, _ = client.Trash(context.Background(), "p/t")
 	_, _ = client.UploadToProject(context.Background(), "p/q", "../plan.png", "image/png", strings.NewReader("x"), 1)
+	_, _ = client.NextCard(context.Background(), "../b")
 
 	want := []string{
 		"/api/v1/cards/..%2Fme",
@@ -57,6 +58,7 @@ func TestIdentifiersAreEscapedInThePath(t *testing.T) {
 		"/api/v1/messages/..%2Fp/people",
 		"/api/v1/projects/p%2Ft/trash",
 		"/api/v1/projects/p%2Fq/uploads",
+		"/api/v1/boards/..%2Fb/next-card",
 	}
 	if !slices.Equal(paths, want) {
 		t.Errorf("paths\n got: %q\nwant: %q", paths, want)
@@ -98,6 +100,27 @@ func TestAnEmptyAnswerIsASuccess(t *testing.T) {
 	}
 	if method != http.MethodDelete || path != "/api/v1/cards/a%2Fb" {
 		t.Errorf("request %s %s", method, path)
+	}
+}
+
+// Nothing released is the body null, which is no card and no failure.
+func TestTheNextCardIsNilWhereNothingIsReleased(t *testing.T) {
+	answer := "null"
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		_, _ = io.WriteString(w, answer)
+	}))
+	defer server.Close()
+	client := New(server.URL, "minka_pat_x", "")
+
+	next, err := client.NextCard(context.Background(), "b")
+	if err != nil || next.Value != nil || string(next.Raw) != "null" {
+		t.Errorf("null: %v, %v, %s", err, next.Value, next.Raw)
+	}
+	answer = `{"id":"c","title":"Next","column":{"title":"Ready"}}`
+	next, err = client.NextCard(context.Background(), "b")
+	if err != nil || next.Value == nil || next.Value.ID != "c" || next.Value.Column.Title != "Ready" {
+		t.Errorf("a card: %v, %+v", err, next.Value)
 	}
 }
 
