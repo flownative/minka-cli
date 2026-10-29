@@ -526,6 +526,10 @@ type Server struct {
 	// field, Triage and Done included.
 	IgnoresColumnRoles bool
 
+	// KnowsNoNextCard makes the server answer like a Minka from before it
+	// named the card somebody takes up next on a board: the address is none.
+	KnowsNoNextCard bool
+
 	// KnowsNoBooks makes the server answer like a Minka from before books and
 	// the order set by hand: it reads neither isBook nor inNavigation, writes
 	// what else was sent with 200, and its answers carry none of their fields.
@@ -1089,6 +1093,7 @@ func New(t testing.TB) (*Server, *Fixture) {
 	s.registerNotificationsRoutes(mux)
 	s.registerConventionsRoutes(mux)
 	s.registerLabelRoutes(mux)
+	s.registerNextCardRoutes(mux)
 	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) { unknownAddress(w) })
 
 	s.Server = httptest.NewServer(s.recording(mux))

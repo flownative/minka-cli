@@ -30,9 +30,12 @@ minka cards unsubscribe <cardId> <person> --json
   column is its ID, or its type or title together with `--board`, looked up on
   that board: `minka cards mine --board <boardId> --column "Als nächstes"`
   lists your cards in the column of that title. `cards next --board
-  <boardId>` names the first of your cards, in board order, in a column with
-  the role `ready` and not on hold, or `data` null when nothing is released
-  for you.
+  <boardId>` names the card Minka releases to you next: in the columns with
+  the role `ready` from left to right, each from the bottom, the first of
+  yours that is not on hold; `data` null when nothing is released for you.
+  The bottom card is usually the one that has waited longest. Exit 2 with a
+  message that the host does not name the next card means the Minka is too
+  old; then read the board yourself.
   Exit 7 with a hint to list without the filters means this Minka cannot say
   where its cards stand: then read a card with `cards show` before taking it.
 - Cards in Done, cards completed in another column, cards in the trash, cards

@@ -37,8 +37,8 @@ takes one or gives one up: exit 9 with systemColumnHasNoColor.`
 
 // columnRoleHelp says which roles a column takes.
 const columnRoleHelp = `--role says what a working column is for in the way the team works: ready
-(released, to be taken up in board order), in_progress or waiting_for_decision,
-spelt exactly so. Several columns may share a role. Any other value is refused
+(released; Minka names the bottom card first), in_progress or
+waiting_for_decision, spelt exactly so. Several columns may share a role. Any other value is refused
 with exit 9 (validation) and meta.apiCode columnRoleUnknown, inbox and done
 included: Triage is the board's inbox and Done is done, by type. --no-role takes
 the role away. Triage, Not now and Done take no role and give none up: exit 9

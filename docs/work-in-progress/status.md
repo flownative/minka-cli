@@ -31,7 +31,11 @@ and the claim name each column's role and print the conventions, `columns edit
 --role`/`--no-role` sets a role, `boards conventions show`/`set` read and write
 the text (Minka lets only human owners and admins write), `notifications wait
 --board` keeps the `board.conventionsChanged` line, and `cards next` names the
-first own card in a `ready` column. The rule is [Columns](../stable/columns.md)
+card Minka's `GET /boards/{id}/next-card` names (the bottom own card of the
+leftmost `ready` column that has one). That address is Minka's #573, on its
+`main` and in no release yet: until the first release with it, `cards next`
+against a released Minka exits 2 and says the host does not name the next
+card; there is no client-side fallback. The rule is [Columns](../stable/columns.md)
 and [Waiting and coordinating](../stable/waiting-and-coordinating.md)
 (C-146…C-151). Minka's #555 carries the server side on its `main`, in no
 release yet; until one does, a released Minka answers `--role` with

@@ -2430,15 +2430,15 @@ with `--board` and must not miss that its conventions changed.
 [Waiting and coordinating](stable/waiting-and-coordinating.md#the-conventions-of-a-board).
 
 <a id="c-149"></a>
-## C-149 — `cards next` is the first own card in a ready column, in board order
+## C-149 — `cards next` is the card Minka names, never one the CLI works out
 
 *Applies to: `cards next`*
 
-The first card, in board order, in a column with the role `ready`, assigned
-to the own account (from `cards mine --board`) and not on hold; none is exit 0
-with `data` null.
-**Why:** an agent takes released work in the order people set, and "nothing
-for you" is a normal answer it waits on, not a failure.
+The card Minka's `next-card` names; none, or no `ready` column, is exit 0 with
+`data` null. A Minka without the address is exit 2 with a message that says
+so, never a fallback to an order computed here.
+**Why:** one rule in one place, so that the board's people and every agent
+agree on which card is next, and "nothing for you" is a normal answer.
 **Implemented as:** `cli.newCardsNextCmd`, see
 [Waiting and coordinating](stable/waiting-and-coordinating.md#coordinating).
 

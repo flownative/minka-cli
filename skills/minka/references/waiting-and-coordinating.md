@@ -112,7 +112,8 @@ minka boards coordinator release <boardId> --json   # remove your entry
    [working-on-a-board.md](working-on-a-board.md)). Remember the conventions'
    `version`, `updatedAt` and `updatedBy`.
 3. Take only your own cards in a column with the role `ready`:
-   `minka cards next --board <boardId> --json` names the first in board order,
+   `minka cards next --board <boardId> --json` names the one Minka releases
+   next, the bottom card of the leftmost `ready` column that has one of yours,
    or `data` null when nothing is released for you. Begin that one; leave the
    rest.
 4. Start `minka notifications wait --board <boardId> --json` in the background.

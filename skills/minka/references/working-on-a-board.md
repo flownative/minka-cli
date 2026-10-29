@@ -15,7 +15,7 @@ inside that order and does not make its own.
 - **Read the flow by the roles of the columns, not by their names.** Every
   column carries a `role` in `minka boards show`:
   - **`inbox`:** Triage, ideas and requests, not yet decided;
-  - **`ready`:** released for work, in board order;
+  - **`ready`:** released for work, the bottom card first;
   - **`in_progress`:** someone is on the card right now;
   - **`waiting_for_decision`:** the card waits for an answer from a person;
   - **`done`:** Done.
@@ -25,12 +25,14 @@ inside that order and does not make its own.
   board has no column with the role you need, ask the person you work for
   which column it is. Do not guess from the titles.
 - **Take only cards in a `ready` column that are assigned to your own
-  account,** the first in board order: `minka cards next --board <boardId>`
-  names it, or says that nothing is released for you. The column says that a
-  card is released and in which order, the assignment says for whom. A card
-  assigned to you in the inbox is not yet released, and a card in a `ready`
-  column assigned to somebody else, or to nobody, is not yours. This holds for every agent, a
-  coordinating one included. If none is there, say so and wait. Until then,
+  account,** the one Minka names: `minka cards next --board <boardId>` gives
+  it, or says that nothing is released for you. Ready columns count from left
+  to right, each from the bottom: the bottom card is usually the one that has
+  waited longest, and whoever wants a card taken up sooner moves it down. The
+  column says that a card is released and in which order, the assignment says
+  for whom. A card assigned to you in the inbox is not yet released, and a
+  card in a `ready` column assigned to somebody else, or to nobody, is not
+  yours. This holds for every agent, a coordinating one included. If none is there, say so and wait. Until then,
   only finish or tidy what is already in hand. Subagents you start yourself
   work under your account and on your cards.
 - **Hand out no work.** People decide who works on what, by assigning. Do not

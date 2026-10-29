@@ -302,6 +302,12 @@ func (c *Client) MyCards(ctx context.Context, boardID, columnID string) (Result[
 	return request[[]Card](ctx, c, http.MethodGet, path, nil)
 }
 
+// NextCard is the card the person of the token takes up next on a board, as
+// MyCards lists it; nil where nothing on the board is released to them.
+func (c *Client) NextCard(ctx context.Context, boardID string) (Result[*Card], error) {
+	return request[*Card](ctx, c, http.MethodGet, "/boards/"+url.PathEscape(boardID)+"/next-card", nil)
+}
+
 func (c *Client) Card(ctx context.Context, cardID string) (Result[Card], error) {
 	return request[Card](ctx, c, http.MethodGet, "/cards/"+url.PathEscape(cardID), nil)
 }
