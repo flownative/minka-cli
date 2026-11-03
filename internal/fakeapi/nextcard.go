@@ -40,7 +40,7 @@ func (s *Server) nextCard(w http.ResponseWriter, r *http.Request, person *Person
 		released = true
 		for _, card := range slices.Backward(column.Cards) {
 			if open && !card.OnHold && openCard(column, card) && slices.Contains(card.AssigneeIDs, person.ID) {
-				writeJSON(w, http.StatusOK, s.cardResource(board, column, card))
+				writeJSON(w, http.StatusOK, s.cardResource(board, column, card, person))
 				return
 			}
 		}

@@ -204,7 +204,10 @@ type Card struct {
 }
 
 type Step struct {
-	ID          string
+	ID string
+	// CardID names the card this step is, empty for a step in words. A card
+	// step carries nothing of its own: its card gives title and tick.
+	CardID      string
 	Title       string
 	Completed   bool
 	AssigneeIDs []string // in the order they were assigned; somebody who left the project stays on
@@ -551,6 +554,13 @@ type Server struct {
 	// alone is nothingToChange and beside the rest it is passed over, and the
 	// address of a move is none.
 	NeitherRenamesNorMovesSteps bool
+
+	// KnowsNoCardSteps makes the server answer like a Minka from before a
+	// card could be the step of another: a step carries no card and a card
+	// names no parents, a cardId in the body of a new step is passed over, so
+	// that only the missing title is refused, and making a step into a card
+	// has no address.
+	KnowsNoCardSteps bool
 
 	// MessagesPerPage, where set, caps a page of a transcript below the 200
 	// Minka allows, so that a client cannot take the page size for granted.
@@ -1073,6 +1083,7 @@ func New(t testing.TB) (*Server, *Fixture) {
 	mux.HandleFunc("PATCH /api/v1/cards/{cardId}/steps/{stepId}", s.authenticated(s.updateStep))
 	mux.HandleFunc("POST /api/v1/cards/{cardId}/steps/{stepId}/moves", s.authenticated(s.moveStep))
 	mux.HandleFunc("DELETE /api/v1/cards/{cardId}/steps/{stepId}", s.authenticated(s.removeStep))
+	mux.HandleFunc("POST /api/v1/cards/{cardId}/steps/{stepId}/card", s.authenticated(s.makeStepIntoCard))
 	mux.HandleFunc("POST /api/v1/cards/{cardId}/subscribers/{personId}", s.authenticated(s.subscribeToCard))
 	mux.HandleFunc("DELETE /api/v1/cards/{cardId}/subscribers/{personId}", s.authenticated(s.unsubscribeFromCard))
 	mux.HandleFunc("GET /api/v1/projects/{projectId}/chats", s.authenticated(s.chats))
@@ -1641,7 +1652,7 @@ func (s *Server) board(w http.ResponseWriter, r *http.Request, person *Person) {
 
 	columns := []any{}
 	for _, column := range board.Columns {
-		columns = append(columns, s.columnResource(board, column))
+		columns = append(columns, s.columnResource(board, column, person))
 	}
 	fields := map[string]any{
 		"id": board.ID, "projectId": board.ProjectID, "title": board.Title, "appUrl": s.boardURL(board), "columns": columns,
@@ -1777,7 +1788,7 @@ func (s *Server) archiveCard(w http.ResponseWriter, r *http.Request, person *Per
 
 	entry := s.PutInTheArchive(card)
 	entry.ByID = person.ID
-	writeJSON(w, http.StatusOK, s.cardResource(board, column, card))
+	writeJSON(w, http.StatusOK, s.cardResource(board, column, card, person))
 }
 
 // unarchiveCard brings a card back out of the archive onto its board. A card
@@ -1803,12 +1814,12 @@ func (s *Server) unarchiveCard(w http.ResponseWriter, r *http.Request, person *P
 
 	column = s.columnToUnarchiveInto(s.inTheArchive(card.ID))
 	s.TakeOutOfTheArchive(card)
-	writeJSON(w, http.StatusOK, s.cardResource(board, column, card))
+	writeJSON(w, http.StatusOK, s.cardResource(board, column, card, person))
 }
 
 // columnResource lists the cards of a column in its two areas, and counts the
 // ones on hold apart from the rest.
-func (s *Server) columnResource(board *Board, column *Column) map[string]any {
+func (s *Server) columnResource(board *Board, column *Column, reader *Person) map[string]any {
 	var listed, onHold []*Card
 	for _, card := range column.Cards {
 		if card.OnHold {
@@ -1827,8 +1838,8 @@ func (s *Server) columnResource(board *Board, column *Column) map[string]any {
 	}
 	resource := map[string]any{
 		"id": column.ID, "type": column.Type, "title": columnTitle(column), "customTitle": column.CustomTitle,
-		"color": shownColor(column), "cardCount": count, "cards": s.boardCardResources(board, listed),
-		"onHoldEnabled": column.OnHoldEnabled, "onHoldCardCount": len(onHold), "onHoldCards": s.boardCardResources(board, onHold),
+		"color": shownColor(column), "cardCount": count, "cards": s.boardCardResources(board, listed, reader),
+		"onHoldEnabled": column.OnHoldEnabled, "onHoldCardCount": len(onHold), "onHoldCards": s.boardCardResources(board, onHold, reader),
 	}
 	if !s.IgnoresColumnRoles {
 		resource["role"] = roleOf(column)
@@ -1836,12 +1847,12 @@ func (s *Server) columnResource(board *Board, column *Column) map[string]any {
 	return resource
 }
 
-func (s *Server) boardCardResources(board *Board, cards []*Card) []any {
+func (s *Server) boardCardResources(board *Board, cards []*Card, reader *Person) []any {
 	list := []any{}
 	for _, card := range cards {
 		list = append(list, s.withShortURL(card.ShortID, map[string]any{
 			"id": card.ID, "shortId": nullable(card.ShortID), "title": card.Title, "hasDescription": card.Description != "",
-			"stepCount": len(card.Steps), "completedStepCount": completedStepCount(card),
+			"stepCount": len(card.Steps), "completedStepCount": s.completedStepCount(card, reader),
 			"commentCount": len(card.Comments), "createdAt": timestamp(card.CreatedAt),
 			"creator": s.personReference(card.CreatorID), "completedAt": timestampOrNil(card.CompletedAt),
 			"completedBy": s.personReferenceOrNil(card.CompletedByID), "assignees": s.assigneeReferences(card),
@@ -1891,7 +1902,7 @@ func (s *Server) myCards(w http.ResponseWriter, r *http.Request, person *Person)
 
 	list := []any{}
 	for _, item := range mine {
-		list = append(list, s.cardResource(item.board, item.column, item.card))
+		list = append(list, s.cardResource(item.board, item.column, item.card, person))
 	}
 	writeJSON(w, http.StatusOK, list)
 }
@@ -1932,7 +1943,7 @@ func (s *Server) card(w http.ResponseWriter, r *http.Request, person *Person) {
 		notFound(w)
 		return
 	}
-	writeJSON(w, http.StatusOK, s.cardResource(board, column, card))
+	writeJSON(w, http.StatusOK, s.cardResource(board, column, card, person))
 }
 
 // cardByShortIdentifier finds a card under the name people call it by, read
@@ -1947,7 +1958,7 @@ func (s *Server) cardByShortIdentifier(w http.ResponseWriter, r *http.Request, p
 		for _, column := range board.Columns {
 			for _, card := range column.Cards {
 				if card.ShortID != "" && card.ShortID == identifier {
-					resource := s.cardResource(board, column, card)
+					resource := s.cardResource(board, column, card, person)
 					if s.AnswersCardsWithoutID {
 						resource["id"] = ""
 					}
@@ -2047,7 +2058,7 @@ func (s *Server) addCard(w http.ResponseWriter, r *http.Request, person *Person)
 	}
 	column.Cards = append([]*Card{card}, column.Cards...)
 	w.Header().Set("Location", s.URL+"/api/v1/cards/"+card.ID)
-	writeJSON(w, http.StatusCreated, s.cardResource(board, column, card))
+	writeJSON(w, http.StatusCreated, s.cardResource(board, column, card, person))
 }
 
 // updateCard finds a card of the archive as well: why nothing was written on
@@ -2098,7 +2109,7 @@ func (s *Server) updateCard(w http.ResponseWriter, r *http.Request, person *Pers
 	if dueDateNamed {
 		card.DueOn = dueDate(dueOn)
 	}
-	writeJSON(w, http.StatusOK, s.cardResource(board, column, card))
+	writeJSON(w, http.StatusOK, s.cardResource(board, column, card, person))
 }
 
 func (s *Server) moveCard(w http.ResponseWriter, r *http.Request, person *Person) {
@@ -2176,7 +2187,7 @@ func (s *Server) moveCard(w http.ResponseWriter, r *http.Request, person *Person
 	if to != from {
 		s.noteTheMove(board, card, to, person)
 	}
-	writeJSON(w, http.StatusOK, s.cardResource(board, to, card))
+	writeJSON(w, http.StatusOK, s.cardResource(board, to, card, person))
 }
 
 // placeInArea is where a card lands among the cards of one area of a column.
@@ -2248,7 +2259,7 @@ func (s *Server) setColumnOnHold(w http.ResponseWriter, r *http.Request, person 
 		}
 		column.Cards = append(column.Cards, waiting...)
 	}
-	writeJSON(w, http.StatusOK, s.columnResource(board, column))
+	writeJSON(w, http.StatusOK, s.columnResource(board, column, person))
 }
 
 func (s *Server) people(w http.ResponseWriter, r *http.Request, person *Person) {
@@ -2336,7 +2347,7 @@ func (s *Server) assignCard(w http.ResponseWriter, r *http.Request, person *Pers
 		card.subscribe(*personID)
 		status = http.StatusCreated
 	}
-	writeJSON(w, status, s.cardResource(board, column, card))
+	writeJSON(w, status, s.cardResource(board, column, card, person))
 }
 
 // unassignCard takes somebody off a card without asking about membership, so
@@ -2368,6 +2379,10 @@ func (s *Server) addStep(w http.ResponseWriter, r *http.Request, person *Person)
 	if !ok {
 		return
 	}
+	if _, namesACard := fields["cardId"]; namesACard && !s.KnowsNoCardSteps {
+		s.addCardStep(w, board, column, card, archived, fields, person)
+		return
+	}
 	title, ok := stringField(w, fields, "title")
 	if !ok {
 		return
@@ -2380,7 +2395,7 @@ func (s *Server) addStep(w http.ResponseWriter, r *http.Request, person *Person)
 		return
 	}
 	card.Steps = append(card.Steps, &Step{ID: newID(), Title: text})
-	writeJSON(w, http.StatusCreated, s.cardResource(board, column, card))
+	writeJSON(w, http.StatusCreated, s.cardResource(board, column, card, person))
 }
 
 // stepText is the line of a step as Minka keeps it, trimmed, or the refusal
@@ -2528,7 +2543,8 @@ func (s *Server) notesResource(board *Board, card *Card) map[string]any {
 }
 
 // updateStep looks for the step on the card before it reads the body, so a
-// step that is not there is 404 even on a card that takes no write. Of the
+// step that is not there is 404 even on a card that takes no write, and a
+// card step is refused before the body as well. Of the
 // body, the shape of assigneeIds is read before anything is asked of it; the
 // line is read after the tick and before the day; a person whose identifier
 // is none is refused before the archive is, and a person who is no member
@@ -2546,6 +2562,10 @@ func (s *Server) updateStep(w http.ResponseWriter, r *http.Request, person *Pers
 		return
 	}
 	step := card.Steps[index]
+	if step.CardID != "" {
+		unprocessable(w, "stepIsACard", "A card step has no title, tick, due date or assignees of its own; its card carries them.")
+		return
+	}
 	fields, ok := readBody(w, r)
 	if !ok {
 		return
@@ -2620,7 +2640,7 @@ func (s *Server) updateStep(w http.ResponseWriter, r *http.Request, person *Pers
 		}
 		step.Completed = completed
 	}
-	writeJSON(w, http.StatusOK, s.cardResource(board, column, card))
+	writeJSON(w, http.StatusOK, s.cardResource(board, column, card, person))
 }
 
 // moveStep puts a step between two others of its card, by the neighbours as
@@ -2679,7 +2699,7 @@ func (s *Server) moveStep(w http.ResponseWriter, r *http.Request, person *Person
 		at = next
 	}
 	card.Steps = slices.Insert(others, at, step)
-	writeJSON(w, http.StatusOK, s.cardResource(board, column, card))
+	writeJSON(w, http.StatusOK, s.cardResource(board, column, card, person))
 }
 
 // removeStep answers 204 for a step that is not on the card as well, one of
@@ -2699,30 +2719,6 @@ func (s *Server) removeStep(w http.ResponseWriter, r *http.Request, person *Pers
 
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(http.StatusNoContent)
-}
-
-func completedStepCount(card *Card) int {
-	completed := 0
-	for _, step := range card.Steps {
-		if step.Completed {
-			completed++
-		}
-	}
-	return completed
-}
-
-// stepResources names everybody on a step, somebody who left the project
-// included, as Minka reads them without asking about the project.
-func (s *Server) stepResources(card *Card) []any {
-	list := []any{}
-	for _, step := range card.Steps {
-		assignees := []any{}
-		for _, id := range step.AssigneeIDs {
-			assignees = append(assignees, s.personReference(id))
-		}
-		list = append(list, map[string]any{"id": step.ID, "title": step.Title, "completed": step.Completed, "assignees": assignees, "dueOn": step.DueOn})
-	}
-	return list
 }
 
 var messageNumber = regexp.MustCompile(`^[0-9]{1,18}$`)
@@ -3668,7 +3664,7 @@ func (s *Server) subscribeToCard(w http.ResponseWriter, r *http.Request, person 
 	}
 	card.OffIDs = slices.DeleteFunc(card.OffIDs, func(id string) bool { return id == personID })
 	card.subscribe(personID)
-	writeJSON(w, http.StatusOK, s.cardResource(board, column, card))
+	writeJSON(w, http.StatusOK, s.cardResource(board, column, card, person))
 }
 
 func (s *Server) unsubscribeFromCard(w http.ResponseWriter, r *http.Request, person *Person) {
@@ -3920,7 +3916,7 @@ func (s *Server) restoreCard(w http.ResponseWriter, r *http.Request, person *Per
 	s.Trash = slices.Delete(s.Trash, index, index+1)
 	trashed.Card.OnHold = false
 	trashed.Column.Cards = append([]*Card{trashed.Card}, trashed.Column.Cards...)
-	writeJSON(w, http.StatusOK, s.cardResource(board, trashed.Column, trashed.Card))
+	writeJSON(w, http.StatusOK, s.cardResource(board, trashed.Column, trashed.Card, person))
 }
 
 // boardOfColumn is the board a column stands on, or stood on before it went
@@ -4063,7 +4059,7 @@ func (s *Server) visibleCard(id string, person *Person) (*Board, *Column, *Card)
 	return nil, nil, nil
 }
 
-func (s *Server) cardResource(board *Board, column *Column, card *Card) map[string]any {
+func (s *Server) cardResource(board *Board, column *Column, card *Card, reader *Person) map[string]any {
 	// Minka orders the comments by the moment they were written and then by
 	// their ID, which it makes from the clock as well, so two of the same
 	// moment stand in the order they were written in.
@@ -4074,7 +4070,7 @@ func (s *Server) cardResource(board *Board, column *Column, card *Card) map[stri
 		comments = append(comments, s.commentResource(board.ProjectID, s.cardURL(board, card), comment))
 	}
 	project := s.projectOf(board)
-	return s.withShortURL(card.ShortID, map[string]any{
+	resource := s.withShortURL(card.ShortID, map[string]any{
 		"id": card.ID, "shortId": nullable(card.ShortID), "projectId": board.ProjectID, "boardId": board.ID,
 		"project":     map[string]any{"id": project.ID, "name": project.Name},
 		"board":       map[string]any{"id": board.ID, "title": board.Title},
@@ -4086,10 +4082,14 @@ func (s *Server) cardResource(board *Board, column *Column, card *Card) map[stri
 		"commentCount": len(card.Comments), "createdAt": timestamp(card.CreatedAt),
 		"creator": s.personReference(card.CreatorID), "completedAt": timestampOrNil(card.CompletedAt),
 		"completedBy": s.personReferenceOrNil(card.CompletedByID), "assignees": s.assigneeReferences(card),
-		"dueOn": card.DueOn, "onHold": card.OnHold, "steps": s.stepResources(card), "subscribers": s.subscriberReferences(card),
+		"dueOn": card.DueOn, "onHold": card.OnHold, "steps": s.stepResources(card, reader), "subscribers": s.subscriberReferences(card),
 		"comments": comments, "labels": s.labelResources(s.LabelsOn(card.ID)),
 		"appUrl": s.cardURL(board, card),
 	})
+	if !s.KnowsNoCardSteps {
+		resource["stepOf"] = s.parentsOf(card, reader)
+	}
+	return resource
 }
 
 func (s *Server) reactionResources(reactions []*Reaction) []any {

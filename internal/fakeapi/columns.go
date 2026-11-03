@@ -64,7 +64,7 @@ func (s *Server) addColumn(w http.ResponseWriter, r *http.Request, person *Perso
 		}
 	}
 	board.Columns = slices.Insert(board.Columns, at, column)
-	writeJSON(w, http.StatusCreated, s.columnResource(board, column))
+	writeJSON(w, http.StatusCreated, s.columnResource(board, column, person))
 }
 
 // updateColumn renames, recolours and gives a role to a column. Every field is
@@ -155,7 +155,7 @@ func (s *Server) updateColumn(w http.ResponseWriter, r *http.Request, person *Pe
 		}
 		column.CustomTitle = newTitle
 	}
-	writeJSON(w, http.StatusOK, s.columnResource(board, column))
+	writeJSON(w, http.StatusOK, s.columnResource(board, column, person))
 }
 
 // moveColumn places a working column between its neighbours, or at the front
@@ -217,7 +217,7 @@ func (s *Server) moveColumn(w http.ResponseWriter, r *http.Request, person *Pers
 		to = i
 	}
 	if from == to && !s.projectOf(board).Archived {
-		writeJSON(w, http.StatusOK, s.columnResource(board, column))
+		writeJSON(w, http.StatusOK, s.columnResource(board, column, person))
 		return
 	}
 	if s.columnWriteRefused(w, board, column, "systemColumnCannotMove") {
@@ -232,7 +232,7 @@ func (s *Server) moveColumn(w http.ResponseWriter, r *http.Request, person *Pers
 			next++
 		}
 	}
-	writeJSON(w, http.StatusOK, s.columnResource(board, column))
+	writeJSON(w, http.StatusOK, s.columnResource(board, column, person))
 }
 
 // removeColumn puts a working column into the trash of its project, and its
