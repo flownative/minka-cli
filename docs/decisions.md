@@ -2479,3 +2479,39 @@ inside the text and a text argument go to Minka as they are.
 Minka refuses it in notes and conventions; anything more is Minka's to judge.
 **Implemented as:** `cli.readValue`, see
 [The output contract](stable/output-contract.md).
+
+<a id="c-153"></a>
+## C-153 — The card of a card step goes out as Minka reads a card's name
+
+*Applies to: `cards steps create --card`*
+
+One leading `#` comes off, a short or long address of this host gives up the
+short identifier or ID in it, an ID goes out in lowercase; anything else,
+another host's address included, goes as given for Minka to answer.
+**Why:** agents name cards as the skill teaches, `#MNK-1` or the address,
+and an address of another Minka must not name a card of this one.
+**Implemented as:** `cli.session.cardNameForMinka`, see [Steps](stable/steps.md#a-card-as-a-step).
+
+<a id="c-154"></a>
+## C-154 — A step becomes a card with `cards steps make-card`
+
+*Applies to: `cards steps make-card`, `cards steps create --card`*
+
+A card step is added with `cards steps create --card`, a step in words made a
+card with `make-card`, `data` the new card; against a Minka without card
+steps both exit 2 with a message that says so, never a fallback.
+**Why:** both stay with the other step commands, and an old Minka's
+`stepMissing` or 404 page would otherwise blame the input.
+**Implemented as:** `cli.newCardsStepsMakeCardCmd`, `cli.addCardStep`, see [Steps](stable/steps.md#a-card-as-a-step).
+
+<a id="c-155"></a>
+## C-155 — A card step reads as its card, without a tick box
+
+*Applies to: `cards show`, `cards steps list` and the answers of the step commands*
+
+`↳ #MNK-12 Title  [Column] (people) <short address>`, the short address built
+on `appUrl`'s host; `(a card you cannot open)` for an unseen one; `Step of:`
+below a card's title. A step is never named by an empty text.
+**Why:** the column is its state, so a box of its own would mislead, and an
+unseen card's empty title must not be matched by `""`.
+**Implemented as:** `cli.cardStepLine`, `cli.stepOfLine`, `cli.findLine`, see [Steps](stable/steps.md#a-card-as-a-step).

@@ -132,6 +132,12 @@ var idsInCapitals = []idInCapitals{
 	{command: "cards steps delete", inputs: []string{"<step>"}, prepare: withStepsSpelledInLetters, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
 		return []string{f.CardInTriage.ID, up(openStepID)}
 	}},
+	{command: "cards steps create", inputs: []string{"--card"}, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
+		return []string{f.CardInTriage.ID, "--card", up(f.CardInDoing.ID)}
+	}},
+	{command: "cards steps make-card", inputs: []string{"<step>"}, prepare: withStepsSpelledInLetters, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
+		return []string{f.CardInTriage.ID, up(openStepID)}
+	}},
 	{command: "columns on-hold", inputs: []string{"<column>"}, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
 		return []string{up(f.Doing.ID)}
 	}},

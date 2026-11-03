@@ -249,6 +249,9 @@ func renderCard(w io.Writer, card api.Card) {
 	// The heading stays the bare title, so that somebody who takes it as the
 	// new title of the card does not write the short identifier into it.
 	fmt.Fprintf(w, "# %s\n", card.Title)
+	if line := stepOfLine(card.StepOf); line != "" {
+		fmt.Fprintln(w, line)
+	}
 	if card.ShortID != nil {
 		fmt.Fprintf(w, "Short ID: %s\n", *card.ShortID)
 	}

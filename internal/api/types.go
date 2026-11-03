@@ -242,14 +242,40 @@ type Card struct {
 	// It is nil where ShortID is, and nil from a Minka that does not hand it
 	// out yet.
 	ShortURL *string `json:"shortUrl"`
+	// StepOf are the cards this card is a step of, those the reader sees.
+	StepOf []LinkedCard `json:"stepOf"`
 }
 
 type Step struct {
 	ID        string            `json:"id"`
-	Title     string            `json:"title"`
-	Completed bool              `json:"completed"`
+	Title     string            `json:"title"`     // of a card step, the title of its card, empty where the reader cannot see it
+	Completed bool              `json:"completed"` // of a card step, whether its card is in Done
 	Assignees []PersonReference `json:"assignees"` // in the order they were assigned, somebody who left the project included
 	DueOn     *string           `json:"dueOn"`     // the day it is due as YYYY-MM-DD, nil for a step without one
+	// Card is the card this step is. It is nil for a step in words and from a
+	// Minka that knows no card steps; a card step has no people and no day of
+	// its own.
+	Card *LinkedCard `json:"card"`
+}
+
+// LinkedCard is a card at either end of a card step. One the reader may not
+// see carries its kind alone, and its ID is empty.
+type LinkedCard struct {
+	Kind        string            `json:"kind"`
+	ID          string            `json:"id"`
+	ShortID     *string           `json:"shortId"` // nil where the board shows no short identifiers
+	Title       string            `json:"title"`
+	ProjectID   string            `json:"projectId"`
+	BoardID     string            `json:"boardId"`
+	Column      ColumnReference   `json:"column"`
+	ColumnColor *string           `json:"columnColor"`
+	Assignees   []PersonReference `json:"assignees"` // empty for a card in the archive
+	AppURL      string            `json:"appUrl"`
+}
+
+// Seen says whether the reader may open the card.
+func (c LinkedCard) Seen() bool {
+	return c.ID != ""
 }
 
 type Comment struct {

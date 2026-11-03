@@ -336,6 +336,39 @@ minka cards unsubscribe <cardId> <person> --json
   (exit 9) and passes over it beside other flags: exit 7, the rest written,
   the card in `data`; the hint says so.
 
+### A card as a step
+
+- A step is words or another card. `cards steps create <cardId> --card
+  <child>` attaches a card, named by its ID, its short identifier (`MNK-1A`
+  or `#MNK-1A`) or its address on this host; the text and `--card` exclude
+  each other. The child can be on any board of any project you see, also in
+  the archive, and a step of several cards. It is a step of the same card at
+  most once: attaching it again succeeds (the summary says it was a step
+  already) without a second step. The card itself is `stepCardIsThisCard`, a
+  card you cannot see `stepCardUnknown` (exit 9).
+- A card step has no title, tick, due day or people of its own: its card
+  carries them. Its `title` is the card's, `completed` says the card is in
+  Done, `assignees` is `[]`, `dueOn` null, and `card` is `{kind, id, shortId,
+  title, projectId, boardId, column, columnColor, assignees, appUrl}` (no
+  `shortUrl`; build it as `https://<host>/go/card/<shortId>`). A step in words
+  has `card: null`. `cards steps edit`, `complete` and `reopen` on a card step
+  are refused with `stepIsACard` (exit 9): change the card itself, and move it
+  to Done to finish the step. A card step moves like any step.
+- A child you cannot see reads as `"card": {"kind": "card"}` with an empty
+  title, shown as `(a card you cannot open)`; name it by its position or ID.
+- `cards show` carries `stepOf`, the cards it is a step of that you see, and
+  prints them as `Step of: #MNK-1 Title, …` below the title.
+- `cards steps delete` on a card step removes only the link; the child card
+  stays.
+- `cards steps make-card <cardId> <step>` makes a step in words into a new
+  card in Triage of the same board, with the words as its title and the
+  step's people and due day; `data` is the new card. The step keeps its place
+  and becomes a card step. Words over 200 characters are cut with `…` and kept
+  whole in the description. A card step is `stepIsACard`; words or people
+  refused for a new card are refused here alike, and nothing is written.
+- A Minka without card steps answers `--card` and `make-card` with exit 2 and
+  a message that the host does not know card steps yet.
+
 ## Due dates
 
 - A card carries `dueOn` as `YYYY-MM-DD`, or null. It is a day, with no time
