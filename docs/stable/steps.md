@@ -21,7 +21,9 @@ Everything here was read in Minka's code — `BoardApiController::addStepAction`
 ## What a read hands over
 
 A card read by itself carries `steps` in the order it shows them, each as
-`id`, `title`, `completed`, `assignees` and `dueOn`. `assignees` are
+`id`, `title`, `completed`, `assignees`, `dueOn` and `card`, which names the
+card a step is and is null for a step in words (see
+[A card as a step](#a-card-as-a-step)). `assignees` are
 references in the order they were put on, and somebody who left the project
 stays on a step and is named there until taken off. `dueOn` is `YYYY-MM-DD` or
 null; a step says nothing about being overdue. A board carries only
@@ -109,6 +111,77 @@ reason; an ID on no step gets the hint of any 404.
 An edit with no flag, or with both `--assignee` and `--no-assignees`, is a
 usage error (exit 1) before any request.
 
+## A card as a step
+
+A step is either words or **another card**. A card step has no title, tick,
+people or day of its own: it reads as its card stands for the reader. Its
+`title` is the card's, `completed` says the card is in Done, `assignees` is
+always empty and `dueOn` null, and `card` is the card as `{kind: "card", id,
+shortId, title, projectId, boardId, column, columnColor, assignees, appUrl}`,
+without `shortUrl` and the people left out for a card in the archive. A step
+in words carries `card: null`. A card the reader may not see is
+`{"kind": "card"}` alone, and its step has the title `""`. A card read by
+itself carries `stepOf`, the cards it is a step of that the reader sees, in
+the same shape and never as `{kind: "card"}`; a board's tiles do not. A
+board's `completedStepCount` counts the ticked steps in words and the card
+steps whose card the reader sees in Done.
+
+`cards steps create <card> --card <child>` sends `{"cardId": …}` in place of
+`title`: the text and `--card` exclude each other, and a `--card` given empty
+or blank names no card; both are usage errors before any request. The child
+goes out as Minka reads a card's name
+([C-153](../decisions.md#c-153)): one leading `#` comes off, an address of
+this host — the short one `…/go/card/<shortId>` or the long one ending in
+`…/cards/<id>`, query and fragment ignored — gives up the name in it, and an
+ID goes out in lowercase. Anything else, an address of another host included,
+goes out as given, and Minka answers `stepCardUnknown`. The card can be on any
+board of any project the reader sees, in the archive too, and a step of several
+cards; it is a step of the same card at most once. Minka answers 201 with the
+card and the new step at the end, and 200 with the card unchanged where the
+child is a step of it already; the summary says which, and `data` is the card
+as answered.
+
+`cards steps make-card <card> <step>` ([C-154](../decisions.md#c-154)) posts
+to `cards/{cardId}/steps/{stepId}/card` without a body. Minka adds a card in
+Triage of the same board with the words of the step as its title and the
+step's people and day, and answers 201 with the new card, whose `stepOf` names
+the card the step is on, and its address in `Location`. The step keeps its ID
+and place and becomes a card step; its tick and people are gone with it.
+Words longer than 200 characters give the title in 199 graphemes, trimmed at
+the end, with `…`, and the whole words as the description `<p>…</p>`. `data`
+is the new card; the text view names it, its column and the position of the
+step that now is that card.
+
+A card step takes no `PATCH`: `stepIsACard`, after the three 404s and before
+the body is read or the archive is told. So `cards steps edit`, `complete`
+and `reopen` on a card step exit 9, and the hint names the card to change,
+with `minka cards move <child> --column Done` to finish it; for a card the
+reader cannot see, the hint offers only to remove the link with `cards steps
+delete`. A card step moves as any step and is a neighbour as any. `cards steps
+delete` removes the link alone, and the summary says the card itself stays.
+The summaries name a step in words by its text, `step "Call the caterer"`, a
+card step by its card, `card step #MNK-12 Buy pegs` (the title alone where
+there is no short identifier), and one whose card the reader cannot see by its
+position, `step 2, a card you cannot open`.
+
+The text views ([C-155](../decisions.md#c-155)) show a card step as its card,
+without a tick box: `2. ↳ #MNK-12 Buy pegs  [Doing] (Dora) <address>`, the
+address the short one built on the host of `appUrl` where the card has a short
+identifier, and `appUrl` where not; Done reads as done by its column. A card the
+reader cannot see is `2. ↳ (a card you cannot open)`. `cards show` names the
+parents in the line `Step of: #MNK-1 Title, …` right below the title. A step in
+words reads as it always did, and a Minka without card steps, whose steps carry
+no `card` and whose cards no `stepOf`, reads as before.
+
+A step is never named by an empty text: the step of a card the reader cannot
+see is named by its position or its ID only.
+
+**An older Minka.** A Minka without card steps passes over `cardId` and
+refuses the missing text with `stepMissing`; `make-card` gets the 404 page of
+an address it does not have. Both exit 2 (`not_found`) with a message that the
+host does not know a card as the step of another, as `cards next` does against
+a Minka without its address (C-149).
+
 ## The order of the refusals
 
 Minka checks in this order, and each step comes only where the one before it
@@ -150,6 +223,27 @@ A move is checked in this order:
 none of the 400 and 415 cases and no identifier that is none: it checks every
 ID before a request.
 
+A card as a step is checked in this order:
+
+1. The card: 404, an archived one found as well. Then the body: 415, 400.
+2. `title` beside `cardId`, whatever its value: `stepTitleAndCard`. Then 400
+   for a `cardId` that is no string.
+3. The name, trimmed: an ID in any case or a short identifier in any case;
+   anything else, null and `""` included, and a card the person may not see,
+   in the trash, of another organization or named ambiguously, is
+   `stepCardUnknown`. The card itself is `stepCardIsThisCard`, before the
+   archive is told.
+4. A child that is a step already: `projectArchived`, `cardArchived`, else
+   200. Then the write: `projectArchived`, `cardArchived`, else 201.
+
+Making a step into a card reads no body and is checked in this order: the
+card 404, a step ID that is none 404, `projectArchived` and `cardArchived`,
+a step not on the card 404, a card step `stepIsACard`, the words as the
+title of a card (`cardTitleHasInvisibleCharacters`, `cardTitleMissing`,
+`cardTitleTooLong`, `cardTitleHasControlCharacters`), then the people
+(`personNotAProjectMember`, `agentOfAnotherPerson`). A refusal writes
+nothing.
+
 | Answer | Command | Exit |
 |---|---|---|
 | 404 | every command, for a card that is unknown, foreign or in the trash; `cards steps edit`, `move`, `complete` and `reopen` for a step that is not on the card; `cards steps move` against a Minka without the move | 2 |
@@ -161,6 +255,12 @@ ID before a request.
 | 422 `stepCompletedMissing` | `cards steps edit` against a Minka older than the people and the day of a step, which reads every change as a tick; the hint says so | 9 |
 | 422 `nothingToChange` | `cards steps edit --title` alone against a Minka without the text of a step, which the hint says; otherwise unreachable: an edit without a change is a usage error here | 9 |
 | 200 without the text sent | `cards steps edit --title` beside other flags against a Minka without the text of a step | 7 |
+| 422 `stepCardUnknown` | `cards steps create --card`; the hint names the forms a card is named by | 9 |
+| 422 `stepCardIsThisCard` | `cards steps create --card` with the card itself | 9 |
+| 422 `stepTitleAndCard` | unreachable: the CLI sends the text or the card; the hint calls it a fault in minka | 9 |
+| 422 `stepIsACard` | `cards steps edit`, `complete` and `reopen` on a card step, the hint naming the card to change; `cards steps make-card` on a card step | 9 |
+| 422 `cardTitle…`, `personNotAProjectMember`, `agentOfAnotherPerson` | `cards steps make-card` | 9 |
+| 422 `stepMissing` for `--card`, 404 page | `cards steps create --card` and `cards steps make-card` against a Minka without card steps | 2 |
 
 `cards steps delete` answers 204 for a step that is not on the card as well, and is
 refused only for an archived project or card.

@@ -400,6 +400,19 @@ func (c *Client) AddStep(ctx context.Context, cardID, title string) (Result[Card
 	return request[Card](ctx, c, http.MethodPost, "/cards/"+url.PathEscape(cardID)+"/steps", map[string]string{"title": title})
 }
 
+// AddCardStep makes another card a step at the end of the list of a card,
+// named by its ID or its short identifier. A card that is a step of this card
+// already is answered with 200 instead of 201 and no second step.
+func (c *Client) AddCardStep(ctx context.Context, cardID, child string) (Result[Card], error) {
+	return request[Card](ctx, c, http.MethodPost, "/cards/"+url.PathEscape(cardID)+"/steps", map[string]string{"cardId": child})
+}
+
+// MakeStepIntoCard adds a card in Triage from a step in words and makes the
+// step point at it; the answer is the new card.
+func (c *Client) MakeStepIntoCard(ctx context.Context, cardID, stepID string) (Result[Card], error) {
+	return request[Card](ctx, c, http.MethodPost, "/cards/"+url.PathEscape(cardID)+"/steps/"+url.PathEscape(stepID)+"/card", nil)
+}
+
 // SetStepCompleted ticks a step off or opens it again. A step that stands that
 // way already succeeds as well.
 func (c *Client) SetStepCompleted(ctx context.Context, cardID, stepID string, completed bool) (Result[Card], error) {

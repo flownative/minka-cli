@@ -69,7 +69,13 @@ references listed under "Where the rest stands".
 - Keep the work steps of a card as steps (`minka cards steps create <card> "…"`,
   `minka cards steps complete`), never as a list in the card's description or a
   comment: a step can be ticked off, carries people and a day, and the board
-  counts it.
+  counts it. Attach a card as a step of another (`minka cards steps create
+  <card> --card <child>`) when you split a big card into child cards or when
+  an existing card belongs to this work, instead of only naming it as
+  `#MNK-xx` in a text; make a step in words that grows too big into a card of
+  its own with `minka cards steps make-card <card> <step>`. A card step has no
+  tick box: its state is the column of the child card, and Done counts as
+  done. To finish it, move the child card.
 - Take a card up from its back: `minka cards notes show <card>` before you
   begin, because whoever was on it before left the state of the work there,
   and `minka cards notes set <card> - --expect <updatedAt>` at every milestone,
@@ -154,7 +160,8 @@ Validation codes in `meta.apiCode`: `cardTitleMissing`, `cardTitleTooLong`,
 breaks and tabs are fine), `commentNotReadable`,
 `commentHasInvisibleCharacters`, `cardDueDateNotADate`, `personNotAProjectMember`, `personIdMissing`,
 `stepMissing`, `stepTooLong`, `stepHasControlCharacters`, `stepCompletedMissing`,
-`stepDueDateNotADate`, `stepPlaceUnknown`, `cardArchived`,
+`stepDueDateNotADate`, `stepPlaceUnknown`, `stepCardUnknown`,
+`stepCardIsThisCard`, `stepTitleAndCard`, `stepIsACard`, `cardArchived`,
 `chatMessageMissing`, `chatMessageTooLong`, `chatMessageHasControlCharacters`,
 `chatMessageNotReadable`, `chatMessageDraftNotAnIdentifier`, `chatMessagesLimitNotANumber`,
 `chatReadSeqMissing`, `nothingToChange`, `columnIdMissing`, `onHoldEnabledMissing`,
@@ -238,7 +245,7 @@ minka boards list <projectId> --json
 minka boards show <boardId> --json
 minka cards mine [--board <boardId>] [--column <column>] --json
 minka cards next --board <boardId> --json
-minka cards show <cardId> --json
+minka cards show <cardId> --json  # stepOf: the cards it is a step of
 minka cards create --board <boardId> --title "Title" [--column <column>] [--assignee <person>]... [--label <label>]... [--due YYYY-MM-DD] [--description - < body.md] --json
 minka cards edit <cardId> [--title "New"] [--due YYYY-MM-DD] [--description - < body.md] --json
 minka cards move <cardId> --column <column> [--on-hold] [--top | --bottom | --after <cardId> | --before <cardId>] --json
@@ -250,6 +257,8 @@ minka cards notes show <cardId> --json
 minka cards notes set <cardId> - --expect <updatedAt|none> --json < notes.md
 minka cards steps list <cardId> --json
 minka cards steps create <cardId> "Text" --json
+minka cards steps create <cardId> --card <child> --json  # another card as the step
+minka cards steps make-card <cardId> <step> --json  # data: the new card
 minka cards steps edit <cardId> <step> --assignee me --due 2026-10-09 --json
 minka cards steps edit <cardId> <step> --title "Text" --json
 minka cards steps move <cardId> <step> (--top | --bottom | --after <step> | --before <step>) --json

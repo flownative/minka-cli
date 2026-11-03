@@ -32,6 +32,19 @@ const stepsWithoutRenamingHint = "The Minka of this host does not rename a step 
 
 const stepsWithoutMovingHint = "The step was on the card a moment ago: the Minka of this host may not move a step yet, which it answers like a step that is not there."
 
+// The answers of Minka about a card as a step.
+const (
+	apiCodeStepCardUnknown    = "stepCardUnknown"
+	apiCodeStepCardIsThisCard = "stepCardIsThisCard"
+	apiCodeStepTitleAndCard   = "stepTitleAndCard"
+	apiCodeStepIsACard        = "stepIsACard"
+	apiCodeStepMissing        = "stepMissing"
+)
+
+const stepCardUnknownHint = "No card you can see goes by that name: it does not exist, is in the trash or in a project you are not a member of. Name the card by its ID, its short identifier such as MNK-1A or #MNK-1A, or its address on this host."
+
+const cardStepsUnknownHint = "Its Minka is older than this minka expects and does not know a card as the step of another yet. Until it is updated, name the card in the text of a step or in a comment."
+
 // phpBlanks are the characters Minka trims off both ends of a step.
 const phpBlanks = " \t\n\r\x00\x0B"
 
@@ -53,6 +66,7 @@ func (a *app) newCardsStepsCmd() *cobra.Command {
 		a.newCardsStepsCompleteCmd(),
 		a.newCardsStepsReopenCmd(),
 		a.newCardsStepsDeleteCmd(),
+		a.newCardsStepsMakeCardCmd(),
 	)
 }
 
@@ -104,17 +118,43 @@ func (a *app) newCardsStepsListCmd() *cobra.Command {
 }
 
 func (a *app) newCardsStepsCreateCmd() *cobra.Command {
-	return &cobra.Command{
+	var child string
+	cmd := &cobra.Command{
 		Use:   "create <cardId> <text|->",
-		Short: "Add a step at the end of the list of a card",
+		Short: "Add a step at the end of the list of a card, in words or as another card",
 		Long: `Adds a step at the end of the list of a card. A step is one line of at most
 500 characters. Give - as the text to read it from stdin.
 
-A step comes without people and without a due day: Minka takes neither when it
-adds one. Give them afterwards with minka cards steps edit.`,
-		Example: `  minka cards steps create 0199... "Call the caterer"`,
-		Args:    requireArgs("cardId", "text"),
-		RunE: func(_ *cobra.Command, args []string) error {
+A step in words comes without people and without a due day: Minka takes
+neither when it adds one. Give them afterwards with minka cards steps edit.
+
+--card makes another card the step instead of a text: the step then reads as
+that card stands, with its title, its people and its column, and it is done
+when the card is in Done. Name the card by its ID, its short identifier
+(MNK-1A, also #MNK-1A) or its address on this host. A card can be a step of
+any card you can see, on any board, and of several cards; it is a step of the
+same card at most once, and naming it again succeeds without a second step.
+A card cannot be a step of itself: exit 9 (validation) with
+stepCardIsThisCard. A card you cannot see is exit 9 with stepCardUnknown. A
+Minka that knows no card steps yet is exit 2 (not_found).`,
+		Example: `  minka cards steps create 0199... "Call the caterer"
+  minka cards steps create MNK-12 --card MNK-15`,
+		Args: func(cmd *cobra.Command, args []string) error {
+			if !cmd.Flags().Changed("card") {
+				return requireArgs("cardId", "text")(cmd, args)
+			}
+			if len(args) > 1 {
+				return usageErrorf(cmd, "give either a text or --card, not both")
+			}
+			if strings.TrimSpace(child) == "" {
+				return usageErrorf(cmd, "--card names no card")
+			}
+			return requireArgs("cardId")(cmd, args)
+		},
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if cmd.Flags().Changed("card") {
+				return a.addCardStep(args[0], child)
+			}
 			text, err := a.readValue("the step", args[1])
 			if err != nil {
 				return err
@@ -150,6 +190,8 @@ adds one. Give them afterwards with minka cards steps edit.`,
 			})
 		},
 	}
+	cmd.Flags().StringVar(&child, "card", "", "Card to add as the step instead of a text: its ID, short identifier or address")
+	return cmd
 }
 
 func (a *app) newCardsStepsEditCmd() *cobra.Command {
@@ -224,9 +266,12 @@ A card in the archive of its board takes no change: exit 9 with cardArchived.
 			changed, err := s.client.UpdateStep(a.ctx, card.Value.ID, step.ID, input)
 			if err != nil {
 				e := stepRefusal(s, err)
-				// A Minka that does not rename a step yet reads a text alone
-				// as no change at all.
-				if input.Title != nil && e.APICode == apiCodeNothingToChange {
+				switch {
+				case e.APICode == apiCodeStepIsACard:
+					e.Hint = stepIsACardHint(card.Value.ID, card.Value.Steps, step)
+				case input.Title != nil && e.APICode == apiCodeNothingToChange:
+					// A Minka that does not rename a step yet reads a text
+					// alone as no change at all.
 					e.Hint = stepsWithoutRenamingHint
 				}
 				return e
@@ -363,7 +408,7 @@ no move: exit 9 with cardArchived.
 				return e
 			}
 
-			summary := fmt.Sprintf("Moved step %q on card %s", step.Title, card.Value.Title)
+			summary := fmt.Sprintf("Moved %s on card %s", stepName(card.Value.Steps, step), card.Value.Title)
 			return a.ok(success{
 				data:        moved.Raw,
 				summary:     summary,
@@ -453,16 +498,20 @@ command succeeds.
 
 			changed, err := s.client.SetStepCompleted(a.ctx, card.Value.ID, step.ID, completed)
 			if err != nil {
-				return s.fail(err)
+				e := s.fail(err)
+				if e.APICode == apiCodeStepIsACard {
+					e.Hint = stepIsACardHint(card.Value.ID, card.Value.Steps, step)
+				}
+				return e
 			}
 
 			verb, state := "Completed", "completed"
 			if !completed {
 				verb, state = "Reopened", "open"
 			}
-			summary := fmt.Sprintf("%s step %q on card %s", verb, step.Title, card.Value.Title)
+			summary := fmt.Sprintf("%s %s on card %s", verb, stepName(card.Value.Steps, step), card.Value.Title)
 			if step.Title != "" && step.Completed == completed {
-				summary = fmt.Sprintf("Step %q on card %s was %s already", step.Title, card.Value.Title, state)
+				summary = fmt.Sprintf("%s on card %s was %s already", capitalized(stepName(card.Value.Steps, step)), card.Value.Title, state)
 			}
 			return a.ok(success{
 				data:        changed.Raw,
@@ -507,12 +556,20 @@ card succeeds as well.
 				return s.fail(err)
 			}
 
-			summary := fmt.Sprintf("Removed step %q from card %s", step.Title, card.Value.Title)
-			if step.Title == "" {
+			// A card step the reader cannot see has no title either, so only
+			// the card as read says whether the step was on it.
+			wasOnCard := slices.ContainsFunc(card.Value.Steps, func(read api.Step) bool { return read.ID == step.ID })
+			summary := fmt.Sprintf("Removed %s from card %s", stepName(card.Value.Steps, step), card.Value.Title)
+			switch {
+			case !wasOnCard:
 				summary = fmt.Sprintf("Step %s was not on card %s", step.ID, card.Value.Title)
+			case step.Card != nil && step.Card.Seen():
+				summary = fmt.Sprintf("Took card %s off the steps of card %s; the card itself stays", linkedCardName(*step.Card), card.Value.Title)
+			case step.Card != nil:
+				summary = fmt.Sprintf("Took a card you cannot open off the steps of card %s; the card itself stays", card.Value.Title)
 			}
 			return a.ok(success{
-				data:        map[string]any{"cardId": card.Value.ID, "stepId": step.ID, "wasOnCard": step.Title != ""},
+				data:        map[string]any{"cardId": card.Value.ID, "stepId": step.ID, "wasOnCard": wasOnCard},
 				summary:     summary,
 				breadcrumbs: stepBreadcrumbs(card.Value.ID),
 				text: func(w io.Writer) {
@@ -571,7 +628,9 @@ func findLine(lines namedLines, value string) (int, string, error) {
 		return position - 1, lines.ids[position-1], nil
 	}
 
-	if lines.caseMatters {
+	// A line without a title, such as a card step whose card the reader
+	// cannot see, is named by its position or its ID, never by a text.
+	if lines.caseMatters && wanted != "" {
 		if at := slices.Index(lines.titles, wanted); at >= 0 && slices.Index(lines.titles[at+1:], wanted) < 0 {
 			return at, lines.ids[at], nil
 		}
@@ -580,7 +639,7 @@ func findLine(lines namedLines, value string) (int, string, error) {
 	var matches []int
 	var positions []string
 	for i, title := range lines.titles {
-		if strings.EqualFold(title, wanted) {
+		if title != "" && strings.EqualFold(title, wanted) {
 			matches = append(matches, i)
 			positions = append(positions, strconv.Itoa(i+1))
 		}
@@ -617,6 +676,9 @@ func describeSteps(steps []api.Step) string {
 }
 
 func stepLine(index int, step api.Step) string {
+	if step.Card != nil {
+		return cardStepLine(index, *step.Card)
+	}
 	mark := " "
 	if step.Completed {
 		mark = "x"

@@ -596,6 +596,24 @@ reports as exit 7, and answers every move with 404, which the hint names. The
 commands are checked against Minka's code and tests and the fake only, see
 below.
 
+A card can be the step of another: `cards steps create <card> --card <child>`
+adds one, `cards steps make-card` makes a step in words into a card in Triage,
+the text views show a card step as its card and `cards show` names the cards a
+card is a step of (C-153…C-155, [Steps](../stable/steps.md#a-card-as-a-step)).
+Minka's side is on its `main` (ea3538525, which reads the child's ID in any
+case) and in no release yet; until a release carries it, `--card` and
+`make-card` exit 2 and say the host does not know card steps. Checked against
+Minka's code and `ApiCardAsStepTest` at ea3538525, the fake, and live against
+a local Minka on its `main`: a child added by an uppercase ID, again (200,
+"already"), and by its address with a query and a fragment; a card as its own
+step and an unknown one refused with their hints; a step in words made into a
+card in Triage, and one of 300 characters cut to 200 with "…"; `stepIsACard`
+on edit, complete, reopen and make-card; a move; a child moved to Done read as
+done and counted on the tile; "Step of" on the child; a child in the trash read
+as a card one cannot open; and removing the link keeping the child. A short
+identifier, a client and an older Minka were not met live, for want of a board
+with short identifiers in the test project.
+
 The working notes on the back of a card are read with `cards notes show` and
 written with `cards notes set`, which needs `--expect` or `--force` (C-042).
 Seen live against the local instance, which runs Minka's main with the notes
@@ -896,6 +914,19 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   position between two keys; it writes the text in the same go as the rest,
   and stands in for a Minka without either by a switch, whose 404 for the
   move is the API's own.
+- A card as a step (`cards steps create --card`, `make-card`, `stepOf`), in
+  what the live run above did not meet: the child by a short identifier, a
+  client, the refusals in an archived project, the people of make-card and a
+  Minka without card steps. Read in `BoardApiController::addStepAction`,
+  `addCardStep`, `updateStepAction`, `makeStepIntoCardAction`,
+  `AddCardStepHandler`, `MakeStepIntoCardHandler`, `DbalCardStepRepository`,
+  `LinkedCardResource`, `StepResource` and `ApiCardAsStepTest` on Minka's
+  `main` (ea3538525), and mirrored by the fake in the order of
+  [Steps](../stable/steps.md#the-order-of-the-refusals). The fake cuts long
+  words between code points where Minka cuts between graphemes, knows no
+  `agentOfAnotherPerson` for a step's people, puts the parents in `stepOf` in
+  the order of its boards, and stands in for a Minka without card steps by a
+  switch.
 - `projects edit`: no request of it has gone to a real Minka, and none can
   until a release carries the rename. Read in `ProjectsApiController::
   updateProjectAction`, `DbalProjectRepository::rename` and `RenameProjectTest`
