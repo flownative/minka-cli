@@ -562,6 +562,18 @@ type Server struct {
 	// has no address.
 	KnowsNoCardSteps bool
 
+	// SearchesOnlyWithinFiles makes the server answer like a Minka from before
+	// it searched across everything: a search without a tool or a folder is
+	// searchScopeMissing, kinds and projectId are passed over, an offset has
+	// no ceiling but its six digits, and a hit carries neither targetKind,
+	// targetId, shortId, shortUrl nor apiUrl.
+	SearchesOnlyWithinFiles bool
+
+	// NamesPagesBeyondTheDeepestOffset makes a search name a next page beyond
+	// the offset of 500 it serves at most, which the server then refuses, as
+	// Minka did when it first searched across everything.
+	NamesPagesBeyondTheDeepestOffset bool
+
 	// MessagesPerPage, where set, caps a page of a transcript below the 200
 	// Minka allows, so that a client cannot take the page size for granted.
 	MessagesPerPage int

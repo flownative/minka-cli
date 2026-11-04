@@ -14,9 +14,9 @@ func searchPath(values url.Values) string {
 	return "/api/v1/search?" + values.Encode()
 }
 
-// A search is refused in the order Minka refuses it: a scope at all, then
-// the scope itself, then the term, then the offset. Every scope that cannot
-// be searched is the plain 404, whatever is wrong with it.
+// A search is refused in the order Minka refuses it: the kinds, the project,
+// the tool and folder, then the term, then the offset. Every scope that
+// cannot be searched is the plain 404, whatever is wrong with it.
 func TestASearchIsRefusedInTheOrderMinkaRefuses(t *testing.T) {
 	s, f := New(t)
 	s.Tokens["minka_pat_client"] = f.Client.ID
@@ -34,7 +34,17 @@ func TestASearchIsRefusedInTheOrderMinkaRefuses(t *testing.T) {
 		values url.Values
 		want   string
 	}{
-		{"no scope, no term and no offset", f.Token, url.Values{"offset": {"x"}}, "422 searchScopeMissing"},
+		{"an unknown kind, before a project that is none", f.Token, url.Values{"kinds": {"cards"}, "projectId": {"nope"}}, "422 searchKindsUnknown"},
+		{"an empty kind between commas", f.Token, url.Values{"kinds": {"chat,"}, "q": {"tent"}}, "422 searchKindsUnknown"},
+		{"all is no kind", f.Token, url.Values{"kinds": {"all"}, "q": {"tent"}}, "422 searchKindsUnknown"},
+		{"a kind in capitals", f.Token, url.Values{"kinds": {"Board"}, "q": {"tent"}}, "422 searchKindsUnknown"},
+		{"blank kinds are every kind", f.Token, url.Values{"kinds": {"  "}, "q": {"tent"}}, "200"},
+		{"kinds trimmed and repeated", f.Token, url.Values{"kinds": {" chat , chat,files"}, "q": {"tent"}}, "200"},
+		{"a project that is no ID, before the tool", f.Token, url.Values{"projectId": {"nope"}, "toolId": {"files"}}, "404"},
+		{"a project of somebody else", f.Token, url.Values{"projectId": {f.OtherProject.ID}, "q": {"tent"}}, "404"},
+		{"a project in capitals", f.Token, url.Values{"projectId": {strings.ToUpper(f.Project.ID)}, "q": {"tent"}}, "200"},
+		{"no scope and no term", f.Token, url.Values{"offset": {"x"}}, "422 searchTermMissing"},
+		{"no scope", f.Token, url.Values{"q": {"tent"}}, "200"},
 		{"a tool that is no ID, before the term", f.Token, url.Values{"toolId": {"files"}}, "404"},
 		{"a folder that is no ID", f.Token, url.Values{"folderId": {"plans"}, "q": {"tent"}}, "404"},
 		{"a Posts tool", f.Token, url.Values{"toolId": {f.Posts.ID}, "q": {"tent"}}, "404"},
@@ -51,6 +61,8 @@ func TestASearchIsRefusedInTheOrderMinkaRefuses(t *testing.T) {
 		{"an offset that is no number", f.Token, url.Values{"toolId": {f.Files.ID}, "q": {"tent"}, "offset": {"x"}}, "422 searchOffsetNotANumber"},
 		{"an offset of seven digits", f.Token, url.Values{"toolId": {f.Files.ID}, "q": {"tent"}, "offset": {"1000000"}}, "422 searchOffsetNotANumber"},
 		{"a negative offset", f.Token, url.Values{"toolId": {f.Files.ID}, "q": {"tent"}, "offset": {"-1"}}, "422 searchOffsetNotANumber"},
+		{"an offset beyond 500", f.Token, url.Values{"q": {"tent"}, "offset": {"501"}}, "422 searchOffsetTooLarge"},
+		{"an offset of 500", f.Token, url.Values{"q": {"tent"}, "offset": {"500"}}, "200"},
 		{"an empty offset", f.Token, url.Values{"toolId": {f.Files.ID}, "q": {"tent"}, "offset": {""}}, "200"},
 		{"a tool alone", f.Token, url.Values{"toolId": {f.Files.ID}, "q": {"tent"}}, "200"},
 		{"a folder alone", f.Token, url.Values{"folderId": {f.Folder.ID}, "q": {"tent"}}, "200"},
