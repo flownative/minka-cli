@@ -100,8 +100,7 @@ func handedTo(ctx context.Context, source Source, bucket, recording int64) ([]pe
 // Only a member of the project is somebody the bundle carries in it, and every
 // member came in where the project was written. Of them, a client is in no
 // project in Minka, and somebody who has left or comes without an address is
-// retired there, which makes them no member either. An agent comes without an
-// address and is given one there, so it stays.
+// retired there, which makes them no member either.
 func (e *Extractor) whomMinkaTakes(bucket int64, named []person, leftOff *PeopleLeftOff) ([]string, int) {
 	members := e.members[bucket]
 	taken := map[int64]bool{}
@@ -123,7 +122,7 @@ func (e *Extractor) whomMinkaTakes(bucket int64, named []person, leftOff *People
 		case known.retired():
 			leftOff.Retired++
 			fell++
-		case known.EmailAddress == "" && !e.people.isAnAgent(one.ID): // the agents'
+		case known.EmailAddress == "":
 			leftOff.WithoutAnAddress++
 			fell++
 		default:
