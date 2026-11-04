@@ -5,8 +5,8 @@ description: >
   read a board with its columns and cards, show a card with description and
   comments, create and edit cards, move, hold and complete them, comment on them,
   read and write chat messages, and say which cards you are working on right
-  now; also documents and files, to-dos, check-ins, posts, events, reminders
-  and the import from Basecamp.
+  now; search everything you may read in Minka; also documents and files,
+  to-dos, check-ins, posts, events, reminders and the import from Basecamp.
   Use for any task on a Minka board, such as tracking development tasks, and
   always before taking up a card, moving it, commenting on it or writing its
   working notes, and when coordinating a board or waiting for work on one.
@@ -60,6 +60,9 @@ references listed under "Where the rest stands".
   card and `minka work stop <card>` when you are done with it. It shows on the
   board only while `minka heartbeat` keeps reporting it, which the mod of
   `minka setup` or `minka hooks install` does once and for all.
+- Search before you ask a person or create a card or a document: `minka
+  search <term> --json` finds what you may read across Minka, and `--kind`
+  and `--project` narrow it ([references/search.md](references/search.md)).
 - To wait for news — a card moved, a comment, an assignment — never poll a
   board: run `minka notifications wait --json` (in Claude Code with
   `run_in_background`), which exits when something arrives. Waiting marks
@@ -279,6 +282,7 @@ minka notifications mark-read <notificationId> --json
 minka work start <card> [--session <id>] --json
 minka work stop [<card>] [--all] [--session <id>] --json
 minka work list [--session <id>] --json
+minka search <term>... [--kind board|posts|todos|files|calendar|chat|conversation]... [--project <projectId>] [--limit N] --json
 minka search <term>... (--folder <folderId> | --tool <toolId> | both) [--limit N] --json
 ```
 
@@ -302,7 +306,8 @@ they stand at its top. Read the one you need, not all of them.
 | Saying which cards you are working on: `work`, `heartbeat`, the mod | [references/work-and-heartbeat.md](references/work-and-heartbeat.md) |
 | Chats of a project and private conversations | [references/chats.md](references/chats.md) |
 | Putting a file into a text, fetching a file back | [references/files.md](references/files.md) |
-| Docs & Files: documents, uploads, folders, versions, books and the order set by hand, the trash and the archive of a tool, searching a tool or a folder with `minka search`, reading a whole book or folder as files with `minka docs export` | [references/docs-and-files.md](references/docs-and-files.md) |
+| Searching everything you may read with `minka search`: narrowing it, reading a hit, opening what it leads to | [references/search.md](references/search.md) |
+| Docs & Files: documents, uploads, folders, versions, books and the order set by hand, the trash and the archive of a tool, reading a whole book or folder as files with `minka docs export` | [references/docs-and-files.md](references/docs-and-files.md) |
 | To-do lists, groups, to-dos, subtasks, repeating to-dos | [references/todos.md](references/todos.md) |
 | Check-ins: questions and answers | [references/checkins.md](references/checkins.md) |
 | Posts of the message board | [references/posts.md](references/posts.md) |

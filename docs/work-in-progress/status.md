@@ -163,17 +163,28 @@ its `main` and in no release yet, so production gets it with the next Minka
 release; the commands are checked against Minka's code and tests and the fake,
 and live only in what addresses that name nothing show, see below.
 
-`search <term>... --tool <toolId> | --folder <folderId>` finds documents and
-uploads within a Files tool or a folder and what lies beneath it, each hit with
-the heading of its match and an address anchored there, read in pages of 25 up
-to `--limit` (C-132, E-304), and an entry in the archive or below an archived
-folder marked `archived`. Minka's side is on its `main` and in no release yet,
-so production gets it with the next Minka release; the command is checked
-against Minka's code and `ApiSearchTest`, the fake, and live against a local
-Minka on its `main`: hits, sections and anchors, `archived`, paging across two
-pages and a cut inside one, and every refusal with the bodies the fake sends.
-A folder outside the tool named was not met live, for want of a second Files
-tool in the test project. The fake finds a term as a substring in any case, not as
+`search <term>...` searches everything the person may read across Minka, or
+with `--tool` and `--folder` the documents and uploads of a Files tool or a
+folder, narrowed with `--kind` and `--project`, read in pages of 25 up to
+`--limit` and never beyond offset 500, each hit naming its kind, what it
+stands under and where it leads (C-132, C-156 to C-160, E-304, E-357). The
+search within a tool or a folder is in Minka's releases since v0.85.0 and was
+checked live against a local Minka: hits, sections and anchors, `archived`,
+paging across two pages and a cut inside one, and every refusal with the
+bodies the fake sends. The search across Minka is on Minka's `main` at
+64fa4398c (#661 and #665) and in no release yet; until one carries it, a
+released Minka answers a search without `--tool` or `--folder` with
+`searchScopeMissing`, which the CLI reports as exit 2 (C-159). The kinds of
+hit and `targetKind` spell `todoList` and `todoGroup` as the rest of the API
+does, and `next` is `null` once it would pass 500; the fake answers so, its
+`NamesPagesBeyondTheDeepestOffset` keeps #661's rule of naming a `next` it then
+refused, and the CLI stops at 500 under both. Checked against Minka's code,
+`ApiSearchEverywhereTest` and the fake, and live against a local Minka on its
+`main`: cards, a comment under a card with the card as its target and its
+breadcrumb, chat lines, `--kind` and `--project` narrowing, an unknown
+project as 404, and the refusals the CLI makes before asking. Paging, to-dos,
+posts, files, events and private conversations were not met live, for want of
+data the test account finds. The fake finds a term as a substring in any case, not as
 Postgres reads it (no stems, typos, phrases or operators), orders `best` as
 title before text and then the newest; its anchors are Minka's rule, the one
 `docs export` writes.
@@ -737,6 +748,16 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
 
 ## Checked against the fake only
 
+- The search across Minka (`search` without `--tool` or `--folder`): the fake
+  mirrors `SearchApiController` and `FullTextSearchQueryService` at
+  64fa4398c. **The fake does not mirror**: check-ins and forwards (Minka does
+  not search them either), a time of change for cards, to-dos, events, to-do
+  lists and groups (it takes when they were made, and none for a list or a
+  group), a document's past versions (Minka searches them, the fake only the
+  current body), a client's view of a card or of a comment (it shows a
+  client every card of the project), the trash of a Files tool or a Posts
+  tool, the author and period filters of the web, the labels asked within
+  files, and ranking (`best` is title before text, then the newest).
 - Waiting and coordinating (`notifications wait`, `count`, `show`,
   `mark-read`, `boards coordinator claim`, `release`, `show`, the coordinator
   in `boards show`, the filters of `cards mine`): the fake is held against

@@ -14,7 +14,6 @@ minka docs list <toolId> [--folder <folderId>] --json
 minka docs list <toolId> --archived --json
 minka docs show <documentId> --json
 minka search <term>... (--tool <toolId> | --folder <folderId> | both) [--sort best|recent] [--limit N] [--offset <next>] --json
-minka search --tool <toolId> --json -- -<word> <term>...
 minka docs create --tool <toolId> --title "Title" --audience everybody|chosen|nobody [--notify <person>]... [--folder <folderId>] [--body - < body.md] --json
 minka docs edit <documentId> [--title "New"] [--body - < body.md] (--expect <updatedAt> | --force) --json
 minka docs edit <documentId> (--in-navigation | --not-in-navigation) --json
@@ -80,56 +79,16 @@ minka docs comments unreact (--document <documentId> | --upload <uploadId>) <com
 
 ## Searching a tool or a folder
 
-`minka search` finds documents and uploads by what they say, the way the
-search of Minka on the web does, within one Docs & Files tool, one folder and
-everything beneath it, or a folder within a tool. Use it rather than walking
-`docs list` and reading every document when you look for a passage of a long
-text, such as a chapter of a handbook.
-
-1. Find the scope. `minka docs tools <projectId> --json` gives the IDs of the
-   tools of a project; `minka docs list <toolId> --json` the folders at the
-   top, and `--folder <folderId>` the folders inside one.
-2. Search: `minka search tent costs --folder <folderId> --json`. The words
-   are one term, joined by a space; double quotes inside it ask for a phrase
-   (`minka search '"site plan"' --tool <toolId>`), a word with a dash in
-   front leaves out what holds it. A term that starts with a dash goes last,
-   behind `--`, and every flag, `--json` included, has to stand before the
-   `--`: behind it every word is part of the term. `minka search --tool
-   <toolId> --json -- -draft tent`. Minka cuts a term at 200 characters; a
-   `notice` says so. `--tool`, `--folder` or both is required,
-   and a search without one is refused with exit 1 before any request.
-3. Read `data.hits`. Each is `{kind, id, title, excerpt, section, projectId,
-   toolId, project, updatedAt, archived, appUrl}`: `kind` is `document` or
-   `upload`, `excerpt` the plain text around the match, `project` the
-   project's name, `archived` true for an entry in the archive or in an
-   archived folder (the text marks its line `(archived)`): it can be read and
-   takes no write.
-   A document hit names the heading its match stands under in `section`
-   (`{heading, anchor}`), and `appUrl` then ends in `#<anchor>`, such as
-   `#h-setup-2`: that address opens the document at the section, so it is the
-   one to hand a person. A match in the title alone, before the first
-   heading, or in an upload has `section: null`.
-4. Open a hit: `minka docs show <id>` for a document, `minka docs uploads
-   show <id>` for an upload; the first breadcrumb names the right one for the
-   first hit. In the body of `docs show`, the section is the heading named in
-   `section.heading`.
-
-`--sort` is `best` (the default) or `recent`; any other word is refused with
-exit 1, because Minka would take it as `best` without a word. Minka serves 25
-hits a page. `--limit N` (25 unless given) is how many hits to read: the
-command reads further pages only while it lacks hits, and stops inside a page
-where the limit falls. Where more are left, `data.next` is a number in a
-string, and the `next` breadcrumb and a `notice` give the whole command to
-read on, to which flags can be appended (one whose term starts with a dash
-ends in `-- <term>`, so put flags before the `--`); hand `next` to `--offset`
-exactly as it came. Without more, `next` is `null`. Minka takes no offset
-beyond 999999, so no hit behind that is reached. Hits can move between two
-pages while somebody writes: a run is no picture of one moment.
-
-Drafts and what is in the trash are never found; what is in the archive is,
-and so is an entry below an archived folder, each with `archived: true`. An archived project finds
-nothing. A tool or folder that is not there, that you may not read, or a
-folder outside the tool `--tool` names, exits 2 (`not_found`).
+`minka search <term> --tool <toolId>` finds the documents and uploads of a
+tool by what they say, `--folder <folderId>` those of a folder and everything
+beneath it. Use it rather than walking `docs list` and reading every document
+when you look for a passage of a long text, such as a chapter of a handbook.
+`minka docs tools <projectId> --json` gives the IDs of the tools of a project,
+`minka docs list <toolId> --json` the folders. A document hit names the
+heading of its match in `section`, and its `appUrl` opens the document there;
+in the body of `docs show`, the section is the heading named in
+`section.heading`. Everything else about the search, across Minka as well:
+[search.md](search.md).
 
 ## Writing a document
 

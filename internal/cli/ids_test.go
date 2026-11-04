@@ -189,6 +189,9 @@ var idsInCapitals = []idInCapitals{
 	{command: "search", inputs: []string{"--tool", "--folder"}, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
 		return []string{"tent", "--tool", up(f.Files.ID), "--folder", up(f.Folder.ID)}
 	}},
+	{command: "search", inputs: []string{"--project"}, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
+		return []string{"tent", "--project", up(f.Project.ID)}
+	}},
 	{command: "docs create", inputs: []string{"--tool", "--folder", "--notify"}, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
 		return []string{"--tool", up(f.Files.ID), "--folder", up(f.Folder.ID), "--title", "Costs", "--audience", "chosen", "--notify", up(f.Anke.ID), "--body", "Four hundred."}
 	}},

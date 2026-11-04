@@ -68,8 +68,13 @@ the documentation says what holds; how it came about is in git.
   the flag that names the kind of entry, the archive of a folder, how a tool
   is kept in order — the trash, the archive, moves, folders, a version made the
   newest — and who may, the refusals, books and the order set by hand, the
-  search within a tool or a folder and its pages, the export of a book into
-  files and what a run never touches — before any work on `docs` or `search`.
+  export of a book into files and what a run never touches — before any work
+  on `docs`.
+- [Search](stable/search.md): What a search finds across Minka and what never,
+  the kinds and the project it is narrowed to, the search within a tool or a
+  folder, what is checked before a request, its pages and the stop at offset
+  500, what a hit names and leads to, what an older Minka answers — before any
+  work on `search`.
 - [Labels](stable/labels.md): Where a label is kept and reached, its name
   rules and colours, how a label is named by ID or name, the move by one
   neighbour, putting several on an item and the scope that replaces, where

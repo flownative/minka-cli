@@ -98,9 +98,10 @@ func TestASearchSendsItsTermAndScope(t *testing.T) {
 	}
 }
 
-// A search that names neither a tool nor a folder, or an order Minka does not
-// know, is refused before any request: Minka would refuse the first with
-// another exit code and take the second as the best match without a word.
+// What Minka would refuse, or answer with nothing or the best match without a
+// word, is refused before any request: an unknown kind, kinds without files
+// beside a tool or a folder, a project beside them, an unknown order and an
+// offset beyond the deepest one.
 func TestASearchIsCheckedBeforeItGoesOut(t *testing.T) {
 	e := newTestEnv(t)
 	f := e.fixture
@@ -109,7 +110,17 @@ func TestASearchIsCheckedBeforeItGoesOut(t *testing.T) {
 		name string
 		args []string
 	}{
-		{"no scope", []string{"search", "tent"}},
+		{"an unknown kind", []string{"search", "tent", "--kind", "cards"}},
+		{"an empty kind between commas", []string{"search", "tent", "--kind", "chat,"}},
+		{"a kind in capitals", []string{"search", "tent", "--kind", "Board"}},
+		{"all is no kind", []string{"search", "tent", "--kind", "all"}},
+		{"kinds without files beside a tool", []string{"search", "tent", "--tool", f.Files.ID, "--kind", "board", "--kind", "chat"}},
+		{"kinds without files beside a folder", []string{"search", "tent", "--folder", f.Folder.ID, "--kind", "posts"}},
+		{"a project beside a tool", []string{"search", "tent", "--tool", f.Files.ID, "--project", f.Project.ID}},
+		{"a project beside a folder", []string{"search", "tent", "--folder", f.Folder.ID, "--project", f.Project.ID}},
+		{"a project that is no ID", []string{"search", "tent", "--project", "Test-Projekt"}},
+		{"an offset beyond 500", []string{"search", "tent", "--offset", "501"}},
+		{"an offset of six digits", []string{"search", "tent", "--offset", "999999"}},
 		{"an order Minka does not know", []string{"search", "tent", "--tool", f.Files.ID, "--sort", "newest"}},
 		{"no term", []string{"search", "--tool", f.Files.ID}},
 		{"a term of blanks", []string{"search", "  ", "--tool", f.Files.ID}},
@@ -207,7 +218,7 @@ func TestASearchAsText(t *testing.T) {
 
 	r := e.run("", "search", "saturday", "--tool", f.Files.ID, "--styled")
 	expectCode(t, r, ExitOK)
-	want := "- " + f.Document.ID + "  How the stage goes up › The tent\n" +
+	want := "- " + f.Document.ID + "  document How the stage goes up › The tent (in Test-Projekt)\n" +
 		"  It comes on Saturday.\n" +
 		"  " + e.server.URL + "/projects/" + f.Project.ID + "/files/" + f.Files.ID + "/" + f.Document.ID + "#h-the-tent\n"
 	if r.stdout != want {
@@ -273,7 +284,7 @@ func TestAnUploadFoundFirstIsShownAsAnUpload(t *testing.T) {
 		t.Errorf("breadcrumbs %+v", env.Breadcrumbs)
 	}
 	r = e.run("", "search", "everything", "--folder", f.Folder.ID, "--styled")
-	if !strings.HasPrefix(r.stdout, "- "+f.FilesUpload.ID+"  site-plan.pdf (upload)\n") {
+	if !strings.HasPrefix(r.stdout, "- "+f.FilesUpload.ID+"  upload site-plan.pdf (in Test-Projekt)\n") {
 		t.Errorf("text %q", r.stdout)
 	}
 }
@@ -285,10 +296,10 @@ func TestAnArchivedHitIsMarked(t *testing.T) {
 
 	r := e.run("", "search", "tent cost", "--folder", f.Folder.ID, "--sort", "recent", "--styled")
 	expectCode(t, r, ExitOK)
-	if !strings.Contains(r.stdout, "- "+f.DocumentBelowTheArchivedFolder.ID+"  What the tent cost last year (archived)\n") {
+	if !strings.Contains(r.stdout, "- "+f.DocumentBelowTheArchivedFolder.ID+"  document What the tent cost last year (in Test-Projekt, archived)\n") {
 		t.Errorf("the hit below the archived folder is not marked:\n%s", r.stdout)
 	}
-	if !strings.Contains(r.stdout, "- "+f.DocumentInFolder.ID+"  What the tent costs\n") {
+	if !strings.Contains(r.stdout, "- "+f.DocumentInFolder.ID+"  document What the tent costs (in Test-Projekt)\n") {
 		t.Errorf("a hit in use is marked:\n%s", r.stdout)
 	}
 }

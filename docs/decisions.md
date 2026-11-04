@@ -2153,16 +2153,14 @@ whose archives and formula are out is done. **Implemented as:** the job
 
 *Applies to: `search`*
 
-A missing `--tool`/`--folder`, a `--sort` other than `best` or `recent` and a
-malformed `--offset` are exit 1 before any request. `--limit` reads Minka's
-pages of 25 only while hits are lacking and may stop inside one; `data` is
-`{hits, next}`, `next` the offset of the first hit left behind. The command to
-read on puts the term first, and behind `--` only where it starts with a dash.
-
+A `--sort` other than `best` or `recent` and a malformed `--offset` are exit 1
+before any request. `--limit` reads Minka's pages of 25 only while hits are
+lacking and may stop inside one; `data` is `{hits, next}`, `next` the offset of
+the first hit left behind. The command to read on puts the term first, and
+behind `--` only where it starts with a dash.
 **Why:** Minka takes an unknown order as `best` without a word, and its offset
 counts hits, so a cut page still says where the rest begins. **Implemented
-as:** `cli.newSearchCmd`, `api.SearchUpTo`, see
-[Docs & Files](stable/docs-and-files.md#searching-a-tool-or-a-folder).
+as:** `cli.newSearchCmd`, `api.SearchUpTo`, see [Search](stable/search.md#pages).
 
 <a id="c-133"></a>
 ## C-133 — Books and the order set by hand go out only as asked, and only what Minka wrote passes
@@ -2479,3 +2477,59 @@ below a card's title. A step is never named by an empty text.
 **Why:** the column is its state, so a box of its own would mislead, and an
 unseen card's empty title must not be matched by `""`.
 **Implemented as:** `cli.cardStepLine`, `cli.stepOfLine`, `cli.findLine`, see [Steps](stable/steps.md#a-card-as-a-step).
+
+<a id="c-156"></a>
+## C-156 — `--kind` takes Minka's words, and beside a tool or folder it names `files`
+
+*Applies to: `search`*
+
+`--kind` takes `board`, `posts`, `todos`, `files`, `calendar`, `chat` and
+`conversation`, repeated or separated by commas, each once; anything else is
+exit 1, and so is a `--kind` without `files` beside `--tool` or `--folder`.
+**Why:** Minka refuses an unknown word with exit 9 and answers kinds without
+files beside a tool with an empty page, which reads like "nothing found".
+**Implemented as:** `cli.searchKindsOf`, see [Search](stable/search.md#narrowing).
+
+<a id="c-157"></a>
+## C-157 — `--project` stands beside neither `--tool` nor `--folder`
+
+*Applies to: `search`*
+
+`--project` beside `--tool` or `--folder` is exit 1 before any request.
+**Why:** a tool or folder lies in one project already, so the flag either
+repeats it or makes Minka answer an empty page, and an older Minka would pass
+it over. **Implemented as:** `cli.newSearchCmd`, see [Search](stable/search.md#narrowing).
+
+<a id="c-158"></a>
+## C-158 — A search reads no further than offset 500
+
+*Applies to: `search`*
+
+An `--offset` beyond 500 is exit 1; a run asks for no page and hands out no
+`next` beyond 500, whatever Minka names. Where the run stopped at 500, or read
+a full page that ends behind it, a notice says to narrow the search.
+**Why:** Minka refuses an offset beyond 500, and a `next` it would refuse must
+not reach an agent. **Implemented as:** `api.SearchUpTo`, see [Search](stable/search.md#pages).
+
+<a id="c-159"></a>
+## C-159 — A Minka that searches only within files is exit 2 with a message that says so
+
+*Applies to: `search`*
+
+Its `searchScopeMissing` on a search without `--tool` or `--folder` is exit 2
+(`not_found`): the host searches only within a Docs & Files tool or folder;
+give `--tool` or `--folder`. Never a fallback.
+**Why:** as with `cards next` (C-149), a host that lacks a feature is no input
+error of the caller. **Implemented as:** `cli.newSearchCmd`, see [Search](stable/search.md#an-older-minka).
+
+<a id="c-160"></a>
+## C-160 — A hit reads as its kind and what it stands under, and leads to its target
+
+*Applies to: `search`*
+
+One line per hit: ID, kind, `#MNK-1` and title, `› Heading`, `(in Project,
+archived)`; `comment on card …`, `chat line in …`, `message with …`; the
+breadcrumb `show` reads the target of the first hit a command shows.
+**Why:** a comment or a line is read in its item or chat, and no command opens
+a transcript at a line. **Implemented as:** `cli.searchHitLine`,
+`cli.hitBreadcrumb`, see [Search](stable/search.md#a-hit).
