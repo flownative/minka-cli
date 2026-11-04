@@ -23,8 +23,8 @@ A tool is kept in order with `delete`, `restore`, `archive`, `unarchive` and
 …` — beside `docs folders create` and `edit`, `docs versions restore` and
 `docs list --archived` ([C-130](../decisions.md#c-130)), see below.
 
-`search` finds documents and uploads within a tool or a folder
-([C-132](../decisions.md#c-132)), see below.
+`search --tool` and `--folder` find documents and uploads within a tool or a
+folder, see [Search](search.md).
 
 `docs book` reads a book as one tree, `docs folders edit --book` and
 `--no-book` mark one, `docs edit --in-navigation` and `--not-in-navigation`
@@ -757,43 +757,3 @@ list. `entries` reaches one folder deep: going down means calling again with a
 folder. The order is the web's own, neither alphabetical nor by date, set by
 hand or automatic, and the CLI passes it through. `lead` is the first 240 characters of the body
 without markup, cut where the count runs out and not at a word.
-
-## Searching a tool or a folder
-
-`search <term>...` asks `GET /api/v1/search` within a Files tool (`--tool`), a
-folder and everything beneath it (`--folder`), or both, the way the web's search
-finds entries (E-304). The words of the command line are one term, joined by a
-space, and go out as they are: Minka reads phrases and operators in it and cuts
-it at 200 characters, which a notice says where the term is longer. Every hit
-carries the heading its match stands under and an `appUrl` that ends in that
-heading's anchor; the CLI shows the address and builds nothing from the anchor.
-An entry in the archive, or below an archived folder, is found as on the web
-and carries `archived: true`, which the text view marks as `docs list` does.
-
-Checked here, before any request ([C-132](../decisions.md#c-132)): a term at
-all, `--tool` or `--folder` (Minka would answer `searchScopeMissing` with exit 9
-instead of 1), the IDs, `--sort` as `best` or `recent` (Minka takes any other
-word as `best` without saying so), `--limit` of at least 1, and `--offset` as a
-whole number of at most six digits. What remains for Minka is the scope itself:
-a tool that is no Files tool, a folder or tool that is not there or cannot be
-read, and a folder outside the tool named are the plain 404, exit 2.
-
-Minka serves 25 hits a page and takes no size. `--limit` (25 unless given) is
-reached with as few pages as it takes: a page is asked for only while hits are
-lacking, so a limit within one page costs one request and no hit costs one of
-its own. The offset counts hits, so a run that stops inside a page names the
-first hit it left behind as `next` (the offset of that page and the hits taken
-from it); a run that took a whole page passes Minka's `next` on. `data` is
-`{hits, next}`, each hit the JSON Minka sent, `next` a string or `null`; the
-breadcrumb `next` and a notice, as on the other paged commands, give the whole
-command with `--offset`. The term stands first, so a flag an agent appends,
-`--json` above all, stays a flag. Only a term starting with a dash, Minka's
-NOT, goes last behind `--`, where it is not read as a flag; every flag then has
-to stand before the `--`. Minka takes no offset of more than six digits, so no
-hit behind 999,999 is reached. Pages are read one after another, so a hit that
-moves while somebody writes can be met twice or not at all across the border. A
-failure on a later page fails the run, and the hits read before it are not
-shown. An answer the run cannot go on from is `unexpectedResponse`, exit 7: a
-hit that is no object, `null` included, or a `next` that is no number of hits,
-an empty one included, which would start over. A page without hits ends the run
-whatever `next` it names.
