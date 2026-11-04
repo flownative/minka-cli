@@ -229,8 +229,6 @@ type Result struct {
 	// Bots counts the people of the bundle that are chatbots or integrations of
 	// the source, the deleted ones among them.
 	Bots int
-	// Agents counts the people of the bundle written as agents of a human.
-	Agents int // the agents'
 	// BotsAlsoNamedElsewhere are the IDs of the bots Basecamp deleted that records
 	// other than lines of an integration name as well: perhaps a deleted user
 	// who once wrote as an integration.
@@ -392,9 +390,6 @@ type Extractor struct {
 	// sends to Basecamp's API itself. Without it no list of versions is asked
 	// for and the report says nothing of them.
 	UploadVersions bool
-	// Agents are the people written as agents of a human; temporary, see
-	// Agents.
-	Agents Agents // the agents'
 
 	// source is Source behind the guard every request of a run passes.
 	source  Source
@@ -412,7 +407,6 @@ type Extractor struct {
 
 	peopleAsClients              int
 	bots                         int
-	agents                       int // the agents'
 	clientMemberships            int
 	visibilityLeftToTheContainer int
 	// talks are the message boards, chats and questionnaires of the projects
@@ -558,7 +552,6 @@ func (e *Extractor) extract(ctx context.Context, w *bundle.Writer, pick func(con
 	e.creatorProbesRefused, e.addressesUnquoted = 0, 0
 	e.peopleAsClients, e.clientMemberships, e.visibilityLeftToTheContainer = 0, 0, 0
 	e.bots = 0
-	e.agents = 0 // the agents'
 	e.account, e.apiRoot = "", ""
 	e.cardsByStatus = everyStatus()
 	e.cardsOnHold, e.cardsLeftOut, e.commentsTrashed, e.bodies = 0, 0, 0, BodyCounts{}
@@ -622,9 +615,6 @@ func (e *Extractor) extract(ctx context.Context, w *bundle.Writer, pick func(con
 	if err := e.people.listAccount(listed); err != nil {
 		return Result{}, err
 	}
-	if err := e.people.takeAgents(e.Agents); err != nil { // the agents'
-		return Result{}, err
-	}
 	ids, err := pick(ctx)
 	if err != nil {
 		return Result{}, err
@@ -682,7 +672,6 @@ func (e *Extractor) extract(ctx context.Context, w *bundle.Writer, pick func(con
 		AddressesUnquoted:      e.people.unquotedAddresses() + e.addressesUnquoted,
 		PeopleLeftOut:          e.people.leftOut(),
 		Bots:                   e.bots,
-		Agents:                 e.agents, // the agents'
 		BotsAlsoNamedElsewhere: e.people.botsAlsoNamedElsewhere(),
 		CreatorProbesRefused:   e.creatorProbesRefused,
 
@@ -1185,14 +1174,10 @@ func (e *Extractor) descriptionOf(p project) string {
 // writePeople adds everybody the run has seen, each with their avatar.
 //
 // A bot comes as a bot, without the address Basecamp may still keep of a
-// deleted one: Minka ends the run over a bot with an address. An agent comes
-// as an agent, without an address, after the human it acts for.
+// deleted one: Minka ends the run over a bot with an address.
 func (e *Extractor) writePeople(ctx context.Context, w *bundle.Writer) (int, error) {
-	if err := e.people.bringInThePrincipals(); err != nil { // the agents'
-		return 0, err
-	}
 	avatars := 0
-	for _, seen := range e.people.inWritingOrder() {
+	for _, seen := range e.people.sorted() {
 		id := sourceID(seen.ID)
 		origin := bundle.Record{SourceID: id, CreatedAt: seen.CreatedAt, UpdatedAt: seen.UpdatedAt}
 		record := bundle.Person{Record: origin, Name: e.nameOf("person", seen.ID, seen.Name), Retired: seen.retired()}
@@ -1244,11 +1229,6 @@ func (e *Extractor) writePeople(ctx context.Context, w *bundle.Writer) (int, err
 		if bot {
 			// Only a bot Basecamp deleted says it is retired.
 			written = bundle.Bot{Record: origin, Name: record.Name, Avatar: record.Avatar, Retired: seen.botByItsLines()}
-		}
-		if principal, isAnAgent := e.people.principalOf(seen.ID); isAnAgent { // the agents'
-			e.agents++
-			written = bundle.Agent{Record: origin, Name: record.Name, Avatar: record.Avatar, Retired: record.Retired, Client: record.Client,
-				Principal: principal}
 		}
 		if err := w.Add(bundle.People, written); err != nil {
 			return 0, err

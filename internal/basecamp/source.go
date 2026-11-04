@@ -41,9 +41,6 @@ const (
 	Unavailable Kind = "unavailable"
 	Interrupted Kind = "interrupted"
 	API         Kind = "api"
-	// Usage is a mistake in the call: a flag of the wrong shape, or one that
-	// names what the account does not hold the way the call needs it.
-	Usage Kind = "usage" // the agents'
 )
 
 type Error struct {

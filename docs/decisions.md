@@ -1923,46 +1923,10 @@ it there, with or without the flag, until somebody deletes it.
 [Importing from Basecamp](stable/import.md).
 
 <a id="c-116"></a>
-## C-116 — `--agent` writes a user of the account as the agent of another, for a while
+## C-116 — (removed) `--agent` of `import basecamp`
 
-*Applies to: `import basecamp --agent`, the people of a bundle, `agents` of the
-report*
-
-**Temporary:** for moving Flownative's own account over, three people; it goes
-once that is done, with `basecamp/agents.go`, `bundle.Agent` and the calls
-marked `the agents'`.
-
-`--agent <agent ID>=<human ID>`, repeated, writes that person with
-`kind: "agent"`, `principal` the human's `sourceId`, and no `email` key at
-all. A value of another shape, an agent of themselves, one agent for two
-humans and somebody named as an agent and as the human of one are refused as
-`usage` before anything is asked of Basecamp. Agent and human must both be in
-the account's people list as a `User` who is no client, which is checked as
-`usage` once that list is read, before a project is asked for. An agent comes
-like anybody else, only where a record refers to it; its human then comes
-whether any record names them or not. Agents are written after everybody
-else.
-**Why:** Basecamp has no agents; only whoever runs the import knows who is
-one. The checks are what Minka needs of an agent (one human, never another
-agent, nobody it may not act for) and cost a run of hours nothing when made
-before the walk. The agents to move are users of the company acting for
-users of the company: a bot, somebody deleted or a client is a mistake in the
-call, and somebody the list does not hold cannot be told to be none. No
-address, because the agent must not be found by one and get a login. The
-agent refers to the human, so the human is written; an agent nothing names
-has nothing to carry. Writing the agents last puts the human's line before
-the agent's, as Minka requires: it refuses an agent whose principal no
-earlier line brought. An agent counts as having an address wherever an
-address decides who is kept, because Minka gives it one. A member agent whose
-human is no member of the project is not counted, because only Minka knows
-whether the human is a member there already. Minka stops a run over an agent
-it cannot make (E-263 there: a login of its own, another organization, agents
-or bots of its own, the owner or admin role, the last member of a project its
-human is not in); none of it can be seen in Basecamp, so the import docs advise
-a dry run of Minka's import first.
-**Implemented as:** `basecamp.ParseAgents`, `registry.takeAgents`,
-`bringInThePrincipals`, `inWritingOrder`, `bundle.Agent`, see
-[Importing from Basecamp](stable/import.md).
+**Removed:** the Basecamp migration it served is complete. A bundle carries
+every person as a human or a bot.
 
 <a id="c-117"></a>
 ## C-117 — `notifications wait` goes on from a position kept per account and session, and exits 12 when its time runs out
