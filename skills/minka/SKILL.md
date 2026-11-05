@@ -44,6 +44,10 @@ references listed under "Where the rest stands".
   (`--format`, `--description-format`, `--body-format`, `--notes-format`); a
   text that is mostly HTML without it is refused with exit 1. After every
   write read `notice` in full, never cut the output off with `head`.
+- People read what you write into Minka: card descriptions, comments, the
+  notes on the back, posts and messages. Write it so that it is pleasant to
+  read, in short paragraphs, with a list where several things stand side by
+  side, never as one long block. Work steps stay steps, see below.
 - IDs are UUIDs. Take them from earlier output, never guess them. A card may
   also be named by its short identifier, such as `MNK-1A`. A value that is
   neither is refused with exit 1 before any request. An ID may be written in
