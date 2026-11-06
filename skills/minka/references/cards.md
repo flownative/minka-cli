@@ -311,6 +311,8 @@ minka cards unsubscribe <cardId> <person> --json
 - `cards steps create` adds a step at the end. A step is one line of at most 500
   characters: `stepMissing`, `stepTooLong` and `stepHasControlCharacters` exit 9.
   It comes without people and without a due day; give them with `cards steps edit`.
+  `data` is the new step, with `--card` too, so `data.id` is the step's ID for
+  a following `cards steps edit` or `cards steps move`.
 - `cards steps edit <cardId> <step>` changes the text, the people and the due day in
   one request; what is not given stays. `--title` follows the rules of
   `cards steps create`; `--title ""` exits 9 with `stepMissing`. `--assignee` (repeatable) is the WHOLE set: whoever

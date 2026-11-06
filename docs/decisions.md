@@ -2533,3 +2533,16 @@ breadcrumb `show` reads the target of the first hit a command shows.
 **Why:** a comment or a line is read in its item or chat, and no command opens
 a transcript at a line. **Implemented as:** `cli.searchHitLine`,
 `cli.hitBreadcrumb`, see [Search](stable/search.md#a-hit).
+
+<a id="c-161"></a>
+## C-161 — A new step is `data` against every Minka
+
+*Applies to: `cards steps create`, with and without `--card`*
+
+`data` is the new step, or the card step that stands, as an entry of the
+card's `steps`; from a Minka that answers with the card it is taken out of it
+(a step in words the last, a card step the child's). Summaries name the card
+as it was given.
+**Why:** one shape for agents whichever Minka answers, and no extra request
+for a title. **Implemented as:** `api.Client.AddStep`,
+`api.Client.AddCardStep`, see [Steps](stable/steps.md#writing-a-step).

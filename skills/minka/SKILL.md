@@ -263,8 +263,8 @@ minka cards unassign <cardId> <person> --json
 minka cards notes show <cardId> --json
 minka cards notes set <cardId> - --expect <updatedAt|none> --json < notes.md
 minka cards steps list <cardId> --json
-minka cards steps create <cardId> "Text" --json
-minka cards steps create <cardId> --card <child> --json  # another card as the step
+minka cards steps create <cardId> "Text" --json  # data: the new step
+minka cards steps create <cardId> --card <child> --json  # another card as the step; data: the step
 minka cards steps make-card <cardId> <step> --json  # data: the new card
 minka cards steps edit <cardId> <step> --assignee me --due 2026-10-09 --json
 minka cards steps edit <cardId> <step> --title "Text" --json

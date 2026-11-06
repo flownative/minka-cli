@@ -21,7 +21,7 @@ func TestACardBecomesAStepAndReadsAsItStands(t *testing.T) {
 	if got != "201" {
 		t.Fatalf("by the short identifier: %s", got)
 	}
-	step := stepOnTheCard(t, answer)
+	step := answer
 	linked, _ := step["card"].(map[string]any)
 	if step["title"] != child.Title || step["completed"] != false || len(step["assignees"].([]any)) != 0 || step["dueOn"] != nil ||
 		linked["id"] != child.ID || linked["shortId"] != "MNK-1A" || linked["kind"] != "card" || len(linked["assignees"].([]any)) != 1 {
@@ -33,9 +33,9 @@ func TestACardBecomesAStepAndReadsAsItStands(t *testing.T) {
 		}
 	}
 
-	got, answer = answerTo(t, s, f.Token, "POST", path, `{"cardId":"`+strings.ToUpper(child.ID)+`"}`)
-	if got != "200" || len(answer["steps"].([]any)) != 1 {
-		t.Fatalf("again: %s, %v", got, answer["steps"])
+	got, again := answerTo(t, s, f.Token, "POST", path, `{"cardId":"`+strings.ToUpper(child.ID)+`"}`)
+	if got != "200" || !reflect.DeepEqual(again, step) || len(f.CardInTriage.Steps) != 1 {
+		t.Fatalf("again: %s, %v", got, again)
 	}
 
 	_, read := answerTo(t, s, f.Token, "GET", "/api/v1/cards/"+child.ID, "")
@@ -49,6 +49,73 @@ func TestACardBecomesAStepAndReadsAsItStands(t *testing.T) {
 	_, board := answerTo(t, s, f.Token, "GET", "/api/v1/boards/"+f.Board.ID, "")
 	if tile := tileOf(board, f.CardInTriage.ID); tile["stepCount"] != 1.0 || tile["completedStepCount"] != 1.0 {
 		t.Errorf("the tile counts %v of %v", tile["completedStepCount"], tile["stepCount"])
+	}
+}
+
+// A new step answers as an entry of the card's list of steps, in words and
+// as a card, and so does a card step that stands already; a Minka from
+// before that answers with the whole card.
+func TestANewStepAnswersAsItselfOrWithItsCard(t *testing.T) {
+	for _, olderMinka := range []bool{false, true} {
+		s, f := New(t)
+		s.AnswersANewStepWithItsCard = olderMinka
+		path := "/api/v1/cards/" + f.CardInTriage.ID + "/steps"
+
+		for _, c := range []struct{ body, status string }{
+			{`{"title":"Measure"}`, "201"},
+			{`{"cardId":"` + f.CardInDoing.ID + `"}`, "201"},
+			{`{"cardId":"` + f.CardInDoing.ID + `"}`, "200"},
+		} {
+			got, answer := answerTo(t, s, f.Token, "POST", path, c.body)
+			_, read := answerTo(t, s, f.Token, "GET", "/api/v1/cards/"+f.CardInTriage.ID, "")
+			steps := read["steps"].([]any)
+			if olderMinka {
+				if got != c.status || answer["id"] != f.CardInTriage.ID || !reflect.DeepEqual(answer["steps"], read["steps"]) {
+					t.Errorf("an older Minka, %s: %s %v", c.body, got, answer)
+				}
+				continue
+			}
+			if want := steps[len(steps)-1]; got != c.status || !reflect.DeepEqual(answer, want) {
+				t.Errorf("%s: %s %v, want %v", c.body, got, answer, want)
+			}
+		}
+	}
+}
+
+// A Minka without card steps or without renaming steps predates the step as
+// the answer, so it answers a new step with the card.
+func TestAnOlderMinkaAnswersANewStepWithTheCard(t *testing.T) {
+	for name, older := range map[string]func(*Server){
+		"without card steps":      func(s *Server) { s.KnowsNoCardSteps = true },
+		"without renaming a step": func(s *Server) { s.NeitherRenamesNorMovesSteps = true },
+		"answering with its card": func(s *Server) { s.AnswersANewStepWithItsCard = true },
+	} {
+		s, f := New(t)
+		older(s)
+		got, answer := answerTo(t, s, f.Token, "POST", "/api/v1/cards/"+f.CardInTriage.ID+"/steps", `{"title":"Measure"}`)
+		if _, isACard := answer["steps"]; got != "201" || !isACard || answer["id"] != f.CardInTriage.ID {
+			t.Errorf("%s: %s %v", name, got, answer)
+		}
+	}
+}
+
+// A short identifier under a former prefix of its board still names its
+// card, which carries its current one.
+func TestAFormerPrefixStillNamesTheCard(t *testing.T) {
+	s, f := New(t)
+	f.CardInDoing.ShortID = "NEW-12"
+	f.Board.FormerPrefixes = []string{"OLD"}
+
+	got, answer := answerTo(t, s, f.Token, "GET", "/api/v1/cards/by-short-id/old-12", "")
+	if got != "200" || answer["id"] != f.CardInDoing.ID || answer["shortId"] != "NEW-12" {
+		t.Errorf("the lookup: %s %v", got, answer)
+	}
+	got, answer = answerTo(t, s, f.Token, "POST", "/api/v1/cards/"+f.CardInTriage.ID+"/steps", `{"cardId":"OLD-12"}`)
+	if linked, _ := answer["card"].(map[string]any); got != "201" || linked["id"] != f.CardInDoing.ID {
+		t.Errorf("a card step: %s %v", got, answer)
+	}
+	if got, _ := answerTo(t, s, f.Token, "GET", "/api/v1/cards/by-short-id/OLD-13", ""); got != "404" {
+		t.Errorf("another suffix: %s", got)
 	}
 }
 

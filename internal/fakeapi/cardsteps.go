@@ -36,7 +36,7 @@ func (s *Server) seenCardByShortIdentifier(named string, reader *Person) string 
 		}
 		for _, column := range board.Columns {
 			for _, card := range column.Cards {
-				if card.ShortID != "" && card.ShortID == identifier {
+				if goesBy(board, card, identifier) {
 					return card.ID
 				}
 			}
@@ -50,6 +50,16 @@ func (s *Server) seenCardByShortIdentifier(named string, reader *Person) string 
 		}
 	}
 	return ""
+}
+
+// goesBy says whether a card goes by a short identifier in capitals: its own,
+// or its suffix under a former prefix of its board.
+func goesBy(board *Board, card *Card, identifier string) bool {
+	if card.ShortID == "" {
+		return false
+	}
+	_, suffix, _ := strings.Cut(card.ShortID, "-")
+	return card.ShortID == identifier || slices.ContainsFunc(board.FormerPrefixes, func(prefix string) bool { return prefix+"-"+suffix == identifier })
 }
 
 // linkedCard is a card at either end of a card step as the reader sees it: in
@@ -141,7 +151,8 @@ func (s *Server) parentsOf(card *Card, reader *Person) []any {
 // addCardStep makes another card a step at the end of the list. Words beside
 // the card are refused first, then the shape of the name, then a card the
 // person may not see or the card itself; a card that is a step already is 200
-// with nothing written, unless nothing may be written on the card at all.
+// with that step and nothing written, unless nothing may be written on the
+// card at all.
 func (s *Server) addCardStep(w http.ResponseWriter, board *Board, column *Column, card *Card, archived bool, fields map[string]any, person *Person) {
 	if _, namesTitle := fields["title"]; namesTitle {
 		unprocessable(w, "stepTitleAndCard", "A step is either a title or a card, not both.")
@@ -171,12 +182,13 @@ func (s *Server) addCardStep(w http.ResponseWriter, board *Board, column *Column
 	if s.refusedAsAClosedCard(w, board, archived) {
 		return
 	}
-	if !slices.ContainsFunc(card.Steps, func(step *Step) bool { return step.CardID == childID }) {
-		card.Steps = append(card.Steps, &Step{ID: newID(), CardID: childID})
-		writeJSON(w, http.StatusCreated, s.cardResource(board, column, card, person))
+	if at := slices.IndexFunc(card.Steps, func(step *Step) bool { return step.CardID == childID }); at >= 0 {
+		s.answerAStep(w, http.StatusOK, board, column, card, card.Steps[at], person)
 		return
 	}
-	writeJSON(w, http.StatusOK, s.cardResource(board, column, card, person))
+	step := &Step{ID: newID(), CardID: childID}
+	card.Steps = append(card.Steps, step)
+	s.answerAStep(w, http.StatusCreated, board, column, card, step, person)
 }
 
 // makeStepIntoCard adds a card in Triage from the words, people and due day of

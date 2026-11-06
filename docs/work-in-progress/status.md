@@ -622,6 +622,16 @@ as a card one cannot open; and removing the link keeping the child. A short
 identifier, a client and an older Minka were not met live, for want of a board
 with short identifiers in the test project.
 
+A new step, in words or a card, answers with the step instead of its card on
+Minka's `main` (59fb5dafc, #758) and in no release yet; a released Minka
+answers with the card. `cards steps create` reads both and hands out the step
+as `data` against either (C-161). Checked against Minka's code,
+`ApiCardStepsTest` and `ApiCardAsStepTest` at 59fb5dafc, the fake, and live
+against a local Minka on its `main`: a step in words and a card step answered
+as the step, a repeated card answered with the step already there, and the new
+step moved by its `data.id`. The answer of a released Minka, the card, is read
+against the fake only.
+
 The working notes on the back of a card are read with `cards notes show` and
 written with `cards notes set`, which needs `--expect` or `--force` (C-042).
 Seen live against the local instance, which runs Minka's main with the notes

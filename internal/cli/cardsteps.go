@@ -41,11 +41,6 @@ func (s *session) cardNameForMinka(value string) string {
 	return id
 }
 
-// namesLinkedCard says whether a name as sent to Minka is the one of this card.
-func namesLinkedCard(card api.LinkedCard, named string) bool {
-	return card.Seen() && (card.ID == named || card.ShortID != nil && strings.EqualFold(*card.ShortID, named))
-}
-
 // linkedCardName is how a text view names a card at either end of a card step:
 // the short identifier in front of the title where the board has one.
 func linkedCardName(card api.LinkedCard) string {
@@ -72,17 +67,17 @@ func linkedCardAddress(card api.LinkedCard) string {
 	return long.Scheme + "://" + long.Host + "/go/card/" + *card.ShortID
 }
 
-// cardStepLine shows a card step as its card stands: no tick box of its own,
+// cardStepEntry shows a card step as its card stands: no tick box of its own,
 // the column saying whether it is done.
-func cardStepLine(index int, card api.LinkedCard) string {
+func cardStepEntry(card api.LinkedCard) string {
 	if !card.Seen() {
-		return fmt.Sprintf("%d. ↳ %s", index+1, unseenCard)
+		return "↳ " + unseenCard
 	}
 	people := ""
 	if len(card.Assignees) > 0 {
 		people = " (" + assigneeNames(card.Assignees) + ")"
 	}
-	return fmt.Sprintf("%d. ↳ %s  [%s]%s %s", index+1, linkedCardName(card), card.Column.Title, people, linkedCardAddress(card))
+	return fmt.Sprintf("↳ %s  [%s]%s %s", linkedCardName(card), card.Column.Title, people, linkedCardAddress(card))
 }
 
 // stepOfLine names the cards a card is a step of, and nothing where there are
@@ -138,10 +133,11 @@ func (a *app) addCardStep(cardID, child string) error {
 		return err
 	}
 	named := s.cardNameForMinka(child)
+	given := cardID
 	if err := s.resolveCard(a.ctx, &cardID); err != nil {
 		return err
 	}
-	card, err := s.client.AddCardStep(a.ctx, cardID, named)
+	step, err := s.client.AddCardStep(a.ctx, cardID, named)
 	if err != nil {
 		e := s.fail(err)
 		switch e.APICode {
@@ -158,30 +154,26 @@ func (a *app) addCardStep(cardID, child string) error {
 		case apiCodeCardArchived:
 			e.Hint = "The card lies in the archive of its board. Bring it back with: minka cards unarchive " + cardID
 		}
+		unreadStepHint(e, cardID)
 		return e
 	}
 
-	at := slices.IndexFunc(card.Value.Steps, func(step api.Step) bool { return step.Card != nil && namesLinkedCard(*step.Card, named) })
-	if at < 0 && card.StatusCode == http.StatusCreated {
-		at = len(card.Value.Steps) - 1
+	shown, breadcrumbs := named, stepBreadcrumbs(cardID)
+	if linked := step.Value.Card; linked != nil && linked.Seen() {
+		shown = linkedCardName(*linked)
+		breadcrumbs = append(breadcrumbs, Breadcrumb{Action: "show", Cmd: "minka cards show " + linked.ID, Description: "Show the card that is the step"})
 	}
-	shown := named
-	if at >= 0 && card.Value.Steps[at].Card != nil && card.Value.Steps[at].Card.Seen() {
-		shown = linkedCardName(*card.Value.Steps[at].Card)
-	}
-	summary := fmt.Sprintf("Added card %s as a step of card %s", shown, card.Value.Title)
-	if card.StatusCode == http.StatusOK {
-		summary = fmt.Sprintf("Card %s was a step of card %s already", shown, card.Value.Title)
+	parent := cardAsNamed(given, cardID)
+	summary := fmt.Sprintf("Added card %s as a step of card %s", shown, parent)
+	if step.StatusCode == http.StatusOK {
+		summary = fmt.Sprintf("Card %s was a step of card %s already", shown, parent)
 	}
 	return a.ok(success{
-		data:        card.Raw,
+		data:        step.Raw,
 		summary:     summary,
-		breadcrumbs: stepBreadcrumbs(card.Value.ID),
+		breadcrumbs: breadcrumbs,
 		text: func(w io.Writer) {
-			fmt.Fprintf(w, "%s.\n", summary)
-			if at >= 0 {
-				fmt.Fprintln(w, stepLine(at, card.Value.Steps[at]))
-			}
+			fmt.Fprintf(w, "%s.\n%s\n", summary, stepEntry(step.Value))
 		},
 	})
 }
