@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 
@@ -56,26 +57,89 @@ func TestACardStepGoesOutAsMinkaReadsTheName(t *testing.T) {
 }
 
 // The first time is an addition, every other one says the card was a step
-// already, and the data is the parent card as Minka answered it.
+// already, and the data is the step, against a Minka that answers with the
+// step and one that answers with the card. The step that stood already is
+// the one of the child, not the last one.
 func TestACardStepSaysWhetherItWasNew(t *testing.T) {
+	for _, olderMinka := range []bool{false, true} {
+		e := newTestEnv(t)
+		e.server.AnswersANewStepWithItsCard = olderMinka
+		child := withAShortIdentifier(e)
+		parent := e.fixture.CardInTriage
+		parent.ShortID = "MNK-12"
+		added := "Added card #MNK-1A " + child.Title + " as a step of card "
+
+		env, r := e.runJSON("", "cards", "steps", "create", parent.ID, "--card", "MNK-1A")
+		expectCode(t, r, ExitOK)
+		data := decode(t, env.Data)
+		linked, _ := data["card"].(map[string]any)
+		if env.Summary != added+parent.ID || data["id"] != parent.Steps[0].ID || linked["id"] != child.ID {
+			t.Fatalf("older Minka %v: summary %q, data %s", olderMinka, env.Summary, env.Data)
+		}
+		if !slices.ContainsFunc(env.Breadcrumbs, func(b Breadcrumb) bool { return b.Cmd == "minka cards show "+child.ID }) {
+			t.Errorf("older Minka %v: breadcrumbs %v", olderMinka, env.Breadcrumbs)
+		}
+		parent.Steps = append(parent.Steps, &fakeapi.Step{ID: newTestID(), Title: "Measure"})
+
+		r = e.run("", "cards", "steps", "create", "mnk-12", "--card", child.ID, "--styled")
+		expectCode(t, r, ExitOK)
+		if want := "Card #MNK-1A " + child.Title + " was a step of card #MNK-12 already.\n↳ #MNK-1A " + child.Title + "  [Doing] " + e.server.URL + "/go/card/MNK-1A\n"; r.stdout != want {
+			t.Errorf("older Minka %v: text %q, want %q", olderMinka, r.stdout, want)
+		}
+		env, r = e.runJSON("", "cards", "steps", "create", parent.ID, "--card", "MNK-1A")
+		expectCode(t, r, ExitOK)
+		if env.Summary != "Card #MNK-1A "+child.Title+" was a step of card "+parent.ID+" already" || decode(t, env.Data)["id"] != parent.Steps[0].ID || len(parent.Steps) != 2 {
+			t.Fatalf("older Minka %v: summary %q, data %s", olderMinka, env.Summary, env.Data)
+		}
+	}
+}
+
+// A child named under a former prefix of its board carries its current short
+// identifier, and the step of an older Minka's card is still found. Where it
+// cannot be, the hint says whether the step was written.
+func TestACardStepUnderAFormerPrefix(t *testing.T) {
+	e := newTestEnv(t)
+	e.server.AnswersANewStepWithItsCard = true
+	child := withAShortIdentifier(e)
+	e.fixture.Board.FormerPrefixes = []string{"OLD"}
+	parent := e.fixture.CardInTriage
+	parent.Steps = []*fakeapi.Step{{ID: newTestID(), Title: "Measure"}}
+
+	env, r := e.runJSON("", "cards", "steps", "create", parent.ID, "--card", "OLD-1A")
+	expectCode(t, r, ExitOK)
+	if linked, _ := decode(t, env.Data)["card"].(map[string]any); linked["id"] != child.ID {
+		t.Fatalf("data %s", env.Data)
+	}
+	env, r = e.runJSON("", "cards", "steps", "create", parent.ID, "--card", "old-1a")
+	expectCode(t, r, ExitOK)
+	if !strings.HasSuffix(env.Summary, "already") || decode(t, env.Data)["id"] != parent.Steps[1].ID {
+		t.Fatalf("again: summary %q, data %s", env.Summary, env.Data)
+	}
+
+	e.server.AnswersCardsWithoutID = true
+	env, r = e.runJSON("", "cards", "steps", "create", parent.ID, "--card", "OLD-1A")
+	expectCode(t, r, ExitAPI)
+	if env.Meta["apiCode"] != "unexpectedResponse" || env.Hint != "Read the steps with: minka cards steps list "+parent.ID {
+		t.Errorf("standing: %v, hint %q", env.Meta, env.Hint)
+	}
+	parent.Steps = parent.Steps[:1]
+	env, r = e.runJSON("", "cards", "steps", "create", parent.ID, "--card", "OLD-1A")
+	expectCode(t, r, ExitAPI)
+	if !strings.HasPrefix(env.Hint, "Do not repeat the command") || len(parent.Steps) != 2 {
+		t.Errorf("new: hint %q, %d steps", env.Hint, len(parent.Steps))
+	}
+}
+
+// Words beside a card are a usage error; the card itself and a card nobody
+// here can see are refused by Minka with a hint.
+func TestACardStepThatCannotBeIsRefused(t *testing.T) {
 	e := newTestEnv(t)
 	withAShortIdentifier(e)
 	parent := e.fixture.CardInTriage
 
-	env, r := e.runJSON("", "cards", "steps", "create", parent.ID, "--card", "MNK-1A")
-	expectCode(t, r, ExitOK)
-	if env.Summary != "Added card #MNK-1A "+e.fixture.CardInDoing.Title+" as a step of card "+parent.Title || decode(t, env.Data)["id"] != parent.ID {
-		t.Fatalf("summary %q, data %s", env.Summary, env.Data)
-	}
-	env, r = e.runJSON("", "cards", "steps", "create", parent.ID, "--card", "MNK-1A")
-	expectCode(t, r, ExitOK)
-	if !strings.Contains(env.Summary, "was a step of card "+parent.Title+" already") || len(parent.Steps) != 1 {
-		t.Fatalf("summary %q, %d steps", env.Summary, len(parent.Steps))
-	}
-
-	_, r = e.runJSON("", "cards", "steps", "create", parent.ID, "A text", "--card", "MNK-1A")
+	_, r := e.runJSON("", "cards", "steps", "create", parent.ID, "A text", "--card", "MNK-1A")
 	expectCode(t, r, ExitUsage)
-	env, r = e.runJSON("", "cards", "steps", "create", parent.ID, "--card", parent.ID)
+	env, r := e.runJSON("", "cards", "steps", "create", parent.ID, "--card", parent.ID)
 	expectCode(t, r, ExitValidation)
 	if env.Meta["apiCode"] != "stepCardIsThisCard" || env.Hint == "" {
 		t.Errorf("the card itself: %v, hint %q", env.Meta, env.Hint)

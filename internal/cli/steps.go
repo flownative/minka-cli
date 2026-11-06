@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/http"
 	"slices"
 	"strconv"
 	"strings"
@@ -136,7 +137,12 @@ any card you can see, on any board, and of several cards; it is a step of the
 same card at most once, and naming it again succeeds without a second step.
 A card cannot be a step of itself: exit 9 (validation) with
 stepCardIsThisCard. A card you cannot see is exit 9 with stepCardUnknown. A
-Minka that knows no card steps yet is exit 2 (not_found).`,
+Minka that knows no card steps yet is exit 2 (not_found).
+
+data is the step, as an entry of the steps of minka cards show, and the step
+that stands already where the card was a step of it before; data.id is the
+ID of the step for the commands that follow, such as minka cards steps move.
+A Minka that answers with the whole card is read the same way.`,
 		Example: `  minka cards steps create 0199... "Call the caterer"
   minka cards steps create MNK-12 --card MNK-15`,
 		Args: func(cmd *cobra.Command, args []string) error {
@@ -164,28 +170,26 @@ Minka that knows no card steps yet is exit 2 (not_found).`,
 			if err != nil {
 				return err
 			}
+			given := args[0]
 			if err := s.resolveCard(a.ctx, &args[0]); err != nil {
 				return err
 			}
-			card, err := s.client.AddStep(a.ctx, args[0], text)
+			step, err := s.client.AddStep(a.ctx, args[0], text)
 			if err != nil {
-				return s.fail(err)
+				e := s.fail(err)
+				unreadStepHint(e, args[0])
+				return e
 			}
 
-			summary := fmt.Sprintf("Added a step to card %s", card.Value.Title)
-			breadcrumbs := stepBreadcrumbs(card.Value.ID)
-			if n := len(card.Value.Steps); n > 0 {
-				breadcrumbs = append(breadcrumbs, Breadcrumb{Action: "edit", Cmd: fmt.Sprintf("minka cards steps edit %s %d --assignee <person> --due <YYYY-MM-DD>", card.Value.ID, n), Description: "Give the step people and a due day"})
-			}
+			summary := fmt.Sprintf("Added %s to card %s", stepName(nil, step.Value), cardAsNamed(given, args[0]))
+			breadcrumbs := append(stepBreadcrumbs(args[0]),
+				Breadcrumb{Action: "edit", Cmd: fmt.Sprintf("minka cards steps edit %s %s --assignee <person> --due <YYYY-MM-DD>", args[0], step.Value.ID), Description: "Give the step people and a due day"})
 			return a.ok(success{
-				data:        card.Raw,
+				data:        step.Raw,
 				summary:     summary,
 				breadcrumbs: breadcrumbs,
 				text: func(w io.Writer) {
-					fmt.Fprintf(w, "%s.\n", summary)
-					if n := len(card.Value.Steps); n > 0 {
-						fmt.Fprintln(w, stepLine(n-1, card.Value.Steps[n-1]))
-					}
+					fmt.Fprintf(w, "%s.\n%s\n", summary, stepEntry(step.Value))
 				},
 			})
 		},
@@ -676,14 +680,42 @@ func describeSteps(steps []api.Step) string {
 }
 
 func stepLine(index int, step api.Step) string {
+	return fmt.Sprintf("%d. %s", index+1, stepEntry(step))
+}
+
+// stepEntry shows a step without its position, for a step read by itself.
+func stepEntry(step api.Step) string {
 	if step.Card != nil {
-		return cardStepLine(index, *step.Card)
+		return cardStepEntry(*step.Card)
 	}
 	mark := " "
 	if step.Completed {
 		mark = "x"
 	}
-	return fmt.Sprintf("%d. [%s] %s%s", index+1, mark, step.Title, stepDetails(step))
+	return fmt.Sprintf("[%s] %s%s", mark, step.Title, stepDetails(step))
+}
+
+// unreadStepHint says what to do where Minka's answer to a new step shows no
+// step: after a 201 the step is written, and running the command again would
+// add it twice.
+func unreadStepHint(e *Error, cardID string) {
+	if e.APICode != api.CodeUnexpectedResponse {
+		return
+	}
+	e.Hint = "Do not repeat the command; read the card with: minka cards show " + cardID
+	if e.HTTPStatus == http.StatusOK {
+		e.Hint = "Read the steps with: minka cards steps list " + cardID
+	}
+}
+
+// cardAsNamed names the card a command was given the way it was given: by
+// its short identifier, or by its ID. It stands in for the title where the
+// answer carries none.
+func cardAsNamed(given, id string) string {
+	if uuidPattern.MatchString(given) {
+		return id
+	}
+	return "#" + strings.ToUpper(given)
 }
 
 // stepDetails says who is on a step and when it is due.

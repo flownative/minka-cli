@@ -2471,20 +2471,54 @@ func TestStepsCreateAddsAStepAtTheEnd(t *testing.T) {
 	e := newTestEnv(t)
 	withSteps(e)
 
-	env, r := e.runJSON("", "cards", "steps", "create", e.fixture.CardInTriage.ID, "Zeltverleih anrufen")
+	_, r := e.runJSON("", "cards", "steps", "create", e.fixture.CardInTriage.ID, "Zeltverleih anrufen")
 	expectCode(t, r, ExitOK)
 	if body := e.lastWriteBody(); len(body) != 1 || body["title"] != "Zeltverleih anrufen" {
 		t.Errorf("body sent %v", body)
 	}
-	var card api.Card
-	if err := json.Unmarshal(env.Data, &card); err != nil || len(card.Steps) != 4 || card.Steps[3].Title != "Zeltverleih anrufen" {
-		t.Errorf("card %s", env.Data)
+	if steps := e.fixture.CardInTriage.Steps; len(steps) != 4 || steps[3].Title != "Zeltverleih anrufen" {
+		t.Errorf("the card carries %v", steps)
 	}
 
 	_, r = e.runJSON("Aufbau\n", "cards", "steps", "create", e.fixture.CardInTriage.ID, "-")
 	expectCode(t, r, ExitOK)
 	if got := e.lastWriteBody()["title"]; got != "Aufbau\n" {
 		t.Errorf("title sent %q", got)
+	}
+}
+
+// A new step is data as Minka lists it on the card, against a Minka that
+// answers with the step and one that answers with the card. Without a title
+// in the answer the card is named as it was given.
+func TestANewStepIsTheDataAndNamesItsCard(t *testing.T) {
+	for _, olderMinka := range []bool{false, true} {
+		e := newTestEnv(t)
+		withSteps(e)
+		e.server.AnswersANewStepWithItsCard = olderMinka
+		card := e.fixture.CardInTriage
+		card.ShortID = "MNK-12"
+
+		env, r := e.runJSON("", "cards", "steps", "create", card.ID, "Zeltverleih anrufen")
+		expectCode(t, r, ExitOK)
+		step := card.Steps[len(card.Steps)-1]
+		data := decode(t, env.Data)
+		if _, isACard := data["steps"]; isACard || data["id"] != step.ID || data["title"] != "Zeltverleih anrufen" {
+			t.Errorf("older Minka %v: data %s", olderMinka, env.Data)
+		}
+		if want := `Added step "Zeltverleih anrufen" to card ` + card.ID; env.Summary != want {
+			t.Errorf("older Minka %v: summary %q, want %q", olderMinka, env.Summary, want)
+		}
+		if !slices.ContainsFunc(env.Breadcrumbs, func(b Breadcrumb) bool {
+			return b.Cmd == "minka cards steps edit "+card.ID+" "+step.ID+" --assignee <person> --due <YYYY-MM-DD>"
+		}) {
+			t.Errorf("older Minka %v: breadcrumbs %v", olderMinka, env.Breadcrumbs)
+		}
+
+		r = e.run("", "cards", "steps", "create", "mnk-12", "Aufbau", "--styled")
+		expectCode(t, r, ExitOK)
+		if want := "Added step \"Aufbau\" to card #MNK-12.\n[ ] Aufbau\n"; r.stdout != want {
+			t.Errorf("older Minka %v: text %q, want %q", olderMinka, r.stdout, want)
+		}
 	}
 }
 

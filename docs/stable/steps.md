@@ -39,7 +39,28 @@ no step goes out as it is, and Minka gives its answer.
 ## Writing a step
 
 `POST cards/{cardId}/steps` adds a step **at the end** from `title` alone and
-answers the card (201). People and a day come with `cards steps edit` afterwards.
+answers 201 with the new step, in the shape of an entry of the card's `steps`.
+People and a day come with `cards steps edit` afterwards.
+
+`data` of `cards steps create` is that step, with `--card` as well, so `data.id`
+is the step's ID for the commands that follow. A Minka that answers with the
+whole card (201, and 200 for a card step that stands) is read too
+([C-161](../decisions.md#c-161)): a card is told from a step by its `steps`,
+which a step never carries, and the step is taken out of it. A step in words
+is the last one, where a new step goes. A card step, on 201 and 200 alike, is
+the one whose `card` is the child, by the ID or short identifier it was given;
+a card is a step of another at most once, so a step added beside it in the
+meantime does not mislead. A short identifier under a former prefix of its
+board names the card too, which then carries its current one: only there the
+child is looked up once by that name and matched by its ID. `data` is then
+that entry of the card's list. An answer without the step is exit 7
+(`unexpectedResponse`): after 201 the step is written, and the hint says not
+to repeat the command but to read the card with `cards show`; after 200
+nothing was written, as the card is a step already, and the hint points at
+`cards steps list`. The answer
+names no card, so summaries and the text view name the card as it was given:
+`#` and its short identifier, or its ID. The text view shows the step without a
+position: `[ ] Call the caterer`, `↳ #MNK-1A …` for a card step.
 
 `PATCH cards/{cardId}/steps/{stepId}` changes any of `title`, `completed`,
 `dueOn` and `assigneeIds` in one request, tested by key: what the body leaves
@@ -137,9 +158,9 @@ ID goes out in lowercase. Anything else, an address of another host included,
 goes out as given, and Minka answers `stepCardUnknown`. The card can be on any
 board of any project the reader sees, in the archive too, and a step of several
 cards; it is a step of the same card at most once. Minka answers 201 with the
-card and the new step at the end, and 200 with the card unchanged where the
-child is a step of it already; the summary says which, and `data` is the card
-as answered.
+new step at the end, and 200 with the step that stands where the child is a
+step of it already; the summary says which, `data` is the step, and a
+breadcrumb shows the child.
 
 `cards steps make-card <card> <step>` ([C-154](../decisions.md#c-154)) posts
 to `cards/{cardId}/steps/{stepId}/card` without a body. Minka adds a card in

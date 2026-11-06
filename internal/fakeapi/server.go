@@ -158,6 +158,9 @@ type Board struct {
 	// cards and the next card answer 404, and neither the list of the
 	// project's boards nor anybody's cards name it. Nothing else knows it.
 	Trashed bool
+	// FormerPrefixes are prefixes the board's short identifiers had before:
+	// a short identifier under one of them still leads to its card.
+	FormerPrefixes []string
 }
 
 type Column struct {
@@ -554,6 +557,12 @@ type Server struct {
 	// alone is nothingToChange and beside the rest it is passed over, and the
 	// address of a move is none.
 	NeitherRenamesNorMovesSteps bool
+
+	// AnswersANewStepWithItsCard makes the server answer like a Minka from
+	// before a new step answered as itself: the answer to a new step, a
+	// card step that stands already included, is the whole card. A Minka
+	// that knows no card steps or cannot rename a step answers so as well.
+	AnswersANewStepWithItsCard bool
 
 	// KnowsNoCardSteps makes the server answer like a Minka from before a
 	// card could be the step of another: a step carries no card and a card
@@ -1969,7 +1978,7 @@ func (s *Server) cardByShortIdentifier(w http.ResponseWriter, r *http.Request, p
 		}
 		for _, column := range board.Columns {
 			for _, card := range column.Cards {
-				if card.ShortID != "" && card.ShortID == identifier {
+				if goesBy(board, card, identifier) {
 					resource := s.cardResource(board, column, card, person)
 					if s.AnswersCardsWithoutID {
 						resource["id"] = ""
@@ -2380,7 +2389,7 @@ func (s *Server) unassignCard(w http.ResponseWriter, r *http.Request, person *Pe
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// addStep puts a step at the end of the list.
+// addStep puts a step at the end of the list and answers with that step.
 func (s *Server) addStep(w http.ResponseWriter, r *http.Request, person *Person) {
 	board, column, card, archived := s.cardToWrite(r.PathValue("cardId"), person)
 	if card == nil {
@@ -2406,8 +2415,20 @@ func (s *Server) addStep(w http.ResponseWriter, r *http.Request, person *Person)
 	if s.refusedAsAClosedCard(w, board, archived) {
 		return
 	}
-	card.Steps = append(card.Steps, &Step{ID: newID(), Title: text})
-	writeJSON(w, http.StatusCreated, s.cardResource(board, column, card, person))
+	step := &Step{ID: newID(), Title: text}
+	card.Steps = append(card.Steps, step)
+	s.answerAStep(w, http.StatusCreated, board, column, card, step, person)
+}
+
+// answerAStep answers a new step, or a card step that stands already, with
+// the step as the card lists it, or with the card as an older Minka does.
+func (s *Server) answerAStep(w http.ResponseWriter, status int, board *Board, column *Column, card *Card, step *Step, person *Person) {
+	if s.AnswersANewStepWithItsCard || s.KnowsNoCardSteps || s.NeitherRenamesNorMovesSteps {
+		writeJSON(w, status, s.cardResource(board, column, card, person))
+		return
+	}
+	resources := s.stepResources(card, person)
+	writeJSON(w, status, resources[slices.Index(card.Steps, step)])
 }
 
 // stepText is the line of a step as Minka keeps it, trimmed, or the refusal

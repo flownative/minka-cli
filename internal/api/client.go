@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -395,16 +396,86 @@ func (c *Client) WriteCardNotes(ctx context.Context, cardID, body string, guard 
 	return request[CardNotes](ctx, c, http.MethodPut, "/cards/"+url.PathEscape(cardID)+"/notes", fields)
 }
 
-// AddStep adds a step at the end of the list of a card.
-func (c *Client) AddStep(ctx context.Context, cardID, title string) (Result[Card], error) {
-	return request[Card](ctx, c, http.MethodPost, "/cards/"+url.PathEscape(cardID)+"/steps", map[string]string{"title": title})
+// AddStep adds a step at the end of the list of a card and answers with the
+// new step.
+func (c *Client) AddStep(ctx context.Context, cardID, title string) (Result[Step], error) {
+	answer, err := request[json.RawMessage](ctx, c, http.MethodPost, "/cards/"+url.PathEscape(cardID)+"/steps", map[string]string{"title": title})
+	if err != nil {
+		return Result[Step]{}, err
+	}
+	return stepOfTheAnswer(answer, lastStep)
+}
+
+// lastStep is where a new step stands in the list of its card.
+func lastStep(steps []Step) int {
+	return len(steps) - 1
 }
 
 // AddCardStep makes another card a step at the end of the list of a card,
-// named by its ID or its short identifier. A card that is a step of this card
-// already is answered with 200 instead of 201 and no second step.
-func (c *Client) AddCardStep(ctx context.Context, cardID, child string) (Result[Card], error) {
-	return request[Card](ctx, c, http.MethodPost, "/cards/"+url.PathEscape(cardID)+"/steps", map[string]string{"cardId": child})
+// named by its ID or its short identifier, and answers with that step. A card
+// that is a step of this card already is answered with 200 instead of 201,
+// with the step that stands, and no second step.
+func (c *Client) AddCardStep(ctx context.Context, cardID, child string) (Result[Step], error) {
+	answer, err := request[json.RawMessage](ctx, c, http.MethodPost, "/cards/"+url.PathEscape(cardID)+"/steps", map[string]string{"cardId": child})
+	if err != nil {
+		return Result[Step]{}, err
+	}
+	// A card is a step of another at most once, so the child's step is found by
+	// the child alone, whatever else was added beside it.
+	return stepOfTheAnswer(answer, func(steps []Step) int {
+		at := slices.IndexFunc(steps, func(step Step) bool {
+			return step.Card != nil && (strings.EqualFold(step.Card.ID, child) || step.Card.ShortID != nil && strings.EqualFold(*step.Card.ShortID, child))
+		})
+		if at >= 0 {
+			return at
+		}
+		// A short identifier under a former prefix of its board names the card
+		// as well, which then carries its current one.
+		found, err := c.CardByShortIdentifier(ctx, strings.ToUpper(child))
+		if err != nil || found.Value.ID == "" {
+			return -1
+		}
+		return slices.IndexFunc(steps, func(step Step) bool { return step.Card != nil && strings.EqualFold(step.Card.ID, found.Value.ID) })
+	})
+}
+
+// CodeUnexpectedResponse is the code of an answer of the server that is not
+// what the request asks for.
+const CodeUnexpectedResponse = "unexpectedResponse"
+
+// stepOfTheAnswer reads the answer to a new step. Minka answers with the step
+// as the card lists it. The whole card, as an older Minka answers, is read as
+// well: the step is the one of the card's list that pick names, and Raw is
+// its entry of that list, so that Raw is the step either way. A card is told
+// from a step by its list of steps, which a step never carries.
+func stepOfTheAnswer(answer Result[json.RawMessage], pick func([]Step) int) (Result[Step], error) {
+	result := Result[Step]{Raw: answer.Value, StatusCode: answer.StatusCode, Header: answer.Header}
+	unexpected := &Error{Method: http.MethodPost, StatusCode: answer.StatusCode, Code: CodeUnexpectedResponse, Message: "Minka wrote the step, but its answer does not show the step."}
+	if answer.StatusCode == http.StatusOK {
+		unexpected.Message = "The card is a step already and nothing was written, but Minka's answer does not show the step."
+	}
+
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(answer.Value, &fields); err != nil {
+		return result, unexpected
+	}
+	if listed, isACard := fields["steps"]; isACard {
+		var raw []json.RawMessage
+		var steps []Step
+		if json.Unmarshal(listed, &raw) != nil || json.Unmarshal(listed, &steps) != nil {
+			return result, unexpected
+		}
+		at := pick(steps)
+		if at < 0 {
+			return result, unexpected
+		}
+		result.Value, result.Raw = steps[at], raw[at]
+		return result, nil
+	}
+	if err := json.Unmarshal(answer.Value, &result.Value); err != nil {
+		return result, unexpected
+	}
+	return result, nil
 }
 
 // MakeStepIntoCard adds a card in Triage from a step in words and makes the
