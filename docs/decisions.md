@@ -2546,3 +2546,37 @@ as it was given.
 **Why:** one shape for agents whichever Minka answers, and no extra request
 for a title. **Implemented as:** `api.Client.AddStep`,
 `api.Client.AddCardStep`, see [Steps](stable/steps.md#writing-a-step).
+
+<a id="c-162"></a>
+## C-162 — `--tool` moves an entry into another tool beside the place
+
+*Applies to: `docs move`, `docs uploads move`, `docs folders move`*
+
+`--tool <toolId>` stands beside `--folder` or `--top-level`, which then name a
+place of that tool; it is sent as given, the entry's own tool included, and
+the summary names the project beside the place.
+**Why:** one command moves within a tool and between tools, as the API's one
+address does, and Minka decides what the own tool means. **Implemented as:**
+`cli.newEntryMoveCmd`, see [Docs & Files](stable/docs-and-files.md#keeping-a-tool-in-order).
+
+<a id="c-163"></a>
+## C-163 — `--tool` beside `--after` or `--before` is exit 1
+
+*Applies to: `move --tool` of every kind of entry*
+
+A neighbour does not go with `--tool`, before a request; the message says
+where an entry lands in another tool.
+**Why:** Minka refuses neighbours with another tool, and with the own tool the
+CLI cannot tell the two apart without reading the entry first. **Implemented
+as:** `cli.newEntryMoveCmd`.
+
+<a id="c-164"></a>
+## C-164 — Every move with `--tool` says what a move into another tool does
+
+*Applies to: `move --tool` of every kind of entry*
+
+An answer in the named tool draws a `notice` with what a move between tools
+does; an answer elsewhere is exit 7, with the answer as `data`.
+**Why:** the answer cannot tell a move between tools from one within, and a
+Minka without them moves the entry within its tool. **Implemented as:**
+`cli.intoAnotherToolNotice`, `cli.movedWithinItsToolOnly`.

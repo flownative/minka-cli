@@ -89,6 +89,8 @@ func TestTheFilesOfAVersionAreListedBesideItsBody(t *testing.T) {
 func TestAClientReachesNoVersion(t *testing.T) {
 	e := newTestEnv(t)
 	e.server.Tokens["minka_pat_client"] = e.fixture.Client.ID
+	e.fixture.Document.CreatorID = e.fixture.Client.ID
+	e.fixture.Folder.ShownToClients = true
 	versionID := listOfObjects(t, runOK(t, e, "docs", "versions", "list", e.fixture.Document.ID).Data)[0]["id"].(string)
 	e.vars["MINKA_TOKEN"] = "minka_pat_client"
 
@@ -161,6 +163,7 @@ func TestNoFileTravelsForAnUploadThatCannotTakeIt(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			e := newTestEnv(t)
 			e.server.Tokens["minka_pat_client"] = e.fixture.Client.ID
+			e.fixture.Folder.ShownToClients = true
 			e.vars["MINKA_TOKEN"] = c.token
 			env, r := e.runJSON("", replaceFile(e)...)
 			expectCode(t, r, ExitNotFound)

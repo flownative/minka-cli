@@ -134,7 +134,7 @@ func TestARefusedOrderSaysWhatToDo(t *testing.T) {
 		}, apiCodeFolderArchived, []string{"--folder names", "--top-level"}},
 		"moving into another tool": {func(e *testEnv) []string {
 			return []string{"docs", "uploads", "move", e.fixture.FilesUpload.ID, "--folder", e.fixture.OtherFiles.ID}
-		}, apiCodeFolderUnknown, []string{"within its tool"}},
+		}, apiCodeFolderUnknown, []string{"no folder of the upload's tool", "--tool <toolId>"}},
 		"moving a folder into itself": {func(e *testEnv) []string {
 			return []string{"docs", "folders", "move", e.fixture.Folder.ID, "--folder", e.fixture.Folder.ID}
 		}, apiCodeFolderIntoItself, []string{"outside the one that moves", "--top-level"}},

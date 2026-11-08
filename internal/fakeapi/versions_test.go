@@ -80,6 +80,7 @@ func TestTheVersionsOfADocumentAreListedOldestFirst(t *testing.T) {
 func TestTheVersionsAreTheTeamsAlone(t *testing.T) {
 	s, f := New(t)
 	s.Tokens["minka_pat_client"] = f.Client.ID
+	f.Folder.ShownToClients = true
 	f.Project.Archived = true
 	document := "/api/v1/documents/" + f.DocumentInFolder.ID
 	version := listOf(t, s, f.Token, document+"/versions")[0]["id"].(string)

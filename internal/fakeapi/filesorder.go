@@ -20,6 +20,10 @@ type EntryState struct {
 
 	ArchivedAt time.Time
 	ArchivedBy string // person ID, empty where nobody is known
+
+	// HiddenFromClients keeps a document or upload at the top of a tool from
+	// the clients whoever made it, as one moved in from another tool is.
+	HiddenFromClients bool
 }
 
 // filesEntry is a folder, a document or an upload seen through what the
@@ -304,8 +308,9 @@ func (s *Server) unarchiveFilesEntry(kind, argument string) handler {
 	}
 }
 
-// moveFilesEntry moves an entry to a folder of the same tool, or to the top of
-// the tool for a folderId of null: first among its kind in a place ordered
+// moveFilesEntry moves an entry to a folder of its tool, or to the top of the
+// tool for a folderId of null; a toolId of another tool moves it there
+// instead. Within the tool it lands first among its kind in a place ordered
 // automatically, last in one arranged by hand, or next to the neighbours the
 // request names. The body and the target are read before an archived project
 // refuses the move, one to where the entry stands already included; there
@@ -327,6 +332,16 @@ func (s *Server) moveFilesEntry(kind, argument string) handler {
 		fields, ok := readBody(w, r)
 		if !ok {
 			return
+		}
+		if !s.MovesWithinToolsOnly {
+			toolID, ok := stringField(w, fields, "toolId")
+			if !ok {
+				return
+			}
+			if toolID != nil && strings.ToLower(*toolID) != entry.tool.ID {
+				s.transferFilesEntry(w, entry, fields, strings.ToLower(*toolID), person)
+				return
+			}
 		}
 		if _, given := fields["folderId"]; !given {
 			unprocessable(w, "folderIdMissing", `A move names the folder to move to in "folderId", null for the top of the tool.`)
@@ -439,9 +454,18 @@ func (s *Server) shownToClientsAsAnEntry(entry filesEntry) bool {
 		return folderShownToClients(entry.tool, entry.id)
 	}
 	if *entry.parent == "" {
-		return s.isAClient(entry.creator)
+		return s.isAClient(entry.creator) && !entry.state.HiddenFromClients
 	}
 	return folderShownToClients(entry.tool, *entry.parent)
+}
+
+// shownAsAnEntryTo says whether this person reads the entry of the tool: the
+// team reads every one, a client one the clients are shown.
+func (s *Server) shownAsAnEntryTo(person *Person, tool *FilesTool, kind, id string) bool {
+	if !s.isAClient(person.ID) {
+		return true
+	}
+	return tool.ShownToClients && s.shownToClientsAsAnEntry(s.entryIn(tool, kind, id))
 }
 
 // trashedEntry finds an entry that lies in the trash by itself, for the team

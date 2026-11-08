@@ -383,8 +383,13 @@ type UpdateFolderInput struct {
 // PreviousEntryID and NextEntryID place the entry next to a neighbour in a
 // place arranged by hand; where both are named, the previous one decides. A
 // neighbour that does not stand in the place counts as none.
+//
+// ToolID moves the entry into another Docs & Files tool, FolderID then naming
+// a folder of that tool. There it lands on top of its kind, and Minka refuses
+// neighbours.
 type MoveFilesEntryInput struct {
 	FolderID        *string `json:"folderId"`
+	ToolID          string  `json:"toolId,omitempty"`
 	PreviousEntryID *string `json:"previousEntryId,omitempty"`
 	NextEntryID     *string `json:"nextEntryId,omitempty"`
 }
