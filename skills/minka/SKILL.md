@@ -106,6 +106,12 @@ references listed under "Where the rest stands".
   another record", for every kind of address. Outside Minka, in a commit or a
   pull request, a card is named by its short address and one comment by its
   `appUrl`, `…#comment-<id>`: the same section says how.
+- Every sentence you write must make sense to someone who has not read the
+  card's back. Never shorten a card to the rest of its short identifier ("needs
+  K5"): write `#MNK-K5`, so that Minka links it. An internal number that is no
+  card, such as a package, a question, a lane, P0 or step 3 of a plan on the
+  back, never stands alone: say in a few words what it is, as in "package 22
+  (sweeping up the raw buttons and fields)".
 - Read before you answer: comment with
   `minka comments create <card> - --if-latest <newest commentId|none>`, the
   newest comment you read. Where somebody commented since, nothing is written

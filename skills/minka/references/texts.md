@@ -164,6 +164,12 @@ printf '%s please have a look' "$MARKUP" | minka comments create <cardId> - --fo
   words of its own (`[the card](…)`, `[MNK-1](…/go/card/MNK-1)` as well), an
   address of another host and a target you cannot see stay as written: they
   link nothing back.
+- A card is always its whole short identifier with `#`: `#MNK-K5`, never `K5`,
+  which nobody can follow and Minka cannot link. A number that names no record
+  of Minka (package 4, question 2, lane A, P0, step 3 of a plan on the back)
+  comes with a few words saying what it is: "package 22 (sweeping up the raw
+  buttons and fields)". The yardstick is a reader who has not seen the card's
+  back.
 - Every answer adds what the reader needs to the element: `title`, `short-id`
   for a card that has one, and `href`. `--json` hands the text over exactly as
   served; sending it back as HTML is safe, because saving keeps only `kind` and
