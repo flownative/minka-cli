@@ -204,6 +204,15 @@ var idsInCapitals = []idInCapitals{
 	{command: "docs folders move", inputs: []string{"--folder"}, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
 		return []string{up(f.FolderShownToClients.ID), "--folder", up(f.Folder.ID)}
 	}},
+	{command: "docs move", inputs: []string{"--tool"}, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
+		return []string{f.Document.ID, "--tool", up(f.Files.ID), "--top-level"}
+	}},
+	{command: "docs uploads move", inputs: []string{"--tool"}, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
+		return []string{f.FilesUpload.ID, "--tool", up(f.Files.ID), "--top-level"}
+	}},
+	{command: "docs folders move", inputs: []string{"--tool"}, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
+		return []string{f.FolderShownToClients.ID, "--tool", up(f.Files.ID), "--folder", f.Folder.ID}
+	}},
 	{command: "docs move", inputs: []string{"--after"}, prepare: arrangePlansByHand, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
 		return []string{f.Document.ID, "--folder", f.Folder.ID, "--after", up(f.DocumentInFolder.ID)}
 	}},

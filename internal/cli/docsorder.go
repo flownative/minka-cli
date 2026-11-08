@@ -23,6 +23,9 @@ const (
 	apiCodeFolderOrderAutomatic       = "folderOrderAutomatic"
 	apiCodeEntryPlaceUnknown          = "entryPlaceUnknown"
 	apiCodeOrderUnknown               = "orderUnknown"
+	apiCodeToolUnknown                = "toolUnknown"
+	apiCodeNeighboursAcrossTools      = "neighboursAcrossTools"
+	apiCodeEntrySharesFiles           = "entrySharesFiles"
 )
 
 // The two ways a place of a tool orders its entries.
@@ -44,6 +47,7 @@ const (
 type entryFacts struct {
 	id, title, toolID, toolTitle, appURL string
 	path                                 []api.FolderReference // down to the folder it stands in, empty at the top
+	projectName                          string                // empty where the answer names no project
 }
 
 // filesEntryKind is one kind of entry of a Docs & Files tool with the writes
@@ -69,7 +73,7 @@ var documentKind = filesEntryKind[api.Document]{
 	remove: (*api.Client).DeleteDocument, restore: (*api.Client).RestoreDocument,
 	archive: (*api.Client).ArchiveDocument, unarchive: (*api.Client).UnarchiveDocument, move: (*api.Client).MoveDocument,
 	facts: func(d api.Document) entryFacts {
-		return entryFacts{d.ID, d.Title, d.ToolID, d.Tool.Title, d.AppURL, d.Path}
+		return entryFacts{d.ID, d.Title, d.ToolID, d.Tool.Title, d.AppURL, d.Path, d.Project.Name}
 	},
 	breadcrumbs: documentBreadcrumbs,
 	notFound:    documentNotFoundHint,
@@ -80,7 +84,7 @@ var uploadKind = filesEntryKind[api.FilesUpload]{
 	remove: (*api.Client).DeleteFilesUpload, restore: (*api.Client).RestoreFilesUpload,
 	archive: (*api.Client).ArchiveFilesUpload, unarchive: (*api.Client).UnarchiveFilesUpload, move: (*api.Client).MoveFilesUpload,
 	facts: func(u api.FilesUpload) entryFacts {
-		return entryFacts{u.ID, u.Title, u.ToolID, u.Tool.Title, u.AppURL, u.Path}
+		return entryFacts{u.ID, u.Title, u.ToolID, u.Tool.Title, u.AppURL, u.Path, u.Project.Name}
 	},
 	breadcrumbs: uploadBreadcrumbs,
 	notFound:    uploadNotFoundHint,
@@ -104,6 +108,9 @@ func folderFacts(entries api.FilesEntries) entryFacts {
 	}
 	if len(entries.Path) > 1 {
 		facts.path = entries.Path[:len(entries.Path)-1]
+	}
+	if entries.Project != nil {
+		facts.projectName = entries.Project.Name
 	}
 	return facts
 }
@@ -271,26 +278,42 @@ archivedWithAFolderAbove.`, k.noun, k.noun+"NotArchived"),
 }
 
 func newEntryMoveCmd[T any](a *app, k filesEntryKind[T]) *cobra.Command {
-	var folderID, after, before string
+	var folderID, toolID, after, before string
 	var topLevel bool
 
-	long := fmt.Sprintf(`Moves a %[1]s to another folder of the same tool, --folder, or to the top
+	article := articleOf(k.noun)
+	long := fmt.Sprintf(`Moves %[3]s %[1]s to another folder of its tool, --folder, or to the top
 level of the tool, --top-level; one of the two is required. In a place ordered
 automatically it lands first among the %[1]ss there; in one arranged by hand it
-goes to the end. A %[1]s moves within its tool only: a folder of another tool
-or project exits 9 with folderUnknown.
+goes to the end. A folder of another tool exits 9 with folderUnknown: --tool
+moves it there.
+
+--tool <toolId> moves the %[1]s into another Docs & Files tool, also of another
+project: --folder then names a folder of that tool, --top-level its top, and it
+lands there as above. It keeps its ID and takes %[2]s
+along. There it is hidden from clients until someone shows it on the web,
+whoever is not a member of that project is taken off it, and labels that belong
+to neither that project nor that tool come off; a notice says so. Only the
+team of both projects moves an entry into another tool: a tool you do not reach
+as one of the team exits 9 with toolUnknown, a folder that tool has not got
+with folderUnknown. Across projects, %[3]s %[1]s that shares a file with something
+that stays behind exits 9 with entrySharesFiles: it moves within its project
+only. --tool naming the %[1]s's own tool is a move within it. Against a Minka
+that does not move entries between tools yet, --tool with --top-level moves the
+%[1]s within its own tool and exits 7.
 
 --after <entryId> or --before <entryId> places it next to a folder, document
 or upload of a place arranged by hand, one of the two at most; naming the place
 where it stands rearranges it there. A place ordered automatically refuses it
 with folderOrderAutomatic: "docs order <toolId> manual" arranges it by hand
 first. A neighbour that does not stand in the place counts as none, and the
-%[1]s then goes first.
+%[1]s then goes first. Neither goes with --tool.
 
-A %[1]s that already stands there without a neighbour named is answered as
+%[4]s %[1]s that already stands there without a neighbour named is answered as
 moved, and nothing is written. One in the archive, itself or through a folder
 above it, does not move, and neither does anything into an archived folder
-(folderArchived).`, k.noun)
+(folderArchived).`, k.noun, map[bool]string{true: "everything in it", false: "its versions and comments"}[k.noun == "folder"],
+		article, strings.ToUpper(article[:1])+article[1:])
 	if k.noun == "folder" {
 		long += ` A folder takes
 everything in it along, and cannot move into itself or a folder below it
@@ -300,12 +323,13 @@ every folder in it.`
 	}
 
 	cmd := &cobra.Command{
-		Use:   "move <" + k.argument + "> (--folder <folderId> | --top-level) [--after <entryId> | --before <entryId>]",
-		Short: "Move " + articleOf(k.noun) + " " + k.noun + " to another folder of its tool, or to another place in its order",
+		Use:   "move <" + k.argument + "> (--folder <folderId> | --top-level) [--tool <toolId>] [--after <entryId> | --before <entryId>]",
+		Short: "Move " + articleOf(k.noun) + " " + k.noun + " to another folder, another place in its order, or another tool",
 		Long:  long,
 		Example: fmt.Sprintf(`  %[1]s move 0199... --folder 0199... --json
   %[1]s move 0199... --top-level --json
-  %[1]s move 0199... --folder 0199... --after 0199... --json`, k.command),
+  %[1]s move 0199... --folder 0199... --after 0199... --json
+  %[1]s move 0199... --tool 0199... --top-level --json`, k.command),
 		Args: requireArgs(k.argument),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if cmd.Flags().Changed("folder") == topLevel {
@@ -315,6 +339,17 @@ every folder in it.`
 				return usageErrorf(cmd, "--after and --before exclude each other: name one neighbour")
 			}
 			input := api.MoveFilesEntryInput{}
+			if cmd.Flags().Changed("tool") {
+				if err := requireID(cmd, "--tool", &toolID); err != nil {
+					return err
+				}
+				// Minka refuses neighbours with another tool, and with the
+				// entry's own one this CLI cannot tell the two apart.
+				if cmd.Flags().Changed("after") || cmd.Flags().Changed("before") {
+					return usageErrorf(cmd, "--after and --before do not go with --tool: an entry moving into another tool goes on top of its kind there, or to the end of a place arranged by hand")
+				}
+				input.ToolID = toolID
+			}
 			if !topLevel {
 				if err := requireID(cmd, "--folder", &folderID); err != nil {
 					return err
@@ -347,26 +382,68 @@ every folder in it.`
 			}
 			entry, err := k.move(s.client, a.ctx, args[0], input)
 			if err != nil {
-				return entryOrderRefusal(s, err, k, args[0], "move")
+				e := entryOrderRefusal(s, err, k, args[0], "move")
+				if input.ToolID != "" {
+					intoAnotherToolRefusal(e)
+				}
+				return e
 			}
 			facts := k.facts(entry.Value)
+			if input.ToolID != "" && facts.toolID != input.ToolID {
+				return movedWithinItsToolOnly(k.noun, k.command, facts, entry.Raw)
+			}
 			summary := "Moved " + k.noun + " " + facts.title + " to " + placeOf(facts)
 			switch {
+			case input.ToolID != "" && facts.projectName != "":
+				summary += " in project " + facts.projectName
 			case input.PreviousEntryID != nil:
 				summary += ", asked after " + after
 			case input.NextEntryID != nil:
 				summary += ", asked before " + before
 			}
-			return a.ok(entrySuccess(entry.Raw, facts, summary, k.breadcrumbs(entry.Value)))
+			result := entrySuccess(entry.Raw, facts, summary, k.breadcrumbs(entry.Value))
+			if input.ToolID != "" {
+				result.notices = []string{intoAnotherToolNotice}
+			}
+			return a.ok(result)
 		},
 	}
 	flags := cmd.Flags()
 	flags.StringVar(&folderID, "folder", "", "ID of the folder to move it into")
 	flags.BoolVar(&topLevel, "top-level", false, "Move it to the top level of the tool, into no folder")
+	flags.StringVar(&toolID, "tool", "", "ID of another Docs & Files tool to move it into; --folder then names a folder of that tool")
 	flags.StringVar(&after, "after", "", "ID of the entry to place it right behind, in a place arranged by hand")
 	flags.StringVar(&before, "before", "", "ID of the entry to place it right before, in a place arranged by hand")
 
 	return cmd
+}
+
+// intoAnotherToolNotice is what a move with --tool did beyond the place. The
+// answer cannot tell a move into another tool from one within the entry's own
+// tool, so the notice says what a move into another tool does.
+const intoAnotherToolNotice = "An entry that moves into another tool goes with everything inside it, its versions and comments; there it is hidden from clients until someone shows it on the web, whoever is not a member of that project is taken off it, and labels that belong to neither that project nor that tool come off"
+
+// intoAnotherToolRefusal gives the refusals of a move with --tool the hint
+// that names the other tool, where the code means it.
+func intoAnotherToolRefusal(e *Error) {
+	switch e.APICode {
+	case apiCodeFolderUnknown:
+		e.Hint = "--folder names no folder of the tool --tool names: a folder in the trash, or one you are not shown, is none, and on a host that does not move entries between tools yet every folder of another tool is none. List its folders with: minka docs list <toolId>"
+	case apiCodeProjectArchived:
+		e.Hint = "The project of the entry, or the one of the tool --tool names, is archived. Both can still be read; nothing moves out of one or into one until it is put back in use, which is done in Minka on the web."
+	}
+}
+
+// movedWithinItsToolOnly answers a Minka that reads no toolId: it moved the
+// entry within its own tool, to the top the request named there. The CLI does
+// not read the entry before a move, so it cannot say where it stood.
+func movedWithinItsToolOnly(noun, command string, facts entryFacts, raw any) *Error {
+	return &Error{
+		Code:    CodeAPI,
+		Message: "this Minka does not move entries between tools: the " + noun + " stands at " + placeOf(facts) + " now, or stood there already",
+		Hint:    "This CLI does not know where it stood before; the answer is in data. Move it back with " + command + " move " + facts.id + " --folder <its old folder>, or --top-level if it stood at the top. Moves into another tool need a newer Minka.",
+		Data:    raw,
+	}
 }
 
 // folderUnknownToTheHostHint answers a Minka that has no address for a folder
@@ -683,7 +760,13 @@ func entryOrderRefusal[T any](s *session, err error, k filesEntryKind[T], id, ac
 	case e.APICode == k.noun+"NotArchived":
 		e.Hint = fmt.Sprintf("The %s stands among the entries of its tool, not in the archive. Put it away with: %s archive %s", k.noun, k.command, id)
 	case e.APICode == apiCodeFolderUnknown && action == "move":
-		e.Hint = fmt.Sprintf("--folder names no folder of the %s's tool: an entry moves within its tool only, and a folder in the trash, or one you are not shown, is none. List the folders with: minka docs list <toolId>", k.noun)
+		e.Hint = fmt.Sprintf("--folder names no folder of the %s's tool: a folder in the trash, or one you are not shown, is none. List the folders with minka docs list <toolId>. A folder of another tool takes it with --tool <toolId>.", k.noun)
+	case e.APICode == apiCodeToolUnknown:
+		e.Hint = "--tool names no Docs & Files tool of a project you are on the team of: an entry moves only between tools whose projects both have you on the team, and never into the template library. List the tools of a project with: minka docs tools <projectId>"
+	case e.APICode == apiCodeNeighboursAcrossTools:
+		e.Hint = "An entry that moves into another tool goes on top of its kind there, or to the end of a place arranged by hand. This CLI sends no neighbour with --tool, so the Minka it talks to reads the request otherwise."
+	case e.APICode == apiCodeEntrySharesFiles:
+		e.Hint = fmt.Sprintf("A file of the %s, or of something below it, is also held by something that stays in its project, so it moves within its project only: name a tool of the same project with --tool, or move it within its tool. Minka does not say which file it shares.", k.noun)
 	case e.APICode == apiCodeFolderIntoItself:
 		e.Hint = "Name a folder outside the one that moves with --folder, or move it with --top-level."
 	case e.APICode == apiCodeFolderOrderAutomatic:

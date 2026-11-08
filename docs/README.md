@@ -66,10 +66,10 @@ the documentation says what holds; how it came about is in git.
   the two requests a file goes into a tool with, the body that is never
   refused, the guard that cannot see one second, whom a new document reaches,
   the flag that names the kind of entry, the archive of a folder, how a tool
-  is kept in order — the trash, the archive, moves, folders, a version made the
-  newest — and who may, the refusals, books and the order set by hand, the
-  export of a book into files and what a run never touches — before any work
-  on `docs`.
+  is kept in order — the trash, the archive, moves, also into another tool,
+  folders, a version made the newest — and who may, the refusals, books and
+  the order set by hand, the export of a book into files and what a run never
+  touches — before any work on `docs`.
 - [Search](stable/search.md): What a search finds across Minka and what never,
   the kinds and the project it is narrowed to, the search within a tool or a
   folder, what is checked before a request, its pages and the stop at offset

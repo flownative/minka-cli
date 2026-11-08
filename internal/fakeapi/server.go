@@ -540,6 +540,11 @@ type Server struct {
 	// named the card somebody takes up next on a board: the address is none.
 	KnowsNoNextCard bool
 
+	// MovesWithinToolsOnly makes the server answer like a Minka from before
+	// moves into another tool: it reads no toolId and moves the entry within
+	// its own tool.
+	MovesWithinToolsOnly bool
+
 	// KnowsNoBooks makes the server answer like a Minka from before books and
 	// the order set by hand: it reads neither isBook nor inNavigation, writes
 	// what else was sent with 200, and its answers carry none of their fields.

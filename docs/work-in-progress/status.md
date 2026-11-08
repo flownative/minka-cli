@@ -227,6 +227,24 @@ unwritten, all with the bodies the fake sends. A Minka without books, which
 the commands answer with exit 7, is checked against the fake only. A client and an
 archived project were not met live.
 
+`docs move`, `docs uploads move` and `docs folders move` take `--tool
+<toolId>`, which moves an entry into another Docs & Files tool, also of another
+project (C-162…C-164, E-381). Minka's side is #802 and #803, on its `main` at
+d75fe9c1b and in no release yet. Against a Minka without #802, `--tool …
+--top-level` moves the entry within its own tool, which the CLI reports as exit
+7 afterwards; `--folder` of another tool is `folderUnknown` there and writes
+nothing. The CLI release with `--tool` goes out after the Minka release that
+carries #802. Checked against Minka's code (`FilesApiController`,
+`DbalFilesTransferRepository`, `CarriesItemsIntoAnotherProject`,
+`TransferFilesEntryHandler`) and `ApiFilesTransferTest`, and the fake. Checked
+live against a local Minka on its `main` (d75fe9c1b): a document into a folder
+of another project's tool, a folder with a document inside to the top of
+another project's tool (the document went along), back again with the tool ID
+in capitals, `toolUnknown`, `folderUnknown` with `--tool`, and `--after`
+beside `--tool` refused before any request; the notice came each time. Not met
+live: a second tool of the same project, an archived project, a book,
+`entrySharesFiles`, a client, and a Minka without #802.
+
 `docs export <folderId> --out <dir> [--format markdown|html] [--read-all] [--force]`
 writes a book, a chapter or any folder into a directory: a directory per
 folder, a file per page with a frontmatter and per upload, `README.md`
@@ -758,6 +776,19 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
 
 ## Checked against the fake only
 
+- A move into another Docs & Files tool (`move --tool`): the fake mirrors the
+  order of the refusals, the ID kept, everything below a folder going along,
+  the place on top of its kind or at the end of an order by hand, the folders
+  and the entries at the top hidden from clients, the labels of neither the
+  target project nor its tool coming off, and the files of uploads moving to
+  the target project. **The fake does not mirror**: subscriptions and
+  notifications (it keeps none on an entry of Docs & Files), organizations and
+  tools not in use, a client of the target project only (its clients are
+  clients everywhere, so a client is 404 at the entry's project already), a
+  draft that only its author moves, activity and references, and of
+  `entrySharesFiles` only the files of uploads and their versions and the
+  backs of cards count, not files in texts.
+
 - The search across Minka (`search` without `--tool` or `--folder`): the fake
   mirrors `SearchApiController` and `FullTextSearchQueryService` at
   64fa4398c. **The fake does not mirror**: check-ins and forwards (Minka does
@@ -818,8 +849,9 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   forwards (it has none, so `forward` finds nothing); a client's view of a
   single comment or chat line beyond the item and the chat; for a client, the
   switch of a document or an upload at the top of a Docs & Files tool
-  (Minka's `minka_item_shown_to_clients`), so such an entry is shown to no
-  client in the fake, while one below a folder follows the topmost folder;
+  (Minka's `minka_item_shown_to_clients`), so such an entry is shown to
+  clients in the fake only where a client made it and it did not move in from
+  another tool, while one below a folder follows the topmost folder;
   of the plain text Minka keeps beside an answer (`RichText::asPlainText`),
   the fake has the blocks on lines of their own, line breaks, the tags gone
   and the entities decoded, but not the source of `script`, `style` and their

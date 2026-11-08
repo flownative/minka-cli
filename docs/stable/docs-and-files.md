@@ -21,7 +21,10 @@ missing.
 A tool is kept in order with `delete`, `restore`, `archive`, `unarchive` and
 `move` in the group of each kind — `docs …`, `docs uploads …`, `docs folders
 …` — beside `docs folders create` and `edit`, `docs versions restore` and
-`docs list --archived` ([C-130](../decisions.md#c-130)), see below.
+`docs list --archived` ([C-130](../decisions.md#c-130)), see below. `move
+--tool` moves an entry into another Docs & Files tool, also of another project
+([C-162](../decisions.md#c-162), [C-163](../decisions.md#c-163),
+[C-164](../decisions.md#c-164), E-381), see below.
 
 `search --tool` and `--folder` find documents and uploads within a tool or a
 folder, see [Search](search.md).
@@ -355,6 +358,12 @@ often they are named.
 | 422 `documentNotArchived`, `uploadNotArchived`, `folderNotArchived` | `unarchive` of an entry not in the archive | 9 |
 | 422 `folderIntoItself` | `docs folders move` into the folder itself or one below it | 9 |
 | 422 `folderIdMissing` | unreachable: every `move` names its place | — |
+| 422 `toolUnknown` | `move --tool` naming a tool of a project you are not on the team of, of the template library, of another organization or not in use | 9 |
+| 422 `folderUnknown` | `move --tool --folder` naming a folder the tool `--tool` names has not got | 9 |
+| 422 `entrySharesFiles` | `move --tool` into another project of an entry with a file also held by something that stays | 9 |
+| 422 `neighboursAcrossTools` | unreachable: `--after` and `--before` do not go with `--tool` | — |
+| 404 | `move --tool` into another tool for a client of the entry's project | 2 |
+| 200 outside the tool `--tool` names | `move --tool` against a Minka that reads no `toolId` and moved the entry within its own tool | 7 |
 | 422 `folderTitleMissing`, `folderTitleTooLong`, `folderTitleHasControlCharacters` | `docs folders create`, `docs folders edit` | 9 |
 | 400 `malformedBody` | unreachable for `docs folders create`: `visibleToClients` goes out as a boolean | — |
 | 422 `documentArchived`, `uploadArchived` | every write on an archived entry, or under one, comments and their reactions included, `archive`, `move` and `docs versions restore`, and a folder above the entry counts — but v0.41.0 changes and removes one's own comment below an archived folder; `delete` takes an archived entry, `unarchive` brings it back | 9 |
@@ -396,6 +405,24 @@ reading it as the wrong one.
   ordered automatically and last in one arranged by hand. A move to where the
   entry stands, without a neighbour, writes nothing and answers 200, so the
   answer cannot tell a move from none. `--after` and `--before` are below.
+- `move --tool <toolId>` sends `toolId` beside `folderId`, which then names a
+  folder of that tool or, as null, its top ([C-162](../decisions.md#c-162)).
+  The entry keeps its ID, takes everything below a folder along (the trash and
+  the archive included) with versions and comments, and lands first among its
+  kind there, last in a place arranged by hand. Everything that moves is
+  hidden from clients; whoever is not a member of the target project loses
+  subscription and notifications; a label stays only if it belongs to the
+  target project, project-wide or of the target tool, so across projects every
+  label comes off and within one the old tool's do. The answer is the entry as
+  its own address reads it, in its new place. `--tool` naming the entry's own
+  tool is a move within it, as Minka reads it. `--after` and `--before` do not
+  go with `--tool`: exit 1 before a request ([C-163](../decisions.md#c-163)).
+  A move with `--tool` draws a `notice` with what a move into another tool
+  does, and an answer that does not stand in the tool `--tool` names is exit 7
+  ([C-164](../decisions.md#c-164)). Against a Minka that does not move
+  entries between tools yet, `--tool … --top-level` moves the entry within its
+  own tool, which the CLI reports as exit 7 afterwards; every folder of another
+  tool is `folderUnknown` there.
 - `docs folders create` answers 201 with the folder in the shape of `docs
   list --folder`, its ID under `folder.id`. `visibleToClients` counts only at
   the top of the tool, in a project open to clients, from the team, and a
@@ -436,6 +463,18 @@ itself, for the team), and reads the body where it takes one. Then:
   (`folderUnknown`), then `projectArchived`, and only then an archived target
   (`folderArchived`), `folderIntoItself` and the place it stands already (200),
   so an archived project refuses a move to where the entry stands as well.
+  A `toolId` that is no string is 400 here too.
+- `move` with `toolId` of another tool: an archived entry as above, before the
+  body; the body (415, 400, a `toolId` that is no string); a client of the
+  entry's project (404); a `toolId` that is no ID, a tool the person does not
+  reach as one of the team, of the template library, of another organization
+  or not in use (`toolUnknown`); `previousEntryId` or `nextEntryId`, even null
+  (`neighboursAcrossTools`); then the field (`folderIdMissing`, 400), a folder
+  the target tool has not got (`folderUnknown`), an archived target folder
+  (the target's `projectArchived`, else `folderArchived`); then
+  `projectArchived` of the entry's project and of the target's; and last what
+  the move meets: `bookWithinABook`, `entrySharesFiles` (across projects, a
+  file of what moves also held by something that stays), 404 for the rest.
 - `docs folders create`: the tool (404), the title, the folder above
   (`folderUnknown`; an archived one is `projectArchived` in an archived
   project and `folderArchived` otherwise), `visibleToClients` that is no

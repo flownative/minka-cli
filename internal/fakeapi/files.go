@@ -191,7 +191,7 @@ func (s *Server) filesEntries(w http.ResponseWriter, r *http.Request, person *Pe
 
 func (s *Server) document(w http.ResponseWriter, r *http.Request, person *Person) {
 	tool, document := s.visibleDocument(r.PathValue("documentId"), person)
-	if document == nil {
+	if document == nil || !s.shownAsAnEntryTo(person, tool, "document", document.ID) {
 		notFound(w)
 		return
 	}
@@ -379,7 +379,7 @@ func (s *Server) updateDocument(w http.ResponseWriter, r *http.Request, person *
 
 func (s *Server) filesUpload(w http.ResponseWriter, r *http.Request, person *Person) {
 	tool, upload := s.visibleFilesUpload(r.PathValue("uploadId"), person)
-	if upload == nil {
+	if upload == nil || !s.shownAsAnEntryTo(person, tool, "upload", upload.ID) {
 		notFound(w)
 		return
 	}

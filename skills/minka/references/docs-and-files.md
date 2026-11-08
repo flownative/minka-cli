@@ -27,7 +27,7 @@ minka docs delete <documentId> --json
 minka docs restore <documentId> --json
 minka docs archive <documentId> --json
 minka docs unarchive <documentId> --json
-minka docs move <documentId> (--folder <folderId> | --top-level) [--after <entryId> | --before <entryId>] --json
+minka docs move <documentId> (--folder <folderId> | --top-level) [--tool <toolId>] [--after <entryId> | --before <entryId>] --json
 minka docs folders show <folderId> --json
 minka docs folders create --tool <toolId> --title "Title" [--folder <folderId>] [--visible-to-clients] --json
 minka docs folders edit <folderId> [--title "New"] [--book | --no-book] --json
@@ -35,7 +35,7 @@ minka docs folders delete <folderId> --json
 minka docs folders restore <folderId> --json
 minka docs folders archive <folderId> --json
 minka docs folders unarchive <folderId> --json
-minka docs folders move <folderId> (--folder <folderId> | --top-level) [--after <entryId> | --before <entryId>] --json
+minka docs folders move <folderId> (--folder <folderId> | --top-level) [--tool <toolId>] [--after <entryId> | --before <entryId>] --json
 minka docs uploads show <uploadId> --json
 minka docs uploads create <file> --tool <toolId> [--folder <folderId>] [--title "Title"] [--description - < about.md] --json
 minka docs uploads create --blob <blobId> --tool <toolId> [--folder <folderId>] [--title "Title"] --json
@@ -46,7 +46,7 @@ minka docs uploads delete <uploadId> --json
 minka docs uploads restore <uploadId> --json
 minka docs uploads archive <uploadId> --json
 minka docs uploads unarchive <uploadId> --json
-minka docs uploads move <uploadId> (--folder <folderId> | --top-level) [--after <entryId> | --before <entryId>] --json
+minka docs uploads move <uploadId> (--folder <folderId> | --top-level) [--tool <toolId>] [--after <entryId> | --before <entryId>] --json
 minka docs comments create (--document <documentId> | --upload <uploadId>) - --json < comment.md
 minka docs comments edit (--document <documentId> | --upload <uploadId>) <commentId> - [--format html] --json < comment.md
 minka docs comments delete (--document <documentId> | --upload <uploadId>) <commentId> --json
@@ -290,11 +290,25 @@ an ID is never read as the wrong kind:
   `docs list <toolId> --archived` marks it `archivedWithAFolderAbove`.
 - **`move`** takes `--folder <folderId>` or `--top-level`, exactly one; it lands
   first among its kind in a place ordered automatically and last in one
-  arranged by hand (see "Books and the order of a place"). It moves within its tool only (another tool's folder
-  is `folderUnknown`), nothing in the archive moves and nothing goes into an
-  archived folder (`folderArchived`), and a folder cannot go into itself or one
-  below it (`folderIntoItself`). Where it stands already, nothing is written
-  and the answer is the same.
+  arranged by hand (see "Books and the order of a place"). Nothing in the
+  archive moves and nothing goes into an archived folder (`folderArchived`),
+  and a folder cannot go into itself or one below it (`folderIntoItself`).
+  Where it stands already, nothing is written and the answer is the same.
+- **`move --tool <toolId>`** moves it into another Docs & Files tool, also of
+  another project: `--folder` then names a folder of **that** tool
+  (`folderUnknown` otherwise), `--top-level` its top. It keeps its ID and goes
+  with everything inside it, its versions and comments, and lands as above.
+  There it is **hidden from clients** until someone shows it on the web,
+  whoever is not a member of that project is taken off it, and **labels that
+  belong to neither that project nor that tool come off**; a `notice` says so. Only the
+  team of both projects may: a tool out of reach is exit 9 `toolUnknown`, a
+  client of the entry's project exit 2. Across projects, one that shares a file
+  with something that stays is exit 9 `entrySharesFiles`: it moves within its
+  project only, and Minka does not say which file. `--after`/`--before` do not
+  go with `--tool` (exit 1). A Minka that does not move between tools yet
+  answers every folder of another tool with `folderUnknown`, and with
+  `--top-level` moves the entry to the top of its own tool: exit 7, the answer
+  in `data`; move it back with `--folder <its old folder>`.
 - What stands **below an archived folder** is not put into the trash on its
   own: `delete` exits 9 `folderArchived`. Bring the folder back, or put the
   folder itself away.
@@ -443,10 +457,10 @@ removing anything for good. All of it is done in Minka on the web.
 `notifyIdsWithoutChosenAudience`,
 `folderUnknown`, `folderArchived`, `documentArchived`, `uploadArchived`,
 `documentNotArchived`, `uploadNotArchived`, `folderNotArchived`,
-`folderIntoItself`, `folderTitleMissing`, `folderTitleTooLong`,
-`folderTitleHasControlCharacters`, `bookWithinABook`, `folderOrderAutomatic`,
-`documentChanged` (409, with the document in `data`), `uploadTitleMissing`,
-`uploadTitleTooLong`, `uploadTitleHasControlCharacters`,
+`folderIntoItself`, `toolUnknown`, `entrySharesFiles`, `folderTitleMissing`,
+`folderTitleTooLong`, `folderTitleHasControlCharacters`, `bookWithinABook`,
+`folderOrderAutomatic`, `documentChanged` (409, with the document in `data`),
+`uploadTitleMissing`, `uploadTitleTooLong`, `uploadTitleHasControlCharacters`,
 `uploadDescriptionTooLong`, `uploadDescriptionNotReadable`, `uploadChanged`
 (409, with the upload in `data`), `fileUnknown`, `fileInUse`, the codes of
 storing a file (`contentTypeMismatch`, `tooLarge`), and the comment codes a
