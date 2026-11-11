@@ -3,8 +3,8 @@
 `search <term>...` asks `GET /api/v1/search` the way Minka's search on the web
 finds things (E-304, E-357). Without `--tool` or `--folder` it searches
 everything the person may read: cards, comments, posts, to-do lists, to-do
-groups, to-dos, folders, documents, uploads, events, the lines of the chats of
-their projects and of their own private conversations. Minka never finds
+groups, to-dos, folders, documents, uploads, events, decisions, the lines of
+the chats of their projects and of their own private conversations. Minka never finds
 drafts, comments under a draft, the trash, archived projects, the template
 library or a line taken back. A client is not refused: Minka finds only what
 the clients are shown.
@@ -24,8 +24,8 @@ with a dash, Minka's NOT, goes behind `--`, with every flag before it.
 ## Narrowing
 
 `--kind` narrows to the hits of tools, with Minka's words: `board`, `posts`,
-`todos`, `files`, `calendar`, `chat`, `conversation`, repeated or separated by
-commas. A comment counts toward the tool of what it stands under. Each word
+`todos`, `files`, `calendar`, `decisions`, `chat`, `conversation`, repeated
+or separated by commas. A comment counts toward the tool of what it stands under. Each word
 goes out once, in the order given ([C-156](../decisions.md#c-156)).
 
 `--project` narrows to one project and leaves the private conversations out,
@@ -87,7 +87,8 @@ names.
 ## A hit
 
 `kind` is `card`, `comment`, `post`, `todoList`, `todo`, `todoGroup`,
-`folder`, `document`, `upload`, `event`, `chat` or `conversation`. `id` is the
+`folder`, `document`, `upload`, `event`, `decision`, `chat` or
+`conversation`. `id` is the
 hit itself: the comment, the message. `targetKind` and `targetId` name what the
 addresses lead to: the item a comment stands under, the chat or conversation
 of a line, else the item itself. `title` is the item's, for a comment the one
@@ -110,8 +111,8 @@ and the mark `archived`; a comment as `comment on card …`, a line of a chat as
 and `appUrl` follow on lines of their own ([C-160](../decisions.md#c-160)). The
 breadcrumb `show` reads what the first hit with a command leads to: `cards
 show`, `posts show`, `todolists show`, `todos show`, `docs folders show`,
-`docs show`, `docs uploads show` or `events show`, for a comment the item it
-stands under. A to-do group, and a line of a chat or a conversation, have
+`docs show`, `docs uploads show`, `events show` or `decisions show`, for a
+comment the item it stands under. A to-do group, and a line of a chat or a conversation, have
 none: the API shows no group on its own, and a transcript is read from its
 newest end, so no command opens it at the line.
 

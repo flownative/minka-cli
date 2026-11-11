@@ -322,6 +322,52 @@ var idsInCapitals = []idInCapitals{
 	{command: "posts create", inputs: []string{"--tool", "--category", "--notify"}, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
 		return []string{"--tool", up(f.Posts.ID), "--category", up(f.Announcement.ID), "--title", "Setting up", "--audience", "chosen", "--notify", up(f.Anke.ID), "--body", "Friday."}
 	}},
+	{command: "decisions list", inputs: []string{"--status", "--label", "--applies-to-event"}, prepare: withLabels, args: func(e *testEnv, f *fakeapi.Fixture) []string {
+		return []string{f.Decisions.ID, "--status", up(f.Decisions.StatusOfRole("holds").ID), "--label", up(labelNamed(e, "Plain").ID), "--applies-to-event", up(f.OnceEvent.ID)}
+	}},
+	{command: "decisions list", inputs: []string{"--applies-to-card"}, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
+		return []string{f.Decisions.ID, "--applies-to-card", up(f.CardInDoing.ID)}
+	}},
+	{command: "decisions create", inputs: []string{"--tool", "--status", "--decided-by", "--event", "--supersedes", "--applies-to-event"}, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
+		return []string{"--tool", up(f.Decisions.ID), "--title", "We meet on Tuesdays", "--status", up(f.Decisions.StatusOfRole("holds").ID),
+			"--decided-by", up(f.Anke.ID), "--event", up(f.OnceEvent.ID), "--supersedes", up(f.Decision.ID), "--applies-to-event", up(f.AllDayEvent.ID)}
+	}},
+	{command: "decisions create", inputs: []string{"--revokes", "--applies-to-card"}, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
+		return []string{"--tool", f.Decisions.ID, "--title", "No more Mondays", "--revokes", up(f.Decision.ID), "--applies-to-card", up(f.CardInDoing.ID)}
+	}},
+	{command: "decisions edit", inputs: []string{"--status", "--decided-by", "--event", "--supersedes", "--applies-to-event"}, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
+		return []string{f.ProposedDecision.ID, "--status", up(f.Decisions.StatusOfRole("holds").ID), "--decided-by", up(f.Anke.ID),
+			"--event", up(f.OnceEvent.ID), "--supersedes", up(f.Decision.ID), "--applies-to-event", up(f.AllDayEvent.ID)}
+	}},
+	{command: "decisions edit", inputs: []string{"--revokes", "--applies-to-card"}, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
+		return []string{f.ProposedDecision.ID, "--revokes", up(f.Decision.ID), "--applies-to-card", up(f.CardInDoing.ID)}
+	}},
+	{command: "decisions supersede", inputs: []string{"--status", "--decided-by", "--event", "--applies-to-event"}, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
+		return []string{up(f.Decision.ID), "--title", "Tuesdays", "--status", up(f.Decisions.StatusOfRole("holds").ID), "--decided-by", up(f.Anke.ID),
+			"--event", up(f.OnceEvent.ID), "--applies-to-event", up(f.AllDayEvent.ID)}
+	}},
+	{command: "decisions supersede", inputs: []string{"--applies-to-card"}, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
+		return []string{f.Decision.ID, "--title", "Tuesdays", "--applies-to-card", up(f.CardInDoing.ID)}
+	}},
+	{command: "decisions revoke", inputs: []string{"--status", "--decided-by", "--event", "--applies-to-event"}, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
+		return []string{up(f.Decision.ID), "--title", "No more", "--status", up(f.Decisions.StatusOfRole("holds").ID), "--decided-by", up(f.Anke.ID),
+			"--event", up(f.OnceEvent.ID), "--applies-to-event", up(f.AllDayEvent.ID)}
+	}},
+	{command: "decisions revoke", inputs: []string{"--applies-to-card"}, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
+		return []string{f.Decision.ID, "--title", "No more", "--applies-to-card", up(f.CardInDoing.ID)}
+	}},
+	{command: "decisions entries move", inputs: []string{"--after"}, prepare: withTwoDecisionEntries, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
+		return []string{up(f.Decision.ID), up(f.Decision.History[0].ID), "--after", up(f.Decision.History[1].ID)}
+	}},
+	{command: "decisions entries move", inputs: []string{"--before"}, prepare: withTwoDecisionEntries, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
+		return []string{f.Decision.ID, f.Decision.History[1].ID, "--before", up(f.Decision.History[0].ID)}
+	}},
+	{command: "decisions label", inputs: []string{"<label>"}, prepare: withLabels, args: func(e *testEnv, f *fakeapi.Fixture) []string {
+		return []string{up(f.Decision.ID), up(labelNamed(e, "Plain").ID)}
+	}},
+	{command: "decisions unlabel", inputs: []string{"<label>"}, prepare: withLabels, args: func(e *testEnv, f *fakeapi.Fixture) []string {
+		return []string{up(f.Decision.ID), up(labelNamed(e, "Plain").ID)}
+	}},
 	{command: "events create", inputs: []string{"--tool", "--participant"}, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
 		return []string{"--tool", up(f.Calendar.ID), "--title", "Setting up", "--first-day", "2026-10-20", "--participant", up(f.Anke.ID)}
 	}},
@@ -608,7 +654,7 @@ var idInputsExcepted = map[string]string{
 // in a variable or on another receiver is not: todogroups move passes its flag
 // in a variable and cards move passes neighbourCard, and both are covered only
 // because --after and --before are on the list.
-var idFlagNames = []string{"after", "before", "assignee", "notify-when-done", "notify", "ask", "person", "list", "group", "tool", "board", "folder", "document", "upload", "blob", "category", "project", "conversation", "column", "client-message-id", "reply-to", "participant", "template"}
+var idFlagNames = []string{"after", "before", "event", "applies-to-event", "supersedes", "revokes", "assignee", "notify-when-done", "notify", "ask", "person", "list", "group", "tool", "board", "folder", "document", "upload", "blob", "category", "project", "conversation", "column", "client-message-id", "reply-to", "participant", "template"}
 
 // idPositions are the positions that take an ID among other names for a thing;
 // a position whose name ends in "Id" takes nothing else and is held by the

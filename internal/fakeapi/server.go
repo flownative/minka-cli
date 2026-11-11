@@ -478,17 +478,18 @@ func chatText(text string) string {
 type Server struct {
 	*httptest.Server
 
-	People        map[string]*Person
-	Tokens        map[string]string // token → person ID
-	Projects      []*Project
-	Boards        []*Board
-	Chats         []*Chat
-	FilesTools    []*FilesTool
-	TodosTools    []*TodosTool
-	CheckinsTools []*CheckinsTool
-	PostsTools    []*PostsTool
-	Calendars     []*CalendarTool
-	Uploads       []*Upload
+	People         map[string]*Person
+	Tokens         map[string]string // token → person ID
+	Projects       []*Project
+	Boards         []*Board
+	Chats          []*Chat
+	FilesTools     []*FilesTool
+	TodosTools     []*TodosTool
+	CheckinsTools  []*CheckinsTool
+	PostsTools     []*PostsTool
+	Calendars      []*CalendarTool
+	DecisionsTools []*DecisionsTool
+	Uploads        []*Upload
 
 	// Labels are the labels of every project and tool, each place's in its
 	// order; ItemLabels are the IDs of the labels every card, document and
@@ -822,6 +823,19 @@ type Fixture struct {
 	OnceEvent        *CalendarEvent // on 21 October 2026, by Anke, with a comment of Anke's and then one of Bruno's
 	AllDayEvent      *CalendarEvent // 20 to 22 October 2026, highlighted
 	OtherEvent       *CalendarEvent
+
+	// The Decisions tool of the project, which lets its clients in, with the
+	// seven statuses of a new tool: a decision in force shown to clients, with
+	// a reason, a body and a comment of Anke's; a proposed one; a draft shown
+	// to clients, which no client meets all the same; one in the archive. The
+	// project that belongs to somebody else has a tool with a decision.
+	Decisions        *DecisionsTool
+	Decision         *Decision
+	ProposedDecision *Decision
+	DraftDecision    *Decision
+	ArchivedDecision *Decision
+	OtherDecisions   *DecisionsTool
+	OtherDecision    *Decision
 }
 
 // New starts a fake with a small fixture: Bruno is a member of one project
@@ -1070,6 +1084,29 @@ func New(t testing.TB) (*Server, *Fixture) {
 	otherCalendar := &CalendarTool{ID: newID(), ProjectID: otherProject.ID, Title: "Secret dates", Events: []*CalendarEvent{otherEvent}}
 	s.Calendars = []*CalendarTool{calendar, calendarOutOfUse, otherCalendar}
 
+	decisions := NewDecisionsTool(project.ID, "Decisions")
+	aDecision := func(title, role string, written time.Time, creatorID string) *Decision {
+		return &Decision{ID: newID(), Title: title, StatusID: decisions.StatusOfRole(role).ID,
+			CreatedAt: written, UpdatedAt: written, CreatorID: creatorID}
+	}
+	decision := aDecision("We meet on Mondays", "holds", at("2026-11-02", "10:00"), bruno.ID)
+	decision.Reason, decision.Body, decision.DecidedOn, decision.ShownToClients = "Then everybody has time.", "<p>From <strong>December</strong> on.</p>", "2026-11-02", true
+	decision.Comments = []*Comment{{ID: newID(), AuthorID: anke.ID, Body: "<div>Fine by me</div>", CreatedAt: at("2026-11-02", "11:00")}}
+	proposedDecision := aDecision("We buy a tent", "proposed", at("2026-11-04", "09:00"), anke.ID)
+	draftDecision := aDecision("The fee rises to 40 euros", "draft", at("2026-11-05", "09:00"), bruno.ID)
+	draftDecision.ShownToClients = true
+	archivedDecision := aDecision("We met on Tuesdays", "holds", at("2026-01-10", "09:00"), bruno.ID)
+	archivedDecision.Archived = true
+	decisions.Decisions = []*Decision{proposedDecision, decision, draftDecision, archivedDecision}
+	otherDecisions := NewDecisionsTool(otherProject.ID, "Secret decisions")
+	otherDecision := &Decision{ID: newID(), Title: "Not yours to know", StatusID: otherDecisions.StatusOfRole("holds").ID,
+		CreatedAt: at("2026-11-01", "09:00"), UpdatedAt: at("2026-11-01", "09:00"), CreatorID: stranger.ID}
+	otherDecisions.Decisions = []*Decision{otherDecision}
+	for _, written := range append(slices.Clone(decisions.Decisions), otherDecision) {
+		written.Versions = []*DecisionVersion{written.snapshot(written.CreatorID, written.CreatedAt)}
+	}
+	s.DecisionsTools = []*DecisionsTool{decisions, otherDecisions}
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v1/me", s.authenticated(s.me))
 	mux.HandleFunc("DELETE /api/v1/me/token", s.authenticated(s.revokeOwnToken))
@@ -1129,6 +1166,7 @@ func New(t testing.TB) (*Server, *Fixture) {
 	s.registerTodosRoutes(mux)
 	s.registerCheckinsRoutes(mux)
 	s.registerPostsRoutes(mux)
+	s.registerDecisionsRoutes(mux)
 	s.registerCalendarRoutes(mux)
 	s.registerReminderRoutes(mux)
 	s.registerNotificationsRoutes(mux)
@@ -1167,6 +1205,8 @@ func New(t testing.TB) (*Server, *Fixture) {
 		PostsOutOfUse: postsOutOfUse, OtherPosts: otherPosts, OtherPost: otherPost, OtherCategory: otherCategory,
 		Calendar: calendar, CalendarOutOfUse: calendarOutOfUse, OtherCalendar: otherCalendar,
 		WeeklyEvent: weeklyEvent, OnceEvent: onceEvent, AllDayEvent: allDayEvent, OtherEvent: otherEvent,
+		Decisions: decisions, Decision: decision, ProposedDecision: proposedDecision, DraftDecision: draftDecision,
+		ArchivedDecision: archivedDecision, OtherDecisions: otherDecisions, OtherDecision: otherDecision,
 	}
 }
 

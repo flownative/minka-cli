@@ -8,8 +8,8 @@ minka search [flags] --json -- -<word> <term>...
 
 `minka search` finds what you may read, the way the search of Minka on the
 web does: cards, comments, posts, to-do lists, groups and to-dos, folders,
-documents, uploads, events, the lines of the chats of your projects and of
-your own private conversations. Drafts, the trash, archived projects and lines
+documents, uploads, events, decisions, the lines of the chats of your
+projects and of your own private conversations. Drafts, the trash, archived projects and lines
 taken back are never found.
 
 Search before you ask a person or create something: whether a card for the
@@ -25,7 +25,7 @@ a passage. It is cheaper than walking boards, lists and folders.
    included, has to stand before the `--`: `minka search --kind todos --json
    -- -draft tent`. Minka cuts a term at 200 characters; a `notice` says so.
 2. Narrow it. `--kind` takes `board`, `posts`, `todos`, `files`, `calendar`,
-   `chat` and `conversation`, repeated or separated by commas
+   `decisions`, `chat` and `conversation`, repeated or separated by commas
    (`--kind board,posts`); a comment counts toward the tool of what it stands
    under. Any other word exits 1 before any request. `--project <projectId>`
    narrows to one project and leaves private conversations out.
@@ -44,7 +44,8 @@ title, excerpt, section, projectId, toolId, project, shortId, shortUrl,
 updatedAt, archived, appUrl, apiUrl}`.
 
 - `kind` is `card`, `comment`, `post`, `todoList`, `todo`, `todoGroup`,
-  `folder`, `document`, `upload`, `event`, `chat` or `conversation`.
+  `folder`, `document`, `upload`, `event`, `decision`, `chat` or
+  `conversation`.
 - `id` is the hit itself: the comment, the message. `targetKind` and
   `targetId` are what it leads to: the card, post, to-do, list, document,
   upload or event a comment stands under, the chat or conversation of a line,
@@ -71,8 +72,8 @@ The text names each hit on one line: its ID, its kind and title, `#MNK-1`,
 
 The first `show` breadcrumb reads what the first hit leads to. By
 `targetKind`: `minka cards show`, `posts show`, `todolists show`, `todos show`,
-`docs folders show`, `docs show`, `docs uploads show` or `events show` with
-`targetId`. A to-do group has no address of its own: read its list. A line of a
+`docs folders show`, `docs show`, `docs uploads show`, `events show` or
+`decisions show` with `targetId`. A to-do group has no address of its own: read its list. A line of a
 chat or a conversation is read in its transcript with `minka messages list
 <targetId>`, which starts at the newest end; `appUrl` opens it at the line on
 the web.

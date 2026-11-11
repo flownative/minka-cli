@@ -122,9 +122,10 @@ type BoardCard struct {
 // A card and a folder, document or upload of Docs & Files can be put back
 // through the API, and only while nothing they hung in is out of use.
 type TrashEntry struct {
-	// Kind is what the thing is: "tool", "column", "card", "post", "todoList",
-	// "todo", "todoGroup", "checkinQuestion", "checkinAnswer", "forward",
-	// "folder", "document" or "upload". Minka may name further kinds.
+	// Kind is what the thing is: "tool", "column", "card", "post", "decision",
+	// "todoList", "todo", "todoGroup", "checkinQuestion", "checkinAnswer",
+	// "forward", "folder", "document" or "upload". Minka may name further
+	// kinds.
 	Kind     string  `json:"kind"`
 	ID       string  `json:"id"`
 	Title    string  `json:"title"`

@@ -21,7 +21,7 @@ func (a *app) newTrashListCmd() *cobra.Command {
 		Short: "List what is in the trash of a project, the newest first",
 		Long: `Lists what was taken out of a project, the newest first, at most 200 of them.
 Anything a project holds can be there: a card, a column, a tool, a post, a
-to-do with its list and its group, a question or an answer of a check-in, a
+decision, a to-do with its list and its group, a question or an answer of a check-in, a
 forward, and a folder, a document or a file of Docs & Files.
 
 WHERE says what the thing hung in. Only a card and a column lie on a board;

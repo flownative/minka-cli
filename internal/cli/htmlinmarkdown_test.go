@@ -47,6 +47,9 @@ func htmlWrites() map[string]htmlWrite {
 		"todos create": {func(f *fakeapi.Fixture, text string) []string {
 			return []string{"todos", "create", "--list", f.TodoList.ID, "--title", "A to-do", "--notes", text}
 		}, "--notes-format"},
+		"decisions create": {func(f *fakeapi.Fixture, text string) []string {
+			return []string{"decisions", "create", "--tool", f.Decisions.ID, "--title", "New", "--body", text}
+		}, "--body-format"},
 		"events create": {func(f *fakeapi.Fixture, text string) []string {
 			return []string{"events", "create", "--tool", f.Calendar.ID, "--title", "New", "--first-day", "2026-10-20", "--description", text}
 		}, "--description-format"},

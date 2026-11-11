@@ -63,7 +63,7 @@ func (s *Server) registerLabelRoutes(mux *http.ServeMux) {
 		mux.HandleFunc("POST /api/v1/"+place+"/labels/{labelId}/moves", s.authenticated(s.moveLabel))
 		mux.HandleFunc("DELETE /api/v1/"+place+"/labels/{labelId}", s.authenticated(s.removeLabel))
 	}
-	for _, item := range []string{"cards/{cardId}", "documents/{documentId}", "files-uploads/{uploadId}"} {
+	for _, item := range []string{"cards/{cardId}", "documents/{documentId}", "files-uploads/{uploadId}", "decisions/{decisionId}"} {
 		mux.HandleFunc("POST /api/v1/"+item+"/labels", s.authenticated(s.assignLabel))
 		mux.HandleFunc("DELETE /api/v1/"+item+"/labels", s.authenticated(s.unassignLabel))
 		mux.HandleFunc("DELETE /api/v1/"+item+"/labels/{labelId}", s.authenticated(s.unassignLabel))
@@ -531,7 +531,7 @@ func (s *Server) labelOfPlace(w http.ResponseWriter, r *http.Request, person *Pe
 	return nil, nil, false
 }
 
-// labelledItem is a card, a document or an upload whose labels are changed,
+// labelledItem is a card, a document, an upload or a decision whose labels are changed,
 // with what refuses a change on it.
 type labelledItem struct {
 	id           string
@@ -554,6 +554,11 @@ func (s *Server) labelledItem(w http.ResponseWriter, r *http.Request, person *Pe
 		if tool, document := s.visibleDocument(r.PathValue("documentId"), person); document != nil {
 			item = labelledItem{id: document.ID, project: s.projectWithID(tool.ProjectID), toolID: tool.ID,
 				archived: document.Archived || folderIsOutOfUse(tool, document.FolderID), archivedCode: "documentArchived"}
+		}
+	case r.PathValue("decisionId") != "":
+		if tool, decision := s.visibleDecision(r.PathValue("decisionId"), person); decision != nil {
+			item = labelledItem{id: decision.ID, project: s.projectWithID(tool.ProjectID), toolID: tool.ID,
+				archived: decision.Archived, archivedCode: "decisionArchived"}
 		}
 	default:
 		if tool, upload := s.visibleFilesUpload(r.PathValue("uploadId"), person); upload != nil {

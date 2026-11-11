@@ -33,9 +33,10 @@ func (p LabelPlace) path() string {
 	return "/" + p.Kind + "/" + url.PathEscape(p.ID) + "/labels"
 }
 
-// LabelledItem is a card, a document or an upload, which carry labels.
+// LabelledItem is a card, a document, an upload or a decision, which carry
+// labels.
 type LabelledItem struct {
-	Kind string // "cards", "documents" or "files-uploads"
+	Kind string // "cards", "documents", "files-uploads" or "decisions"
 	ID   string
 }
 

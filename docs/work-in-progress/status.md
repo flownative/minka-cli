@@ -353,6 +353,20 @@ reacting to a post itself and showing one to clients have no address in the
 API. None of it has been seen live: the whole feature is checked against the
 fake, see below.
 
+The decisions of a Decisions tool are read with `decisions tools`, `tool`,
+`statuses`, `list` (`--holds`, `--status`, `--label`, `--applies-to-card`,
+`--applies-to-event`), `show` and `versions list`/`show`, and written with
+`decisions create` (also several with `--from`), `edit`, `status`,
+`supersede`, `revoke`, `delete`, `label`, `unlabel`, `history add`,
+`consequences add` and `entries move`/`delete`; their comments with
+`decisions comments …`, and `search --kind decisions` finds them. The rule the
+commands follow is [Decisions](../stable/decisions.md) (C-165…C-171). Minka's
+side is on its `main` (8cd72692e) and in no release yet, so production gets it
+with the next Minka release. The commands are checked against Minka's code and
+tests and the fake only, **not live**: no instance a live check may write to
+has a Decisions tool yet, so the live check comes with the follow-up that
+brings the audience and the short identifiers of decisions.
+
 The calendars of a project are listed with `events tools`, their events read
 with `events list` (a span of days, with the occurrences of every series in
 it) and `events show`, and written with `events create`, `edit` and `delete`;
@@ -788,6 +802,21 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   draft that only its author moves, activity and references, and of
   `entrySharesFiles` only the files of uploads and their versions and the
   backs of cards count, not files in texts.
+
+- Everything of `decisions`: no request of it has gone to a real Minka. The
+  fake mirrors `DecisionsApiController` at 8cd72692e in the order of its
+  refusals, the client rules (no draft, no version, only what is shown to
+  clients, only one's own into the trash), the earlier decision that moves
+  only while the later one holds, and the versions of the text. **The fake
+  does not mirror**: the reader's view of a subject or an event in the trash
+  (`inTrash` is always false), Minka acting on `validUntil`, `reviewOn` and
+  a subject that is over, the statuses a team adds and renames, an entry
+  naming a comment, a chat line, a document or an upload (it reads the pages
+  of a card, a to-do and a post and a `#` card name), the reader's view of an
+  entry's target beyond its project, labels of the Decisions tool itself,
+  which only the web writes, and a subject or an earlier decision the writer
+  is not shown, which Minka keeps through `appliesTo: null` and
+  `--no-earlier` (the fake clears it).
 
 - The search across Minka (`search` without `--tool` or `--folder`): the fake
   mirrors `SearchApiController` and `FullTextSearchQueryService` at
