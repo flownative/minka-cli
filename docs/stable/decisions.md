@@ -10,18 +10,22 @@ comments and a short identifier such as ENT-14.
 `label`, `unlabel`, `history add`, `consequences add` and `entries …` write;
 `decisions comments …` reads and writes the comments under one.
 
-Everything here was read in Minka's code — `DecisionsApiController`, its resources, the decision handlers,
+Everything here was read in Minka's code — `DecisionsApiController`, its resources, the decision handlers
+(`AddDecisionsHandler` and `DecisionLines` for several at once),
 `DbalDecisionRepository`, `DecisionStatusSetBy`, `LabelsApiController` and
 `SearchTool` — and in `ApiDecisionsTest`, `ApiDecisionEntriesTest` and
-`ApiDecisionCommentsTest`; none of it has been seen live.
+`ApiDecisionCommentsTest`; none of it has been seen live. Several decisions at
+once and `agendaNumber` are on Minka's `main` (119d5ca71) and in no release
+yet.
 
 ## What is not there
 
 Archiving a decision and taking it back out, taking one out of the trash,
 writing the statuses of a tool, changing an entry of the history or the
-consequences, and writing several decisions in one request have no address in
-the API, nor have the prefix and the next number of a tool, which the team
-sets on the web.
+consequences, labels on one new decision (`POST …/decisions` reads no
+`labelIds`), and several decisions with fields of their own in one request
+have no address in the API, nor have the prefix and the next number of a
+tool, which the team sets on the web.
 
 ## Naming a decision
 
@@ -81,7 +85,14 @@ of the project, looked up before the list is read
 ([C-171](../decisions.md#c-171)); `--applies-to-card` and `--applies-to-event`
 narrow to one subject, `--set-by-agent` (`?setBy=agent`) to the decisions
 whose status an agent set by hand. Minka refuses any other value of `setBy`
-with `decisionSetByUnknown`, which the CLI never sends.
+with `decisionSetByUnknown`, which the CLI never sends. Decisions written down
+at once stand in the order of their agenda, one written down alone after them
+on the same day and moment.
+
+`agendaNumber` stands on the list and on a decision: its place among the
+decisions written down with it, counted from 1, null for one written down
+alone. The list gives it as `agenda item 2`, `show` as an `Agenda item:`
+line.
 
 `statusSetBy` stands on the list and on a decision: `person` (null once
 purged), `agent`, true where an agent set the status by hand, `minka`, true
@@ -117,14 +128,54 @@ the event does not repeat. What the decision applies to is named by
 `--applies-to-event` ([C-166](../decisions.md#c-166)). `--visible-to-clients`
 goes with a new decision only.
 
+`--label`, repeatable, takes an ID or the name of a label of the project.
+Every one is looked up among the project's labels before anything is
+written: one the project lacks is exit 2, two of one scope exit 9 with
+`meta.apiCode` `labelsShareAScope`, as Minka refuses them, and a label named
+twice goes once ([C-178](../decisions.md#c-178)). Since Minka
+takes no labels with one new decision, a single decision is written first and
+takes each label right after, one `POST decisions/{id}/labels` each; a label
+that then fails ends the run with `data.created`, `data.labelled` and
+`data.notLabelled`, the decision staying written. Several decisions carry
+their labels in `labelIds` of the one request.
+
+## Several at once
+
+`--title` given more than once, or `--titles-from <file|->` with one sentence
+per line, writes several decisions with `POST
+decisions-tools/{toolId}/decisions/batch` from `titles`, all or none, in their
+order; Minka numbers them one after the other and gives each its
+`agendaNumber`. A line that is empty or only spaces is left out, every other
+one goes as typed, list markers such as `1.` or `TOP 3:` included: stripping
+them is a convenience of Minka's web form for pasted text, which neither the
+API nor the CLI does ([C-177](../decisions.md#c-177)). `--title` and
+`--titles-from` exclude each other; `--titles-from -` beside `--body -` is
+exit 1, since both would read stdin. One sentence, of a file too, is the single create and
+takes every flag. Two or more share `--decided-on`, `--decided-by`,
+`--event`, `--status`, `--applies-to-card`/`--applies-to-event`,
+`--audience`/`--notify`, `--visible-to-clients` and `--label`; any other flag
+beside them is exit 1 before any request ([C-176](../decisions.md#c-176)).
+Success hands over `data` as the list of the decisions in their order.
+
+Refused sentences are 422 `decisionLinesRefused`, exit 9, nothing written:
+`data.lines` carries each refused one with Minka's `index` (from 0 in the
+order sent), `code` (`decisionTitleMissing`, `decisionTitleTooLong`,
+`decisionTitleHasControlCharacters`) and `message`, and the CLI's `title` and
+`from`, where it was given: `--title 2` or `line 5 of agenda.txt`, a line
+counted in the file with the empty ones. `decisionsMissing` and
+`decisionsTooMany` (beyond 100, left to Minka) and `labelsShareAScope` get a
+hint; a client sending labels is 404.
+
 `--from <file|->` writes several: a JSON list of objects in Minka's names of
 the fields of a new decision, a body as Markdown unless `--body-format html`,
 taken as written: a body of `-` is no call for stdin.
 A field Minka does not take is exit 1 before any request; IDs and the
-status go out in lowercase. The decisions go one request each in the order
-given, and the first refusal ends the run with `data.created`, the decisions
-as Minka answered, and `data.notCreated`, the titles of the rest
-([C-168](../decisions.md#c-168)).
+status go out in lowercase. `--from` is for decisions with fields of their
+own and is not all or none: the decisions go one request each in the order
+given, without an `agendaNumber`, and the first refusal ends the run with
+`data.created`, the decisions as Minka answered, and `data.notCreated`, the
+titles of the rest ([C-168](../decisions.md#c-168)). Sentences that share
+their fields go all or none with `--title` or `--titles-from`.
 
 ## Whom a decision reaches
 
@@ -189,7 +240,13 @@ earlier decision named twice or malformed, the shape of `appliesTo`,
 `validUntil` and `reviewOn`, then the audience (its word, the shape of
 `notifyIds`, a value that is no ID, then the people missing or without
 `chosen`), then the archived project, then a subject and an earlier decision
-that are unknown, then the people chosen. A change follows the same order
+that are unknown, then the people chosen. Several at once: 415 and 400, the
+tool (404), `titles` (400 no list of strings, `decisionsMissing`,
+`decisionsTooMany`, then `decisionLinesRefused` with every refused sentence),
+the day, the status, who decided, the event, the shape of `appliesTo`, the
+audience, then `labelIds` (400, a client 404, `labelUnknown`), then the
+archived project, an unknown subject, `labelsShareAScope` and the people
+chosen. A change follows the same order
 after the decision (404), except that it meets the people chosen right after
 the archived project, before an unknown earlier decision, which it meets
 before an unknown subject. A change of a decision of the archive is 422

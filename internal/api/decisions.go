@@ -107,6 +107,10 @@ type DecisionLine struct {
 	StatusSetBy *DecisionStatusSetBy `json:"statusSetBy"`
 	ShortID     *string              `json:"shortId"`  // such as "ENT-14", nil before its tool numbered it
 	ShortURL    *string              `json:"shortUrl"` // its go/decision address, nil where ShortID is
+
+	// AgendaNumber is its place among the decisions written down with it,
+	// counted from 1; nil for a decision written down alone.
+	AgendaNumber *int `json:"agendaNumber"`
 }
 
 // Decision is one decision with everything said about it.
@@ -148,6 +152,10 @@ type Decision struct {
 	StatusSetBy *DecisionStatusSetBy `json:"statusSetBy"`
 	ShortID     *string              `json:"shortId"`  // such as "ENT-14", nil before its tool numbered it
 	ShortURL    *string              `json:"shortUrl"` // its go/decision address, nil where ShortID is
+
+	// AgendaNumber is its place among the decisions written down with it,
+	// counted from 1; nil for a decision written down alone.
+	AgendaNumber *int `json:"agendaNumber"`
 }
 
 // DecisionsToolReference names the tool a decision stands in.
@@ -270,6 +278,17 @@ func (c *Client) DecisionByShortIdentifier(ctx context.Context, identifier strin
 
 func (c *Client) CreateDecision(ctx context.Context, toolID string, input DecisionInput) (Result[Decision], error) {
 	return request[Decision](ctx, c, http.MethodPost, decisionsToolPath(toolID)+"/decisions", map[string]any(input))
+}
+
+// DecisionsWritten are the decisions written down at once, in their order.
+type DecisionsWritten struct {
+	Decisions []Decision `json:"decisions"`
+}
+
+// CreateDecisions writes several decisions down at once from "titles", all
+// or none, sharing the other fields of the input.
+func (c *Client) CreateDecisions(ctx context.Context, toolID string, input DecisionInput) (Result[DecisionsWritten], error) {
+	return request[DecisionsWritten](ctx, c, http.MethodPost, decisionsToolPath(toolID)+"/decisions/batch", map[string]any(input))
 }
 
 // UpdateDecision changes what the input names; what it leaves out stays.

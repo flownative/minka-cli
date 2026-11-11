@@ -2707,3 +2707,36 @@ A short identifier in `supersedes` or `revokes` is looked up for every entry
 before the first request that writes; one nobody can find ends the run with
 nothing written. **Why:** a run that stops halfway leaves the caller to sort
 out what was written. **Implemented as:** `cli.createDecisionsFrom`.
+
+## C-176 — Several sentences go all or none and take only the fields they share
+
+*Applies to: `decisions create` with `--title` more than once or `--titles-from`*
+
+Two or more sentences go in one request to `…/decisions/batch`; one is the
+single create. Beside several, a flag Minka does not share is exit 1 before
+any request, and a refused sentence comes back in `data.lines` with where it
+was given. **Why:** an agenda is written down whole or not at all, and a flag
+Minka would drop silently misleads. `--from` stays the loop for decisions
+with fields of their own. **Implemented as:** `cli.createSeveralDecisions`.
+
+## C-177 — A line of --titles-from is a sentence as typed, an empty line none
+
+*Applies to: `decisions create --titles-from`*
+
+Lines that are empty or only spaces are left out; every other line goes as
+typed, a list marker included, and is counted in the file for `from`. **Why:**
+a blank line separates and Minka refuses it at its place, while stripping
+markers is the web form's guess, which the API leaves to the caller.
+**Implemented as:** `cli.decisionTitlesGiven`.
+
+## C-178 — The labels of new decisions are looked up before anything is written
+
+*Applies to: `--label` of `decisions create`*
+
+IDs and names alike are looked up among the project's labels; an unknown one
+is exit 2, two of one scope exit 9 with `labelsShareAScope`, nothing written.
+One decision takes its labels by a request each after it is written, since
+Minka takes none with it yet; a label put on that way would silently displace
+one of the same scope.
+**Why:** the single create cannot be all or none, so what the CLI can know
+beforehand it refuses beforehand. **Implemented as:** `cli.labelsForNewDecisions`.

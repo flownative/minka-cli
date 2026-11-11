@@ -684,6 +684,9 @@ type Server struct {
 	requests     []RecordedRequest
 	failWith     int
 	failReadWith int
+	// failWriteTo is the path suffix whose next write answers failWriteWith.
+	failWriteTo   string
+	failWriteWith int
 	// failWithServerError takes precedence over a pending failWith.
 	failWithServerError string
 	now                 time.Time
@@ -1305,6 +1308,15 @@ func (s *Server) FailNextReadWith(status int) {
 	s.failReadWith = status
 }
 
+// FailNextWriteWith makes the next request that is no GET and whose path
+// ends in suffix answer as FailNextWith does, so that a test can let one
+// write of several fail after those before it went through.
+func (s *Server) FailNextWriteWith(suffix string, status int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.failWriteTo, s.failWriteWith = suffix, status
+}
+
 // FailNextWith makes the next request answer with this status and a body that
 // is not JSON, like a proxy in front of the server would.
 func (s *Server) FailNextWith(status int) {
@@ -1334,6 +1346,9 @@ func (s *Server) recording(next http.Handler) http.Handler {
 		s.failWith = 0
 		if r.Method == http.MethodGet && s.failReadWith != 0 {
 			failWith, s.failReadWith = s.failReadWith, 0
+		}
+		if r.Method != http.MethodGet && s.failWriteTo != "" && strings.HasSuffix(r.URL.Path, s.failWriteTo) {
+			failWith, s.failWriteTo = s.failWriteWith, ""
 		}
 		reference := s.failWithServerError
 		s.failWithServerError = ""

@@ -2,6 +2,7 @@ package fakeapi
 
 import (
 	"cmp"
+	"fmt"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -21,6 +22,7 @@ const (
 	maxDeciderName          = 100
 	mostDecidersOfADecision = 50
 	maxLinkDescription      = 200
+	maxDecisionsAtOnce      = 100 // written down by one request
 )
 
 // decisionRoles are the roles a status of a Decisions tool goes by, in the
@@ -127,6 +129,10 @@ type Decision struct {
 	// numbered yet.
 	ShortID string
 
+	// AgendaNumber is its place among the decisions written down with it,
+	// counted from 1; 0 for a decision written down alone.
+	AgendaNumber int
+
 	// StatusSetBy is who set the current status, nil where nobody is known.
 	StatusSetBy *DecisionStatusSetBy
 
@@ -191,6 +197,7 @@ func (s *Server) registerDecisionsRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/decisions-tools/{toolId}/statuses", s.authenticated(s.decisionStatuses))
 	mux.HandleFunc("GET /api/v1/decisions-tools/{toolId}/decisions", s.authenticated(s.decisionsList))
 	mux.HandleFunc("POST /api/v1/decisions-tools/{toolId}/decisions", s.authenticated(s.addDecision))
+	mux.HandleFunc("POST /api/v1/decisions-tools/{toolId}/decisions/batch", s.authenticated(s.addDecisions))
 	mux.HandleFunc("GET /api/v1/decisions/{decisionId}", s.authenticated(s.decision))
 	// A pattern of its own for "by-short-id" would clash with the comments
 	// under a decision, so it is told apart here.
@@ -306,13 +313,30 @@ func (s *Server) decisionsList(w http.ResponseWriter, r *http.Request, person *P
 		if c := cmp.Compare(dayOfTheList(b), dayOfTheList(a)); c != 0 {
 			return c
 		}
-		return b.CreatedAt.Compare(a.CreatedAt)
+		if c := b.CreatedAt.Compare(a.CreatedAt); c != 0 {
+			return c
+		}
+		return compareAgendaNumbers(a, b)
 	})
 	list := []any{}
 	for _, decision := range listed {
 		list = append(list, s.decisionListItemResource(tool, decision))
 	}
 	writeJSON(w, http.StatusOK, list)
+}
+
+// compareAgendaNumbers puts decisions written down together in the order of
+// their agenda, and one written down alone after them.
+func compareAgendaNumbers(a, b *Decision) int {
+	switch {
+	case a.AgendaNumber == b.AgendaNumber:
+		return 0
+	case a.AgendaNumber == 0:
+		return 1
+	case b.AgendaNumber == 0:
+		return -1
+	}
+	return cmp.Compare(a.AgendaNumber, b.AgendaNumber)
 }
 
 // dayOfTheList is the day a decision stands at in the list: the one decided
@@ -448,6 +472,16 @@ func (s *Server) addDecision(w http.ResponseWriter, r *http.Request, person *Per
 	if announcement != nil {
 		decision.Announcements = append(decision.Announcements, *announcement)
 	}
+	s.numberAndKeep(tool, decision, person)
+	if s.statusRole(tool, decision.StatusID) == "holds" {
+		s.moveTheEarlier(tool, decision, person)
+	}
+	writeJSON(w, http.StatusCreated, s.decisionResource(tool, decision, person))
+}
+
+// numberAndKeep gives a new decision the next short identifier of its tool,
+// where the tool numbers them, and its first version.
+func (s *Server) numberAndKeep(tool *DecisionsTool, decision *Decision, person *Person) {
 	if tool.Prefix != "" {
 		number := max(tool.NextNumber, 1)
 		decision.ShortID = tool.Prefix + "-" + strconv.Itoa(number)
@@ -455,10 +489,170 @@ func (s *Server) addDecision(w http.ResponseWriter, r *http.Request, person *Per
 	}
 	decision.Versions = append(decision.Versions, decision.snapshot(person.ID, s.now))
 	tool.Decisions = append(tool.Decisions, decision)
-	if s.statusRole(tool, decision.StatusID) == "holds" {
-		s.moveTheEarlier(tool, decision, person)
+}
+
+// decisionsSharedFields are the fields the decisions written down at once
+// share, each read as for one decision; the batch reads no other.
+var decisionsSharedFields = []string{
+	"decidedOn", "decidedBy", "decidedInEventId", "status", "appliesTo", "audience", "notifyIds", "visibleToClients", "labelIds",
+}
+
+// addDecisions writes several decisions down at once, all or none, refusing
+// in the order the controller refuses: the tool, the sentences, the shared
+// fields, the labels, then what the first decision meets: its subject, the
+// scopes of its labels and the people chosen. They share one moment and
+// are numbered and listed in their order.
+func (s *Server) addDecisions(w http.ResponseWriter, r *http.Request, person *Person) {
+	fields, ok := readBody(w, r)
+	if !ok {
+		return
 	}
-	writeJSON(w, http.StatusCreated, s.decisionResource(tool, decision, person))
+	tool := s.visibleDecisionsTool(r.PathValue("toolId"), person)
+	if tool == nil {
+		notFound(w)
+		return
+	}
+	titles, ok := decisionLines(w, fields["titles"])
+	if !ok {
+		return
+	}
+	// A sentence that passed stands in for the title the fields of one
+	// decision need.
+	shared := map[string]any{"title": titles[0]}
+	for _, name := range decisionsSharedFields {
+		if value, given := fields[name]; given {
+			shared[name] = value
+		}
+	}
+	read, ok := s.readDecisionFields(w, shared, tool, person, nil)
+	if !ok {
+		return
+	}
+	labels, ok := s.labelsForNewDecisions(w, tool, person, shared)
+	if !ok {
+		return
+	}
+	visible, ok := booleanField(w, shared, "visibleToClients")
+	if !ok {
+		return
+	}
+	if s.refusedAsArchived(w, s.projectWithID(tool.ProjectID)) {
+		return
+	}
+	statusID := tool.StatusOfRole("holds").ID
+	if read.statusID != nil {
+		statusID = *read.statusID
+	}
+	shownToClients := visible != nil && *visible || s.isAClient(person.ID)
+	if !s.subjectKnown(w, tool, read, person) {
+		return
+	}
+	if labelsShareAScope(labels) {
+		unprocessable(w, "labelsShareAScope", "Decisions take only one label of each scope.")
+		return
+	}
+	announcement, ok := s.announced(w, tool, shownToClients, statusID, read, person)
+	if !ok {
+		return
+	}
+
+	written := []any{}
+	for i, title := range titles {
+		decision := &Decision{ID: newID(), CreatedAt: s.now, UpdatedAt: s.now, CreatorID: person.ID,
+			ShownToClients: shownToClients, AgendaNumber: i + 1}
+		read.applyTo(decision)
+		decision.Title, decision.StatusID = title, statusID
+		if read.decidedOn == nil && decision.DecidedOn == "" && decision.EventID != "" {
+			decision.DecidedOn = s.dayAnEventBrings(decision.EventID, person)
+		}
+		decision.StatusSetBy = &DecisionStatusSetBy{PersonID: person.ID, At: s.now}
+		if announcement != nil {
+			decision.Announcements = append(decision.Announcements, *announcement)
+		}
+		for _, label := range labels {
+			if !slices.Contains(s.ItemLabels[decision.ID], label.ID) {
+				s.PutLabelOn(decision.ID, label)
+			}
+		}
+		s.numberAndKeep(tool, decision, person)
+		written = append(written, s.decisionResource(tool, decision, person))
+	}
+	writeJSON(w, http.StatusCreated, map[string]any{"decisions": written})
+}
+
+// decisionLines reads the sentences of several decisions, trimmed: a list
+// of strings, at least one and at most maxDecisionsAtOnce, each refused at
+// its place, counted from 0, before anything is written.
+func decisionLines(w http.ResponseWriter, value any) ([]string, bool) {
+	list, isList := value.([]any)
+	titles := []string{}
+	for _, entry := range list {
+		text, isText := entry.(string)
+		if !isText {
+			isList = false
+			break
+		}
+		titles = append(titles, phpTrim(text))
+	}
+	if !isList {
+		malformed(w, `The field "titles" has to be a list of strings.`)
+		return nil, false
+	}
+	switch {
+	case len(titles) == 0:
+		unprocessable(w, "decisionsMissing", `Several decisions need at least one sentence in "titles".`)
+		return nil, false
+	case len(titles) > maxDecisionsAtOnce:
+		unprocessable(w, "decisionsTooMany", fmt.Sprintf("At most %d decisions are written down at once.", maxDecisionsAtOnce))
+		return nil, false
+	}
+	messages := map[string]string{
+		"TooLong":              "The sentence of a decision is too long.",
+		"HasControlCharacters": "The sentence of a decision must not contain control characters.",
+		"Missing":              "A decision needs the sentence that holds.",
+	}
+	refused := []any{}
+	for i, title := range titles {
+		if refusal := titleRefusal(title); refusal != "" {
+			refused = append(refused, map[string]any{"index": i, "code": "decisionTitle" + refusal, "message": messages[refusal]})
+		}
+	}
+	if len(refused) > 0 {
+		writeJSON(w, http.StatusUnprocessableEntity, map[string]any{"error": map[string]any{
+			"code": "decisionLinesRefused", "message": "Some sentences are refused; nothing was written.", "lines": refused,
+		}})
+		return nil, false
+	}
+	return titles, true
+}
+
+// labelsForNewDecisions are the labels of the project that "labelIds" names
+// by their identifier as Minka keeps it; a client puts on none and meets
+// 404, as on one decision.
+func (s *Server) labelsForNewDecisions(w http.ResponseWriter, tool *DecisionsTool, person *Person, fields map[string]any) ([]*Label, bool) {
+	ids, ok := stringListField(w, fields, "labelIds")
+	if !ok || len(ids) == 0 {
+		return nil, ok
+	}
+	if s.isAClient(person.ID) {
+		notFound(w)
+		return nil, false
+	}
+	var labels []*Label
+	for _, id := range ids {
+		var named *Label
+		for _, label := range s.labelsOf(tool.ProjectID, "") {
+			if label.ID == id {
+				named = label
+			}
+		}
+		if named == nil {
+			unprocessable(w, "labelUnknown", "The project has no such label.")
+			return nil, false
+		}
+		labels = append(labels, named)
+	}
+	return labels, true
 }
 
 // updateDecision changes what the request names; what it leaves out stays,
@@ -1514,6 +1708,7 @@ func (s *Server) decisionListItemResource(tool *DecisionsTool, decision *Decisio
 		"appUrl": s.decisionURL(tool, decision), "decidedBy": s.deciderResources(decision.DecidedBy),
 		"validUntil": nullable(decision.ValidUntil), "reviewOn": nullable(decision.ReviewOn),
 		"statusSetBy": s.statusSetByResource(decision), "shortId": nullable(decision.ShortID), "shortUrl": s.shortDecisionURL(decision),
+		"agendaNumber": agendaNumberOf(decision),
 	}
 }
 
@@ -1557,6 +1752,7 @@ func (s *Server) decisionResource(tool *DecisionsTool, decision *Decision, perso
 		"consequencesDone": done, "appliesTo": s.subjectReferenceOf(decision, person),
 		"validUntil": nullable(decision.ValidUntil), "reviewOn": nullable(decision.ReviewOn),
 		"statusSetBy": s.statusSetByResource(decision), "shortId": nullable(decision.ShortID), "shortUrl": s.shortDecisionURL(decision),
+		"agendaNumber": agendaNumberOf(decision),
 	}
 }
 
@@ -1566,4 +1762,13 @@ func (s *Server) decisionsToolURL(tool *DecisionsTool) string {
 
 func (s *Server) decisionURL(tool *DecisionsTool, decision *Decision) string {
 	return s.decisionsToolURL(tool) + "/" + decision.ID
+}
+
+// agendaNumberOf is the place among the decisions written down with it, null
+// for a decision written down alone.
+func agendaNumberOf(decision *Decision) any {
+	if decision.AgendaNumber == 0 {
+		return nil
+	}
+	return decision.AgendaNumber
 }

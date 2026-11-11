@@ -2,6 +2,7 @@ package fakeapi
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"slices"
 	"strings"
@@ -373,5 +374,144 @@ func TestAStatusIsNamedInAnyCaseAndTheArchiveTakesNoChange(t *testing.T) {
 	f.Project.Archived = true
 	if got, _ := answerTo(t, s, f.Token, http.MethodPatch, archived, `{"title":"Renamed"}`); got != "422 projectArchived" {
 		t.Errorf("a change of a decision of the archive in an archived project: %s", got)
+	}
+}
+
+// Several decisions are written down in their order with what they share,
+// numbered one after the other, each with its place on the agenda, and the
+// list keeps that order; one written down alone has no place and no labels.
+func TestSeveralDecisionsAreWrittenDownInTheirOrder(t *testing.T) {
+	s, f := New(t)
+	label := s.AddLabel(f.Project.ID, "", "Budget", "red")
+	batch := "/api/v1/decisions-tools/" + f.Decisions.ID + "/decisions/batch"
+
+	got, answer := answerTo(t, s, f.Token, http.MethodPost, batch, `{"titles":[" The budget passes ","The grant is approved","December is off"],"decidedOn":"2026-11-10","decidedBy":[{"name":"Council"}],"labelIds":["`+label.ID+`"],"reason":"ignored"}`)
+	if got != "201" {
+		t.Fatalf("%s %v", got, answer)
+	}
+	written, _ := answer["decisions"].([]any)
+	var titles, shortIDs []string
+	var places []float64
+	for _, entry := range written {
+		decision := entry.(map[string]any)
+		titles = append(titles, decision["title"].(string))
+		shortIDs = append(shortIDs, decision["shortId"].(string))
+		places = append(places, decision["agendaNumber"].(float64))
+		if decision["decidedOn"] != "2026-11-10" || decision["reason"] != nil || len(decision["labels"].([]any)) != 1 {
+			t.Errorf("not what they share: %v", decision)
+		}
+	}
+	if !slices.Equal(titles, []string{"The budget passes", "The grant is approved", "December is off"}) || !slices.Equal(places, []float64{1, 2, 3}) {
+		t.Errorf("titles %v, places %v", titles, places)
+	}
+	if len(shortIDs) != 3 || shortIDs[1] == shortIDs[0] || shortIDs[2] == shortIDs[1] {
+		t.Errorf("not numbered one after the other: %v", shortIDs)
+	}
+
+	_, alone := answerTo(t, s, f.Token, http.MethodPost, "/api/v1/decisions-tools/"+f.Decisions.ID+"/decisions", `{"title":"Alone","decidedOn":"2026-11-10","labelIds":["`+label.ID+`"]}`)
+	if alone["agendaNumber"] != nil || len(alone["labels"].([]any)) != 0 {
+		t.Errorf("a decision written down alone: agenda %v, labels %v", alone["agendaNumber"], alone["labels"])
+	}
+
+	request, _ := http.NewRequest(http.MethodGet, s.URL+"/api/v1/decisions-tools/"+f.Decisions.ID+"/decisions", nil)
+	request.Header.Set("Authorization", "Bearer "+f.Token)
+	response, err := http.DefaultClient.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var lines []map[string]any
+	_ = json.NewDecoder(response.Body).Decode(&lines)
+	_ = response.Body.Close()
+	var listed []string
+	for _, line := range lines {
+		if line["decidedOn"] == "2026-11-10" {
+			listed = append(listed, line["title"].(string))
+		}
+	}
+	if !slices.Equal(listed, []string{"The budget passes", "The grant is approved", "December is off", "Alone"}) {
+		t.Errorf("listed %v, want the agenda's order and the one alone after it", listed)
+	}
+}
+
+// The list orders decisions written down together by their place on the
+// agenda, not by the order they are kept in.
+func TestTheListOrdersByTheAgendaNotByStorage(t *testing.T) {
+	s, f := New(t)
+	batch := "/api/v1/decisions-tools/" + f.Decisions.ID + "/decisions/batch"
+	if got, _ := answerTo(t, s, f.Token, http.MethodPost, batch, `{"titles":["First","Second","Third"],"decidedOn":"2026-11-10"}`); got != "201" {
+		t.Fatal(got)
+	}
+	slices.Reverse(f.Decisions.Decisions)
+
+	request, _ := http.NewRequest(http.MethodGet, s.URL+"/api/v1/decisions-tools/"+f.Decisions.ID+"/decisions", nil)
+	request.Header.Set("Authorization", "Bearer "+f.Token)
+	response, err := http.DefaultClient.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var lines []map[string]any
+	_ = json.NewDecoder(response.Body).Decode(&lines)
+	_ = response.Body.Close()
+	var listed []string
+	for _, line := range lines {
+		if line["decidedOn"] == "2026-11-10" {
+			listed = append(listed, line["title"].(string))
+		}
+	}
+	if !slices.Equal(listed, []string{"First", "Second", "Third"}) {
+		t.Fatalf("listed %v", listed)
+	}
+}
+
+// Several decisions are refused as a whole in the order the controller
+// asks, the sentences each at its place, and nothing is written.
+func TestSeveralDecisionsAreRefusedAsAWhole(t *testing.T) {
+	s, f := New(t)
+	batch := "/api/v1/decisions-tools/" + f.Decisions.ID + "/decisions/batch"
+	nowhere := "/api/v1/decisions-tools/" + newID() + "/decisions/batch"
+	high := s.AddLabel(f.Project.ID, "", "Priority::High", "red")
+	low := s.AddLabel(f.Project.ID, "", "Priority::Low", "blue")
+	boardLabel := s.AddLabel(f.Project.ID, f.Board.ID, "Board only", "red")
+	unknownCard := `{"kind":"card","id":"` + newID() + `"}`
+	before := len(f.Decisions.Decisions)
+
+	for _, c := range []struct{ name, path, body, want string }{
+		{"no sentences for a tool never made", nowhere, `{"titles":[]}`, "404"},
+		{"no list", batch, `{"titles":"One"}`, "400 malformedBody"},
+		{"a list of more than text", batch, `{"titles":["One",2]}`, "400 malformedBody"},
+		{"an empty list beside a status that is none", batch, `{"titles":[],"status":"nope"}`, "422 decisionsMissing"},
+		{"too many", batch, `{"titles":[` + strings.TrimSuffix(strings.Repeat(`"x",`, 101), ",") + `]}`, "422 decisionsTooMany"},
+		{"a refused sentence beside a status that is none", batch, `{"titles":["Good","  "],"status":"nope"}`, "422 decisionLinesRefused"},
+		{"a status that is none beside a label never made", batch, `{"titles":["Good"],"status":"nope","labelIds":["` + newID() + `"]}`, "422 decisionStatusUnknown"},
+		{"labels of no list beside an unknown subject", batch, `{"titles":["Good"],"labelIds":"x","appliesTo":` + unknownCard + `}`, "400 malformedBody"},
+		{"a label of a board", batch, `{"titles":["Good"],"labelIds":["` + boardLabel.ID + `"]}`, "422 labelUnknown"},
+		{"an unknown subject beside two of a scope", batch, `{"titles":["Good"],"appliesTo":` + unknownCard + `,"labelIds":["` + high.ID + `","` + low.ID + `"]}`, "422 decisionAppliesToUnknown"},
+		{"two of a scope beside a stranger", batch, `{"titles":["Good"],"labelIds":["` + high.ID + `","` + low.ID + `"],"audience":"chosen","notifyIds":["` + f.Stranger.ID + `"]}`, "422 labelsShareAScope"},
+		{"a stranger to tell", batch, `{"titles":["Good"],"audience":"chosen","notifyIds":["` + f.Stranger.ID + `"]}`, "422 personNotAProjectMember"},
+	} {
+		if got, _ := answerTo(t, s, f.Token, http.MethodPost, c.path, c.body); got != c.want {
+			t.Errorf("%s: %s, want %s", c.name, got, c.want)
+		}
+	}
+
+	_, answer := answerTo(t, s, f.Token, http.MethodPost, batch, `{"titles":["Good","`+strings.Repeat("x", 201)+`"," ","Also good","Tab\there"]}`)
+	refusal, _ := answer["error"].(map[string]any)
+	lines, _ := refusal["lines"].([]any)
+	var refused []string
+	for _, line := range lines {
+		entry := line.(map[string]any)
+		refused = append(refused, fmt.Sprint(entry["index"], " ", entry["code"]))
+	}
+	if !slices.Equal(refused, []string{"1 decisionTitleTooLong", "2 decisionTitleMissing", "4 decisionTitleHasControlCharacters"}) {
+		t.Errorf("the lines refused: %v", refused)
+	}
+
+	clientToken := "minka_pat_client"
+	s.Tokens[clientToken] = f.Client.ID
+	if got, _ := answerTo(t, s, clientToken, http.MethodPost, batch, `{"titles":["Good"],"labelIds":["`+high.ID+`"]}`); got != "404" {
+		t.Errorf("a client sending labels: %s", got)
+	}
+	if len(f.Decisions.Decisions) != before {
+		t.Errorf("%d decisions written by refused requests", len(f.Decisions.Decisions)-before)
 	}
 }

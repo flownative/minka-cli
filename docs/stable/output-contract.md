@@ -65,13 +65,18 @@ line and the field off; `doctor` reports the state either way.
 `{ok: false, error, code, retryable, hint, meta: {apiCode, httpStatus,
 reference}, data, notice}`. `meta.apiCode` is the case code of Minka
 (`cardTitleTooLong`), `code` the class, `hint` the next step. `meta` is there
-when a server answered. `meta.reference` is there when Minka answered a server
+when a server answered, and where the CLI refuses beforehand what Minka would
+refuse, with Minka's code and `httpStatus` 0 (`cardNotesTooLong`,
+`labelsShareAScope`). `meta.reference` is there when Minka answered a server
 error with the key of its log entry; the hint ends by naming it, for a person
 to quote when they report the error.
 `data` and `notice` are there only when a command got its work done but not
 all of it: `data` is the result it would have printed, `notice` its warnings —
 or, for `unread`, when it wrote nothing because of what it read: `data` is the
-comments that stopped it.
+comments that stopped it — or where a refusal that wrote nothing names its
+places: `data.lines` of `decisions create` with several sentences
+(`decisionLinesRefused`), `data.paths` of `docs export` (the paths in the
+way).
 
 | Exit | `code` | Meaning |
 |---|---|---|

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -31,6 +32,9 @@ const (
 	apiCodeEntryAddressMalformed    = "entryAddressMalformed"
 	apiCodeLinkDescriptionMissing   = "linkDescriptionMissing"
 	apiCodeDecisionAudienceUnknown  = "decisionAudienceUnknown"
+	apiCodeDecisionLinesRefused     = "decisionLinesRefused"
+	apiCodeDecisionsMissing         = "decisionsMissing"
+	apiCodeDecisionsTooMany         = "decisionsTooMany"
 )
 
 // decisionNames are the arguments and flags that name a decision, by its ID
@@ -346,6 +350,8 @@ never a draft.
 // take them. A field is sent only where its flag is given.
 type decisionFlags struct {
 	title, reason, body, bodyFormat         string
+	titles                                  []string // --title given more than once, where severalTitles
+	severalTitles                           bool
 	decidedOn, validUntil, reviewOn, status string
 	decidedBy                               []string
 	eventID, votes, card, appliesToEventID  string
@@ -363,7 +369,11 @@ type decisionFlags struct {
 // and earlier those that name the decision a new one takes the place of.
 func (f *decisionFlags) register(cmd *cobra.Command, editing, earlier bool) {
 	flags := cmd.Flags()
-	flags.StringVar(&f.title, "title", "", "The sentence that holds")
+	if f.severalTitles {
+		flags.StringArrayVar(&f.titles, "title", nil, "The sentence that holds; more than once for several decisions")
+	} else {
+		flags.StringVar(&f.title, "title", "", "The sentence that holds")
+	}
 	flags.StringVar(&f.reason, "reason", "", "Why, in one sentence")
 	flags.StringVar(&f.body, "body", "", "What more is written down, - to read it from stdin")
 	flags.StringVar(&f.bodyFormat, "body-format", "markdown", "Format of the body: markdown or html")
@@ -585,13 +595,21 @@ func checkCardFlag(cmd *cobra.Command, flag string, value *string) error {
 	return usageErrorf(cmd, "%s %q is no card; a card is named by its ID or its short identifier such as MNK-1A", flag, *value)
 }
 
+// decisionsSharedFlags are the flags several decisions written down at once
+// share; Minka takes no other field for them.
+var decisionsSharedFlags = []string{
+	"tool", "title", "titles-from", "decided-on", "decided-by", "event", "status",
+	"applies-to-card", "applies-to-event", "audience", "notify", "visible-to-clients", "label",
+}
+
 func (a *app) newDecisionsCreateCmd() *cobra.Command {
-	var f decisionFlags
-	var toolID, from string
+	f := decisionFlags{severalTitles: true}
+	var toolID, from, titlesFrom string
+	var labels []string
 
 	cmd := &cobra.Command{
 		Use:   "create",
-		Short: "Write a decision down in a Decisions tool, or several from a file",
+		Short: "Write a decision down in a Decisions tool, or several at once",
 		Long: "Writes a decision down in a Decisions tool. Without --status it holds.\n\n" +
 			decisionFieldsHelp + "\n\n" + decisionStatusHelp + "\n\n" + decisionBodyHelp + `
 
@@ -603,22 +621,57 @@ decisions revoke do the same with the earlier decision named first.
 the project works with them; what a client writes down is shown to clients
 anyway.
 
---from writes several decisions, read from a file or, with -, from stdin: a
-JSON list of objects, each with the fields Minka takes for a new decision —
-title, reason, body, decidedOn, status, decidedBy (a list of {"personId"} and
-{"name"}), decidedInEventId, votes, supersedes or revokes (an ID or a short
-identifier, looked up before anything is written), appliesTo ({"kind": "card"
-or "event", "id"}), validUntil, reviewOn, audience, notifyIds (a list of IDs of
-members) and visibleToClients. A body is Markdown unless --body-format html is
-given. A field Minka does not take is refused before anything is sent. The decisions are written one after
-another in the order given; the first refusal stops the run, and the error
-says which were written before it ("created" in data, as Minka answered, and
-"notCreated", the titles of the rest). On success data is the list of the
-decisions written. --from takes --tool and --body-format beside it, no other
-flag.`,
+--label puts a label of the project on the decision and can be given more than
+once: its ID or its name, looked up among the labels of the project the way
+Minka compares names, case and spacing aside. Each is looked up before anything
+is written: one the project does not have exits 2 (not_found), and two of one
+scope, such as "Priority::High" and "Priority::Low", exit 9 (validation), since
+a decision takes one label of each scope. One decision is written down first
+and takes its labels right after, one request each; should one of those fail,
+the error hands over the decision written ("created" in data) and the labels
+put on and not ("labelled", "notLabelled").
+
+Several decisions at once: --title given more than once, or --titles-from with
+a file, - for stdin, that holds one sentence per line. Empty lines and lines of
+nothing but spaces are left out; every other line is sent as typed, list
+markers such as "1." or "TOP 3:" included: Minka's web form strips them from
+pasted text, the CLI and the API do not, so leave them off. --title and
+--titles-from exclude each other, and --titles-from - and --body - both read
+stdin, which is exit 1.
+Two or more sentences are written down in one request, all or none, in their
+order: Minka numbers them one after the other and gives each its place on the
+agenda, agendaNumber 1, 2, 3, and tells each person once of all of them. They
+share --decided-on, --decided-by, --event, --status, --applies-to-card or
+--applies-to-event, --audience with --notify, --visible-to-clients and
+--label; any other flag beside them exits 1 before anything is sent. At most
+100 go at once. A sentence Minka refuses refuses them all: exit 9 with
+meta.apiCode decisionLinesRefused, and data.lines names each refused one by its
+index in the order sent, counted from 0, its sentence, where it came from
+("--title 2", "line 5 of agenda.txt") and Minka's code: decisionTitleMissing,
+decisionTitleTooLong or decisionTitleHasControlCharacters. On success data is
+the list of the decisions written. A single sentence, of --titles-from too, is
+one decision as above and takes every flag.
+
+--from writes several decisions with fields of their own, read from a file or,
+with -, from stdin: a JSON list of objects, each with the fields Minka takes
+for a new decision — title, reason, body, decidedOn, status, decidedBy (a list
+of {"personId"} and {"name"}), decidedInEventId, votes, supersedes or revokes
+(an ID or a short identifier, looked up before anything is written), appliesTo
+({"kind": "card" or "event", "id"}), validUntil, reviewOn, audience, notifyIds
+(a list of IDs of members) and visibleToClients. A body is Markdown unless
+--body-format html is given. A field Minka does not take is refused before
+anything is sent. --from is not all or none: the decisions are written one
+after another in the order given, one request each, without a place on an
+agenda; the first refusal stops the run, and the error says which were written
+before it ("created" in data, as Minka answered, and "notCreated", the titles
+of the rest). Sentences that share their fields go all or none with --title or
+--titles-from instead. On success data is the list of the decisions written.
+--from takes --tool and --body-format beside it, no other flag.`,
 		Example: `  minka decisions create --tool 0199... --title "We meet on Mondays" --reason "Then everybody has time." --json
-  minka decisions create --tool 0199... --title "We buy a tent" --status proposed --decided-by me --decided-by Board
+  minka decisions create --tool 0199... --title "We buy a tent" --status proposed --decided-by me --decided-by Board --label Budget
   minka decisions create --tool 0199... --title "We buy a tent" --status proposed --audience chosen --notify me --notify Anke
+  minka decisions create --tool 0199... --titles-from agenda.txt --decided-on 2026-11-10 --event 0199... --label Council
+  minka decisions create --tool 0199... --title "The budget passes" --title "The grant is approved" --decided-by Council
   minka decisions create --tool 0199... --from decisions.json`,
 		Args: requireArgs(),
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -629,50 +682,314 @@ flag.`,
 				return err
 			}
 			if cmd.Flags().Changed("from") {
-				var others []string
-				cmd.LocalNonPersistentFlags().VisitAll(func(flag *pflag.Flag) {
-					if flag.Changed && !slices.Contains([]string{"from", "tool", "body-format"}, flag.Name) {
-						others = append(others, "--"+flag.Name)
-					}
-				})
-				if len(others) > 0 {
+				if others := flagsGivenBesides(cmd, "from", "tool", "body-format"); len(others) > 0 {
 					return usageErrorf(cmd, "--from takes the fields from the file and no %s beside it", strings.Join(others, ", "))
 				}
 				return a.createDecisionsFrom(cmd, toolID, from, f.bodyFormat)
 			}
-			if !cmd.Flags().Changed("title") {
-				return usageErrorf(cmd, "a decision needs --title, the sentence that holds")
+			if titlesFrom == "-" && f.body == "-" {
+				return usageErrorf(cmd, "--titles-from - and --body - both read stdin; give one of them a file")
+			}
+			if err := checkLabelValues(cmd, labels); err != nil {
+				return err
+			}
+			titles, err := a.decisionTitlesGiven(cmd, f.titles, titlesFrom)
+			if err != nil {
+				return err
+			}
+			if len(titles) > 1 {
+				if others := flagsGivenBesides(cmd, decisionsSharedFlags...); len(others) > 0 {
+					return usageErrorf(cmd, "several decisions share only their day, who decided, the event, the status, the subject, the audience, whether clients see them and the labels; give no %s beside them, or write them with --from", strings.Join(others, ", "))
+				}
 			}
 
 			s, err := a.session()
 			if err != nil {
 				return err
 			}
-			input, notices, err := f.input(cmd, a, s, func() (string, error) {
-				tool, err := s.client.DecisionsTool(a.ctx, toolID)
-				if err != nil {
-					return "", toolRefusal(s, err, decisionsToolNotFoundHint)
-				}
-				return tool.Value.ProjectID, nil
-			})
+			project := s.projectOfADecisionsTool(a.ctx, toolID)
+			input, notices, err := f.input(cmd, a, s, project)
 			if err != nil {
 				return err
 			}
-			decision, err := s.client.CreateDecision(a.ctx, toolID, input)
+			labelled, err := a.labelsForNewDecisions(s, project, labels)
 			if err != nil {
-				return createDecisionRefusal(s, err)
+				return err
 			}
-			notices = append(notices, earlierNotice(decision.Value)...)
-			summary := "Wrote decision " + decisionTitle(decision.Value.ShortID, decision.Value.Title) + " down in " + decision.Value.Tool.Title
-			return a.ok(decisionSuccess(decision, summary, notices, func(w io.Writer) {
-				fmt.Fprintf(w, "%s.\nDecision: %s\nStatus: %s\n%s\n", summary, decisionName(decision.Value), decision.Value.Status.Name, decisionAddress(decision.Value))
-			}))
+			if len(titles) > 1 {
+				return a.createSeveralDecisions(s, toolID, input, titles, labelled, notices)
+			}
+			input["title"] = titles[0].sentence
+			return a.createOneDecision(s, toolID, input, labelled, notices)
 		},
 	}
 	f.register(cmd, false, true)
 	cmd.Flags().StringVar(&toolID, "tool", "", "ID of the Decisions tool the decision goes into")
+	cmd.Flags().StringVar(&titlesFrom, "titles-from", "", "File with one sentence per line, each sent as typed, - for stdin")
+	cmd.Flags().StringArrayVar(&labels, "label", nil, "Label of the project to put on: its ID or its name (repeatable)")
 	cmd.Flags().StringVar(&from, "from", "", "File with a JSON list of decisions to write, - for stdin")
 	return cmd
+}
+
+// flagsGivenBesides are the flags of the command given other than those
+// named, as they are typed.
+func flagsGivenBesides(cmd *cobra.Command, allowed ...string) []string {
+	var others []string
+	cmd.LocalNonPersistentFlags().VisitAll(func(flag *pflag.Flag) {
+		if flag.Changed && !slices.Contains(allowed, flag.Name) {
+			others = append(others, "--"+flag.Name)
+		}
+	})
+	return others
+}
+
+// decisionTitleGiven is a sentence to write down and where it was given, so that
+// Minka's refusal of it names the place the writer can find it at.
+type decisionTitleGiven struct {
+	sentence, from string
+}
+
+// decisionTitlesGiven are the sentences of --title, or the lines of
+// --titles-from that are not empty, in their order.
+func (a *app) decisionTitlesGiven(cmd *cobra.Command, titles []string, titlesFrom string) ([]decisionTitleGiven, error) {
+	if !cmd.Flags().Changed("titles-from") {
+		if len(titles) == 0 {
+			return nil, usageErrorf(cmd, "a decision needs --title, the sentence that holds, or --titles-from")
+		}
+		given := make([]decisionTitleGiven, len(titles))
+		for i, title := range titles {
+			given[i] = decisionTitleGiven{sentence: title, from: fmt.Sprintf("--title %d", i+1)}
+		}
+		return given, nil
+	}
+	if len(titles) > 0 {
+		return nil, usageErrorf(cmd, "--title and --titles-from exclude each other")
+	}
+	source := titlesFrom
+	if titlesFrom == "-" {
+		source = "stdin"
+	}
+	content, err := a.readFileOrStdin("the sentences of the decisions", titlesFrom)
+	if err != nil {
+		return nil, err
+	}
+	var given []decisionTitleGiven
+	for i, line := range strings.Split(content, "\n") {
+		line = strings.TrimSuffix(line, "\r")
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		given = append(given, decisionTitleGiven{sentence: line, from: fmt.Sprintf("line %d of %s", i+1, source)})
+	}
+	if len(given) == 0 {
+		return nil, usageErrorf(cmd, "--titles-from %s holds no sentence; each line that is not empty is a decision", titlesFrom)
+	}
+	return given, nil
+}
+
+// projectOfADecisionsTool is the project of the tool, read once and only
+// when asked for.
+func (s *session) projectOfADecisionsTool(ctx context.Context, toolID string) func() (string, error) {
+	var projectID string
+	var refusal error
+	read := false
+	return func() (string, error) {
+		if !read {
+			read = true
+			tool, err := s.client.DecisionsTool(ctx, toolID)
+			if err != nil {
+				refusal = toolRefusal(s, err, decisionsToolNotFoundHint)
+			} else {
+				projectID = tool.Value.ProjectID
+			}
+		}
+		return projectID, refusal
+	}
+}
+
+// labelsForNewDecisions are the labels of the project named, each once. An
+// ID and a name alike are looked up among the project's labels before
+// anything is written, so that no decision is written down without the
+// labels it was given: a single one takes them only after it is written.
+func (a *app) labelsForNewDecisions(s *session, project func() (string, error), values []string) ([]api.Label, error) {
+	if len(values) == 0 {
+		return nil, nil
+	}
+	projectID, err := project()
+	if err != nil {
+		return nil, err
+	}
+	listed, err := s.client.Labels(a.ctx, api.LabelPlace{Kind: "projects", ID: projectID})
+	if err != nil {
+		return nil, labelRefusal(s, err)
+	}
+	var chosen []api.Label
+	for _, value := range values {
+		id, isID := asID(value)
+		index := slices.IndexFunc(listed.Value, func(label api.Label) bool {
+			if isID {
+				return label.ID == id
+			}
+			return labelNameKey(label.Name) == labelNameKey(value)
+		})
+		if index < 0 {
+			return nil, &Error{Code: CodeNotFound,
+				Message: fmt.Sprintf("project %s has no label %q", projectID, value),
+				Hint:    "A decision takes the labels of its project. List them with: minka labels list --project " + projectID}
+		}
+		label := listed.Value[index]
+		if slices.ContainsFunc(chosen, func(other api.Label) bool { return other.ID == label.ID }) {
+			continue
+		}
+		for _, other := range chosen {
+			if label.Scope != nil && other.Scope != nil && labelNameKey(*label.Scope) == labelNameKey(*other.Scope) {
+				// The refusal Minka gives, so that it has one code wherever
+				// it is decided.
+				return nil, &Error{Code: CodeValidation, APICode: apiCodeLabelsShareAScope,
+					Message: fmt.Sprintf("labels %q and %q share the scope %q; a decision takes one label of each scope", other.Name, label.Name, *label.Scope),
+					Hint:    "Give only one label of each scope, the part before \"::\". Nothing was written."}
+			}
+		}
+		chosen = append(chosen, label)
+	}
+	return chosen, nil
+}
+
+// createOneDecision writes one decision down and puts its labels on, one
+// request each, since Minka takes no labels with one new decision.
+func (a *app) createOneDecision(s *session, toolID string, input api.DecisionInput, labels []api.Label, notices []string) error {
+	decision, err := s.client.CreateDecision(a.ctx, toolID, input)
+	if err != nil {
+		return createDecisionRefusal(s, err)
+	}
+	notices = append(notices, earlierNotice(decision.Value)...)
+	summary := "Wrote decision " + decisionTitle(decision.Value.ShortID, decision.Value.Title) + " down in " + decision.Value.Tool.Title
+	item := api.LabelledItem{Kind: "decisions", ID: decision.Value.ID}
+	labelled := []string{}
+	for i, label := range labels {
+		carried, err := s.client.AssignLabel(a.ctx, item, label.ID, "")
+		if err != nil {
+			e := labelRefusal(s, err)
+			notLabelled := []string{}
+			for _, rest := range labels[i:] {
+				notLabelled = append(notLabelled, rest.Name)
+			}
+			e.Message = fmt.Sprintf("wrote decision %s down, but label %q was not put on: %s", decisionTitle(decision.Value.ShortID, decision.Value.Title), label.Name, e.Message)
+			e.Hint = "The decision is written. Put the rest of the labels on with: minka decisions label " + decision.Value.ID + " <label>..."
+			e.Data = map[string]any{"created": decision.Raw, "labelled": labelled, "notLabelled": notLabelled}
+			e.Notices = notices
+			return e
+		}
+		labelled = append(labelled, label.Name)
+		decision.Value.Labels = carried.Value
+		decision.Raw = withField(decision.Raw, "labels", carried.Raw)
+	}
+	return a.ok(decisionSuccess(decision, summary, notices, func(w io.Writer) {
+		fmt.Fprintf(w, "%s.\nDecision: %s\nStatus: %s\n", summary, decisionName(decision.Value), decision.Value.Status.Name)
+		labelLine(w, decision.Value.Labels)
+		fmt.Fprintln(w, decisionAddress(decision.Value))
+	}))
+}
+
+// withField is the JSON object with one field put in place, as it is where
+// the object cannot be read.
+func withField(raw json.RawMessage, name string, value json.RawMessage) json.RawMessage {
+	var object map[string]json.RawMessage
+	if json.Unmarshal(raw, &object) != nil || object == nil {
+		return raw
+	}
+	object[name] = value
+	changed, err := json.Marshal(object)
+	if err != nil {
+		return raw
+	}
+	return changed
+}
+
+// createSeveralDecisions writes the sentences down in one request, all or
+// none, with the fields they share.
+func (a *app) createSeveralDecisions(s *session, toolID string, input api.DecisionInput, titles []decisionTitleGiven, labels []api.Label, notices []string) error {
+	delete(input, "title")
+	sentences := make([]string, len(titles))
+	for i, title := range titles {
+		sentences[i] = title.sentence
+	}
+	input["titles"] = sentences
+	if len(labels) > 0 {
+		ids := make([]string, len(labels))
+		for i, label := range labels {
+			ids[i] = label.ID
+		}
+		input["labelIds"] = ids
+	}
+	written, err := s.client.CreateDecisions(a.ctx, toolID, input)
+	if err != nil {
+		return severalDecisionsRefusal(s, err, titles)
+	}
+	decisions := written.Value.Decisions
+	tool := ""
+	if len(decisions) > 0 {
+		tool = " in " + decisions[0].Tool.Title
+	}
+	summary := fmt.Sprintf("Wrote %s down%s", plural(len(decisions), "decision", "decisions"), tool)
+	return a.ok(success{
+		data:    rawField(written.Raw, "decisions"),
+		summary: summary,
+		notices: notices,
+		breadcrumbs: []Breadcrumb{
+			{Action: "list", Cmd: "minka decisions list " + toolID, Description: "List the decisions of the tool"},
+			{Action: "show", Cmd: "minka decisions show <decisionId>", Description: "Read a decision with its body, history and comments"},
+		},
+		text: func(w io.Writer) {
+			fmt.Fprintf(w, "%s:\n", summary)
+			for _, decision := range decisions {
+				place := ""
+				if decision.AgendaNumber != nil {
+					place = fmt.Sprintf("%d. ", *decision.AgendaNumber)
+				}
+				fmt.Fprintf(w, "%s%s  %s\n", place, decisionName(decision), decision.Title)
+			}
+		},
+	})
+}
+
+// severalDecisionsRefusal is the refusal of decisions written down at once.
+// Refused sentences come back with the place each was given at.
+func severalDecisionsRefusal(s *session, err error, titles []decisionTitleGiven) *Error {
+	e := createDecisionRefusal(s, err)
+	var apiErr *api.Error
+	if e.APICode != apiCodeDecisionLinesRefused || !errors.As(err, &apiErr) {
+		return e
+	}
+	var body struct {
+		Error struct {
+			Lines []struct {
+				Index   int    `json:"index"`
+				Code    string `json:"code"`
+				Message string `json:"message"`
+			} `json:"lines"`
+		} `json:"error"`
+	}
+	if json.Unmarshal(apiErr.Body, &body) != nil {
+		return e
+	}
+	lines := []map[string]any{}
+	var named []string
+	for _, line := range body.Error.Lines {
+		refused := map[string]any{"index": line.Index, "code": line.Code, "message": line.Message}
+		place := fmt.Sprintf("sentence %d", line.Index+1)
+		if line.Index >= 0 && line.Index < len(titles) {
+			refused["title"], refused["from"] = titles[line.Index].sentence, titles[line.Index].from
+			place = titles[line.Index].from
+		}
+		lines = append(lines, refused)
+		named = append(named, place+": "+line.Code)
+	}
+	e.Message = fmt.Sprintf("Minka refused %d of %s, and wrote none down: %s",
+		len(lines), plural(len(titles), "sentence", "sentences"), strings.Join(named, "; "))
+	e.Hint = "A sentence is one line of at most 200 characters, not empty and without control characters such as a tab. Correct those named in data.lines and send them all again."
+	e.Data = map[string]any{"lines": lines}
+	return e
 }
 
 // decisionFromFields are the fields an entry of --from may have: those Minka
@@ -1557,6 +1874,14 @@ func decisionRefusal(s *session, err error) *Error {
 		e.Hint = "The decision lies in the archive of its tool. It can be read; it comes back out of the archive in Minka on the web only."
 	case apiCodeDecisionTitleMissing:
 		e.Hint = "A decision needs the sentence that holds: it can be replaced, never removed."
+	case apiCodeDecisionsMissing:
+		e.Hint = "Several decisions need at least one sentence: give --title or a --titles-from file with a sentence on a line."
+	case apiCodeDecisionsTooMany:
+		e.Hint = "At most 100 decisions are written down at once. Split the sentences and write each part down on its own."
+	case apiCodeLabelsShareAScope:
+		e.Hint = "A decision takes one label of each scope, the part before \"::\": give only one of them. The labels: minka labels list --project <projectId>"
+	case apiCodeLabelUnknown:
+		e.Hint = "A decision takes the labels of its project. The labels: minka labels list --project <projectId>"
 	case apiCodePersonNotAProjectMember:
 		e.Hint = "Somebody named with --decided-by or --notify is not a member of the project. The members: minka people list <projectId>. Anybody else who decided is named by a name given freely, which is no ID, and is told nothing."
 	case apiCodeNotifyIDsMissing, apiCodeNotifyIDsWithoutChosenAudience:
@@ -1631,6 +1956,9 @@ func renderDecisionLines(w io.Writer, decisions []api.DecisionLine) {
 		if decision.DecidedOn != nil {
 			details = append(details, "decided "+*decision.DecidedOn)
 		}
+		if decision.AgendaNumber != nil {
+			details = append(details, fmt.Sprintf("agenda item %d", *decision.AgendaNumber))
+		}
 		if decision.ValidUntil != nil {
 			details = append(details, "until "+*decision.ValidUntil)
 		}
@@ -1670,6 +1998,9 @@ func renderDecision(w io.Writer, d api.Decision) {
 		fmt.Fprintf(w, "Reason: %s\n", *d.Reason)
 	}
 	renderDecisionCircumstances(w, d.DecidedOn, d.DecidedBy, d.DecidedIn, d.Votes)
+	if d.AgendaNumber != nil {
+		fmt.Fprintf(w, "Agenda item: %d of the decisions written down with it\n", *d.AgendaNumber)
+	}
 	if d.AppliesTo != nil {
 		trash := ""
 		if d.AppliesTo.InTrash {
