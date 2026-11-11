@@ -356,6 +356,9 @@ var idsInCapitals = []idInCapitals{
 	{command: "decisions revoke", inputs: []string{"--applies-to-card"}, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
 		return []string{f.Decision.ID, "--title", "No more", "--applies-to-card", up(f.CardInDoing.ID)}
 	}},
+	{command: "decisions create", inputs: []string{"--label"}, prepare: withLabels, args: func(e *testEnv, f *fakeapi.Fixture) []string {
+		return []string{"--tool", f.Decisions.ID, "--title", "We buy a tent", "--title", "We buy chairs", "--label", up(labelNamed(e, "Plain").ID)}
+	}},
 	{command: "decisions create", inputs: []string{"--notify"}, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
 		return []string{"--tool", f.Decisions.ID, "--title", "We buy a tent", "--status", "proposed", "--audience", "chosen", "--notify", up(f.Anke.ID)}
 	}},

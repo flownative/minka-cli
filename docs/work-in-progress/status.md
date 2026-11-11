@@ -356,7 +356,9 @@ fake, see below.
 The decisions of a Decisions tool are read with `decisions tools`, `tool`,
 `statuses`, `list` (`--holds`, `--status`, `--label`, `--applies-to-card`,
 `--applies-to-event`), `show` and `versions list`/`show`, and written with
-`decisions create` (also several with `--from`), `edit`, `status`,
+`decisions create` (several at once, all or none, with `--title` more than
+once or `--titles-from`, labels with `--label`; several with fields of their
+own with `--from`), `edit`, `status`,
 `supersede`, `revoke`, `delete`, `label`, `unlabel`, `history add`,
 `consequences add` and `entries move`/`delete`; their comments with
 `decisions comments …`, and `search --kind decisions` finds them. Every
@@ -364,12 +366,14 @@ command takes a decision by its short identifier as well, the text views lead
 with it and give the `/go/decision/…` address, `--audience` and `--notify`
 say whom a decision proposed or in force reaches, and `statusSetBy` with `list
 --set-by-agent` says who set the status. The rule the commands follow is
-[Decisions](../stable/decisions.md) (C-165…C-175). Minka's side is on its
+[Decisions](../stable/decisions.md) (C-165…C-178). Minka's side is on its
 `main` and in no release yet, so production gets it with the next Minka
-release. The commands are checked against Minka's code and tests, the fake,
-and live against a local Minka on its `main`, in a Decisions tool of a test
-project whose prefix is a single letter; `--label` is checked against the
-fake only, since that project has no labels.
+release. Minka is to take `labelIds` on one new decision as well; until then a
+single `create --label` puts its labels on by a request each after the write.
+The commands are checked against Minka's code and tests, the fake, and live
+against a local Minka on its `main`, in a Decisions tool of a test project
+whose prefix is a single letter; the labels are checked against the fake only,
+since that project has none.
 
 The calendars of a project are listed with `events tools`, their events read
 with `events list` (a span of days, with the occurrences of every series in
@@ -808,8 +812,9 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   backs of cards count, not files in texts.
 
 - Everything of `decisions`: no request of it has gone to a real Minka. The
-  fake mirrors `DecisionsApiController` at aba1e769b in the order of its
-  refusals, the audience and when it is announced, the short identifiers
+  fake mirrors `DecisionsApiController` at 119d5ca71 in the order of its
+  refusals, several at once (all or none, refused sentences at their place,
+  `agendaNumber`, the order of the list), the audience and when it is announced, the short identifiers
   (numbered on adding, under the tool's prefix, also a former one) and who set
   the status, the client rules (no draft, no version, only what is shown to
   clients, only one's own into the trash), the earlier decision that moves
