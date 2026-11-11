@@ -2582,15 +2582,15 @@ Minka without them moves the entry within its tool. **Implemented as:**
 `cli.intoAnotherToolNotice`, `cli.movedWithinItsToolOnly`.
 
 <a id="c-165"></a>
-## C-165 — A status is named by its ID or by its role as typed
+## C-165 — A status is named by its ID or by its role, in any case
 
 *Applies to: `decisions list --status`, `decisions status`, `--status` of the writes, `status` of `--from`*
 
-A value that is an ID goes out in lowercase, anything else exactly as typed;
-`--holds` is `--status holds`, and the help names the seven roles.
-**Why:** Minka compares an ID in any case and a role case-sensitively, so a
-role changed by the CLI would name another status or none. **Implemented as:**
-`cli.statusValue`, see [Decisions](stable/decisions.md#reading).
+A status goes out in lowercase, whether an ID or a role; `--holds` is
+`--status holds`, and the help names the seven roles.
+**Why:** Minka keeps and compares both in lowercase, and one form for every
+value is the one every Minka with the Decisions API reads. **Implemented
+as:** `cli.statusValue`, see [Decisions](stable/decisions.md#reading).
 
 <a id="c-166"></a>
 ## C-166 — What a decision applies to has a flag per kind
@@ -2656,3 +2656,54 @@ An ID goes out as it is; a name is looked up among the project's labels, and
 one found nowhere is exit 2 before the list is read.
 **Why:** Minka filters by ID only. **Implemented as:**
 `cli.labelOfADecisionsTool`.
+
+<a id="c-172"></a>
+## C-172 — A decision is named by its short identifier as well, then the ID takes over
+
+*Applies to: every argument and flag that names a decision, `supersedes` and
+`revokes` of `decisions create --from`*
+
+An ID or a short identifier such as ENT-14 is taken; a short one is looked up
+in capitals with `decisions/by-short-id/…` and the command goes on with the
+ID, an answer without one is exit 7. Anything else is exit 1 before any
+request. **Why:** people cite decisions by their short identifier, but a
+prefix that is given up and taken again can make it name another decision,
+while the ID names one decision for good (as C-022 for a card). **Implemented as:**
+`cli.requireID`, `session.readDecision`, `session.resolveDecision`, see
+[Decisions](stable/decisions.md#naming-a-decision).
+
+<a id="c-173"></a>
+## C-173 — The audience of a decision goes out only where it is given, and with a status
+
+*Applies to: `--audience` and `--notify` of `decisions create`, `edit`,
+`status`, `supersede`, `revoke`*
+
+Without the flags nothing is sent, so Minka's default, everybody, holds; the
+CLI checks only the word of `--audience`. `edit` refuses both without
+`--status`. **Why:** only a status newly proposed or in force tells anybody,
+and Minka ignores the fields otherwise; a flag that silently does nothing
+would read as a decision announced. **Implemented as:**
+`cli.checkDecisionAudience`, `cli.audienceWithStatus`, `app.audienceInput`.
+
+<a id="c-174"></a>
+## C-174 — A text view names a decision by its short identifier and short address
+
+*Applies to: the text of `decisions list`, `show` and every confirmation of
+a write*
+
+The short identifier leads where there is one; the address given is
+`shortUrl`, else `appUrl`; the list marks a status an agent or Minka set,
+`show` says who set it and when. **Why:** a reader cites and trusts a
+decision by these, as a card by its short address. **Implemented as:**
+`cli.renderDecisionLines`, `cli.renderDecision`, `cli.decisionAddress`,
+`cli.statusSetByLine`.
+
+<a id="c-175"></a>
+## C-175 — The earlier decisions of a list are looked up before anything is written
+
+*Applies to: `decisions create --from`*
+
+A short identifier in `supersedes` or `revokes` is looked up for every entry
+before the first request that writes; one nobody can find ends the run with
+nothing written. **Why:** a run that stops halfway leaves the caller to sort
+out what was written. **Implemented as:** `cli.createDecisionsFrom`.

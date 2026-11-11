@@ -24,6 +24,9 @@ type commentedKind struct {
 	read func(a *app, s *session, id string) (commentedItem, error)
 	// refusal classifies a failed request about the item.
 	refusal func(s *session, err error, id string) *Error
+	// resolve replaces another name of the item, such as a short identifier,
+	// by its ID before the first request; nil where only the ID names it.
+	resolve func(a *app, s *session, id *string) error
 
 	reactHelp string // what the help of react says beyond the reactions themselves
 
@@ -39,6 +42,13 @@ type commentedItem struct {
 	// refusal classifies a failed write with what the read learnt, such as
 	// the list a to-do stands in; nil leaves it to the kind.
 	refusal func(s *session, err error) *Error
+}
+
+func (k commentedKind) resolveID(a *app, s *session, id *string) error {
+	if k.resolve == nil {
+		return nil
+	}
+	return k.resolve(a, s, id)
 }
 
 func (k commentedKind) item(id string) api.Commented {
@@ -127,6 +137,9 @@ Nothing is paged. %s`, k.aNoun, shown),
 			if err != nil {
 				return err
 			}
+			if err := k.resolveID(a, s, &args[0]); err != nil {
+				return err
+			}
 			comments, err := s.client.CommentsOn(a.ctx, k.item(args[0]))
 			if err != nil {
 				return k.refusal(s, err, args[0])
@@ -174,6 +187,9 @@ func (a *app) newItemCommentsCreateCmd(k commentedKind) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			if err := k.resolveID(a, s, &args[0]); err != nil {
+				return err
+			}
 			comment, err := s.client.WriteCommentOn(a.ctx, k.item(args[0]), body)
 			if err != nil {
 				return k.refusal(s, err, args[0])
@@ -206,8 +222,8 @@ func (a *app) newItemCommentsEditCmd(k commentedKind) *cobra.Command {
 Files and mentions stand in a comment as action-text-attachment elements, which
 Markdown cannot hold. To keep them, take the bodySource of the comment from
 %s. A new text
-that would drop them from a comment of yours is refused unless
---drop-attachments is given; the command reads the %s first to know, and
+that would drop them from a comment of yours is refused, and goes through
+with --drop-attachments only; the command reads the %s first to know, and
 where the comment carries files or mentions, the person of the token to know
 whose it is. Where it is about to refuse, it reads the archived projects as
 well: in an archived project Minka refuses any text, so the request goes out
@@ -229,6 +245,9 @@ and projectArchived is the answer.`, k.whereToTakeTheBodySource(), k.noun),
 
 			s, err := a.session()
 			if err != nil {
+				return err
+			}
+			if err := k.resolveID(a, s, &args[0]); err != nil {
 				return err
 			}
 			under, err := k.read(a, s, args[0])
@@ -278,6 +297,9 @@ removing it again exits with 2 (not_found), like a comment that never existed.`,
 			if err != nil {
 				return err
 			}
+			if err := k.resolveID(a, s, &args[0]); err != nil {
+				return err
+			}
 			if err := s.client.DeleteCommentOn(a.ctx, k.item(args[0]), args[1]); err != nil {
 				return k.commentRefusal(s, err, args[0])
 			}
@@ -309,6 +331,9 @@ func (a *app) newItemCommentsReactCmd(k commentedKind) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			if err := k.resolveID(a, s, &args[0]); err != nil {
+				return err
+			}
 			comment, err := s.client.ReactToCommentOn(a.ctx, k.item(args[0]), args[1], args[2])
 			if err != nil {
 				return k.reactionRefusal(s, err, args[0])
@@ -337,6 +362,9 @@ func (a *app) newItemCommentsUnreactCmd(k commentedKind) *cobra.Command {
 		RunE: func(_ *cobra.Command, args []string) error {
 			s, err := a.session()
 			if err != nil {
+				return err
+			}
+			if err := k.resolveID(a, s, &args[0]); err != nil {
 				return err
 			}
 			if err := s.client.UnreactFromCommentOn(a.ctx, k.item(args[0]), args[1], args[2]); err != nil {

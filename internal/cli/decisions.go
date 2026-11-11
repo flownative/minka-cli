@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -29,32 +30,36 @@ const (
 	apiCodeEntryTargetUnknown       = "entryTargetUnknown"
 	apiCodeEntryAddressMalformed    = "entryAddressMalformed"
 	apiCodeLinkDescriptionMissing   = "linkDescriptionMissing"
+	apiCodeDecisionAudienceUnknown  = "decisionAudienceUnknown"
 )
+
+// decisionNames are the arguments and flags that name a decision, by its ID
+// or by its short identifier.
+var decisionNames = []string{"decisionId", "--supersedes", "--revokes"}
 
 // decisionRoles are the roles a status goes by, as Minka spells them.
 var decisionRoles = []string{"draft", "proposed", "holds", "done", "superseded", "revoked", "rejected"}
 
 const decisionNotFoundHint = "There is no such decision, it is in the trash, it belongs to a project you are not a member of, or you are a client of the project and it is not shown to you: a client never meets a draft."
 
-const decisionNotChangedHint = "There is no such decision, it lies in the archive of its tool, which takes no change through the API, it is in the trash, it belongs to a project you are not a member of, or you are a client of the project and it is not shown to you: a client never meets a draft."
-
 const decisionsToolNotFoundHint = "There is no such Decisions tool, it is in the trash, it belongs to a project you are not a member of, or you are a client of the project and it is not shown to you. The tools of a project: minka decisions tools <projectId>"
 
-const decisionStatusHelp = `A status is named by its ID or by its role. Minka compares an ID in any case
-and a role exactly as it spells it: draft, proposed, holds, done, superseded,
-revoked or rejected. A status the team added has no role and is named by its
-ID; "decisions statuses <toolId>" lists them all. A client of the project is
-never offered draft.`
+const decisionStatusHelp = `A status is named by its ID or by its role, in any case: draft, proposed,
+holds, done, superseded, revoked or rejected. A status the team added has no
+role and is named by its ID; "decisions statuses <toolId>" lists them all. A
+client of the project is never offered draft.`
 
 const decisionBodyHelp = `The body is what more is written down beside the sentence and the reason:
 Markdown by default, sent as HTML the way a description is, - to read it from
 stdin. --body-format html sends HTML as it is.`
 
 const decisionFieldsHelp = `--title is the sentence that holds, one line of at most 200 characters.
---reason is why, one sentence of at most 500. --decided-on is the day it was
-decided, --valid-until the day Minka sets a decision in force to done, and
---review-on the day Minka reminds those who follow it to look at it again,
-each YYYY-MM-DD.
+
+--reason is why, one sentence of at most 500.
+
+--decided-on is the day it was decided, --valid-until the day Minka sets a
+decision in force to done, and --review-on the day Minka reminds those who
+follow it to look at it again, each YYYY-MM-DD.
 
 --decided-by names one of who decided and can be given more than once, in the
 order they are to stand: an ID or "me" names a member of the project, and
@@ -65,7 +70,29 @@ repeats. --votes is one line such as "5 : 1".
 
 --applies-to-card or --applies-to-event names the one card or event the
 decision applies to: once the event is over or the card done, Minka sets a
-decision in force to done. A card is its ID or its short identifier.`
+decision in force to done. A card is its ID or its short identifier.
+
+` + decisionAudienceHelp
+
+const decisionNameHelp = `A decision is named by its ID or by its short identifier, such as ENT-14, in
+any case and also under a former prefix of its tool; a short identifier is
+looked up first, and the command goes on with the ID.`
+
+const decisionAudienceHelp = `--audience says whom the decision reaches once it is proposed or in force:
+"everybody" in the project, which Minka takes where --audience is not given,
+"chosen" with one --notify per person, who then follow it, or "nobody". It
+takes effect only where the decision comes into a status of role proposed or
+holds: a new decision proposed or in force, or a change that moves it there
+from another status. A draft, a status the team added and the other roles tell
+nobody, and a change that keeps the status ignores --audience and --notify,
+which Minka checks all the same. --notify belongs to "chosen" alone: Minka
+refuses names under any other audience with notifyIdsWithoutChosenAudience
+and "chosen" without a name with notifyIdsMissing; this command sends what it
+is given and leaves the rule to Minka.
+` + personHelp + ` A name or an e-mail address
+is looked up among the members of the project. Somebody chosen who is a client
+of the project, or an agent working for one, has to be shown the decision, or
+Minka refuses with personCannotSeeIt.`
 
 const decisionEarlierHelp = `The earlier decision moves into the status of role superseded or revoked
 only while the new one holds, when it is named or when the new one comes into
@@ -183,22 +210,33 @@ role. The list itself is written on the web.
 
 func (a *app) newDecisionsListCmd() *cobra.Command {
 	var status, label, card, eventID string
-	var holds bool
+	var holds, setByAgent bool
 
 	cmd := &cobra.Command{
 		Use:   "list <toolId>",
 		Short: "List the decisions of a tool, in force or in any status",
 		Long: `Lists the decisions of a tool the way its page does: the day decided on last
-first, one without a day by the day it was written. Nothing is paged. The text
-names each decision by its ID, its sentence, its status and its reason, so
-that what holds is looked up at a glance; --json hands over every field.
+first, one without a day by the day it was written. Nothing is paged.
 
-Every status is listed unless --status names one; --holds is short for
---status holds, the decisions in force. ` + decisionStatusHelp + `
+Each line of the text gives the short identifier where the decision has one,
+the ID, the sentence, the status and the reason, so that what holds is looked
+up at a glance, and says where an agent or Minka set the status. The JSON
+output hands over every field.
+
+Every status is listed unless --status names one. The flag --holds is short
+for "--status holds", the decisions in force. ` + decisionStatusHelp + `
 
 --label narrows to the decisions that carry a label, by its ID or its name; a
-name is looked up among the labels of the project. --applies-to-card and
---applies-to-event narrow to the decisions that apply to that card or event.`,
+name is looked up among the labels of the project.
+
+--applies-to-card and --applies-to-event narrow to the decisions that apply
+to that card or event.
+
+--set-by-agent narrows to the decisions whose status an agent set. That
+includes an earlier decision an agent superseded or revoked: putting the later
+one into force moves the earlier one, and Minka counts that move as the
+agent's. A status Minka moved by itself, on the day a decision ends or when
+what it applies to is over, is not among them.`,
 		Example: `  minka decisions list 0199... --holds
   minka decisions list 0199... --status proposed --json
   minka decisions list 0199... --label Board --applies-to-card MNK-1A`,
@@ -223,7 +261,7 @@ name is looked up among the labels of the project. --applies-to-card and
 					return err
 				}
 			}
-			query := api.DecisionsQuery{Status: statusValue(status), AppliesTo: eventID}
+			query := api.DecisionsQuery{Status: statusValue(status), AppliesTo: eventID, SetByAnAgent: setByAgent}
 			if holds {
 				query.Status = "holds"
 			}
@@ -251,6 +289,9 @@ name is looked up among the labels of the project. --applies-to-card and
 			if query.Status == "holds" {
 				summary += " in force"
 			}
+			if setByAgent {
+				summary += " whose status an agent set"
+			}
 			return a.ok(success{
 				data:    decisions.Raw,
 				summary: summary,
@@ -268,6 +309,7 @@ name is looked up among the labels of the project. --applies-to-card and
 	flags.StringVar(&label, "label", "", "Label the decisions carry: its ID or its name")
 	flags.StringVar(&card, "applies-to-card", "", "Card the decisions apply to: its ID or short identifier")
 	flags.StringVar(&eventID, "applies-to-event", "", "ID of the event the decisions apply to")
+	flags.BoolVar(&setByAgent, "set-by-agent", false, "List only the decisions whose status an agent set by hand")
 	return cmd
 }
 
@@ -282,18 +324,26 @@ history and consequences, its labels, its body and its comments. In text
 output the body is converted to Markdown, which decisions edit --body turns
 back into the same HTML; in JSON it is the HTML the server stores.
 
+The text leads with the short identifier where the decision has one, says who
+set its status and when, an agent or Minka marked as such, and gives the
+decision's short address, or its page where it has none.
+
 A decision in the archive is shown as well and says so: it is read, and not
 changed. A client of the project meets only a decision shown to clients, and
-never a draft.`,
+never a draft.
+
+` + decisionNameHelp,
+		Example: `  minka decisions show ENT-14
+  minka decisions show 0199... --json`,
 		Args: requireArgs("decisionId"),
 		RunE: func(_ *cobra.Command, args []string) error {
 			s, err := a.session()
 			if err != nil {
 				return err
 			}
-			decision, err := s.client.Decision(a.ctx, args[0])
+			decision, err := s.readDecision(a.ctx, args[0])
 			if err != nil {
-				return decisionRefusal(s, err)
+				return err
 			}
 			return a.ok(decisionSuccess(decision, decisionSummary(decision.Value), nil, func(w io.Writer) { renderDecision(w, decision.Value) }))
 		},
@@ -309,6 +359,8 @@ type decisionFlags struct {
 	eventID, votes, card, appliesToEventID  string
 	supersedes, revokes                     string
 	visibleToClients                        bool
+	audience                                string
+	notify                                  []string
 
 	// The flags of a change that clear a field.
 	noReason, noDecidedOn, noValidUntil, noReviewOn, noDecidedBy bool
@@ -332,9 +384,10 @@ func (f *decisionFlags) register(cmd *cobra.Command, editing, earlier bool) {
 	flags.StringVar(&f.votes, "votes", "", "The votes, one line")
 	flags.StringVar(&f.card, "applies-to-card", "", "Card it applies to: its ID or short identifier")
 	flags.StringVar(&f.appliesToEventID, "applies-to-event", "", "ID of the event it applies to")
+	registerDecisionAudience(cmd, &f.audience, &f.notify)
 	if earlier {
-		flags.StringVar(&f.supersedes, "supersedes", "", "ID of the earlier decision this one takes the place of")
-		flags.StringVar(&f.revokes, "revokes", "", "ID of the earlier decision this one lifts")
+		flags.StringVar(&f.supersedes, "supersedes", "", "Earlier decision this one takes the place of: its ID or short identifier")
+		flags.StringVar(&f.revokes, "revokes", "", "Earlier decision this one lifts: its ID or short identifier")
 	}
 	if !editing {
 		flags.BoolVar(&f.visibleToClients, "visible-to-clients", false, "Show the decision to the clients of the project")
@@ -380,16 +433,55 @@ func (f *decisionFlags) check(cmd *cobra.Command) error {
 			return err
 		}
 	}
+	return checkDecisionAudience(cmd, f.audience)
+}
+
+// registerDecisionAudience adds the flags that say whom a decision proposed
+// or in force reaches.
+func registerDecisionAudience(cmd *cobra.Command, audience *string, notify *[]string) {
+	cmd.Flags().StringVar(audience, "audience", "", "Whom it reaches once proposed or in force: everybody, chosen or nobody")
+	cmd.Flags().StringArrayVar(notify, "notify", nil, "Person to tell, with --audience chosen: ID, me, e-mail address or name (repeatable)")
+}
+
+// checkDecisionAudience holds the word of --audience where it is given.
+// Which people go with which audience is the server's rule and is left to it.
+func checkDecisionAudience(cmd *cobra.Command, audience string) error {
+	if cmd.Flags().Changed("audience") && audience != "everybody" && audience != "chosen" && audience != "nobody" {
+		return usageErrorf(cmd, "--audience is everybody, chosen or nobody, not %q", audience)
+	}
+	return nil
+}
+
+// audienceInput puts the audience and the people to tell into a write where
+// their flags are given; a name is looked up among the members of the
+// project, which is read only then.
+func (a *app) audienceInput(cmd *cobra.Command, s *session, input api.DecisionInput, audience string, notify []string, project func() (string, error)) error {
+	if cmd.Flags().Changed("audience") {
+		input["audience"] = audience
+	}
+	if cmd.Flags().Changed("notify") {
+		ids, err := a.peopleOfATool(s, project, notify)
+		if err != nil {
+			return err
+		}
+		input["notifyIds"] = ids
+	}
 	return nil
 }
 
 // input is the request the flags make: a field for every flag given, null
-// for every one cleared. The body is converted here, "me" and a card's short
-// identifier are looked up.
-func (f *decisionFlags) input(cmd *cobra.Command, a *app, s *session) (api.DecisionInput, []string, error) {
+// for every one cleared. The body is converted here, "me", the people to tell
+// and the short identifier of a card or an earlier decision are looked up;
+// project names the project whose members are told.
+func (f *decisionFlags) input(cmd *cobra.Command, a *app, s *session, project func() (string, error)) (api.DecisionInput, []string, error) {
 	input := api.DecisionInput{}
 	var notices []string
 	changed := cmd.Flags().Changed
+	for _, earlier := range []*string{&f.supersedes, &f.revokes} {
+		if err := s.resolveDecision(a.ctx, earlier); err != nil {
+			return nil, nil, err
+		}
+	}
 	for name, value := range map[string]string{
 		"title": f.title, "reason": f.reason, "decided-on": f.decidedOn, "valid-until": f.validUntil,
 		"review-on": f.reviewOn, "event": f.eventID, "votes": f.votes, "supersedes": f.supersedes, "revokes": f.revokes,
@@ -443,6 +535,9 @@ func (f *decisionFlags) input(cmd *cobra.Command, a *app, s *session) (api.Decis
 	if f.visibleToClients {
 		input["visibleToClients"] = true
 	}
+	if err := a.audienceInput(cmd, s, input, f.audience, f.notify, project); err != nil {
+		return nil, nil, err
+	}
 	return input, notices, nil
 }
 
@@ -477,13 +572,10 @@ func decidedBy(a *app, s *session, value string) (api.DeciderInput, error) {
 	return api.DeciderInput{Name: value}, nil
 }
 
-// statusValue is a status as it goes out: an ID in lowercase, a role as it
-// was typed, since Minka compares a role exactly.
+// statusValue is a status as it goes out: in lowercase, the form Minka
+// keeps an ID and a role in.
 func statusValue(value string) string {
-	if id, isID := asID(value); isID {
-		return id
-	}
-	return value
+	return strings.ToLower(value)
 }
 
 // checkCardFlag takes a card by its ID or its short identifier.
@@ -511,9 +603,9 @@ func (a *app) newDecisionsCreateCmd() *cobra.Command {
 		Long: "Writes a decision down in a Decisions tool. Without --status it holds.\n\n" +
 			decisionFieldsHelp + "\n\n" + decisionStatusHelp + "\n\n" + decisionBodyHelp + `
 
---supersedes or --revokes names an earlier decision of the same tool by its ID.
-` + decisionEarlierHelp + ` decisions supersede and decisions revoke do the same
-with the earlier decision named first.
+--supersedes or --revokes names an earlier decision of the same tool by its ID
+or its short identifier. ` + decisionEarlierHelp + ` decisions supersede and
+decisions revoke do the same with the earlier decision named first.
 
 --visible-to-clients shows the decision to the clients of the project, where
 the project works with them; what a client writes down is shown to clients
@@ -522,10 +614,11 @@ anyway.
 --from writes several decisions, read from a file or, with -, from stdin: a
 JSON list of objects, each with the fields Minka takes for a new decision —
 title, reason, body, decidedOn, status, decidedBy (a list of {"personId"} and
-{"name"}), decidedInEventId, votes, supersedes or revokes, appliesTo
-({"kind": "card" or "event", "id"}), validUntil, reviewOn, visibleToClients.
-A body is Markdown unless --body-format html is given. A field Minka does not
-take is refused before anything is sent. The decisions are written one after
+{"name"}), decidedInEventId, votes, supersedes or revokes (an ID or a short
+identifier, looked up before anything is written), appliesTo ({"kind": "card"
+or "event", "id"}), validUntil, reviewOn, audience, notifyIds (a list of IDs of
+members) and visibleToClients. A body is Markdown unless --body-format html is
+given. A field Minka does not take is refused before anything is sent. The decisions are written one after
 another in the order given; the first refusal stops the run, and the error
 says which were written before it ("created" in data, as Minka answered, and
 "notCreated", the titles of the rest). On success data is the list of the
@@ -533,6 +626,7 @@ decisions written. --from takes --tool and --body-format beside it, no other
 flag.`,
 		Example: `  minka decisions create --tool 0199... --title "We meet on Mondays" --reason "Then everybody has time." --json
   minka decisions create --tool 0199... --title "We buy a tent" --status proposed --decided-by me --decided-by Board
+  minka decisions create --tool 0199... --title "We buy a tent" --status proposed --audience chosen --notify me --notify Anke
   minka decisions create --tool 0199... --from decisions.json`,
 		Args: requireArgs(),
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -562,7 +656,13 @@ flag.`,
 			if err != nil {
 				return err
 			}
-			input, notices, err := f.input(cmd, a, s)
+			input, notices, err := f.input(cmd, a, s, func() (string, error) {
+				tool, err := s.client.DecisionsTool(a.ctx, toolID)
+				if err != nil {
+					return "", toolRefusal(s, err, decisionsToolNotFoundHint)
+				}
+				return tool.Value.ProjectID, nil
+			})
 			if err != nil {
 				return err
 			}
@@ -571,9 +671,9 @@ flag.`,
 				return createDecisionRefusal(s, err)
 			}
 			notices = append(notices, earlierNotice(decision.Value)...)
-			summary := "Wrote decision " + decision.Value.Title + " down in " + decision.Value.Tool.Title
+			summary := "Wrote decision " + decisionTitle(decision.Value.ShortID, decision.Value.Title) + " down in " + decision.Value.Tool.Title
 			return a.ok(decisionSuccess(decision, summary, notices, func(w io.Writer) {
-				fmt.Fprintf(w, "%s.\nDecision: %s\nStatus: %s\n%s\n", summary, decision.Value.ID, decision.Value.Status.Name, decision.Value.AppURL)
+				fmt.Fprintf(w, "%s.\nDecision: %s\nStatus: %s\n%s\n", summary, decisionName(decision.Value), decision.Value.Status.Name, decisionAddress(decision.Value))
 			}))
 		},
 	}
@@ -587,7 +687,7 @@ flag.`,
 // takes for a new decision.
 var decisionFromFields = []string{
 	"title", "reason", "body", "decidedOn", "status", "decidedBy", "decidedInEventId", "votes",
-	"supersedes", "revokes", "appliesTo", "validUntil", "reviewOn", "visibleToClients",
+	"supersedes", "revokes", "appliesTo", "validUntil", "reviewOn", "audience", "notifyIds", "visibleToClients",
 }
 
 // createDecisionsFrom writes the decisions of a list one after another and
@@ -613,6 +713,11 @@ func (a *app) createDecisionsFrom(cmd *cobra.Command, toolID, from, bodyFormat s
 				return usageErrorf(cmd, "decision %d: Minka takes no field %q for a new decision; it takes %s", i+1, name, strings.Join(decisionFromFields, ", "))
 			}
 		}
+		for _, name := range []string{"supersedes", "revokes"} {
+			if value, isText := entry[name].(string); isText && value != "" && !uuidPattern.MatchString(value) && !shortIdentifierPattern.MatchString(value) {
+				return usageErrorf(cmd, "decision %d: %s %q is no decision; a decision is named by its ID or its short identifier such as ENT-14", i+1, name, value)
+			}
+		}
 		if body, isText := entry["body"].(string); isText {
 			html, warnings, err := decisionBodyOf(body, bodyFormat)
 			if err != nil {
@@ -630,6 +735,20 @@ func (a *app) createDecisionsFrom(cmd *cobra.Command, toolID, from, bodyFormat s
 	s, err := a.session()
 	if err != nil {
 		return err
+	}
+	// A short identifier of an earlier decision is looked up before the first
+	// write, so that one nobody can find writes nothing.
+	for _, entry := range entries {
+		for _, name := range []string{"supersedes", "revokes"} {
+			value, isText := entry[name].(string)
+			if !isText || value == "" {
+				continue
+			}
+			if err := s.resolveDecision(a.ctx, &value); err != nil {
+				return err
+			}
+			entry[name] = value
+		}
 	}
 	created := []json.RawMessage{}
 	var titles []string
@@ -672,8 +791,8 @@ func (a *app) createDecisionsFrom(cmd *cobra.Command, toolID, from, bodyFormat s
 	})
 }
 
-// idsInLowercase writes the IDs an entry of --from names in the form Minka
-// keeps them in. A role keeps its spelling: Minka compares it exactly.
+// idsInLowercase writes the IDs an entry of --from names, and its status, in
+// the form Minka keeps them in.
 func idsInLowercase(entry map[string]any) {
 	lower := func(value any) any {
 		if text, isText := value.(string); isText {
@@ -690,6 +809,11 @@ func idsInLowercase(entry map[string]any) {
 	}
 	if subject, isObject := entry["appliesTo"].(map[string]any); isObject {
 		subject["id"] = lower(subject["id"])
+	}
+	if people, isList := entry["notifyIds"].([]any); isList {
+		for i := range people {
+			people[i] = lower(people[i])
+		}
 	}
 	if deciders, isList := entry["decidedBy"].([]any); isList {
 		for _, decider := range deciders {
@@ -735,14 +859,14 @@ func (a *app) newDecisionsLaterCmd(verb string) *cobra.Command {
 		Use:   verb + " <decisionId>",
 		Short: short,
 		Long: fmt.Sprintf(`Writes a new decision down in the tool of the earlier one, which it %s:
-the same as decisions create --%s <decisionId>, with the same flags. Without
---status the new one holds.
+the same as "decisions create --%s <decisionId>", with the same flags.
+Without --status the new one holds.
 
 %s The answer names the earlier decision in %s with the status
 it stands in now, and a notice says so where it did not move.
 
-`, relation, relation, decisionEarlierHelp, relation) + decisionFieldsHelp + "\n\n" + decisionStatusHelp + "\n\n" + decisionBodyHelp,
-		Example: fmt.Sprintf(`  minka decisions %s 0199... --title "We meet on Tuesdays" --reason "The hall is free then."`, verb),
+`, relation, relation, decisionEarlierHelp, relation) + decisionNameHelp + "\n\n" + decisionFieldsHelp + "\n\n" + decisionStatusHelp + "\n\n" + decisionBodyHelp,
+		Example: fmt.Sprintf(`  minka decisions %s ENT-14 --title "We meet on Tuesdays" --reason "The hall is free then."`, verb),
 		Args:    requireArgs("decisionId"),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := f.check(cmd); err != nil {
@@ -755,11 +879,11 @@ it stands in now, and a notice says so where it did not move.
 			if err != nil {
 				return err
 			}
-			earlier, err := s.client.Decision(a.ctx, args[0])
+			earlier, err := s.readDecision(a.ctx, args[0])
 			if err != nil {
-				return decisionRefusal(s, err)
+				return err
 			}
-			input, notices, err := f.input(cmd, a, s)
+			input, notices, err := f.input(cmd, a, s, func() (string, error) { return earlier.Value.ProjectID, nil })
 			if err != nil {
 				return err
 			}
@@ -769,17 +893,17 @@ it stands in now, and a notice says so where it did not move.
 				return createDecisionRefusal(s, err)
 			}
 			notices = append(notices, earlierNotice(decision.Value)...)
-			summary := fmt.Sprintf("Wrote decision %s down; it %s %s", decision.Value.Title, relation, earlier.Value.Title)
+			summary := fmt.Sprintf("Wrote decision %s down; it %s %s", decisionTitle(decision.Value.ShortID, decision.Value.Title), relation, decisionTitle(earlier.Value.ShortID, earlier.Value.Title))
 			return a.ok(decisionSuccess(decision, summary, notices, func(w io.Writer) {
-				fmt.Fprintf(w, "%s.\nDecision: %s\nStatus: %s\n", summary, decision.Value.ID, decision.Value.Status.Name)
+				fmt.Fprintf(w, "%s.\nDecision: %s\nStatus: %s\n", summary, decisionName(decision.Value), decision.Value.Status.Name)
 				if link := earlierOf(decision.Value); link != nil {
 					state := "moved into " + link.Status.Name
 					if deref(link.Status.Role) != role {
 						state = "still " + link.Status.Name + ": it moves only while the new one holds"
 					}
-					fmt.Fprintf(w, "%s: %s, %s\n", done, link.Title, state)
+					fmt.Fprintf(w, "%s: %s, %s\n", done, decisionTitle(link.ShortID, link.Title), state)
 				}
-				fmt.Fprintln(w, decision.Value.AppURL)
+				fmt.Fprintln(w, decisionAddress(decision.Value))
 			}))
 		},
 	}
@@ -816,28 +940,43 @@ func (a *app) newDecisionsEditCmd() *cobra.Command {
 		Use:   "edit <decisionId>",
 		Short: "Change what a decision says, its status or the decision it follows",
 		Long: `Changes the fields given; what is not given stays as it is. Each field is
-cleared by its --no-... flag: --no-reason, --no-decided-on, --no-valid-until,
---no-review-on, --no-decided-by, --no-event, --no-votes, --no-applies-to, and
---no-earlier for the decision it supersedes or revokes. --body "" empties the
-body. --title "" does not empty the sentence: a decision needs one, and exits
-9 (validation) with meta.apiCode decisionTitleMissing. --decided-by names the
-whole list of who decided anew. The same values again succeed and change
-nothing.
+cleared by its own flag, which sends null:
+
+  --no-reason          the reason
+  --no-decided-on      the day it was decided
+  --no-valid-until     the day it is done
+  --no-review-on       the day of the review
+  --no-decided-by      who decided
+  --no-event           the event it was decided in
+  --no-votes           the votes
+  --no-applies-to      the card or event it applies to
+  --no-earlier         the decision it supersedes or revokes
+
+An empty --body empties the body. An empty --title does not empty the
+sentence: a decision needs one, and exits 9 (validation) with meta.apiCode
+decisionTitleMissing. --decided-by names the whole list of who decided anew.
+The same values again succeed and change nothing.
 
 --supersedes or --revokes names another earlier decision. ` + decisionEarlierHelp + `
 
+--audience and --notify go with --status alone, the only change that tells
+anybody: without --status they exit 1 (usage) before anything is sent.
+
 A decision in the archive is read and not changed: Minka answers a change of
-one with exit 2 (not_found).
+one with exit 9 (validation) and meta.apiCode decisionArchived.
+
+` + decisionNameHelp + `
 
 ` + decisionFieldsHelp + "\n\n" + decisionStatusHelp + "\n\n" + decisionBodyHelp + `
 
 Files and mentions stand in a body as action-text-attachment elements, which
-Markdown cannot hold. To keep them, take the bodySource from decisions show
---json, change it and send it back with --body-format html. A new body that
-would drop them is refused unless --drop-attachments is given; the command
-reads the decision first to know.`,
+Markdown cannot hold. To keep them, take the bodySource of the decision as
+"decisions show --json" gives it, change it, and send it back with
+"--body-format html". A new body that would drop them is refused unless the
+flag --drop-attachments is given; the command reads the decision first to
+know.`,
 		Example: `  minka decisions edit 0199... --reason "The hall is free on Mondays."
-  minka decisions edit 0199... --status holds
+  minka decisions edit ENT-14 --status holds --audience nobody
   minka decisions edit 0199... --no-earlier --no-votes`,
 		Args: requireArgs("decisionId"),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -853,18 +992,25 @@ reads the decision first to know.`,
 			if !given {
 				return usageErrorf(cmd, "nothing to change; give a field to change or to clear")
 			}
+			if err := audienceWithStatus(cmd); err != nil {
+				return err
+			}
 			s, err := a.session()
 			if err != nil {
 				return err
 			}
-			input, notices, err := f.input(cmd, a, s)
+			current, err := s.decisionOnce(a.ctx, &args[0])
+			if err != nil {
+				return err
+			}
+			input, notices, err := f.input(cmd, a, s, projectOf(current))
 			if err != nil {
 				return err
 			}
 			if body, given := input["body"].(string); given {
-				current, err := s.client.Decision(a.ctx, args[0])
+				current, err := current()
 				if err != nil {
-					return decisionRefusal(s, err)
+					return err
 				}
 				dropped, err := a.guardOverFiles(s, current.Value.ProjectID, closedIf(current.Value.Archived), firstNonEmpty(current.Value.BodySource, current.Value.Body), body, dropAttachments,
 					"the decision has %s, and the new body would drop them",
@@ -876,12 +1022,12 @@ reads the decision first to know.`,
 			}
 			decision, err := s.client.UpdateDecision(a.ctx, args[0], input)
 			if err != nil {
-				return changeDecisionRefusal(s, err)
+				return decisionRefusal(s, err)
 			}
 			notices = append(notices, earlierNotice(decision.Value)...)
-			summary := "Changed decision " + decision.Value.Title
+			summary := "Changed decision " + decisionTitle(decision.Value.ShortID, decision.Value.Title)
 			return a.ok(decisionSuccess(decision, summary, notices, func(w io.Writer) {
-				fmt.Fprintf(w, "%s.\nStatus: %s\n%s\n", summary, decision.Value.Status.Name, decision.Value.AppURL)
+				fmt.Fprintf(w, "%s.\nStatus: %s\n%s\n", summary, decision.Value.Status.Name, decisionAddress(decision.Value))
 			}))
 		},
 	}
@@ -891,7 +1037,9 @@ reads the decision first to know.`,
 }
 
 func (a *app) newDecisionsStatusCmd() *cobra.Command {
-	return &cobra.Command{
+	var audience string
+	var notify []string
+	cmd := &cobra.Command{
 		Use:   "status <decisionId> <status>",
 		Short: "Put a decision into another status",
 		Long: `Puts a decision into a status of its tool and changes nothing else. ` + decisionStatusHelp + `
@@ -899,25 +1047,130 @@ func (a *app) newDecisionsStatusCmd() *cobra.Command {
 A status set already succeeds and changes nothing. A decision that comes into
 force moves the earlier decision it supersedes or revokes into the status of
 that role; nothing moves it back. A decision in the archive takes no status:
-Minka answers with exit 2 (not_found).`,
-		Example: `  minka decisions status 0199... holds
+Minka answers with exit 9 (validation) and meta.apiCode decisionArchived.
+
+` + decisionAudienceHelp + `
+
+` + decisionNameHelp,
+		Example: `  minka decisions status ENT-14 holds
+  minka decisions status 0199... proposed --audience chosen --notify Anke
   minka decisions status 0199... rejected --json`,
 		Args: requireArgs("decisionId", "status"),
-		RunE: func(_ *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := checkDecisionAudience(cmd, audience); err != nil {
+				return err
+			}
 			s, err := a.session()
 			if err != nil {
 				return err
 			}
-			decision, err := s.client.UpdateDecision(a.ctx, args[0], api.DecisionInput{"status": statusValue(args[1])})
+			current, err := s.decisionOnce(a.ctx, &args[0])
 			if err != nil {
-				return changeDecisionRefusal(s, err)
+				return err
 			}
-			summary := "Decision " + decision.Value.Title + " is " + decision.Value.Status.Name
+			input := api.DecisionInput{"status": statusValue(args[1])}
+			if err := a.audienceInput(cmd, s, input, audience, notify, projectOf(current)); err != nil {
+				return err
+			}
+			decision, err := s.client.UpdateDecision(a.ctx, args[0], input)
+			if err != nil {
+				return decisionRefusal(s, err)
+			}
+			summary := "Decision " + decisionTitle(decision.Value.ShortID, decision.Value.Title) + " is " + decision.Value.Status.Name
 			return a.ok(decisionSuccess(decision, summary, earlierNotice(decision.Value), func(w io.Writer) {
-				fmt.Fprintf(w, "%s.\n%s\n", summary, decision.Value.AppURL)
+				fmt.Fprintf(w, "%s.\n%s\n", summary, decisionAddress(decision.Value))
 			}))
 		},
 	}
+	registerDecisionAudience(cmd, &audience, &notify)
+	return cmd
+}
+
+// audienceWithStatus refuses an audience on a change that names no status:
+// only a status newly set tells anybody, and Minka ignores it otherwise.
+func audienceWithStatus(cmd *cobra.Command) error {
+	changed := cmd.Flags().Changed
+	if (changed("audience") || changed("notify")) && !changed("status") {
+		return usageErrorf(cmd, "--audience and --notify go with --status: only a new status tells anybody, and a change without one tells nobody")
+	}
+	return nil
+}
+
+// decisionOnce replaces a short identifier by the ID and returns a read of
+// the decision that asks the server once at most: the lookup of a short
+// identifier is that read already, an ID is read only when it is asked.
+func (s *session) decisionOnce(ctx context.Context, value *string) (func() (api.Result[api.Decision], error), error) {
+	var read *api.Result[api.Decision]
+	if !uuidPattern.MatchString(*value) {
+		decision, err := s.readDecision(ctx, *value)
+		if err != nil {
+			return nil, err
+		}
+		*value, read = decision.Value.ID, &decision
+	}
+	id := *value
+	return func() (api.Result[api.Decision], error) {
+		if read == nil {
+			decision, err := s.readDecision(ctx, id)
+			if err != nil {
+				return decision, err
+			}
+			read = &decision
+		}
+		return *read, nil
+	}, nil
+}
+
+// projectOf is the project of the decision a read gives.
+func projectOf(decision func() (api.Result[api.Decision], error)) func() (string, error) {
+	return func() (string, error) {
+		read, err := decision()
+		if err != nil {
+			return "", err
+		}
+		return read.Value.ProjectID, nil
+	}
+}
+
+// readDecision reads a decision named by its ID or by its short identifier,
+// which is looked up in capitals.
+func (s *session) readDecision(ctx context.Context, value string) (api.Result[api.Decision], error) {
+	if uuidPattern.MatchString(value) {
+		decision, err := s.client.Decision(ctx, value)
+		if err != nil {
+			return decision, decisionRefusal(s, err)
+		}
+		return decision, nil
+	}
+	identifier := strings.ToUpper(value)
+	decision, err := s.client.DecisionByShortIdentifier(ctx, identifier)
+	if err != nil {
+		e := decisionRefusal(s, err)
+		if e.Code == CodeNotFound {
+			e.Message = "no decision you can see goes by " + identifier
+			e.Hint = "It does not exist, its tool has not numbered it yet, it is in the trash or in a project you are not a member of, or you are a client of the project and it is not shown to you: a client never meets a draft. The ID of a decision always works; minka decisions list <toolId> gives both."
+		}
+		return decision, e
+	}
+	// What comes back goes into the path of the requests that follow.
+	if !uuidPattern.MatchString(decision.Value.ID) {
+		return decision, &Error{Code: CodeAPI, Message: s.host + " answered for " + identifier + " with a decision that has no ID"}
+	}
+	return decision, nil
+}
+
+// resolveDecision replaces the short identifier of a decision by its ID, so
+// that a renamed prefix does not change what the requests that follow name.
+func (s *session) resolveDecision(ctx context.Context, value *string) error {
+	if *value == "" || uuidPattern.MatchString(*value) {
+		return nil
+	}
+	decision, err := s.readDecision(ctx, *value)
+	if err != nil {
+		return err
+	}
+	*value = decision.Value.ID
+	return nil
 }
 
 func (a *app) newDecisionsDeleteCmd() *cobra.Command {
@@ -930,11 +1183,16 @@ the project removes only a decision of their own; another exits 2
 (not_found).
 
 A decision in the trash reads like one that never existed: showing, changing
-or deleting it again exits 2. It comes back in Minka on the web only.`,
+or deleting it again exits 2. It comes back in Minka on the web only.
+
+` + decisionNameHelp,
 		Args: requireArgs("decisionId"),
 		RunE: func(_ *cobra.Command, args []string) error {
 			s, err := a.session()
 			if err != nil {
+				return err
+			}
+			if err := s.resolveDecision(a.ctx, &args[0]); err != nil {
 				return err
 			}
 			if err := s.client.DeleteDecision(a.ctx, args[0]); err != nil {
@@ -953,6 +1211,7 @@ or deleting it again exits 2. It comes back in Minka on the web only.`,
 
 func (a *app) decisionLabelsTarget() itemLabelsTarget {
 	return itemLabelsTarget{kind: "decisions", noun: "decision", show: "minka decisions show", example: "minka decisions",
+		resolve: func(s *session, id *string) error { return s.resolveDecision(a.ctx, id) },
 		read: func(s *session, id string) (json.RawMessage, []api.Label, error) {
 			decision, err := s.client.Decision(a.ctx, id)
 			if err != nil {
@@ -1005,6 +1264,9 @@ The versions are the team's alone: a client of the project gets exit 2
 			if err != nil {
 				return err
 			}
+			if err := s.resolveDecision(a.ctx, &args[0]); err != nil {
+				return err
+			}
 			versions, err := s.client.DecisionVersions(a.ctx, args[0])
 			if err != nil {
 				return versionsRefusal(s, err, notFound)
@@ -1048,6 +1310,9 @@ IDs come from decisions versions list.`,
 			if err != nil {
 				return err
 			}
+			if err := s.resolveDecision(a.ctx, &args[0]); err != nil {
+				return err
+			}
 			version, err := s.client.DecisionVersionOf(a.ctx, args[0], args[1])
 			if err != nil {
 				return versionsRefusal(s, err, notFound)
@@ -1087,12 +1352,13 @@ func (a *app) newDecisionsEntryAddCmd(part string) *cobra.Command {
 	short, long := "Add what led to a decision to its history", `Appends to the history of a decision what led to it: the address of a record
 of this Minka, such as a card, a to-do, a post or a document, a comment by its
 #comment-… place, a line of a chat by its #chat-message-… place, a card by its
-"#" name such as #MNK-1A, or any other web address together with
---description, a few words that say what it is.`
+"#" name such as #MNK-1A, a decision by its "#" name such as #ENT-14 or by its
+short address (shortUrl, .../go/decision/ENT-14), or any other web address
+together with --description, a few words that say what it is.`
 	if consequence {
 		short, long = "Add what follows from a decision to its consequences", `Appends to the consequences of a decision what follows from it: a to-do or a
 card, by the address of its page or a card by its "#" name such as #MNK-1A.
-decisions show counts the consequences done.`
+A decision is no consequence. decisions show counts the consequences done.`
 	}
 	add := &cobra.Command{
 		Use:   "add <decisionId> <address>",
@@ -1109,6 +1375,9 @@ decisionArchived.`,
 		RunE: func(_ *cobra.Command, args []string) error {
 			s, err := a.session()
 			if err != nil {
+				return err
+			}
+			if err := s.resolveDecision(a.ctx, &args[0]); err != nil {
 				return err
 			}
 			entry, err := s.client.AddDecisionEntry(a.ctx, args[0], consequence, args[1], description)
@@ -1141,10 +1410,11 @@ func (a *app) newDecisionsEntriesCmd() *cobra.Command {
 		Short: "Move an entry of the history or the consequences of a decision",
 		Long: `Puts an entry elsewhere within its part, the history or the consequences:
 --top puts it first, --bottom last, --after below the entry named, --before
-above it. Exactly one of the four is required. The entry named with --after or
---before has to be another entry of the same decision; otherwise exit 9
-(validation) with meta.apiCode entryPlaceUnknown. The IDs of the entries are
-in decisions show --json.`,
+above it. Exactly one of the four is required.
+
+The entry named with --after or --before has to be another entry of the same
+decision; otherwise exit 9 (validation) with meta.apiCode entryPlaceUnknown.
+The IDs of the entries are in "decisions show --json".`,
 		Example: `  minka decisions entries move 0199... 0199... --top`,
 		Args:    requireArgs("decisionId", "entryId"),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -1174,12 +1444,16 @@ in decisions show --json.`,
 			if err != nil {
 				return err
 			}
+			current, err := s.decisionOnce(a.ctx, &args[0])
+			if err != nil {
+				return err
+			}
 			if bottom {
 				// Minka has no word for the end: an entry goes there behind
 				// the last of the others of its part.
-				decision, err := s.client.Decision(a.ctx, args[0])
+				decision, err := current()
 				if err != nil {
-					return decisionRefusal(s, err)
+					return err
 				}
 				for _, part := range [][]api.DecisionEntry{decision.Value.History, decision.Value.Consequences} {
 					if !slices.ContainsFunc(part, func(entry api.DecisionEntry) bool { return entry.ID == args[1] }) {
@@ -1219,6 +1493,9 @@ not there, or that you are not shown, exits 2 (not_found).`,
 			if err != nil {
 				return err
 			}
+			if err := s.resolveDecision(a.ctx, &args[0]); err != nil {
+				return err
+			}
 			if err := s.client.DeleteDecisionEntry(a.ctx, args[0], args[1]); err != nil {
 				return decisionRefusal(s, err)
 			}
@@ -1247,6 +1524,7 @@ var decisionComments = commentedKind{
 		return commentedItem{projectID: decision.Value.ProjectID, closed: closedIf(false), comments: decision.Value.Comments}, nil
 	},
 	refusal: func(s *session, err error, _ string) *Error { return decisionRefusal(s, err) },
+	resolve: func(a *app, s *session, id *string) error { return s.resolveDecision(a.ctx, id) },
 	reactHelp: `Only the comments take reactions through the API, not the decision
 itself.`,
 }
@@ -1283,7 +1561,7 @@ func decisionRefusal(s *session, err error) *Error {
 	e := s.fail(err)
 	switch e.APICode {
 	case apiCodeDecisionStatusUnknown:
-		e.Hint = "The tool has no such status for you. Name one by its ID or by its role, spelt exactly: " + strings.Join(decisionRoles, ", ") + "; a client is never offered draft. The statuses: minka decisions statuses <toolId>"
+		e.Hint = "The tool has no such status for you. Name one by its ID or by its role: " + strings.Join(decisionRoles, ", ") + "; a client is never offered draft. The statuses: minka decisions statuses <toolId>"
 	case apiCodeDecisionEarlierTwice:
 		e.Hint = "A decision supersedes or revokes one earlier decision, not both: give one of --supersedes and --revokes."
 	case apiCodeDecisionEarlierUnknown:
@@ -1299,7 +1577,13 @@ func decisionRefusal(s *session, err error) *Error {
 	case apiCodeDecisionTitleMissing:
 		e.Hint = "A decision needs the sentence that holds: it can be replaced, never removed."
 	case apiCodePersonNotAProjectMember:
-		e.Hint = "Only a member of the project is named as a person who decided. The members: minka people list <projectId>. Anybody else is named by a name given freely, which is no ID."
+		e.Hint = "Somebody named with --decided-by or --notify is not a member of the project. The members: minka people list <projectId>. Anybody else who decided is named by a name given freely, which is no ID, and is told nothing."
+	case apiCodeNotifyIDsMissing, apiCodeNotifyIDsWithoutChosenAudience:
+		e.Hint, _ = audienceHint(e.APICode)
+	case apiCodeDecisionAudienceUnknown:
+		e.Hint = "A decision reaches everybody, chosen with one --notify per person, or nobody."
+	case apiCodePersonCannotSeeIt:
+		e.Hint = "Nothing was written, and the same request will be refused again: somebody named with --notify is a client of the project, or an agent working for one, and the decision is not shown to clients. Name somebody else, or write a new decision down with --visible-to-clients."
 	case apiCodeEntryAddressMalformed:
 		e.Hint = `An entry is the address of a page of this Minka, a "#" card name such as #MNK-1A, or, in the history, a web address with --description.`
 	case apiCodeEntryTargetUnknown:
@@ -1312,16 +1596,6 @@ func decisionRefusal(s *session, err error) *Error {
 		if e.Code == CodeNotFound {
 			e.Hint = decisionNotFoundHint
 		}
-	}
-	return e
-}
-
-// changeDecisionRefusal is the refusal of a change, whose 404 also answers a
-// decision of the archive.
-func changeDecisionRefusal(s *session, err error) *Error {
-	e := decisionRefusal(s, err)
-	if e.Code == CodeNotFound {
-		e.Hint = decisionNotChangedHint
 	}
 	return e
 }
@@ -1345,7 +1619,7 @@ func decisionsToolRefusal(s *session, err error) *Error {
 }
 
 func decisionSummary(decision api.Decision) string {
-	summary := "Decision " + decision.Title + ", " + decision.Status.Name
+	summary := "Decision " + decisionTitle(decision.ShortID, decision.Title) + ", " + decision.Status.Name
 	if decision.Archived {
 		summary += ", in the archive of " + decision.Tool.Title
 	}
@@ -1379,10 +1653,13 @@ func renderDecisionLines(w io.Writer, decisions []api.DecisionLine) {
 		if decision.ValidUntil != nil {
 			details = append(details, "until "+*decision.ValidUntil)
 		}
+		if setBy := statusSetByAnAgentOrMinka(decision.StatusSetBy); setBy != "" {
+			details = append(details, setBy)
+		}
 		if tags := labelTags(decision.Labels); tags != "" {
 			details = append(details, tags)
 		}
-		fmt.Fprintf(w, "- %s  %s (%s)\n", decision.ID, decision.Title, strings.Join(details, ", "))
+		fmt.Fprintf(w, "- %s%s  %s (%s)\n", shortIDBefore(decision.ShortID), decision.ID, decision.Title, strings.Join(details, ", "))
 		if decision.Reason != nil && *decision.Reason != "" {
 			fmt.Fprintf(w, "  %s\n", oneLine(*decision.Reason))
 		}
@@ -1390,13 +1667,21 @@ func renderDecisionLines(w io.Writer, decisions []api.DecisionLine) {
 }
 
 func renderDecision(w io.Writer, d api.Decision) {
+	// The heading stays the bare sentence, so that somebody who takes it as
+	// the new title does not write the short identifier into it.
 	fmt.Fprintf(w, "# %s\n", d.Title)
+	if d.ShortID != nil {
+		fmt.Fprintf(w, "Short ID: %s\n", *d.ShortID)
+	}
 	fmt.Fprintf(w, "Decision: %s\nTool: %s (%s)\nProject: %s\n", d.ID, d.Tool.Title, d.ToolID, d.ProjectID)
 	status := d.Status.Name
 	if d.Status.Role != nil && *d.Status.Role != "" {
 		status += " (" + *d.Status.Role + ")"
 	}
 	fmt.Fprintf(w, "Status: %s\n", status)
+	if line := statusSetByLine(d.StatusSetBy); line != "" {
+		fmt.Fprintln(w, line)
+	}
 	if d.Archived {
 		fmt.Fprintln(w, "Archived: yes, it is read and not changed")
 	}
@@ -1422,7 +1707,7 @@ func renderDecision(w io.Writer, d api.Decision) {
 		link  *api.DecisionLink
 	}{{"Supersedes", d.Supersedes}, {"Revokes", d.Revokes}} {
 		if link.link != nil {
-			fmt.Fprintf(w, "%s: %s (%s, %s)\n", link.label, link.link.Title, link.link.ID, link.link.Status.Name)
+			fmt.Fprintf(w, "%s: %s (%s, %s)\n", link.label, decisionTitle(link.link.ShortID, link.link.Title), link.link.ID, link.link.Status.Name)
 		}
 	}
 	for _, later := range []struct {
@@ -1430,7 +1715,7 @@ func renderDecision(w io.Writer, d api.Decision) {
 		links []api.DecisionLink
 	}{{"Superseded by", d.SupersededBy}, {"Revoked by", d.RevokedBy}} {
 		for _, link := range later.links {
-			fmt.Fprintf(w, "%s: %s (%s, %s)\n", later.label, link.Title, link.ID, link.Status.Name)
+			fmt.Fprintf(w, "%s: %s (%s, %s)\n", later.label, decisionTitle(link.ShortID, link.Title), link.ID, link.Status.Name)
 		}
 	}
 	labelLine(w, d.Labels)
@@ -1438,7 +1723,7 @@ func renderDecision(w io.Writer, d api.Decision) {
 	if d.EditedAt != nil {
 		fmt.Fprintf(w, "Edited: %s\n", formatTime(*d.EditedAt))
 	}
-	fmt.Fprintf(w, "URL: %s\n", d.AppURL)
+	fmt.Fprintf(w, "URL: %s\n", decisionAddress(d))
 
 	renderDecisionEntries(w, d)
 	if body := richtext.ToMarkdown(firstNonEmpty(d.BodySource, d.Body)); body != "" {
@@ -1488,7 +1773,68 @@ func renderDecisionEntries(w io.Writer, d api.Decision) {
 			if entry.Done != nil {
 				mark = map[bool]string{true: "[x] ", false: "[ ] "}[*entry.Done]
 			}
-			fmt.Fprintf(w, "- %s%s  %s %s\n  %s\n", mark, entry.ID, entry.Kind, entry.Title, entry.AppURL)
+			fmt.Fprintf(w, "- %s%s  %s %s\n  %s\n", mark, entry.ID, entry.Kind, decisionTitle(entry.ShortID, entry.Title), entry.AppURL)
 		}
 	}
+}
+
+// decisionTitle puts the short identifier of a decision, or of a card an
+// entry names, in front of its title where it has one.
+func decisionTitle(shortID *string, title string) string {
+	if shortID == nil || *shortID == "" {
+		return title
+	}
+	return *shortID + " " + title
+}
+
+// decisionName is how a confirmation names a decision: its short identifier
+// with the ID beside it, or the ID alone.
+func decisionName(d api.Decision) string {
+	if d.ShortID == nil || *d.ShortID == "" {
+		return d.ID
+	}
+	return *d.ShortID + " (" + d.ID + ")"
+}
+
+// decisionAddress is the address a person copies to name a decision
+// elsewhere: the short one, which a renamed prefix keeps leading to, and the
+// page for a decision its tool has not numbered.
+func decisionAddress(d api.Decision) string {
+	if d.ShortURL != nil && *d.ShortURL != "" {
+		return *d.ShortURL
+	}
+	return d.AppURL
+}
+
+// statusSetByAnAgentOrMinka is what a line of the list says about who set the
+// status: only an agent or Minka is worth the words there.
+func statusSetByAnAgentOrMinka(setBy *api.DecisionStatusSetBy) string {
+	switch {
+	case setBy == nil:
+		return ""
+	case setBy.Minka:
+		return "set by Minka"
+	case setBy.Agent:
+		return "set by an agent"
+	}
+	return ""
+}
+
+// statusSetByLine names who set the status and when: a person, an agent
+// marked as such, or Minka with the person its line names.
+func statusSetByLine(setBy *api.DecisionStatusSetBy) string {
+	if setBy == nil {
+		return ""
+	}
+	who := "somebody no longer known"
+	if setBy.Person != nil {
+		who = setBy.Person.Name + " (" + setBy.Person.ID + ")"
+	}
+	switch {
+	case setBy.Minka:
+		who = "Minka, on behalf of " + who
+	case setBy.Agent:
+		who += ", an agent"
+	}
+	return fmt.Sprintf("Status set: %s by %s", formatTime(setBy.At), who)
 }

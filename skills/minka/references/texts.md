@@ -152,7 +152,8 @@ printf '%s please have a look' "$MARKUP" | minka comments create <cardId> - --fo
 
 ## Pointing at a card or another record
 
-- Write `#MNK-1` for a card with a short identifier, or paste the address of a
+- Write `#MNK-1` for a card with a short identifier, `#ENT-14` or its
+  `shortUrl` for a decision with one, or paste the address of a
   card, a post, a chat, a chat line (a chat's address ending in
   `#chat-message-…`), a to-do, a to-do list, a document, an upload, a
   check-in question or a calendar event of the same Minka — in the words or
@@ -194,7 +195,9 @@ printf '%s please have a look' "$MARKUP" | minka comments create <cardId> - --fo
   Example: `Resolves: https://<host>/go/card/MNK-1`. The text views of a card
   give that same address. A Minka that leaves the field out entirely is
   older; there, build the address from the host and the card's `shortId` as
-  `https://<host>/go/card/<shortId>`, where `shortId` is not null.
+  `https://<host>/go/card/<shortId>`, where `shortId` is not null. A decision
+  is named the same way, by its `shortUrl` (`…/go/decision/ENT-14`) or its
+  `appUrl`.
 - One comment is named by its `appUrl`: the page of its item with
   `#comment-<id>`, which opens the item scrolled to the comment. Every comment
   carries it, under a card and under any other item, and so does the answer to

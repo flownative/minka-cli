@@ -118,9 +118,10 @@ the documentation says what holds; how it came about is in git.
   ends, the post that is shown to no client, whom a new post reaches, pinning,
   the archive and the trash, the guard that stands aside where Minka refuses,
   the order of the refusals — before any work on `posts`.
-- [Decisions](stable/decisions.md): What a decision carries, a status named
-  by its ID or its role as typed, the flag per kind of subject, who decided,
-  several written from a file and where such a run stops, the fields cleared
+- [Decisions](stable/decisions.md): What a decision carries, a decision
+  named by its short identifier, who set its status, whom it reaches and
+  when, a status named by its ID or its role in any case, the flag per kind of
+  subject, who decided, several written from a file and where such a run stops, the fields cleared
   by `--no-…`, the earlier decision that moves only while the new one holds,
   history and consequences, the order of the refusals — before any work on
   `decisions`.
