@@ -25,7 +25,7 @@ const (
 
 // searchKinds are the words "kinds" takes. Each names a tool, and a comment
 // counts toward the tool of what it stands under.
-var searchKinds = []string{"board", "posts", "todos", "files", "calendar", "chat", "conversation"}
+var searchKinds = []string{"board", "posts", "todos", "files", "calendar", "decisions", "chat", "conversation"}
 
 // The kinds of hit whose word differs from the one of their item type.
 const (
@@ -91,7 +91,7 @@ func (s *Server) search(w http.ResponseWriter, r *http.Request, person *Person) 
 	} else {
 		kinds, ok := searchKindsOf(query.Get("kinds"))
 		if !ok {
-			unprocessable(w, "searchKindsUnknown", `"kinds" takes "board", "posts", "todos", "files", "calendar", "chat", "conversation", separated by commas.`)
+			unprocessable(w, "searchKindsUnknown", `"kinds" takes "board", "posts", "todos", "files", "calendar", "decisions", "chat", "conversation", separated by commas.`)
 			return
 		}
 		filter.kinds = kinds
@@ -333,6 +333,7 @@ func (f *searchFinder) everywhere() {
 		}
 	}
 	f.events()
+	f.decisions()
 	f.chats()
 }
 
@@ -535,6 +536,31 @@ func (f *searchFinder) events() {
 				f.item(hit, plainText(event.Description))
 			}
 			f.comments("calendar", event.Comments, hit)
+		}
+	}
+}
+
+// decisions finds the decisions out of the trash and the archive, which
+// Minka's search treats as never archived, and the comments under every one
+// out of the trash, marked archived under one of the archive; a client only
+// what is shown to clients and never a draft.
+func (f *searchFinder) decisions() {
+	s := f.s
+	for _, tool := range s.DecisionsTools {
+		if s.visibleDecisionsTool(tool.ID, f.person) == nil || !f.searches(tool.ProjectID) {
+			continue
+		}
+		for _, decision := range tool.Decisions {
+			if !s.seesDecision(tool, decision, f.person) {
+				continue
+			}
+			hit := searchItem{kind: "decision", id: decision.ID, title: decision.Title, projectID: tool.ProjectID, toolID: tool.ID,
+				updatedAt: lastChange(decision.CreatedAt, decision.UpdatedAt), archived: decision.Archived,
+				appURL: s.decisionURL(tool, decision), apiPath: "decisions/" + decision.ID}
+			if f.filter.includes("decisions") && !decision.Archived {
+				f.item(hit, decision.Reason+" "+plainText(decision.Body))
+			}
+			f.comments("decisions", decision.Comments, hit)
 		}
 	}
 }

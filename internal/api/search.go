@@ -28,7 +28,7 @@ const SearchDeepestOffset = 500
 
 // SearchKinds are the words a search is narrowed to tools with. A comment
 // counts toward the tool of what it stands under.
-var SearchKinds = []string{"board", "posts", "todos", "files", "calendar", "chat", "conversation"}
+var SearchKinds = []string{"board", "posts", "todos", "files", "calendar", "decisions", "chat", "conversation"}
 
 // SearchKindFiles is the kind of the documents and uploads, which are all a
 // search within a Files tool or a folder finds.
@@ -46,6 +46,7 @@ const (
 	SearchHitDocument     = "document"
 	SearchHitUpload       = "upload"
 	SearchHitEvent        = "event"
+	SearchHitDecision     = "decision"
 	SearchHitChat         = "chat"
 	SearchHitConversation = "conversation"
 )

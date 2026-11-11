@@ -41,8 +41,8 @@ func (a *app) newSearchCmd() *cobra.Command {
 		Short: "Search everything you may read in Minka, or a Docs & Files tool or folder",
 		Long: `Searches everything you may read in Minka the way its search on the web
 does: cards, comments, posts, to-do lists, groups and to-dos, folders,
-documents, uploads, events, the lines of the chats of your projects and of
-your own private conversations. Drafts, the trash, archived projects and
+documents, uploads, events, decisions, the lines of the chats of your
+projects and of your own private conversations. Drafts, the trash, archived projects and
 lines taken back are never found. Several words are one term, joined by a
 space; Minka reads phrases in double quotes and the operators of its web
 search in it, and cuts it at 200 characters. A term that starts with a dash,
@@ -50,7 +50,7 @@ such as -draft for "not draft", goes behind --, with every flag before it:
 behind -- every word is part of the term.
 
 --kind narrows to the hits of tools: board, posts, todos, files, calendar,
-chat or conversation, repeated or separated by commas. A comment counts
+decisions, chat or conversation, repeated or separated by commas. A comment counts
 toward the tool of what it stands under. --project narrows to one project and
 leaves the private conversations out.
 
@@ -186,7 +186,7 @@ searches only within a Docs & Files tool or folder answers a search without
 			})
 		},
 	}
-	cmd.Flags().StringArrayVar(&kindFlags, "kind", nil, "Kind of hits: board, posts, todos, files, calendar, chat or conversation; repeated or separated by commas")
+	cmd.Flags().StringArrayVar(&kindFlags, "kind", nil, "Kind of hits: board, posts, todos, files, calendar, decisions, chat or conversation; repeated or separated by commas")
 	cmd.Flags().StringVar(&projectID, "project", "", "ID of the project to search")
 	cmd.Flags().StringVar(&toolID, "tool", "", "ID of the Docs & Files tool to search")
 	cmd.Flags().StringVar(&folderID, "folder", "", "ID of the folder to search, with everything beneath it")
@@ -285,6 +285,7 @@ var searchShowCommands = map[string]string{
 	api.SearchHitDocument: "minka docs show ",
 	api.SearchHitUpload:   "minka docs uploads show ",
 	api.SearchHitEvent:    "minka events show ",
+	api.SearchHitDecision: "minka decisions show ",
 }
 
 // hitBreadcrumb reads what the hit leads to, where the API shows it and a

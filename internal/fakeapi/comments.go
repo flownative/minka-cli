@@ -70,6 +70,15 @@ func (s *Server) itemOfTheRequest(r *http.Request, person *Person) *commentedIte
 		}
 		return &commentedItem{projectID: tool.ProjectID, appURL: s.todoListURL(tool, list), comments: &list.Comments,
 			refusedAsClosed: func(w http.ResponseWriter) bool { return s.refusedAsNothingWritten(w, tool, list) }}
+	case r.PathValue("decisionId") != "":
+		// A decision of the archive takes comments; only the archive of its
+		// project closes it.
+		tool, decision := s.visibleDecision(r.PathValue("decisionId"), person)
+		if decision == nil {
+			return nil
+		}
+		return &commentedItem{projectID: tool.ProjectID, appURL: s.decisionURL(tool, decision), comments: &decision.Comments,
+			refusedAsClosed: func(w http.ResponseWriter) bool { return s.refusedAsArchived(w, s.projectWithID(tool.ProjectID)) }}
 	case r.PathValue("eventId") != "":
 		// An event takes comments in a calendar out of use as well; only the
 		// archive of its project closes it.

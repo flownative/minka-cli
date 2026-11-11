@@ -2580,3 +2580,79 @@ does; an answer elsewhere is exit 7, with the answer as `data`.
 **Why:** the answer cannot tell a move between tools from one within, and a
 Minka without them moves the entry within its tool. **Implemented as:**
 `cli.intoAnotherToolNotice`, `cli.movedWithinItsToolOnly`.
+
+<a id="c-165"></a>
+## C-165 — A status is named by its ID or by its role as typed
+
+*Applies to: `decisions list --status`, `decisions status`, `--status` of the writes, `status` of `--from`*
+
+A value that is an ID goes out in lowercase, anything else exactly as typed;
+`--holds` is `--status holds`, and the help names the seven roles.
+**Why:** Minka compares an ID in any case and a role case-sensitively, so a
+role changed by the CLI would name another status or none. **Implemented as:**
+`cli.statusValue`, see [Decisions](stable/decisions.md#reading).
+
+<a id="c-166"></a>
+## C-166 — What a decision applies to has a flag per kind
+
+*Applies to: `decisions list`, `create`, `edit`, `supersede`, `revoke`*
+
+`--applies-to-card` (an ID or a short identifier, looked up) and
+`--applies-to-event` exclude each other; `--no-applies-to` names none.
+**Why:** the API needs the kind beside the ID, and a flag names the circle
+rather than a guess from the ID (C-010). **Implemented as:**
+`cli.decisionFlags`, see [Decisions](stable/decisions.md#writing).
+
+<a id="c-167"></a>
+## C-167 — `--decided-by` is a member by ID or `me`, else a free name
+
+*Applies to: `--decided-by` of the writes of `decisions`*
+
+An ID or `me` goes out as `{"personId"}`, anything else as `{"name"}`, in the
+order given; no name is looked up among the members.
+**Why:** a decision may name a body such as "Board" that is nobody's account,
+and a name looked up could link the wrong person. **Implemented as:**
+`cli.decidedBy`.
+
+<a id="c-168"></a>
+## C-168 — `decisions create --from` writes one after another and stops at the first refusal
+
+*Applies to: `decisions create --from`*
+
+A JSON list of objects in Minka's names of the fields, a body as Markdown; a
+field Minka does not take is exit 1 before any request. The refusal carries
+`data.created` and `data.notCreated`.
+**Why:** there is no batch address, and what was written must not be written
+twice by a caller that retries. **Implemented as:**
+`cli.createDecisionsFrom`.
+
+<a id="c-169"></a>
+## C-169 — Superseding says where the earlier decision stays
+
+*Applies to: `decisions supersede`, `revoke`, `create`, `edit`, `status`*
+
+`supersede` and `revoke` read the earlier decision for its tool and write the
+new one there; every answer whose earlier decision is not in the role's
+status draws a `notice` that it moves only while the new one holds.
+**Why:** Minka moves it silently or not at all, and never back. **Implemented
+as:** `cli.newDecisionsLaterCmd`, `cli.earlierNotice`.
+
+<a id="c-170"></a>
+## C-170 — A field of a decision is cleared by its `--no-…` flag
+
+*Applies to: `decisions edit`*
+
+Each `--no-…` sends null; `--no-earlier` sends null for both `supersedes` and
+`revokes`; a flag and its `--no-…` exclude each other.
+**Why:** an empty value beside the other relation reads to Minka as both
+named (`decisionEarlierTwice`). **Implemented as:** `cli.decisionFlags`.
+
+<a id="c-171"></a>
+## C-171 — A label of the list of decisions is looked up in the project
+
+*Applies to: `decisions list --label`*
+
+An ID goes out as it is; a name is looked up among the project's labels, and
+one found nowhere is exit 2 before the list is read.
+**Why:** Minka filters by ID only. **Implemented as:**
+`cli.labelOfADecisionsTool`.

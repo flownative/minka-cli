@@ -118,6 +118,12 @@ the documentation says what holds; how it came about is in git.
   ends, the post that is shown to no client, whom a new post reaches, pinning,
   the archive and the trash, the guard that stands aside where Minka refuses,
   the order of the refusals — before any work on `posts`.
+- [Decisions](stable/decisions.md): What a decision carries, a status named
+  by its ID or its role as typed, the flag per kind of subject, who decided,
+  several written from a file and where such a run stops, the fields cleared
+  by `--no-…`, the earlier decision that moves only while the new one holds,
+  history and consequences, the order of the refusals — before any work on
+  `decisions`.
 - [Calendars and events](stable/calendar.md): What a span hands over and whose
   days it reads, the series that stands in it once with its occurrences, the
   time given as moments or days, the zone a series keeps its clock time in,

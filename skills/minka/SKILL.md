@@ -6,7 +6,8 @@ description: >
   comments, create and edit cards, move, hold and complete them, comment on them,
   read and write chat messages, and say which cards you are working on right
   now; search everything you may read in Minka; also documents and files,
-  to-dos, check-ins, posts, events, reminders and the import from Basecamp.
+  to-dos, check-ins, posts, events, decisions, reminders and the import
+  from Basecamp.
   Use for any task on a Minka board, such as tracking development tasks, and
   always before taking up a card, moving it, commenting on it or writing its
   working notes, and when coordinating a board or waiting for work on one.
@@ -64,6 +65,12 @@ references listed under "Where the rest stands".
   card and `minka work stop <card>` when you are done with it. It shows on the
   board only while `minka heartbeat` keeps reporting it, which the mod of
   `minka setup` or `minka hooks install` does once and for all.
+- Before you work in a project, look up the decisions in force there:
+  `minka decisions tools <projectId> --json` names its Decisions tools and
+  `minka decisions list <toolId> --holds --json` lists what holds, each with
+  its reason. Work within them; where your work would go against one, say so
+  to the person instead of going ahead
+  ([references/decisions.md](references/decisions.md)).
 - Search before you ask a person or create a card or a document: `minka
   search <term> --json` finds what you may read across Minka, and `--kind`
   and `--project` narrow it ([references/search.md](references/search.md)).
@@ -292,7 +299,7 @@ minka notifications mark-read <notificationId> --json
 minka work start <card> [--session <id>] --json
 minka work stop [<card>] [--all] [--session <id>] --json
 minka work list [--session <id>] --json
-minka search <term>... [--kind board|posts|todos|files|calendar|chat|conversation]... [--project <projectId>] [--limit N] --json
+minka search <term>... [--kind board|posts|todos|files|calendar|decisions|chat|conversation]... [--project <projectId>] [--limit N] --json
 minka search <term>... (--folder <folderId> | --tool <toolId> | both) [--limit N] --json
 ```
 
@@ -321,6 +328,7 @@ they stand at its top. Read the one you need, not all of them.
 | To-do lists, groups, to-dos, subtasks, repeating to-dos | [references/todos.md](references/todos.md) |
 | Check-ins: questions and answers | [references/checkins.md](references/checkins.md) |
 | Posts of the message board | [references/posts.md](references/posts.md) |
+| Decisions: what holds and why, statuses, writing one down, superseding and revoking, history and consequences | [references/decisions.md](references/decisions.md) |
 | Calendars and events | [references/calendars.md](references/calendars.md) |
 | Reminders ("Remind me") | [references/reminders.md](references/reminders.md) |
 | Importing from Basecamp | [references/basecamp-import.md](references/basecamp-import.md) |

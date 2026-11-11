@@ -32,6 +32,8 @@ func everyWrite(e *testEnv) map[string][]string {
 	expectCode(e.t, e.run("", "cards", "delete", f.CardInTriage.ID, "--json"), ExitOK)
 	expectCode(e.t, e.run("", "docs", "comments", "create", "--document", document, "A comment", "--json"), ExitOK)
 	expectCode(e.t, e.run("", "posts", "comments", "create", f.Post.ID, "A comment", "--json"), ExitOK)
+	expectCode(e.t, e.run("", "decisions", "comments", "create", f.Decision.ID, "A comment", "--json"), ExitOK)
+	expectCode(e.t, e.run("", "decisions", "history", "add", f.Decision.ID, "https://example.org/tents", "--description", "Tents compared", "--json"), ExitOK)
 	expectCode(e.t, e.run("", "todos", "comments", "create", f.LooseTodo.ID, "A comment", "--json"), ExitOK)
 	expectCode(e.t, e.run("", "todolists", "comments", "create", f.TodoList.ID, "A comment", "--json"), ExitOK)
 	expectCode(e.t, e.run("", "columns", "create", "--board", f.Board.ID, "--title", "Review", "--json"), ExitOK)
@@ -42,6 +44,8 @@ func everyWrite(e *testEnv) map[string][]string {
 	todoComment := f.LooseTodo.Comments[len(f.LooseTodo.Comments)-1].ID
 	listComment := f.TodoList.Comments[len(f.TodoList.Comments)-1].ID
 	eventComment := f.OnceEvent.Comments[len(f.OnceEvent.Comments)-1].ID
+	decisionComment := f.Decision.Comments[len(f.Decision.Comments)-1].ID
+	decisionEntry := f.Decision.History[0].ID
 	version := listOfObjects(e.t, runOK(e.t, e, "docs", "versions", "list", document).Data)[0]["id"].(string)
 	withLabels(e)
 
@@ -179,6 +183,24 @@ func everyWrite(e *testEnv) map[string][]string {
 		"posts comments react":   {"posts", "comments", "react", f.Post.ID, postComment, "👍"},
 		"posts comments unreact": {"posts", "comments", "unreact", f.Post.ID, postComment, "👍"},
 
+		"decisions create":           {"decisions", "create", "--tool", f.Decisions.ID, "--title", "New"},
+		"decisions edit":             {"decisions", "edit", f.Decision.ID, "--title", "Renamed"},
+		"decisions status":           {"decisions", "status", f.ProposedDecision.ID, "holds"},
+		"decisions supersede":        {"decisions", "supersede", f.Decision.ID, "--title", "Instead"},
+		"decisions revoke":           {"decisions", "revoke", f.Decision.ID, "--title", "No more"},
+		"decisions delete":           {"decisions", "delete", f.Decision.ID},
+		"decisions label":            {"decisions", "label", f.Decision.ID, "Plain"},
+		"decisions unlabel":          {"decisions", "unlabel", f.Decision.ID, "Plain"},
+		"decisions history add":      {"decisions", "history", "add", f.Decision.ID, "https://example.org/halls", "--description", "Halls"},
+		"decisions consequences add": {"decisions", "consequences", "add", f.Decision.ID, "#MNK-9"},
+		"decisions entries move":     {"decisions", "entries", "move", f.Decision.ID, decisionEntry, "--top"},
+		"decisions entries delete":   {"decisions", "entries", "delete", f.Decision.ID, decisionEntry},
+		"decisions comments create":  {"decisions", "comments", "create", f.Decision.ID, "Another comment"},
+		"decisions comments edit":    {"decisions", "comments", "edit", f.Decision.ID, decisionComment, "Other words"},
+		"decisions comments delete":  {"decisions", "comments", "delete", f.Decision.ID, decisionComment},
+		"decisions comments react":   {"decisions", "comments", "react", f.Decision.ID, decisionComment, "👍"},
+		"decisions comments unreact": {"decisions", "comments", "unreact", f.Decision.ID, decisionComment, "👍"},
+
 		"events create": {"events", "create", "--tool", f.Calendar.ID, "--title", "New", "--first-day", "2026-10-20"},
 		"events edit":   {"events", "edit", f.OnceEvent.ID, "--title", "Renamed"},
 		"events delete": {"events", "delete", f.OnceEvent.ID},
@@ -229,6 +251,8 @@ var notAWriteIntoAProject = []string{
 	"checkins tools", "checkins tool", "checkins list", "checkins show", "checkins reminders",
 	"checkins answers list", "checkins answers show",
 	"posts tools", "posts tool", "posts categories", "posts list", "posts show", "posts comments list",
+	"decisions tools", "decisions tool", "decisions statuses", "decisions list", "decisions show",
+	"decisions versions list", "decisions versions show", "decisions comments list",
 	"events tools", "events tool", "events list", "events mine", "events show", "events comments list",
 	"reminders list", "reminders set", "reminders delete",
 	"chats mark-read", "conversations list", "conversations with", "conversations people",
