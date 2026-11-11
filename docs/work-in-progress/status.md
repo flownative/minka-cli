@@ -359,13 +359,16 @@ The decisions of a Decisions tool are read with `decisions tools`, `tool`,
 `decisions create` (also several with `--from`), `edit`, `status`,
 `supersede`, `revoke`, `delete`, `label`, `unlabel`, `history add`,
 `consequences add` and `entries move`/`delete`; their comments with
-`decisions comments …`, and `search --kind decisions` finds them. The rule the
-commands follow is [Decisions](../stable/decisions.md) (C-165…C-171). Minka's
-side is on its `main` (8cd72692e) and in no release yet, so production gets it
-with the next Minka release. The commands are checked against Minka's code and
-tests and the fake only, **not live**: no instance a live check may write to
-has a Decisions tool yet, so the live check comes with the follow-up that
-brings the audience and the short identifiers of decisions.
+`decisions comments …`, and `search --kind decisions` finds them. Every
+command takes a decision by its short identifier as well, the text views lead
+with it and give the `/go/decision/…` address, `--audience` and `--notify`
+say whom a decision proposed or in force reaches, and `statusSetBy` with `list
+--set-by-agent` says who set the status. The rule the commands follow is
+[Decisions](../stable/decisions.md) (C-165…C-175). Minka's side is on its
+`main` (aba1e769b) and in no release yet, so production gets it with the next
+Minka release. The commands are checked against Minka's code and tests and the
+fake only, **not live**: no instance a live check may write to has a
+Decisions tool yet.
 
 The calendars of a project are listed with `events tools`, their events read
 with `events list` (a span of days, with the occurrences of every series in
@@ -804,8 +807,10 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   backs of cards count, not files in texts.
 
 - Everything of `decisions`: no request of it has gone to a real Minka. The
-  fake mirrors `DecisionsApiController` at 8cd72692e in the order of its
-  refusals, the client rules (no draft, no version, only what is shown to
+  fake mirrors `DecisionsApiController` at aba1e769b in the order of its
+  refusals, the audience and when it is announced, the short identifiers
+  (numbered on adding, under the tool's prefix, also a former one) and who set
+  the status, the client rules (no draft, no version, only what is shown to
   clients, only one's own into the trash), the earlier decision that moves
   only while the later one holds, and the versions of the text. **The fake
   does not mirror**: the reader's view of a subject or an event in the trash
@@ -816,7 +821,14 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   entry's target beyond its project, labels of the Decisions tool itself,
   which only the web writes, and a subject or an earlier decision the writer
   is not shown, which Minka keeps through `appliesTo: null` and
-  `--no-earlier` (the fake clears it).
+  `--no-earlier` (the fake clears it). Nor does it mirror the lines an
+  announcement sends (it records whom it would reach), a person purged from
+  `statusSetBy`, Minka's own moves into done, the prefix `ENT` of an
+  organization's language, and a decision's `#` name or short address
+  anywhere but in the history. A short identifier names in the fake the first
+  decision the reader is shown under it, read with a plain decimal number;
+  Minka answers only where exactly one decision goes by the name, and reads
+  the number in the notation of the tool's sequence.
 
 - The search across Minka (`search` without `--tool` or `--folder`): the fake
   mirrors `SearchApiController` and `FullTextSearchQueryService` at

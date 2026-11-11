@@ -613,6 +613,8 @@ type Server struct {
 	// a card that has no ID, which no Minka does: what a client does with an
 	// answer it cannot use must not depend on that.
 	AnswersCardsWithoutID bool
+	// AnswersDecisionsWithoutID does the same for a decision.
+	AnswersDecisionsWithoutID bool
 
 	// AfterStoring is called with every file just stored, before the answer
 	// goes out. It lets a test change what the file meets next, such as a
@@ -1102,9 +1104,24 @@ func New(t testing.TB) (*Server, *Fixture) {
 	otherDecision := &Decision{ID: newID(), Title: "Not yours to know", StatusID: otherDecisions.StatusOfRole("holds").ID,
 		CreatedAt: at("2026-11-01", "09:00"), UpdatedAt: at("2026-11-01", "09:00"), CreatorID: stranger.ID}
 	otherDecisions.Decisions = []*Decision{otherDecision}
+	otherDecisions.Prefix = "DEC2"
 	for _, written := range append(slices.Clone(decisions.Decisions), otherDecision) {
 		written.Versions = []*DecisionVersion{written.snapshot(written.CreatorID, written.CreatedAt)}
+		written.StatusSetBy = &DecisionStatusSetBy{PersonID: written.CreatorID, At: written.CreatedAt}
 	}
+	// Numbered in the order written, as the migration numbered them.
+	for _, tool := range []*DecisionsTool{decisions, otherDecisions} {
+		inOrder := slices.Clone(tool.Decisions)
+		slices.SortFunc(inOrder, func(a, b *Decision) int { return a.CreatedAt.Compare(b.CreatedAt) })
+		for _, written := range inOrder {
+			written.ShortID = fmt.Sprintf("%s-%d", tool.Prefix, tool.NextNumber)
+			tool.NextNumber++
+		}
+	}
+	// The status of the proposed one an agent set by hand; of the draft
+	// nobody is known to have set it.
+	proposedDecision.StatusSetBy = &DecisionStatusSetBy{PersonID: agent.ID, At: at("2026-11-04", "10:00")}
+	draftDecision.StatusSetBy = nil
 	s.DecisionsTools = []*DecisionsTool{decisions, otherDecisions}
 
 	mux := http.NewServeMux()

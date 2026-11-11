@@ -356,6 +356,21 @@ var idsInCapitals = []idInCapitals{
 	{command: "decisions revoke", inputs: []string{"--applies-to-card"}, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
 		return []string{f.Decision.ID, "--title", "No more", "--applies-to-card", up(f.CardInDoing.ID)}
 	}},
+	{command: "decisions create", inputs: []string{"--notify"}, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
+		return []string{"--tool", f.Decisions.ID, "--title", "We buy a tent", "--status", "proposed", "--audience", "chosen", "--notify", up(f.Anke.ID)}
+	}},
+	{command: "decisions edit", inputs: []string{"--notify"}, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
+		return []string{f.ProposedDecision.ID, "--status", "holds", "--audience", "chosen", "--notify", up(f.Anke.ID)}
+	}},
+	{command: "decisions status", inputs: []string{"--notify"}, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
+		return []string{up(f.ProposedDecision.ID), "holds", "--audience", "chosen", "--notify", up(f.Anke.ID)}
+	}},
+	{command: "decisions supersede", inputs: []string{"--notify"}, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
+		return []string{f.Decision.ID, "--title", "Tuesdays", "--audience", "chosen", "--notify", up(f.Anke.ID)}
+	}},
+	{command: "decisions revoke", inputs: []string{"--notify"}, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
+		return []string{f.Decision.ID, "--title", "No more", "--audience", "chosen", "--notify", up(f.Anke.ID)}
+	}},
 	{command: "decisions entries move", inputs: []string{"--after"}, prepare: withTwoDecisionEntries, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
 		return []string{up(f.Decision.ID), up(f.Decision.History[0].ID), "--after", up(f.Decision.History[1].ID)}
 	}},

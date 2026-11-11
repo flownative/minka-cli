@@ -1,8 +1,10 @@
 # Decisions
 
 A Decisions tool holds **decisions**: the sentence that holds, why, who
-decided, when and in which event, and a status of the tool. `decisions …`
-reads and writes them; `decisions comments …` the comments under one.
+decided, when and in which event, a status of the tool and who set it, and a
+short identifier such as `ENT-14`. `decisions …` reads and writes them;
+`decisions comments …` the comments under one. Wherever a command below says
+`<decision>`, give the ID or the short identifier.
 
 ## Commands
 
@@ -10,29 +12,29 @@ reads and writes them; `decisions comments …` the comments under one.
 minka decisions tools <projectId> --json
 minka decisions tool <toolId> --json
 minka decisions statuses <toolId> --json
-minka decisions list <toolId> [--holds | --status <id|role|all>] [--label <label>] [--applies-to-card <card> | --applies-to-event <eventId>] --json
-minka decisions show <decisionId> --json
-minka decisions create --tool <toolId> --title "The sentence" [--reason "Why."] [--body - < more.md] [--status <id|role>] [--decided-on YYYY-MM-DD] [--decided-by <id|me|name>]... [--event <eventId>] [--votes "5 : 1"] [--applies-to-card <card> | --applies-to-event <eventId>] [--valid-until YYYY-MM-DD] [--review-on YYYY-MM-DD] [--supersedes <decisionId> | --revokes <decisionId>] [--visible-to-clients] --json
+minka decisions list <toolId> [--holds | --status <id|role|all>] [--label <label>] [--applies-to-card <card> | --applies-to-event <eventId>] [--set-by-agent] --json
+minka decisions show <decision> --json
+minka decisions create --tool <toolId> --title "The sentence" [--reason "Why."] [--body - < more.md] [--status <id|role>] [--decided-on YYYY-MM-DD] [--decided-by <id|me|name>]... [--event <eventId>] [--votes "5 : 1"] [--applies-to-card <card> | --applies-to-event <eventId>] [--valid-until YYYY-MM-DD] [--review-on YYYY-MM-DD] [--supersedes <decision> | --revokes <decision>] [--audience everybody|chosen|nobody] [--notify <person>]... [--visible-to-clients] --json
 minka decisions create --tool <toolId> --from decisions.json --json
-minka decisions edit <decisionId> [the flags of create but --visible-to-clients] [--drop-attachments] [--no-reason] [--no-decided-on] [--no-decided-by] [--no-event] [--no-votes] [--no-applies-to] [--no-valid-until] [--no-review-on] [--no-earlier] --json
-minka decisions status <decisionId> <id|role> --json
-minka decisions supersede <decisionId> --title "The new sentence" [the flags of create] --json
-minka decisions revoke <decisionId> --title "What holds instead" [the flags of create] --json
-minka decisions delete <decisionId> --json
-minka decisions label <decisionId> <label>... --json
-minka decisions unlabel <decisionId> <label>... --json
-minka decisions versions list <decisionId> --json
-minka decisions versions show <decisionId> <versionId> --json
-minka decisions history add <decisionId> <address> [--description "What it is"] --json
-minka decisions consequences add <decisionId> <address> --json
-minka decisions entries move <decisionId> <entryId> --top|--bottom|--after <entryId>|--before <entryId> --json
-minka decisions entries delete <decisionId> <entryId> --json
-minka decisions comments list <decisionId> --json
-minka decisions comments create <decisionId> - --json < comment.md
-minka decisions comments edit <decisionId> <commentId> - --json < comment.md
-minka decisions comments delete <decisionId> <commentId> --json
-minka decisions comments react <decisionId> <commentId> 👍 --json
-minka decisions comments unreact <decisionId> <commentId> 👍 --json
+minka decisions edit <decision> [the flags of create but --visible-to-clients] [--drop-attachments] [--no-reason] [--no-decided-on] [--no-decided-by] [--no-event] [--no-votes] [--no-applies-to] [--no-valid-until] [--no-review-on] [--no-earlier] --json
+minka decisions status <decision> <id|role> [--audience everybody|chosen|nobody] [--notify <person>]... --json
+minka decisions supersede <decision> --title "The new sentence" [the flags of create] --json
+minka decisions revoke <decision> --title "What holds instead" [the flags of create] --json
+minka decisions delete <decision> --json
+minka decisions label <decision> <label>... --json
+minka decisions unlabel <decision> <label>... --json
+minka decisions versions list <decision> --json
+minka decisions versions show <decision> <versionId> --json
+minka decisions history add <decision> <address> [--description "What it is"] --json
+minka decisions consequences add <decision> <address> --json
+minka decisions entries move <decision> <entryId> --top|--bottom|--after <entryId>|--before <entryId> --json
+minka decisions entries delete <decision> <entryId> --json
+minka decisions comments list <decision> --json
+minka decisions comments create <decision> - --json < comment.md
+minka decisions comments edit <decision> <commentId> - --json < comment.md
+minka decisions comments delete <decision> <commentId> --json
+minka decisions comments react <decision> <commentId> 👍 --json
+minka decisions comments unreact <decision> <commentId> 👍 --json
 ```
 
 ## Looking up what holds
@@ -42,15 +44,34 @@ minka decisions comments unreact <decisionId> <commentId> 👍 --json
   decisions in force, each with its ID, sentence and reason. Nothing is paged.
   `decisions show <decisionId>` gives the whole decision.
 - Every status is listed unless `--status` names one. A status is named by
-  its ID or by its **role, spelt exactly**: `draft`, `proposed`, `holds`,
-  `done`, `superseded`, `revoked`, `rejected`. `Holds` is no role (exit 9
+  its ID or by its **role**, in any case: `draft`, `proposed`, `holds`,
+  `done`, `superseded`, `revoked`, `rejected`. "In force" is no role (exit 9
   `decisionStatusUnknown`). A status the team added has no role; `decisions
   statuses <toolId>` lists all with their IDs. A client is never offered
   `draft` and never meets a draft.
 - `--label` takes a label's ID or the name of a label of the project.
   `--applies-to-card` (an ID or a short identifier such as `MNK-1A`) and
   `--applies-to-event` narrow to the decisions that apply to that card or
-  event.
+  event. `--set-by-agent` narrows to the decisions whose status an agent set
+  by hand: check those before you rely on them.
+- `statusSetBy` says who set the status and when: `person`, `agent` (true
+  where an agent set it by hand), `minka` (true where Minka moved it, and
+  `person` is whom its line names), `at`; null where nobody is known. The text
+  of `list` says "set by an agent" or "set by Minka", `show` names who.
+
+## Naming a decision
+
+- Every command and flag that takes a decision takes its ID or its short
+  identifier (`ENT-14`, any case, also under a former prefix of its tool).
+  `shortId` is null for a decision its tool has not numbered yet: use the ID
+  then.
+- In a comment, a description, a message or a history entry, point at a
+  decision as `#ENT-14` or by its `shortUrl`
+  (`https://<host>/go/decision/ENT-14`); Minka links either. A decision is no
+  consequence: `consequences add` refuses it.
+- Outside Minka — a commit, a pull request — name a decision by its
+  `shortUrl`, or by its `appUrl` where `shortUrl` is null. The text views give
+  that same address.
 
 ## Writing one down
 
@@ -66,12 +87,25 @@ minka decisions comments unreact <decisionId> <commentId> 👍 --json
   `--review-on` the day it reminds those who follow it. `--applies-to-card` or
   `--applies-to-event`: once the event is over or the card done, Minka sets a
   decision in force to done.
+- `--audience` says whom a decision reaches once it is proposed or in force:
+  `everybody` (what Minka takes without the flag), `chosen` with one
+  `--notify <person>` each (ID, `me`, e-mail or name; they then follow it), or
+  `nobody`. It takes effect only where the decision comes into proposed or
+  in force: on `create`, `supersede`, `revoke`, and on `status` or `edit
+  --status` that moves it there. A draft tells nobody, and `edit` refuses
+  `--audience` without `--status` (exit 1). Minka refuses `--notify` without
+  `chosen` (`notifyIdsWithoutChosenAudience`), `chosen` without a person
+  (`notifyIdsMissing`), a non-member (`personNotAProjectMember`) and a client
+  who is not shown the decision (`personCannotSeeIt`).
 - `--from <file|->` writes several: a JSON list of objects with the fields
   Minka takes (`title`, `reason`, `body` as Markdown, `decidedOn`, `status`,
   `decidedBy` as `[{"personId": …}, {"name": …}]`, `decidedInEventId`,
-  `votes`, `supersedes` or `revokes`, `appliesTo` as `{"kind": "card"|"event",
-  "id": …}`, `validUntil`, `reviewOn`, `visibleToClients`). A field Minka
-  does not take exits 1 before anything is sent. The first refusal stops the
+  `votes`, `supersedes` or `revokes` (an ID or a short identifier),
+  `appliesTo` as `{"kind": "card"|"event", "id": …}`, `validUntil`,
+  `reviewOn`, `audience`, `notifyIds` (IDs), `visibleToClients`). A field Minka
+  does not take exits 1 before anything is sent. A short identifier is looked
+  up before the first write, so it cannot name a decision of the same list:
+  write that one first, then supersede it in a second run. The first refusal stops the
   run: the error carries `data.created` (as Minka answered) and
   `data.notCreated` (the titles of the rest) — do not write those again.
 
@@ -87,16 +121,17 @@ minka decisions comments unreact <decisionId> <commentId> 👍 --json
   it). **The earlier decision moves into superseded or revoked only while the
   new one holds**; with another status it stays where it is, and `notice`
   says so. Nothing ever moves it back.
-- A decision in the archive is read, not changed: an edit or a status exits
-  2, a label or an entry exits 9 `decisionArchived`. Archiving is done on the
+- A decision in the archive is read, not changed: an edit, a status, a label
+  or an entry exits 9 `decisionArchived`. Archiving is done on the
   web.
 
 ## History and consequences
 
-- `decisions history add <decisionId> <address>` records what led to it: the
-  `appUrl` of a record, a comment's `…#comment-<id>`, `#MNK-1A`, or any web
-  address with `--description`. `decisions consequences add` records what
-  follows from it: a to-do or a card. Naming the same again answers with the
+- `decisions history add <decision> <address>` records what led to it: the
+  `appUrl` of a record, a comment's `…#comment-<id>`, `#MNK-1A`, an earlier
+  decision as `#ENT-14` or by its `shortUrl`, or any web address with
+  `--description`. `decisions consequences add` records what follows from it:
+  a to-do or a card, never a decision. Naming the same again answers with the
   entry there. `decisions show` lists both, a consequence ticked when done.
 - `decisions entries move` and `decisions entries delete` take the entry's
   ID from `decisions show --json`.

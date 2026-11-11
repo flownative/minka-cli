@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 	"unicode"
@@ -46,6 +47,12 @@ type DecisionsTool struct {
 
 	// ShownToClients lets the clients of the project into the tool at all.
 	ShownToClients bool
+
+	// Prefix numbers the decisions of the tool, "DEC" as in DEC-14; a prefix
+	// replaced since stays a former one, and a decision goes by it as well.
+	Prefix         string
+	FormerPrefixes []string
+	NextNumber     int
 
 	Statuses  []*DecisionStatus
 	Decisions []*Decision
@@ -116,6 +123,17 @@ type Decision struct {
 	Archived       bool
 	Trashed        bool
 
+	// ShortID is such as "DEC-14", empty for a decision its tool has not
+	// numbered yet.
+	ShortID string
+
+	// StatusSetBy is who set the current status, nil where nobody is known.
+	StatusSetBy *DecisionStatusSetBy
+
+	// Announcements are the lines a status of role proposed or holds sent
+	// out, oldest first.
+	Announcements []DecisionAnnouncement
+
 	CreatedAt time.Time
 	UpdatedAt time.Time
 	CreatorID string
@@ -126,9 +144,31 @@ type Decision struct {
 	Versions     []*DecisionVersion
 }
 
-// NewDecisionsTool is a tool with the statuses a new tool gets, one per role.
+// DecisionStatusSetBy is who set the status of a decision and when. With
+// Minka true, Minka moved it, and PersonID is the one its line names; an
+// empty PersonID is a person purged since.
+type DecisionStatusSetBy struct {
+	PersonID string
+	Minka    bool
+	At       time.Time
+}
+
+// DecisionAnnouncement is whom a decision told of the status it came into:
+// "everybody", "chosen" with NotifyIDs, or "nobody".
+type DecisionAnnouncement struct {
+	Role      string
+	Audience  string
+	NotifyIDs []string
+}
+
+// decisionAudiences are the audiences a decision proposed or in force
+// reaches; everybody when none is named.
+var decisionAudiences = []string{"everybody", "chosen", "nobody"}
+
+// NewDecisionsTool is a tool with the statuses a new tool gets, one per role,
+// numbering its decisions under DEC.
 func NewDecisionsTool(projectID, title string) *DecisionsTool {
-	tool := &DecisionsTool{ID: newID(), ProjectID: projectID, Title: title, ShownToClients: true}
+	tool := &DecisionsTool{ID: newID(), ProjectID: projectID, Title: title, ShownToClients: true, Prefix: "DEC", NextNumber: 1}
 	for _, role := range decisionRoles {
 		tool.Statuses = append(tool.Statuses, &DecisionStatus{ID: newID(), Role: role.role})
 	}
@@ -152,6 +192,9 @@ func (s *Server) registerDecisionsRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/decisions-tools/{toolId}/decisions", s.authenticated(s.decisionsList))
 	mux.HandleFunc("POST /api/v1/decisions-tools/{toolId}/decisions", s.authenticated(s.addDecision))
 	mux.HandleFunc("GET /api/v1/decisions/{decisionId}", s.authenticated(s.decision))
+	// A pattern of its own for "by-short-id" would clash with the comments
+	// under a decision, so it is told apart here.
+	mux.HandleFunc("GET /api/v1/decisions/{first}/{second}", s.authenticated(s.decisionByShortIdentifier))
 	mux.HandleFunc("PATCH /api/v1/decisions/{decisionId}", s.authenticated(s.updateDecision))
 	mux.HandleFunc("DELETE /api/v1/decisions/{decisionId}", s.authenticated(s.removeDecision))
 	mux.HandleFunc("GET /api/v1/decisions/{decisionId}/versions", s.authenticated(s.decisionVersions))
@@ -206,7 +249,8 @@ func (s *Server) decisionStatuses(w http.ResponseWriter, r *http.Request, person
 // decisionsList lists the decisions of a tool out of its archive, the day
 // decided on last first and one without a day by the day it was written, in
 // every status unless one is named; "label" and "appliesTo" narrow it by an
-// identifier each.
+// identifier each, "setBy" "agent" to the decisions whose status an agent set
+// by hand.
 func (s *Server) decisionsList(w http.ResponseWriter, r *http.Request, person *Person) {
 	tool := s.visibleDecisionsTool(r.PathValue("toolId"), person)
 	if tool == nil {
@@ -233,6 +277,11 @@ func (s *Server) decisionsList(w http.ResponseWriter, r *http.Request, person *P
 		}
 		statusID = status.ID
 	}
+	setBy := query.Get("setBy")
+	if setBy != "" && setBy != "agent" {
+		unprocessable(w, "decisionSetByUnknown", `Only "agent" narrows by who set the status.`)
+		return
+	}
 
 	var listed []*Decision
 	for _, decision := range tool.Decisions {
@@ -246,6 +295,9 @@ func (s *Server) decisionsList(w http.ResponseWriter, r *http.Request, person *P
 			continue
 		}
 		if appliesTo != "" && decision.AppliesToID != strings.ToLower(appliesTo) {
+			continue
+		}
+		if setBy != "" && !s.setByAnAgent(decision) {
 			continue
 		}
 		listed = append(listed, decision)
@@ -281,6 +333,60 @@ func (s *Server) decision(w http.ResponseWriter, r *http.Request, person *Person
 	writeJSON(w, http.StatusOK, s.decisionResource(tool, decision, person))
 }
 
+// decisionByShortIdentifier finds a decision by its short identifier in any
+// case, also under a former prefix of its tool, under the conditions of its
+// page. A draft for a client, an unknown name and a name of the wrong shape are
+// the same 404.
+func (s *Server) decisionByShortIdentifier(w http.ResponseWriter, r *http.Request, person *Person) {
+	if r.PathValue("first") != "by-short-id" {
+		notFound(w)
+		return
+	}
+	tool, decision := s.decisionGoingBy(r.PathValue("second"), person)
+	if decision == nil {
+		notFound(w)
+		return
+	}
+	resource := s.decisionResource(tool, decision, person)
+	if s.AnswersDecisionsWithoutID {
+		resource["id"] = ""
+	}
+	writeJSON(w, http.StatusOK, resource)
+}
+
+// decisionGoingBy finds the decision a person is shown under a short
+// identifier in any case, its tool's prefix or a former one.
+func (s *Server) decisionGoingBy(identifier string, person *Person) (*DecisionsTool, *Decision) {
+	prefix, number, found := strings.Cut(strings.ToUpper(strings.TrimSpace(identifier)), "-")
+	if !found || prefix == "" || number == "" {
+		return nil, nil
+	}
+	for _, tool := range s.DecisionsTools {
+		if !strings.EqualFold(tool.Prefix, prefix) && !slices.ContainsFunc(tool.FormerPrefixes, func(former string) bool { return strings.EqualFold(former, prefix) }) {
+			continue
+		}
+		for _, decision := range tool.Decisions {
+			if decision.ShortID == "" || !strings.HasSuffix(decision.ShortID, "-"+number) {
+				continue
+			}
+			if visibleTool, visible := s.visibleDecision(decision.ID, person); visible != nil {
+				return visibleTool, visible
+			}
+		}
+	}
+	return nil, nil
+}
+
+// setByAnAgent says whether an agent set the status of a decision by hand,
+// not Minka on its behalf.
+func (s *Server) setByAnAgent(decision *Decision) bool {
+	setBy := decision.StatusSetBy
+	if setBy == nil || setBy.Minka || s.People[setBy.PersonID] == nil {
+		return false
+	}
+	return kindOf(s.People[setBy.PersonID]) == "agent"
+}
+
 // decisionFields is what a write of a decision says, read and checked.
 type decisionFields struct {
 	title, reason, body, decidedOn *string
@@ -291,6 +397,11 @@ type decisionFields struct {
 	earlier                        *struct{ id, relation string }
 	appliesTo                      *struct{ kind, id string }
 	validUntil, reviewOn           *string
+
+	// audience is whom a status of role proposed or holds reaches, named or
+	// not; notifyIDs the people of "chosen".
+	audience  string
+	notifyIDs []string
 }
 
 // addDecision writes a decision down, refusing in the order the controller
@@ -322,14 +433,30 @@ func (s *Server) addDecision(w http.ResponseWriter, r *http.Request, person *Per
 	if !s.subjectAndEarlierKnown(w, tool, decision, read, person, false) {
 		return
 	}
+	if read.statusID != nil {
+		decision.StatusID = *read.statusID
+	}
+	announcement, ok := s.announced(w, tool, decision.ShownToClients, decision.StatusID, read, person)
+	if !ok {
+		return
+	}
 	read.applyTo(decision)
 	if read.decidedOn == nil && decision.DecidedOn == "" && decision.EventID != "" {
 		decision.DecidedOn = s.dayAnEventBrings(decision.EventID, person)
 	}
+	decision.StatusSetBy = &DecisionStatusSetBy{PersonID: person.ID, At: s.now}
+	if announcement != nil {
+		decision.Announcements = append(decision.Announcements, *announcement)
+	}
+	if tool.Prefix != "" {
+		number := max(tool.NextNumber, 1)
+		decision.ShortID = tool.Prefix + "-" + strconv.Itoa(number)
+		tool.NextNumber = number + 1
+	}
 	decision.Versions = append(decision.Versions, decision.snapshot(person.ID, s.now))
 	tool.Decisions = append(tool.Decisions, decision)
 	if s.statusRole(tool, decision.StatusID) == "holds" {
-		s.moveTheEarlier(tool, decision)
+		s.moveTheEarlier(tool, decision, person)
 	}
 	writeJSON(w, http.StatusCreated, s.decisionResource(tool, decision, person))
 }
@@ -353,11 +480,22 @@ func (s *Server) updateDecision(w http.ResponseWriter, r *http.Request, person *
 	if s.refusedAsArchived(w, s.projectWithID(tool.ProjectID)) {
 		return
 	}
-	// The handler finds no decision to change in the archive, and the 404 is
-	// the answer.
+	// The handler finds no decision to change in the archive, which the
+	// controller names once the project is known to take writes.
 	if decision.Archived {
-		notFound(w)
+		unprocessable(w, "decisionArchived", "An archived decision takes no change.")
 		return
+	}
+	// Only a status newly set announces itself; a save that keeps it ignores
+	// the audience, which was checked all the same. The handler enrols the
+	// people chosen right after the text, before it relates the earlier
+	// decision and the subject.
+	statusChanged := read.statusID != nil && *read.statusID != decision.StatusID
+	var announcement *DecisionAnnouncement
+	if statusChanged {
+		if announcement, ok = s.announced(w, tool, decision.ShownToClients, *read.statusID, read, person); !ok {
+			return
+		}
 	}
 	if !s.subjectAndEarlierKnown(w, tool, decision, read, person, true) {
 		return
@@ -368,6 +506,12 @@ func (s *Server) updateDecision(w http.ResponseWriter, r *http.Request, person *
 	if read.decidedOn == nil && decision.DecidedOn == "" && decision.EventID != "" {
 		decision.DecidedOn = s.dayAnEventBrings(decision.EventID, person)
 	}
+	if statusChanged {
+		decision.StatusSetBy = &DecisionStatusSetBy{PersonID: person.ID, At: s.now}
+	}
+	if announcement != nil {
+		decision.Announcements = append(decision.Announcements, *announcement)
+	}
 	after := decision.snapshot(person.ID, s.aMomentAfter(decision.UpdatedAt))
 	if !before.sameText(after) {
 		decision.Versions = append(decision.Versions, after)
@@ -377,7 +521,7 @@ func (s *Server) updateDecision(w http.ResponseWriter, r *http.Request, person *
 	newlyRelated := decision.EarlierID != "" && (decision.EarlierID != earlierBefore || decision.Relation != relationBefore)
 	cameIntoForce := decision.StatusID != statusBefore && s.statusRole(tool, decision.StatusID) == "holds"
 	if (newlyRelated || cameIntoForce) && s.statusRole(tool, decision.StatusID) == "holds" {
-		s.moveTheEarlier(tool, decision)
+		s.moveTheEarlier(tool, decision, person)
 	}
 	writeJSON(w, http.StatusOK, s.decisionResource(tool, decision, person))
 }
@@ -572,7 +716,67 @@ func (s *Server) readDecisionFields(w http.ResponseWriter, fields map[string]any
 		}
 		*day.into = &value
 	}
+	audience, ok := stringField(w, fields, "audience")
+	if !ok {
+		return read, false
+	}
+	read.audience = "everybody"
+	if audience != nil {
+		if !slices.Contains(decisionAudiences, *audience) {
+			unprocessable(w, "decisionAudienceUnknown", `A decision reaches "everybody", "chosen" with "notifyIds", or "nobody".`)
+			return read, false
+		}
+		read.audience = *audience
+	}
+	notifyIDs, ok := stringListField(w, fields, "notifyIds")
+	if !ok {
+		return read, false
+	}
+	for _, personID := range notifyIDs {
+		if !uuidPattern.MatchString(personID) {
+			unprocessable(w, "personNotAProjectMember", "Only a member of the project can be told about a decision.")
+			return read, false
+		}
+		read.notifyIDs = append(read.notifyIDs, strings.ToLower(personID))
+	}
+	if read.audience == "chosen" && len(read.notifyIDs) == 0 {
+		unprocessable(w, "notifyIdsMissing", `An audience of "chosen" names the people in "notifyIds".`)
+		return read, false
+	}
+	if read.audience != "chosen" && len(read.notifyIDs) > 0 {
+		unprocessable(w, "notifyIdsWithoutChosenAudience", `Only an audience of "chosen" takes "notifyIds".`)
+		return read, false
+	}
 	return read, true
+}
+
+// announced is the line a decision coming into a status sends, nil where the
+// status tells nobody: only one of role proposed or holds is announced. The
+// people chosen are met in the order given, the writer and anybody met before
+// passed over, and the first who cannot be told decides: a client the
+// decision is not shown to, else somebody outside the project.
+func (s *Server) announced(w http.ResponseWriter, tool *DecisionsTool, shownToClients bool, statusID string, read decisionFields, writer *Person) (*DecisionAnnouncement, bool) {
+	role := s.statusRole(tool, statusID)
+	if role != "proposed" && role != "holds" {
+		return nil, true
+	}
+	project := s.projectWithID(tool.ProjectID)
+	met := []string{writer.ID}
+	for _, personID := range read.notifyIDs {
+		if slices.Contains(met, personID) {
+			continue
+		}
+		met = append(met, personID)
+		if !slices.Contains(project.MemberIDs, personID) {
+			unprocessable(w, "personNotAProjectMember", "Only a member of the project can be told about a decision.")
+			return nil, false
+		}
+		if s.isAClient(personID) && !(tool.ShownToClients && shownToClients) {
+			unprocessable(w, "personCannotSeeIt", "Somebody chosen is a client of the project, and this decision is not shown to clients.")
+			return nil, false
+		}
+	}
+	return &DecisionAnnouncement{Role: role, Audience: read.audience, NotifyIDs: slices.Clone(read.notifyIDs)}, true
 }
 
 // dayField reads a day: empty for none, whether left out, null or empty.
@@ -747,8 +951,9 @@ func (read decisionFields) applyTo(decision *Decision) {
 }
 
 // moveTheEarlier puts the earlier decision a decision in force names into
-// the status of the relation's role, unless it went into the archive since.
-func (s *Server) moveTheEarlier(tool *DecisionsTool, decision *Decision) {
+// the status of the relation's role, unless it went into the archive since;
+// the writer of the later one is who set it.
+func (s *Server) moveTheEarlier(tool *DecisionsTool, decision *Decision, writer *Person) {
 	// Only a status of role holds moves it: a decision from before its tool
 	// had statuses holds without one, and moves nothing.
 	if decision.StatusID == "" {
@@ -759,8 +964,9 @@ func (s *Server) moveTheEarlier(tool *DecisionsTool, decision *Decision) {
 		return
 	}
 	role := map[string]string{"supersedes": "superseded", "revokes": "revoked"}[decision.Relation]
-	if status := tool.StatusOfRole(role); status != nil {
+	if status := tool.StatusOfRole(role); status != nil && earlier.StatusID != status.ID {
 		earlier.StatusID = status.ID
+		earlier.StatusSetBy = &DecisionStatusSetBy{PersonID: writer.ID, At: s.now}
 	}
 }
 
@@ -843,18 +1049,20 @@ func (s *Server) addDecisionConsequence(w http.ResponseWriter, r *http.Request, 
 	s.addDecisionEntry(w, r, person, true)
 }
 
-// cardAddress, todoAddress and postAddress are the pages of the fake an
-// entry may name, ending in the identifier of what they show.
+// cardAddress, todoAddress, postAddress and decisionAddress are the pages of
+// the fake an entry may name, ending in the identifier of what they show.
 var (
-	cardAddress = regexp.MustCompile(`^/projects/[0-9a-f-]{36}/boards/[0-9a-f-]{36}/cards/([0-9a-f-]{36})$`)
-	todoAddress = regexp.MustCompile(`^/projects/[0-9a-f-]{36}/todos/[0-9a-f-]{36}/todos/([0-9a-f-]{36})$`)
-	postAddress = regexp.MustCompile(`^/projects/[0-9a-f-]{36}/posts/[0-9a-f-]{36}/([0-9a-f-]{36})$`)
+	decisionAddress = regexp.MustCompile(`^/projects/[0-9a-f-]{36}/decisions/[0-9a-f-]{36}/([0-9a-f-]{36})/?$`)
+	cardAddress     = regexp.MustCompile(`^/projects/[0-9a-f-]{36}/boards/[0-9a-f-]{36}/cards/([0-9a-f-]{36})$`)
+	todoAddress     = regexp.MustCompile(`^/projects/[0-9a-f-]{36}/todos/[0-9a-f-]{36}/todos/([0-9a-f-]{36})$`)
+	postAddress     = regexp.MustCompile(`^/projects/[0-9a-f-]{36}/posts/[0-9a-f-]{36}/([0-9a-f-]{36})$`)
 )
 
 // addDecisionEntry appends what an address names to the history or the
 // consequences. The fake reads the pages of a card, a to-do and a post, a
-// "#" card name and, for the history, a web address with its description;
-// naming the same again answers with the entry there.
+// "#" card name and, for the history, a decision by its "#" name or its short
+// address and a web address with its description; naming the same again
+// answers with the entry there.
 func (s *Server) addDecisionEntry(w http.ResponseWriter, r *http.Request, person *Person, consequence bool) {
 	fields, ok := readBody(w, r)
 	if !ok {
@@ -905,6 +1113,9 @@ func (s *Server) entryNamed(w http.ResponseWriter, address, description string, 
 				}
 			}
 		}
+		if _, decision := s.decisionGoingBy(address[1:], person); decision != nil && !consequence {
+			return &DecisionEntry{ID: newID(), Kind: "decision", TargetID: decision.ID}, true
+		}
 		return targetUnknown()
 	}
 	parsed, err := url.Parse(address)
@@ -931,6 +1142,11 @@ func (s *Server) entryNamed(w http.ResponseWriter, address, description string, 
 		}
 		return &DecisionEntry{ID: newID(), Kind: "link", URL: address, Title: description}, true
 	}
+	if identifier, isShort := strings.CutPrefix(strings.TrimSuffix(parsed.Path, "/"), "/go/decision/"); isShort && !consequence {
+		if _, decision := s.decisionGoingBy(identifier, person); decision != nil {
+			return &DecisionEntry{ID: newID(), Kind: "decision", TargetID: decision.ID}, true
+		}
+	}
 	path := strings.ToLower(parsed.Path)
 	if match := cardAddress.FindStringSubmatch(path); match != nil {
 		if _, _, card := s.visibleCard(match[1], person); card != nil {
@@ -940,6 +1156,11 @@ func (s *Server) entryNamed(w http.ResponseWriter, address, description string, 
 	if match := todoAddress.FindStringSubmatch(path); match != nil {
 		if _, _, todo := s.visibleTodo(match[1], person); todo != nil {
 			return &DecisionEntry{ID: newID(), Kind: "todo", TargetID: todo.ID}, true
+		}
+	}
+	if match := decisionAddress.FindStringSubmatch(path); match != nil && !consequence {
+		if _, decision := s.visibleDecision(match[1], person); decision != nil {
+			return &DecisionEntry{ID: newID(), Kind: "decision", TargetID: decision.ID}, true
 		}
 	}
 	if match := postAddress.FindStringSubmatch(path); match != nil && !consequence {
@@ -1040,14 +1261,20 @@ func (decision *Decision) entryWithID(id string) (*[]*DecisionEntry, *DecisionEn
 // decisionEntryResource is an entry as the API shows it, with what it names now.
 func (s *Server) decisionEntryResource(entry *DecisionEntry, consequence bool, person *Person) map[string]any {
 	resource := map[string]any{"id": entry.ID, "kind": entry.Kind, "title": entry.Title, "targetId": nullable(entry.TargetID),
-		"commentId": nil, "projectId": nil, "appUrl": entry.URL, "done": nil}
+		"commentId": nil, "projectId": nil, "appUrl": entry.URL, "done": nil, "shortId": nil}
 	switch entry.Kind {
 	case "card":
 		if board, column, card := s.visibleCard(entry.TargetID, person); card != nil {
 			resource["title"], resource["projectId"], resource["appUrl"] = card.Title, board.ProjectID, s.cardURL(board, card)
+			resource["shortId"] = nullable(card.ShortID)
 			if consequence {
 				resource["done"] = column.Type == "done"
 			}
+		}
+	case "decision":
+		if tool, decision := s.visibleDecision(entry.TargetID, person); decision != nil {
+			resource["title"], resource["projectId"], resource["appUrl"] = decision.Title, tool.ProjectID, s.decisionURL(tool, decision)
+			resource["shortId"] = nullable(decision.ShortID)
 		}
 	case "todo":
 		if tool, _, todo := s.visibleTodo(entry.TargetID, person); todo != nil {
@@ -1093,11 +1320,12 @@ func (s *Server) statusesOfferedTo(tool *DecisionsTool, person *Person) []*Decis
 	return offered
 }
 
-// statusNamed finds a status by its identifier in any case, or by its role
-// exactly as Minka spells it.
+// statusNamed finds a status by its identifier or its role, either in any
+// case.
 func (s *Server) statusNamed(tool *DecisionsTool, person *Person, value string) *DecisionStatus {
+	named := strings.ToLower(value)
 	for _, status := range s.statusesOfferedTo(tool, person) {
-		if status.ID == strings.ToLower(value) || status.Role != "" && status.Role == value {
+		if status.ID == named || status.Role != "" && status.Role == named {
 			return status
 		}
 	}
@@ -1251,7 +1479,30 @@ func (s *Server) subjectReferenceOf(decision *Decision, person *Person) any {
 // linkResource is another decision of the same tool as a decision names it.
 func (s *Server) linkResource(tool *DecisionsTool, decision *Decision) map[string]any {
 	return map[string]any{"id": decision.ID, "title": decision.Title, "status": s.statusResourceOf(tool, decision.StatusID),
-		"archived": decision.Archived, "appUrl": s.decisionURL(tool, decision)}
+		"archived": decision.Archived, "appUrl": s.decisionURL(tool, decision), "shortId": nullable(decision.ShortID)}
+}
+
+// statusSetByResource is who set the status of a decision, null where
+// nobody is known; "agent" is an agent that set it by hand.
+func (s *Server) statusSetByResource(decision *Decision) any {
+	setBy := decision.StatusSetBy
+	if setBy == nil {
+		return nil
+	}
+	var person any
+	if s.People[setBy.PersonID] != nil {
+		person = s.personReference(setBy.PersonID)
+	}
+	return map[string]any{"person": person, "agent": s.setByAnAgent(decision), "minka": setBy.Minka, "at": timestamp(setBy.At)}
+}
+
+// shortDecisionURL is the go/decision address of a decision, null before its
+// tool numbered it.
+func (s *Server) shortDecisionURL(decision *Decision) any {
+	if decision.ShortID == "" {
+		return nil
+	}
+	return s.URL + "/go/decision/" + decision.ShortID
 }
 
 func (s *Server) decisionListItemResource(tool *DecisionsTool, decision *Decision) map[string]any {
@@ -1262,6 +1513,7 @@ func (s *Server) decisionListItemResource(tool *DecisionsTool, decision *Decisio
 		"createdAt": timestamp(decision.CreatedAt), "creator": s.personReference(decision.CreatorID),
 		"appUrl": s.decisionURL(tool, decision), "decidedBy": s.deciderResources(decision.DecidedBy),
 		"validUntil": nullable(decision.ValidUntil), "reviewOn": nullable(decision.ReviewOn),
+		"statusSetBy": s.statusSetByResource(decision), "shortId": nullable(decision.ShortID), "shortUrl": s.shortDecisionURL(decision),
 	}
 }
 
@@ -1304,6 +1556,7 @@ func (s *Server) decisionResource(tool *DecisionsTool, decision *Decision, perso
 		"supersededBy": supersededBy, "revokedBy": revokedBy, "history": history, "consequences": consequences,
 		"consequencesDone": done, "appliesTo": s.subjectReferenceOf(decision, person),
 		"validUntil": nullable(decision.ValidUntil), "reviewOn": nullable(decision.ReviewOn),
+		"statusSetBy": s.statusSetByResource(decision), "shortId": nullable(decision.ShortID), "shortUrl": s.shortDecisionURL(decision),
 	}
 }
 
