@@ -9,8 +9,10 @@ import (
 )
 
 type doctorReport struct {
-	Healthy bool          `json:"healthy"`
-	Checks  []doctorCheck `json:"checks"`
+	Healthy     bool          `json:"healthy"`
+	Checks      []doctorCheck `json:"checks"`
+	Host        *string       `json:"host"`
+	DefaultHost *string       `json:"defaultHost"`
 }
 
 func (e *testEnv) doctor() (doctorReport, envelope) {

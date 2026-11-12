@@ -2740,3 +2740,35 @@ Minka takes none with it yet; a label put on that way would silently displace
 one of the same scope.
 **Why:** the single create cannot be all or none, so what the CLI can know
 beforehand it refuses beforehand. **Implemented as:** `cli.labelsForNewDecisions`.
+
+<a id="c-179"></a>
+## C-179 — A sign-in does not move the default host
+
+*Applies to: `auth login`, `setup`*
+
+`auth login` sets the default host only where there is none or none that can
+be read; `--make-default` or `config set host` move it, and `setup` makes its
+host the default. **Why:** every session on the machine shares the default, so
+one agent's sign-in to a local instance must not send the others there.
+**Implemented as:** `cli.signIn`, see [Token, hosts and
+requests](stable/security.md#the-default-host).
+
+<a id="c-180"></a>
+## C-180 — `config set host` takes only a host signed in to
+
+*Applies to: `config set host`, `config get host`*
+
+The value is read like a sign-in's host; one without a token is exit 1
+(`usage`) naming `auth login`, and there is no `config unset`. **Why:** a
+default without a token would fail every later command, far from its cause.
+**Implemented as:** `cli.setDefaultHost`.
+
+<a id="c-181"></a>
+## C-181 — Signing out of the default host leaves no default
+
+*Applies to: `auth logout`, every command without a host*
+
+No remaining host takes its place; a `notice` says so, and a command without a
+host exits 3 with `no default host is set`. **Why:** a host left over is
+nobody's choice, and picking one would move the default silently.
+**Implemented as:** `config.File.RemoveHost`, `cli.noHostError`.

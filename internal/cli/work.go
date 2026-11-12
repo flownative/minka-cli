@@ -766,7 +766,7 @@ func (a *app) hostOfTheStore() (string, error) {
 		return "", err
 	}
 	if host == "" {
-		return "", &Error{Code: CodeAuth, Message: "not signed in to any Minka host", Hint: "Run: minka auth login --host https://minka.example.com"}
+		return "", noHostError(file)
 	}
 	return host, nil
 }

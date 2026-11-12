@@ -16,12 +16,15 @@ In this order:
    setup before the first question. A token is shown once, and one that cannot
    be saved is lost.
 2. The host: `--host` or `$MINKA_HOST` when given, else it asks. An empty
-   answer takes the host signed in to last; a host that cannot be used is
-   asked for again.
+   answer takes the default host; a host that cannot be used is asked for
+   again.
 3. The sign-in: a saved token of this host that it still accepts is kept, and
-   the host becomes the default. Only a host that refuses the saved token is a
-   reason to ask for a new one; a host that does not answer ends setup with
-   that error. Asking means pointing to the account page of the host, where a
+   the host becomes the default, whichever was before: unlike `auth login`,
+   setup is a person choosing the host of this machine ([Token, hosts and
+   requests](security.md#the-default-host)). Where that moves the default,
+   setup says so and `data.previousDefaultHost` names the one before. Only a
+   host that refuses the saved token is a reason to ask for a new one; a host
+   that does not answer ends setup with that error. Asking means pointing to the account page of the host, where a
    token for an agent is created, and taking the token without echo. The token
    goes the same way as with `auth login`: checked against `/me` first, saved
    only when accepted. A refused token ends setup with exit 3; nothing is saved
@@ -47,7 +50,7 @@ is the setup, not the command; `data.healthy` is false when a check failed
 |---|---|
 | `version` | never; says which minka this is |
 | `config` | the config file cannot be read, or others can read it |
-| `sign-in` | no host or token can be found: nobody is signed in, `$MINKA_TOKEN` stands without `$MINKA_HOST`, `--host` is no host. The hint names the step that needs no terminal first, then `setup`. Skipped when the config check failed |
+| `sign-in` | no host or token can be found: nobody is signed in, `$MINKA_TOKEN` stands without `$MINKA_HOST`, `--host` is no host. The hint names the step that needs no terminal first, then `setup`. Skipped when the config check failed. Its detail names the default host beside the host checked where the two differ, and `data.host` and `data.defaultHost` carry both |
 | `host` | the host does not answer or refuses the token; carries the hint of that error |
 | `skill` | warns when none is installed or the installed one differs; a skill behind a symbolic link is fine |
 | `update` | warns when this minka is older than the minimum Minka named; a newer latest version is `ok` with the hint `brew upgrade minka`. Says that nothing is known yet, or that a build is no release and not compared (C-129) |

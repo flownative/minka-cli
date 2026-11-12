@@ -65,7 +65,8 @@ func (a *app) runSetup(cmd *cobra.Command, withTheMod bool) error {
 	// Setup says itself what it does about the skill.
 	a.skillIsTheTopic = true
 
-	host, err := a.setupHost(input, hostToOfferAgain(file))
+	previousDefault := hostToOfferAgain(file)
+	host, err := a.setupHost(input, previousDefault)
 	if err != nil {
 		return err
 	}
@@ -73,6 +74,13 @@ func (a *app) runSetup(cmd *cobra.Command, withTheMod bool) error {
 	person, err := a.setupSignIn(cmd, host, path, file)
 	if err != nil {
 		return err
+	}
+	// Every command without --host goes to the default host, so a move of it
+	// is said, not left to be found out.
+	movedFrom := ""
+	if previousDefault != "" && previousDefault != host {
+		movedFrom = previousDefault
+		fmt.Fprintf(a.stderr, "%s is the default host now, instead of %s.\n", host, movedFrom)
 	}
 
 	skillPath, skillState, err := a.setupSkill(input)
@@ -88,6 +96,7 @@ func (a *app) runSetup(cmd *cobra.Command, withTheMod bool) error {
 	return a.ok(success{
 		data: map[string]any{
 			"host": host, "configPath": path, "person": person.Raw,
+			"defaultHost": host, "previousDefaultHost": nullable(movedFrom),
 			"skill":   map[string]string{"path": skillPath, "state": skillState},
 			"mod":     installed.data(),
 			"oldHook": installed.hook.data(),
@@ -119,7 +128,7 @@ func hostToOfferAgain(file *config.File) string {
 }
 
 // setupHost is --host or $MINKA_HOST when given, else what the person types;
-// an empty answer takes the host signed in to last.
+// an empty answer takes the default host.
 func (a *app) setupHost(input *bufio.Reader, fallback string) (string, error) {
 	if host, err := a.explicitHost(); err != nil || host != "" {
 		return host, err
@@ -150,7 +159,9 @@ func (a *app) setupHost(input *bufio.Reader, fallback string) (string, error) {
 }
 
 // setupSignIn keeps a token that works and asks for one otherwise. The saved
-// token it tries is the one of this host, never the one of another.
+// token it tries is the one of this host, never the one of another. Either way
+// the host becomes the default: setup asks a person at the terminal which host
+// this machine works with, and the answer is that choice.
 //
 // Only a host that refuses the saved token is a reason to ask for a new one.
 // A host that does not answer would not accept a new token either, and the
@@ -179,7 +190,7 @@ func (a *app) setupSignIn(cmd *cobra.Command, host, path string, file *config.Fi
 	if err != nil {
 		return api.Result[api.Me]{}, err
 	}
-	path, me, err := a.signIn(host, token)
+	path, me, _, err := a.signIn(host, token, true)
 	if err != nil {
 		return api.Result[api.Me]{}, err
 	}

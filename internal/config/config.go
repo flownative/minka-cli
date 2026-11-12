@@ -17,7 +17,6 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"sort"
 	"strings"
 	"unicode"
 )
@@ -150,8 +149,9 @@ func NewClientID() (string, error) {
 	return hex.EncodeToString(bytes[:]), nil
 }
 
-// RemoveHost forgets the token of a host. If it was the default host, another
-// remaining host becomes the default.
+// RemoveHost forgets the token of a host. If it was the default host, there is
+// no default host afterwards: which host a command reaches without being told
+// is a choice, and a host that is merely left over is not one.
 func (f *File) RemoveHost(host string) bool {
 	if _, ok := f.Hosts[host]; !ok {
 		return false
@@ -159,14 +159,6 @@ func (f *File) RemoveHost(host string) bool {
 	delete(f.Hosts, host)
 	if f.DefaultHost == host {
 		f.DefaultHost = ""
-		remaining := make([]string, 0, len(f.Hosts))
-		for name := range f.Hosts {
-			remaining = append(remaining, name)
-		}
-		sort.Strings(remaining)
-		if len(remaining) > 0 {
-			f.DefaultHost = remaining[0]
-		}
 	}
 
 	return true

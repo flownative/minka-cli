@@ -375,6 +375,20 @@ against a local Minka on its `main`, in a Decisions tool of a test project
 whose prefix is a single letter; the labels are checked against the fake only,
 since that project has none.
 
+The default host moves only when somebody means it to: `auth login` keeps it
+and says so, `--make-default` and `config set host` move it, signing out of it
+leaves none, and `auth status` and `doctor` name it beside the host of the
+command ([Token, hosts and requests](../stable/security.md#the-default-host),
+C-179…C-181). This touches no API; it is tested against temporary
+configuration files only.
+
+For the release notes of the release that carries this: on a machine whose
+default host is a local instance because it was signed in to last, the first
+sign-out from that host leaves no default, and every command without `--host`
+exits 3 with `no default host is set` until `minka config set host <url>`
+names one. Whoever wants the default back where it belongs runs that command
+right after upgrading; `minka auth status` shows which host is the default.
+
 The calendars of a project are listed with `events tools`, their events read
 with `events list` (a span of days, with the occurrences of every series in
 it) and `events show`, and written with `events create`, `edit` and `delete`;
