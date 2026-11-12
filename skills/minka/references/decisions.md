@@ -14,12 +14,13 @@ minka decisions tool <toolId> --json
 minka decisions statuses <toolId> --json
 minka decisions list <toolId> [--holds | --status <id|role|all>] [--label <label>] [--applies-to-card <card> | --applies-to-event <eventId>] [--set-by-agent] --json
 minka decisions show <decision> --json
-minka decisions create --tool <toolId> --title "The sentence" [--reason "Why."] [--body - < more.md] [--status <id|role>] [--decided-on YYYY-MM-DD] [--decided-by <id|me|name>]... [--event <eventId>] [--votes "5 : 1"] [--applies-to-card <card> | --applies-to-event <eventId>] [--valid-until YYYY-MM-DD] [--review-on YYYY-MM-DD] [--supersedes <decision> | --revokes <decision>] [--audience everybody|chosen|nobody] [--notify <person>]... [--visible-to-clients] --json
+minka decisions create --tool <toolId> --title "The sentence" [--reason "Why."] [--body - < more.md] [--status <id|role>] [--decided-on YYYY-MM-DD] [--decided-by <id|me|name>]... [--event <eventId>] [--votes "5 : 1"] [--applies-to-card <card> | --applies-to-event <eventId>] [--valid-until YYYY-MM-DD] [--review-on YYYY-MM-DD] [--supersedes <decision> | --revokes <decision>] [--audience everybody|chosen|nobody] [--notify <person>]... [--visible-to-clients] [--label <label>]... --json
+minka decisions create --tool <toolId> (--title "First" --title "Second"... | --titles-from <file|->) [--decided-on …] [--decided-by …]... [--event …] [--status …] [--applies-to-card … | --applies-to-event …] [--audience … [--notify …]...] [--visible-to-clients] [--label <label>]... --json
 minka decisions create --tool <toolId> --from decisions.json --json
-minka decisions edit <decision> [the flags of create but --visible-to-clients] [--drop-attachments] [--no-reason] [--no-decided-on] [--no-decided-by] [--no-event] [--no-votes] [--no-applies-to] [--no-valid-until] [--no-review-on] [--no-earlier] --json
+minka decisions edit <decision> [--title "…"] [--reason "…"] [--body -] [--body-format markdown|html] [--status <id|role>] [--decided-on YYYY-MM-DD] [--decided-by <id|me|name>]... [--event <eventId>] [--votes "…"] [--applies-to-card <card> | --applies-to-event <eventId>] [--valid-until YYYY-MM-DD] [--review-on YYYY-MM-DD] [--supersedes <decision> | --revokes <decision>] [--audience …] [--notify <person>]... [--drop-attachments] [--no-reason] [--no-decided-on] [--no-decided-by] [--no-event] [--no-votes] [--no-applies-to] [--no-valid-until] [--no-review-on] [--no-earlier] --json
 minka decisions status <decision> <id|role> [--audience everybody|chosen|nobody] [--notify <person>]... --json
-minka decisions supersede <decision> --title "The new sentence" [the flags of create] --json
-minka decisions revoke <decision> --title "What holds instead" [the flags of create] --json
+minka decisions supersede <decision> --title "The new sentence" [the flags of create but --label and --titles-from] --json
+minka decisions revoke <decision> --title "What holds instead" [the flags of create but --label and --titles-from] --json
 minka decisions delete <decision> --json
 minka decisions label <decision> <label>... --json
 minka decisions unlabel <decision> <label>... --json
@@ -98,7 +99,30 @@ minka decisions comments unreact <decision> <commentId> 👍 --json
   `chosen` (`notifyIdsWithoutChosenAudience`), `chosen` without a person
   (`notifyIdsMissing`), a non-member (`personNotAProjectMember`) and a client
   who is not shown the decision (`personCannotSeeIt`).
-- `--from <file|->` writes several: a JSON list of objects with the fields
+- `--label <label>`, repeatable, puts a label of the project on: its ID or
+  its name. An unknown one exits 2 and two of one scope exit 9
+  (`labelsShareAScope`), before anything
+  is written. One decision takes its labels right after it is written; should
+  one fail, the error carries `data.created`, `data.labelled` and
+  `data.notLabelled` — the decision is written, put the rest on with
+  `decisions label`.
+- Several decisions that share their fields, such as the votes of one
+  meeting: `--title` more than once, or `--titles-from <file|->` with one
+  sentence per line (empty lines are left out, everything else goes as
+  typed: the CLI strips no list markers as the web form does, so leave them
+  off; `--titles-from -` beside `--body -` exits 1). They go in one request, all or none, in
+  their order, numbered one after the other, each with `agendaNumber` 1, 2, 3.
+  They share `--decided-on`, `--decided-by`, `--event`, `--status`,
+  `--applies-to-card`/`--applies-to-event`, `--audience`/`--notify`,
+  `--visible-to-clients` and `--label`; any other flag beside them exits 1. At
+  most 100. A refused sentence refuses all: exit 9, `meta.apiCode`
+  `decisionLinesRefused`, and `data.lines` names each by `index` (from 0),
+  `title`, `from` (`--title 2`, `line 5 of agenda.txt`) and `code`
+  (`decisionTitleMissing`, `decisionTitleTooLong`,
+  `decisionTitleHasControlCharacters`). Correct those and send all again;
+  nothing was written. On success `data` is the list of the decisions.
+- `--from <file|->` writes several with fields of their own, and is not all
+  or none: a JSON list of objects with the fields
   Minka takes (`title`, `reason`, `body` as Markdown, `decidedOn`, `status`,
   `decidedBy` as `[{"personId": …}, {"name": …}]`, `decidedInEventId`,
   `votes`, `supersedes` or `revokes` (an ID or a short identifier),

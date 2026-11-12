@@ -558,18 +558,32 @@ func cardTitle(w http.ResponseWriter, title string) (string, bool) {
 // validTitle holds a title against what the server keeps, and names the
 // case after what carries it and the message after the same with its article.
 func validTitle(w http.ResponseWriter, thing, aThing, title string) bool {
-	title = phpTrim(title)
-	switch {
-	case utf8.RuneCountInString(title) > maxTitleLength:
+	switch titleRefusal(title) {
+	case "TooLong":
 		unprocessable(w, thing+"TitleTooLong", "The title of "+aThing+" is too long.")
-	case strings.IndexFunc(title, unicode.IsControl) >= 0:
+	case "HasControlCharacters":
 		unprocessable(w, thing+"TitleHasControlCharacters", "The title of "+aThing+" must not contain control characters.")
-	case title == "":
+	case "Missing":
 		unprocessable(w, thing+"TitleMissing", strings.ToUpper(aThing[:1])+aThing[1:]+" needs a title.")
 	default:
 		return true
 	}
 	return false
+}
+
+// titleRefusal is what the server refuses a title for, in the order it
+// checks, as the end of a code such as decisionTitleTooLong; empty for none.
+func titleRefusal(title string) string {
+	title = phpTrim(title)
+	switch {
+	case utf8.RuneCountInString(title) > maxTitleLength:
+		return "TooLong"
+	case strings.IndexFunc(title, unicode.IsControl) >= 0:
+		return "HasControlCharacters"
+	case title == "":
+		return "Missing"
+	}
+	return ""
 }
 
 // momentAfterEveryArchiving is when a list goes into the archive: after every
