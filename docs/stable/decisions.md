@@ -1,17 +1,18 @@
 # Decisions
 
 A Decisions tool holds **decisions**: the sentence that holds, its reason, a
-body, a status of the tool, who decided, when and in which event, the votes,
-what it applies to, the days Minka acts on, the earlier decision it
-supersedes or revokes, its history and consequences, labels and comments.
+body, a status of the tool and who set it, who decided, when and in which
+event, the votes, what it applies to, the days Minka acts on, the earlier
+decision it supersedes or revokes, its history and consequences, labels,
+comments and a short identifier such as ENT-14.
 `decisions tools`, `tool`, `statuses`, `list`, `show` and `versions …` read;
 `decisions create`, `edit`, `status`, `supersede`, `revoke`, `delete`,
 `label`, `unlabel`, `history add`, `consequences add` and `entries …` write;
 `decisions comments …` reads and writes the comments under one.
 
-Everything here was read in Minka's code — `DecisionsApiController`, its
-resources, the decision handlers, `LabelsApiController` and `SearchTool` —
-and in `ApiDecisionsTest`, `ApiDecisionEntriesTest` and
+Everything here was read in Minka's code — `DecisionsApiController`, its resources, the decision handlers,
+`DbalDecisionRepository`, `DecisionStatusSetBy`, `LabelsApiController` and
+`SearchTool` — and in `ApiDecisionsTest`, `ApiDecisionEntriesTest` and
 `ApiDecisionCommentsTest`; none of it has been seen live.
 
 ## What is not there
@@ -19,7 +20,45 @@ and in `ApiDecisionsTest`, `ApiDecisionEntriesTest` and
 Archiving a decision and taking it back out, taking one out of the trash,
 writing the statuses of a tool, changing an entry of the history or the
 consequences, and writing several decisions in one request have no address in
-the API. A decision has no short identifier yet.
+the API, nor have the prefix and the next number of a tool, which the team
+sets on the web.
+
+## Naming a decision
+
+Every argument and flag that names a decision — `show`, `edit`, `status`,
+`supersede`, `revoke`, `delete`, `label`, `unlabel`, `versions …`, `history
+add`, `consequences add`, `entries …`, `comments …`, `--supersedes`,
+`--revokes` and `supersedes`/`revokes` of `--from` — takes its ID or its short
+identifier, `shortId`. A short identifier is looked up in capitals with `GET
+decisions/by-short-id/{identifier}`, which also knows a former prefix of the
+tool, and the command goes on with the ID; `show`, `supersede`/`revoke` and
+`entries move --bottom` take the decision that answer gives. A draft for a
+client, an unknown name and a name of the wrong shape are the same 404, which
+the CLI words as no decision you can see going by that name. A short
+identifier is a prefix of one to ten letters and digits, the first a letter,
+a hyphen and the number; the prefix of a Decisions tool can be a single
+letter, as in E-14. A value of neither shape is exit 1 before any request; an answer without an ID is exit 7 before anything is
+written ([C-172](../decisions.md#c-172)). The short identifiers of earlier
+decisions in a `--from` list are looked up before the first decision is
+written ([C-175](../decisions.md#c-175)), so a short identifier cannot name
+an earlier decision written in the same run: it has none before it is
+written.
+
+`shortId` is null for a decision its tool has not numbered yet, and so is
+`shortUrl`, its `/go/decision/…` address. Both stand on the list, on a
+decision, on `supersedes`, `revokes`, `supersededBy` and `revokedBy` (`shortId`
+only) and on an entry naming a card or a decision. A `#ENT-14` and a
+`shortUrl` given to `history add` are read by Minka, like `#MNK-1A`, and so
+they are in a text; the CLI passes them on as they stand. A decision is no
+consequence: `consequences add` refuses both with `entryTargetUnknown`.
+`show`, `edit`, `status` and `entries move --bottom` read a decision named
+by its short identifier once and take what they need from that read.
+
+The text views lead with the short identifier: a line of the list with it in
+front of the ID, `show` with a `Short ID:` line below the bare sentence,
+confirmations with it in front of the sentence. Every address a text view
+gives is `shortUrl`, or `appUrl` for a decision without one
+([C-174](../decisions.md#c-174)).
 
 ## Reading
 
@@ -32,19 +71,34 @@ without an ID, which holds. A client is offered no draft.
 
 `decisions list <toolId>` reads `GET decisions-tools/{toolId}/decisions`, the
 day decided on last first and one without a day by the day it was written,
-not paged. The text names each decision by its ID, sentence, status, day and
-labels, with its reason below, so that what holds is looked up at a glance.
+not paged. The text names each decision by its short identifier and ID,
+sentence, status, day and labels, with its reason below, so that what holds is looked up at a glance;
+a status an agent set by hand says "set by an agent", one Minka moved "set by
+Minka".
 Every status is listed unless `--status` names one; `--holds` is `--status
-holds`. A status is named by its ID, which goes out in lowercase, or by its
-role, which goes out as typed, because Minka compares a role exactly
+holds`. A status is named by its ID or by its role, in any case; it goes
+out in lowercase, the form Minka keeps both in and compares them in
 ([C-165](../decisions.md#c-165)). `--label` takes an ID or the name of a label
 of the project, looked up before the list is read
 ([C-171](../decisions.md#c-171)); `--applies-to-card` and `--applies-to-event`
-narrow to one subject.
+narrow to one subject, `--set-by-agent` (`?setBy=agent`) to the decisions
+whose status an agent set. That includes an earlier decision an agent
+superseded or revoked: Minka records the move as the writer's of the later
+decision, not as its own. Minka refuses any other value of `setBy` with
+`decisionSetByUnknown`, which the CLI never sends.
+
+`statusSetBy` stands on the list and on a decision: `person` (null once
+purged), `agent`, true where an agent set the status by hand, `minka`, true
+where Minka moved it and `person` is whom its line names, and `at`; null where
+nobody is known. The writer sets it on adding, whoever changes the status
+afterwards, and the writer of a later decision whose coming into force moved
+the earlier one. A save that keeps the status keeps who set it. `show` gives it
+as `Status set: <when> by <who>`, an agent marked as such, Minka as "Minka, on
+behalf of" the person.
 
 `decisions show` gives the decision with `body` and `bodySource`, its files,
-labels, comments (oldest first), `decidedBy` (each `{person, name}`),
-`decidedIn`, `votes`, `supersedes` or `revokes` and `supersededBy` and
+labels, comments (oldest first), `statusSetBy`, `decidedBy` (each `{person,
+name}`), `decidedIn`, `votes`, `supersedes` or `revokes` and `supersededBy` and
 `revokedBy`, `history` and `consequences` with `consequencesDone`,
 `appliesTo`, `validUntil` and `reviewOn`. The text converts the body to
 Markdown. A decision of the archive is read and says so. A client meets only
@@ -70,11 +124,38 @@ goes with a new decision only.
 `--from <file|->` writes several: a JSON list of objects in Minka's names of
 the fields of a new decision, a body as Markdown unless `--body-format html`,
 taken as written: a body of `-` is no call for stdin.
-A field Minka does not take is exit 1 before any request; IDs go out in
-lowercase, a role as written. The decisions go one request each in the order
+A field Minka does not take is exit 1 before any request; IDs and the
+status go out in lowercase. The decisions go one request each in the order
 given, and the first refusal ends the run with `data.created`, the decisions
 as Minka answered, and `data.notCreated`, the titles of the rest
 ([C-168](../decisions.md#c-168)).
+
+## Whom a decision reaches
+
+`--audience` and `--notify` of `create`, `edit`, `status`, `supersede` and
+`revoke` go out as `audience` and `notifyIds`, and only where they are given:
+Minka takes `everybody` where `audience` is absent, `chosen` with the people
+of `notifyIds`, who then follow the decision, or `nobody`. A person of
+`--notify` is an ID, `me`, an e-mail address or a name, looked up among the
+members of the project, sent as IDs. Which people go with which audience is
+Minka's rule and left to it: `decisionAudienceUnknown`, `notifyIdsMissing`,
+`notifyIdsWithoutChosenAudience`, `personNotAProjectMember` (also for a value
+that is no ID), `personCannotSeeIt` (a client chosen who is not shown the
+decision) and 400 `malformedBody` (`notifyIds` no list of strings) each get a
+hint. The CLI checks only the word of `--audience`, exit 1
+([C-173](../decisions.md#c-173)).
+
+The audience takes effect only where a decision comes into a status of role
+proposed or holds: a new one proposed or in force, or a change that moves it
+there from another status. A draft, another role and a status the team added
+tell nobody; a move Minka makes tells nothing. A save that keeps the status
+ignores both fields, and Minka checks them all the same, right after
+`reviewOn`; whether the people chosen may be told is asked only where the
+decision is announced. So `edit` refuses `--audience` and `--notify` without
+`--status`, exit 1 before any request. In a `--from` list `audience` and
+`notifyIds` are fields like the others, the IDs going out in lowercase.
+
+## Changing
 
 `decisions edit` is a PATCH of what is given; what is left out stays, and a
 request that changes nothing is 200. Each field is cleared by its `--no-…`
@@ -96,8 +177,9 @@ their own. `decisions label` and `unlabel` work as for a card, with the labels
 of the decision's tool and project (see [Labels](labels.md)).
 
 `decisions history add <decisionId> <address>` and `consequences add` append
-an entry: an address of this Minka, a `#` card name, or for the history a web
-address with `--description`; a consequence is a to-do or a card. Naming one
+an entry: an address of this Minka, a `#` card name, or for the history a
+decision by its `#` name or its `shortUrl` and a web address with
+`--description`; a consequence is a to-do or a card. Naming one
 there already answers with that entry. `decisions entries move` puts an entry
 first, last, after or before another of its part; `--bottom` reads the
 decision for the last entry of the part. `decisions entries delete` takes one
@@ -108,9 +190,19 @@ off.
 On a new decision: 415 and 400, the tool (404), then the title, the reason,
 the body, the day, the status, who decided, the event and the votes, then the
 earlier decision named twice or malformed, the shape of `appliesTo`,
-`validUntil` and `reviewOn`, then the archived project, then a subject and an
-earlier decision that are unknown. A change follows the same order after the
-decision (404), except that it meets an unknown earlier decision before an
-unknown subject; a change of a decision of the archive is 404. An entry, a
+`validUntil` and `reviewOn`, then the audience (its word, the shape of
+`notifyIds`, a value that is no ID, then the people missing or without
+`chosen`), then the archived project, then a subject and an earlier decision
+that are unknown, then the people chosen. A change follows the same order
+after the decision (404), except that it meets the people chosen right after
+the archived project, before an unknown earlier decision, which it meets
+before an unknown subject. A change of a decision of the archive is 422
+`decisionArchived` once the project is known to take writes, before the
+people chosen; exit 9, with a hint that it is read and comes out of the
+archive on the web only. The
+people chosen are met in the order given, the writer and anybody met before
+passed over, and only where the decision is announced; the first who cannot
+be told decides: `personCannotSeeIt` for a client the decision is not shown
+to, `personNotAProjectMember` for anybody else. An entry, a
 label and a move of an entry meet the archived project, then
 `decisionArchived`.

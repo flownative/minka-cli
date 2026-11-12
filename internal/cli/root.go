@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"regexp"
+	"slices"
 	"strings"
 	"syscall"
 	"time"
@@ -34,11 +35,12 @@ const (
 	tokenFromEnvironment = "environment"
 )
 
-// shortIdentifierPattern is the shape of what people call a card by, such as
-// "MNK-1A". It is a little wider than what the server reads, which leaves out
-// four letters behind the hyphen: what is no card answers 404 there, and a
-// pattern kept narrower here could only fall behind.
-var shortIdentifierPattern = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9]{1,9}-[0-9A-Za-z]{1,12}$`)
+// shortIdentifierPattern is the shape of what people call a card or a
+// decision by, such as "MNK-1A" or "E-14": a prefix of one to ten letters and
+// digits, the first a letter. It is a little wider than what the server reads,
+// which leaves out four letters behind the hyphen: what is no card answers 404
+// there, and a pattern kept narrower here could only fall behind.
+var shortIdentifierPattern = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9]{0,9}-[0-9A-Za-z]{1,12}$`)
 
 // uuidPattern is the shape of an ID in either case. Minka keeps an ID in
 // lowercase, so one somebody typed goes through asID before it is sent.
@@ -325,9 +327,9 @@ func requireArgs(names ...string) cobra.PositionalArgs {
 }
 
 // requireID keeps anything that is no ID out of the path of a request and
-// writes an ID in lowercase, the form Minka keeps it in. A card may also be
-// named by its short identifier, which is looked up before the command goes on
-// with the ID.
+// writes an ID in lowercase, the form Minka keeps it in. A card and a decision
+// may also be named by a short identifier, which is looked up before the
+// command goes on with the ID.
 func requireID(cmd *cobra.Command, name string, value *string) error {
 	if id, ok := asID(*value); ok {
 		*value = id
@@ -338,6 +340,12 @@ func requireID(cmd *cobra.Command, name string, value *string) error {
 			return nil
 		}
 		return usageErrorf(cmd, "%s %q is not an ID; a card is named by a UUID such as 0192f3a4-5b6c-4d7e-8f90-a1b2c3d4e5f6 or by its short identifier such as MNK-1A", name, *value)
+	}
+	if slices.Contains(decisionNames, name) {
+		if shortIdentifierPattern.MatchString(*value) {
+			return nil
+		}
+		return usageErrorf(cmd, "%s %q is not an ID; a decision is named by a UUID such as 0192f3a4-5b6c-4d7e-8f90-a1b2c3d4e5f6 or by its short identifier such as ENT-14", name, *value)
 	}
 	return usageErrorf(cmd, "%s %q is not an ID; IDs are UUIDs such as 0192f3a4-5b6c-4d7e-8f90-a1b2c3d4e5f6", name, *value)
 }

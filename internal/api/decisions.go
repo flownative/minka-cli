@@ -49,6 +49,17 @@ type DecisionLink struct {
 	Status   DecisionStatus `json:"status"`
 	Archived bool           `json:"archived"`
 	AppURL   string         `json:"appUrl"`
+	ShortID  *string        `json:"shortId"` // such as "ENT-14", nil before its tool numbered it
+}
+
+// DecisionStatusSetBy is who set the status a decision stands in, and when.
+// With Minka true, Minka moved it, and Person is whom its line names; Agent
+// is an agent that set it by hand. Person is nil once purged.
+type DecisionStatusSetBy struct {
+	Person *PersonReference `json:"person"`
+	Agent  bool             `json:"agent"`
+	Minka  bool             `json:"minka"`
+	At     string           `json:"at"`
 }
 
 // DecisionSubject is the event or card a decision applies to.
@@ -72,7 +83,8 @@ type DecisionEntry struct {
 	CommentID *string `json:"commentId"`
 	ProjectID *string `json:"projectId"`
 	AppURL    string  `json:"appUrl"`
-	Done      *bool   `json:"done"` // a consequence done; nil in the history
+	Done      *bool   `json:"done"`    // a consequence done; nil in the history
+	ShortID   *string `json:"shortId"` // of a card or decision named, where it has one
 }
 
 // DecisionLine is one decision as the list of its tool names it.
@@ -91,6 +103,10 @@ type DecisionLine struct {
 	DecidedBy    []Decider       `json:"decidedBy"`
 	ValidUntil   *string         `json:"validUntil"`
 	ReviewOn     *string         `json:"reviewOn"`
+	// StatusSetBy is nil where nobody is known to have set the status.
+	StatusSetBy *DecisionStatusSetBy `json:"statusSetBy"`
+	ShortID     *string              `json:"shortId"`  // such as "ENT-14", nil before its tool numbered it
+	ShortURL    *string              `json:"shortUrl"` // its go/decision address, nil where ShortID is
 }
 
 // Decision is one decision with everything said about it.
@@ -128,6 +144,10 @@ type Decision struct {
 	AppliesTo    *DecisionSubject `json:"appliesTo"`
 	ValidUntil   *string          `json:"validUntil"`
 	ReviewOn     *string          `json:"reviewOn"`
+	// StatusSetBy is nil where nobody is known to have set the status.
+	StatusSetBy *DecisionStatusSetBy `json:"statusSetBy"`
+	ShortID     *string              `json:"shortId"`  // such as "ENT-14", nil before its tool numbered it
+	ShortURL    *string              `json:"shortUrl"` // its go/decision address, nil where ShortID is
 }
 
 // DecisionsToolReference names the tool a decision stands in.
@@ -165,6 +185,9 @@ type DecisionsQuery struct {
 	Status    string // an ID or a role
 	LabelID   string
 	AppliesTo string // the ID of an event or a card
+	// SetByAnAgent narrows to the decisions whose status an agent set by
+	// hand.
+	SetByAnAgent bool
 }
 
 // DecisionInput is a write of a decision by the API's names of its fields.
@@ -224,6 +247,9 @@ func (c *Client) Decisions(ctx context.Context, toolID string, query DecisionsQu
 	if query.AppliesTo != "" {
 		values.Set("appliesTo", query.AppliesTo)
 	}
+	if query.SetByAnAgent {
+		values.Set("setBy", "agent")
+	}
 	path := decisionsToolPath(toolID) + "/decisions"
 	if len(values) > 0 {
 		path += "?" + values.Encode()
@@ -234,6 +260,12 @@ func (c *Client) Decisions(ctx context.Context, toolID string, query DecisionsQu
 // Decision reads one decision, in the list or in the archive.
 func (c *Client) Decision(ctx context.Context, decisionID string) (Result[Decision], error) {
 	return request[Decision](ctx, c, http.MethodGet, decisionPath(decisionID), nil)
+}
+
+// DecisionByShortIdentifier reads a decision by its short identifier, such as
+// "ENT-14", also under a former prefix of its tool.
+func (c *Client) DecisionByShortIdentifier(ctx context.Context, identifier string) (Result[Decision], error) {
+	return request[Decision](ctx, c, http.MethodGet, "/decisions/by-short-id/"+url.PathEscape(identifier), nil)
 }
 
 func (c *Client) CreateDecision(ctx context.Context, toolID string, input DecisionInput) (Result[Decision], error) {

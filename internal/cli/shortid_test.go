@@ -124,7 +124,7 @@ func TestAShortIdentifierThatNamesNothingSaysWhatThatCanMean(t *testing.T) {
 func TestWhatIsNeitherAnIDNorAShortIdentifierSendsNothing(t *testing.T) {
 	e := newTestEnv(t)
 
-	for _, name := range []string{"MNK", "MNK-", "-1A", "MNK-1A/../../me", "M-1", "MNK-1234567890123", "MNK 1A"} {
+	for _, name := range []string{"MNK", "MNK-", "-1A", "MNK-1A/../../me", "1-1", "ABCDEFGHIJK-1", "MNK-1234567890123", "MNK 1A"} {
 		_, r := e.runJSON("", "cards", "show", name)
 		expectCode(t, r, ExitUsage)
 	}

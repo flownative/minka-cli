@@ -86,17 +86,18 @@ func TestTheDecisionsOfAToolAreListedTheLastDecidedFirst(t *testing.T) {
 
 // Minka compares a role exactly as it spells it, so a role goes out as it was
 // typed and an ID in lowercase.
-func TestARoleGoesOutAsTypedAndAnIDOfAStatusInLowercase(t *testing.T) {
+func TestAStatusGoesOutInLowercase(t *testing.T) {
 	e := newTestEnv(t)
 	f := e.fixture
 
-	env, r := e.runJSON("", "decisions", "list", f.Decisions.ID, "--status", "Holds")
+	runOK(t, e, "decisions", "list", f.Decisions.ID, "--status", "Holds")
+	if e.lastRequestQuery() != "status=holds" {
+		t.Fatalf("query %q: a role goes out in lowercase", e.lastRequestQuery())
+	}
+	env, r := e.runJSON("", "decisions", "list", f.Decisions.ID, "--status", "in-force")
 	expectCode(t, r, ExitValidation)
 	if env.Meta["apiCode"] != apiCodeDecisionStatusUnknown || !strings.Contains(env.Hint, "holds") {
 		t.Fatalf("apiCode %v, hint %q", env.Meta["apiCode"], env.Hint)
-	}
-	if e.lastRequestQuery() != "status=Holds" {
-		t.Fatalf("query %q: the role is to go out as typed", e.lastRequestQuery())
 	}
 
 	runOK(t, e, "decisions", "status", f.ProposedDecision.ID, up(f.Decisions.StatusOfRole("rejected").ID))
@@ -336,7 +337,7 @@ func TestTheEarlierDecisionMovesOnlyWhileTheNewOneHolds(t *testing.T) {
 
 	text := e.run("", "decisions", "revoke", f.ProposedDecision.ID, "--title", "No tent", "--styled")
 	expectCode(t, text, ExitOK)
-	if !strings.Contains(text.stdout, "Revoked: We buy a tent, moved into Revoked") {
+	if !strings.Contains(text.stdout, "Revoked: DEC-3 We buy a tent, moved into Revoked") {
 		t.Fatalf("the text does not say where the earlier one went:\n%s", text.stdout)
 	}
 }
@@ -512,8 +513,19 @@ func TestAChangeOfADecisionOfTheArchiveNamesTheArchive(t *testing.T) {
 		{"decisions", "status", e.fixture.ArchivedDecision.ID, "done"},
 	} {
 		env, r := e.runJSON("", args...)
+		expectCode(t, r, ExitValidation)
+		if env.Meta["apiCode"] != apiCodeDecisionArchived || !strings.Contains(env.Hint, "archive") {
+			t.Errorf("%s: %v, hint %q", args[1], env.Meta["apiCode"], env.Hint)
+		}
+	}
+	// A decision nobody can see is no longer said to be maybe in the archive.
+	for _, args := range [][]string{
+		{"decisions", "edit", e.fixture.OtherDecision.ID, "--title", "Renamed"},
+		{"decisions", "status", e.fixture.OtherDecision.ID, "done"},
+	} {
+		env, r := e.runJSON("", args...)
 		expectCode(t, r, ExitNotFound)
-		if !strings.Contains(env.Hint, "archive") {
+		if strings.Contains(env.Hint, "archive") {
 			t.Errorf("%s: hint %q", args[1], env.Hint)
 		}
 	}
