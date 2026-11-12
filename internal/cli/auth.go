@@ -22,14 +22,19 @@ func (a *app) newAuthCmd() *cobra.Command {
 }
 
 func (a *app) newAuthLoginCmd() *cobra.Command {
-	var withToken bool
+	var withToken, makeDefault bool
 
 	cmd := &cobra.Command{
 		Use:   "login",
 		Short: "Sign in to a Minka host with an access token",
 		Long: `Signs in to a Minka host with a personal access token. The token is checked
 against the host and then saved in the config file, which only your user can
-read. The host becomes the default host.
+read.
+
+The default host, which a command without --host and $MINKA_HOST goes to,
+does not move: the first host signed in to becomes it, and later sign-ins
+leave it where it is. --make-default makes this host the default, as does
+minka config set host <url> for a host signed in to already.
 
 Without --with-token the token is asked for on the terminal, without echo.
 With --with-token it is read from stdin. No flag takes the token itself, so it
@@ -37,7 +42,8 @@ does not end up in the shell history or the process list.
 
 The config file is ~/.config/minka/config.json, or $MINKA_CONFIG.`,
 		Example: `  minka auth login --host https://minka.localbeach.net
-  minka auth login --host https://minka.localbeach.net --with-token < token.txt`,
+  minka auth login --host https://minka.localbeach.net --with-token < token.txt
+  minka auth login --host https://minka.example.com --make-default`,
 		Args: requireArgs(),
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			host, err := a.explicitHost()
@@ -53,32 +59,56 @@ The config file is ~/.config/minka/config.json, or $MINKA_CONFIG.`,
 				return err
 			}
 
-			path, me, err := a.signIn(host, token)
+			path, me, defaultHost, err := a.signIn(host, token, makeDefault)
 			if err != nil {
 				return err
 			}
 
+			summary := fmt.Sprintf("Signed in to %s as %s; it is the default host", host, me.Value.Name)
+			defaultLine := host + " is the default host."
+			breadcrumbs := []Breadcrumb{
+				{Action: "projects", Cmd: "minka projects list", Description: "List your projects"},
+			}
+			if defaultHost != host {
+				shown := config.HostForOutput(defaultHost)
+				summary = fmt.Sprintf("Signed in to %s as %s; the default host stays %s", host, me.Value.Name, shown)
+				defaultLine = "The default host stays " + shown + ". Give --host " + host + " to a command to reach this host,\nor make it the default: minka config set host " + host
+				breadcrumbs = []Breadcrumb{
+					{Action: "projects", Cmd: "minka projects list --host " + host, Description: "List your projects on " + host},
+					{Action: "make-default", Cmd: "minka config set host " + host, Description: "Make " + host + " the default host"},
+				}
+			}
+
 			return a.ok(success{
-				data:    map[string]any{"host": host, "configPath": path, "person": me.Raw},
-				summary: fmt.Sprintf("Signed in to %s as %s", host, me.Value.Name),
-				breadcrumbs: []Breadcrumb{
-					{Action: "projects", Cmd: "minka projects list", Description: "List your projects"},
+				data: map[string]any{
+					"host": host, "configPath": path, "person": me.Raw,
+					"defaultHost": config.HostForOutput(defaultHost), "isDefault": defaultHost == host,
 				},
+				summary:     summary,
+				breadcrumbs: breadcrumbs,
 				text: func(w io.Writer) {
-					fmt.Fprintf(w, "Signed in to %s as %s <%s>.\nThe token is saved in %s.\n", host, me.Value.Name, me.Value.EmailAddress, path)
+					fmt.Fprintf(w, "Signed in to %s as %s <%s>.\nThe token is saved in %s.\n%s\n", host, me.Value.Name, me.Value.EmailAddress, path, defaultLine)
 				},
 			})
 		},
 	}
 	cmd.Flags().BoolVar(&withToken, "with-token", false, "Read the token from stdin")
+	cmd.Flags().BoolVar(&makeDefault, "make-default", false, "Make this host the default host, even when another one is")
 
 	return cmd
 }
 
 // signIn checks a token against its host and saves it as the token of that
-// host, which becomes the default host. A token the host does not accept is
-// not saved, so the config file never holds one that does not work.
-func (a *app) signIn(host, token string) (string, api.Result[api.Me], error) {
+// host. A token the host does not accept is not saved, so the config file never
+// holds one that does not work. It returns the default host as it stands after
+// the sign-in.
+//
+// The default host is where every command without --host goes, those of other
+// sessions on this machine included, so signing in to another host does not
+// move it unless that is asked for. Where there is none yet, or one no command
+// can read, the host signed in to takes its place: there is nothing a command
+// could reach that it would take away.
+func (a *app) signIn(host, token string, makeDefault bool) (string, api.Result[api.Me], string, error) {
 	me, err := a.newClient(host, token).Me(a.ctx)
 	if err != nil {
 		e := apiError(err, host)
@@ -86,19 +116,24 @@ func (a *app) signIn(host, token string) (string, api.Result[api.Me], error) {
 			e.Message = fmt.Sprintf("%s did not accept the token, nothing was saved", host)
 			e.Hint = "Check that the token is complete and not revoked or expired."
 		}
-		return "", api.Result[api.Me]{}, e
+		return "", api.Result[api.Me]{}, "", e
 	}
 
 	path, file, err := a.loadConfig()
 	if err != nil {
-		return "", api.Result[api.Me]{}, err
+		return "", api.Result[api.Me]{}, "", err
 	}
 	file.Hosts[host] = config.HostEntry{Token: token, PersonName: me.Value.Name, EmailAddress: me.Value.EmailAddress}
-	file.DefaultHost = host
-	if err := file.Save(path); err != nil {
-		return "", api.Result[api.Me]{}, &Error{Code: CodeConfig, Message: err.Error()}
+	// An empty default host fails to normalise like an unreadable one, so both
+	// count as no default here.
+	defaultHost, unreadable := config.NormalizeHost(file.DefaultHost)
+	if makeDefault || unreadable != nil {
+		file.DefaultHost, defaultHost = host, host
 	}
-	return path, me, nil
+	if err := file.Save(path); err != nil {
+		return "", api.Result[api.Me]{}, "", &Error{Code: CodeConfig, Message: err.Error()}
+	}
+	return path, me, defaultHost, nil
 }
 
 func (a *app) readToken(cmd *cobra.Command, host string, fromStdin bool) (string, error) {
@@ -150,8 +185,9 @@ func (a *app) newAuthStatusCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "status",
 		Short: "Show the host and the person you are signed in as",
-		Long: `Checks the token against the host and shows who it acts as. Exits with 3 when
-there is no token or the host does not accept it.`,
+		Long: `Checks the token against the host and shows who it acts as, and names the
+default host where the host comes from --host or $MINKA_HOST and is another
+one. Exits with 3 when there is no token or the host does not accept it.`,
 		Args: requireArgs(),
 		RunE: func(*cobra.Command, []string) error {
 			s, err := a.session()
@@ -167,15 +203,22 @@ there is no token or the host does not accept it.`,
 			if s.tokenSource == tokenFromEnvironment {
 				tokenSource = "$MINKA_TOKEN"
 			}
+			source := a.hostSource()
+			defaultHost, problem := a.defaultHostToReport()
+			hosts := hostsInWords(s.host, source, defaultHost, problem)
 
 			return a.ok(success{
-				data:    map[string]any{"host": s.host, "tokenSource": s.tokenSource, "person": me.Raw},
-				summary: fmt.Sprintf("Signed in to %s as %s", s.host, me.Value.Name),
+				data: map[string]any{
+					"host": s.host, "hostSource": source, "defaultHost": nullable(defaultHost),
+					"tokenSource": s.tokenSource, "person": me.Raw,
+				},
+				summary: fmt.Sprintf("Signed in to %s as %s; %s", s.host, me.Value.Name, hosts),
 				text: func(w io.Writer) {
 					fmt.Fprintf(w, "Signed in to %s as %s <%s>.\n", s.host, me.Value.Name, me.Value.EmailAddress)
 					if me.Value.Principal != nil {
 						fmt.Fprintf(w, "Acting for %s.\n", me.Value.Principal.Name)
 					}
+					fmt.Fprintf(w, "%s.\n", strings.ToUpper(hosts[:1])+hosts[1:])
 					fmt.Fprintf(w, "The token comes from %s.\n", tokenSource)
 				},
 			})
@@ -228,7 +271,9 @@ Revoking is safe to repeat: a token the server no longer accepts counts as
 revoked, the entry is removed, and a notice says so. Only the token of the
 entry is revoked; a token in $MINKA_TOKEN is never touched.
 
-Without --host it is the host signed in to last. The entry is reached as the
+Without --host it is the default host. Signing out of the default host leaves
+no default: the next sign-in sets one, or minka config set host <url> names one
+of the hosts still signed in to. The entry is reached as the
 file writes it, so an address written in by hand can be taken out again; with
 --revoke the token goes to that address read like every host, and an entry no
 host can be read from keeps its token and exits 1.`,
@@ -274,7 +319,14 @@ host can be read from keeps its token and exits 1.`,
 				notices = append(notices, "the token in $MINKA_TOKEN was not revoked: a sign-out revokes only the token of the config file. Revoke it in Minka's account area, or sign it in with minka auth login --with-token and sign out again with --revoke")
 			}
 
+			wasDefault := file.DefaultHost == host
 			removed := file.RemoveHost(host)
+			// The hosts left keep their tokens, and none of them becomes the
+			// default by being left over; whoever relied on the default has to
+			// hear that there is none now.
+			if removed && wasDefault && len(file.Hosts) > 0 {
+				notices = append(notices, shown+" was the default host, and no host is the default now: give --host <url> to a command, or make a host signed in to the default with: minka config set host <url>")
+			}
 			if removed {
 				if err := file.Save(path); err != nil {
 					e := &Error{Code: CodeConfig, Message: err.Error()}

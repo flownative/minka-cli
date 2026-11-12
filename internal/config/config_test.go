@@ -92,7 +92,9 @@ func TestAMissingFileIsAnEmptyConfig(t *testing.T) {
 	}
 }
 
-func TestRemoveHostPicksAnotherDefault(t *testing.T) {
+// A host that is merely left over is no choice of anybody's, so taking the
+// default host away leaves none, and the other hosts keep their tokens.
+func TestRemoveHostOfTheDefaultLeavesNoDefault(t *testing.T) {
 	file := &File{DefaultHost: "https://b.example", Hosts: map[string]HostEntry{
 		"https://b.example": {Token: "1"},
 		"https://c.example": {Token: "2"},
@@ -102,8 +104,11 @@ func TestRemoveHostPicksAnotherDefault(t *testing.T) {
 	if !file.RemoveHost("https://b.example") {
 		t.Fatal("host not removed")
 	}
-	if file.DefaultHost != "https://a.example" {
+	if file.DefaultHost != "" {
 		t.Errorf("default host %q", file.DefaultHost)
+	}
+	if len(file.Hosts) != 2 {
+		t.Errorf("hosts %v", file.Hosts)
 	}
 	if file.RemoveHost("https://b.example") {
 		t.Error("removing twice reported a removal")

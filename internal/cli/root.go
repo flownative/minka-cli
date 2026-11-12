@@ -236,7 +236,7 @@ only used for the host in $MINKA_HOST.`,
 	root.CompletionOptions.HiddenDefaultCmd = true
 
 	flags := root.PersistentFlags()
-	flags.StringVar(&a.hostFlag, "host", "", "Minka host (default: $MINKA_HOST, else the host signed in to last)")
+	flags.StringVar(&a.hostFlag, "host", "", "Minka host (default: $MINKA_HOST, else the default host)")
 	flags.BoolVar(&a.jsonFlag, "json", false, "Print a JSON envelope")
 	flags.BoolVarP(&a.quietFlag, "quiet", "q", false, "Print only the data as JSON")
 	flags.BoolVar(&a.styledFlag, "styled", false, "Print text even when stdout is not a terminal")
@@ -431,7 +431,7 @@ func (a *app) session() (*session, error) {
 		}
 	}
 	if host == "" {
-		return nil, &Error{Code: CodeAuth, Message: "not signed in to any Minka host", Hint: "Run: minka auth login --host https://minka.example.com"}
+		return nil, noHostError(file)
 	}
 	token := file.Hosts[host].Token
 	if token == "" {
@@ -445,6 +445,81 @@ func (a *app) session() (*session, error) {
 	}
 
 	return &session{client: a.newClient(host, token), host: host, tokenSource: tokenFromConfig, configPath: path, reader: readmark.Reader(token)}, nil
+}
+
+// Where the host of a command comes from.
+const (
+	hostFromFlag        = "flag"
+	hostFromEnvironment = "environment"
+	hostFromDefault     = "default"
+)
+
+// hostSource says where the host of a command comes from, in the order session
+// looks for it.
+func (a *app) hostSource() string {
+	switch {
+	case a.hostFlag != "":
+		return hostFromFlag
+	case a.getenv("MINKA_HOST") != "":
+		return hostFromEnvironment
+	default:
+		return hostFromDefault
+	}
+}
+
+// defaultHostToReport is the default host as a sign-in writes it, for a report
+// that names it beside the host a command uses. It is empty where there is
+// none. Where it or the configuration cannot be read, it is empty as well and
+// the problem says why: a command given its host by --host or $MINKA_HOST gets
+// past both, while every command without one fails on them, and a report that
+// called that no default would hide the failure.
+func (a *app) defaultHostToReport() (host, problem string) {
+	_, file, err := a.loadConfig()
+	if err != nil {
+		return "", err.Error()
+	}
+	if file.DefaultHost == "" {
+		return "", ""
+	}
+	host, err = config.NormalizeHost(file.DefaultHost)
+	if err != nil {
+		return "", err.Error()
+	}
+	return host, ""
+}
+
+// hostsInWords says how the host of a command stands to the default host,
+// naming a host only where the two differ.
+func hostsInWords(host, source, defaultHost, problem string) string {
+	given := "--host"
+	if source == hostFromEnvironment {
+		given = "$MINKA_HOST"
+	}
+	switch {
+	case problem != "":
+		return "the host comes from " + given + ", and the default host cannot be read: " + problem
+	case host == defaultHost:
+		return "it is the default host"
+	case defaultHost == "":
+		return "the host comes from " + given + ", and no default host is set"
+	default:
+		return "the host comes from " + given + ", the default host is " + defaultHost
+	}
+}
+
+// noHostError is the refusal of a command that names no host where the
+// configuration names no default host either. Where hosts are signed in to, the
+// way on is to name one of them; nothing picks one by itself, because the
+// default host is a choice and not what happened to be left over.
+func noHostError(file *config.File) *Error {
+	if len(file.Hosts) == 0 {
+		return &Error{Code: CodeAuth, Message: "not signed in to any Minka host", Hint: "Run: minka auth login --host https://minka.example.com"}
+	}
+	return &Error{
+		Code:    CodeAuth,
+		Message: "no default host is set",
+		Hint:    "Give the host with --host <url>, or make a host signed in to the default: minka config set host <url>",
+	}
 }
 
 // hostToPaste is the host a hint may put into a command line. Where what may be

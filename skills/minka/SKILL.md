@@ -38,6 +38,12 @@ references listed under "Where the rest stands".
 - Never put a token on the command line. Sign in once with
   `minka auth login --host <url> --with-token < file`, or set `MINKA_TOKEN`
   together with `MINKA_HOST`; the environment token is only sent to that host.
+- A command without `--host` and `MINKA_HOST` goes to the default host, which
+  other sessions on the machine share. Signing in to another host does not
+  move it (`data.isDefault` is false, `data.defaultHost` names it). For a
+  host you need now, pass `--host <url>` or set `MINKA_HOST`; move the default
+  with `auth login --make-default` or `minka config set host <url>` only when
+  it is really meant to move.
 - Pass long or multi-line text through stdin with `-`, never through shell
   quoting: `--description -` for cards, `<text>` = `-` for comments. Stdin
   has to be a pipe or a file, not a terminal.
@@ -217,8 +223,9 @@ not expected in practice.
   answers and accepts the token, and the installed skill. It is a report and
   exits 0 whatever it finds: read `data.healthy`, and for every entry of
   `data.checks` its `status` (`ok`, `warn`, `fail`, or `skip` where a check
-  before it failed), `detail` and `hint`. Run
-  it first when a command fails in a way you do not understand.
+  before it failed), `detail` and `hint`; `data.host` is the host of the
+  command and `data.defaultHost` the default one, as `auth status` names them
+  too. Run it first when a command fails in a way you do not understand.
 - `minka setup` is for a person on a terminal: it asks for the host and the
   token, offers to install this skill, and installs the mod (`--no-mod` leaves
   it out); `data.mod.state` is `installed`, `current`, `written` (Claude Code
@@ -233,9 +240,11 @@ not expected in practice.
   again). A token Minka itself no longer accepts counts as revoked, with a
   `notice`; a 401 of a proxy in front of Minka does not. A token in
   `$MINKA_TOKEN` is never revoked, and a `notice` says so. `data` is `{host,
-  removed, revoked}`.
+  removed, revoked}`. Signing out of the default host leaves no default host,
+  with a `notice`.
 - `minka config get <key> --json` and `minka config set <key> <value> --json`:
-  the settings of this machine, so far `comments.requireRead`.
+  the settings of this machine, so far `comments.requireRead` and `host`, the
+  default host, which takes only a host signed in to (exit 1 otherwise).
 
 ## This skill
 

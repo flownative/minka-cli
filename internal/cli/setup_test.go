@@ -241,7 +241,7 @@ func TestSetupKeepsATokenThatWorks(t *testing.T) {
 	first := e.runWith(onATerminal(e.fixture.Token), e.server.URL+"\nn\n", "setup")
 	expectCode(t, first, ExitOK)
 
-	// An empty answer takes the host signed in to last, and nobody is asked
+	// An empty answer takes the default host, and nobody is asked
 	// for a token again.
 	r := e.runWith(onATerminal(""), "\nn\n", "setup")
 	expectCode(t, r, ExitOK)
@@ -307,6 +307,35 @@ func TestSetupSendsASavedTokenToItsOwnHostOnly(t *testing.T) {
 	status, _ := e.runJSON("", "auth", "status")
 	if got := decode(t, status.Data)["host"]; got != other.URL {
 		t.Fatalf("default host %v, want the host set up last, %s", got, other.URL)
+	}
+	if !strings.Contains(r.stderr, other.URL+" is the default host now, instead of "+e.server.URL) {
+		t.Errorf("setup does not say that the default moved:\n%s", r.stderr)
+	}
+}
+
+// Setup says where it moves the default host, and only then.
+func TestSetupNamesTheDefaultHostItMovedFrom(t *testing.T) {
+	e := newSetupEnv(t)
+	other, otherFixture := fakeapi.New(t)
+	expectCode(t, e.runWith(onATerminal(e.fixture.Token), "n\n", "setup", "--host", e.server.URL), ExitOK)
+
+	r := e.runWith(onATerminal(otherFixture.Token), "n\n", "setup", "--host", other.URL, "--json")
+	expectCode(t, r, ExitOK)
+	var env envelope
+	if err := json.Unmarshal([]byte(r.stdout), &env); err != nil {
+		t.Fatal(err)
+	}
+	if data := decode(t, env.Data); data["defaultHost"] != other.URL || data["previousDefaultHost"] != e.server.URL {
+		t.Errorf("data %s", env.Data)
+	}
+
+	r = e.runWith(nobodyTypesAToken(t), "n\n", "setup", "--host", other.URL, "--json")
+	expectCode(t, r, ExitOK)
+	if err := json.Unmarshal([]byte(r.stdout), &env); err != nil {
+		t.Fatal(err)
+	}
+	if data := decode(t, env.Data); data["previousDefaultHost"] != nil || strings.Contains(r.stderr, "default host now") {
+		t.Errorf("data %s, stderr %s", env.Data, r.stderr)
 	}
 }
 

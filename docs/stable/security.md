@@ -38,6 +38,37 @@ fails a command. A version is taken from a header only where it is a plain
 Whoever addresses another host with `--host` gets that host's token from the
 configuration file, or a refusal — never the token of the first host (C-004).
 
+## The default host
+
+The host of a command is `--host`, else `$MINKA_HOST`, else the default host
+of the configuration file. Every session on the machine shares that default,
+so it moves only when somebody means it to (C-179):
+
+- `auth login` sets it only where there is none yet, or one that cannot be
+  read; otherwise it stays, and the answer says so: `data.isDefault` false,
+  `data.defaultHost` the default, a summary and a text line naming it, and
+  breadcrumbs to `--host` and `config set host`. `--make-default` moves it.
+- `minka config set host <url>` moves it to a host the file holds a token for,
+  read the way a sign-in reads it; any other host is exit 1 (`usage`) with
+  the sign-in as hint, and nothing is written (C-180). `config get host` names
+  it, `null` where there is none. There is no `config unset`: a default goes
+  with the sign-out of its host.
+- `setup` makes the host it is answered the default: it asks a
+  person at the terminal which host this machine works with.
+- Signing out of the default host leaves no default, with a `notice`, and no
+  host that happens to be left takes its place (C-181). A command without a
+  host then exits 3 with `no default host is set` and names `--host` and
+  `config set host`; the next sign-in sets the default again.
+
+`auth status` and `doctor` name the default host beside the host of the
+command, in `data.defaultHost` and in the text, where the two differ; where
+they are the same, the host is named once. A default host or a configuration
+file that cannot be read is said as such, with the reason, never as no
+default: a command with `--host` gets past it, every command without fails on
+it. `auth status` adds `data.hostSource` (`flag`, `environment`, `default`),
+`doctor` `data.host`, the host of the command even where no session came
+about.
+
 ## The Basecamp token of an import
 
 `import basecamp` leaves Basecamp's sign-in to the Basecamp CLI, and no
