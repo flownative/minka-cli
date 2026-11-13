@@ -47,6 +47,9 @@ func everyWrite(e *testEnv) map[string][]string {
 	decisionComment := f.Decision.Comments[len(f.Decision.Comments)-1].ID
 	decisionEntry := f.Decision.History[0].ID
 	version := listOfObjects(e.t, runOK(e.t, e, "docs", "versions", "list", document).Data)[0]["id"].(string)
+	onAgenda := &fakeapi.Decision{ID: newTestID(), Title: "On the agenda", StatusID: f.Decisions.StatusOfRole("proposed").ID, CreatedAt: f.ProposedDecision.CreatedAt, CreatorID: f.Bruno.ID}
+	f.Decisions.Decisions = append(f.Decisions.Decisions, onAgenda)
+	f.OnceEvent.MeetingOn("").PutOnAgenda(onAgenda)
 	withLabels(e)
 
 	return map[string][]string{
@@ -207,6 +210,12 @@ func everyWrite(e *testEnv) map[string][]string {
 
 		"events settings": {"events", "settings", f.Calendar.ID, "--content", "eventsOnly"},
 
+		"events meeting agenda add":    {"events", "meeting", "agenda", "add", f.OnceEvent.ID, f.ProposedDecision.ID},
+		"events meeting agenda move":   {"events", "meeting", "agenda", "move", f.OnceEvent.ID, "1", "--top"},
+		"events meeting agenda remove": {"events", "meeting", "agenda", "remove", f.OnceEvent.ID, "1"},
+		"events meeting outcome":       {"events", "meeting", "outcome", f.OnceEvent.ID, "1", "accepted"},
+		"events meeting close":         {"events", "meeting", "close", f.OnceEvent.ID, "--audience", "nobody"},
+
 		"events comments create":  {"events", "comments", "create", f.OnceEvent.ID, "Another comment"},
 		"events comments edit":    {"events", "comments", "edit", f.OnceEvent.ID, eventComment, "Other words"},
 		"events comments delete":  {"events", "comments", "delete", f.OnceEvent.ID, eventComment},
@@ -253,7 +262,7 @@ var notAWriteIntoAProject = []string{
 	"posts tools", "posts tool", "posts categories", "posts list", "posts show", "posts comments list",
 	"decisions tools", "decisions tool", "decisions statuses", "decisions list", "decisions show",
 	"decisions versions list", "decisions versions show", "decisions comments list",
-	"events tools", "events tool", "events list", "events mine", "events show", "events comments list",
+	"events tools", "events tool", "events list", "events mine", "events show", "events comments list", "events meeting show",
 	"reminders list", "reminders set", "reminders delete",
 	"chats mark-read", "conversations list", "conversations with", "conversations people",
 	"uploads create", "uploads download", "import basecamp",

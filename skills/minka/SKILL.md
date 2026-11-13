@@ -95,7 +95,8 @@ references listed under "Where the rest stands".
   `#MNK-xx` in a text; make a step in words that grows too big into a card of
   its own with `minka cards steps make-card <card> <step>`. A card step has no
   tick box: its state is the column of the child card, and Done counts as
-  done. To finish it, move the child card.
+  done. To finish it, move the child card. A to-do is attached the same way
+  (`--todo <todoId>`) and is ticked on the to-do, with `minka todos complete`.
 - Take a card up from its back: `minka cards notes show <card>` before you
   begin, because whoever was on it before left the state of the work there,
   and `minka cards notes set <card> - --expect <updatedAt>` at every milestone,
@@ -287,6 +288,7 @@ minka cards notes set <cardId> - --expect <updatedAt|none> --json < notes.md
 minka cards steps list <cardId> --json
 minka cards steps create <cardId> "Text" --json  # data: the new step
 minka cards steps create <cardId> --card <child> --json  # another card as the step; data: the step
+minka cards steps create <cardId> --todo <todoId> --json  # a to-do as the step; data: the step
 minka cards steps make-card <cardId> <step> --json  # data: the new card
 minka cards steps edit <cardId> <step> --assignee me --due 2026-10-09 --json
 minka cards steps edit <cardId> <step> --title "Text" --json
@@ -338,7 +340,7 @@ they stand at its top. Read the one you need, not all of them.
 | Check-ins: questions and answers | [references/checkins.md](references/checkins.md) |
 | Posts of the message board | [references/posts.md](references/posts.md) |
 | Decisions: what holds and why, statuses, writing one down, superseding and revoking, history and consequences | [references/decisions.md](references/decisions.md) |
-| Calendars and events | [references/calendars.md](references/calendars.md) |
+| Calendars and events; the meeting of an event with `minka events meeting`: its agenda of decisions, the outcomes, closing it | [references/calendars.md](references/calendars.md) |
 | Reminders ("Remind me") | [references/reminders.md](references/reminders.md) |
 | Importing from Basecamp | [references/basecamp-import.md](references/basecamp-import.md) |
 

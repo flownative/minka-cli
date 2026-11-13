@@ -91,8 +91,9 @@ the documentation says what holds; how it came about is in git.
   order of the refusals — before any work on `cards notes`.
 - [Steps](stable/steps.md): What a step of a card carries, the people given as
   a whole set and who may be among them, the day, why `cards steps create` takes
-  neither, the text that changes, the move and its end, what an older Minka
-  answers, the order of the refusals — before any work on `cards steps`.
+  neither, the text that changes, the move and its end, the step that is
+  another card or a to-do, what an older Minka answers, the order of the
+  refusals — before any work on `cards steps`.
 - [To-do lists and groups](stable/todo-lists.md): What a read of a list hands
   over and what it only counts, the colour of a group and why white is none,
   the archive a list goes quiet in and the group that is then at no address,
@@ -130,6 +131,12 @@ the documentation says what holds; how it came about is in git.
   time given as moments or days, the zone a series keeps its clock time in,
   what an edit does to the repetition, the write without a guard, the order of
   the refusals — before any work on `events`.
+- [Meetings](stable/meetings.md): What the meeting of an event hands over and
+  what its flags allow, the day that names the meeting of a series and where
+  it is found, the three ways to name an agenda item, what an outcome does to
+  the decision and to the votes, why closing asks for its audience, what an
+  older Minka answers, the order of the refusals — before any work on `events
+  meeting`.
 - [Reminders](stable/reminders.md): What a reminder of one's own is, the
   kind beside the ID and why it is checked here, the preset counted in
   Minka's zone and the moment sent as written, the list cut before what is out

@@ -353,6 +353,21 @@ reacting to a post itself and showing one to clients have no address in the
 API. None of it has been seen live: the whole feature is checked against the
 fake, see below.
 
+The meeting of an event is read with `events meeting show` and kept with
+`events meeting agenda add`, `move` and `remove`, `events meeting outcome`
+and `events meeting close`; `events list` and `events mine` hand out the
+`day` of every occurrence, which names the meeting of a series. The rule the
+commands follow is [Meetings](../stable/meetings.md) (C-183…C-186). Minka
+carries meetings, and the role `deferred` of a status, from v0.122.0; against
+an older one every command exits 2 and says the host does not know meetings.
+On Minka's `main` (7e5def35c) and in no release yet, a vote field an outcome
+leaves out keeps its value and null clears it. Until a release carries that, a
+released Minka clears the votes on the agenda item on a correction without
+vote flags, and sets the decision's other three to none where one vote field
+is sent; the help describes the rule of `main`. Checked against Minka's code
+and `ApiMeetingTest`, `ApiEventsTest` and `ApiMyCalendarTest` at 7e5def35c and
+the fake, not live.
+
 The decisions of a Decisions tool are read with `decisions tools`, `tool`,
 `statuses`, `list` (`--holds`, `--status`, `--label`, `--applies-to-card`,
 `--applies-to-event`), `show` and `versions list`/`show`, and written with
@@ -675,6 +690,18 @@ done and counted on the tile; "Step of" on the child; a child in the trash read
 as a card one cannot open; and removing the link keeping the child. A short
 identifier, a client and an older Minka were not met live, for want of a board
 with short identifiers in the test project.
+
+A to-do can be the step of a card: `cards steps create <card> --todo <todoId>`
+adds one, the text views show a to-do step as its to-do with the to-do's tick,
+`edit`, `complete` and `reopen` on one name the command that does the same on
+the to-do, and `make-card` says that a to-do does not become a card (C-182,
+[Steps](../stable/steps.md#a-to-do-as-a-step)).
+Minka carries it from v0.122.0; against an older one `--todo` exits 2 and says
+the host does not know to-do steps. A body naming a card and a to-do is
+`stepCardAndTodo` on Minka's `main` (7e5def35c) and in no release yet; a
+released Minka takes the card and passes over the to-do, which is why the CLI
+refuses the two together itself. Checked against Minka's code,
+`ApiCardAsStepTest` and `TodoAsStepTest` at 7e5def35c and the fake, not live.
 
 A new step, in words or a card, answers with the step instead of its card on
 Minka's `main` (59fb5dafc, #758) and in no release yet; a released Minka
@@ -1048,6 +1075,42 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   `agentOfAnotherPerson` for a step's people, puts the parents in `stepOf` in
   the order of its boards, and stands in for a Minka without card steps by a
   switch.
+- A to-do as a step (`cards steps create --todo`, `todo` on a step): every
+  request of it. Read in `BoardApiController::addTodoStep`,
+  `updateStepAction`, `makeStepIntoCardAction`, `LinkedTodoResource`,
+  `AddTodoStepHandler`, `DbalCardStepRepository`, `LinkedTodoQueryService`,
+  `ApiCardAsStepTest` and `TodoAsStepTest` at Minka 7e5def35c, and mirrored by
+  the fake in the order of
+  [Steps](../stable/steps.md#the-order-of-the-refusals). The fake has no
+  to-do deleted for good, which at Minka takes its step along, sees a to-do
+  by the membership of its project where Minka asks for the same
+  organization and that the person sees it, refuses a card and a to-do in one
+  body as Minka's `main` does and not as a released Minka, which takes the
+  card, and stands in for a Minka without
+  to-do steps by a switch. A to-do of a template list as a step is decided
+  nowhere in Minka and is not mirrored.
+- The meeting of an event (`events meeting …`, `day` on an occurrence): every
+  request of it. Read in `MeetingApiController`, `ReadsDecisionFields`, the
+  meeting resources, `PutDecisionsOnMeetingAgendaHandler`,
+  `RecordMeetingOutcomeHandler`, `CloseMeetingHandler`,
+  `DbalMeetingAgendaRepository`, `DbalDecisionRepository`,
+  `MeetingAgendaQueryService` and `ApiMeetingTest` at Minka 7e5def35c, and
+  mirrored by the fake in the order of
+  [Meetings](../stable/meetings.md#the-order-of-the-refusals). What the fake
+  does not mirror: the votes of a released Minka, which clears what an outcome
+  leaves out; the people a closed
+  meeting enrols on the decisions it accepted; a meeting or an item gone
+  between the checks of one request; a
+  series whose schedule only a newer Minka knows; the vote counts of a
+  decision on `decisions create` and `edit`, which the fake reads from an
+  outcome alone; and a Decisions tool in the trash, which the fake does not
+  have: at Minka the items of its decisions are hidden, count for nothing and
+  do not keep a meeting from being closed. It
+  tells of a closed meeting with
+  a line of the bell whose wording is its own, moves an occurrence and
+  cancels a day only where a test sets that, judges such a day by the
+  schedule alone, where Minka also drops a move of the wrong kind, all-day
+  against timed, and stands in for a Minka without meetings by a switch.
 - `projects edit`: no request of it has gone to a real Minka, and none can
   until a release carries the rename. Read in `ProjectsApiController::
   updateProjectAction`, `DbalProjectRepository::rename` and `RenameProjectTest`

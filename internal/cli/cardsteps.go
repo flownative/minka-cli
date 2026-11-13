@@ -93,17 +93,21 @@ func stepOfLine(parents []api.LinkedCard) string {
 	return "Step of: " + strings.Join(names, ", ")
 }
 
-// stepName names a step in a summary: by its words, or by its card, or by its
-// position where the reader cannot see the card.
+// stepName names a step in a summary: by its words, or by its card or its
+// to-do, or by its position where the reader cannot see that.
 func stepName(steps []api.Step, step api.Step) string {
-	switch {
-	case step.Card == nil:
-		return fmt.Sprintf("step %q", step.Title)
-	case step.Card.Seen():
-		return "card step " + linkedCardName(*step.Card)
-	}
 	position := slices.IndexFunc(steps, func(read api.Step) bool { return read.ID == step.ID }) + 1
-	return fmt.Sprintf("step %d, a card you cannot open", position)
+	switch {
+	case step.Card != nil && step.Card.Seen():
+		return "card step " + linkedCardName(*step.Card)
+	case step.Card != nil:
+		return fmt.Sprintf("step %d, a card you cannot open", position)
+	case step.Todo != nil && step.Todo.Seen():
+		return fmt.Sprintf("to-do step %q", step.Todo.Title)
+	case step.Todo != nil:
+		return fmt.Sprintf("step %d, a to-do you cannot open", position)
+	}
+	return fmt.Sprintf("step %q", step.Title)
 }
 
 // capitalized puts a summary that starts with a step name at the start of a
@@ -190,7 +194,8 @@ Triage all the same. Words longer than a card's title of 200 characters are cut
 with an ellipsis and stand whole in the description.
 
 data is the new card. A step that is a card already is exit 9 (validation)
-with stepIsACard. Words Minka refuses as the title of a card, and people who
+with stepIsACard, and one that is a to-do with stepIsATodo: a to-do does not
+become a card. Words Minka refuses as the title of a card, and people who
 may not be on a card of the project, refuse it with exit 9 as a new card would
 be refused, and nothing is written. A Minka that knows no card steps yet is
 exit 2 (not_found).
@@ -227,6 +232,8 @@ exit 2 (not_found).
 					e.Hint = cardStepsUnknownHint
 				case e.APICode == apiCodeStepIsACard:
 					e.Hint = "The step is a card already, so there is nothing to make. Read it with: minka cards steps list " + card.Value.ID
+				case e.APICode == apiCodeStepIsATodo:
+					e.Hint = "The step is a to-do, and a to-do does not become a card: only a step in words does. The to-do stays what it is, and the step with it."
 				}
 				return e
 			}

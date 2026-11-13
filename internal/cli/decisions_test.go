@@ -47,7 +47,7 @@ func TestTheDecisionsOfAToolAreListedTheLastDecidedFirst(t *testing.T) {
 		t.Fatalf("tools %v", tools)
 	}
 	statuses := listOfObjects(t, runOK(t, e, "decisions", "statuses", f.Decisions.ID).Data)
-	if len(statuses) != 7 || statuses[2]["role"] != "holds" || statuses[2]["name"] != "In force" {
+	if len(statuses) != 8 || statuses[2]["role"] != "deferred" || statuses[3]["role"] != "holds" || statuses[3]["name"] != "In force" {
 		t.Fatalf("statuses %v", statuses)
 	}
 

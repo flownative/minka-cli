@@ -116,6 +116,7 @@ func (a *app) newEventsCmd() *cobra.Command {
 		a.newEventsCreateCmd(),
 		a.newEventsEditCmd(),
 		a.newEventsDeleteCmd(),
+		a.newEventsMeetingCmd(),
 		a.newItemCommentsCmd(eventComments),
 	)
 }
@@ -186,6 +187,10 @@ in; an all-day one counts when one of its days does.
 
 Every event stands in the span once, a series too: occurrences holds the times
 it takes place at in the span, in the order they start, and is never empty.
+An occurrence of a series carries day, the day its schedule gives, which
+stays the same where the occurrence was moved to another day and is null for
+an event that does not repeat. It is the day "events meeting" takes as --day;
+the text view names it where it is not the day the occurrence starts on.
 The event's own startsAt, endsAt, firstDay and lastDay are its first
 occurrence, which for a series may lie long before the span. An agenda is
 read from the occurrences, not from the lines. The events come in the order
@@ -220,6 +225,7 @@ under a heading of its own, apart from the events.`,
 				summary: summary,
 				breadcrumbs: []Breadcrumb{
 					{Action: "show", Cmd: "minka events show <eventId>", Description: "Read an event with its description"},
+					{Action: "meeting", Cmd: "minka events meeting show <eventId> --day <occurrences[].day>", Description: "Read the meeting of an event, for a series the one of a day"},
 					{Action: "create", Cmd: "minka events create --tool " + args[0] + " --title <title> --first-day YYYY-MM-DD", Description: "Add an event to the calendar"},
 					{Action: "settings", Cmd: "minka events settings " + args[0] + " --content eventsAndDatedItems|eventsOnly", Description: "Choose whether the calendar shows what is due beside its events"},
 				},
@@ -245,7 +251,10 @@ project you are a member of that is not archived.
 
 events are the events you take part in, each a line as "events list" gives it
 with toolId, its calendar, and project, {id, name}, besides. An event you do
-not take part in is not here, whoever added it.
+not take part in is not here, whoever added it. Each of its occurrences
+carries day, as in "events list": the day the schedule of a series gives,
+which "events meeting" takes as --day, and null for an event that does not
+repeat.
 
 datedItems are the open to-dos, cards and steps assigned to you and due in the
 span, in the order of "events list", each with kind (todo, card or step),
@@ -793,11 +802,21 @@ func eventSuccess(event api.Result[api.Event], summary string, notices []string,
 	crumbs := []Breadcrumb{
 		{Action: "show", Cmd: "minka events show " + e.ID, Description: "Read the event with its description"},
 		{Action: "comments", Cmd: "minka events comments list " + e.ID, Description: "Read the comments on the event"},
+		{Action: "meeting", Cmd: "minka events meeting show " + e.ID + meetingDayPlaceholder(e), Description: "Read its meeting: the agenda and the outcomes"},
 		{Action: "edit", Cmd: "minka events edit " + e.ID + " --title <title>", Description: "Change the event"},
 		{Action: "delete", Cmd: "minka events delete " + e.ID, Description: "Move the event to the trash"},
 		{Action: "list", Cmd: "minka events list " + e.ToolID + " --from YYYY-MM-DD --to YYYY-MM-DD", Description: "List the events of its calendar between two days"},
 	}
 	return success{data: event.Raw, summary: summary, notices: notices, breadcrumbs: crumbs, text: text}
+}
+
+// meetingDayPlaceholder stands for the day a series needs to name one of its
+// meetings, which the event read by itself does not hand out.
+func meetingDayPlaceholder(event api.Event) string {
+	if event.Schedule == nil {
+		return ""
+	}
+	return " --day YYYY-MM-DD"
 }
 
 // describeEventTime says when an event or one occurrence of it takes place,
@@ -931,9 +950,26 @@ func renderEventLines(w io.Writer, events []api.EventLine, suffix func(int) stri
 		}
 		fmt.Fprintln(w, line)
 		for _, occurrence := range event.Occurrences {
-			fmt.Fprintf(w, "  %s\n", describeEventTime(occurrence))
+			fmt.Fprintf(w, "  %s%s\n", describeEventTime(occurrence.EventTime), meetingDayOf(occurrence))
 		}
 	}
+}
+
+// meetingDayOf names the day of a series an occurrence stands for where that
+// is not the day it starts on, as for one that was moved: the day is what
+// names its meeting.
+func meetingDayOf(occurrence api.EventOccurrence) string {
+	if occurrence.Day == nil {
+		return ""
+	}
+	startsOn := deref(occurrence.FirstDay)
+	if startsAt, err := time.Parse(time.RFC3339Nano, deref(occurrence.StartsAt)); err == nil {
+		startsOn = startsAt.Local().Format("2006-01-02")
+	}
+	if startsOn == *occurrence.Day {
+		return ""
+	}
+	return "  (day " + *occurrence.Day + " of the series)"
 }
 
 func renderEvent(w io.Writer, event api.Event) {

@@ -119,10 +119,10 @@ func (a *app) newCardsStepsListCmd() *cobra.Command {
 }
 
 func (a *app) newCardsStepsCreateCmd() *cobra.Command {
-	var child string
+	var child, todo string
 	cmd := &cobra.Command{
 		Use:   "create <cardId> <text|->",
-		Short: "Add a step at the end of the list of a card, in words or as another card",
+		Short: "Add a step at the end of the list of a card, in words, as another card or as a to-do",
 		Long: `Adds a step at the end of the list of a card. A step is one line of at most
 500 characters. Give - as the text to read it from stdin.
 
@@ -139,27 +139,55 @@ A card cannot be a step of itself: exit 9 (validation) with
 stepCardIsThisCard. A card you cannot see is exit 9 with stepCardUnknown. A
 Minka that knows no card steps yet is exit 2 (not_found).
 
+--todo makes a to-do the step instead of a text: the step then reads as that
+to-do stands, with its title, and it is done when the to-do is. Name the to-do
+by its ID; a to-do has no short identifier. It may be a to-do of any project
+you can see it in, in a list in the archive as well, and a step of several
+cards; it is a step of the same card at most once, and naming it again
+succeeds without a second step. A to-do you cannot see or one in the trash is
+exit 9 with stepTodoUnknown. A to-do step is ticked on its to-do, with minka
+todos complete, never on the step. A Minka that knows no to-do steps yet is
+exit 2 (not_found).
+
+A step is a text, a card or a to-do: two of them at once are a usage error,
+and nothing is sent.
+
 data is the step, as an entry of the steps of minka cards show, and the step
-that stands already where the card was a step of it before; data.id is the
+that stands already where the card or the to-do was a step of it before; data.id is the
 ID of the step for the commands that follow, such as minka cards steps move.
 A Minka that answers with the whole card is read the same way.`,
 		Example: `  minka cards steps create 0199... "Call the caterer"
-  minka cards steps create MNK-12 --card MNK-15`,
+  minka cards steps create MNK-12 --card MNK-15
+  minka cards steps create MNK-12 --todo 0199...`,
 		Args: func(cmd *cobra.Command, args []string) error {
-			if !cmd.Flags().Changed("card") {
+			asCard, asTodo := cmd.Flags().Changed("card"), cmd.Flags().Changed("todo")
+			switch {
+			case !asCard && !asTodo:
 				return requireArgs("cardId", "text")(cmd, args)
-			}
-			if len(args) > 1 {
+			case asCard && asTodo:
+				// A Minka that does not refuse the two together takes the card
+				// and passes over the to-do without a word.
+				return usageErrorf(cmd, "give either --card or --todo, not both")
+			case len(args) > 1 && asCard:
 				return usageErrorf(cmd, "give either a text or --card, not both")
-			}
-			if strings.TrimSpace(child) == "" {
+			case len(args) > 1:
+				return usageErrorf(cmd, "give either a text or --todo, not both")
+			case asCard && strings.TrimSpace(child) == "":
 				return usageErrorf(cmd, "--card names no card")
+			}
+			if asTodo {
+				if err := requireID(cmd, "--todo", &todo); err != nil {
+					return err
+				}
 			}
 			return requireArgs("cardId")(cmd, args)
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if cmd.Flags().Changed("card") {
 				return a.addCardStep(args[0], child)
+			}
+			if cmd.Flags().Changed("todo") {
+				return a.addTodoStep(args[0], todo)
 			}
 			text, err := a.readValue("the step", args[1])
 			if err != nil {
@@ -195,6 +223,7 @@ A Minka that answers with the whole card is read the same way.`,
 		},
 	}
 	cmd.Flags().StringVar(&child, "card", "", "Card to add as the step instead of a text: its ID, short identifier or address")
+	cmd.Flags().StringVar(&todo, "todo", "", "To-do to add as the step instead of a text: its ID")
 	return cmd
 }
 
@@ -218,6 +247,9 @@ refuses the whole write with 9 (validation) and meta.apiCode
 personNotAProjectMember, and nothing is written, the text neither.
 
 A card in the archive of its board takes no change: exit 9 with cardArchived.
+A step that is a card or a to-do carries nothing of its own: exit 9 with
+stepIsACard or stepIsATodo, and the hint names the command that changes the
+card or the to-do.
 
 ` + stepHelp,
 		Example: `  minka cards steps edit 0199... 2 --assignee me --due 2026-10-09
@@ -273,6 +305,8 @@ A card in the archive of its board takes no change: exit 9 with cardArchived.
 				switch {
 				case e.APICode == apiCodeStepIsACard:
 					e.Hint = stepIsACardHint(card.Value.ID, card.Value.Steps, step)
+				case e.APICode == apiCodeStepIsATodo:
+					e.Hint = stepIsATodoHint(card.Value.ID, card.Value.Steps, step, "edit")
 				case input.Title != nil && e.APICode == apiCodeNothingToChange:
 					// A Minka that does not rename a step yet reads a text
 					// alone as no change at all.
@@ -480,6 +514,10 @@ func (a *app) newCardsStepsSetCompletedCmd(name, short string, completed bool) *
 		Long: short + `. A step that stands that way already stays as it is, and the
 command succeeds.
 
+A step that is a card or a to-do has no tick of its own: exit 9 (validation)
+with stepIsACard or stepIsATodo. A card step is done when its card is in Done,
+a to-do step when its to-do is ticked off with minka todos complete.
+
 ` + stepHelp,
 		Example: fmt.Sprintf("  minka cards steps %s 0199... 2", name),
 		Args:    requireArgs("cardId", "step"),
@@ -503,8 +541,11 @@ command succeeds.
 			changed, err := s.client.SetStepCompleted(a.ctx, card.Value.ID, step.ID, completed)
 			if err != nil {
 				e := s.fail(err)
-				if e.APICode == apiCodeStepIsACard {
+				switch e.APICode {
+				case apiCodeStepIsACard:
 					e.Hint = stepIsACardHint(card.Value.ID, card.Value.Steps, step)
+				case apiCodeStepIsATodo:
+					e.Hint = stepIsATodoHint(card.Value.ID, card.Value.Steps, step, name)
 				}
 				return e
 			}
@@ -560,8 +601,8 @@ card succeeds as well.
 				return s.fail(err)
 			}
 
-			// A card step the reader cannot see has no title either, so only
-			// the card as read says whether the step was on it.
+			// A card or a to-do step the reader cannot see has no title either,
+			// so only the card as read says whether the step was on it.
 			wasOnCard := slices.ContainsFunc(card.Value.Steps, func(read api.Step) bool { return read.ID == step.ID })
 			summary := fmt.Sprintf("Removed %s from card %s", stepName(card.Value.Steps, step), card.Value.Title)
 			switch {
@@ -571,6 +612,10 @@ card succeeds as well.
 				summary = fmt.Sprintf("Took card %s off the steps of card %s; the card itself stays", linkedCardName(*step.Card), card.Value.Title)
 			case step.Card != nil:
 				summary = fmt.Sprintf("Took a card you cannot open off the steps of card %s; the card itself stays", card.Value.Title)
+			case step.Todo != nil && step.Todo.Seen():
+				summary = fmt.Sprintf("Took to-do %q off the steps of card %s; the to-do itself stays", step.Todo.Title, card.Value.Title)
+			case step.Todo != nil:
+				summary = fmt.Sprintf("Took a to-do you cannot open off the steps of card %s; the to-do itself stays", card.Value.Title)
 			}
 			return a.ok(success{
 				data:        map[string]any{"cardId": card.Value.ID, "stepId": step.ID, "wasOnCard": wasOnCard},
@@ -632,7 +677,7 @@ func findLine(lines namedLines, value string) (int, string, error) {
 		return position - 1, lines.ids[position-1], nil
 	}
 
-	// A line without a title, such as a card step whose card the reader
+	// A line without a title, such as a step whose card or to-do the reader
 	// cannot see, is named by its position or its ID, never by a text.
 	if lines.caseMatters && wanted != "" {
 		if at := slices.Index(lines.titles, wanted); at >= 0 && slices.Index(lines.titles[at+1:], wanted) < 0 {
@@ -687,6 +732,9 @@ func stepLine(index int, step api.Step) string {
 func stepEntry(step api.Step) string {
 	if step.Card != nil {
 		return cardStepEntry(*step.Card)
+	}
+	if step.Todo != nil {
+		return todoStepEntry(*step.Todo)
 	}
 	mark := " "
 	if step.Completed {

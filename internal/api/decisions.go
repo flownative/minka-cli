@@ -135,10 +135,15 @@ type Decision struct {
 	AppURL      string                 `json:"appUrl"`
 	// Archived says the decision lies in the archive of its tool: readable,
 	// and not changed.
-	Archived     bool             `json:"archived"`
-	DecidedBy    []Decider        `json:"decidedBy"`
-	DecidedIn    *DecisionEvent   `json:"decidedIn"`
-	Votes        *string          `json:"votes"`
+	Archived  bool           `json:"archived"`
+	DecidedBy []Decider      `json:"decidedBy"`
+	DecidedIn *DecisionEvent `json:"decidedIn"`
+	Votes     *string        `json:"votes"` // the note beside the counts
+	// The votes counted, each nil where nobody counted and from a Minka that
+	// counts none. The outcome of a meeting writes them.
+	VotesFor     *int             `json:"votesFor"`
+	VotesAgainst *int             `json:"votesAgainst"`
+	Abstentions  *int             `json:"abstentions"`
 	Supersedes   *DecisionLink    `json:"supersedes"`
 	Revokes      *DecisionLink    `json:"revokes"`
 	SupersededBy []DecisionLink   `json:"supersededBy"`
@@ -186,6 +191,11 @@ type DecisionVersion struct {
 	DecidedBy   []Decider      `json:"decidedBy"`
 	DecidedIn   *DecisionEvent `json:"decidedIn"`
 	Votes       *string        `json:"votes"`
+	// The votes counted as the version kept them, each nil where nobody
+	// counted.
+	VotesFor     *int `json:"votesFor"`
+	VotesAgainst *int `json:"votesAgainst"`
+	Abstentions  *int `json:"abstentions"`
 }
 
 // DecisionsQuery narrows the list of a tool; what is empty narrows nothing.

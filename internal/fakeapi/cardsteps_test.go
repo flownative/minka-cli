@@ -155,7 +155,7 @@ func TestAnUnseenChildIsOnlyACard(t *testing.T) {
 	f.CardInTriage.Steps = []*Step{step}
 
 	_, answer := answerTo(t, s, f.Token, "GET", "/api/v1/cards/"+f.CardInTriage.ID, "")
-	want := map[string]any{"id": step.ID, "title": "", "completed": false, "assignees": []any{}, "dueOn": nil, "card": map[string]any{"kind": "card"}}
+	want := map[string]any{"id": step.ID, "title": "", "completed": false, "assignees": []any{}, "dueOn": nil, "card": map[string]any{"kind": "card"}, "todo": nil}
 	if shown := stepOnTheCard(t, answer); !reflect.DeepEqual(shown, want) {
 		t.Errorf("the step reads %v", shown)
 	}

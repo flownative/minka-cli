@@ -439,6 +439,20 @@ func (c *Client) AddCardStep(ctx context.Context, cardID, child string) (Result[
 	})
 }
 
+// AddTodoStep makes a to-do a step at the end of the list of a card, named by
+// its ID, and answers with that step. A to-do that is a step of this card
+// already is answered with 200 instead of 201, with the step that stands, and
+// no second step.
+func (c *Client) AddTodoStep(ctx context.Context, cardID, todoID string) (Result[Step], error) {
+	answer, err := request[json.RawMessage](ctx, c, http.MethodPost, "/cards/"+url.PathEscape(cardID)+"/steps", map[string]string{"todoId": todoID})
+	if err != nil {
+		return Result[Step]{}, err
+	}
+	return stepOfTheAnswer(answer, func(steps []Step) int {
+		return slices.IndexFunc(steps, func(step Step) bool { return step.Todo != nil && strings.EqualFold(step.Todo.ID, todoID) })
+	})
+}
+
 // CodeUnexpectedResponse is the code of an answer of the server that is not
 // what the request asks for.
 const CodeUnexpectedResponse = "unexpectedResponse"
@@ -452,7 +466,7 @@ func stepOfTheAnswer(answer Result[json.RawMessage], pick func([]Step) int) (Res
 	result := Result[Step]{Raw: answer.Value, StatusCode: answer.StatusCode, Header: answer.Header}
 	unexpected := &Error{Method: http.MethodPost, StatusCode: answer.StatusCode, Code: CodeUnexpectedResponse, Message: "Minka wrote the step, but its answer does not show the step."}
 	if answer.StatusCode == http.StatusOK {
-		unexpected.Message = "The card is a step already and nothing was written, but Minka's answer does not show the step."
+		unexpected.Message = "The step stands already and nothing was written, but Minka's answer does not show the step."
 	}
 
 	var fields map[string]json.RawMessage

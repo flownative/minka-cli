@@ -104,6 +104,16 @@ type CalendarEvent struct {
 	Comments  []*Comment
 	CreatedAt time.Time
 	CreatorID string
+
+	// CancelledDays are the days of a series that do not take place, and
+	// MovedDays the days that take place at another time, each by the day
+	// the schedule gives.
+	CancelledDays []string
+	MovedDays     map[string]EventMove
+
+	// Meetings are the agendas of the event by the day it meets on; an event
+	// that does not repeat keeps its one under the empty day.
+	Meetings map[string]*Meeting
 }
 
 // EventRepetition is how an event repeats: its schedule, and for a timed
@@ -113,10 +123,13 @@ type EventRepetition struct {
 	TimeZone string // empty for an all-day series
 }
 
-// eventTime is the time of an event or of one occurrence of it.
+// eventTime is the time of an event or of one occurrence of it. An
+// occurrence of a series carries the day its schedule gives, which stays the
+// same where the occurrence was moved.
 type eventTime struct {
 	startsAt, endsAt  *time.Time
 	firstDay, lastDay string
+	day               string
 }
 
 func (t eventTime) allDay() bool {
@@ -137,6 +150,7 @@ func (s *Server) registerCalendarRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/events/{eventId}", s.authenticated(s.event))
 	mux.HandleFunc("PATCH /api/v1/events/{eventId}", s.authenticated(s.updateEvent))
 	mux.HandleFunc("DELETE /api/v1/events/{eventId}", s.authenticated(s.removeEvent))
+	s.registerMeetingRoutes(mux)
 	s.registerCommentRoutes(mux, "events/{eventId}")
 }
 
@@ -775,59 +789,75 @@ func (s *Server) participantsAfter(w http.ResponseWriter, tool *CalendarTool, ev
 // reaches in.
 func occurrencesBetween(event *CalendarEvent, from, to string, readerZone *time.Location) []eventTime {
 	when := event.time()
-	if when.allDay() {
-		if event.Repetition == nil {
-			if when.firstDay <= to && when.lastDay >= from {
-				return []eventTime{when}
-			}
-			return nil
-		}
-		further := daysBetween(when.firstDay, when.lastDay)
-		var occurrences []eventTime
-		for _, day := range event.Repetition.Schedule.daysBetween(addDays(from, -further), to) {
-			occurrences = append(occurrences, eventTime{firstDay: day, lastDay: addDays(day, further)})
-		}
-		return occurrences
-	}
-
 	windowStart, _ := time.ParseInLocation(dayLayout, from, readerZone)
 	windowEnd, _ := time.ParseInLocation(dayLayout, addDays(to, 1), readerZone)
-	inWindow := func(start, end time.Time) bool {
+	inWindow := func(occurrence eventTime) bool {
+		if occurrence.allDay() {
+			return occurrence.firstDay <= to && occurrence.lastDay >= from
+		}
+		start, end := *occurrence.startsAt, *occurrence.endsAt
 		return start.Before(windowEnd) && (end.After(windowStart) || !start.Before(windowStart))
 	}
 	if event.Repetition == nil {
-		if inWindow(*when.startsAt, *when.endsAt) {
+		if inWindow(when) {
 			return []eventTime{when}
 		}
 		return nil
 	}
 
-	zone, _ := time.LoadLocation(event.Repetition.TimeZone)
-	localStart, localEnd := when.startsAt.In(zone), when.endsAt.In(zone)
-	further := daysBetween(localStart.Format(dayLayout), localEnd.Format(dayLayout))
-	// A day earlier and later than the window, because the reader's days are
-	// not the days of the event's zone.
-	days := event.Repetition.Schedule.daysBetween(
-		addDays(windowStart.In(zone).Format(dayLayout), -further-1),
-		addDays(windowEnd.In(zone).Format(dayLayout), 1),
-	)
-	var occurrences []eventTime
-	for _, day := range days {
-		// The first occurrence is the event itself, which says which of two
-		// equal clock times it meant.
-		if day == event.Repetition.Schedule.StartsOn {
-			if inWindow(*when.startsAt, *when.endsAt) {
-				occurrences = append(occurrences, when)
-			}
-			continue
+	// What the schedule gives on a day, and the days it gives around the span.
+	var scheduled func(day string) eventTime
+	var days []string
+	if when.allDay() {
+		further := daysBetween(when.firstDay, when.lastDay)
+		scheduled = func(day string) eventTime {
+			return eventTime{firstDay: day, lastDay: addDays(day, further), day: day}
 		}
-		start := atTheClockTimeOf(localStart, day, zone)
-		end := later(start, atTheClockTimeOf(localEnd, addDays(day, further), zone))
-		if inWindow(start, end) {
+		days = event.Repetition.Schedule.daysBetween(addDays(from, -further), to)
+	} else {
+		zone, _ := time.LoadLocation(event.Repetition.TimeZone)
+		localStart, localEnd := when.startsAt.In(zone), when.endsAt.In(zone)
+		further := daysBetween(localStart.Format(dayLayout), localEnd.Format(dayLayout))
+		scheduled = func(day string) eventTime {
+			// The first occurrence is the event itself, which says which of
+			// two equal clock times it meant.
+			if day == event.Repetition.Schedule.StartsOn {
+				return eventTime{startsAt: when.startsAt, endsAt: when.endsAt, day: day}
+			}
+			start := atTheClockTimeOf(localStart, day, zone)
+			end := later(start, atTheClockTimeOf(localEnd, addDays(day, further), zone))
 			start, end = start.UTC(), end.UTC()
-			occurrences = append(occurrences, eventTime{startsAt: &start, endsAt: &end})
+			return eventTime{startsAt: &start, endsAt: &end, day: day}
+		}
+		// A day earlier and later than the window, because the reader's days
+		// are not the days of the event's zone.
+		days = event.Repetition.Schedule.daysBetween(
+			addDays(windowStart.In(zone).Format(dayLayout), -further-1),
+			addDays(windowEnd.In(zone).Format(dayLayout), 1),
+		)
+	}
+	// A moved occurrence may reach into the span from a day far outside it;
+	// a day the schedule gives no more is moved nowhere.
+	for day := range event.MovedDays {
+		if !slices.Contains(days, day) && event.Repetition.Schedule.fallsOn(day) {
+			days = append(days, day)
 		}
 	}
+
+	var occurrences []eventTime
+	for _, day := range days {
+		if slices.Contains(event.CancelledDays, day) {
+			continue
+		}
+		occurrence := scheduled(day)
+		if moved, isMoved := event.MovedDays[day]; isMoved {
+			occurrence = eventTime{startsAt: moved.StartsAt, endsAt: moved.EndsAt, firstDay: moved.FirstDay, lastDay: moved.LastDay, day: day}
+		}
+		if inWindow(occurrence) {
+			occurrences = append(occurrences, occurrence)
+		}
+	}
+	slices.SortStableFunc(occurrences, func(a, b eventTime) int { return startOf(a).Compare(startOf(b)) })
 	return occurrences
 }
 
@@ -957,7 +987,11 @@ func (s *Server) eventLineResource(tool *CalendarTool, event *CalendarEvent, occ
 	line := s.eventFieldsOfBothForms(tool, event)
 	times := []any{}
 	for _, occurrence := range occurrences {
-		times = append(times, occurrenceResource(occurrence))
+		resource := occurrenceResource(occurrence)
+		if !s.KnowsNoMeetings {
+			resource["day"] = nullable(occurrence.day)
+		}
+		times = append(times, resource)
 	}
 	line["occurrences"] = times
 	return line

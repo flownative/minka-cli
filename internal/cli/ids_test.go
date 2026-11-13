@@ -135,6 +135,9 @@ var idsInCapitals = []idInCapitals{
 	{command: "cards steps create", inputs: []string{"--card"}, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
 		return []string{f.CardInTriage.ID, "--card", up(f.CardInDoing.ID)}
 	}},
+	{command: "cards steps create", inputs: []string{"--todo"}, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
+		return []string{f.CardInTriage.ID, "--todo", up(f.LooseTodo.ID)}
+	}},
 	{command: "cards steps make-card", inputs: []string{"<step>"}, prepare: withStepsSpelledInLetters, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
 		return []string{f.CardInTriage.ID, up(openStepID)}
 	}},
@@ -388,6 +391,26 @@ var idsInCapitals = []idInCapitals{
 	}},
 	{command: "events create", inputs: []string{"--tool", "--participant"}, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
 		return []string{"--tool", up(f.Calendar.ID), "--title", "Setting up", "--first-day", "2026-10-20", "--participant", up(f.Anke.ID)}
+	}},
+	{command: "events meeting agenda move", inputs: []string{"<item>", "--after"}, args: func(e *testEnv, f *fakeapi.Fixture) []string {
+		first, second := withAnAgenda(e)
+		return []string{up(f.OnceEvent.ID), up(first.ID), "--after", up(second.ID)}
+	}},
+	{command: "events meeting agenda move", inputs: []string{"--before"}, args: func(e *testEnv, f *fakeapi.Fixture) []string {
+		first, second := withAnAgenda(e)
+		return []string{f.OnceEvent.ID, up(second.DecisionID), "--before", up(first.DecisionID)}
+	}},
+	{command: "events meeting agenda remove", inputs: []string{"<item>"}, args: func(e *testEnv, f *fakeapi.Fixture) []string {
+		first, _ := withAnAgenda(e)
+		return []string{up(f.OnceEvent.ID), up(first.ID)}
+	}},
+	{command: "events meeting outcome", inputs: []string{"<item>"}, args: func(e *testEnv, f *fakeapi.Fixture) []string {
+		first, _ := withAnAgenda(e)
+		return []string{up(f.OnceEvent.ID), up(first.ID), "accepted"}
+	}},
+	{command: "events meeting close", inputs: []string{"--notify"}, args: func(e *testEnv, f *fakeapi.Fixture) []string {
+		withAnAgenda(e)
+		return []string{up(f.OnceEvent.ID), "--audience", "chosen", "--notify", up(f.Anke.ID)}
 	}},
 	{command: "events edit", inputs: []string{"--participant"}, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
 		return []string{f.OnceEvent.ID, "--participant", up(f.Anke.ID)}
@@ -672,7 +695,7 @@ var idInputsExcepted = map[string]string{
 // in a variable or on another receiver is not: todogroups move passes its flag
 // in a variable and cards move passes neighbourCard, and both are covered only
 // because --after and --before are on the list.
-var idFlagNames = []string{"after", "before", "event", "applies-to-event", "supersedes", "revokes", "assignee", "notify-when-done", "notify", "ask", "person", "list", "group", "tool", "board", "folder", "document", "upload", "blob", "category", "project", "conversation", "column", "client-message-id", "reply-to", "participant", "template"}
+var idFlagNames = []string{"after", "before", "event", "applies-to-event", "supersedes", "revokes", "assignee", "notify-when-done", "notify", "ask", "person", "list", "group", "tool", "board", "folder", "document", "upload", "blob", "category", "project", "conversation", "column", "client-message-id", "reply-to", "participant", "template", "todo"}
 
 // idPositions are the positions that take an ID among other names for a thing;
 // a position whose name ends in "Id" takes nothing else and is held by the

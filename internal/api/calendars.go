@@ -49,6 +49,15 @@ type EventTime struct {
 	LastDay  *string `json:"lastDay"` // the first day again for one day
 }
 
+// EventOccurrence is one time an event takes place at in a span. Day is the
+// day the schedule of a series gives for it, which stays the same where the
+// occurrence was moved and is what names its meeting; it is nil for an event
+// that does not repeat, and from a Minka that knows no meetings.
+type EventOccurrence struct {
+	EventTime
+	Day *string `json:"day"`
+}
+
 // EventLine is an event as a span of days lists it: without its description,
 // and with the times it takes place at in the span. Its own time is that of
 // the event, for a series its first occurrence, which may lie before the span.
@@ -64,7 +73,7 @@ type EventLine struct {
 	Highlighted  bool                `json:"highlighted"`
 	Participants []PersonReference   `json:"participants"`
 	CommentCount int                 `json:"commentCount"`
-	Occurrences  []EventTime         `json:"occurrences"` // in the order they start, never empty
+	Occurrences  []EventOccurrence   `json:"occurrences"` // in the order they start, never empty
 	AppURL       string              `json:"appUrl"`
 }
 

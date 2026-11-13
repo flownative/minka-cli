@@ -42,14 +42,14 @@ const (
 var decisionNames = []string{"decisionId", "--supersedes", "--revokes"}
 
 // decisionRoles are the roles a status goes by, as Minka spells them.
-var decisionRoles = []string{"draft", "proposed", "holds", "done", "superseded", "revoked", "rejected"}
+var decisionRoles = []string{"draft", "proposed", "deferred", "holds", "done", "superseded", "revoked", "rejected"}
 
 const decisionNotFoundHint = "There is no such decision, it is in the trash, it belongs to a project you are not a member of, or you are a client of the project and it is not shown to you: a client never meets a draft."
 
 const decisionsToolNotFoundHint = "There is no such Decisions tool, it is in the trash, it belongs to a project you are not a member of, or you are a client of the project and it is not shown to you. The tools of a project: minka decisions tools <projectId>"
 
 const decisionStatusHelp = `A status is named by its ID or by its role, in any case: draft, proposed,
-holds, done, superseded, revoked or rejected. A status the team added has no
+deferred, holds, done, superseded, revoked or rejected. A status the team added has no
 role and is named by its ID; "decisions statuses <toolId>" lists them all. A
 client of the project is never offered draft.`
 
@@ -322,7 +322,8 @@ func (a *app) newDecisionsShowCmd() *cobra.Command {
 		Use:   "show <decisionId>",
 		Short: "Show a decision with its body, history, consequences and comments",
 		Long: `Shows a decision: its sentence, reason and status, who decided, when and in
-which event, the votes, what it applies to, the days Minka acts on, the earlier
+which event, the votes (votesFor, votesAgainst and abstentions as a meeting
+counted them, and the note votes), what it applies to, the days Minka acts on, the earlier
 decision it supersedes or revokes and the later ones that took its place, its
 history and consequences, its labels, its body and its comments. In text
 output the body is converted to Markdown, which decisions edit --body turns
@@ -1621,7 +1622,7 @@ The versions are the team's alone: a client of the project gets exit 2
 		Use:   "show <decisionId> <versionId>",
 		Short: "Show one version of a decision",
 		Long: `Shows one version of a decision as it was written: the sentence, the reason,
-the day, who decided, the event, the votes and the body. In text output the
+the day, who decided, the event, the votes with their counts and the body. In text output the
 body is converted to Markdown; in JSON it is the HTML the server stored. The
 IDs come from decisions versions list.`,
 		Args: requireArgs("decisionId", "versionId"),
@@ -1652,7 +1653,7 @@ IDs come from decisions versions list.`,
 					if v.Reason != nil {
 						fmt.Fprintf(w, "Reason: %s\n", *v.Reason)
 					}
-					renderDecisionCircumstances(w, v.DecidedOn, v.DecidedBy, v.DecidedIn, v.Votes)
+					renderDecisionCircumstances(w, v.DecidedOn, v.DecidedBy, v.DecidedIn, describeVotes(v.VotesFor, v.VotesAgainst, v.Abstentions, v.Votes))
 					fmt.Fprintf(w, "URL: %s\n", v.AppURL)
 					if body := richtext.ToMarkdown(v.Body); body != "" {
 						fmt.Fprintf(w, "\n## Body\n\n%s\n", body)
@@ -2019,7 +2020,7 @@ func renderDecision(w io.Writer, d api.Decision) {
 	if d.Reason != nil {
 		fmt.Fprintf(w, "Reason: %s\n", *d.Reason)
 	}
-	renderDecisionCircumstances(w, d.DecidedOn, d.DecidedBy, d.DecidedIn, d.Votes)
+	renderDecisionCircumstances(w, d.DecidedOn, d.DecidedBy, d.DecidedIn, describeVotes(d.VotesFor, d.VotesAgainst, d.Abstentions, d.Votes))
 	if d.AgendaNumber != nil {
 		fmt.Fprintf(w, "Agenda item: %d of the decisions written down with it\n", *d.AgendaNumber)
 	}
@@ -2069,7 +2070,7 @@ func renderDecision(w io.Writer, d api.Decision) {
 
 // renderDecisionCircumstances names when, by whom, where and by how many
 // votes a decision was taken, each where it is known.
-func renderDecisionCircumstances(w io.Writer, decidedOn *string, decidedBy []api.Decider, decidedIn *api.DecisionEvent, votes *string) {
+func renderDecisionCircumstances(w io.Writer, decidedOn *string, decidedBy []api.Decider, decidedIn *api.DecisionEvent, votes string) {
 	if decidedOn != nil {
 		fmt.Fprintf(w, "Decided on: %s\n", *decidedOn)
 	}
@@ -2088,8 +2089,8 @@ func renderDecisionCircumstances(w io.Writer, decidedOn *string, decidedBy []api
 	if decidedIn != nil {
 		fmt.Fprintf(w, "Decided in: %s on %s (%s)\n", decidedIn.Title, decidedIn.StartsOn, decidedIn.ID)
 	}
-	if votes != nil {
-		fmt.Fprintf(w, "Votes: %s\n", *votes)
+	if votes != "" {
+		fmt.Fprintf(w, "Votes: %s\n", votes)
 	}
 }
 

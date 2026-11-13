@@ -311,7 +311,7 @@ minka cards unsubscribe <cardId> <person> --json
 - `cards steps create` adds a step at the end. A step is one line of at most 500
   characters: `stepMissing`, `stepTooLong` and `stepHasControlCharacters` exit 9.
   It comes without people and without a due day; give them with `cards steps edit`.
-  `data` is the new step, with `--card` too, so `data.id` is the step's ID for
+  `data` is the new step, with `--card` and `--todo` too, so `data.id` is the step's ID for
   a following `cards steps edit` or `cards steps move`.
 - `cards steps edit <cardId> <step>` changes the text, the people and the due day in
   one request; what is not given stays. `--title` follows the rules of
@@ -370,6 +370,32 @@ minka cards unsubscribe <cardId> <person> --json
   refused for a new card are refused here alike, and nothing is written.
 - A Minka without card steps answers `--card` and `make-card` with exit 2 and
   a message that the host does not know card steps yet.
+
+### A to-do as a step
+
+- `cards steps create <cardId> --todo <todoId>` attaches a to-do, named by
+  its ID alone (a to-do has no short identifier). A step is a text, a card or
+  a to-do: `--todo` beside a text or beside `--card` is a usage error (exit
+  1), and nothing is sent. The to-do can be of any project you see it in,
+  also in an archived list, done or open, and a step of several cards. It is
+  a step of the same card at most once: attaching it again succeeds (the
+  summary says it was a step already) without a second step. A to-do you
+  cannot see or one in the trash is `stepTodoUnknown` (exit 9).
+- A to-do step has no title, tick, due day or people of its own. Its `title`
+  is the to-do's, `completed` says the to-do is done, `assignees` is `[]`,
+  `dueOn` null, `card` null, and `todo` is `{kind, id, title, projectId,
+  toolId, listId, completed, appUrl}`. Every other step has `todo: null`.
+- **Tick the to-do, not the step:** `minka todos complete <todoId>` (or
+  `reopen`), and the step follows by itself. `cards steps edit`, `complete`
+  and `reopen` on a to-do step are refused with `stepIsATodo` (exit 9), and
+  the hint carries the `todos` command. `make-card` is refused the same way:
+  a to-do does not become a card. A to-do step moves like any step; `cards
+  steps delete` removes only the link, the to-do stays.
+- A to-do you cannot see, or one in the trash, reads as `"todo": {"kind":
+  "todo"}` with an empty title and `completed: false`, shown as `(a to-do you
+  cannot open)`; name the step by its position or ID.
+- A Minka without to-do steps (before v0.122.0) answers `--todo` with exit 2
+  and a message that the host does not know to-do steps yet.
 
 ## Due dates
 

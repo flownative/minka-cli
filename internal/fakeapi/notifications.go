@@ -74,7 +74,7 @@ var notificationKinds = []string{
 	"comment.written", "post.added", "checkinAnswer.added", "checkinQuestion.asked",
 	"calendarEvent.participantAdded", "calendarEvent.moved", "calendarEvent.dayMoved", "calendarEvent.dayCancelled",
 	"calendarEvent.startsSoon", "reminder.due", "person.mentioned", "person.mentionedPrivately",
-	"board.conventionsChanged",
+	"board.conventionsChanged", "meeting.closed",
 }
 
 // reactionKind is the occasion of a reaction, which the bell rolls up into one
