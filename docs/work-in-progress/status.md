@@ -353,6 +353,21 @@ reacting to a post itself and showing one to clients have no address in the
 API. None of it has been seen live: the whole feature is checked against the
 fake, see below.
 
+The meeting of an event is read with `events meeting show` and kept with
+`events meeting agenda add`, `move` and `remove`, `events meeting outcome`
+and `events meeting close`; `events list` and `events mine` hand out the
+`day` of every occurrence, which names the meeting of a series. The rule the
+commands follow is [Meetings](../stable/meetings.md) (C-183…C-186). Minka
+carries meetings, and the role `deferred` of a status, from v0.122.0; against
+an older one every command exits 2 and says the host does not know meetings.
+On Minka's `main` (7e5def35c) and in no release yet, a vote field an outcome
+leaves out keeps its value and null clears it. Until a release carries that, a
+released Minka clears the votes on the agenda item on a correction without
+vote flags, and sets the decision's other three to none where one vote field
+is sent; the help describes the rule of `main`. Checked against Minka's code
+and `ApiMeetingTest`, `ApiEventsTest` and `ApiMyCalendarTest` at 7e5def35c and
+the fake, not live.
+
 The decisions of a Decisions tool are read with `decisions tools`, `tool`,
 `statuses`, `list` (`--holds`, `--status`, `--label`, `--applies-to-card`,
 `--applies-to-event`), `show` and `versions list`/`show`, and written with
@@ -1074,6 +1089,28 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   card, and stands in for a Minka without
   to-do steps by a switch. A to-do of a template list as a step is decided
   nowhere in Minka and is not mirrored.
+- The meeting of an event (`events meeting …`, `day` on an occurrence): every
+  request of it. Read in `MeetingApiController`, `ReadsDecisionFields`, the
+  meeting resources, `PutDecisionsOnMeetingAgendaHandler`,
+  `RecordMeetingOutcomeHandler`, `CloseMeetingHandler`,
+  `DbalMeetingAgendaRepository`, `DbalDecisionRepository`,
+  `MeetingAgendaQueryService` and `ApiMeetingTest` at Minka 7e5def35c, and
+  mirrored by the fake in the order of
+  [Meetings](../stable/meetings.md#the-order-of-the-refusals). What the fake
+  does not mirror: the votes of a released Minka, which clears what an outcome
+  leaves out; the people a closed
+  meeting enrols on the decisions it accepted; a meeting or an item gone
+  between the checks of one request; a
+  series whose schedule only a newer Minka knows; the vote counts of a
+  decision on `decisions create` and `edit`, which the fake reads from an
+  outcome alone; and a Decisions tool in the trash, which the fake does not
+  have: at Minka the items of its decisions are hidden, count for nothing and
+  do not keep a meeting from being closed. It
+  tells of a closed meeting with
+  a line of the bell whose wording is its own, moves an occurrence and
+  cancels a day only where a test sets that, judges such a day by the
+  schedule alone, where Minka also drops a move of the wrong kind, all-day
+  against timed, and stands in for a Minka without meetings by a switch.
 - `projects edit`: no request of it has gone to a real Minka, and none can
   until a release carries the rename. Read in `ProjectsApiController::
   updateProjectAction`, `DbalProjectRepository::rename` and `RenameProjectTest`

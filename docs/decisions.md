@@ -2783,3 +2783,46 @@ that is no ID as well; nothing is sent. **Why:** a Minka from before
 `stepCardAndTodo` takes the card and passes over the to-do without a word, so
 the step added would not be the one asked for.
 **Implemented as:** `cli.newCardsStepsCreateCmd`, `cli.addTodoStep`, see [Steps](stable/steps.md#a-to-do-as-a-step).
+
+<a id="c-183"></a>
+## C-183 — The day of a meeting goes into the query, whenever it is given
+
+*Applies to: `events meeting …`*
+
+`--day` is held to a day that exists before any request, sent as the query
+`day` on every request and never in a body, also for an event that does not
+repeat. **Why:** Minka may read a body's `day` as the same argument, and only
+Minka knows whether an event repeats, so the CLI does not decide to drop it.
+**Implemented as:** `api.meetingPath`, `cli.checkMeetingDay`, see [Meetings](stable/meetings.md#the-day-of-a-series).
+
+<a id="c-184"></a>
+## C-184 — An agenda item is named by its ID, its number or its decision
+
+*Applies to: `events meeting agenda move`, `agenda remove`, `outcome`*
+
+The item is found in one read of the meeting: by its ID, its number as shown,
+or the ID or short identifier of its decision; an unknown number or name is
+exit 1, an ID on no item goes to Minka. **Why:** people point at an agenda by
+place or by decision, and the item's own ID stands nowhere but in the answer.
+**Implemented as:** `cli.resolveAgendaItem` over `cli.findLine`, see [Meetings](stable/meetings.md#naming-an-item).
+
+<a id="c-185"></a>
+## C-185 — An outcome sends exactly the vote fields given
+
+*Applies to: `events meeting outcome`*
+
+Only the vote flags given go out, nothing read is carried over, and
+`--no-votes` sends the note as null. **Why:** Minka keeps a field left out
+and clears one sent as null, so a value read and sent back would overwrite
+what somebody recorded in between.
+**Implemented as:** `cli.newMeetingOutcomeCmd`, see [Meetings](stable/meetings.md#the-outcome).
+
+<a id="c-186"></a>
+## C-186 — Closing a meeting needs `--audience`
+
+*Applies to: `events meeting close`*
+
+Without `--audience` the command is exit 1 and sends nothing, although Minka
+reads a missing audience as everybody. **Why:** closing cannot be undone and
+tells people, and nobody is told by a flag left out, as for a decision.
+**Implemented as:** `cli.newMeetingCloseCmd`, with `cli.audienceInput` of the decisions, see [Meetings](stable/meetings.md#closing).

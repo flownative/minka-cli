@@ -580,6 +580,11 @@ type Server struct {
 	// has no address.
 	KnowsNoCardSteps bool
 
+	// KnowsNoMeetings makes the server answer like a Minka from before an
+	// event had a meeting: the meeting has no address, and an occurrence of
+	// a span names no day.
+	KnowsNoMeetings bool
+
 	// KnowsNoTodoSteps makes the server answer like a Minka from before a
 	// to-do could be the step of a card: a step carries no to-do, and a todoId
 	// in the body of a new step is passed over, so that only the missing
@@ -634,6 +639,15 @@ type Server struct {
 	// anything of it is looked at. It lets a test change the steps between
 	// the read of the card and the move, as somebody else on the web would.
 	BeforeMovingStep func(*Card)
+
+	// BeforeMovingAgendaItem is called with the meeting of every move of an
+	// agenda item before its neighbours are looked at. It lets a test change
+	// the agenda between the read of the meeting and the move.
+	BeforeMovingAgendaItem func(*Meeting)
+
+	// NewerMeetingFields are fields a newer Minka might add to a meeting,
+	// which every answer with a meeting then carries beside its own.
+	NewerMeetingFields map[string]any
 
 	// StoreURL stands for a file store that serves the bytes itself. Where it
 	// is set, a picture is answered with a redirect there, the way an

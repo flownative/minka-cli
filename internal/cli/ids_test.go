@@ -392,6 +392,26 @@ var idsInCapitals = []idInCapitals{
 	{command: "events create", inputs: []string{"--tool", "--participant"}, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
 		return []string{"--tool", up(f.Calendar.ID), "--title", "Setting up", "--first-day", "2026-10-20", "--participant", up(f.Anke.ID)}
 	}},
+	{command: "events meeting agenda move", inputs: []string{"<item>", "--after"}, args: func(e *testEnv, f *fakeapi.Fixture) []string {
+		first, second := withAnAgenda(e)
+		return []string{up(f.OnceEvent.ID), up(first.ID), "--after", up(second.ID)}
+	}},
+	{command: "events meeting agenda move", inputs: []string{"--before"}, args: func(e *testEnv, f *fakeapi.Fixture) []string {
+		first, second := withAnAgenda(e)
+		return []string{f.OnceEvent.ID, up(second.DecisionID), "--before", up(first.DecisionID)}
+	}},
+	{command: "events meeting agenda remove", inputs: []string{"<item>"}, args: func(e *testEnv, f *fakeapi.Fixture) []string {
+		first, _ := withAnAgenda(e)
+		return []string{up(f.OnceEvent.ID), up(first.ID)}
+	}},
+	{command: "events meeting outcome", inputs: []string{"<item>"}, args: func(e *testEnv, f *fakeapi.Fixture) []string {
+		first, _ := withAnAgenda(e)
+		return []string{up(f.OnceEvent.ID), up(first.ID), "accepted"}
+	}},
+	{command: "events meeting close", inputs: []string{"--notify"}, args: func(e *testEnv, f *fakeapi.Fixture) []string {
+		withAnAgenda(e)
+		return []string{up(f.OnceEvent.ID), "--audience", "chosen", "--notify", up(f.Anke.ID)}
+	}},
 	{command: "events edit", inputs: []string{"--participant"}, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
 		return []string{f.OnceEvent.ID, "--participant", up(f.Anke.ID)}
 	}},

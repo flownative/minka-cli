@@ -43,10 +43,17 @@ minka decisions comments unreact <decision> <commentId> 👍 --json
 - Before you work in a project, read what holds: `decisions tools
   <projectId>` names the tools, `decisions list <toolId> --holds` the
   decisions in force, each with its ID, sentence and reason. Nothing is paged.
-  `decisions show <decisionId>` gives the whole decision.
+  `decisions show <decisionId>` gives the whole decision, with the votes a
+  meeting counted: `votesFor`, `votesAgainst`, `abstentions` (each null where
+  nobody counted) beside the note `votes`; a version carries them too. Only
+  `events meeting outcome` writes the counts: `decisions create` and `edit`
+  have no flag for them.
 - Every status is listed unless `--status` names one. A status is named by
-  its ID or by its **role**, in any case: `draft`, `proposed`, `holds`,
-  `done`, `superseded`, `revoked`, `rejected`. "In force" is no role (exit 9
+  its ID or by its **role**, in any case: `draft`, `proposed`, `deferred`,
+  `holds`, `done`, `superseded`, `revoked`, `rejected` (`deferred` from Minka
+  v0.122.0). A decision that is `proposed` or `deferred` can go on the agenda
+  of a meeting, whose outcome then sets its status: see
+  [calendars.md](calendars.md), "Meetings". "In force" is no role (exit 9
   `decisionStatusUnknown`). A status the team added has no role; `decisions
   statuses <toolId>` lists all with their IDs. A client is never offered
   `draft` and never meets a draft.

@@ -109,15 +109,23 @@ behalf of" the person.
 
 `decisions show` gives the decision with `body` and `bodySource`, its files,
 labels, comments (oldest first), `statusSetBy`, `decidedBy` (each `{person,
-name}`), `decidedIn`, `votes`, `supersedes` or `revokes` and `supersededBy` and
+name}`), `decidedIn`, `votes` (the note) with the counts `votesFor`,
+`votesAgainst` and `abstentions`, `supersedes` or `revokes` and `supersededBy` and
 `revokedBy`, `history` and `consequences` with `consequencesDone`,
 `appliesTo`, `validUntil` and `reviewOn`. The text converts the body to
 Markdown. A decision of the archive is read and says so. A client meets only
 a decision shown to clients, never a draft, and no version.
 
 `decisions versions list` and `show` read the versions, oldest first: the
-sentence, reason, body, day, who decided, event and votes. A change of the
+sentence, reason, body, day, who decided, event and votes, the counts
+included. A change of the
 status or of the earlier decision makes none. They are the team's alone.
+
+The three counts are whole numbers, each null where nobody counted. The
+outcome of a meeting writes them ([Meetings](meetings.md#the-outcome)); the
+`decisions` commands read them and have no flag for them. The text view of
+`show` and of a version gives the counts and the note in one line, as the
+outcome of a meeting does: `Votes: 7 for, 2 against, Show of hands`.
 
 ## Writing
 

@@ -340,7 +340,7 @@ they stand at its top. Read the one you need, not all of them.
 | Check-ins: questions and answers | [references/checkins.md](references/checkins.md) |
 | Posts of the message board | [references/posts.md](references/posts.md) |
 | Decisions: what holds and why, statuses, writing one down, superseding and revoking, history and consequences | [references/decisions.md](references/decisions.md) |
-| Calendars and events | [references/calendars.md](references/calendars.md) |
+| Calendars and events; the meeting of an event with `minka events meeting`: its agenda of decisions, the outcomes, closing it | [references/calendars.md](references/calendars.md) |
 | Reminders ("Remind me") | [references/reminders.md](references/reminders.md) |
 | Importing from Basecamp | [references/basecamp-import.md](references/basecamp-import.md) |
 

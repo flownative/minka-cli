@@ -28,7 +28,7 @@ const (
 // decisionRoles are the roles a status of a Decisions tool goes by, in the
 // order a new tool lists them, with the English name each is shown by.
 var decisionRoles = []struct{ role, name string }{
-	{"draft", "Draft"}, {"proposed", "Proposed"}, {"holds", "In force"}, {"done", "Done"},
+	{"draft", "Draft"}, {"proposed", "Proposed"}, {"deferred", "Deferred"}, {"holds", "In force"}, {"done", "Done"},
 	{"superseded", "Superseded"}, {"revoked", "Revoked"}, {"rejected", "Rejected"},
 }
 
@@ -84,8 +84,12 @@ type DecisionVersion struct {
 	DecidedBy []Decider
 	EventID   string
 	Votes     string
-	AuthorID  string
-	WrittenAt time.Time
+	// The votes counted, each nil where nobody counted.
+	VotesFor     *int
+	VotesAgainst *int
+	Abstentions  *int
+	AuthorID     string
+	WrittenAt    time.Time
 }
 
 // DecisionEntry is one entry of the history or the consequences of a
@@ -101,15 +105,22 @@ type DecisionEntry struct {
 // Decision is one decision of a tool. StatusID is empty for a decision from
 // before its tool had statuses, which holds.
 type Decision struct {
-	ID         string
-	Title      string
-	Reason     string // empty for none
-	Body       string // the HTML as stored, empty for none
-	StatusID   string
-	DecidedOn  string // YYYY-MM-DD, empty while the day is not known
-	DecidedBy  []Decider
-	EventID    string // the event it was taken in, empty for none
-	Votes      string
+	ID        string
+	Title     string
+	Reason    string // empty for none
+	Body      string // the HTML as stored, empty for none
+	StatusID  string
+	DecidedOn string // YYYY-MM-DD, empty while the day is not known
+	DecidedBy []Decider
+	EventID   string // the event it was taken in, empty for none
+	Votes     string // the note beside the counts
+
+	// The votes counted, each nil where nobody counted. Only the outcome of
+	// a meeting writes them.
+	VotesFor     *int
+	VotesAgainst *int
+	Abstentions  *int
+
 	ValidUntil string
 	ReviewOn   string
 
@@ -1167,14 +1178,21 @@ func (s *Server) moveTheEarlier(tool *DecisionsTool, decision *Decision, writer 
 func (decision *Decision) snapshot(authorID string, at time.Time) *DecisionVersion {
 	return &DecisionVersion{ID: newID(), Title: decision.Title, Reason: decision.Reason, Body: decision.Body,
 		DecidedOn: decision.DecidedOn, DecidedBy: slices.Clone(decision.DecidedBy), EventID: decision.EventID,
-		Votes: decision.Votes, AuthorID: authorID, WrittenAt: at}
+		Votes: decision.Votes, VotesFor: decision.VotesFor, VotesAgainst: decision.VotesAgainst, Abstentions: decision.Abstentions,
+		AuthorID: authorID, WrittenAt: at}
+}
+
+// sameCount says whether two counts of votes are the same, counted or not.
+func sameCount(a, b *int) bool {
+	return a == nil && b == nil || a != nil && b != nil && *a == *b
 }
 
 // sameText says whether two versions say the same; a version is kept only
 // of what differs.
 func (v *DecisionVersion) sameText(other *DecisionVersion) bool {
 	return v.Title == other.Title && v.Reason == other.Reason && v.Body == other.Body && v.DecidedOn == other.DecidedOn &&
-		slices.Equal(v.DecidedBy, other.DecidedBy) && v.EventID == other.EventID && v.Votes == other.Votes
+		slices.Equal(v.DecidedBy, other.DecidedBy) && v.EventID == other.EventID && v.Votes == other.Votes &&
+		sameCount(v.VotesFor, other.VotesFor) && sameCount(v.VotesAgainst, other.VotesAgainst) && sameCount(v.Abstentions, other.Abstentions)
 }
 
 // dayAnEventBrings is the day of an event that does not repeat, in the zone
@@ -1228,7 +1246,8 @@ func (s *Server) decisionVersion(w http.ResponseWriter, r *http.Request, person 
 			"author": s.personReferenceOrNil(version.AuthorID), "writtenAt": timestamp(version.WrittenAt),
 			"appUrl":    s.decisionURL(tool, decision) + "/versions/" + version.ID,
 			"decidedBy": s.deciderResources(version.DecidedBy), "decidedIn": s.eventReferenceOf(tool, version.EventID, person),
-			"votes": nullable(version.Votes),
+			"votes": nullable(version.Votes), "votesFor": countOrNil(version.VotesFor),
+			"votesAgainst": countOrNil(version.VotesAgainst), "abstentions": countOrNil(version.Abstentions),
 		})
 		return
 	}
@@ -1747,7 +1766,8 @@ func (s *Server) decisionResource(tool *DecisionsTool, decision *Decision, perso
 		"comments": s.commentResources(tool.ProjectID, s.decisionURL(tool, decision), decision.Comments),
 		"appUrl":   s.decisionURL(tool, decision), "archived": decision.Archived,
 		"decidedBy": s.deciderResources(decision.DecidedBy), "decidedIn": s.eventReferenceOf(tool, decision.EventID, person),
-		"votes": nullable(decision.Votes), "supersedes": supersedes, "revokes": revokes,
+		"votes": nullable(decision.Votes), "votesFor": countOrNil(decision.VotesFor), "votesAgainst": countOrNil(decision.VotesAgainst),
+		"abstentions": countOrNil(decision.Abstentions), "supersedes": supersedes, "revokes": revokes,
 		"supersededBy": supersededBy, "revokedBy": revokedBy, "history": history, "consequences": consequences,
 		"consequencesDone": done, "appliesTo": s.subjectReferenceOf(decision, person),
 		"validUntil": nullable(decision.ValidUntil), "reviewOn": nullable(decision.ReviewOn),

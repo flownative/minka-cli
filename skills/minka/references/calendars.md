@@ -24,6 +24,12 @@ minka events comments edit <eventId> <commentId> - [--format html] --json < comm
 minka events comments delete <eventId> <commentId> --json
 minka events comments react <eventId> <commentId> 👍 --json
 minka events comments unreact <eventId> <commentId> 👍 --json
+minka events meeting show <eventId> [--day YYYY-MM-DD] --json
+minka events meeting agenda add <eventId> <decision>... [--day YYYY-MM-DD] --json
+minka events meeting agenda move <eventId> <item> (--top | --bottom | --after <item> | --before <item>) [--day YYYY-MM-DD] --json
+minka events meeting agenda remove <eventId> <item> [--day YYYY-MM-DD] --json
+minka events meeting outcome <eventId> <item> accepted|accepted-with-changes|rejected|deferred [--sentence "…"] [--votes "note" | --no-votes] [--votes-for N] [--votes-against N] [--abstentions N] [--day YYYY-MM-DD] --json
+minka events meeting close <eventId> --audience everybody|chosen|nobody [--notify <person>]... [--day YYYY-MM-DD] --json
 ```
 
 ## Reading
@@ -53,7 +59,10 @@ minka events comments unreact <eventId> <commentId> 👍 --json
   `occurrences`, the times it takes place at in the span, never empty and in
   the order they start. The event's own `startsAt`/`endsAt`/`firstDay`/
   `lastDay` are its first occurrence, which for a series may lie years before
-  the span. A line has no description.
+  the span. A line has no description. Each occurrence carries `day`: the day
+  the schedule of a series gives for it, the same where the occurrence was
+  moved to another day, `null` for an event that does not repeat. It is the
+  `--day` of `events meeting`.
 - `events show <eventId>` gives the event with `description`,
   `descriptionSource`, its files, `schedule`, `timeZone`, `joinUrl`,
   `highlighted` and `participants`.
@@ -91,6 +100,71 @@ minka events comments unreact <eventId> <commentId> 👍 --json
   for everybody, whether the calendar's span carries what is due. Minka's
   words, as written: anything else is exit 9 `calendarContentUnknown`. Only
   the team chooses: a client is exit 2, after the value and the archive.
+
+## Meetings
+
+Every event you can see has a **meeting**: the agenda of the decisions it is
+to take, the outcome of each, and whether it is closed. Minka has them from
+v0.122.0; an older one answers every command with exit 2 and "does not know
+meetings".
+
+- **A series meets on each of its days**, each with its own agenda, so name
+  the day: `--day YYYY-MM-DD`. It is `occurrences[].day` of `events list` or
+  `events mine`, the day the schedule gives: **not** the first day of the
+  series, and for a moved occurrence not the day it takes place on. Without
+  it a series is exit 9 `meetingDayMissing`; a day the series does not meet
+  on is exit 2. An event that does not repeat needs no `--day`. A cancelled
+  day reads with `cancelled: true` and takes no agenda and no other change
+  (exit 2).
+- `events meeting show <eventId>`: `data` is `{eventId, projectId, toolId,
+  title, day, cancelled, closed, closedAt, closedBy, mayClose, items,
+  appUrl}`. An item has `id` (its own, not the decision's), `number` (from 1,
+  as you are shown the agenda), `current` (the first item without an
+  outcome), `decision` (`{id, title, status, archived, appUrl, shortId}`),
+  `outcome` (null, or `{outcome, status, withChanges, votes, votesFor,
+  votesAgainst, abstentions, recordedBy, recordedAt}`) and `mayMove`,
+  `mayTakeOff`, `mayRecordOutcome`. **Go by these flags and `mayClose`**, not
+  by a guess. An event without an agenda has `items: []`.
+- `<item>` is the item's ID, its number, or its decision (ID or short
+  identifier such as `ENT-14`). A number or name on no item is exit 1 with
+  the agenda in the hint.
+- `events meeting agenda add <eventId> <decision>...` puts decisions (ID or
+  short identifier) at the end, in one request, all or none. Only a decision
+  of the event's project that is still to be taken goes on: role `proposed`
+  or `deferred`, or a status the team added; else exit 9
+  `decisionNotForAMeetingAgenda`, `decisionUnknown` (unknown, archived, other
+  project, hidden) or `decisionAlreadyOnMeetingAgenda`. Putting on changes
+  nothing on the decision.
+- `events meeting agenda move <eventId> <item>` needs exactly one of `--top`,
+  `--bottom` (the end of the agenda as you are shown it), `--after <item>`, `--before <item>`. `events meeting agenda
+  remove <eventId> <item>` takes the item off and keeps the decision; `data`
+  is `{eventId, day, itemId, decisionId}`. A second removal is exit 2.
+- **`events meeting outcome <eventId> <item> <outcome>` changes the
+  decision's status** (the word in any case): `accepted` and `accepted-with-changes` put it into the
+  status of role `holds`, `rejected` and `deferred` into theirs; all but
+  `deferred` also set the day and the event it was decided on to this
+  meeting. `accepted-with-changes` needs `--sentence "…"`, the decision's new
+  sentence; no other outcome takes one. It tells nobody. The last outcome
+  written stands: recording again corrects it, without a guard.
+- Votes: `--votes "note"`, `--votes-for N`, `--votes-against N`,
+  `--abstentions N` (0 to 99999). Only what you give is sent; a vote flag left
+  out keeps what stands, `--no-votes` takes the note off. A Minka of v0.122
+  clears the votes a correction leaves out instead: give them again there.
+- **`events meeting close <eventId> --audience everybody|chosen|nobody`
+  cannot be undone and tells people.** `--audience` is required, and
+  `everybody` is the humans of the project, no agent; `--notify
+  <person>` (repeatable) goes with `chosen` alone. Ask the person before you
+  close a meeting or choose whom it tells. A closed meeting takes no decision,
+  move or removal, and only the correction of an outcome it has: anything
+  else is exit 9 `meetingClosed`. Exit 2 on `close` means there is nothing to
+  close or you may not close it: an empty agenda, or an item you may not
+  change (`mayClose` says so beforehand).
+- Codes, all exit 9: `meetingDayMissing`, `meetingClosed`, `decisionUnknown`,
+  `decisionNotForAMeetingAgenda`, `decisionAlreadyOnMeetingAgenda`,
+  `agendaPlaceUnknown`, `meetingOutcomeHasNoStatus` (the decision's tool has
+  no status of the role), `decisionTitleTooLong`, `decisionVotesTooLong`,
+  `notifyIdsMissing`, `notifyIdsWithoutChosenAudience`,
+  `personNotAProjectMember`, `personCannotSeeIt`, `projectArchived`.
 
 ## Comments
 

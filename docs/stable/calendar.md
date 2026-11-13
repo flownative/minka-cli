@@ -4,7 +4,9 @@ A calendar of a project holds **events**: one-off, all-day or repeating.
 `events tools` lists the calendars of a project, `events list` and `events
 show` read, `events create`, `edit` and `delete` write
 ([C-098](../decisions.md#c-098)), and `events comments` reads and writes the
-comments under an event ([C-095](../decisions.md#c-095)). Beside its events a
+comments under an event ([C-095](../decisions.md#c-095)); `events meeting`
+reads and keeps the agenda of an event, for which see
+[Meetings](meetings.md). Beside its events a
 calendar shows what of its project is due, unless its team chose otherwise
 with `events settings`, and `events mine` reads My calendar, across projects
 ([C-106](../decisions.md#c-106)). `events tool <toolId>` reads one calendar by
@@ -73,7 +75,12 @@ themselves are Minka's to judge (`eventsSpanNotADay`, `eventsSpanOutOfOrder`,
   same.
 - **Every event stands in the span once**, a series too, with `occurrences`:
   the times it takes place at in the span, each shaped like the time of an
-  event, in the order they start, and never empty. An event without an
+  event, in the order they start, and never empty. Each carries `day` besides:
+  the day the schedule of a series gives for it, which stays the same where
+  the occurrence was moved, and null for an event that does not repeat. It
+  names the meeting of the occurrence ([Meetings](meetings.md#the-day-of-a-series)),
+  and the text view shows it where the occurrence does not start on it. A
+  cancelled day of a series is left out. An event without an
   occurrence in the span is left out. The four time fields of the line are the
   event's own, for a series its first occurrence, which may lie long before the
   span. An agenda is laid out from the occurrences, not from the lines.

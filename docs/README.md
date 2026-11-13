@@ -131,6 +131,12 @@ the documentation says what holds; how it came about is in git.
   time given as moments or days, the zone a series keeps its clock time in,
   what an edit does to the repetition, the write without a guard, the order of
   the refusals — before any work on `events`.
+- [Meetings](stable/meetings.md): What the meeting of an event hands over and
+  what its flags allow, the day that names the meeting of a series and where
+  it is found, the three ways to name an agenda item, what an outcome does to
+  the decision and to the votes, why closing asks for its audience, what an
+  older Minka answers, the order of the refusals — before any work on `events
+  meeting`.
 - [Reminders](stable/reminders.md): What a reminder of one's own is, the
   kind beside the ID and why it is checked here, the preset counted in
   Minka's zone and the moment sent as written, the list cut before what is out

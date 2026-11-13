@@ -58,13 +58,13 @@ func TestASpanListsEveryEventOnceAndASeriesWithItsOccurrences(t *testing.T) {
 		t.Fatalf("events %v, want by their first occurrence", ids)
 	}
 	series := events[0].(map[string]any)
-	occurrence := func(startsAt, endsAt string) any {
-		return map[string]any{"startsAt": startsAt, "endsAt": endsAt, "firstDay": nil, "lastDay": nil}
+	occurrence := func(startsAt, endsAt, day string) any {
+		return map[string]any{"startsAt": startsAt, "endsAt": endsAt, "firstDay": nil, "lastDay": nil, "day": day}
 	}
 	want := []any{
-		occurrence("2026-10-19T08:00:00.000000Z", "2026-10-19T08:30:00.000000Z"),
-		occurrence("2026-10-26T09:00:00.000000Z", "2026-10-26T09:30:00.000000Z"),
-		occurrence("2026-11-02T09:00:00.000000Z", "2026-11-02T09:30:00.000000Z"),
+		occurrence("2026-10-19T08:00:00.000000Z", "2026-10-19T08:30:00.000000Z", "2026-10-19"),
+		occurrence("2026-10-26T09:00:00.000000Z", "2026-10-26T09:30:00.000000Z", "2026-10-26"),
+		occurrence("2026-11-02T09:00:00.000000Z", "2026-11-02T09:30:00.000000Z", "2026-11-02"),
 	}
 	if !reflect.DeepEqual(series["occurrences"], want) {
 		t.Errorf("occurrences %v, want %v", series["occurrences"], want)
@@ -73,7 +73,7 @@ func TestASpanListsEveryEventOnceAndASeriesWithItsOccurrences(t *testing.T) {
 		t.Errorf("the line of the series: %v", series)
 	}
 	allDay := events[1].(map[string]any)["occurrences"]
-	if !reflect.DeepEqual(allDay, []any{map[string]any{"startsAt": nil, "endsAt": nil, "firstDay": "2026-10-20", "lastDay": "2026-10-22"}}) {
+	if !reflect.DeepEqual(allDay, []any{map[string]any{"startsAt": nil, "endsAt": nil, "firstDay": "2026-10-20", "lastDay": "2026-10-22", "day": nil}}) {
 		t.Errorf("the all-day event: %v", allDay)
 	}
 
@@ -417,7 +417,7 @@ func TestASeriesIsReadInTheDaysOfItsReader(t *testing.T) {
 			night = entry.(map[string]any)
 		}
 	}
-	want := []any{map[string]any{"startsAt": "2026-11-09T23:30:00.000000Z", "endsAt": "2026-11-09T23:45:00.000000Z", "firstDay": nil, "lastDay": nil}}
+	want := []any{map[string]any{"startsAt": "2026-11-09T23:30:00.000000Z", "endsAt": "2026-11-09T23:45:00.000000Z", "firstDay": nil, "lastDay": nil, "day": "2026-11-10"}}
 	if night == nil || !reflect.DeepEqual(night["occurrences"], want) {
 		t.Errorf("00:30 in Berlin on the 10th is the 9th in UTC: %s", span.raw)
 	}
@@ -450,7 +450,7 @@ func TestAnOccurrenceAcrossASkippedHourEndsNotBeforeItStarts(t *testing.T) {
 		"schedule": map[string]any{"rhythm": "weekly"},
 	})
 	span := callSeries(t, s, f.Token, http.MethodGet, eventsOf(f)+"?from=2026-03-29&to=2026-03-29", nil)
-	want := []any{map[string]any{"startsAt": "2026-03-29T01:30:00.000000Z", "endsAt": "2026-03-29T01:30:00.000000Z", "firstDay": nil, "lastDay": nil}}
+	want := []any{map[string]any{"startsAt": "2026-03-29T01:30:00.000000Z", "endsAt": "2026-03-29T01:30:00.000000Z", "firstDay": nil, "lastDay": nil, "day": "2026-03-29"}}
 	if ids := idsOf(t, span.body["events"]); len(ids) != 1 || ids[0] != early.body["id"] ||
 		!reflect.DeepEqual(span.body["events"].([]any)[0].(map[string]any)["occurrences"], want) {
 		t.Errorf("02:30 to 03:10 on the day 02:00 to 03:00 is skipped: %s", span.raw)
