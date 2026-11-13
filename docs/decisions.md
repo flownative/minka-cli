@@ -2772,3 +2772,14 @@ No remaining host takes its place; a `notice` says so, and a command without a
 host exits 3 with `no default host is set`. **Why:** a host left over is
 nobody's choice, and picking one would move the default silently.
 **Implemented as:** `config.File.RemoveHost`, `cli.noHostError`.
+
+<a id="c-182"></a>
+## C-182 — A step is a text, a card or a to-do, decided before any request
+
+*Applies to: `cards steps create --todo`, `--card`*
+
+`--todo` beside a text or beside `--card` is exit 1 (`usage`), and a to-do
+that is no ID as well; nothing is sent. **Why:** a Minka from before
+`stepCardAndTodo` takes the card and passes over the to-do without a word, so
+the step added would not be the one asked for.
+**Implemented as:** `cli.newCardsStepsCreateCmd`, `cli.addTodoStep`, see [Steps](stable/steps.md#a-to-do-as-a-step).

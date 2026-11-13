@@ -21,9 +21,11 @@ Everything here was read in Minka's code — `BoardApiController::addStepAction`
 ## What a read hands over
 
 A card read by itself carries `steps` in the order it shows them, each as
-`id`, `title`, `completed`, `assignees`, `dueOn` and `card`, which names the
-card a step is and is null for a step in words (see
-[A card as a step](#a-card-as-a-step)). `assignees` are
+`id`, `title`, `completed`, `assignees`, `dueOn`, `card`, which names the
+card a step is and is null for any other step (see
+[A card as a step](#a-card-as-a-step)), and `todo`, which names the to-do a
+step is in the same way (see [A to-do as a step](#a-to-do-as-a-step)).
+`assignees` are
 references in the order they were put on, and somebody who left the project
 stays on a step and is named there until taken off. `dueOn` is `YYYY-MM-DD` or
 null; a step says nothing about being overdue. A board carries only
@@ -42,7 +44,7 @@ no step goes out as it is, and Minka gives its answer.
 answers 201 with the new step, in the shape of an entry of the card's `steps`.
 People and a day come with `cards steps edit` afterwards.
 
-`data` of `cards steps create` is that step, with `--card` as well, so `data.id`
+`data` of `cards steps create` is that step, with `--card` and `--todo` as well, so `data.id`
 is the step's ID for the commands that follow. A Minka that answers with the
 whole card (201, and 200 for a card step that stands) is read too
 ([C-161](../decisions.md#c-161)): a card is told from a step by its `steps`,
@@ -57,7 +59,8 @@ that entry of the card's list. An answer without the step is exit 7
 (`unexpectedResponse`): after 201 the step is written, and the hint says not
 to repeat the command but to read the card with `cards show`; after 200
 nothing was written, as the card is a step already, and the hint points at
-`cards steps list`. The answer
+`cards steps list`. A to-do step is found the same way, by the ID of its
+to-do. The answer
 names no card, so summaries and the text view name the card as it was given:
 `#` and its short identifier, or its ID. The text view shows the step without a
 position: `[ ] Call the caterer`, `↳ #MNK-1A …` for a card step.
@@ -203,6 +206,61 @@ an address it does not have. Both exit 2 (`not_found`) with a message that the
 host does not know a card as the step of another, as `cards next` does against
 a Minka without its address (C-149).
 
+## A to-do as a step
+
+A step can be **a to-do** as well. Read in Minka's code —
+`BoardApiController::addTodoStep`, `updateStepAction`,
+`makeStepIntoCardAction`, `LinkedTodoResource`, `AddTodoStepHandler`,
+`DbalCardStepRepository`, `LinkedTodoQueryService` — and in
+`ApiCardAsStepTest` and `TodoAsStepTest`.
+
+A to-do step has no title, tick, people or day of its own: it reads as its
+to-do stands for the reader. Its `title` is the to-do's, `completed` says the
+to-do is done, `assignees` is always empty and `dueOn` null — the to-do's own
+people and days are not on the step — `card` is null, and `todo` is the to-do
+as `{kind: "todo", id, title, projectId, toolId, listId, completed, appUrl}`:
+IDs only, no names of the list or the project. A to-do the reader may not
+see, and one in the trash for every reader, is `{"kind": "todo"}` alone, and
+its step has the title `""` and reads as not done. A to-do says nothing about
+the cards it is a step of. A board's `completedStepCount` counts a to-do step
+whose to-do the reader sees done.
+
+`cards steps create <card> --todo <todoId>` sends `{"todoId": …}` alone. A
+to-do is named by its ID, which is checked before any request; it has no short
+identifier. `--todo` excludes the text and `--card`, both usage errors before
+any request ([C-182](../decisions.md#c-182)): Minka refuses a body naming
+both with `stepCardAndTodo`, and a Minka from before that refusal takes the
+card and passes over the to-do without a word. The to-do can be of any project
+the reader sees it in, in a list in the archive too, done or open, and a step
+of several cards; it is a step of the same card at most once. Minka answers
+201 with the new step at the end, and 200 with the step that stands where the
+to-do is a step of the card already; the summary says which, `data` is the
+step, and the breadcrumbs show the to-do and tick it off.
+
+A to-do step takes no `PATCH`: `stepIsATodo`, at the place of `stepIsACard`
+and asked right after it, for a to-do the reader cannot see as well. There is
+no step address that ticks the to-do: it is ticked with `todos complete`, and
+the step follows by itself. So `cards steps edit`, `complete` and `reopen` on
+a to-do step exit 9, and the hint names the command that does the same on the
+to-do — `minka todos edit`, `complete` or `reopen` with its ID; for a to-do
+the reader cannot see, the hint offers only to remove the link with `cards
+steps delete`. `cards steps make-card` on a to-do step is `stepIsATodo` too,
+and its hint says only that a to-do does not become a card. A to-do step
+moves as any step and is a neighbour as any.
+`cards steps delete` removes the link alone, and the summary says the to-do
+itself stays. The summaries name a to-do step by its to-do, `to-do step "Buy
+pegs"`, and one whose to-do the reader cannot see by its position, `step 2, a
+to-do you cannot open`.
+
+The text views show a to-do step as its to-do, with the to-do's tick and
+address: `2. ↳ to-do [x] Buy pegs  <appUrl>`. A to-do the reader cannot see is
+`2. ↳ (a to-do you cannot open)`.
+
+**An older Minka.** A Minka without to-do steps passes over `todoId` and
+refuses the missing text with `stepMissing`: exit 2 (`not_found`) with a
+message that the host does not know a to-do as the step of a card. Its steps
+carry no `todo`, and every view reads as before.
+
 ## The order of the refusals
 
 Minka checks in this order, and each step comes only where the one before it
@@ -257,9 +315,28 @@ A card as a step is checked in this order:
 4. A child that is a step already: `projectArchived`, `cardArchived`, else
    200. Then the write: `projectArchived`, `cardArchived`, else 201.
 
+A to-do as a step is checked in this order:
+
+1. The card: 404, an archived one found as well. Then the body: 415, 400.
+   Then `cardId` beside `todoId`, whatever their values: `stepCardAndTodo`,
+   before anything else of either.
+2. `title` beside `todoId`, whatever its value: `stepTitleAndTodo`. Then 400
+   for a `todoId` that is no string.
+3. The ID, trimmed, in any case: anything else, null and `""` included, and a
+   to-do the person may not see, in the trash — itself, its list or its
+   group — or of another organization, is `stepTodoUnknown`, before the
+   archive is told.
+4. A to-do that is a step already: `projectArchived`, `cardArchived`, else
+   200. Then the write: `projectArchived`, `cardArchived`, else 201.
+
+A change of a card step or a to-do step is refused right after the 404s of
+the card and the step, `stepIsACard` before `stepIsATodo`, and before the body
+is read.
+
 Making a step into a card reads no body and is checked in this order: the
 card 404, a step ID that is none 404, `projectArchived` and `cardArchived`,
-a step not on the card 404, a card step `stepIsACard`, the words as the
+a step not on the card 404, a card step `stepIsACard`, a to-do step
+`stepIsATodo`, the words as the
 title of a card (`cardTitleHasInvisibleCharacters`, `cardTitleMissing`,
 `cardTitleTooLong`, `cardTitleHasControlCharacters`), then the people
 (`personNotAProjectMember`, `agentOfAnotherPerson`). A refusal writes
@@ -280,6 +357,10 @@ nothing.
 | 422 `stepCardIsThisCard` | `cards steps create --card` with the card itself | 9 |
 | 422 `stepTitleAndCard` | unreachable: the CLI sends the text or the card; the hint calls it a fault in minka | 9 |
 | 422 `stepIsACard` | `cards steps edit`, `complete` and `reopen` on a card step, the hint naming the card to change; `cards steps make-card` on a card step | 9 |
+| 422 `stepTodoUnknown` | `cards steps create --todo`; the hint says a to-do is named by its ID | 9 |
+| 422 `stepTitleAndTodo`, `stepCardAndTodo` | unreachable: the CLI sends the text, the card or the to-do; the hint calls it a fault in minka | 9 |
+| 422 `stepIsATodo` | `cards steps edit`, `complete` and `reopen` on a to-do step, the hint naming the command on the to-do; `cards steps make-card` on a to-do step, which does not become a card | 9 |
+| 422 `stepMissing` for `--todo` | `cards steps create --todo` against a Minka without to-do steps | 2 |
 | 422 `cardTitle…`, `personNotAProjectMember`, `agentOfAnotherPerson` | `cards steps make-card` | 9 |
 | 422 `stepMissing` for `--card`, 404 page | `cards steps create --card` and `cards steps make-card` against a Minka without card steps | 2 |
 

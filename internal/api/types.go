@@ -257,6 +257,28 @@ type Step struct {
 	// Minka that knows no card steps; a card step has no people and no day of
 	// its own.
 	Card *LinkedCard `json:"card"`
+	// Todo is the to-do this step is. It is nil for any other step and from a
+	// Minka that knows no to-do steps; a to-do step has no people and no day
+	// of its own, and it is done when its to-do is.
+	Todo *LinkedTodo `json:"todo"`
+}
+
+// LinkedTodo is the to-do of a to-do step. One the reader may not see, or one
+// in the trash, carries its kind alone, and its ID is empty.
+type LinkedTodo struct {
+	Kind      string `json:"kind"`
+	ID        string `json:"id"`
+	Title     string `json:"title"`
+	ProjectID string `json:"projectId"`
+	ToolID    string `json:"toolId"`
+	ListID    string `json:"listId"`
+	Completed bool   `json:"completed"`
+	AppURL    string `json:"appUrl"`
+}
+
+// Seen says whether the reader may open the to-do.
+func (t LinkedTodo) Seen() bool {
+	return t.ID != ""
 }
 
 // LinkedCard is a card at either end of a card step. One the reader may not

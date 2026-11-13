@@ -82,17 +82,25 @@ func (s *Server) linkedCard(id string, reader *Person) (resource map[string]any,
 	}, card.Title, column.Type == "done"
 }
 
+// linkedTodo is the to-do of a to-do step as the reader sees it: in full, or
+// only as a to-do where the reader may not see it or it lies in the trash.
+func (s *Server) linkedTodo(id string, reader *Person) (resource map[string]any, title string, done bool) {
+	tool, list, todo := s.visibleTodo(id, reader)
+	if todo == nil {
+		return map[string]any{"kind": "todo"}, "", false
+	}
+	return map[string]any{
+		"kind": "todo", "id": todo.ID, "title": todo.Title, "projectId": tool.ProjectID, "toolId": tool.ID,
+		"listId": list.ID, "completed": todo.CompletedAt != nil, "appUrl": s.todoURL(tool, todo),
+	}, todo.Title, todo.CompletedAt != nil
+}
+
 // stepResources names everybody on a step, somebody who left the project
 // included, as Minka reads them without asking about the project. A card step
-// reads as its card stands for the reader.
+// reads as its card stands for the reader, a to-do step as its to-do does.
 func (s *Server) stepResources(card *Card, reader *Person) []any {
 	list := []any{}
 	for _, step := range card.Steps {
-		if step.CardID != "" && !s.KnowsNoCardSteps {
-			linked, title, done := s.linkedCard(step.CardID, reader)
-			list = append(list, map[string]any{"id": step.ID, "title": title, "completed": done, "assignees": []any{}, "dueOn": nil, "card": linked})
-			continue
-		}
 		assignees := []any{}
 		for _, id := range step.AssigneeIDs {
 			assignees = append(assignees, s.personReference(id))
@@ -101,23 +109,36 @@ func (s *Server) stepResources(card *Card, reader *Person) []any {
 		if !s.KnowsNoCardSteps {
 			resource["card"] = nil
 		}
+		if !s.KnowsNoCardSteps && !s.KnowsNoTodoSteps {
+			resource["todo"] = nil
+		}
+		switch {
+		case step.CardID != "" && !s.KnowsNoCardSteps:
+			resource["card"], resource["title"], resource["completed"] = s.linkedCard(step.CardID, reader)
+			resource["assignees"], resource["dueOn"] = []any{}, nil
+		case step.TodoID != "" && !s.KnowsNoCardSteps && !s.KnowsNoTodoSteps:
+			resource["todo"], resource["title"], resource["completed"] = s.linkedTodo(step.TodoID, reader)
+			resource["assignees"], resource["dueOn"] = []any{}, nil
+		}
 		list = append(list, resource)
 	}
 	return list
 }
 
-// completedStepCount counts the ticked steps in words and the card steps whose
-// card the reader sees in Done.
+// completedStepCount counts the ticked steps in words, the card steps whose
+// card the reader sees in Done and the to-do steps whose to-do the reader
+// sees done.
 func (s *Server) completedStepCount(card *Card, reader *Person) int {
 	completed := 0
 	for _, step := range card.Steps {
-		if step.CardID == "" {
-			if step.Completed {
-				completed++
-			}
-			continue
+		done := step.Completed
+		switch {
+		case step.CardID != "":
+			_, _, done = s.linkedCard(step.CardID, reader)
+		case step.TodoID != "":
+			_, _, done = s.linkedTodo(step.TodoID, reader)
 		}
-		if _, _, done := s.linkedCard(step.CardID, reader); done {
+		if done {
 			completed++
 		}
 	}
@@ -191,6 +212,37 @@ func (s *Server) addCardStep(w http.ResponseWriter, board *Board, column *Column
 	s.answerAStep(w, http.StatusCreated, board, column, card, step, person)
 }
 
+// addTodoStep makes a to-do a step at the end of the list. Words beside the
+// to-do are refused first, then the shape of the name, then a to-do the person
+// may not see; a to-do that is a step already is 200 with that step and
+// nothing written, unless nothing may be written on the card at all. The
+// to-do may be of any project the person sees it in.
+func (s *Server) addTodoStep(w http.ResponseWriter, board *Board, column *Column, card *Card, archived bool, fields map[string]any, person *Person) {
+	if _, namesTitle := fields["title"]; namesTitle {
+		unprocessable(w, "stepTitleAndTodo", "A step is either a title or a to-do, not both.")
+		return
+	}
+	named, ok := stringField(w, fields, "todoId")
+	if !ok {
+		return
+	}
+	_, _, todo := s.visibleTodo(strings.ToLower(phpTrim(deref(named))), person)
+	if todo == nil {
+		unprocessable(w, "stepTodoUnknown", "No to-do you may see goes by that identifier.")
+		return
+	}
+	if s.refusedAsAClosedCard(w, board, archived) {
+		return
+	}
+	if at := slices.IndexFunc(card.Steps, func(step *Step) bool { return step.TodoID == todo.ID }); at >= 0 {
+		s.answerAStep(w, http.StatusOK, board, column, card, card.Steps[at], person)
+		return
+	}
+	step := &Step{ID: newID(), TodoID: todo.ID}
+	card.Steps = append(card.Steps, step)
+	s.answerAStep(w, http.StatusCreated, board, column, card, step, person)
+}
+
 // makeStepIntoCard adds a card in Triage from the words, people and due day of
 // a step and makes the step point at it, in its place. The body is never
 // read. A card that takes no write refuses before a step that is not on it
@@ -217,6 +269,10 @@ func (s *Server) makeStepIntoCard(w http.ResponseWriter, r *http.Request, person
 	step := card.Steps[index]
 	if step.CardID != "" {
 		unprocessable(w, "stepIsACard", "This step is a card already.")
+		return
+	}
+	if step.TodoID != "" {
+		unprocessable(w, "stepIsATodo", "This step is a to-do, which does not become a card.")
 		return
 	}
 	if hasInvisibleCharacters(phpTrim(harmlessStripped(step.Title))) {

@@ -210,7 +210,10 @@ type Step struct {
 	ID string
 	// CardID names the card this step is, empty for a step in words. A card
 	// step carries nothing of its own: its card gives title and tick.
-	CardID      string
+	CardID string
+	// TodoID names the to-do this step is, empty for any other step. A to-do
+	// step carries nothing of its own either: its to-do gives title and tick.
+	TodoID      string
 	Title       string
 	Completed   bool
 	AssigneeIDs []string // in the order they were assigned; somebody who left the project stays on
@@ -576,6 +579,12 @@ type Server struct {
 	// that only the missing title is refused, and making a step into a card
 	// has no address.
 	KnowsNoCardSteps bool
+
+	// KnowsNoTodoSteps makes the server answer like a Minka from before a
+	// to-do could be the step of a card: a step carries no to-do, and a todoId
+	// in the body of a new step is passed over, so that only the missing
+	// title is refused.
+	KnowsNoTodoSteps bool
 
 	// SearchesOnlyWithinFiles makes the server answer like a Minka from before
 	// it searched across everything: a search without a tool or a folder is
@@ -2477,8 +2486,18 @@ func (s *Server) addStep(w http.ResponseWriter, r *http.Request, person *Person)
 	if !ok {
 		return
 	}
-	if _, namesACard := fields["cardId"]; namesACard && !s.KnowsNoCardSteps {
+	_, namesACard := fields["cardId"]
+	_, namesATodo := fields["todoId"]
+	if namesACard && namesATodo && !s.KnowsNoCardSteps && !s.KnowsNoTodoSteps {
+		unprocessable(w, "stepCardAndTodo", "A step is either a card or a to-do, not both.")
+		return
+	}
+	if namesACard && !s.KnowsNoCardSteps {
 		s.addCardStep(w, board, column, card, archived, fields, person)
+		return
+	}
+	if namesATodo && !s.KnowsNoTodoSteps {
+		s.addTodoStep(w, board, column, card, archived, fields, person)
 		return
 	}
 	title, ok := stringField(w, fields, "title")
@@ -2654,7 +2673,7 @@ func (s *Server) notesResource(board *Board, card *Card) map[string]any {
 
 // updateStep looks for the step on the card before it reads the body, so a
 // step that is not there is 404 even on a card that takes no write, and a
-// card step is refused before the body as well. Of the
+// card step and then a to-do step are refused before the body as well. Of the
 // body, the shape of assigneeIds is read before anything is asked of it; the
 // line is read after the tick and before the day; a person whose identifier
 // is none is refused before the archive is, and a person who is no member
@@ -2674,6 +2693,10 @@ func (s *Server) updateStep(w http.ResponseWriter, r *http.Request, person *Pers
 	step := card.Steps[index]
 	if step.CardID != "" {
 		unprocessable(w, "stepIsACard", "A card step has no title, tick, due date or assignees of its own; its card carries them.")
+		return
+	}
+	if step.TodoID != "" {
+		unprocessable(w, "stepIsATodo", "A to-do step has no title, tick, due date or assignees of its own; its to-do carries them.")
 		return
 	}
 	fields, ok := readBody(w, r)

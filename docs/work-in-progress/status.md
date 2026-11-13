@@ -676,6 +676,18 @@ as a card one cannot open; and removing the link keeping the child. A short
 identifier, a client and an older Minka were not met live, for want of a board
 with short identifiers in the test project.
 
+A to-do can be the step of a card: `cards steps create <card> --todo <todoId>`
+adds one, the text views show a to-do step as its to-do with the to-do's tick,
+`edit`, `complete` and `reopen` on one name the command that does the same on
+the to-do, and `make-card` says that a to-do does not become a card (C-182,
+[Steps](../stable/steps.md#a-to-do-as-a-step)).
+Minka carries it from v0.122.0; against an older one `--todo` exits 2 and says
+the host does not know to-do steps. A body naming a card and a to-do is
+`stepCardAndTodo` on Minka's `main` (7e5def35c) and in no release yet; a
+released Minka takes the card and passes over the to-do, which is why the CLI
+refuses the two together itself. Checked against Minka's code,
+`ApiCardAsStepTest` and `TodoAsStepTest` at 7e5def35c and the fake, not live.
+
 A new step, in words or a card, answers with the step instead of its card on
 Minka's `main` (59fb5dafc, #758) and in no release yet; a released Minka
 answers with the card. `cards steps create` reads both and hands out the step
@@ -1048,6 +1060,20 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   `agentOfAnotherPerson` for a step's people, puts the parents in `stepOf` in
   the order of its boards, and stands in for a Minka without card steps by a
   switch.
+- A to-do as a step (`cards steps create --todo`, `todo` on a step): every
+  request of it. Read in `BoardApiController::addTodoStep`,
+  `updateStepAction`, `makeStepIntoCardAction`, `LinkedTodoResource`,
+  `AddTodoStepHandler`, `DbalCardStepRepository`, `LinkedTodoQueryService`,
+  `ApiCardAsStepTest` and `TodoAsStepTest` at Minka 7e5def35c, and mirrored by
+  the fake in the order of
+  [Steps](../stable/steps.md#the-order-of-the-refusals). The fake has no
+  to-do deleted for good, which at Minka takes its step along, sees a to-do
+  by the membership of its project where Minka asks for the same
+  organization and that the person sees it, refuses a card and a to-do in one
+  body as Minka's `main` does and not as a released Minka, which takes the
+  card, and stands in for a Minka without
+  to-do steps by a switch. A to-do of a template list as a step is decided
+  nowhere in Minka and is not mirrored.
 - `projects edit`: no request of it has gone to a real Minka, and none can
   until a release carries the rename. Read in `ProjectsApiController::
   updateProjectAction`, `DbalProjectRepository::rename` and `RenameProjectTest`
