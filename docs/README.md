@@ -51,8 +51,10 @@ the documentation says what holds; how it came about is in git.
   mine`.
 - [Projects](stable/projects.md): What a project carries, the edit that sends
   only what was given and needs no guard, the description that is plain text,
-  the client who gets the same 404 as an outsider, the order of the refusals —
-  before any work on `projects`.
+  the client who gets the same 404 as an outsider, the order of the refusals,
+  starting a project with its category, adding and taking out members, the
+  tools of every type with their positions, moves and trash — before any work
+  on `projects`, `people add`, `people remove` or `tools`.
 - [Columns](stable/columns.md): How a column is named, what it carries and
   its colour, the place and colour a new column gets, why a move reads the
   board first, what happens to the cards of a deleted column, who may write

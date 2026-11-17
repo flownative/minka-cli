@@ -3,7 +3,15 @@
 ## Commands
 
 ```bash
+minka projects create --name "Name" [--description - < about.txt] [--category <name>] --json
 minka projects edit <projectId> [--name "New name"] [--description - < about.txt] --json
+minka people add <projectId> <personId> --json
+minka people remove <projectId> <person> --json
+minka tools list <projectId> --json
+minka tools add <projectId> --type <type> --title "Title" --json
+minka tools rename <projectId> <toolId> --title "New" --json
+minka tools move <projectId> <toolId> [--after <toolId> | --before <toolId>] --json
+minka tools trash <projectId> <toolId> --json
 minka boards archive <boardId> [--before <cardId>] [--limit <n>] [--all] --json
 minka cards archive <cardId> --json
 minka cards unarchive <cardId> --json
@@ -97,6 +105,41 @@ minka cards unsubscribe <cardId> <person> --json
   edit: a client of the project gets exit 2 like an outsider. A host whose
   Minka is too old for the command also exits 2, with a hint that says so.
   Rename a project only when you were asked to.
+- `projects create --name <name>` starts a project; `--description` and
+  `--category` (a name of the organization's list, any case) are optional. You
+  are its first member, and an agent brings the person it acts for along. It
+  has no tools yet. A client of the organization gets exit 4 with
+  `organizationTeamOnly`, an unknown category exit 9 with
+  `projectCategoryUnknown`. `projects list` carries `category`, null for none
+  and always null for a client. Start a project only when you were asked to.
+
+## Members and tools of a project
+
+- `people add <projectId> <personId>` adds somebody of the organization;
+  somebody in already succeeds and the summary says so. Exit 9 with
+  `personNotAnOrganizationMember`, `principalNotAProjectMember` (add the
+  agent's human first), `agentRetired`, `projectWithoutClientAccess` or
+  `projectArchived`.
+- `people remove <projectId> <person>` takes somebody out, given by ID, e-mail
+  address or name as for `cards assign`, or with `me` leaves the project. Taking out a human takes out their agents too. The last
+  human of the team stays: exit 9 with `lastProjectMember`. Taking out somebody
+  else is the team's, and is refused in an archived project.
+- `tools list <projectId>` lists every tool of every type in the order of the
+  project page: `position` from 1, `type`, `id`, `title`. The types are
+  `board`, `chat`, `posts`, `todos`, `checkins`, `files`, `forwards`,
+  `calendar` and `decisions`.
+- `tools add` takes `--type` and `--title`, both required; the type is sent as
+  typed and Minka refuses an unknown one, and `forwards`, with
+  `toolTypeUnknown`; its message names the types it takes. The new tool goes
+  at the end.
+- `tools move` puts the tool `--after` or `--before` another tool of the
+  project, or with neither in front; not both. The answer has the new
+  `position`.
+- `tools trash` puts the tool with all it holds into the trash; `trash list`
+  shows it as kind `tool`. Only the web brings it back, so trash a tool only
+  when you were asked to.
+- Only the team adds people and changes tools: a client of the project gets
+  exit 2 like an outsider, and can only take themselves out.
 
 ## Boards
 
