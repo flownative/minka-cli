@@ -2801,9 +2801,11 @@ Minka knows whether an event repeats, so the CLI does not decide to drop it.
 *Applies to: `events meeting agenda move`, `agenda remove`, `outcome`*
 
 The item is found in one read of the meeting: by its ID, its number as shown,
-or the ID or short identifier of its decision; an unknown number or name is
-exit 1, an ID on no item goes to Minka. **Why:** people point at an agenda by
-place or by decision, and the item's own ID stands nowhere but in the answer.
+or the ID or short identifier of its decision. An item on no place is exit 2
+(`not_found`), as Minka's 404 for an item not on the agenda; an ID on no item
+goes to Minka, and so does a neighbour on no item, which Minka answers with
+`agendaPlaceUnknown`. **Why:** people point at an agenda by place or by
+decision, and the item's own ID stands nowhere but in the answer.
 **Implemented as:** `cli.resolveAgendaItem` over `cli.findLine`, see [Meetings](stable/meetings.md#naming-an-item).
 
 <a id="c-185"></a>
@@ -2812,7 +2814,8 @@ place or by decision, and the item's own ID stands nowhere but in the answer.
 *Applies to: `events meeting outcome`*
 
 Only the vote flags given go out, nothing read is carried over, and
-`--no-votes` sends the note as null. **Why:** Minka keeps a field left out
+`--no-votes`, `--no-votes-for`, `--no-votes-against` and `--no-abstentions`
+send their field as null. **Why:** Minka keeps a field left out
 and clears one sent as null, so a value read and sent back would overwrite
 what somebody recorded in between.
 **Implemented as:** `cli.newMeetingOutcomeCmd`, see [Meetings](stable/meetings.md#the-outcome).

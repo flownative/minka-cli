@@ -28,7 +28,7 @@ minka events meeting show <eventId> [--day YYYY-MM-DD] --json
 minka events meeting agenda add <eventId> <decision>... [--day YYYY-MM-DD] --json
 minka events meeting agenda move <eventId> <item> (--top | --bottom | --after <item> | --before <item>) [--day YYYY-MM-DD] --json
 minka events meeting agenda remove <eventId> <item> [--day YYYY-MM-DD] --json
-minka events meeting outcome <eventId> <item> accepted|accepted-with-changes|rejected|deferred [--sentence "…"] [--votes "note" | --no-votes] [--votes-for N] [--votes-against N] [--abstentions N] [--day YYYY-MM-DD] --json
+minka events meeting outcome <eventId> <item> accepted|accepted-with-changes|rejected|deferred [--sentence "…"] [--votes "note" | --no-votes] [--votes-for N | --no-votes-for] [--votes-against N | --no-votes-against] [--abstentions N | --no-abstentions] [--day YYYY-MM-DD] --json
 minka events meeting close <eventId> --audience everybody|chosen|nobody [--notify <person>]... [--day YYYY-MM-DD] --json
 ```
 
@@ -126,8 +126,9 @@ meetings".
   `mayTakeOff`, `mayRecordOutcome`. **Go by these flags and `mayClose`**, not
   by a guess. An event without an agenda has `items: []`.
 - `<item>` is the item's ID, its number, or its decision (ID or short
-  identifier such as `ENT-14`). A number or name on no item is exit 1 with
-  the agenda in the hint.
+  identifier such as `ENT-14`). An item on no place of the agenda is exit 2,
+  with the agenda in the hint; a neighbour on no item (`--after`,
+  `--before`) goes to Minka as given, which answers `agendaPlaceUnknown`.
 - `events meeting agenda add <eventId> <decision>...` puts decisions (ID or
   short identifier) at the end, in one request, all or none. Only a decision
   of the event's project that is still to be taken goes on: role `proposed`
@@ -148,7 +149,8 @@ meetings".
   written stands: recording again corrects it, without a guard.
 - Votes: `--votes "note"`, `--votes-for N`, `--votes-against N`,
   `--abstentions N` (0 to 99999). Only what you give is sent; a vote flag left
-  out keeps what stands, `--no-votes` takes the note off. A Minka of v0.122
+  out keeps what stands, `--no-votes` takes the note off, `--no-votes-for`,
+  `--no-votes-against` and `--no-abstentions` each its count. A Minka of v0.122
   clears the votes a correction leaves out instead: give them again there.
 - **`events meeting close <eventId> --audience everybody|chosen|nobody`
   cannot be undone and tells people.** `--audience` is required, and

@@ -56,15 +56,17 @@ event that does not repeat needs no day, and Minka reads none for it.`
 const agendaItemHelp = `An item is given by its ID, by its number on the agenda as "events meeting
 show" prints it, or by the decision it carries: the ID of the decision or its
 short identifier such as ENT-14. A number always means a place on the agenda
-as you are shown it.`
+as you are shown it. An item on no place of the agenda is exit 2 (not_found),
+as Minka answers it.`
 
 // meetingVotesHelp is the one place that says what an outcome does to the
 // votes.
 const meetingVotesHelp = `The votes are a note of one line (--votes, at most 100 characters) and three
 counts, each a whole number from 0 to 99999 (--votes-for, --votes-against,
 --abstentions). Only what is given is sent. A vote flag left out keeps what
-stands, on the agenda item and on the decision; --no-votes takes the note
-off.`
+stands, on the agenda item and on the decision. --no-votes takes the note
+off, --no-votes-for, --no-votes-against and --no-abstentions each its count:
+nobody counted it then.`
 
 const meetingDayMissingHint = "The event repeats, and a series meets on each of its days: give --day YYYY-MM-DD. The day is occurrences[].day of minka events list <toolId> --from YYYY-MM-DD --to YYYY-MM-DD, the day the schedule gives: not the first day of the series, and for a moved occurrence not the day it takes place on."
 
@@ -234,7 +236,8 @@ func (a *app) newAgendaMoveCmd() *cobra.Command {
 --after below the item named, --before above it. Exactly one of the four is
 required. Moving an item to where it stands already succeeds. The item named
 with --after or --before is another item of the agenda that you are shown;
-the item itself is exit 9 (validation) with agendaPlaceUnknown. A closed
+the item itself, or a neighbour on no item, is exit 9 (validation) with
+agendaPlaceUnknown, as Minka answers it. A closed
 meeting keeps its order: meetingClosed.
 
 --bottom means behind the last item as read: the command reads the meeting
@@ -271,7 +274,7 @@ data is the meeting.
 			if err != nil {
 				return meetingRefusal(s, err, meetingNotFoundHint)
 			}
-			item, err := resolveAgendaItem(read.Value.Items, args[1])
+			item, err := resolveAgendaTarget(read.Value.Items, args[1])
 			if err != nil {
 				return err
 			}
@@ -284,10 +287,16 @@ data is the meeting.
 					continue
 				}
 				found, err := resolveAgendaItem(read.Value.Items, neighbour.value)
-				if err != nil {
+				var refused *Error
+				switch {
+				case errors.As(err, &refused) && refused.Code == CodeUsage:
+					// Minka judges a neighbour on no item, as agendaPlaceUnknown.
+					*neighbour.id = strings.TrimSpace(neighbour.value)
+				case err != nil:
 					return err
+				default:
+					*neighbour.id = found.ID
 				}
-				*neighbour.id = found.ID
 			}
 			// Minka has no word for the end: an item goes there behind the
 			// last of the others, or to the top where there is no other.
@@ -352,7 +361,7 @@ repeat.
 			if err != nil {
 				return meetingRefusal(s, err, meetingNotFoundHint)
 			}
-			item, err := resolveAgendaItem(read.Value.Items, args[1])
+			item, err := resolveAgendaTarget(read.Value.Items, args[1])
 			if err != nil {
 				return err
 			}
@@ -377,7 +386,7 @@ repeat.
 func (a *app) newMeetingOutcomeCmd() *cobra.Command {
 	var day, sentence, note string
 	var votesFor, votesAgainst, abstentions int
-	var noVotes bool
+	var noVotes, noVotesFor, noVotesAgainst, noAbstentions bool
 	cmd := &cobra.Command{
 		Use:   "outcome <eventId> <item> <outcome>",
 		Short: "Record what the meeting made of an item, or correct it",
@@ -438,7 +447,15 @@ data is the meeting.
 			for _, count := range []struct {
 				flag, field string
 				value       int
-			}{{"votes-for", "votesFor", votesFor}, {"votes-against", "votesAgainst", votesAgainst}, {"abstentions", "abstentions", abstentions}} {
+				off         bool
+			}{{"votes-for", "votesFor", votesFor, noVotesFor}, {"votes-against", "votesAgainst", votesAgainst, noVotesAgainst}, {"abstentions", "abstentions", abstentions, noAbstentions}} {
+				if count.off {
+					if changed(count.flag) {
+						return usageErrorf(cmd, "--%s and --no-%s contradict each other", count.flag, count.flag)
+					}
+					input[count.field] = nil
+					continue
+				}
 				if !changed(count.flag) {
 					continue
 				}
@@ -459,7 +476,7 @@ data is the meeting.
 			if err != nil {
 				return meetingRefusal(s, err, meetingNotFoundHint)
 			}
-			item, err := resolveAgendaItem(read.Value.Items, args[1])
+			item, err := resolveAgendaTarget(read.Value.Items, args[1])
 			if err != nil {
 				return err
 			}
@@ -492,6 +509,9 @@ data is the meeting.
 	flags.IntVar(&votesFor, "votes-for", 0, "Votes for, 0 to 99999")
 	flags.IntVar(&votesAgainst, "votes-against", 0, "Votes against, 0 to 99999")
 	flags.IntVar(&abstentions, "abstentions", 0, "Abstentions, 0 to 99999")
+	flags.BoolVar(&noVotesFor, "no-votes-for", false, "Take the count of votes for off")
+	flags.BoolVar(&noVotesAgainst, "no-votes-against", false, "Take the count of votes against off")
+	flags.BoolVar(&noAbstentions, "no-abstentions", false, "Take the count of abstentions off")
 	registerMeetingDay(cmd, &day)
 	return cmd
 }
@@ -594,6 +614,18 @@ func resolveAgendaItem(items []api.AgendaItem, value string) (api.AgendaItem, er
 		return api.AgendaItem{ID: id}, err
 	}
 	return items[at], nil
+}
+
+// resolveAgendaTarget finds the item a write is about. A number or a name on
+// no item is not found, as Minka answers an item that is not on the agenda.
+func resolveAgendaTarget(items []api.AgendaItem, value string) (api.AgendaItem, error) {
+	item, err := resolveAgendaItem(items, value)
+	var refused *Error
+	if errors.As(err, &refused) && refused.Code == CodeUsage {
+		refused.Code = CodeNotFound
+		refused.Hint = "The item is gone from the agenda, hidden from you, or was never on it. " + refused.Hint
+	}
+	return item, err
 }
 
 func describeAgenda(items []api.AgendaItem) string {
