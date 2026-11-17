@@ -84,9 +84,11 @@ An item is given by its ID, by its number as the agenda shows it, or by the
 decision it carries — the decision's ID or its short identifier, in any case
 ([C-184](../decisions.md#c-184)). `move`, `remove` and `outcome` read the
 meeting first and find the item there, as the step commands find a step: a
-number always means a place, a number or a name on no item is exit 1
-(`usage`) with the agenda in the hint, and an ID on no item goes out for
-Minka to answer, which is 404. `--after` and `--before` take the same.
+number always means a place. A number or a name on no item is exit 2
+(`not_found`) with the agenda in the hint, as Minka answers an item that is
+not on the agenda, and an ID on no item goes out for Minka to answer, which
+is 404. `--after` and `--before` take the same, but a neighbour on no item
+goes out as given, and Minka answers `agendaPlaceUnknown`.
 
 ## Putting decisions on
 
@@ -153,7 +155,9 @@ that range before any request. The command **sends exactly the vote fields
 given** and reads none to carry over ([C-185](../decisions.md#c-185)): a
 field left out keeps its value, on the item and on the decision, and
 `--no-votes` sends the note as null, which takes it off, as `decisions edit
---no-votes` does. A count has no flag that takes it off.
+--no-votes` does. `--no-votes-for`, `--no-votes-against` and
+`--no-abstentions` send their count as null, which says nobody counted it;
+each contradicts the flag that gives the count.
 
 ## Closing
 
@@ -235,7 +239,7 @@ So a closed meeting is told before anything of the body is read. After that:
 | 422 `meetingClosed` | `agenda add`, `move`, `remove`, `close`, and `outcome` on an item without one | 9 |
 | 422 `decisionUnknown`, `decisionNotForAMeetingAgenda`, `decisionAlreadyOnMeetingAgenda` | `agenda add`; none is put on | 9 |
 | 422 `decisionsMissing` | unreachable: `agenda add` needs a decision | 9 |
-| 422 `agendaPlaceUnknown` | `agenda move` with the item as its own neighbour, with `--after` or `--before` given an ID that is on no item, which goes out as it is, or behind a last item that is gone | 9 |
+| 422 `agendaPlaceUnknown` | `agenda move` with the item as its own neighbour, with `--after` or `--before` given an ID, a number or a name that is on no item, which goes out as it is, or behind a last item that is gone | 9 |
 | 422 `meetingOutcomeUnknown`, `sentenceWithoutChanges`, `decisionTitleMissing`, `decisionVoteCountMalformed` | unreachable: `outcome` checks the word, the sentence and the counts itself | 9 |
 | 422 `decisionTitleTooLong`, `decisionTitleHasControlCharacters`, `decisionVotesTooLong`, `decisionVotesHasControlCharacters` | `outcome` with a sentence or a note Minka does not keep | 9 |
 | 422 `meetingOutcomeHasNoStatus` | `outcome` where the decision's tool has no status of the role | 9 |

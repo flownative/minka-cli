@@ -293,28 +293,40 @@ func TestAnAgendaItemIsNamedInThreeWays(t *testing.T) {
 	writes := len(e.server.WritingRequests())
 	for _, c := range []struct {
 		args []string
+		code int
 		want string
 	}{
-		{[]string{"3", "--top"}, "there is no item 3, the agenda has 2 items"},
-		{[]string{"DEC-77", "--top"}, `no item of the agenda matches "DEC-77"`},
-		{[]string{"1", "--after", "We move the party"}, `no item of the agenda matches "We move the party"`},
-		{[]string{"1"}, "exactly one of --top, --bottom, --after and --before"},
-		{[]string{"1", "--top", "--bottom"}, "exactly one of --top, --bottom, --after and --before"},
+		{[]string{"3", "--top"}, ExitNotFound, "there is no item 3, the agenda has 2 items"},
+		{[]string{"DEC-77", "--top"}, ExitNotFound, `no item of the agenda matches "DEC-77"`},
+		{[]string{"1"}, ExitUsage, "exactly one of --top, --bottom, --after and --before"},
+		{[]string{"1", "--top", "--bottom"}, ExitUsage, "exactly one of --top, --bottom, --after and --before"},
 	} {
 		env, r := e.runJSON("", append([]string{"events", "meeting", "agenda", "move", event}, c.args...)...)
-		expectCode(t, r, ExitUsage)
+		expectCode(t, r, c.code)
 		if !strings.Contains(env.Error, c.want) {
 			t.Errorf("%v: %q, want %q", c.args, env.Error, c.want)
 		}
 	}
 	env, r := e.runJSON("", "events", "meeting", "agenda", "move", event, "3", "--top")
-	expectCode(t, r, ExitUsage)
-	if !strings.Contains(env.Hint, "Agenda: 1. DEC-2 "+f.ProposedDecision.Title+" ("+first.ID+"); 2. DEC-9") {
-		t.Errorf("the hint does not list the agenda: %q", env.Hint)
+	expectCode(t, r, ExitNotFound)
+	if env.Code != CodeNotFound || !strings.Contains(env.Hint, "gone from the agenda") ||
+		!strings.Contains(env.Hint, "Agenda: 1. DEC-2 "+f.ProposedDecision.Title+" ("+first.ID+"); 2. DEC-9") {
+		t.Errorf("the item on no place: %q, hint %q", env.Code, env.Hint)
 	}
 	if len(e.server.WritingRequests()) != writes {
-		t.Fatal("a name that fits no item wrote")
+		t.Fatal("an item that fits no place wrote")
 	}
+
+	// A neighbour on no item goes out as given, for Minka to judge.
+	for _, neighbour := range []string{"We move the party", "3", "DEC-77"} {
+		env, r = e.runJSON("", "events", "meeting", "agenda", "move", event, "1", "--after", neighbour)
+		expectCode(t, r, ExitValidation)
+		writes := e.server.WritingRequests()
+		if sent := strings.TrimSpace(string(writes[len(writes)-1].Body)); env.Meta["apiCode"] != "agendaPlaceUnknown" || sent != `{"previousItemId":"`+neighbour+`"}` {
+			t.Errorf("--after %q sent %s and got %v", neighbour, sent, env.Meta)
+		}
+	}
+	writes = len(e.server.WritingRequests())
 
 	env, r = e.runJSON("", "events", "meeting", "agenda", "move", event, newTestID(), "--top")
 	expectCode(t, r, ExitNotFound)
@@ -354,8 +366,13 @@ func TestAnAgendaItemIsTakenOff(t *testing.T) {
 	if env.Code != CodeNotFound || !strings.Contains(env.Hint, "it is gone") {
 		t.Errorf("a second removal: %q, hint %q", env.Code, env.Hint)
 	}
-	_, r = e.runJSON("", "events", "meeting", "agenda", "remove", f.OnceEvent.ID, "DEC-2")
-	expectCode(t, r, ExitUsage)
+	for _, gone := range []string{"DEC-2", "2"} {
+		env, r = e.runJSON("", "events", "meeting", "agenda", "remove", f.OnceEvent.ID, gone)
+		expectCode(t, r, ExitNotFound)
+		if env.Code != CodeNotFound || !strings.Contains(env.Hint, "gone from the agenda") {
+			t.Errorf("removing %s, which is on no item: %q, hint %q", gone, env.Code, env.Hint)
+		}
+	}
 
 	e.fixture.WeeklyEvent.MeetingOn(seriesDay).PutOnAgenda(f.ProposedDecision)
 	env, r = e.runJSON("", "events", "meeting", "agenda", "remove", f.WeeklyEvent.ID, "1", "--day", seriesDay)
@@ -385,6 +402,10 @@ func TestAnOutcomeSendsExactlyWhatIsGiven(t *testing.T) {
 		{[]string{"accepted-with-changes", "--sentence", "We buy two tents", "--no-votes"},
 			`{"outcome":"acceptedWithChanges","sentence":"We buy two tents","votes":null}`, "Corrected the outcome of DEC-2 We buy a tent to accepted-with-changes"},
 		{[]string{"accepted", "--votes", ""}, `{"outcome":"accepted","votes":""}`, "Corrected the outcome of DEC-2 We buy two tents to accepted"},
+		{[]string{"accepted", "--votes-for", "7", "--votes-against", "2", "--abstentions", "0"},
+			`{"abstentions":0,"outcome":"accepted","votesAgainst":2,"votesFor":7}`, "Corrected the outcome of DEC-2 We buy two tents to accepted"},
+		{[]string{"accepted", "--no-votes-for", "--no-votes-against", "--no-abstentions"},
+			`{"abstentions":null,"outcome":"accepted","votesAgainst":null,"votesFor":null}`, "Corrected the outcome of DEC-2 We buy two tents to accepted"},
 	} {
 		env, r := e.runJSON("", append([]string{"events", "meeting", "outcome", event, "1"}, c.args...)...)
 		expectCode(t, r, ExitOK)
@@ -396,16 +417,20 @@ func TestAnOutcomeSendsExactlyWhatIsGiven(t *testing.T) {
 			t.Errorf("%v: summary %q, want it to start with %q", c.args, env.Summary, c.summary)
 		}
 	}
-	// The votes the first outcome counted stand through the corrections that
-	// left them out.
-	if got := first.Outcome; got.VotesFor == nil || *got.VotesFor != 7 || *got.VotesAgainst != 2 || *got.Abstentions != 0 || got.Votes != "" {
+	// The counts taken off are gone from the item and from the decision.
+	if got := first.Outcome; got.VotesFor != nil || got.VotesAgainst != nil || got.Abstentions != nil || got.Votes != "" {
 		t.Errorf("the item counts %+v", got)
 	}
+	if d := f.ProposedDecision; d.VotesFor != nil || d.VotesAgainst != nil || d.Abstentions != nil {
+		t.Errorf("the decision counts %v %v %v", d.VotesFor, d.VotesAgainst, d.Abstentions)
+	}
+	_, r := e.runJSON("", "events", "meeting", "outcome", event, "1", "accepted", "--votes-for", "7", "--votes-against", "2", "--abstentions", "0")
+	expectCode(t, r, ExitOK)
 	if role := f.Decisions.StatusOfRole("holds"); f.ProposedDecision.StatusID != role.ID || f.ProposedDecision.Title != "We buy two tents" {
 		t.Errorf("the decision stands as %q in %s", f.ProposedDecision.Title, f.ProposedDecision.StatusID)
 	}
 
-	r := e.run("", "events", "meeting", "outcome", event, "DEC-2", "rejected", "--styled")
+	r = e.run("", "events", "meeting", "outcome", event, "DEC-2", "rejected", "--styled")
 	expectCode(t, r, ExitOK)
 	if !strings.HasPrefix(r.stdout, "Corrected the outcome of DEC-2 We buy two tents to rejected in the meeting "+f.OnceEvent.Title+".\n  1. DEC-2 We buy two tents  [Rejected]\n") ||
 		!strings.Contains(r.stdout, "Outcome: rejected (Rejected); votes: 7 for, 2 against, 0 abstained; recorded ") {
@@ -435,6 +460,9 @@ func TestAnOutcomeIsCheckedBeforeAnyRequest(t *testing.T) {
 		{[]string{"accepted", "--votes-for", "-1"}, "--votes-for is a whole number from 0 to 99999"},
 		{[]string{"accepted", "--votes-against", "100000"}, "--votes-against is a whole number from 0 to 99999"},
 		{[]string{"accepted", "--abstentions", "100000"}, "--abstentions is a whole number from 0 to 99999"},
+		{[]string{"accepted", "--votes-for", "7", "--no-votes-for"}, "--votes-for and --no-votes-for contradict"},
+		{[]string{"accepted", "--votes-against", "2", "--no-votes-against"}, "--votes-against and --no-votes-against contradict"},
+		{[]string{"accepted", "--abstentions", "0", "--no-abstentions"}, "--abstentions and --no-abstentions contradict"},
 	} {
 		env, r := e.runJSON("", append([]string{"events", "meeting", "outcome", e.fixture.OnceEvent.ID, "1"}, c.args...)...)
 		expectCode(t, r, ExitUsage)
