@@ -64,7 +64,7 @@ var identifierFields = []string{
 	"folderId", "groupId", "listId", "nextCardId", "nextGroupId", "nextSubtaskId", "nextTodoId",
 	"nextColumnId", "notifiedIds", "notifyIds", "personId", "previousCardId", "previousColumnId", "previousGroupId",
 	"participantIds", "previousSubtaskId", "previousTodoId", "replyTo", "todoId",
-	"previousStepId", "nextStepId",
+	"previousStepId", "nextStepId", "previousToolId", "nextToolId",
 }
 
 // identifiersOfTheAddressInAnyCase writes every identifier of the address in
@@ -141,6 +141,20 @@ type Project struct {
 	// whose members are the team: no list of projects names it, and its
 	// To-dos tool holds the templates.
 	TemplateLibrary bool
+
+	// Category is the name of the organization's category the project is
+	// filed under, empty for none.
+	Category string
+
+	// WithoutClientAccess is a project that does not work with clients: no
+	// client of the organization joins it. A project started over the API
+	// begins so.
+	WithoutClientAccess bool
+
+	// ToolOrder is the order of the project page by tool ID, once a tool was
+	// added or moved over the API; a tool it does not name follows the ones
+	// it names, in the order of its type.
+	ToolOrder []string
 }
 
 type Board struct {
@@ -520,6 +534,18 @@ type Server struct {
 	// PostCategories are the kinds of post of every project, each in the
 	// order its project lists them.
 	PostCategories []*PostCategory
+
+	// ProjectCategories are the names the organization files its projects
+	// under.
+	ProjectCategories []string
+
+	// ForwardsTools hold the mails forwarded into a project, which only an
+	// import brings: the fake knows no more of them than the list of tools.
+	ForwardsTools []*ForwardsTool
+
+	// TrashedTools are the tools taken out of their project, in the order
+	// they went in.
+	TrashedTools []*TrashedTool
 
 	// TimeZone is the installation's zone, which reads the days of whoever
 	// set none of their own. It may be a name of the backward table, such as
@@ -1155,7 +1181,15 @@ func New(t testing.TB) (*Server, *Fixture) {
 	mux.HandleFunc("DELETE /api/v1/me/token", s.authenticated(s.revokeOwnToken))
 	mux.HandleFunc("PUT /api/v1/me/work", s.authenticated(s.noteAtWork))
 	mux.HandleFunc("GET /api/v1/projects", s.authenticated(s.projects))
+	mux.HandleFunc("POST /api/v1/projects", s.authenticated(s.createProject))
 	mux.HandleFunc("PATCH /api/v1/projects/{projectId}", s.authenticated(s.editProject))
+	mux.HandleFunc("POST /api/v1/projects/{projectId}/people", s.authenticated(s.addProjectMember))
+	mux.HandleFunc("DELETE /api/v1/projects/{projectId}/people/{personId}", s.authenticated(s.removeProjectMember))
+	mux.HandleFunc("GET /api/v1/projects/{projectId}/tools", s.authenticated(s.projectTools))
+	mux.HandleFunc("POST /api/v1/projects/{projectId}/tools", s.authenticated(s.addProjectTool))
+	mux.HandleFunc("PATCH /api/v1/projects/{projectId}/tools/{toolId}", s.authenticated(s.renameProjectTool))
+	mux.HandleFunc("POST /api/v1/projects/{projectId}/tools/{toolId}/moves", s.authenticated(s.moveProjectTool))
+	mux.HandleFunc("DELETE /api/v1/projects/{projectId}/tools/{toolId}", s.authenticated(s.trashProjectTool))
 	mux.HandleFunc("GET /api/v1/projects/{projectId}/boards", s.authenticated(s.boards))
 	mux.HandleFunc("GET /api/v1/boards/{boardId}", s.authenticated(s.board))
 	mux.HandleFunc("GET /api/v1/boards/{boardId}/archive", s.authenticated(s.archivedCards))
@@ -1627,14 +1661,20 @@ func (s *Server) projects(w http.ResponseWriter, r *http.Request, person *Person
 	list := []any{}
 	for _, p := range s.Projects {
 		if slices.Contains(p.MemberIDs, person.ID) && p.Archived == archived && !p.TemplateLibrary {
-			list = append(list, s.projectResource(p))
+			list = append(list, s.projectResource(p, person))
 		}
 	}
 	writeJSON(w, http.StatusOK, list)
 }
 
-func (s *Server) projectResource(p *Project) map[string]any {
-	return map[string]any{"id": p.ID, "name": p.Name, "description": p.Description, "status": projectStatus(p), "appUrl": s.URL + "/projects/" + p.ID}
+// projectResource names the category to the team alone: a client is told
+// none, whatever the project is filed under.
+func (s *Server) projectResource(p *Project, person *Person) map[string]any {
+	var category any
+	if p.Category != "" && !s.isAClient(person.ID) {
+		category = p.Category
+	}
+	return map[string]any{"id": p.ID, "name": p.Name, "description": p.Description, "status": projectStatus(p), "appUrl": s.URL + "/projects/" + p.ID, "category": category}
 }
 
 // editProject renames or describes a project. Only the team may write, so a
@@ -1678,7 +1718,7 @@ func (s *Server) editProject(w http.ResponseWriter, r *http.Request, person *Per
 	if description != nil {
 		project.Description = phpTrim(*description)
 	}
-	writeJSON(w, http.StatusOK, s.projectResource(project))
+	writeJSON(w, http.StatusOK, s.projectResource(project, person))
 }
 
 // maxProjectNameLength and maxProjectDescriptionLength count characters, as
@@ -2414,20 +2454,26 @@ func (s *Server) writePeople(w http.ResponseWriter, circle string, memberIDs []s
 		if member.Retired {
 			continue
 		}
-		handle := "sgid-person-" + circle + "-" + member.ID
-		list = append(list, map[string]any{
-			"id": member.ID, "name": member.Name, "emailAddress": member.Email,
-			"kind": kindOf(member), "principal": s.principalOf(member),
-			"mention": map[string]any{
-				"handle": handle,
-				"markup": fmt.Sprintf(
-					`<action-text-attachment sgid=%q content-type="application/vnd.minka.person" content="@%s"></action-text-attachment>`,
-					handle, member.Name,
-				),
-			},
-		})
+		list = append(list, s.memberResource(circle, member))
 	}
 	writeJSON(w, http.StatusOK, list)
+}
+
+// memberResource is one person of a circle, with the mention that names them
+// in a text of that circle.
+func (s *Server) memberResource(circle string, member *Person) map[string]any {
+	handle := "sgid-person-" + circle + "-" + member.ID
+	return map[string]any{
+		"id": member.ID, "name": member.Name, "emailAddress": member.Email,
+		"kind": kindOf(member), "principal": s.principalOf(member),
+		"mention": map[string]any{
+			"handle": handle,
+			"markup": fmt.Sprintf(
+				`<action-text-attachment sgid=%q content-type="application/vnd.minka.person" content="@%s"></action-text-attachment>`,
+				handle, member.Name,
+			),
+		},
+	}
 }
 
 // assignCard refuses a person that is no ID like a person outside the
@@ -4003,6 +4049,7 @@ func (s *Server) trash(w http.ResponseWriter, r *http.Request, person *Person) {
 		}})
 	}
 	entries = append(entries, s.trashedFilesEntries(project, person)...)
+	entries = append(entries, s.trashedToolEntries(project)...)
 	slices.SortStableFunc(entries, func(a, b trashRow) int {
 		if !a.at.Equal(b.at) {
 			return b.at.Compare(a.at)
