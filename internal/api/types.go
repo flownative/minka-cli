@@ -37,6 +37,9 @@ type Project struct {
 	Description string `json:"description"`
 	Status      string `json:"status"` // "active" or "archived"
 	AppURL      string `json:"appUrl"`
+	// Category is the name the project is filed under, nil for none; a
+	// client of the project is always told none.
+	Category *string `json:"category"`
 }
 
 type BoardListItem struct {

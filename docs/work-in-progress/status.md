@@ -444,6 +444,17 @@ the command follows is [Projects](../stable/projects.md) (C-093). Minka's side
 so the command is checked against Minka's code and tests and the fake only,
 see below.
 
+A project is started with `projects create` (`--category` files it under a
+name of the organization's list), its members are kept with `people add` and
+`people remove` (a person as for `cards assign`, `me` leaves), and its tools
+of every type with `tools list`, `add`, `rename`, `move` (`--after`/`--before`,
+neither to the front) and `trash`. The rule the commands follow is
+[Projects](../stable/projects.md) (C-187…C-190). Minka's side is on its `main`
+(6c762fc79, #955); against a Minka without it every one of these commands
+exits 2 and says the host cannot set up projects yet, or list the tools of a
+project yet. Built (MNK-SW), checked against Minka's code and
+`ApiProjectSetupTest` and the fake, not live.
+
 A reference to a card, a post, a chat, a chat message, a to-do, a to-do list,
 a document, an upload or a question in any text is read as its address,
 `<href>`, which comes back as the reference when the text is edited, or as
@@ -1111,6 +1122,20 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   cancels a day only where a test sets that, judges such a day by the
   schedule alone, where Minka also drops a move of the wrong kind, all-day
   against timed, and stands in for a Minka without meetings by a switch.
+- `projects create`, `people add`, `people remove` and `tools …`: no request
+  of them has gone to a real Minka. Read in `ProjectsApiController`,
+  `ProjectToolsApiController`, `ProjectToolResource`, `CreateProjectHandler`,
+  `ProjectJoining`, `RemoveProjectMemberHandler` and `ApiProjectSetupTest` at
+  Minka 6c762fc79, and mirrored by the fake in the order of
+  [Projects](../stable/projects.md#members). What the fake does not mirror:
+  the organization, whose member everybody of the fake is; the posts kinds a
+  new Posts tool gets, which the fake keeps per project; the template library,
+  whose team cannot leave it; a category removed between the check and the
+  start. A trashed board, To-dos tool and Check-ins tool are marked as in the
+  trash, a tool of every other type leaves its list. A tool of the fixture
+  goes in the order of its type until one is added or moved. That a released
+  Minka answers these addresses with the 404 page of its web is inferred from
+  `projects edit`, not measured.
 - `projects edit`: no request of it has gone to a real Minka, and none can
   until a release carries the rename. Read in `ProjectsApiController::
   updateProjectAction`, `DbalProjectRepository::rename` and `RenameProjectTest`

@@ -59,6 +59,12 @@ func arrangePlansByHand(e *testEnv) {
 // idsInCapitals names every input that takes an ID, in every command that has
 // one; the test below holds the command tree against it.
 var idsInCapitals = []idInCapitals{
+	{command: "tools move", inputs: []string{"--after"}, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
+		return []string{f.Project.ID, f.Board.ID, "--after", up(f.Chat.ID)}
+	}},
+	{command: "tools move", inputs: []string{"--before"}, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
+		return []string{f.Project.ID, f.Board.ID, "--before", up(f.Files.ID)}
+	}},
 	{command: "cards show", inputs: []string{"<cardId>"}, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
 		return []string{up(f.CardInTriage.ID)}
 	}},
@@ -82,6 +88,9 @@ var idsInCapitals = []idInCapitals{
 	}},
 	{command: "cards assign", inputs: []string{"<person>"}, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
 		return []string{f.CardInTriage.ID, up(f.Anke.ID)}
+	}},
+	{command: "people remove", inputs: []string{"<person>"}, args: func(_ *testEnv, f *fakeapi.Fixture) []string {
+		return []string{f.Project.ID, up(f.Anke.ID)}
 	}},
 	{command: "cards unassign", inputs: []string{"<person>"}, prepare: func(e *testEnv) {
 		e.fixture.CardInTriage.AssigneeIDs = []string{e.fixture.Anke.ID}
@@ -680,11 +689,12 @@ func TestAnArgumentThatIsAnIDIsHandedOnInLowercase(t *testing.T) {
 // idInputsExcepted take no ID a person types: a sequence number, a place Minka
 // hands over as it is, or an identifier of Basecamp.
 var idInputsExcepted = map[string]string{
-	"messages list --after":     "a sequence number",
-	"messages list --before":    "a sequence number",
-	"posts list --before":       "a place Minka hands over",
-	"todos completed --before":  "a place Minka hands over",
-	"import basecamp --project": "an ID of Basecamp",
+	"messages list --after":      "a sequence number",
+	"messages list --before":     "a sequence number",
+	"posts list --before":        "a place Minka hands over",
+	"todos completed --before":   "a place Minka hands over",
+	"import basecamp --project":  "an ID of Basecamp",
+	"projects create --category": "a name of the organization's list",
 }
 
 // idFlagNames are the flags that take an ID wherever they are. The tree test

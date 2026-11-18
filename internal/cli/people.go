@@ -22,7 +22,7 @@ project belongs in texts of that project and one of a conversation in that
 conversation.`
 
 func (a *app) newPeopleCmd() *cobra.Command {
-	return group("people", "List the people of a project", a.newPeopleListCmd())
+	return group("people", "List the people of a project, add them and take them out", a.newPeopleListCmd(), a.newPeopleAddCmd(), a.newPeopleRemoveCmd())
 }
 
 func (a *app) newPeopleListCmd() *cobra.Command {

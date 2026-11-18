@@ -2829,3 +2829,51 @@ Without `--audience` the command is exit 1 and sends nothing, although Minka
 reads a missing audience as everybody. **Why:** closing cannot be undone and
 tells people, and nobody is told by a flag left out, as for a decision.
 **Implemented as:** `cli.newMeetingCloseCmd`, with `cli.audienceInput` of the decisions, see [Meetings](stable/meetings.md#closing).
+
+<a id="c-187"></a>
+## C-187 — A tool's type goes as typed, and Minka owns the set
+
+*Applies to: `tools add`*
+
+`--type` and `--title` are required, and `--type` is sent as typed: Minka
+refuses an unknown type, `forwards` and a type in capitals with
+`toolTypeUnknown`, whose message names the types it takes; the CLI keeps no
+list of them. **Why:** Minka owns the set of addable types as it owns the
+column roles (C-146), and a type a newer Minka adds works without a new minka.
+**Implemented as:** `cli.newToolsAddCmd`, see [Projects](stable/projects.md#tools).
+
+<a id="c-188"></a>
+## C-188 — A tool moves `--after` or `--before` one other tool, or to the front
+
+*Applies to: `tools move`*
+
+`--after` and `--before` exclude each other, and neither puts the tool in
+front; both, or the tool itself as its neighbour, are exit 1 before any
+request. Only the neighbour given is sent. **Why:** Minka places by the
+previous tool alone where both are named, so a second flag would be ignored
+without a word; the front is how dragging a tile on the page ends.
+**Implemented as:** `cli.newToolsMoveCmd`, `api.MoveProjectToolInput`, see
+[Projects](stable/projects.md#tools).
+
+<a id="c-189"></a>
+## C-189 — The commands on a tool take its project as well
+
+*Applies to: `tools rename`, `tools move`, `tools trash`*
+
+They take `<projectId> <toolId>`, the two IDs of the address. **Why:** the
+address of every type names the project, and finding it from the tool alone
+would cost a read per type before every write.
+**Implemented as:** `cli.newToolsCmd`, `api.projectToolPath`, see
+[Projects](stable/projects.md#tools).
+
+<a id="c-190"></a>
+## C-190 — Setting up a project tells an older Minka from a missing project
+
+*Applies to: `projects create`, `people add`, `people remove`, `tools …`*
+
+A 404 without Minka's JSON body says that the host cannot set up projects
+yet, or for `tools list` that it cannot list the tools of a project yet; one
+with it names, per command, what may not be there. **Why:** a hint that the
+project is missing would tell a member they are none, as for `projects edit`
+(C-093).
+**Implemented as:** `cli.setupRefusal`, see [Projects](stable/projects.md#refusals).

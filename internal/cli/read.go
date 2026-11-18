@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"slices"
 	"text/tabwriter"
 
 	"github.com/flownative/minka-cli/internal/api"
@@ -56,7 +57,7 @@ is the person the agent acts for.`,
 }
 
 func (a *app) newProjectsCmd() *cobra.Command {
-	return group("projects", "List projects, rename and describe them", a.newProjectsListCmd(), a.newProjectsEditCmd())
+	return group("projects", "List and start projects, rename and describe them", a.newProjectsListCmd(), a.newProjectsCreateCmd(), a.newProjectsEditCmd())
 }
 
 func (a *app) newProjectsListCmd() *cobra.Command {
@@ -110,10 +111,25 @@ projectArchived. Its cards are not among "cards mine".`,
 						fmt.Fprintln(w, none)
 						return
 					}
+					// The column of the category is left out where no project is filed
+					// under one, which is always so for a client.
+					filed := slices.ContainsFunc(projects.Value, func(project api.Project) bool { return project.Category != nil })
 					table := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
-					fmt.Fprintln(table, "ID\tNAME\tSTATUS")
+					if filed {
+						fmt.Fprintln(table, "ID\tNAME\tSTATUS\tCATEGORY")
+					} else {
+						fmt.Fprintln(table, "ID\tNAME\tSTATUS")
+					}
 					for _, project := range projects.Value {
-						fmt.Fprintf(table, "%s\t%s\t%s\n", project.ID, project.Name, project.Status)
+						if !filed {
+							fmt.Fprintf(table, "%s\t%s\t%s\n", project.ID, project.Name, project.Status)
+							continue
+						}
+						category := "-"
+						if project.Category != nil {
+							category = *project.Category
+						}
+						fmt.Fprintf(table, "%s\t%s\t%s\t%s\n", project.ID, project.Name, project.Status, category)
 					}
 					_ = table.Flush()
 				},

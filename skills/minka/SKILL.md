@@ -281,6 +281,7 @@ minka cards edit <cardId> [--title "New"] [--due YYYY-MM-DD] [--description - < 
 minka cards move <cardId> --column <column> [--on-hold] [--top | --bottom | --after <cardId> | --before <cardId>] --json
 minka cards done <cardId> --json
 minka people list <projectId> --json
+minka tools list <projectId> --json  # every tool of the project, of every type
 minka cards assign <cardId> <person> --json
 minka cards unassign <cardId> <person> --json
 minka cards notes show <cardId> --json
@@ -327,7 +328,7 @@ they stand at its top. Read the one you need, not all of them.
 |-----|------|
 | How to work on a board: the roles of the columns, the board's conventions, taking up a card, asking a person, handing over | [references/working-on-a-board.md](references/working-on-a-board.md) |
 | Waiting for news instead of polling, a line of the bell, coordinating a board | [references/waiting-and-coordinating.md](references/waiting-and-coordinating.md) |
-| Your own cards and the trash, projects, boards and short identifiers, columns and their commands, cards on hold, the archive of a board, people, assignments and subscribers, steps, due dates | [references/cards.md](references/cards.md) |
+| Your own cards and the trash, projects, starting one, its members and its tools (`projects create`, `people add`, `people remove`, `tools …`), boards and short identifiers, columns and their commands, cards on hold, the archive of a board, people, assignments and subscribers, steps, due dates | [references/cards.md](references/cards.md) |
 | The back of a card: how to keep the working notes, their commands, the attachments | [references/working-notes.md](references/working-notes.md) |
 | Labels of a project, board or Docs & Files tool, putting them on cards, documents and uploads, scopes such as `Priority::High`, filtering Files by label | [references/labels.md](references/labels.md) |
 | Descriptions and comments in detail, reactions, naming somebody in a text, pointing at a card or another record, callouts, diagrams, link tiles and variables | [references/texts.md](references/texts.md) |

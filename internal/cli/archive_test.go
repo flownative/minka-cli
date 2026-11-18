@@ -236,6 +236,12 @@ func everyWrite(e *testEnv) map[string][]string {
 		"docs unlabel":         {"docs", "unlabel", document, "Draft"},
 		"docs uploads label":   {"docs", "uploads", "label", upload, "Plain"},
 		"docs uploads unlabel": {"docs", "uploads", "unlabel", upload, "Draft"},
+		"people add":           {"people", "add", f.Project.ID, f.Theo.ID},
+		"people remove":        {"people", "remove", f.Project.ID, f.Anke.ID},
+		"tools add":            {"tools", "add", f.Project.ID, "--type", "board", "--title", "Review"},
+		"tools rename":         {"tools", "rename", f.Project.ID, f.Board.ID, "--title", "Review"},
+		"tools move":           {"tools", "move", f.Project.ID, f.Board.ID, "--after", chat},
+		"tools trash":          {"tools", "trash", f.Project.ID, f.Board.ID},
 	}
 }
 
@@ -249,7 +255,7 @@ func everyWrite(e *testEnv) map[string][]string {
 var notAWriteIntoAProject = []string{
 	"auth login", "auth logout", "auth status", "setup", "doctor", "me", "version", "commands",
 	"skill show", "skill install", "skill status",
-	"projects list", "labels list", "boards list", "boards show", "boards archive", "people list", "trash list",
+	"projects list", "projects create", "tools list", "labels list", "boards list", "boards show", "boards archive", "people list", "trash list",
 	"config get", "config set",
 	"cards mine", "cards show", "cards notes show", "cards notes attachments list", "cards notes attachments show", "cards notes attachments download", "comments list", "comments unread", "cards steps list", "chats list", "chats show", "messages list",
 	"docs tools", "docs tool", "docs list", "docs show", "docs uploads show", "docs book", "docs export", "docs folders show",
