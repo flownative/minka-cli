@@ -32,10 +32,11 @@ const (
 )
 
 // setupHints say what to do about a refusal of setting up a project, where
-// the code alone does not.
+// the code alone does not. A <projectId> in one is replaced by the project the
+// command was given.
 var setupHints = map[string]string{
 	"organizationTeamOnly":          "Only somebody on the team of the organization starts a project, and an agent only when the person it acts for could join it.",
-	"projectCategoryUnknown":        "The organization files no projects under that name. Its categories are kept on the web.",
+	"projectCategoryUnknown":        "The list of categories is kept on the web. Those your projects are filed under: minka projects list",
 	"personNotAnOrganizationMember": "Only somebody who belongs to the organization joins one of its projects; people are invited on the web.",
 	"principalNotAProjectMember":    "An agent joins only a project the person it acts for is in. Add that person first.",
 	"agentRetired":                  "The agent has left service and joins no project.",
@@ -47,10 +48,13 @@ var setupHints = map[string]string{
 // setupRefusal tells Minka's own 404, which carries its JSON body, from the
 // page of a host whose Minka does not know the address at all, and adds the
 // hint a refusal needs.
-func setupRefusal(s *session, err error, notFoundHint, cannot string) *Error {
+func setupRefusal(s *session, err error, projectID, notFoundHint, cannot string) *Error {
 	e := s.fail(err)
 	if hint, ok := setupHints[e.APICode]; ok {
 		e.Hint = hint
+		if projectID != "" {
+			e.Hint = strings.ReplaceAll(hint, "<projectId>", projectID)
+		}
 	}
 	if e.Code != CodeNotFound {
 		return e
@@ -114,7 +118,7 @@ The answer is the project as "projects list" gives it.`,
 			}
 			project, err := s.client.CreateProject(a.ctx, input)
 			if err != nil {
-				return setupRefusal(s, err, olderMinkaHint(settingUp), settingUp)
+				return setupRefusal(s, err, "", olderMinkaHint(settingUp), settingUp)
 			}
 
 			summary := "Started project " + project.Value.Name
@@ -169,7 +173,7 @@ somebody who is not in it.`,
 			}
 			member, err := s.client.AddProjectMember(a.ctx, args[0], args[1])
 			if err != nil {
-				return setupRefusal(s, err, peopleAddNotFoundHint, settingUp)
+				return setupRefusal(s, err, args[0], peopleAddNotFoundHint, settingUp)
 			}
 
 			summary := fmt.Sprintf("Added %s to the project", member.Value.Name)
@@ -212,23 +216,23 @@ project is exit 2.
 			}
 			members, err := s.client.People(a.ctx, args[0])
 			if err != nil {
-				return setupRefusal(s, err, peopleRemoveNotFoundHint, settingUp)
+				return setupRefusal(s, err, args[0], peopleRemoveNotFoundHint, settingUp)
 			}
 			person, err := resolvePerson(args[1], members.Value, a.meID(s))
 			if err != nil {
 				return err
 			}
 			if err := s.client.RemoveProjectMember(a.ctx, args[0], person.ID); err != nil {
-				return setupRefusal(s, err, peopleRemoveNotFoundHint, settingUp)
+				return setupRefusal(s, err, args[0], peopleRemoveNotFoundHint, settingUp)
 			}
 
 			name := person.Name
 			if name == "" {
 				name = person.ID
 			}
-			summary := fmt.Sprintf("Took %s out of project %s", name, args[0])
+			summary := fmt.Sprintf("Took %s out of the project", name)
 			if strings.EqualFold(strings.TrimSpace(args[1]), "me") {
-				summary = "Left project " + args[0]
+				summary = "Left the project"
 			}
 			return a.ok(success{
 				data:    map[string]any{"projectId": args[0], "personId": person.ID},
@@ -275,7 +279,7 @@ tools shown to clients; the positions count the tools listed.`,
 			}
 			tools, err := s.client.ProjectTools(a.ctx, args[0])
 			if err != nil {
-				return setupRefusal(s, err, toolsListNotFoundHint, listingTools)
+				return setupRefusal(s, err, args[0], toolsListNotFoundHint, listingTools)
 			}
 			return a.ok(success{
 				data:    tools.Raw,
@@ -332,7 +336,7 @@ somebody who is not in it. The answer is the tool as "tools list" gives it.`,
 			}
 			tool, err := s.client.AddProjectTool(a.ctx, args[0], api.AddProjectToolInput{Type: toolType, Title: title})
 			if err != nil {
-				return setupRefusal(s, err, toolNotFoundHint, settingUp)
+				return setupRefusal(s, err, args[0], toolNotFoundHint, settingUp)
 			}
 			return a.answerWithTool(tool, fmt.Sprintf("Added %s %s at position %d", tool.Value.Type, tool.Value.Title, tool.Value.Position))
 		},
@@ -363,7 +367,7 @@ renames tools. The answer is the tool as "tools list" gives it.`,
 			}
 			tool, err := s.client.RenameProjectTool(a.ctx, args[0], args[1], title)
 			if err != nil {
-				return setupRefusal(s, err, toolNotFoundHint, settingUp)
+				return setupRefusal(s, err, args[0], toolNotFoundHint, settingUp)
 			}
 			return a.answerWithTool(tool, fmt.Sprintf("Renamed %s to %s", tool.Value.Type, tool.Value.Title))
 		},
@@ -416,7 +420,7 @@ The answer is the moved tool with its new position.`,
 			}
 			tool, err := s.client.MoveProjectTool(a.ctx, args[0], args[1], input)
 			if err != nil {
-				return setupRefusal(s, err, toolNotFoundHint, settingUp)
+				return setupRefusal(s, err, args[0], toolNotFoundHint, settingUp)
 			}
 			return a.answerWithTool(tool, fmt.Sprintf("Moved %s %s to position %d", tool.Value.Type, tool.Value.Title, tool.Value.Position))
 		},
@@ -429,8 +433,8 @@ The answer is the moved tool with its new position.`,
 func (a *app) newToolsTrashCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "trash <projectId> <toolId>",
-		Short: "Put a tool in the trash of its project",
-		Long: `Puts a tool of any type in the trash of its project, with everything it holds.
+		Short: "Move a tool to the trash of its project",
+		Long: `Moves a tool of any type to the trash of its project, with everything it holds.
 "minka trash list <projectId>" shows it there as kind tool. It cannot be
 brought back through the API: that is done in Minka on the web. A second
 trash of the same tool is exit 2, an archived project exit 9 with
@@ -443,9 +447,9 @@ projectArchived. Only the project's team trashes tools.`,
 				return err
 			}
 			if err := s.client.TrashProjectTool(a.ctx, args[0], args[1]); err != nil {
-				return setupRefusal(s, err, toolNotFoundHint, settingUp)
+				return setupRefusal(s, err, args[0], toolNotFoundHint, settingUp)
 			}
-			summary := fmt.Sprintf("Put tool %s in the trash of project %s", args[1], args[0])
+			summary := "Moved tool " + args[1] + " to the trash"
 			return a.ok(success{
 				data:    map[string]any{"projectId": args[0], "toolId": args[1]},
 				summary: summary,

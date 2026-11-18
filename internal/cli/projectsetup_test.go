@@ -71,7 +71,7 @@ func TestProjectsCreateNamesTheRefusals(t *testing.T) {
 
 	env, r := e.runJSON("", "projects", "create", "--name", "X", "--category", "Nowhere")
 	expectCode(t, r, ExitValidation)
-	if env.Meta["apiCode"] != "projectCategoryUnknown" || env.Hint != setupHints["projectCategoryUnknown"] {
+	if env.Meta["apiCode"] != "projectCategoryUnknown" || env.Hint != "The list of categories is kept on the web. Those your projects are filed under: minka projects list" {
 		t.Fatalf("apiCode %v, hint %q", env.Meta["apiCode"], env.Hint)
 	}
 
@@ -162,7 +162,7 @@ func TestPeopleRemoveTakesTheAgentsAlong(t *testing.T) {
 	if slices.Contains(f.Project.MemberIDs, f.Bruno.ID) || slices.Contains(f.Project.MemberIDs, f.Agent.ID) {
 		t.Fatalf("members %v", f.Project.MemberIDs)
 	}
-	if env.Summary != "Left project "+f.Project.ID {
+	if env.Summary != "Left the project" || decode(t, env.Data)["projectId"] != f.Project.ID {
 		t.Fatalf("summary %q", env.Summary)
 	}
 }
@@ -175,8 +175,8 @@ func TestPeopleRemoveFindsThePersonAmongThePeopleOfTheProject(t *testing.T) {
 	if slices.Contains(f.Project.MemberIDs, f.Anke.ID) || slices.Contains(f.Project.MemberIDs, f.RetiredAgent.ID) {
 		t.Fatalf("members %v", f.Project.MemberIDs)
 	}
-	if env.Summary != "Took Anke out of project "+f.Project.ID {
-		t.Fatalf("summary %q", env.Summary)
+	if data := decode(t, env.Data); env.Summary != "Took Anke out of the project" || data["projectId"] != f.Project.ID || data["personId"] != f.Anke.ID {
+		t.Fatalf("summary %q, data %v", env.Summary, data)
 	}
 }
 
@@ -185,9 +185,9 @@ func TestPeopleRemoveNamesTheRefusals(t *testing.T) {
 	f := e.fixture
 	f.Project.MemberIDs = []string{f.Bruno.ID, f.Agent.ID}
 
-	env, r := e.runJSON("", "people", "remove", f.Project.ID, "me")
+	env, r := e.runJSON("", "people", "remove", strings.ToUpper(f.Project.ID), "me")
 	expectCode(t, r, ExitValidation)
-	if env.Meta["apiCode"] != "lastProjectMember" || env.Hint != setupHints["lastProjectMember"] {
+	if env.Meta["apiCode"] != "lastProjectMember" || env.Hint != "A project keeps at least one human on its team. Add somebody else first: minka people add "+f.Project.ID+" <personId>" {
 		t.Fatalf("apiCode %v, hint %q", env.Meta["apiCode"], env.Hint)
 	}
 	env, r = e.runJSON("", "people", "remove", f.Project.ID, f.Theo.ID)
@@ -300,7 +300,7 @@ func TestToolsMoveSendsOneNeighbourOrNone(t *testing.T) {
 
 	env, r := e.runJSON("", "tools", "move", f.Project.ID, f.Files.ID, "--after", f.OtherBoard.ID)
 	expectCode(t, r, ExitValidation)
-	if env.Meta["apiCode"] != "toolPlaceUnknown" || env.Hint != setupHints["toolPlaceUnknown"] {
+	if env.Meta["apiCode"] != "toolPlaceUnknown" || env.Hint != "The neighbour has to be another tool the project lists. Its tools: minka tools list "+f.Project.ID {
 		t.Fatalf("apiCode %v, hint %q", env.Meta["apiCode"], env.Hint)
 	}
 
@@ -325,6 +325,9 @@ func TestToolsTrashPointsToTheTrash(t *testing.T) {
 	env := runOK(t, e, "tools", "trash", f.Project.ID, f.Board.ID)
 	if crumbFor(t, env.Breadcrumbs, "trash") != "minka trash list "+f.Project.ID {
 		t.Fatalf("breadcrumbs %+v", env.Breadcrumbs)
+	}
+	if data := decode(t, env.Data); env.Summary != "Moved tool "+f.Board.ID+" to the trash" || data["projectId"] != f.Project.ID || data["toolId"] != f.Board.ID {
+		t.Fatalf("summary %q, data %v", env.Summary, data)
 	}
 	trash := listOfObjects(t, runOK(t, e, "trash", "list", f.Project.ID).Data)
 	if !slices.ContainsFunc(trash, func(entry map[string]any) bool {
