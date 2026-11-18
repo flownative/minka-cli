@@ -453,7 +453,13 @@ neither to the front) and `trash`. The rule the commands follow is
 (6c762fc79, #955); against a Minka without it every one of these commands
 exits 2 and says the host cannot set up projects yet, or list the tools of a
 project yet. Built (MNK-SW), checked against Minka's code and
-`ApiProjectSetupTest` and the fake, not live.
+`ApiProjectSetupTest` and the fake, and live on `minka.localbeach.net`
+(2026-11-17): `projects create` with its refusals for an empty name and an
+unknown category; `people add` and `remove`, by an ID in capitals, somebody in
+already, by e-mail address and `me`; `tools add`, `rename`, `move` and
+`trash` with their refusals; and `trash list` with the tool in it. Not seen
+live: an agent starting a project with its human, an existing category, an
+archived project and the rules for clients.
 
 A reference to a card, a post, a chat, a chat message, a to-do, a to-do list,
 a document, an upload or a question in any text is read as its address,

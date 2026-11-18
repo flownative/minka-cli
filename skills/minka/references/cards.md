@@ -110,8 +110,9 @@ minka cards unsubscribe <cardId> <person> --json
   are its first member, and an agent brings the person it acts for along. It
   has no tools yet. A client of the organization gets exit 4 with
   `organizationTeamOnly`, an unknown category exit 9 with
-  `projectCategoryUnknown`. `projects list` carries `category`, null for none
-  and always null for a client. Start a project only when you were asked to.
+  `projectCategoryUnknown`: the categories are kept on the web, and those your
+  projects are filed under show in `projects list`. `projects list` carries
+  `category`, null for none and always null for a client. Start a project only when you were asked to.
 
 ## Members and tools of a project
 
@@ -122,7 +123,8 @@ minka cards unsubscribe <cardId> <person> --json
   `projectArchived`.
 - `people remove <projectId> <person>` takes somebody out, given by ID, e-mail
   address or name as for `cards assign`, or with `me` leaves the project. Taking out a human takes out their agents too. The last
-  human of the team stays: exit 9 with `lastProjectMember`. Taking out somebody
+  human of the team stays: exit 9 with `lastProjectMember`, and the hint names
+  the `people add` for this project. Taking out somebody
   else is the team's, and is refused in an archived project.
 - `tools list <projectId>` lists every tool of every type in the order of the
   project page: `position` from 1, `type`, `id`, `title`. The types are

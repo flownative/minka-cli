@@ -80,8 +80,9 @@ before any request. The name and the description follow the rules of an edit.
 The **category** is a name of the organization's list, compared without case
 and answered as the list writes it; a name the list does not hold is 422
 `projectCategoryUnknown`, and no project is started. The list itself is kept
-on the web and has no address in the API. A new project has no tools and does
-not work with clients.
+on the web and has no address in the API; the hint says so, and that
+`projects list` shows the categories your projects are filed under. A new
+project has no tools and does not work with clients.
 
 The creator is the first member. An **agent** starts the project together
 with the person it acts for, who joins it as well. A client of the
@@ -98,7 +99,8 @@ category where at least one project is filed under one.
 
 `people add <projectId> <personId>` sends `POST projects/{projectId}/people`
 with `personId`. The answer is the member as `people list` lists them: 201
-where they are new, 200 where they were in already. The summary says which.
+where they are new, 200 where they were in already. The summary says which,
+naming the person.
 Minka checks, in this order:
 
 1. The project: one the person is not in, and one they are a client of, are
@@ -124,7 +126,8 @@ included. Minka answers 204, or in this order: 404 for a project the person is
 not in and for somebody not in the project; 422 `projectArchived` for taking
 out somebody else from an archived project; 404 for a client who names
 somebody else; 422 `lastProjectMember` where no other human of the team would
-stay.
+stay. The summary names the person taken out, by name where the people of the
+project give one; the project is in `--json` as `projectId`.
 
 ## Tools
 
@@ -162,7 +165,9 @@ project lists, so one out of use is 404.
 - `tools trash <projectId> <toolId>` puts the tool and everything it holds in
   the trash of the project: 204, a second time 404. `trash list` shows it as
   kind `tool` with its `toolType`, not restorable: only the web brings it
-  back.
+  back. The summary names the tool by its ID, as `todolists trash` does: Minka
+  answers the trash with no body, and a read of the tools only for the summary
+  is not worth a request.
 
 A title is one line of at most 200 characters: `toolTitleMissing`,
 `toolTitleTooLong` and `toolTitleHasControlCharacters`. For every write Minka
@@ -181,7 +186,11 @@ then `tools list` says that the host cannot list the tools of a project yet,
 and every other of these commands that it cannot set up projects yet.
 Where the code alone does not say what to do, the hint does: who may start a
 project, where the categories are kept, that an agent's human has to be added
-first, that a project keeps one human on its team.
+first, that a project keeps one human on its team. A command such a hint
+suggests is written out with the project's ID: `people add <projectId>` after
+`lastProjectMember`, `tools list <projectId>` after `toolPlaceUnknown`. The
+hints of a 404 keep the `<projectId>` placeholder, because the project may
+not exist.
 
 What this section and the three above say was read in
 `ProjectsApiController`, `ProjectToolsApiController`, `ProjectToolResource`,
