@@ -594,10 +594,11 @@ keep a card alight for a working day with nobody left to stop it.
 
 *Applies to: `--host`, `$MINKA_HOST`, the default host of the configuration*
 
-A value that names no machine is refused, and a default host the CLI cannot read
-is refused where it is read, so that no session comes about under it. Signing out
-is the one command that takes an entry as the file writes it, so that one written
-by hand can be taken out again.
+A value that names no machine is refused, and the host of a profile the CLI cannot
+read is refused where it is read, so that no session comes about under it.
+Signing out is the one command that takes a profile without reading its host,
+so that one written by hand can be taken out again; a `--host` that can be read
+chooses as C-192 says.
 
 **Why:** Such a value would become a key of the configuration and of the list
 of cards, and a session under it would carry it into everything that prints a
@@ -2746,32 +2747,34 @@ beforehand it refuses beforehand. **Implemented as:** `cli.labelsForNewDecisions
 
 *Applies to: `auth login`, `setup`*
 
-`auth login` sets the default host only where there is none or none that can
-be read; `--make-default` or `config set host` move it, and `setup` makes its
-host the default. **Why:** every session on the machine shares the default, so
-one agent's sign-in to a local instance must not send the others there.
-**Implemented as:** `cli.signIn`, see [Token, hosts and
-requests](stable/security.md#the-default-host).
+`auth login` sets the default profile only where there is none or none that
+can be used; `--make-default`, `profiles default` or `config set host` move it,
+and `setup` makes its profile the default. **Why:** every session on the
+machine shares the default, so one agent's sign-in to a local instance must not
+send the others there.
+**Implemented as:** `cli.signIn`, see [Profiles](stable/profiles.md#the-default).
 
 <a id="c-180"></a>
-## C-180 — `config set host` takes only a host signed in to
+## C-180 — `config set host` takes only a host with one profile
 
 *Applies to: `config set host`, `config get host`*
 
-The value is read like a sign-in's host; one without a token is exit 1
-(`usage`) naming `auth login`, and there is no `config unset`. **Why:** a
-default without a token would fail every later command, far from its cause.
+The value is read like a sign-in's host and makes the one profile on it the
+default; none is exit 1 (`usage`) naming `auth login`, several are exit 8
+naming `profiles default`, and there is no `config unset`. **Why:** a default
+without a token would fail every later command, far from its cause, and of two
+accounts on one host none is to be guessed.
 **Implemented as:** `cli.setDefaultHost`.
 
 <a id="c-181"></a>
-## C-181 — Signing out of the default host leaves no default
+## C-181 — Removing the default profile leaves no default
 
-*Applies to: `auth logout`, every command without a host*
+*Applies to: `auth logout`, `profiles remove`, every command without a profile*
 
-No remaining host takes its place; a `notice` says so, and a command without a
-host exits 3 with `no default host is set`. **Why:** a host left over is
-nobody's choice, and picking one would move the default silently.
-**Implemented as:** `config.File.RemoveHost`, `cli.noHostError`.
+No remaining profile takes its place; a `notice` says so, and a command without
+a profile exits 3 with `no default profile is set`. **Why:** a profile left over
+is nobody's choice, and picking one would move the default silently.
+**Implemented as:** `config.File.RemoveProfile`, `cli.noAccountError`.
 
 <a id="c-182"></a>
 ## C-182 — A step is a text, a card or a to-do, decided before any request
@@ -2877,3 +2880,77 @@ with it names, per command, what may not be there. **Why:** a hint that the
 project is missing would tell a member they are none, as for `projects edit`
 (C-093).
 **Implemented as:** `cli.setupRefusal`, see [Projects](stable/projects.md#refusals).
+
+<a id="c-191"></a>
+## C-191 — A profile is one account, under a name of its own
+
+*Applies to: the configuration file, `--profile`, `profiles …`*
+
+A profile bundles a host, a token and the account it acted as; several may
+share a host. Names are lower case letters, digits, `-` and `.`, start with a
+letter or a digit, at most 64 characters; one made without a name is named
+after its host. **Why:** switching organizations by a short word, and a name
+that never reads as a host can share a key with one.
+**Implemented as:** `config.Profile`, `config.CheckProfileName`, see
+[Profiles](stable/profiles.md).
+
+<a id="c-192"></a>
+## C-192 — `--profile`, `--host`, `$MINKA_PROFILE`, `$MINKA_HOST`, the default
+
+*Applies to: every command that signs in*
+
+Strongest first, a flag before any variable; both flags together are exit 1. A
+host stands for its one profile, or for the default among several; otherwise
+exit 8 naming them. An unknown profile is exit 1 listing the profiles.
+**Why:** which account writes in an organization is never to be guessed.
+**Implemented as:** `cli.chooseAccount`, `cli.chooseIn`, see
+[Profiles](stable/profiles.md#which-profile-a-command-uses).
+
+<a id="c-193"></a>
+## C-193 — `$MINKA_TOKEN` goes to `$MINKA_HOST`, never to a profile
+
+*Applies to: `$MINKA_TOKEN` beside `--profile` or `$MINKA_PROFILE`*
+
+The token of the environment signs in a command whose host comes from `--host`
+or `$MINKA_HOST` and is that host; a profile named signs in with its own token,
+even on that host, and a `notice` says the token was not used. **Why:** the token was given for a host, and a profile names
+an account that may be another one there.
+**Implemented as:** `cli.chooseAccount`, see
+[Profiles](stable/profiles.md#which-profile-a-command-uses).
+
+<a id="c-194"></a>
+## C-194 — The file keeps the hosts for older versions beside the profiles
+
+*Applies to: `config.Load`, `config.File.Save`*
+
+A save writes `hosts` (per host the default profile on it, else the first by
+name) and `defaultHost`. `profiles` holds where present, and a token under
+`hosts` no profile on that host has is taken over; without `profiles`, every
+host becomes a profile. A plain read never writes. **Why:** an older minka on
+the same machine keeps working, and what it writes is not lost.
+**Implemented as:** `config.onDisk`, see [Profiles](stable/profiles.md#the-configuration-file).
+
+<a id="c-195"></a>
+## C-195 — A profile keeps its host
+
+*Applies to: `auth login --profile`, `setup`*
+
+Signing an existing profile in with another `--host` is exit 1 naming
+`profiles remove`; without `--host` it signs in on its own host. **Why:** a
+script that names a profile must not find it writing in another organization.
+**Implemented as:** `cli.profileOnHost`.
+
+<a id="c-196"></a>
+## C-196 — The cards at work are kept per account, and every account beats
+
+*Applies to: `work …`, `heartbeat`, `cards move`, `profiles rename`*
+
+The store keys a list by profile, or by host for the token of the environment,
+and writes per host the lists of the profile the host carries. A rename moves
+the lists and drops leftovers under the new name; a removal drops them. Lists
+under a name no profile has are passed over, never deleted for it; a new
+profile clears its name first or is refused. The heartbeat reports every
+account with a list of its session, each with its own token. **Why:** no
+account may report another's cards, and the mod knows nothing of profiles.
+**Implemented as:** `work.File.Accounts`, `cli.beatEveryAccount`, see
+[Profiles](stable/profiles.md#state-per-account).

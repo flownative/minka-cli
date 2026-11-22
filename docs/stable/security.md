@@ -23,7 +23,9 @@ line.
 - File 0600 in a directory 0700, written atomically with `fsync` and `rename`;
   a symlink stays a symlink.
 - A file that others can read is refused instead of silently used.
-- It holds several hosts with one token each, and a default host.
+- It holds the profiles, each a host and a token, and a default profile, and
+  beside them the hosts in the form older versions read; see
+  [Profiles](profiles.md#the-configuration-file).
 
 Beside it, `cli-update.json` (0600, written the same way) remembers the
 versions of minka Minka named last and when the notice of a newer one was
@@ -35,39 +37,16 @@ fails a command. A version is taken from a header only where it is a plain
 ## A token goes to its own host only
 
 `MINKA_TOKEN` counts only together with `MINKA_HOST` and only for that host.
-Whoever addresses another host with `--host` gets that host's token from the
-configuration file, or a refusal — never the token of the first host (C-004).
+Whoever addresses another host with `--host` gets the token of the profile on
+that host, or a refusal — never the token of the first host (C-004). A profile
+named with `--profile` or `$MINKA_PROFILE` signs in with its own token, even on
+the host of `MINKA_HOST` (C-193).
 
-## The default host
+## The default profile
 
-The host of a command is `--host`, else `$MINKA_HOST`, else the default host
-of the configuration file. Every session on the machine shares that default,
-so it moves only when somebody means it to (C-179):
-
-- `auth login` sets it only where there is none yet, or one that cannot be
-  read; otherwise it stays, and the answer says so: `data.isDefault` false,
-  `data.defaultHost` the default, a summary and a text line naming it, and
-  breadcrumbs to `--host` and `config set host`. `--make-default` moves it.
-- `minka config set host <url>` moves it to a host the file holds a token for,
-  read the way a sign-in reads it; any other host is exit 1 (`usage`) with
-  the sign-in as hint, and nothing is written (C-180). `config get host` names
-  it, `null` where there is none. There is no `config unset`: a default goes
-  with the sign-out of its host.
-- `setup` makes the host it is answered the default: it asks a
-  person at the terminal which host this machine works with.
-- Signing out of the default host leaves no default, with a `notice`, and no
-  host that happens to be left takes its place (C-181). A command without a
-  host then exits 3 with `no default host is set` and names `--host` and
-  `config set host`; the next sign-in sets the default again.
-
-`auth status` and `doctor` name the default host beside the host of the
-command, in `data.defaultHost` and in the text, where the two differ; where
-they are the same, the host is named once. A default host or a configuration
-file that cannot be read is said as such, with the reason, never as no
-default: a command with `--host` gets past it, every command without fails on
-it. `auth status` adds `data.hostSource` (`flag`, `environment`, `default`),
-`doctor` `data.host`, the host of the command even where no session came
-about.
+Which profile a command uses, how the default moves and what `auth status` and
+`doctor` say about it is in [Profiles](profiles.md#which-profile-a-command-uses)
+(C-179…C-181, C-192).
 
 ## The Basecamp token of an import
 
@@ -104,29 +83,30 @@ sub-delimiters of a URL by the letter of the standard, so
 answers at it while it would become a key of the configuration and of the list
 of cards.
 
-This holds for the default host of the configuration as well, whoever wrote it
-there, and a value that cannot be read at all is no host: it is refused where
-it is read, and no session comes about under it (C-044). The host is a key of
-the list of cards, so every process has to make the same string of it, and a
-value no process can make a host of is nothing to carry further: carried
-further, it stands in a status, in a report and in the hint of a 401. The
-refusal names the file to repair and the way out. Where the configuration keeps
-the same host in another form, the refusal says which entry that is: the token
-is there, it is only written where nothing looks for it.
+This holds for the host of a profile as well, whoever wrote it there, and a
+value that cannot be read at all is no host: it is refused where it is read,
+and no session comes about under it (C-044). A profile is found on a host by
+its host read the way a sign-in writes it, so one written by hand in another
+form is found all the same, and a host taken over from a file of hosts is
+written in that form where it can be read. A value no process can make a host
+of is nothing to carry further: carried further, it stands in a status, in a
+report and in the hint of a 401. The refusal names the profile and the way
+out, `profiles remove`.
 
-Signing out is the one command that takes the entry as the file writes it, the
-host it was told as much as the default one. It has to reach the entry that is
-there: one written in another form would be left standing with its token by a
-host that was read straight, and one that cannot be read at all is matched
-letter for letter. Without `--revoke` nothing goes anywhere from here, and no
-command lists the hosts, so an entry that could not be signed out of would be
-invisible and unremovable with its token valid on the server.
+Signing out is the one command that takes a profile without reading its host
+first. A `--host` that can be read chooses as everywhere else: the one profile
+on it, the default among several, and exit 8 otherwise, so that no token is
+taken away or revoked by chance. Only a `--host` that cannot be read finds the
+profile whose host is written letter for letter like it, and of several such
+none. It has to reach the profile that is there: one whose host cannot be read
+would otherwise have no way out of the file. Without `--revoke` nothing goes
+anywhere from here.
 
 ## Revoking the token on signing out
 
-`auth logout --revoke` sends one request before it touches the file:
-`DELETE /me/token` with the token of the entry, which Minka answers by revoking
-that token and no other (E-238). The entry is taken out only after the
+`auth logout --revoke` and `profiles remove --revoke` send one request before
+they touch the file: `DELETE /me/token` with the token of the profile, which
+Minka answers by revoking that token and no other (E-238). The entry is taken out only after the
 revocation went through, because the entry is the one copy of the token this
 machine has: taken out first, a revocation that then failed would leave a valid
 token nothing here can reach any more (C-119).
@@ -167,9 +147,9 @@ A host that a session carries has been through this reading, so printing it
 needs nothing further: `auth status`, the report of `doctor` and the hint of a
 401 name it as it stands, and there is nothing in it to render away. Rendered
 is what has not been read where it is printed, and those are five places: the
-refusal of a host that was given, the refusal of the default host, the entry a
-sign-out takes away, the entry a refusal names as the same host written another
-way, and the hint after a request that could not be made, where the host
+refusal of a host that was given, the refusal of the host of a profile, the
+profile a sign-out takes away, the host `profiles list` names, and the hint
+after a request that could not be made, where the host
 arrives as a bare argument from wherever the caller had it. Whoever prints a
 value that has not been read adds a sixth.
 

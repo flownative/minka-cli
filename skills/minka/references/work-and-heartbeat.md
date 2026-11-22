@@ -89,6 +89,13 @@ this:
 - A `reason` this CLI does not know takes no card out of the list: the card
   stays, the word is reported as it came, and the `notice` says so. Act on it
   yourself.
+- A card belongs to the profile it was taken up with: `work start --profile
+  familie` keeps it in the list of that profile, and `work list` and `work
+  stop` show and stop the cards of the profile they are given. The heartbeat
+  reports the list of your session in every profile that holds one, each with
+  the token of that profile, whatever `MINKA_PROFILE` the mod was started with;
+  `data.accounts` has one entry per profile with `profile`, `sent`, `reason`
+  and `cardIds`. `--profile` or `--host` narrow it to one.
 - `minka heartbeat` always exits 0 and prints nothing unless you ask with
   `--json`, which names the session it reported for in `data.session`. Not
   signed in, no network, a token that was revoked: none of it stops your work,

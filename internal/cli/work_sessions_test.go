@@ -358,7 +358,7 @@ func TestAStoreOfTheMachineIsHandedOutToItsSessions(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer handle.Close()
-	sessions := handle.File.Hosts[host].Sessions
+	sessions := handle.File.Accounts[host].Sessions
 	for session, want := range map[string]struct {
 		card string
 		beat time.Time

@@ -23,9 +23,11 @@ Only an agent may say so. A person's token is refused with `agentsOnly`.
 ## Every session has a list of its own
 
 The cards lie in `work.json` beside the configuration file, never in a project
-and never in the directory a command was started in: one list per host and
-session. A signal carries the list of one session and nothing else, under a
-client of that session's own (C-103). The server keeps a card alight for as
+and never in the directory a command was started in: one list per account and
+session, an account being a profile, or a host signed in to through
+`$MINKA_TOKEN` ([Profiles](profiles.md#state-per-account)). A signal carries
+the list of one session and nothing else, under a client of that session's own
+(C-103). The server keeps a card alight for as
 long as any client names it, so a session that reported the cards of another
 would keep them glowing after that one died — for hours, as long as anything
 else on the machine was at work.

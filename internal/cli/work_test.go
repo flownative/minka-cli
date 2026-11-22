@@ -953,10 +953,10 @@ func (e *testEnv) storedListAsItLies() *work.List {
 	if err := json.Unmarshal(content, &file); err != nil {
 		e.t.Fatalf("the store is not JSON: %v", err)
 	}
-	if len(file.Hosts) != 1 {
-		e.t.Fatalf("%d hosts in the store, want one", len(file.Hosts))
+	if len(file.Accounts) != 1 {
+		e.t.Fatalf("%d accounts in the store, want one", len(file.Accounts))
 	}
-	for _, host := range file.Hosts {
+	for _, host := range file.Accounts {
 		return listOf(host, e.vars[sessionVariable])
 	}
 	return nil

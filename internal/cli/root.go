@@ -18,6 +18,7 @@ import (
 	"github.com/flownative/minka-cli/internal/cliupdate"
 	"github.com/flownative/minka-cli/internal/config"
 	"github.com/flownative/minka-cli/internal/readmark"
+	"github.com/flownative/minka-cli/internal/work"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 )
@@ -90,7 +91,14 @@ type app struct {
 	// clock instead.
 	pause func(ctx context.Context, d time.Duration) error
 
-	hostFlag   string
+	hostFlag    string
+	profileFlag string
+
+	// openTheStore opens the store of the cards at work; tests make it fail.
+	openTheStore func(path string, wait time.Duration, accounts work.Accounts) (*work.Handle, error)
+
+	// runNotices are what this run has to say whatever the command answers.
+	runNotices []string
 	jsonFlag   bool
 	quietFlag  bool
 	styledFlag bool
@@ -150,6 +158,7 @@ func newApp(ctx context.Context, stdin io.Reader, stdout, stderr io.Writer, gete
 	a.pause = pauseFor
 	a.runClaude = a.runClaudeCommand
 	a.executable = os.Executable
+	a.openTheStore = work.OpenFor
 	a.stdinIsTerminal = func() bool { return isTerminal(stdin) }
 	a.stdoutIsTerminal = func() bool { return isTerminal(stdout) }
 	a.readSecret = func() (string, error) {
@@ -224,8 +233,13 @@ First steps, on a terminal:
 Without a terminal, sign in with:
   minka auth login --host https://minka.example.com --with-token < token.txt
 
+A profile is one account in one organization: a host, a token and who it acts
+as. --profile <name> or $MINKA_PROFILE chooses one; --host or $MINKA_HOST
+chooses the profile on that host. A flag outweighs a variable, a profile a
+host. Without either, a command uses the default profile.
+
 $MINKA_HOST and $MINKA_TOKEN sign in without the config file. The token is
-only used for the host in $MINKA_HOST.`,
+only used for the host in $MINKA_HOST, and not where a profile is chosen.`,
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		Version:       version,
@@ -236,7 +250,8 @@ only used for the host in $MINKA_HOST.`,
 	root.CompletionOptions.HiddenDefaultCmd = true
 
 	flags := root.PersistentFlags()
-	flags.StringVar(&a.hostFlag, "host", "", "Minka host (default: $MINKA_HOST, else the default host)")
+	flags.StringVar(&a.profileFlag, "profile", "", "Profile to use (default: $MINKA_PROFILE, else the default profile)")
+	flags.StringVar(&a.hostFlag, "host", "", "Minka host, for the profile on it (default: $MINKA_HOST)")
 	flags.BoolVar(&a.jsonFlag, "json", false, "Print a JSON envelope")
 	flags.BoolVarP(&a.quietFlag, "quiet", "q", false, "Print only the data as JSON")
 	flags.BoolVar(&a.styledFlag, "styled", false, "Print text even when stdout is not a terminal")
@@ -249,6 +264,7 @@ only used for the host in $MINKA_HOST.`,
 		a.newSetupCmd(),
 		a.newConfigCmd(),
 		a.newAuthCmd(),
+		a.newProfilesCmd(),
 		a.newMeCmd(),
 		a.newProjectsCmd(),
 		a.newBoardsCmd(),
@@ -391,166 +407,56 @@ func (a *app) explicitHost() (string, error) {
 type session struct {
 	client      *api.Client
 	host        string
+	profile     string // empty where the token came from the environment
+	source      string // where the choice of the account came from
+	key         string // what the state of the account on this machine is kept under
 	tokenSource string
 	configPath  string // empty when the token came from the environment
 	reader      string // who reads comments here, named without the token
 }
 
-// session finds the host and the token of a command.
-//
-// The host is --host, else $MINKA_HOST, else the default host of the config
-// file. $MINKA_TOKEN belongs to $MINKA_HOST and is used for that host only.
-// For any other host the token comes from the config file, so a token is
-// never sent to a host it was not given for.
+// session finds the account of a command and signs in with it. Which account
+// that is, chooseAccount says.
 func (a *app) session() (*session, error) {
-	host, err := a.explicitHost()
+	c, path, file, err := a.chooseAccount(true)
 	if err != nil {
 		return nil, err
 	}
+	return a.sessionOf(c, path, file)
+}
 
-	if envToken := a.getenv("MINKA_TOKEN"); envToken != "" {
-		envHostValue := a.getenv("MINKA_HOST")
-		if envHostValue == "" {
-			return nil, &Error{Code: CodeUsage, Message: "$MINKA_TOKEN is set without $MINKA_HOST", Hint: "Set $MINKA_HOST to the host the token belongs to."}
-		}
-		envHost, err := config.NormalizeHost(envHostValue)
-		if err != nil {
-			return nil, &Error{Code: CodeUsage, Message: "$MINKA_HOST: " + err.Error()}
-		}
-		if host == envHost {
-			return &session{client: a.newClient(host, envToken), host: host, tokenSource: tokenFromEnvironment, reader: readmark.Reader(envToken)}, nil
-		}
+func (a *app) sessionOf(c choice, path string, file *config.File) (*session, error) {
+	if c.envToken != "" {
+		return &session{client: a.newClient(c.host, c.envToken), host: c.host, source: c.source, key: c.key(), tokenSource: tokenFromEnvironment, reader: readmark.Reader(c.envToken)}, nil
 	}
-
-	path, file, err := a.loadConfig()
-	if err != nil {
-		return nil, err
+	if c.host == "" {
+		return nil, noAccountError(file)
 	}
-	if host == "" {
-		if host, err = defaultHostOf(file, path); err != nil {
-			return nil, err
-		}
+	if c.profile == "" {
+		return nil, &Error{Code: CodeAuth, Message: "not signed in to " + config.HostForOutput(c.host), Hint: "Run: minka auth login --host " + c.host}
 	}
-	if host == "" {
-		return nil, noHostError(file)
-	}
-	token := file.Hosts[host].Token
+	token := file.Profiles[c.profile].Token
 	if token == "" {
-		e := &Error{Code: CodeAuth, Message: "not signed in to " + config.HostForOutput(host), Hint: "Run: minka auth login --host " + host}
-		if written := hostWrittenAnotherWay(file, host); written != "" {
-			e.Hint = "The configuration keeps this host as " + config.HostForOutput(written) +
-				", the same host written another way, and the token under that entry is looked for under " + host +
-				". Run: minka auth login --host " + host + " — or write that entry as " + host + "."
-		}
-		return nil, e
+		return nil, &Error{Code: CodeAuth, Message: "the profile " + c.profile + " holds no token", Hint: "Run: minka auth login --profile " + c.profile}
 	}
 
-	return &session{client: a.newClient(host, token), host: host, tokenSource: tokenFromConfig, configPath: path, reader: readmark.Reader(token)}, nil
+	return &session{client: a.newClient(c.host, token), host: c.host, profile: c.profile, source: c.source, key: c.key(), tokenSource: tokenFromConfig, configPath: path, reader: readmark.Reader(token)}, nil
 }
 
-// Where the host of a command comes from.
-const (
-	hostFromFlag        = "flag"
-	hostFromEnvironment = "environment"
-	hostFromDefault     = "default"
-)
-
-// hostSource says where the host of a command comes from, in the order session
-// looks for it.
-func (a *app) hostSource() string {
-	switch {
-	case a.hostFlag != "":
-		return hostFromFlag
-	case a.getenv("MINKA_HOST") != "":
-		return hostFromEnvironment
+// hostSource says where the host of a command comes from, in the words the
+// output gave it before there were profiles: flag, environment, profile where
+// a profile was named, and default.
+func hostSource(source string) string {
+	switch source {
+	case chosenByHostFlag:
+		return "flag"
+	case chosenByHostEnv:
+		return "environment"
+	case chosenByProfileFlag, chosenByProfileEnv:
+		return "profile"
 	default:
-		return hostFromDefault
+		return "default"
 	}
-}
-
-// defaultHostToReport is the default host as a sign-in writes it, for a report
-// that names it beside the host a command uses. It is empty where there is
-// none. Where it or the configuration cannot be read, it is empty as well and
-// the problem says why: a command given its host by --host or $MINKA_HOST gets
-// past both, while every command without one fails on them, and a report that
-// called that no default would hide the failure.
-func (a *app) defaultHostToReport() (host, problem string) {
-	_, file, err := a.loadConfig()
-	if err != nil {
-		return "", err.Error()
-	}
-	if file.DefaultHost == "" {
-		return "", ""
-	}
-	host, err = config.NormalizeHost(file.DefaultHost)
-	if err != nil {
-		return "", err.Error()
-	}
-	return host, ""
-}
-
-// hostsInWords says how the host of a command stands to the default host,
-// naming a host only where the two differ.
-func hostsInWords(host, source, defaultHost, problem string) string {
-	given := "--host"
-	if source == hostFromEnvironment {
-		given = "$MINKA_HOST"
-	}
-	switch {
-	case problem != "":
-		return "the host comes from " + given + ", and the default host cannot be read: " + problem
-	case host == defaultHost:
-		return "it is the default host"
-	case defaultHost == "":
-		return "the host comes from " + given + ", and no default host is set"
-	default:
-		return "the host comes from " + given + ", the default host is " + defaultHost
-	}
-}
-
-// noHostError is the refusal of a command that names no host where the
-// configuration names no default host either. Where hosts are signed in to, the
-// way on is to name one of them; nothing picks one by itself, because the
-// default host is a choice and not what happened to be left over.
-func noHostError(file *config.File) *Error {
-	if len(file.Hosts) == 0 {
-		return &Error{Code: CodeAuth, Message: "not signed in to any Minka host", Hint: "Run: minka auth login --host https://minka.example.com"}
-	}
-	return &Error{
-		Code:    CodeAuth,
-		Message: "no default host is set",
-		Hint:    "Give the host with --host <url>, or make a host signed in to the default: minka config set host <url>",
-	}
-}
-
-// hostToPaste is the host a hint may put into a command line. Where what may be
-// printed of a value is no address to sign in to, the line names what is to be
-// filled in instead. That is no address on purpose: whoever runs the line as it
-// stands, a person or an agent, must not reach a host that is not theirs. It is a
-// plain word, so a shell hands it on and the line fails where it should, at
-// minka.
-func hostToPaste(shown string) string {
-	if host, err := config.NormalizeHost(shown); err == nil {
-		return host
-	}
-
-	return "YOUR-INSTANCE-ADDRESS"
-}
-
-// hostWrittenAnotherWay names an entry of the configuration that means the host
-// asked for but is not written the way a sign-in writes it. The token under such
-// an entry is never found, and a refusal that named only the host it looked for
-// would name one that stands nowhere in the file.
-func hostWrittenAnotherWay(file *config.File, host string) string {
-	for written, entry := range file.Hosts {
-		if written == host || entry.Token == "" {
-			continue
-		}
-		if same, err := config.NormalizeHost(written); err == nil && same == host {
-			return written
-		}
-	}
-	return ""
 }
 
 const neighbourCard = "the neighbour"

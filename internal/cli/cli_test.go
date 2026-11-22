@@ -187,7 +187,7 @@ func TestLoginSavesTheTokenInAFileOnlyTheUserCanRead(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if file.DefaultHost != e.server.URL || file.Hosts[e.server.URL].Token != e.fixture.Token {
+	if name := profileNamedAfter(e.server.URL); file.DefaultProfile != name || file.Profiles[name].Token != e.fixture.Token || file.Profiles[name].Host != e.server.URL {
 		t.Errorf("config %+v", file)
 	}
 
@@ -258,32 +258,17 @@ func TestAConfigFileOthersCanReadIsNotUsed(t *testing.T) {
 }
 
 // A configuration written by hand can keep a host in a form no sign-in writes.
-// The token under such an entry is never found, and a refusal that named only the
-// host it looked for would name one that stands nowhere in the file and send
-// somebody looking at the wrong end.
-func TestAHostTheConfigurationWritesAnotherWayIsSaidSo(t *testing.T) {
+// Its profile signs in to the host as a sign-in writes it, so the token is
+// found under either spelling.
+func TestAHostTheConfigurationWritesAnotherWayIsFound(t *testing.T) {
 	e := newTestEnv(t)
 	delete(e.vars, "MINKA_TOKEN")
 	delete(e.vars, "MINKA_HOST")
 	written := e.server.URL + "/"
 	e.writeConfig(`{"defaultHost": "` + written + `", "hosts": {"` + written + `": {"token": "` + e.fixture.Token + `"}}}`)
 
-	env, r := e.runJSON("", "me")
-	expectCode(t, r, ExitAuth)
-	if env.Code != CodeAuth {
-		t.Errorf("code %q", env.Code)
-	}
-	if !strings.Contains(env.Hint, written) || !strings.Contains(env.Hint, "another way") {
-		t.Errorf("the hint %q does not say that the configuration keeps the host in another form", env.Hint)
-	}
-	if !strings.Contains(env.Hint, "minka auth login --host "+e.server.URL) {
-		t.Errorf("the hint %q does not say what puts it right", env.Hint)
-	}
-	// It names an entry of the file the token lies in, and an agent puts what it
-	// reads into a log.
-	if strings.Contains(env.Hint, e.fixture.Token) || strings.Contains(env.Error, e.fixture.Token) {
-		t.Errorf("the refusal carries the token: %q %q", env.Error, env.Hint)
-	}
+	expectCode(t, e.run("", "me", "--json"), ExitOK)
+	expectCode(t, e.run("", "me", "--host", e.server.URL, "--json"), ExitOK)
 }
 
 func TestLogoutRemovesTheToken(t *testing.T) {
@@ -1635,7 +1620,7 @@ func TestTheEnvironmentTokenIsOnlySentToItsHost(t *testing.T) {
 		t.Fatalf("%d requests reached the other host", n)
 	}
 
-	file := &config.File{Hosts: map[string]config.HostEntry{other.URL: {Token: otherFixture.StrangerToken}}}
+	file := &config.File{Profiles: map[string]config.Profile{"other": {Host: other.URL, Token: otherFixture.StrangerToken}}}
 	if err := file.Save(e.vars["MINKA_CONFIG"]); err != nil {
 		t.Fatal(err)
 	}
@@ -1697,11 +1682,11 @@ func TestARefusedHostKeepsItsPasswordOutOfTheOutput(t *testing.T) {
 	}
 }
 
-// A default host the configuration cannot read is no host: it is refused where
-// it is read, and no command comes to a session under it. That is what keeps the
-// value out of everything that prints a host — a status, a report, the hint of a
-// refusal. What the refusal says of the value is the address alone, and it names
-// the file to repair.
+// A default profile whose host the configuration cannot read is no account: it
+// is refused where it is read, and no command comes to a session under it. That
+// is what keeps the value out of everything that prints a host — a status, a
+// report, the hint of a refusal. What the refusal says of the value is the
+// address alone, and it names the profile to repair.
 func TestADefaultHostThatCannotBeReadIsNoHost(t *testing.T) {
 	const password = "s3cr3t-password"
 	const withCredentials = "https://robert:" + password + "@minka.example.com"
@@ -1713,23 +1698,24 @@ func TestADefaultHostThatCannotBeReadIsNoHost(t *testing.T) {
 	e.writeConfig(`{"defaultHost":"` + withCredentials + `","hosts":{"` + withCredentials + `":{"token":"minka_pat_written_by_hand"}}}`)
 
 	// A session, and the store beside it, are the two ways into such an entry.
-	for _, command := range [][]string{{"me"}, {"auth", "status"}, {"work", "list"}, {"work", "stop"}} {
+	for _, command := range [][]string{{"me"}, {"auth", "status"}, {"work", "list"}, {"work", "stop"}, {"profiles", "list"}} {
 		what := strings.Join(command, " ")
 		env, r := e.runJSON("", append(command, "--json")...)
-		expectCode(t, r, ExitUsage)
 		if out := r.stdout + r.stderr; strings.Contains(out, password) {
 			t.Errorf("%s hands the password on: %s", what, out)
 		}
+		if what == "profiles list" {
+			expectCode(t, r, ExitOK)
+			continue
+		}
+		expectCode(t, r, ExitUsage)
 		if env.Code != CodeConfig {
 			t.Errorf("%s answers with code %q", what, env.Code)
 		}
-		if !strings.Contains(env.Error, "the default host in "+e.vars["MINKA_CONFIG"]+" cannot be read") {
-			t.Errorf("%s does not say that the default host of the configuration cannot be read: %s", what, env.Error)
+		if !strings.Contains(env.Error, "the host of the profile minka.example.com in "+e.vars["MINKA_CONFIG"]+" cannot be read") {
+			t.Errorf("%s does not say that the host of the default profile cannot be read: %s", what, env.Error)
 		}
-		if !strings.Contains(env.Error, "minka.example.com") {
-			t.Errorf("%s does not say which host it is about: %s", what, env.Error)
-		}
-		if !strings.Contains(env.Hint, `"defaultHost"`) || !strings.Contains(env.Hint, "minka auth login --host https://minka.example.com") {
+		if !strings.Contains(env.Hint, `"host"`) || !strings.Contains(env.Hint, "minka profiles remove minka.example.com") {
 			t.Errorf("%s gives no way out: %s", what, env.Hint)
 		}
 	}
@@ -1754,31 +1740,17 @@ func TestADefaultHostThatCannotBeReadIsNoHost(t *testing.T) {
 		t.Errorf("%d requests were sent", n)
 	}
 
-	// Of an entry that cannot be read at all, what may be printed is too little
-	// to sign in with, and a command line with the replacement in it would not
-	// work. The hint then names an address to fill in.
+	// A default host without a token under it becomes no profile at all, and
+	// what is printed then is no part of the value.
 	unreadable := newTestEnv(t)
 	delete(unreadable.vars, "MINKA_HOST")
 	delete(unreadable.vars, "MINKA_TOKEN")
 	unreadable.writeConfig(`{"defaultHost":"https://robert:` + password + `@minka.example.com\u007f","hosts":{}}`)
 
-	env, r := unreadable.runJSON("", "me")
-	expectCode(t, r, ExitUsage)
-	if out := r.stdout + r.stderr; strings.Contains(out, password) {
-		t.Errorf("the refusal hands the password on: %s", out)
-	}
-	// What is left of such a value may hold anything, and a printed line goes
-	// through a terminal and a log that read a control character as an order.
-	if strings.ContainsRune(r.stdout+r.stderr, '\x7f') {
-		t.Errorf("a control character of the value reached the output: %q", r.stdout+r.stderr)
-	}
-	if strings.Contains(env.Hint, "***") || !strings.Contains(env.Hint, "--host YOUR-INSTANCE-ADDRESS") {
-		t.Errorf("the hint does not say what is to be filled in: %s", env.Hint)
-	}
-	// A line that looks ready to run would be run, by a person or by an agent,
-	// and would reach a host that is not theirs.
-	if strings.Contains(env.Hint, "--host https://") {
-		t.Errorf("the hint names an address of its own: %s", env.Hint)
+	_, r = unreadable.runJSON("", "me")
+	expectCode(t, r, ExitAuth)
+	if out := r.stdout + r.stderr; strings.Contains(out, password) || strings.ContainsRune(out, '\x7f') {
+		t.Errorf("the refusal hands on what the value holds: %q", out)
 	}
 }
 
@@ -1805,7 +1777,7 @@ func TestSigningOutOfAHandWrittenEntryPrintsNoPassword(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, ok := file.Hosts[withCredentials]; ok {
+	if ok := len(file.ProfilesOnHost(withCredentials)) > 0; ok {
 		t.Error("the entry the file holds was not the one that was removed")
 	}
 }
@@ -1836,10 +1808,10 @@ func TestSigningOutOfAnEntryThatCannotBeRead(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, ok := file.Hosts[written]; ok {
+	if ok := len(file.ProfilesOnHost(written)) > 0; ok {
 		t.Error("the entry that cannot be read is still there")
 	}
-	if _, ok := file.Hosts[e.server.URL]; !ok {
+	if ok := len(file.ProfilesOnHost(e.server.URL)) > 0; !ok {
 		t.Error("the entry of another host was taken away with it")
 	}
 
@@ -1848,11 +1820,9 @@ func TestSigningOutOfAnEntryThatCannotBeRead(t *testing.T) {
 	expectCode(t, r, ExitUsage)
 }
 
-// An entry written in a form a sign-in would not write is reached as it stands as
-// well. Read first, a sign-out would look for the canonical spelling, find
-// nothing and leave the token where it is — the very case the CLI itself teaches
-// about. The other way round, with the canonical host named and the odd one in
-// the file, the answer says which entry holds the token.
+// A host written in a form a sign-in would not write is the host of its profile
+// as a sign-in writes it, so a sign-out reaches it under either spelling and
+// leaves the profile of another host where it is.
 func TestSigningOutOfAnEntryWrittenAnotherWay(t *testing.T) {
 	const written = "https://hand.example.com/"
 	e := newTestEnv(t)
@@ -1864,26 +1834,14 @@ func TestSigningOutOfAnEntryWrittenAnotherWay(t *testing.T) {
 
 	env, r := e.runJSON("", "auth", "logout", "--host", "https://hand.example.com")
 	expectCode(t, r, ExitOK)
-	if data := decode(t, env.Data); data["removed"] != false {
+	if data := decode(t, env.Data); data["removed"] != true || data["profile"] != "hand.example.com" {
 		t.Errorf("data of the sign-out: %v", data)
 	}
-	if !strings.Contains(env.Notice, written) {
-		t.Errorf("the answer does not say which entry holds the token: %q", env.Notice)
-	}
-
-	env, r = e.runJSON("", "auth", "logout", "--host", written)
-	expectCode(t, r, ExitOK)
-	if data := decode(t, env.Data); data["removed"] != true {
-		t.Errorf("data of the sign-out: %v", data)
-	}
-	file, err := config.Load(e.vars["MINKA_CONFIG"])
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, ok := file.Hosts[written]; ok {
+	file := e.config()
+	if standing := len(file.ProfilesOnHost("https://hand.example.com")) > 0; standing {
 		t.Error("the entry written another way is still there")
 	}
-	if _, ok := file.Hosts[e.server.URL]; !ok {
+	if standing := len(file.ProfilesOnHost(e.server.URL)) > 0; !standing {
 		t.Error("the entry of another host was taken away with it")
 	}
 }
@@ -2107,7 +2065,7 @@ func TestLoginAsksForTheTokenOnATerminal(t *testing.T) {
 	if strings.Contains(r.stdout+r.stderr, e.fixture.Token) {
 		t.Error("the token appears in the output")
 	}
-	if file, err := config.Load(e.vars["MINKA_CONFIG"]); err != nil || file.Hosts[e.server.URL].Token != e.fixture.Token {
+	if file, err := config.Load(e.vars["MINKA_CONFIG"]); err != nil || file.Profiles[profileNamedAfter(e.server.URL)].Token != e.fixture.Token {
 		t.Errorf("token not saved: %+v, %v", file, err)
 	}
 }

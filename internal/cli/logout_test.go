@@ -88,10 +88,10 @@ func TestLogoutRevokesTheTokenOfTheHostItIsTold(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, standing := file.Hosts[other.URL]; !standing {
+	if standing := len(file.ProfilesOnHost(other.URL)) > 0; !standing {
 		t.Error("the entry of the default host was taken out")
 	}
-	if _, standing := file.Hosts[e.server.URL]; standing {
+	if standing := len(file.ProfilesOnHost(e.server.URL)) > 0; standing {
 		t.Error("the entry of the host told was left")
 	}
 }
@@ -135,7 +135,7 @@ func TestLogoutKeepsTheEntryWhenTheHostDoesNotAnswer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, standing := file.Hosts[gone.URL]; !standing {
+	if standing := len(file.ProfilesOnHost(gone.URL)) > 0; !standing {
 		t.Error("the entry was taken out")
 	}
 }
@@ -152,26 +152,11 @@ func TestLogoutSaysTheTokenIsRevokedWhenTheEntryCannotBeRemoved(t *testing.T) {
 
 	env, r := e.runJSON("", "auth", "logout", "--revoke")
 	expectCode(t, r, ExitUsage)
-	if env.Code != CodeConfig || !strings.Contains(env.Error, "the token is revoked, but its entry could not be taken out") {
+	if env.Code != CodeConfig || !strings.Contains(env.Error, "the token is revoked, but its profile could not be taken out") {
 		t.Errorf("code %q, error %q", env.Code, env.Error)
 	}
 	if data := decode(t, env.Data); data["revoked"] != true || data["removed"] != false {
 		t.Errorf("data %s", env.Data)
-	}
-}
-
-// The way to the entry written another way keeps --revoke when it was given.
-func TestTheEntryWrittenAnotherWayIsNamedWithRevoke(t *testing.T) {
-	const written = "https://hand.example.com/"
-	e := newTestEnv(t)
-	delete(e.vars, "MINKA_HOST")
-	delete(e.vars, "MINKA_TOKEN")
-	e.writeConfig(`{"defaultHost":"` + written + `","hosts":{"` + written + `":{"token":"minka_pat_written_by_hand"}}}`)
-
-	env, r := e.runJSON("", "auth", "logout", "--host", "https://hand.example.com", "--revoke")
-	expectCode(t, r, ExitOK)
-	if !strings.HasSuffix(env.Notice, " --revoke") {
-		t.Errorf("notice %q", env.Notice)
 	}
 }
 
@@ -191,7 +176,7 @@ func (e *testEnv) entryStands() bool {
 	if err != nil {
 		e.t.Fatal(err)
 	}
-	_, standing := file.Hosts[e.server.URL]
+	standing := len(file.ProfilesOnHost(e.server.URL)) > 0
 	return standing
 }
 
@@ -327,7 +312,7 @@ func TestLogoutWithRevokeOfAnEntryThatCannotBeReadSendsNothing(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, standing := file.Hosts[written]; !standing {
+	if standing := len(file.ProfilesOnHost(written)) > 0; !standing {
 		t.Error("the entry was taken out although its token was not revoked")
 	}
 }
