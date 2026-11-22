@@ -30,7 +30,11 @@ func (e *testEnv) defaultHost() string {
 	if err != nil {
 		e.t.Fatal(err)
 	}
-	return file.DefaultHost
+	profile, ok := file.Profiles[file.DefaultProfile]
+	if !ok {
+		return ""
+	}
+	return profile.Host
 }
 
 // On a fresh machine there is no default to keep, and the first host signed in
@@ -63,12 +67,12 @@ func TestASecondLoginKeepsTheDefaultHost(t *testing.T) {
 	if data := decode(t, env.Data); data["isDefault"] != false || data["defaultHost"] != e.server.URL || data["host"] != other.URL {
 		t.Errorf("data %s", env.Data)
 	}
-	if !strings.Contains(env.Summary, "default host stays "+e.server.URL) {
+	if !strings.Contains(env.Summary, "default profile stays "+profileNamedAfter(e.server.URL)) {
 		t.Errorf("summary %q", env.Summary)
 	}
 	found := false
 	for _, b := range env.Breadcrumbs {
-		found = found || b.Cmd == "minka config set host "+other.URL
+		found = found || b.Cmd == "minka profiles default "+profileNamedAfter(other.URL)
 	}
 	if !found {
 		t.Errorf("no breadcrumb that makes %s the default: %+v", other.URL, env.Breadcrumbs)
@@ -76,7 +80,7 @@ func TestASecondLoginKeepsTheDefaultHost(t *testing.T) {
 
 	r = e.run("minka_pat_bruno", "auth", "login", "--host", other.URL, "--with-token", "--styled")
 	expectCode(t, r, ExitOK)
-	if !strings.Contains(r.stdout, "The default host stays "+e.server.URL) || !strings.Contains(r.stdout, "minka config set host "+other.URL) {
+	if !strings.Contains(r.stdout, "The default profile stays "+profileNamedAfter(e.server.URL)) || !strings.Contains(r.stdout, "minka profiles default "+profileNamedAfter(other.URL)) {
 		t.Errorf("the text does not say that the default stays:\n%s", r.stdout)
 	}
 
@@ -162,14 +166,14 @@ func TestLogoutOfTheDefaultHostLeavesNoDefault(t *testing.T) {
 	if e.defaultHost() != "" {
 		t.Errorf("default host %q, want none", e.defaultHost())
 	}
-	if !strings.Contains(env.Notice, "no host is the default now") || !strings.Contains(env.Notice, "minka config set host") {
+	if !strings.Contains(env.Notice, "no profile is the default now") || !strings.Contains(env.Notice, "minka profiles default") {
 		t.Errorf("notice %q", env.Notice)
 	}
 
 	before := len(other.Requests())
 	env, r = e.runJSON("", "me")
 	expectCode(t, r, ExitAuth)
-	if env.Error != "no default host is set" || !strings.Contains(env.Hint, "minka config set host") {
+	if env.Error != "no default profile is set" || !strings.Contains(env.Hint, "minka profiles default") {
 		t.Errorf("error %q, hint %q", env.Error, env.Hint)
 	}
 	if len(other.Requests()) != before {
@@ -189,19 +193,19 @@ func TestStatusNamesTheDefaultHostWhereTheHostOfTheCommandDiffers(t *testing.T) 
 	env, r := e.runJSON("", "auth", "status", "--host", other.URL)
 	expectCode(t, r, ExitOK)
 	data := decode(t, env.Data)
-	if data["host"] != other.URL || data["defaultHost"] != e.server.URL || data["hostSource"] != hostFromFlag {
+	if data["host"] != other.URL || data["defaultHost"] != e.server.URL || data["hostSource"] != "flag" {
 		t.Errorf("data %s", env.Data)
 	}
 	r = e.run("", "auth", "status", "--host", other.URL, "--styled")
 	expectCode(t, r, ExitOK)
-	if !strings.Contains(r.stdout, "Signed in to "+other.URL+" ") || !strings.Contains(r.stdout, "the default host is "+e.server.URL+".") {
+	if !strings.Contains(r.stdout, "Signed in to "+other.URL+" ") || !strings.Contains(r.stdout, "the default profile is "+profileNamedAfter(e.server.URL)+".") {
 		t.Errorf("the text does not name both hosts:\n%s", r.stdout)
 	}
 
 	e.vars["MINKA_HOST"] = other.URL
 	env, r = e.runJSON("", "auth", "status")
 	expectCode(t, r, ExitOK)
-	if data := decode(t, env.Data); data["hostSource"] != hostFromEnvironment || data["defaultHost"] != e.server.URL {
+	if data := decode(t, env.Data); data["hostSource"] != "environment" || data["defaultHost"] != e.server.URL {
 		t.Errorf("data %s", env.Data)
 	}
 	if !strings.Contains(env.Summary, "$MINKA_HOST") {
@@ -214,12 +218,12 @@ func TestStatusNamesTheHostOnceWhereItIsTheDefault(t *testing.T) {
 
 	env, r := e.runJSON("", "auth", "status")
 	expectCode(t, r, ExitOK)
-	if data := decode(t, env.Data); data["host"] != e.server.URL || data["defaultHost"] != e.server.URL || data["hostSource"] != hostFromDefault {
+	if data := decode(t, env.Data); data["host"] != e.server.URL || data["defaultHost"] != e.server.URL || data["hostSource"] != "default" {
 		t.Errorf("data %s", env.Data)
 	}
 	r = e.run("", "auth", "status", "--styled")
 	expectCode(t, r, ExitOK)
-	if strings.Count(r.stdout, e.server.URL) != 1 || !strings.Contains(r.stdout, "It is the default host.") {
+	if strings.Count(r.stdout, e.server.URL) != 1 || !strings.Contains(r.stdout, "The profile "+profileNamedAfter(e.server.URL)+" is the default profile.") {
 		t.Errorf("the text names the host other than once:\n%s", r.stdout)
 	}
 }
@@ -232,7 +236,7 @@ func TestDoctorNamesTheDefaultHostWhereTheHostOfTheCommandDiffers(t *testing.T) 
 	if report.Host == nil || *report.Host != other.URL || report.DefaultHost == nil || *report.DefaultHost != e.server.URL {
 		t.Errorf("host %v, default host %v", report.Host, report.DefaultHost)
 	}
-	if detail := report.check(t, "sign-in").Detail; !strings.Contains(detail, other.URL) || !strings.Contains(detail, "the default host is "+e.server.URL) {
+	if detail := report.check(t, "sign-in").Detail; !strings.Contains(detail, other.URL) || !strings.Contains(detail, "the default profile is "+profileNamedAfter(e.server.URL)) {
 		t.Errorf("sign-in detail %q", detail)
 	}
 
@@ -241,28 +245,31 @@ func TestDoctorNamesTheDefaultHostWhereTheHostOfTheCommandDiffers(t *testing.T) 
 	if report.Host == nil || *report.Host != e.server.URL || report.DefaultHost == nil || *report.DefaultHost != e.server.URL {
 		t.Errorf("host %v, default host %v", report.Host, report.DefaultHost)
 	}
-	if detail := report.check(t, "sign-in").Detail; strings.Count(detail, e.server.URL) != 1 || !strings.Contains(detail, "it is the default host") {
+	if detail := report.check(t, "sign-in").Detail; strings.Count(detail, e.server.URL) != 1 || !strings.Contains(detail, "is the default profile") {
 		t.Errorf("sign-in detail %q", detail)
 	}
 }
 
-// A default host that cannot be read is no missing default: every command
-// without --host fails on it, and a report that called it none would hide that.
-func TestStatusAndDoctorSayThatTheDefaultHostCannotBeRead(t *testing.T) {
+// A default profile whose host cannot be read is no missing default: every
+// command without --profile fails on it, and a report that called it none would
+// hide that.
+func TestStatusAndDoctorSayThatTheDefaultProfileCannotBeRead(t *testing.T) {
 	e := newTestEnv(t)
 	delete(e.vars, "MINKA_TOKEN")
 	delete(e.vars, "MINKA_HOST")
-	e.writeConfig(`{"defaultHost":"https://minka.example.com;t=x","hosts":{"` + e.server.URL + `":{"token":"` + e.fixture.Token + `"}}}`)
+	e.writeConfig(`{"defaultProfile":"bad","profiles":{` +
+		`"bad":{"host":"https://minka.example.com;t=x","token":"minka_pat_written_by_hand"},` +
+		`"good":{"host":"` + e.server.URL + `","token":"` + e.fixture.Token + `"}}}`)
 
 	env, r := e.runJSON("", "auth", "status", "--host", e.server.URL)
 	expectCode(t, r, ExitOK)
-	if !strings.Contains(env.Summary, "the default host cannot be read: ") || strings.Contains(env.Summary, "no default host is set") {
+	if !strings.Contains(env.Summary, "the default profile cannot be read: ") || strings.Contains(env.Summary, "no default profile is set") {
 		t.Errorf("summary %q", env.Summary)
 	}
 
 	e.vars["MINKA_HOST"] = e.server.URL
 	report, _ := e.doctor()
-	if detail := report.check(t, "sign-in").Detail; !strings.Contains(detail, "the default host cannot be read: ") {
+	if detail := report.check(t, "sign-in").Detail; !strings.Contains(detail, "the default profile cannot be read: ") {
 		t.Errorf("sign-in detail %q", detail)
 	}
 }
@@ -278,7 +285,7 @@ func TestStatusSaysThatTheConfigurationCannotBeRead(t *testing.T) {
 
 	env, r := e.runJSON("", "auth", "status")
 	expectCode(t, r, ExitOK)
-	if !strings.Contains(env.Summary, "the default host cannot be read: ") || !strings.Contains(env.Summary, "accessible by other users") {
+	if !strings.Contains(env.Summary, "the default profile cannot be read: ") || !strings.Contains(env.Summary, "accessible by other users") {
 		t.Errorf("summary %q", env.Summary)
 	}
 }
@@ -291,7 +298,7 @@ func TestStatusNamesTheFlagBeforeTheEnvironment(t *testing.T) {
 
 	env, r := e.runJSON("", "auth", "status", "--host", other.URL)
 	expectCode(t, r, ExitOK)
-	if data := decode(t, env.Data); data["hostSource"] != hostFromFlag || data["host"] != other.URL {
+	if data := decode(t, env.Data); data["hostSource"] != "flag" || data["host"] != other.URL {
 		t.Errorf("data %s", env.Data)
 	}
 }

@@ -1,7 +1,8 @@
 // Package work keeps the cards the sessions on this machine are working on.
 //
 // There is one store per machine, next to the configuration, and in it one list
-// per host and session. Every session reports its own list and nothing else,
+// per account and session. An account is a profile, or a host where no profile
+// stands for the account. Every session reports its own list and nothing else,
 // under a client of its own: the server keeps one set per client, so a session
 // that reported the cards of another would keep them alight after that one
 // died. Every change to the store is made while holding a lock of the kernel, so
@@ -90,13 +91,14 @@ type LetGoCard struct {
 	At      time.Time `json:"at"`
 }
 
-// Host is what is remembered for one Minka host: one list per session, keyed by
-// the name of the session, and NoSession for whoever gave none.
-type Host struct {
+// Account is what is remembered for one account: one list per session, keyed
+// by the name of the session, and NoSession for whoever gave none.
+type Account struct {
 	Sessions map[string]*List `json:"sessions"`
 }
 
-// List is what one session has in hand on one host, and what it last reported.
+// List is what one session has in hand in one account, and what it last
+// reported.
 //
 // SentAt and SentCards are the throttle: they say what the last signal carried
 // and when it went out, whether it arrived or not. Every signal is a new
@@ -128,7 +130,37 @@ type List struct {
 
 // File is the store as it lies on disk.
 type File struct {
-	Hosts map[string]*Host `json:"hosts"`
+	// Accounts are keyed by the name of a profile, or by the host where no
+	// profile stands for the account. A profile name never reads as a host.
+	Accounts map[string]*Account `json:"accounts"`
+
+	// Hosts are the lists in the form of the versions before profiles, one per
+	// host. Save writes them for such a version beside the accounts, and
+	// TakeOverHosts hands what only they hold to an account.
+	Hosts map[string]*Account `json:"hosts,omitempty"`
+}
+
+// Accounts says how the hosts of older versions and the accounts of this one
+// meet.
+type Accounts struct {
+	// Of is the account the lists of a host belong to.
+	Of func(host string) string
+	// On are the accounts on a host: its profiles, and the host itself.
+	On func(host string) []string
+	// Live says whether an account is still one. A reader passes over the
+	// lists of an account that is gone; nothing deletes them for that, as the
+	// configuration may be read in the middle of a rename. Nil is every account.
+	Live func(key string) bool
+	// Host is the host whose lists the lists of an account are for an older
+	// version, and false where they are no host's.
+	Host func(key string) (string, bool)
+}
+
+// ByHost is Accounts for a store whose accounts are hosts.
+var ByHost = Accounts{
+	Of:   func(host string) string { return host },
+	On:   func(host string) []string { return []string{host} },
+	Host: func(key string) (string, bool) { return key, true },
 }
 
 // Handle is an open store together with the lock that is held on it. The
@@ -136,8 +168,9 @@ type File struct {
 type Handle struct {
 	File *File
 
-	path string
-	lock *lock
+	path     string
+	lock     *lock
+	accounts Accounts
 }
 
 // Path is where the store lies: beside the configuration file, so that it
@@ -156,8 +189,14 @@ func Untouched(path string) bool {
 
 // Open takes the lock on the store and reads it. It waits at most that long
 // for the lock; with no wait at all it gives up as soon as somebody else holds
-// it, which is what a signal does rather than keep a session waiting.
+// it, which is what a signal does rather than keep a session waiting. The lists
+// of a store kept per host stay under their hosts.
 func Open(path string, wait time.Duration) (*Handle, error) {
+	return OpenFor(path, wait, ByHost)
+}
+
+// OpenFor is Open, with the accounts the hosts of older versions stand for.
+func OpenFor(path string, wait time.Duration, accounts Accounts) (*Handle, error) {
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, fmt.Errorf("creating %s: %w", dir, err)
@@ -167,7 +206,7 @@ func Open(path string, wait time.Duration) (*Handle, error) {
 		return nil, err
 	}
 
-	file := &File{Hosts: map[string]*Host{}}
+	file := &File{}
 	content, err := os.ReadFile(path)
 	switch {
 	case errors.Is(err, fs.ErrNotExist):
@@ -179,12 +218,18 @@ func Open(path string, wait time.Duration) (*Handle, error) {
 			held.Release()
 			return nil, fmt.Errorf("reading %s: %w", path, err)
 		}
-		if file.Hosts == nil {
-			file.Hosts = map[string]*Host{}
-		}
 	}
+	if file.Accounts == nil && file.Hosts == nil {
+		file.Accounts = map[string]*Account{}
+	}
+	file.TakeOverHosts(accounts)
 
-	return &Handle{File: file, path: path, lock: held}, nil
+	return &Handle{File: file, path: path, lock: held, accounts: accounts}, nil
+}
+
+// IsLive says whether the lists of an account are still read.
+func (h *Handle) IsLive(key string) bool {
+	return h.accounts.Live == nil || h.accounts.Live(key)
 }
 
 func (h *Handle) Close() {
@@ -193,27 +238,100 @@ func (h *Handle) Close() {
 
 // Save writes the store where it lies. It writes a temporary file next to the
 // target and renames it, so that an interrupted write cannot leave a truncated
-// store behind.
+// store behind. Beside the accounts it writes per host the lists of the account
+// that host stands for, so that an older version reads them.
 func (h *Handle) Save() error {
-	content, err := json.MarshalIndent(h.File, "", "  ")
+	stored := File{Accounts: h.File.Accounts, Hosts: map[string]*Account{}}
+	for key, entry := range h.File.Accounts {
+		if host, ok := h.accounts.Host(key); ok {
+			stored.Hosts[host] = entry
+		}
+	}
+	content, err := json.MarshalIndent(stored, "", "  ")
 	if err != nil {
 		return fmt.Errorf("encoding the store: %w", err)
 	}
 	return localfile.Write(h.path, ".work-*.json", append(content, '\n'))
 }
 
-// Host is what this host holds, an empty one where it holds nothing yet.
-func (f *File) Host(host string) *Host {
-	entry, ok := f.Hosts[host]
+// Account is what this account holds, an empty one where it holds nothing yet.
+func (f *File) Account(key string) *Account {
+	entry, ok := f.Accounts[key]
 	if !ok {
-		entry = &Host{}
-		f.Hosts[host] = entry
+		entry = &Account{}
+		f.Accounts[key] = entry
 	}
 	return entry
 }
 
+// TakeOverHosts hands the lists of the hosts to the accounts those hosts stand
+// for now. Where the store has accounts, they are what holds, and a host is
+// taken over only where no account on it holds anything: what this version
+// writes per host is a copy of the account the host stood for then, which need
+// not be the one it stands for now. A store an older version wrote last has
+// lost its accounts, and its hosts are what is left.
+func (f *File) TakeOverHosts(accounts Accounts) {
+	if f.Accounts == nil {
+		f.Accounts = map[string]*Account{}
+	}
+	for host, entry := range f.Hosts {
+		if slices.ContainsFunc(accounts.On(host), func(key string) bool { return f.Accounts[key] != nil }) {
+			continue
+		}
+		f.Account(accounts.Of(host)).takeOver(entry)
+	}
+	f.Hosts = nil
+}
+
+// Drop forgets the lists of an account, and says whether there were any.
+func (f *File) Drop(key string) bool {
+	if _, ok := f.Accounts[key]; !ok {
+		return false
+	}
+	delete(f.Accounts, key)
+	return true
+}
+
+// Rename moves the lists of an account to another key, and says whether it
+// changed anything. Lists left under the new key belong to an account that is
+// gone and are dropped, never mixed with those of the one renamed.
+func (f *File) Rename(from, to string) bool {
+	entry, ok := f.Accounts[from]
+	dropped := f.Drop(to)
+	if !ok {
+		return dropped
+	}
+	delete(f.Accounts, from)
+	f.Accounts[to] = entry
+	return true
+}
+
+// takeOver adds the lists of another account to this one. Where both hold a
+// list of the same session, the cards come together and the rest of the list
+// stays as this one has it.
+func (h *Account) takeOver(other *Account) {
+	if other == nil {
+		return
+	}
+	for session, list := range other.Sessions {
+		mine, held := h.Sessions[session]
+		if !held {
+			if h.Sessions == nil {
+				h.Sessions = map[string]*List{}
+			}
+			h.Sessions[session] = list
+			continue
+		}
+		for _, card := range list.Cards {
+			if !slices.ContainsFunc(mine.Cards, func(c Card) bool { return c.ID == card.ID }) {
+				mine.Cards = append(mine.Cards, card)
+			}
+		}
+	}
+}
+
 // List is the list of one session, an empty one where it holds nothing yet.
-func (h *Host) List(session string) *List {
+func (h *Account) List(session string) *List {
 	if h.Sessions == nil {
 		h.Sessions = map[string]*List{}
 	}
@@ -228,7 +346,7 @@ func (h *Host) List(session string) *List {
 // StillAtIt says again that a session is at work on the cards it took up, and
 // answers whether that was worth writing down. A session that gave no name
 // says nothing here: its cards go by the moment they were started.
-func (h *Host) StillAtIt(session string, now time.Time) bool {
+func (h *Account) StillAtIt(session string, now time.Time) bool {
 	list, known := h.Sessions[session]
 	if session == NoSession || !known {
 		return false
@@ -244,12 +362,12 @@ func (h *Host) StillAtIt(session string, now time.Time) bool {
 	return written
 }
 
-// ForgetWhatRanOut sweeps every list of the host, and drops a list that has
+// ForgetWhatRanOut sweeps every list of the account, and drops a list that has
 // nothing left to hold, to say or to take back: no card, no note, and nothing
 // sent that the server could still be counting. It answers how many cards it
 // forgot in the list of the session named, which is the one a command speaks
 // for, and whether it changed anything at all.
-func (h *Host) ForgetWhatRanOut(session string, now time.Time) (int, bool) {
+func (h *Account) ForgetWhatRanOut(session string, now time.Time) (int, bool) {
 	forgottenHere, changed := 0, false
 	for name, list := range h.Sessions {
 		forgotten, swept := list.ForgetWhatRanOut(now)
@@ -276,7 +394,7 @@ func (h *Host) ForgetWhatRanOut(session string, now time.Time) (int, bool) {
 // A list is given the moment its own cards were last seen as the mark of its
 // beat, not the mark of the machine: a session that died long ago would
 // otherwise pass for one at work as long as any other was.
-func (h *Host) UnmarshalJSON(content []byte) error {
+func (h *Account) UnmarshalJSON(content []byte) error {
 	var stored struct {
 		Sessions map[string]*List `json:"sessions"`
 		List

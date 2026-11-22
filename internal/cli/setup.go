@@ -66,21 +66,27 @@ func (a *app) runSetup(cmd *cobra.Command, withTheMod bool) error {
 	a.skillIsTheTopic = true
 
 	previousDefault := hostToOfferAgain(file)
-	host, err := a.setupHost(input, previousDefault)
+	previousProfile := file.DefaultProfile
+	name, host, err := a.setupProfile(cmd, input, file, previousDefault)
 	if err != nil {
 		return err
 	}
 
-	person, err := a.setupSignIn(cmd, host, path, file)
+	person, err := a.setupSignIn(cmd, name, host, path, file)
 	if err != nil {
 		return err
 	}
-	// Every command without --host goes to the default host, so a move of it
-	// is said, not left to be found out.
+	// Every command without --profile goes to the default profile, so a move
+	// of it is said, not left to be found out.
 	movedFrom := ""
 	if previousDefault != "" && previousDefault != host {
 		movedFrom = previousDefault
 		fmt.Fprintf(a.stderr, "%s is the default host now, instead of %s.\n", host, movedFrom)
+	}
+	movedFromProfile := ""
+	if previousProfile != "" && previousProfile != name {
+		movedFromProfile = previousProfile
+		fmt.Fprintf(a.stderr, "%s is the default profile now, instead of %s.\n", name, movedFromProfile)
 	}
 
 	skillPath, skillState, err := a.setupSkill(input)
@@ -97,6 +103,7 @@ func (a *app) runSetup(cmd *cobra.Command, withTheMod bool) error {
 		data: map[string]any{
 			"host": host, "configPath": path, "person": person.Raw,
 			"defaultHost": host, "previousDefaultHost": nullable(movedFrom),
+			"profile": name, "defaultProfile": name, "previousDefaultProfile": nullable(movedFromProfile),
 			"skill":   map[string]string{"path": skillPath, "state": skillState},
 			"mod":     installed.data(),
 			"oldHook": installed.hook.data(),
@@ -114,17 +121,40 @@ func (a *app) runSetup(cmd *cobra.Command, withTheMod bool) error {
 	})
 }
 
-// hostToOfferAgain is the host of the configuration where it can be read, and
-// nothing where it cannot. An entry setup is there to repair is no answer to
+// hostToOfferAgain is the host of the default profile where it can be read,
+// and nothing where it cannot. An entry setup is there to repair is no answer to
 // offer: taking it would only be refused, and putting it in the question would
 // print a value that may hold anything.
 func hostToOfferAgain(file *config.File) string {
-	host, err := config.NormalizeHost(file.DefaultHost)
+	profile, ok := file.Profiles[file.DefaultProfile]
+	if !ok {
+		return ""
+	}
+	host, err := config.NormalizeHost(profile.Host)
 	if err != nil {
 		return ""
 	}
 
 	return host
+}
+
+// setupProfile is the profile setup signs in with, and its host. A profile
+// named by --profile or $MINKA_PROFILE that exists brings its host along;
+// otherwise the host is --host, $MINKA_HOST or what the person types, and the
+// profile is found on it the way auth login finds it.
+func (a *app) setupProfile(cmd *cobra.Command, input *bufio.Reader, file *config.File, fallback string) (string, string, error) {
+	named := a.profileFlag
+	if named == "" && a.hostFlag == "" {
+		named = a.getenv("MINKA_PROFILE")
+	}
+	if _, exists := file.Profiles[named]; exists && a.hostFlag == "" {
+		return a.profileOnHost(cmd, file, "", false)
+	}
+	host, err := a.setupHost(input, fallback)
+	if err != nil {
+		return "", "", err
+	}
+	return a.profileOnHost(cmd, file, host, true)
 }
 
 // setupHost is --host or $MINKA_HOST when given, else what the person types;
@@ -159,20 +189,20 @@ func (a *app) setupHost(input *bufio.Reader, fallback string) (string, error) {
 }
 
 // setupSignIn keeps a token that works and asks for one otherwise. The saved
-// token it tries is the one of this host, never the one of another. Either way
-// the host becomes the default: setup asks a person at the terminal which host
-// this machine works with, and the answer is that choice.
+// token it tries is the one of this profile, never the one of another. Either
+// way the profile becomes the default: setup asks a person at the terminal which
+// host this machine works with, and the answer is that choice.
 //
 // Only a host that refuses the saved token is a reason to ask for a new one.
 // A host that does not answer would not accept a new token either, and the
 // person would have created one for nothing.
-func (a *app) setupSignIn(cmd *cobra.Command, host, path string, file *config.File) (api.Result[api.Me], error) {
-	if saved := file.Hosts[host].Token; saved != "" {
+func (a *app) setupSignIn(cmd *cobra.Command, name, host, path string, file *config.File) (api.Result[api.Me], error) {
+	if saved := file.Profiles[name].Token; saved != "" {
 		me, err := a.newClient(host, saved).Me(a.ctx)
 		if err == nil {
 			fmt.Fprintf(a.stderr, "Already signed in to %s as %s.\n", host, me.Value.Name)
-			if file.DefaultHost != host {
-				file.DefaultHost = host
+			if file.DefaultProfile != name {
+				file.DefaultProfile = name
 				if err := file.Save(path); err != nil {
 					return api.Result[api.Me]{}, &Error{Code: CodeConfig, Message: err.Error()}
 				}
@@ -190,7 +220,7 @@ func (a *app) setupSignIn(cmd *cobra.Command, host, path string, file *config.Fi
 	if err != nil {
 		return api.Result[api.Me]{}, err
 	}
-	path, me, _, err := a.signIn(host, token, true)
+	path, me, _, err := a.signIn(name, host, token, true)
 	if err != nil {
 		return api.Result[api.Me]{}, err
 	}

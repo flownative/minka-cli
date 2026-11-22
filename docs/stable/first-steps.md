@@ -15,14 +15,17 @@ In this order:
 1. The config file: one that cannot be read, or that others can read, ends
    setup before the first question. A token is shown once, and one that cannot
    be saved is lost.
-2. The host: `--host` or `$MINKA_HOST` when given, else it asks. An empty
-   answer takes the default host; a host that cannot be used is asked for
-   again.
-3. The sign-in: a saved token of this host that it still accepts is kept, and
-   the host becomes the default, whichever was before: unlike `auth login`,
-   setup is a person choosing the host of this machine ([Token, hosts and
-   requests](security.md#the-default-host)). Where that moves the default,
-   setup says so and `data.previousDefaultHost` names the one before. Only a
+2. The profile and its host: a profile `--profile` or `$MINKA_PROFILE` names
+   that exists brings its host. Otherwise the host is `--host` or `$MINKA_HOST`
+   when given, else it asks; an empty answer takes the host of the default
+   profile, and a host that cannot be used is asked for again. The profile on
+   that host is found as `auth login` finds it ([Profiles](profiles.md#commands)).
+3. The sign-in: a saved token of this profile that it still accepts is kept,
+   and the profile becomes the default, whichever was before: unlike `auth
+   login`, setup is a person choosing the host of this machine
+   ([Profiles](profiles.md#the-default)). Where that moves the default, setup
+   says so, and `data.previousDefaultHost` and `data.previousDefaultProfile`
+   name the one before. Only a
    host that refuses the saved token is a reason to ask for a new one; a host
    that does not answer ends setup with that error. Asking means pointing to the account page of the host, where a
    token for an agent is created, and taking the token without echo. The token
@@ -50,7 +53,7 @@ is the setup, not the command; `data.healthy` is false when a check failed
 |---|---|
 | `version` | never; says which minka this is |
 | `config` | the config file cannot be read, or others can read it |
-| `sign-in` | no host or token can be found: nobody is signed in, `$MINKA_TOKEN` stands without `$MINKA_HOST`, `--host` is no host. The hint names the step that needs no terminal first, then `setup`. Skipped when the config check failed. Its detail names the default host beside the host checked where the two differ, and `data.host` and `data.defaultHost` carry both |
+| `sign-in` | no host or token can be found: nobody is signed in, `$MINKA_TOKEN` stands without `$MINKA_HOST`, `--host` is no host. The hint names the step that needs no terminal first, then `setup`. Skipped when the config check failed. Its detail names the profile and where the choice came from, and the default profile where it is another one; `data.profile`, `data.host`, `data.defaultProfile` and `data.defaultHost` carry them |
 | `host` | the host does not answer or refuses the token; carries the hint of that error |
 | `skill` | warns when none is installed or the installed one differs; a skill behind a symbolic link is fine |
 | `update` | warns when this minka is older than the minimum Minka named; a newer latest version is `ok` with the hint `brew upgrade minka`. Says that nothing is known yet, or that a build is no release and not compared (C-129) |

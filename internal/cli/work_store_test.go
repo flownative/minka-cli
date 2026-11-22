@@ -18,12 +18,12 @@ func (e *testEnv) storedHosts() map[string]map[string]any {
 		e.t.Fatal(err)
 	}
 	var file struct {
-		Hosts map[string]map[string]any `json:"hosts"`
+		Accounts map[string]map[string]any `json:"accounts"`
 	}
 	if err := json.Unmarshal(content, &file); err != nil {
 		e.t.Fatalf("the store is not JSON: %v: %s", err, content)
 	}
-	return file.Hosts
+	return file.Accounts
 }
 
 // storedList is what the store holds for the host of these tests and the
@@ -47,10 +47,10 @@ func asStored(at time.Time) string {
 	return at.UTC().Format(time.RFC3339)
 }
 
-// The host of the store is read the way a sign-in writes it, however it stands
+// The store keeps the cards of a profile under its name, however its host stands
 // in the file: a default host written by hand with a slash at the end would
 // otherwise have one command at another list than the next.
-func TestTheHostOfTheStoreIsReadAsASignInWritesIt(t *testing.T) {
+func TestTheStoreIsKeyedByTheProfile(t *testing.T) {
 	e := newAgentEnv(t)
 	began := time.Date(2026, 9, 23, 10, 0, 0, 0, time.UTC)
 	host := e.server.URL
@@ -65,8 +65,8 @@ func TestTheHostOfTheStoreIsReadAsASignInWritesIt(t *testing.T) {
 	if sent := decode(t, env.Data)["sent"]; sent != true {
 		t.Fatalf("the beat sent nothing: %s", env.Data)
 	}
-	if keys := slices.Sorted(maps.Keys(e.storedHosts())); len(keys) != 1 || keys[0] != host {
-		t.Errorf("the store is keyed by %v, want the one host %s", keys, host)
+	if keys := slices.Sorted(maps.Keys(e.storedHosts())); len(keys) != 1 || keys[0] != profileNamedAfter(host) {
+		t.Errorf("the store is keyed by %v, want the one profile %s", keys, profileNamedAfter(host))
 	}
 }
 

@@ -390,10 +390,10 @@ against a local Minka on its `main`, in a Decisions tool of a test project
 whose prefix is a single letter; the labels are checked against the fake only,
 since that project has none.
 
-The default host moves only when somebody means it to: `auth login` keeps it
-and says so, `--make-default` and `config set host` move it, signing out of it
-leaves none, and `auth status` and `doctor` name it beside the host of the
-command ([Token, hosts and requests](../stable/security.md#the-default-host),
+The default profile moves only when somebody means it to: `auth login` keeps it
+and says so, `--make-default`, `profiles default` and `config set host` move
+it, removing it leaves none, and `auth status` and `doctor` name it beside the
+profile of the command ([Profiles](../stable/profiles.md#the-default),
 C-179…C-181). This touches no API; it is tested against temporary
 configuration files only.
 
@@ -855,6 +855,19 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
 (account Bruno, local instance) gets revoked then.
 
 ## Checked against the fake only
+
+- Profiles (MNK-TP): `--profile`, `$MINKA_PROFILE`, `profiles list|rename|
+  remove|default`, the file written with the hosts for older versions beside
+  the profiles, the store per account and the heartbeat over every account.
+  Built and tested against temporary files and the fake only; no live check
+  yet. **The release that carries it needs a line in its notes:** the first
+  command of this version that writes the configuration writes it with
+  profiles. An older minka still reads it and signs in with the profile its
+  host carries, but once it writes the file itself the profile names are gone
+  and only one account per host is left; this version then takes every host
+  over as a profile named after it. The store of `work start` is the same: an
+  older minka sees the cards of the profile each host carries, and one that
+  writes the store leaves only those.
 
 - A move into another Docs & Files tool (`move --tool`): the fake mirrors the
   order of the refusals, the ID kept, everything below a folder going along,

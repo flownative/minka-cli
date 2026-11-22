@@ -14,7 +14,7 @@ import (
 
 // setting is one value of the configuration file that a command may read and
 // change. Tokens are not among them: they are what auth is for. The default
-// host is, as one of the hosts auth has signed in to.
+// host is, as the host of the profile that becomes the default.
 type setting struct {
 	help string
 	get  func(*config.File) any
@@ -23,7 +23,7 @@ type setting struct {
 
 var settings = map[string]setting{
 	"host": {
-		help: "The default host, which a command without --host and $MINKA_HOST goes to; one signed in to with auth login",
+		help: "The host of the default profile; setting it makes the one profile on that host the default",
 		get:  defaultHostSetting,
 		set:  setDefaultHost,
 	},
@@ -41,35 +41,45 @@ var settings = map[string]setting{
 	},
 }
 
-// defaultHostSetting is the default host as a sign-in writes it, the value as
-// far as it may be printed where it cannot be read, and null where there is
-// none.
+// defaultHostSetting is the host of the default profile as a sign-in writes
+// it, the value as far as it may be printed where it cannot be read, and null
+// where there is none.
 func defaultHostSetting(f *config.File) any {
-	if f.DefaultHost == "" {
+	profile, ok := f.Profiles[f.DefaultProfile]
+	if !ok {
 		return nil
 	}
-	if host, err := config.NormalizeHost(f.DefaultHost); err == nil {
+	if host, err := config.NormalizeHost(profile.Host); err == nil {
 		return host
 	}
-	return config.HostForOutput(f.DefaultHost)
+	return config.HostForOutput(profile.Host)
 }
 
-// setDefaultHost takes a host only where the configuration holds a token for
-// it. A default host without one would make every later command without --host
-// fail, far from the command that caused it.
+// setDefaultHost makes the profile on a host the default. It takes a host only
+// where a profile signs in to it, and only one: a default without a token would
+// make every later command fail far from the command that caused it, and of two
+// accounts on one host none is to be guessed.
 func setDefaultHost(f *config.File, value string) error {
 	host, err := config.NormalizeHost(value)
 	if err != nil {
 		return err
 	}
-	if f.Hosts[host].Token == "" {
+	names := f.ProfilesOnHost(host)
+	switch {
+	case len(names) == 0:
 		return &Error{
 			Code:    CodeUsage,
 			Message: "not signed in to " + host + ", so it cannot become the default host",
 			Hint:    "Sign in first, which makes it the default as well: minka auth login --host " + host + " --make-default --with-token < token.txt",
 		}
+	case len(names) > 1:
+		return &Error{
+			Code:    CodeAmbiguous,
+			Message: fmt.Sprintf("%d profiles sign in to %s: %s", len(names), host, strings.Join(names, ", ")),
+			Hint:    "Make one of them the default by its name: minka profiles default <name>",
+		}
 	}
-	f.DefaultHost = host
+	f.DefaultProfile = names[0]
 	return nil
 }
 

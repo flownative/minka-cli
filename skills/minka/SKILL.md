@@ -36,14 +36,22 @@ references listed under "Where the rest stands".
 - Pass `--json` explicitly. Read `ok`, then `data`; on failure read `code`,
   `retryable`, `hint` and `meta.apiCode`.
 - Never put a token on the command line. Sign in once with
-  `minka auth login --host <url> --with-token < file`, or set `MINKA_TOKEN`
-  together with `MINKA_HOST`; the environment token is only sent to that host.
-- A command without `--host` and `MINKA_HOST` goes to the default host, which
-  other sessions on the machine share. Signing in to another host does not
-  move it (`data.isDefault` is false, `data.defaultHost` names it). For a
-  host you need now, pass `--host <url>` or set `MINKA_HOST`; move the default
-  with `auth login --make-default` or `minka config set host <url>` only when
-  it is really meant to move.
+  `minka auth login --profile <name> --host <url> --with-token < file`, or set
+  `MINKA_TOKEN` together with `MINKA_HOST`; the environment token is only sent
+  to that host, and never where a profile is chosen, which a `notice` says.
+- A profile is one account in one organization: a name, a host and a token.
+  The account of a command is, strongest first: `--profile <name>`, `--host
+  <url>` (the profile on that host), `MINKA_PROFILE`, `MINKA_HOST`, else the
+  default profile, which other sessions on the machine share. In a script or a
+  session that works for one organization, set `MINKA_PROFILE`; for a single
+  command, pass `--profile`. `--profile` and `--host` together exit 1. A host
+  with several profiles and none of them the default exits 8 and names them;
+  an unknown profile exits 1 and lists the profiles. `minka profiles list
+  --json` shows them, the default and which one is active and why.
+- Signing in with another profile does not move the default
+  (`data.isDefault` is false, `data.defaultProfile` names it). Move it with
+  `auth login --make-default` or `minka profiles default <name>` only when it
+  is really meant to move.
 - Pass long or multi-line text through stdin with `-`, never through shell
   quoting: `--description -` for cards, `<text>` = `-` for comments. Stdin
   has to be a pipe or a file, not a terminal.
@@ -224,9 +232,12 @@ not expected in practice.
   answers and accepts the token, and the installed skill. It is a report and
   exits 0 whatever it finds: read `data.healthy`, and for every entry of
   `data.checks` its `status` (`ok`, `warn`, `fail`, or `skip` where a check
-  before it failed), `detail` and `hint`; `data.host` is the host of the
-  command and `data.defaultHost` the default one, as `auth status` names them
-  too. Run it first when a command fails in a way you do not understand.
+  before it failed), `detail` and `hint`; `data.profile` and `data.host` are
+  the account of the command, `data.defaultProfile` and `data.defaultHost` the
+  default one. `auth status` names them too, with `data.profileSource` saying
+  where the choice came from (`--profile`, `--host`, `$MINKA_PROFILE`,
+  `$MINKA_HOST` or `default`). Run it first when a command fails in a way you
+  do not understand.
 - `minka setup` is for a person on a terminal: it asks for the host and the
   token, offers to install this skill, and installs the mod (`--no-mod` leaves
   it out); `data.mod.state` is `installed`, `current`, `written` (Claude Code
@@ -234,18 +245,27 @@ not expected in practice.
   be written) or `skipped`. Without a terminal it exits 1; take `minka auth
   login --host <url> --with-token < file`, `minka skill install` and `minka
   hooks install` instead.
-- `minka auth logout --host <url>`: forget the token of a host. The token stays
-  valid until it is revoked on the server. `--revoke` revokes it there first
-  and removes the entry only then; when the revocation fails the entry is kept
-  and the exit code is the failure's (a `retryable` one may simply be run
-  again). A token Minka itself no longer accepts counts as revoked, with a
-  `notice`; a 401 of a proxy in front of Minka does not. A token in
-  `$MINKA_TOKEN` is never revoked, and a `notice` says so. `data` is `{host,
-  removed, revoked}`. Signing out of the default host leaves no default host,
-  with a `notice`.
+- `minka auth login --profile <name> [--host <url>] --with-token < file`: a new
+  name makes a profile and needs `--host`; an existing name signs that profile
+  in again and keeps its host (another `--host` exits 1). Without `--profile`,
+  the one profile on the host is signed in again, or a new one named after the
+  host is made.
+- `minka profiles list`, `minka profiles rename <old> <new>`, `minka profiles
+  remove <name> [--revoke]` and `minka profiles default <name>`: the profiles
+  of this machine. A rename keeps the default and the cards of `work start`.
+- `minka auth logout` (or `minka profiles remove <name>`): forget the profile a
+  command uses and its token. The token stays valid until it is revoked on the
+  server. `--revoke` revokes it there first and removes the profile only then;
+  when the revocation fails the profile is kept and the exit code is the
+  failure's (a `retryable` one may simply be run again). A token Minka itself
+  no longer accepts counts as revoked, with a `notice`; a 401 of a proxy in
+  front of Minka does not. A token in `$MINKA_TOKEN` is never revoked, and a
+  `notice` says so. `data` is `{host, profile, removed, revoked}`. Removing the
+  default profile leaves no default, with a `notice`.
 - `minka config get <key> --json` and `minka config set <key> <value> --json`:
   the settings of this machine, so far `comments.requireRead` and `host`, the
-  default host, which takes only a host signed in to (exit 1 otherwise).
+  host of the default profile; setting it makes the one profile on that host
+  the default (exit 1 without one, exit 8 with several).
 
 ## This skill
 

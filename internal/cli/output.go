@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"slices"
 	"strings"
 )
 
@@ -80,6 +81,7 @@ type success struct {
 // ok prints a success. Notices go into the envelope for --json and to stderr
 // otherwise, so that --quiet keeps stdout to the bare data without losing them.
 func (a *app) ok(s success) error {
+	s.notices = slices.Concat(a.runNotices, s.notices)
 	if !a.skillIsTheTopic {
 		if notice := a.staleSkillNotice(); notice != "" {
 			s.notices = append(s.notices, notice)
@@ -123,6 +125,14 @@ func (a *app) noticeChannel() noticeChannel {
 	return noChannel
 }
 
+// noteOnce keeps a notice for the answer of this run, once however often it is
+// noted.
+func (a *app) noteOnce(notice string) {
+	if !slices.Contains(a.runNotices, notice) {
+		a.runNotices = append(a.runNotices, notice)
+	}
+}
+
 func (a *app) warn(notices []string) {
 	for _, notice := range notices {
 		fmt.Fprintf(a.stderr, "Warning: %s\n", notice)
@@ -130,6 +140,7 @@ func (a *app) warn(notices []string) {
 }
 
 func (a *app) fail(e *Error) {
+	e.Notices = slices.Concat(a.runNotices, e.Notices)
 	_, update := a.settleCLIUpdate(a.noticeChannel())
 	if a.format() != formatText {
 		response := ErrorResponse{OK: false, Error: e.Message, Code: e.Code, Retryable: e.Retryable, Hint: e.fullHint(), Data: e.Data, Notice: strings.Join(e.Notices, "; "), CLIUpdate: update}

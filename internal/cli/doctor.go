@@ -34,18 +34,20 @@ func (a *app) newDoctorCmd() *cobra.Command {
 		Long: `Checks what a command needs to work: the config file and its permissions,
 the host and the token, whether the host answers and accepts the token,
 whether the installed skill is the one this minka carries, and how this minka
-stands against the latest and the oldest version Minka names. Where --host or
-$MINKA_HOST names another host than the default one, it names both.
+stands against the latest and the oldest version Minka names. It names the
+profile a command uses and where that choice came from, and the default
+profile where it is another one.
 
 It is a report and exits 0 whatever it finds. With --json, data.healthy is
 false when a check failed; every check carries status (ok, warn, fail, or
 skip where a check before it failed), detail and, where something can be
-done, hint. data.host is the host of the command, data.defaultHost the default host
-of the config file; either is null where there is none.`,
+done, hint. data.host is the host of the command, data.defaultHost the host of
+the default profile, data.profile the profile of the command and
+data.defaultProfile the default profile; each is null where there is none.`,
 		Args: requireArgs(),
 		RunE: func(*cobra.Command, []string) error {
-			checks, host := a.doctorChecks()
-			defaultHost, _ := a.defaultHostToReport()
+			checks, host, profile := a.doctorChecks()
+			defaultProfile, defaultHost, _ := a.defaultToReport()
 
 			healthy := true
 			problems := 0
@@ -67,6 +69,7 @@ of the config file; either is null where there is none.`,
 				data: map[string]any{
 					"healthy": healthy, "version": version, "checks": checks,
 					"host": nullable(host), "defaultHost": nullable(defaultHost),
+					"profile": nullable(profile), "defaultProfile": nullable(defaultProfile),
 				},
 				summary: summary,
 				text: func(w io.Writer) {
@@ -82,9 +85,10 @@ of the config file; either is null where there is none.`,
 	}
 }
 
-// doctorChecks runs the checks and names the host of the command: the one the
-// session reached, else the one --host or $MINKA_HOST names, else none.
-func (a *app) doctorChecks() ([]doctorCheck, string) {
+// doctorChecks runs the checks and names the host and the profile of the
+// command: the ones the session reached, else the ones the choice names, else
+// none.
+func (a *app) doctorChecks() ([]doctorCheck, string, string) {
 	checks := []doctorCheck{{Name: "version", Status: checkOK, Detail: "minka " + version}}
 
 	configCheck := doctorCheck{Name: "config", Status: checkOK}
@@ -99,8 +103,12 @@ func (a *app) doctorChecks() ([]doctorCheck, string) {
 
 	signIn := doctorCheck{Name: "sign-in", Status: checkOK}
 	host := doctorCheck{Name: "host", Status: checkOK}
-	s, err := a.session()
-	sessionHost := ""
+	c, path, file, err := a.chooseAccount(true)
+	var s *session
+	if err == nil {
+		s, err = a.sessionOf(c, path, file)
+	}
+	sessionHost, sessionProfile := "", ""
 	if err != nil {
 		signIn.Status, signIn.Detail, signIn.Hint = checkFail, err.Error(), hintOf(err)
 		var cliErr *Error
@@ -112,16 +120,16 @@ func (a *app) doctorChecks() ([]doctorCheck, string) {
 			signIn.Status, signIn.Detail, signIn.Hint = checkSkip, "not checked, see config", ""
 		}
 		host.Status, host.Detail = checkSkip, "not checked without a sign-in"
-		// The host the command was given is still the one it would reach.
-		sessionHost, _ = a.explicitHost()
+		// The account the command was given is still the one it would reach.
+		sessionHost, sessionProfile = c.host, c.profile
 	} else {
-		sessionHost = s.host
+		sessionHost, sessionProfile = s.host, s.profile
 		signIn.Detail = "a token for " + s.host + " from the config file"
 		if s.tokenSource == tokenFromEnvironment {
 			signIn.Detail = "a token for " + s.host + " from $MINKA_TOKEN"
 		}
-		defaultHost, problem := a.defaultHostToReport()
-		signIn.Detail += "; " + hostsInWords(s.host, a.hostSource(), defaultHost, problem)
+		defaultProfile, _, problem := a.defaultToReport()
+		signIn.Detail += "; " + accountInWords(c, defaultProfile, problem)
 		if me, err := s.client.Me(a.ctx); err != nil {
 			e := s.fail(err)
 			host.Status, host.Detail, host.Hint = checkFail, e.Message, e.Hint
@@ -134,7 +142,7 @@ func (a *app) doctorChecks() ([]doctorCheck, string) {
 	}
 	checks = append(checks, signIn, host)
 
-	return append(checks, a.doctorSkillCheck(), a.doctorUpdateCheck()), sessionHost
+	return append(checks, a.doctorSkillCheck(), a.doctorUpdateCheck()), sessionHost, sessionProfile
 }
 
 func hintOf(err error) string {

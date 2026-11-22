@@ -1,4 +1,5 @@
-// Package config keeps the hosts the CLI is signed in to and their tokens.
+// Package config keeps the profiles the CLI signs in with: an account each, a
+// host and a token.
 //
 // The file holds access tokens in plain text. It is written with permissions
 // 0600 in a directory with 0700, and a file that others can read is refused
@@ -21,11 +22,14 @@ import (
 	"unicode"
 )
 
+// File is the configuration of this machine. Profiles are what it is about:
+// every profile is one account in one organization, a token for a host and who
+// the token acts as.
 type File struct {
-	DefaultHost string               `json:"defaultHost,omitempty"`
-	ClientID    string               `json:"clientId,omitempty"`
-	Hosts       map[string]HostEntry `json:"hosts"`
-	Comments    CommentSettings      `json:"comments,omitzero"`
+	DefaultProfile string             `json:"defaultProfile,omitempty"`
+	Profiles       map[string]Profile `json:"profiles"`
+	ClientID       string             `json:"clientId,omitempty"`
+	Comments       CommentSettings    `json:"comments,omitzero"`
 }
 
 // CommentSettings are the settings of the comments on a card, for every host.
@@ -35,10 +39,21 @@ type CommentSettings struct {
 	RequireRead bool `json:"requireRead,omitempty"`
 }
 
-type HostEntry struct {
+// Profile is one account: where it signs in, with which token, and who the
+// token acts as.
+type Profile struct {
+	Host         string `json:"host"` // as a sign-in writes it; one written by hand may be in another form
 	Token        string `json:"token"`
 	PersonName   string `json:"personName,omitempty"`   // who the token acts as, at sign-in
 	EmailAddress string `json:"emailAddress,omitempty"` // who the token acts as, at sign-in
+}
+
+// HostEntry is the sign-in of one host in the form versions of minka before
+// profiles read and write.
+type HostEntry struct {
+	Token        string `json:"token"`
+	PersonName   string `json:"personName,omitempty"`
+	EmailAddress string `json:"emailAddress,omitempty"`
 }
 
 // ErrInsecurePermissions is returned for a config file that users other than
@@ -64,7 +79,7 @@ func Path(getenv func(string) string) (string, error) {
 
 // Load reads the config file. A missing file is an empty configuration.
 func Load(path string) (*File, error) {
-	file := &File{Hosts: map[string]HostEntry{}}
+	file := &File{Profiles: map[string]Profile{}}
 
 	info, err := os.Stat(path)
 	if errors.Is(err, fs.ErrNotExist) {
@@ -81,14 +96,12 @@ func Load(path string) (*File, error) {
 	if err != nil {
 		return nil, fmt.Errorf("reading %s: %w", path, err)
 	}
-	if err := json.Unmarshal(content, file); err != nil {
+	var stored onDisk
+	if err := json.Unmarshal(content, &stored); err != nil {
 		return nil, fmt.Errorf("reading %s: %w", path, err)
 	}
-	if file.Hosts == nil {
-		file.Hosts = map[string]HostEntry{}
-	}
 
-	return file, nil
+	return stored.file(), nil
 }
 
 // Save writes the file with permissions 0600. It writes a temporary file next
@@ -106,7 +119,7 @@ func (f *File) Save(path string) error {
 		return fmt.Errorf("creating %s: %w", dir, err)
 	}
 
-	content, err := json.MarshalIndent(f, "", "  ")
+	content, err := json.MarshalIndent(f.onDisk(), "", "  ")
 	if err != nil {
 		return fmt.Errorf("encoding the config: %w", err)
 	}
@@ -147,21 +160,6 @@ func NewClientID() (string, error) {
 		return "", fmt.Errorf("making a client id: %w", err)
 	}
 	return hex.EncodeToString(bytes[:]), nil
-}
-
-// RemoveHost forgets the token of a host. If it was the default host, there is
-// no default host afterwards: which host a command reaches without being told
-// is a choice, and a host that is merely left over is not one.
-func (f *File) RemoveHost(host string) bool {
-	if _, ok := f.Hosts[host]; !ok {
-		return false
-	}
-	delete(f.Hosts, host)
-	if f.DefaultHost == host {
-		f.DefaultHost = ""
-	}
-
-	return true
 }
 
 // NormalizeHost turns what a user types into the canonical form the config is

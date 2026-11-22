@@ -11,7 +11,7 @@ import (
 
 func TestSaveWritesAFileOnlyItsOwnerCanRead(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "minka", "config.json")
-	file := &File{DefaultHost: "https://a.example", Hosts: map[string]HostEntry{"https://a.example": {Token: "minka_pat_x"}}}
+	file := &File{DefaultProfile: "a", Profiles: map[string]Profile{"a": {Host: "https://a.example", Token: "minka_pat_x"}}}
 
 	if err := file.Save(path); err != nil {
 		t.Fatal(err)
@@ -36,7 +36,7 @@ func TestSaveWritesAFileOnlyItsOwnerCanRead(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if loaded.Hosts["https://a.example"].Token != "minka_pat_x" || loaded.DefaultHost != "https://a.example" {
+	if loaded.Profiles["a"].Token != "minka_pat_x" || loaded.DefaultProfile != "a" {
 		t.Errorf("loaded %+v", loaded)
 	}
 }
@@ -55,7 +55,7 @@ func TestSaveKeepsASymlinkedConfigFileALink(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	file := &File{Hosts: map[string]HostEntry{"https://a.example": {Token: "minka_pat_x"}}}
+	file := &File{Profiles: map[string]Profile{"a": {Host: "https://a.example", Token: "minka_pat_x"}}}
 	if err := file.Save(link); err != nil {
 		t.Fatal(err)
 	}
@@ -63,7 +63,7 @@ func TestSaveKeepsASymlinkedConfigFileALink(t *testing.T) {
 	if info, err := os.Lstat(link); err != nil || info.Mode()&os.ModeSymlink == 0 {
 		t.Errorf("config file is no longer a symlink: %v", err)
 	}
-	if loaded, err := Load(target); err != nil || loaded.Hosts["https://a.example"].Token != "minka_pat_x" {
+	if loaded, err := Load(target); err != nil || loaded.Profiles["a"].Token != "minka_pat_x" {
 		t.Errorf("target not written: %+v, %v", loaded, err)
 	}
 }
@@ -87,30 +87,30 @@ func TestAMissingFileIsAnEmptyConfig(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if file.DefaultHost != "" || len(file.Hosts) != 0 {
+	if file.DefaultProfile != "" || len(file.Profiles) != 0 {
 		t.Errorf("got %+v", file)
 	}
 }
 
-// A host that is merely left over is no choice of anybody's, so taking the
-// default host away leaves none, and the other hosts keep their tokens.
-func TestRemoveHostOfTheDefaultLeavesNoDefault(t *testing.T) {
-	file := &File{DefaultHost: "https://b.example", Hosts: map[string]HostEntry{
-		"https://b.example": {Token: "1"},
-		"https://c.example": {Token: "2"},
-		"https://a.example": {Token: "3"},
+// A profile that is merely left over is no choice of anybody's, so taking the
+// default profile away leaves none, and the other profiles keep their tokens.
+func TestRemoveProfileOfTheDefaultLeavesNoDefault(t *testing.T) {
+	file := &File{DefaultProfile: "b", Profiles: map[string]Profile{
+		"b": {Host: "https://b.example", Token: "1"},
+		"c": {Host: "https://c.example", Token: "2"},
+		"a": {Host: "https://a.example", Token: "3"},
 	}}
 
-	if !file.RemoveHost("https://b.example") {
-		t.Fatal("host not removed")
+	if !file.RemoveProfile("b") {
+		t.Fatal("profile not removed")
 	}
-	if file.DefaultHost != "" {
-		t.Errorf("default host %q", file.DefaultHost)
+	if file.DefaultProfile != "" {
+		t.Errorf("default profile %q", file.DefaultProfile)
 	}
-	if len(file.Hosts) != 2 {
-		t.Errorf("hosts %v", file.Hosts)
+	if len(file.Profiles) != 2 {
+		t.Errorf("profiles %v", file.Profiles)
 	}
-	if file.RemoveHost("https://b.example") {
+	if file.RemoveProfile("b") {
 		t.Error("removing twice reported a removal")
 	}
 }

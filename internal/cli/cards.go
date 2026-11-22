@@ -812,7 +812,7 @@ takes a card up moves it first and says 'minka work start' afterwards.
 				moved.Value.Column.Type == api.ColumnDone
 			var notices []string
 			if letGo {
-				if letGo, told := a.letGoOfTheCard(s.host, moved.Value.ID); letGo {
+				if letGo, told := a.letGoOfTheCard(s, moved.Value.ID); letGo {
 					notices = append(notices, noLongerInHand(told))
 				}
 			}
@@ -866,7 +866,7 @@ that does not get through, with the next signal of the session that held it.`,
 
 			if card.Value.Column.Type == api.ColumnDone {
 				var notices []string
-				if letGo, told := a.letGoOfTheCard(s.host, card.Value.ID); letGo {
+				if letGo, told := a.letGoOfTheCard(s, card.Value.ID); letGo {
 					notices = append(notices, noLongerInHand(told))
 				}
 				return a.ok(success{
@@ -900,7 +900,7 @@ that does not get through, with the next signal of the session that held it.`,
 			}
 
 			var notices []string
-			if letGo, told := a.letGoOfTheCard(s.host, moved.Value.ID); letGo {
+			if letGo, told := a.letGoOfTheCard(s, moved.Value.ID); letGo {
 				notices = append(notices, noLongerInHand(told))
 			}
 			return a.ok(success{

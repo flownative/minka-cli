@@ -253,7 +253,7 @@ func everyWrite(e *testEnv) map[string][]string {
 // archived project is not found at all. An upload is tested by itself, because
 // it needs a file.
 var notAWriteIntoAProject = []string{
-	"auth login", "auth logout", "auth status", "setup", "doctor", "me", "version", "commands",
+	"auth login", "auth logout", "auth status", "profiles list", "profiles rename", "profiles remove", "profiles default", "setup", "doctor", "me", "version", "commands",
 	"skill show", "skill install", "skill status",
 	"projects list", "projects create", "tools list", "labels list", "boards list", "boards show", "boards archive", "people list", "trash list",
 	"config get", "config set",

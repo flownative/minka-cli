@@ -16,6 +16,11 @@ the documentation says what holds; how it came about is in git.
   sent and revoked on signing out, how a host name is read whoever wrote it,
   what is fixed about the HTTP client, which check happens before a request —
   before any work on sign-in, client or IDs.
+- [Profiles](stable/profiles.md): What a profile is and how it is named, which
+  one a command uses and why, `$MINKA_TOKEN` beside a profile, the default,
+  the file that older versions still read and what becomes of one they wrote,
+  the cards of `work start` per account and the heartbeat over all of them —
+  before any work on sign-in, `profiles`, the configuration file or the store.
 - [Rich text in both directions](stable/rich-text.md): Markdown to HTML and
   back, the allowlist of the server, the shapes of a document, sources, files,
   mentions and references to other records — before any

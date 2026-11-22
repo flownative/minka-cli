@@ -16,7 +16,7 @@ func TestTheStoreIsWrittenSoThatOnlyItsOwnerReadsIt(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handle.File.Host("https://minka.example.com").List(NoSession).Start(Card{ID: "a-card", StartedAt: time.Now()})
+	handle.File.Account("https://minka.example.com").List(NoSession).Start(Card{ID: "a-card", StartedAt: time.Now()})
 	if err := handle.Save(); err != nil {
 		t.Fatal(err)
 	}
@@ -45,7 +45,7 @@ func TestAStoreThatCannotBeWrittenKeepsWhatItHeld(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handle.File.Host(aHostOfTheStore).List(NoSession).Start(Card{ID: "the-one-card", StartedAt: time.Now()})
+	handle.File.Account(aHostOfTheStore).List(NoSession).Start(Card{ID: "the-one-card", StartedAt: time.Now()})
 	if err := handle.Save(); err != nil {
 		t.Fatal(err)
 	}
@@ -67,7 +67,7 @@ func TestAStoreThatCannotBeWrittenKeepsWhatItHeld(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer handle.Close()
-	handle.File.Host(aHostOfTheStore).List(NoSession).Start(Card{ID: "another-card", StartedAt: time.Now()})
+	handle.File.Account(aHostOfTheStore).List(NoSession).Start(Card{ID: "another-card", StartedAt: time.Now()})
 	if err := handle.Save(); err == nil {
 		t.Fatal("a save that cannot be carried out says it went well")
 	}
@@ -104,7 +104,7 @@ func TestStartingACardAgainSaysItIsStillTheTurnOfThatCard(t *testing.T) {
 // now — and it is on that that the window of a card rests.
 func TestACardTakenUpAnewGoesByTheNewMoment(t *testing.T) {
 	first := time.Date(2026, 9, 23, 9, 0, 0, 0, time.UTC)
-	host := &Host{}
+	host := &Account{}
 	entry := host.List("mine")
 	entry.Start(Card{ID: "a-card", StartedAt: first})
 	host.StillAtIt("mine", first.Add(time.Hour))
@@ -140,7 +140,7 @@ func TestACardNobodyStartedAgainRunsOut(t *testing.T) {
 // work keeps nothing of a session that died alive, nor a card of nobody.
 func TestOnlyTheSessionThatTookACardUpKeepsItAlive(t *testing.T) {
 	began := time.Date(2026, 9, 23, 9, 0, 0, 0, time.UTC)
-	host := &Host{}
+	host := &Account{}
 	host.List("busy").Start(Card{ID: "of the busy session", StartedAt: began})
 	host.List("gone").Start(Card{ID: "of the session that died", StartedAt: began})
 	host.List(NoSession).Start(Card{ID: "of a person at a terminal", StartedAt: began})
@@ -164,7 +164,7 @@ func TestOnlyTheSessionThatTookACardUpKeepsItAlive(t *testing.T) {
 // empty set to report, until the server has forgotten what it was sent.
 func TestAListGoesOnceThereIsNothingLeftToTakeBack(t *testing.T) {
 	sent := time.Date(2026, 9, 23, 9, 0, 0, 0, time.UTC)
-	host := &Host{}
+	host := &Account{}
 	list := host.List("done")
 	list.SentAt, list.SentCards = sent, []string{"a-card"}
 
@@ -190,7 +190,7 @@ func TestAListGoesOnceThereIsNothingLeftToTakeBack(t *testing.T) {
 // hours, so it is written down once a minute and not once a tool call.
 func TestSayingItAgainIsWrittenDownOnceAMinute(t *testing.T) {
 	began := time.Date(2026, 9, 23, 9, 0, 0, 0, time.UTC)
-	entry := &Host{}
+	entry := &Account{}
 	entry.List("mine").Start(Card{ID: "one", StartedAt: began})
 
 	if !entry.StillAtIt("mine", began.Add(SeenEvery)) {
@@ -237,7 +237,7 @@ func TestTheMarkOfABeatIsWrittenDownOnceAMinute(t *testing.T) {
 // brings. Such a card goes by the moment it was started.
 func TestACardWithoutASessionIsKeptAliveByNobody(t *testing.T) {
 	began := time.Date(2026, 9, 23, 9, 0, 0, 0, time.UTC)
-	entry := &Host{}
+	entry := &Account{}
 	entry.List(NoSession).Start(Card{ID: "of a person at a terminal", StartedAt: began})
 
 	for hour := 1; hour <= 9; hour++ {
