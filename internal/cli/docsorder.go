@@ -664,7 +664,8 @@ adds no version.
 
 It is the team's alone: a client of the project exits 2 (not_found). A document
 in the archive, itself or through a folder above it, exits 9 with
-documentArchived. The IDs come from "docs versions list".`,
+documentArchived, a locked one with documentLocked: it is unlocked on its
+page in Minka on the web. The IDs come from "docs versions list".`,
 		Args: requireArgs("documentId", "versionId"),
 		RunE: func(_ *cobra.Command, args []string) error {
 			s, err := a.session()

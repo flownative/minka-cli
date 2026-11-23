@@ -35,13 +35,14 @@ type pageAsRead struct {
 // reference the title and address of its target as they stand when the page
 // is read, so one that leads elsewhere — a card, a post, a page outside —
 // may have changed without the page; a reference into the export is
-// rendered from this run's tree instead.
+// rendered from this run's tree instead. The rows of a decisions block
+// change without the page as well.
 func cachedPageOf(cache map[string]cachedPage, n *node, inside map[string]*node) (*api.Document, bool) {
 	if n.version == nil || n.updatedAt == "" {
 		return nil, false
 	}
 	page, found := cache[n.id]
-	if !found || page.Version != *n.version || page.UpdatedAt != n.updatedAt || !referencesStayInside(page.Document.Body, inside) {
+	if !found || page.Version != *n.version || page.UpdatedAt != n.updatedAt || !referencesStayInside(page.Document.Body, inside) || holdsDecisionBlocks(page.Document.Body) {
 		return nil, false
 	}
 	return &api.Document{

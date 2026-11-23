@@ -101,6 +101,9 @@ type Document struct {
 	// it says now. A document set up without any is taken to have been written
 	// before versions were kept: its first version names no author.
 	Versions []*DocumentVersion
+
+	// Lock is set while the document is locked, nil otherwise.
+	Lock *DocumentLock
 	EntryState
 }
 
@@ -195,7 +198,7 @@ func (s *Server) document(w http.ResponseWriter, r *http.Request, person *Person
 		notFound(w)
 		return
 	}
-	resource := s.documentResource(tool, document)
+	resource := s.documentResource(tool, document, person)
 	resource["body"] = s.servedReferences(document.Body, person)
 	writeJSON(w, http.StatusOK, resource)
 }
@@ -224,7 +227,7 @@ func (s *Server) addDocument(w http.ResponseWriter, r *http.Request, person *Per
 		return
 	}
 	stored, ok := storedBody(w, "document", deref(body))
-	if !ok {
+	if !ok || s.refusedDecisionBlocks(w, tool.ProjectID, deref(body), "", person) {
 		return
 	}
 	folderID, ok := stringField(w, fields, "folderId")
@@ -283,7 +286,7 @@ func (s *Server) addDocument(w http.ResponseWriter, r *http.Request, person *Per
 	document.keepAVersion(person.ID, document.UpdatedAt)
 	tool.Documents = append([]*Document{document}, tool.Documents...)
 	placeAtTheEnd(tool, document.FolderID, document.ID)
-	writeJSON(w, http.StatusCreated, s.documentResource(tool, document))
+	writeJSON(w, http.StatusCreated, s.documentResource(tool, document, person))
 }
 
 // updateDocument writes over the title and the body of a document. What the
@@ -319,6 +322,11 @@ func (s *Server) updateDocument(w http.ResponseWriter, r *http.Request, person *
 		if newBody, ok = storedBody(w, "document", deref(body)); !ok {
 			return
 		}
+		// A locked document takes no text at all, so its blocks are not
+		// checked and it answers documentLocked below.
+		if document.Lock == nil && s.refusedDecisionBlocks(w, tool.ProjectID, deref(body), document.Body, person) {
+			return
+		}
 	}
 	expected, guarded, ok := expectedUpdatedAt(w, fields)
 	if !ok {
@@ -349,6 +357,13 @@ func (s *Server) updateDocument(w http.ResponseWriter, r *http.Request, person *
 	if s.refusedAsAnArchivedEntry(w, tool, document.FolderID, document.Archived, "document") {
 		return
 	}
+	// The navigation alone is no edit of the text, and a lock leaves it open.
+	_, writesTitle := fields["title"]
+	_, writesBody := fields["body"]
+	if document.Lock != nil && (inNavigation == nil || writesTitle || writesBody) {
+		unprocessable(w, "documentLocked", "This document is locked. Its title and text stay as they are until somebody of the team unlocks it.")
+		return
+	}
 	// The text that stands already is no write and no conflict, whatever the
 	// expectation: nothing was lost. The navigation is written all the same,
 	// and touches no moment of the document.
@@ -356,12 +371,12 @@ func (s *Server) updateDocument(w http.ResponseWriter, r *http.Request, person *
 		if inNavigation != nil {
 			document.OutOfNavigation = !*inNavigation
 		}
-		writeJSON(w, http.StatusOK, s.documentResource(tool, document))
+		writeJSON(w, http.StatusOK, s.documentResource(tool, document, person))
 		return
 	}
 	if guarded && !expected.Equal(document.UpdatedAt) {
 		refusal := errorBody("documentChanged", `This document was written over since it was read. Nothing was written; "document" holds it as it stands.`)
-		refusal["document"] = s.documentResource(tool, document)
+		refusal["document"] = s.documentResource(tool, document, person)
 		writeJSON(w, http.StatusConflict, refusal)
 		return
 	}
@@ -374,7 +389,7 @@ func (s *Server) updateDocument(w http.ResponseWriter, r *http.Request, person *
 	if inNavigation != nil {
 		document.OutOfNavigation = !*inNavigation
 	}
-	writeJSON(w, http.StatusOK, s.documentResource(tool, document))
+	writeJSON(w, http.StatusOK, s.documentResource(tool, document, person))
 }
 
 func (s *Server) filesUpload(w http.ResponseWriter, r *http.Request, person *Person) {
@@ -642,7 +657,17 @@ func storedRichText(w http.ResponseWriter, tooLong, message string, maxLength in
 	if !richtext.CarriesMarkup(value) {
 		return "<div>" + plainTextLineBreaks.ReplaceAllString(plainTextEscaper.Replace(value), "<br>$0") + "</div>", true
 	}
-	return value, true
+	return keptDecisionBlocks(value), true
+}
+
+// refusedDecisionBlocks refuses a sent text whose decisions blocks name what
+// the project has not got. Minka reads them from the text as sent.
+func (s *Server) refusedDecisionBlocks(w http.ResponseWriter, projectID, sent, stored string, person *Person) bool {
+	if refusal := s.decisionBlockRefusal(projectID, sent, stored, person); refusal != "" {
+		unprocessable(w, "decisionBlockInvalid", refusal)
+		return true
+	}
+	return false
 }
 
 // plainTextEscaper escapes what the server escapes in a text it keeps as
@@ -1017,15 +1042,17 @@ func leadOf(body string) string {
 	return string([]rune(text)[:leadLength])
 }
 
-func (s *Server) documentResource(tool *FilesTool, document *Document) map[string]any {
+func (s *Server) documentResource(tool *FilesTool, document *Document, person *Person) map[string]any {
 	return s.withoutBooks(map[string]any{
 		"id": document.ID, "projectId": tool.ProjectID, "toolId": tool.ID,
 		"project": s.projectReference(tool.ProjectID), "tool": map[string]any{"id": tool.ID, "title": tool.Title},
 		"folder": folderReference(folderIn(tool, document.FolderID)), "path": s.pathTo(tool, document.FolderID),
 		"title": document.Title, "body": document.Body, "bodySource": document.Body,
-		"attachments":  s.attachmentsIn(tool.ProjectID, document.Body),
-		"archived":     document.Archived || folderIsOutOfUse(tool, document.FolderID),
-		"inNavigation": !document.OutOfNavigation, "book": folderReference(bookOf(tool, document.FolderID)),
+		"attachments":    s.attachmentsIn(tool.ProjectID, document.Body),
+		"decisionBlocks": s.decisionBlockResources(tool.ProjectID, document.Body, document.Lock, person),
+		"locked":         document.Lock != nil,
+		"archived":       document.Archived || folderIsOutOfUse(tool, document.FolderID),
+		"inNavigation":   !document.OutOfNavigation, "book": folderReference(bookOf(tool, document.FolderID)),
 		"commentCount": len(document.Comments),
 		"createdAt":    timestamp(document.CreatedAt), "editedAt": editedAt(document.CreatedAt, document.UpdatedAt),
 		"updatedAt": timestamp(document.UpdatedAt), "creator": s.personReference(document.CreatorID),

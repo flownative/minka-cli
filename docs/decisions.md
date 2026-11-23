@@ -2954,3 +2954,67 @@ account with a list of its session, each with its own token. **Why:** no
 account may report another's cards, and the mod knows nothing of profiles.
 **Implemented as:** `work.File.Accounts`, `cli.beatEveryAccount`, see
 [Profiles](stable/profiles.md#state-per-account).
+
+<a id="c-197"></a>
+## C-197 — A decisions block is a marker line, its attributes in one order
+
+*Applies to: every text sent as Markdown, every text shown as Markdown*
+
+`<!-- minka:decisions tool="…" label="…" status="…" decided-in="…" applies-to="…" -->`
+on a line of its own becomes `<minka-decisions>`; read back, the element is
+that marker with its attributes in this order, so a block read, edited and
+sent back stays the same element. **Why:** an HTML comment is hidden by every
+Markdown tool, as the markers of tiles and variables are.
+**Implemented as:** `markdown.DecisionsElementOf`, `richtext.DecisionsMarker`,
+see [Rich text](stable/rich-text.md#decisions-blocks).
+
+<a id="c-198"></a>
+## C-198 — A malformed decisions marker is refused before anything is sent
+
+*Applies to: every text sent as Markdown*
+
+A marker with an unknown or doubled attribute, no tool, a value not in double
+quotes or not an identifier is exit 1 (`usage`) with the form and where the
+IDs come from; an identifier in capitals is lowercased and an empty filter
+left out. Whether the IDs name what the project has is Minka's
+(`decisionBlockInvalid`, exit 9). **Why:** sent on, the marker would stand in
+the text as visible source, where a misplaced tiles marker only loses a shape.
+**Implemented as:** `markdown.Result.Refusal`, `cli.markdownToHTML`.
+
+<a id="c-199"></a>
+## C-199 — The rows of a block stand apart from the body and are never sent
+
+*Applies to: `docs show`, `posts show`, the document a 409 prints, every text sent as Markdown*
+
+The body of a view holds a block's marker alone; its rows follow after the
+body under `## Decisions blocks`, one entry per block named by its position
+and attributes, as a quote that opens with "Read out, not part of the text:".
+A text sent as Markdown that holds such a quote is refused, exit 1, before
+anything is sent. **Why:** an agent sends back what it read, and dropping rows
+on the way back fails silently both ways, by lazy continuation and by a moved
+or deleted marker. **Implemented as:** `cli.renderDecisionBlocks`,
+`markdown.RefusalReadOutRows`.
+
+<a id="c-200"></a>
+## C-200 — An exported page carries the marker and the rows, read anew
+
+*Applies to: `docs export`*
+
+A page's file holds each block's marker and its rows as the reading view
+prints them, in HTML a comment and a quote; a page with a block is never taken
+from the cache. **Why:** an export is read as files, where a hidden marker
+alone would show nothing, and the rows change without the page.
+**Implemented as:** `export.readOutDecisions`, `export.holdsDecisionBlocks`.
+
+<a id="c-201"></a>
+## C-201 — `docs show --body` and `posts show --body` print the body alone
+
+*Applies to: `docs show`, `posts show`*
+
+`--body` prints only the body as Markdown on standard output, also where
+standard output is no terminal, and the `--expect` of a document on standard
+error; beside
+`--json` or `--quiet` it is exit 1. **Why:** no other output yields exactly
+the editable body, and cutting the text view at the next heading cuts a body
+with headings of its own. **Implemented as:** `cli.bodyAlone`,
+`cli.writeBodyAlone`.

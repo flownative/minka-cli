@@ -61,7 +61,7 @@ func (s *Server) transferFilesEntry(w http.ResponseWriter, entry filesEntry, fie
 	if entry.kind == "folder" && bookOf(target, to) != nil {
 		arrangeByHand(target, entry.id)
 	}
-	writeJSON(w, http.StatusOK, s.entryResource(s.entryIn(target, entry.kind, entry.id)))
+	writeJSON(w, http.StatusOK, s.entryResource(s.entryIn(target, entry.kind, entry.id), person))
 }
 
 // toolToTransferInto is the Docs & Files tool an entry may move into: one of a

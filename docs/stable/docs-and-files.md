@@ -73,6 +73,18 @@ callouts, Mermaid diagrams, link tiles, blocks of variables and their
 placeholders. How each is written and shown in Markdown is in
 [The shapes of a document](rich-text.md#the-shapes-of-a-document).
 
+A body also holds decisions blocks, a stored query on the decisions of a
+Decisions tool (E-422, E-473). `docs show` prints each as its marker in the
+body and its rows in a section after it, read out and never sent back;
+`docs show --body` prints the body alone, as `docs edit --body` takes it;
+`--json` carries the rows in `decisionBlocks`; `docs edit` and `docs create`
+write the marker. How, and
+which views print rows, is in [Decisions blocks](rich-text.md#decisions-blocks).
+A locked document (`locked`, E-413) takes no new title, no new body and no
+restored version (`docs versions restore`), and its blocks show the copies of
+the lock; `docs show` says `Locked: yes`. The CLI has
+no command to lock or unlock: that is done on the document's page in Minka.
+
 ## A file goes into a tool in two requests
 
 Minka takes a file into a tool in two steps: `POST projects/{id}/uploads`
@@ -348,6 +360,8 @@ often they are named.
 | 422 `contentTypeMismatch`, 413 `tooLarge` | `docs uploads create <file>`, storing it, as `uploads create` | 9 |
 | 422 `documentTitleMissing`, `documentTitleTooLong`, `documentTitleHasControlCharacters` | `docs create`, `docs edit` | 9 |
 | 422 `documentBodyTooLong`, `documentBodyNotReadable` | `docs create`, `docs edit` | 9 |
+| 422 `decisionBlockInvalid` | `docs create`, `docs edit` with a block naming what the project has not got, or more than 20 blocks; after the length of the body, before everything after it; never on a locked document. Minka's message names the attribute, the hint where the IDs come from | 9 |
+| 422 `documentLocked` | `docs edit` writing the title or the body of a locked document, from the edit after the length of the body and the archive (its blocks go unchecked), before `--expect`; `docs versions restore` of a locked document, after the archive; the hint says it is unlocked on the web | 9 |
 | 422 `documentAudienceMissing` | unreachable: the audience is held here | — |
 | 422 `notifyIdsMissing`, `notifyIdsWithoutChosenAudience` | `docs create --audience` and `--notify` that do not go together | 9 |
 | 422 `personNotAProjectMember` | `docs create --notify` naming somebody outside the project | 9 |
@@ -657,6 +671,12 @@ its file, in lower case.
 is the stored HTML in a minimal page: the same fields as `meta` elements and
 `link rel="canonical"`, the title as `h1`, no script and no style.
 
+- **Decisions blocks** carry their marker and right below it their rows, the
+  quote `docs show` prints after the body, in HTML the marker as a comment
+  and the rows as a quote ([C-200](../decisions.md#c-200)): an export is read
+  as files, where the marker alone shows nothing. A page with its rows sent
+  back with `docs edit` is refused; the marker alone goes back.
+
 - **Headings** carry the anchors Minka's page gives them (E-304), counted over
   every heading of the body in document order, as `search` names them. In
   Markdown the anchor is `<a id="h-…"></a>` on the line above the heading:
@@ -705,7 +725,9 @@ and the body kept is at least as new as the version named, since the tree is
 read before the pages. A reference that leads elsewhere — a card, a post, a
 page outside the export — carries the title and address Minka gives it when
 the page is read, which change without the page, so such a page is read on
-every run, and so is one that refers to a page gone when it was read. Every
+every run, and so is one that refers to a page gone when it was read. A page
+with a decisions block is read on every run as well: its rows change without
+it. Every
 page's file is rendered anew from its body, on every run and against this
 run's tree: title, address and navigation come from the tree, and a
 reference into the export takes the title of its target from the tree too.

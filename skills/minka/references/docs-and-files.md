@@ -70,7 +70,11 @@ minka docs comments unreact (--document <documentId> | --upload <uploadId>) <com
   the archive. The inside of an archived folder **can** be listed by naming it,
   and then the answer and every line of it says `archived: true`.
 - `docs show <documentId>` gives the document with its body, its files and its
-  comments. `docs uploads show <uploadId>` gives an upload the same way, with
+  comments. `--body` prints only the body as Markdown, as `docs edit --body`
+  takes it back. A decisions block shows as its marker, its rows read out in
+  a section after the body, which never go back as text; inserting one is in
+  [texts.md](texts.md#decisions-blocks). `Locked: yes` (`locked` in JSON) is a
+  document that takes no edit until it is unlocked on the web. `docs uploads show <uploadId>` gives an upload the same way, with
   its `description` and `descriptionSource`. A
   **draft is at no address**, its author included: exit 2.
 - The bytes of an upload are fetched with `uploads download <blobId>`, where
@@ -410,6 +414,8 @@ minka docs export <folderId> --out handbook --json
 - Pictures and files of a page are downloaded beside it, into
   `<name>.assets/`, and linked from the page. An upload is downloaded into the
   directory of its folder, under its title and with its file's extension.
+- A decisions block is its marker with the rows right below it; a page with one is read again on every run, since its rows
+  change without it.
 - `--format html` writes the stored HTML in minimal pages instead, the anchor
   as the heading's `id`, `index.html` as the index.
 - **Refresh by running the same command again.** It reads again only the
@@ -452,7 +458,8 @@ removing anything for good. All of it is done in Minka on the web.
 
 `documentTitleMissing`, `documentTitleTooLong`,
 `documentTitleHasControlCharacters`, `documentBodyTooLong`,
-`documentBodyNotReadable`, `documentAudienceMissing`, `personNotAProjectMember`,
+`documentBodyNotReadable`, `decisionBlockInvalid`, `documentLocked`,
+`documentAudienceMissing`, `personNotAProjectMember`,
 `personCannotSeeIt` (a person to replace, not input to fix), `notifyIdsMissing`,
 `notifyIdsWithoutChosenAudience`,
 `folderUnknown`, `folderArchived`, `documentArchived`, `uploadArchived`,

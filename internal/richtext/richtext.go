@@ -45,6 +45,7 @@ var servedMarkup = func() *regexp.Regexp {
 		names = append(names, name)
 	}
 	names = append(names, carriedElements...)
+	names = append(names, markdown.DecisionsElement)
 	alternatives := strings.Join(names, "|")
 	return regexp.MustCompile(`(?i)<(?:` + alternatives + `)(?:\s[^<>]*)?/?>|</(?:` + alternatives + `)\s*>`)
 }()
@@ -294,7 +295,7 @@ func ToMarkdown(fragment string) string {
 func isBlock(name string) bool {
 	switch name {
 	case "p", "div", "h1", "h2", "h3", "h4", "h5", "h6", "hr", "blockquote", "pre", "ul", "ol", "li", "table", "figure", "figcaption",
-		"aside", "header", "dl", "dt", "dd":
+		"aside", "header", "dl", "dt", "dd", markdown.DecisionsElement:
 		return true
 	}
 	return false
@@ -366,6 +367,8 @@ func block(n *html.Node) string {
 		return heading
 	case "hr":
 		return "---"
+	case markdown.DecisionsElement:
+		return decisionsBlock(n)
 	case "table":
 		return table(n)
 	case "blockquote":

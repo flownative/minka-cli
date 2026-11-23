@@ -75,8 +75,10 @@ type Post struct {
 	BodySource string             `json:"bodySource"` // the body as the editor opens it
 	// Attachments are the files hanging in the body, and in no comment.
 	Attachments []Attachment `json:"attachments"`
-	Category    *string      `json:"category"`
-	CategoryID  *string      `json:"categoryId"`
+	// DecisionBlocks are the decisions blocks of the body in its order.
+	DecisionBlocks []DecisionBlock `json:"decisionBlocks"`
+	Category       *string         `json:"category"`
+	CategoryID     *string         `json:"categoryId"`
 	// Archived says the post lies in the archive of its tool: readable, and
 	// closed to every write but going into the trash.
 	Archived     bool   `json:"archived"`

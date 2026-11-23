@@ -128,6 +128,52 @@ Drain {{node_name}} first.
   characters a dash, a repeat counted on (`h-setup-2`); `minka search` names
   it for a hit, and `docs export` writes it above every heading.
 
+## Decisions blocks
+
+A document or a post can list decisions of a Decisions tool, read afresh on
+every reading: a line of its own,
+
+```markdown
+<!-- minka:decisions tool="<toolId>" label="<labelId>" status="<statusId>" decided-in="<eventId>" applies-to="<eventOrCardId>" -->
+```
+
+`tool` is required, every filter optional, all of them IDs. In `docs show`
+and `posts show` the body holds the marker alone; the rows follow after the
+body under `## Decisions blocks`, one entry per block, headed by its position
+and attributes, as a quote that starts with `Read out, not part of the text:`.
+That quote is never text: a body that holds it is refused (exit 1). `--json`
+has the rows in `decisionBlocks`, one per block in the order of the body; a
+block whose `tool` is `null` is of a tool you cannot see.
+
+To insert a block:
+
+1. `minka decisions tools <projectId> --json` gives the tool's ID.
+2. Only for filters: `minka decisions statuses <toolId> --json` (status),
+   `minka labels list --project <projectId> --json` (label of the project; a
+   label of the Decisions tool counts too), `minka events tools <projectId>`
+   and `minka events list <calendarToolId> --from <day> --to <day> --json`
+   (`decided-in` an event; `applies-to` an event or a card, a card by the `id`
+   of `minka cards show <cardId> --json`).
+3. `minka docs show <documentId> --body > body.md` (or `posts show <postId>
+   --body`) writes the body alone, exactly as the edit takes it back; for a
+   document it prints the `--expect` to use on standard error.
+4. Put the marker on a line of its own where the list belongs, with blank
+   lines around it.
+5. `minka docs edit <documentId> --body - --expect <updatedAt> --json <
+   body.md` (`posts edit <postId> --body - --json < body.md` for a post), then
+   read the rows in `decisionBlocks` of the answer.
+
+A marker with an unknown attribute, no tool, single quotes or a value that is
+no ID exits 1 before anything is sent. An ID the project has not got is
+`decisionBlockInvalid`, exit 9, the message naming the attribute; nothing is
+written. A block the text holds already is not checked again. At most 20 blocks
+per text. A locked document takes no edit of its title or body and no restored version
+(`documentLocked`, exit 9):
+somebody of the team unlocks it on its page in Minka on the web, and its blocks
+show the decisions as they stood at the lock until then. A post whose body is a
+block alone says nothing (`postBodyMissing`). Other texts — descriptions,
+comments — show the marker alone, and Minka does not check a block there.
+
 ## Naming somebody in a text
 
 - `people list <projectId>` and `conversations people <conversationId>` give

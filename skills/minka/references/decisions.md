@@ -67,6 +67,10 @@ minka decisions comments unreact <decision> <commentId> 👍 --json
   where an agent set it by hand), `minka` (true where Minka moved it, and
   `person` is whom its line names), `at`; null where nobody is known. The text
   of `list` says "set by an agent" or "set by Minka", `show` names who.
+- A document or a post can list the decisions of a tool, narrowed by label,
+  status, the event they were decided in or what they apply to, read afresh
+  on every reading: a decisions block, see
+  [texts.md](texts.md#decisions-blocks).
 
 ## Naming a decision
 
