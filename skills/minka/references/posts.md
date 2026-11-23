@@ -46,7 +46,10 @@ minka posts comments unreact <postId> <commentId> 👍 --json
   first, with `archivedAt` and `archivedBy`. It is not paged.
 - `posts show <postId>` gives the post with `body`, `bodySource`, its files,
   `category`, `pinned`, `archived` and its comments. **A draft and a post in the
-  trash are at no address**, their author included: exit 2.
+  trash are at no address**, their author included: exit 2. `--body` prints only
+  the body as Markdown, as `posts edit --body` takes it back. A decisions
+  block in the body shows as its marker, its rows read out in a section after
+  the body and in `decisionBlocks`; inserting one is in [texts.md](texts.md#decisions-blocks).
 
 ## Writing
 
@@ -99,7 +102,7 @@ their guard over files is about to refuse. That guard never comes before
 
 `postTitleMissing`, `postTitleTooLong`, `postTitleHasControlCharacters`,
 `postBodyMissing`, `postBodyTooLong`, `postBodyNotReadable`,
-`postCategoryUnknown`, `notifyIdsMissing`, `notifyIdsWithoutChosenAudience`,
+`postCategoryUnknown`, `decisionBlockInvalid`, `notifyIdsMissing`, `notifyIdsWithoutChosenAudience`,
 `personNotAProjectMember`, `personCannotSeeIt` (a person to replace, not input
 to fix), `postArchived`, `postNotArchived`, `postInTrash`,
 `postsLimitNotANumber`, `postsBeforeUnknown`, `projectArchived` and the comment

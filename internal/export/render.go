@@ -121,6 +121,9 @@ func (l *layout) renderDocument(n *node) rendered {
 
 	files := &assetNames{dir: l.assetsDirOf(n), byBlob: map[string]string{}, taken: map[string]bool{}}
 	l.rewrite(container, n, files)
+	if l.format == FormatHTML {
+		readOutDecisions(container, document.DecisionBlocks)
+	}
 	var body strings.Builder
 	for top := container.FirstChild; top != nil; top = top.NextSibling {
 		_ = xhtml.Render(&body, top)
@@ -137,7 +140,7 @@ func (l *layout) renderDocument(n *node) rendered {
 		out = htmlPage(n.title, fields, "<h1>"+html.EscapeString(n.title)+"</h1>\n"+body.String())
 	} else {
 		out = frontmatter(fields) + "\n# " + markdownLine(n.title) + "\n"
-		if markdown := richtext.ToMarkdown(body.String()); markdown != "" {
+		if markdown := richtext.ToMarkdownWithDecisions(body.String(), document.DecisionBlocks); markdown != "" {
 			out += "\n" + markdown + "\n"
 		}
 	}

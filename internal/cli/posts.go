@@ -40,7 +40,9 @@ stands in the post afterwards as "# Heading". The command says so in a notice,
 and nothing else ever will.
 
 A post that goes out says something: a body without a word and without a file
-is refused with postBodyMissing.`
+is refused with postBodyMissing; a decisions block alone says nothing.
+
+` + decisionBlocksHelp
 
 const postAudienceHelp = audienceHelp + `
 
@@ -241,18 +243,28 @@ Every post carries a lead: the first words of its body without markup.`,
 }
 
 func (a *app) newPostsShowCmd() *cobra.Command {
-	return &cobra.Command{
+	var bodyOnly bool
+	cmd := &cobra.Command{
 		Use:   "show <postId>",
 		Short: "Show a post with its body and comments",
 		Long: `Shows a post with its kind, its body and its comments. In text output the body
 is converted to Markdown, which posts edit --body turns back into the same
 HTML; in JSON it is the HTML the server stores.
 
+` + showBodyHelp + `
+
 A post in the archive is shown as well and says so: reading works, writing on
 it is refused. A draft and a post in the trash are at no address, their author
 included: they exit 2 (not_found).`,
+		Example: `  minka posts show 0199... --json
+  minka posts show 0199... --body > body.md`,
 		Args: requireArgs("postId"),
-		RunE: func(_ *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if bodyOnly {
+				if err := a.bodyAlone(cmd); err != nil {
+					return err
+				}
+			}
 			s, err := a.session()
 			if err != nil {
 				return err
@@ -261,9 +273,16 @@ included: they exit 2 (not_found).`,
 			if err != nil {
 				return postRefusal(s, err)
 			}
-			return a.ok(postSuccess(post, postSummary(post.Value), nil, func(w io.Writer) { renderPost(w, post.Value) }))
+			render := func(w io.Writer) { renderPost(w, post.Value) }
+			if bodyOnly {
+				// A post takes no guard, so there is no moment to name.
+				render = func(w io.Writer) { a.writeBodyAlone(w, firstNonEmpty(post.Value.BodySource, post.Value.Body), "") }
+			}
+			return a.ok(postSuccess(post, postSummary(post.Value), nil, render))
 		},
 	}
+	cmd.Flags().BoolVar(&bodyOnly, "body", false, "Print only the body as Markdown, as posts edit --body takes it")
+	return cmd
 }
 
 func (a *app) newPostsCreateCmd() *cobra.Command {
@@ -614,7 +633,9 @@ func postRefusal(s *session, err error) *Error {
 	case e.APICode == apiCodePostCategoryUnknown:
 		e.Hint = "The project offers no such kind of post. The kinds: minka posts categories <projectId>."
 	case e.APICode == apiCodePostBodyMissing:
-		e.Hint = "A post that goes out says something: give --body with words, a picture or a file."
+		e.Hint = "A post that goes out says something: give --body with words, a picture or a file. A decisions block alone says nothing."
+	case e.APICode == apiCodeDecisionBlockInvalid:
+		e.Hint = decisionBlockInvalidHint
 	case e.APICode == apiCodePostTitleMissing:
 		e.Hint = "A post needs a title: it can be replaced, never removed."
 	case e.Code == CodeNotFound:
@@ -742,6 +763,7 @@ func renderPost(w io.Writer, post api.Post) {
 	if body := richtext.ToMarkdown(firstNonEmpty(post.BodySource, post.Body)); body != "" {
 		fmt.Fprintf(w, "\n## Body\n\n%s\n", body)
 	}
+	renderDecisionBlocks(w, post.DecisionBlocks)
 	renderEntryFiles(w, post.Attachments)
 	renderEntryComments(w, post.Comments)
 }

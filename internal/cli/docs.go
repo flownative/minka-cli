@@ -25,7 +25,19 @@ const (
 	apiCodeFolderArchived   = "folderArchived"
 	apiCodeFileUnknown      = "fileUnknown"
 	apiCodeFileInUse        = "fileInUse"
+	apiCodeDocumentLocked   = "documentLocked"
+	// A document's or a post's decisions block names what the project has
+	// not got.
+	apiCodeDecisionBlockInvalid = "decisionBlockInvalid"
 )
+
+// decisionBlockInvalidHint follows Minka's message, which names the
+// attribute.
+const decisionBlockInvalidHint = "Nothing was written. " + decisionsMarkerHint
+
+// documentLockedHint says what a locked document takes. The CLI has no
+// command to unlock one.
+const documentLockedHint = "Nothing was written: a locked document takes no new title, no new body and no earlier version restored, and its decisions blocks keep the rows of the lock. Somebody of the team unlocks it on its page in Minka on the web; then its blocks are live again and it can be written."
 
 // theGuardIsKeptToTheSecond is what a guard on an entry cannot do. Minka keeps
 // the moment of a document and of an upload to the whole second, so a change
@@ -45,7 +57,24 @@ become plain text, each with a warning. Use --body - to read it from stdin.
 --body-format html sends HTML as it is. Minka refuses no body: one that
 carries no element it serves is kept as the characters it consists of, so
 Markdown sent that way stands in the document afterwards as "# Heading". The
-command says so in a notice, and nothing else ever will.`
+command says so in a notice, and nothing else ever will.
+
+` + decisionBlocksHelp + `
+
+A locked document takes no new title and no new body: exit 9, meta.apiCode
+documentLocked. It is unlocked on its page in Minka on the web.`
+
+// decisionBlocksHelp says how a document or a post holds a decisions block.
+const decisionBlocksHelp = `A decisions block lists the decisions of a Decisions tool, read afresh on
+every reading. It is a line of its own:
+  <!-- minka:decisions tool="<id>" label="<id>" status="<id>" decided-in="<id>" applies-to="<id>" -->
+"tool" is required, every filter optional. The IDs come from minka decisions
+tools <projectId>, minka decisions statuses <toolId>, minka labels list
+--project <projectId>, minka events list and minka cards show. A malformed
+marker is refused before anything is sent (exit 1); one naming what the
+project has not got is refused by Minka (exit 9, meta.apiCode
+decisionBlockInvalid), and nothing is written. A block the text holds
+already is kept unchecked. A text holds at most 20 blocks.`
 
 const documentAudienceHelp = audienceHelp + `
 
@@ -188,20 +217,30 @@ lists it. It is not paged, and does not go with --folder.`,
 }
 
 func (a *app) newDocsShowCmd() *cobra.Command {
-	return &cobra.Command{
+	var bodyOnly bool
+	cmd := &cobra.Command{
 		Use:   "show <documentId>",
 		Short: "Show a document with its body and comments",
 		Long: `Shows a document with the folder it stands in, its body and its comments. In
 text output the body is converted to Markdown, which docs edit --body turns
 back into the same HTML; in JSON it is the HTML the server stores.
 
+` + showBodyHelp + `
+
 updatedAt is what docs edit --expect takes to write over the document. A
 document in the archive, or one in a folder in the archive, is shown as well
 and says so: reading works, writing on it is refused.
 
 A draft is at no address, its author included: it exits 2 (not_found).`,
+		Example: `  minka docs show 0199... --json
+  minka docs show 0199... --body > body.md`,
 		Args: requireArgs("documentId"),
-		RunE: func(_ *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if bodyOnly {
+				if err := a.bodyAlone(cmd); err != nil {
+					return err
+				}
+			}
 			s, err := a.session()
 			if err != nil {
 				return err
@@ -211,14 +250,22 @@ A draft is at no address, its author included: it exits 2 (not_found).`,
 				return documentRefusal(s, err)
 			}
 
+			render := func(w io.Writer) { renderDocument(w, document.Value) }
+			if bodyOnly {
+				render = func(w io.Writer) {
+					a.writeBodyAlone(w, firstNonEmpty(document.Value.BodySource, document.Value.Body), document.Value.UpdatedAt)
+				}
+			}
 			return a.ok(success{
 				data:        document.Raw,
 				summary:     documentSummary(document.Value),
 				breadcrumbs: documentBreadcrumbs(document.Value),
-				text:        func(w io.Writer) { renderDocument(w, document.Value) },
+				text:        render,
 			})
 		},
 	}
+	cmd.Flags().BoolVar(&bodyOnly, "body", false, "Print only the body as Markdown, as docs edit --body takes it")
+	return cmd
 }
 
 func (a *app) newDocsCreateCmd() *cobra.Command {
@@ -1388,6 +1435,10 @@ func documentRefusal(s *session, err error) *Error {
 		e.Hint = "This Docs & Files tool has no such folder, it is in the trash, or you are a client of the project and it is not shown to you. List the folders with: minka docs list <toolId>"
 	case e.APICode == apiCodeFolderArchived:
 		e.Hint = "The folder, or one above it, lies in the archive and takes nothing new. Write at the top of the tool or in another folder, or bring the folder back first: minka docs folders unarchive <folderId>"
+	case e.APICode == apiCodeDecisionBlockInvalid:
+		e.Hint = decisionBlockInvalidHint
+	case e.APICode == apiCodeDocumentLocked:
+		e.Hint = documentLockedHint
 	case e.Code == CodeNotFound:
 		e.Hint = documentNotFoundHint
 	}
@@ -1580,6 +1631,9 @@ func renderDocument(w io.Writer, document api.Document) {
 	fmt.Fprintf(w, "# %s\n", document.Title)
 	fmt.Fprintf(w, "Document: %s\nTool: %s\nProject: %s\n", document.ID, document.ToolID, document.ProjectID)
 	renderEntryPlace(w, document.Folder, document.Path, document.Archived)
+	if document.Locked {
+		fmt.Fprintln(w, "Locked: yes, title and body take no write until it is unlocked")
+	}
 	if document.Book != nil {
 		fmt.Fprintf(w, "Book: %s (%s)\n", document.Book.Title, document.Book.ID)
 	}
@@ -1597,6 +1651,7 @@ func renderDocument(w io.Writer, document api.Document) {
 	if body := richtext.ToMarkdown(firstNonEmpty(document.BodySource, document.Body)); body != "" {
 		fmt.Fprintf(w, "\n## Body\n\n%s\n", body)
 	}
+	renderDecisionBlocks(w, document.DecisionBlocks)
 	renderEntryFiles(w, document.Attachments)
 	renderEntryComments(w, document.Comments)
 }

@@ -250,7 +250,7 @@ func (s *Server) restoreFilesEntry(kind, argument string) handler {
 		}
 
 		entry.state.Trashed, entry.state.TrashedAt, entry.state.TrashedBy = false, time.Time{}, ""
-		writeJSON(w, http.StatusOK, s.entryResource(entry))
+		writeJSON(w, http.StatusOK, s.entryResource(entry, person))
 	}
 }
 
@@ -273,7 +273,7 @@ func (s *Server) archiveFilesEntry(kind, argument string) handler {
 
 		*entry.archived = true
 		entry.state.ArchivedAt, entry.state.ArchivedBy = s.momentAfterEveryFilesArchiving(entry.tool), person.ID
-		writeJSON(w, http.StatusOK, s.entryResource(entry))
+		writeJSON(w, http.StatusOK, s.entryResource(entry, person))
 	}
 }
 
@@ -304,7 +304,7 @@ func (s *Server) unarchiveFilesEntry(kind, argument string) handler {
 		}
 
 		*entry.archived, entry.state.ArchivedAt, entry.state.ArchivedBy = false, time.Time{}, ""
-		writeJSON(w, http.StatusOK, s.entryResource(entry))
+		writeJSON(w, http.StatusOK, s.entryResource(entry, person))
 	}
 }
 
@@ -380,7 +380,7 @@ func (s *Server) moveFilesEntry(kind, argument string) handler {
 		if neighbours != nil {
 			placeBetween(entry.tool, *entry.parent, entry.id, neighbours[0], neighbours[1])
 		}
-		writeJSON(w, http.StatusOK, s.entryResource(entry))
+		writeJSON(w, http.StatusOK, s.entryResource(entry, person))
 	}
 }
 
@@ -406,13 +406,18 @@ func (s *Server) restoreDocumentVersion(w http.ResponseWriter, r *http.Request, 
 	if s.refusedAsArchived(w, s.projectWithID(tool.ProjectID)) || s.refusedAsAnArchivedEntry(w, tool, document.FolderID, document.Archived, "document") {
 		return
 	}
+	// Restoring writes the title and the text, which a lock keeps.
+	if document.Lock != nil {
+		unprocessable(w, "documentLocked", "This document is locked. Its title and text stay as they are until somebody of the team unlocks it.")
+		return
+	}
 
 	if version.Title != document.Title || version.Body != document.Body {
 		document.Title, document.Body = version.Title, version.Body
 		document.UpdatedAt = later(s.aWholeSecond(), document.UpdatedAt.Add(time.Second))
 		document.keepAVersion(person.ID, document.UpdatedAt)
 	}
-	writeJSON(w, http.StatusOK, s.documentResource(tool, document))
+	writeJSON(w, http.StatusOK, s.documentResource(tool, document, person))
 }
 
 // mayPutAway says whether this person may take the entry into the trash or
@@ -568,12 +573,12 @@ func refusedBelowAnArchivedFolder(w http.ResponseWriter, entry filesEntry) bool 
 
 // entryResource is the entry as its own address answers it: a folder with
 // what stands in it, a document or an upload as it is read.
-func (s *Server) entryResource(entry filesEntry) map[string]any {
+func (s *Server) entryResource(entry filesEntry, person *Person) map[string]any {
 	switch entry.kind {
 	case "folder":
 		return s.entriesResource(entry.tool, entry.folder)
 	case "document":
-		return s.documentResource(entry.tool, entry.document)
+		return s.documentResource(entry.tool, entry.document, person)
 	default:
 		return s.filesUploadResource(entry.tool, entry.upload)
 	}

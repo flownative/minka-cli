@@ -81,7 +81,8 @@ server: markup is only a tag of a served element that is written out up to its
 closing angle bracket. `a<i und b<s` stays plain text. The elements are those
 of the allowlist in `internal/markdown`, the shapes' `aside`, `header`, `dl`,
 `dt` and `dd` among them, and beside them the three that a text carries rather
-than writes: `action-text-attachment`, `minka-embed` and `minka-ref`.
+than writes: `action-text-attachment`, `minka-embed` and `minka-ref`, and
+the decisions block's `minka-decisions`.
 
 ## The shapes of a document
 
@@ -139,6 +140,77 @@ the view stays the editable text of C-008 ([C-134](../decisions.md#c-134)):
   `<minka-ref kind="document" id anchor>` (E-309), which reads as the
   document's title and counts as a backlink. The conversion has nothing to do
   for it, see below. A link with words of its own stays a mere link.
+
+## Decisions blocks
+
+A decisions block is a stored query on the decisions of one Decisions tool
+(Minka's E-422, E-473): `<minka-decisions tool label status decided-in
+applies-to>`, identifiers only, the tool required and every filter optional.
+Minka lists the rows afresh on every reading and never stores them.
+
+**The marker** ([C-197](../decisions.md#c-197)). In Markdown a block is an HTML
+comment on a line of its own:
+
+```
+<!-- minka:decisions tool="<id>" label="<id>" status="<id>" decided-in="<id>" applies-to="<id>" -->
+```
+
+It becomes the element with the same attributes, in this order; read back, the
+element is the marker in this order again, so a block read, edited and sent
+back is the same element. Only the form is checked here: an identifier in
+capitals is lowercased, an empty filter is left out, and a marker with an
+unknown or doubled attribute, no tool, a value not in double quotes or no
+identifier is refused before anything is sent, exit 1 with the form and where
+the IDs come from ([C-198](../decisions.md#c-198)). A marker inside a paragraph
+is no block and stays visible text, as any other HTML there. Whether the IDs
+name a tool, label, status, event or card of the project is Minka's to say:
+`decisionBlockInvalid`, exit 9, its message naming the attribute.
+
+**What Minka checks** (E-473). In a document and a post only: at most 20
+blocks; no tool, a value that is no identifier, a tool that is no Decisions
+tool of the project, a label of neither the project nor that tool, a status not
+of that tool, a `decided-in` that is no event of the project, an `applies-to`
+that is neither an event nor a card of it. A block the stored text holds
+already, with the same five values, passes unchecked, so editing around a
+block whose label is gone still works. The check comes after the length of the
+text; a locked document answers `documentLocked` before it. Anything inside
+the element and any other attribute is dropped. A post whose body is a block
+alone says nothing (`postBodyMissing`). Every other rich text stores the
+element unchecked and has no rows over the API.
+
+**The rows** ([C-199](../decisions.md#c-199)). A document and a post carry
+`decisionBlocks`, one per element in the order of the body, `position`
+counting the elements from 0: the query, the `tool` the reader sees (`null`
+otherwise), an English `summary`, `frozen` in a locked document, the
+`decisions` with `shortId`, `title`, `status`, the votes, `today` in a frozen
+block, and Minka's own `markdown`. `--json` passes them through.
+
+Rows are read out, never written. In `docs show`, `posts show` and the
+document a 409 prints, the body holds each block as its marker alone, so it is
+the text an edit takes back. The rows follow in a section of their own after
+the body, `## Decisions blocks (N)`, one entry per block in the order of the
+body, headed by its position and its marker's attributes so a reader finds the
+marker it belongs to, the rows from the structured fields as a quote:
+
+```
+### Position 0: tool="…" status="…"
+
+> Read out, not part of the text: Decisions · status In force
+> - DEC-2 We meet on Mondays — In force · 5 for, 0 against, 0 abstaining · unanimous
+> - DEC-7 The tent stands by the pond — In force · today: superseded by DEC-9
+```
+
+`(as locked)` follows the summary of a frozen block; a block without decisions
+lists `(no decisions)`, one of a tool the reader cannot see reads `(a
+Decisions tool you cannot see)`. `docs show --body` and `posts show --body`
+print the body alone as Markdown, the one output that is exactly what `--body`
+of an edit takes back ([C-201](../decisions.md#c-201)). An exported page,
+which is read and not sent back, carries the same quote right below each
+marker; its rows go there only while position and tool agree. A text sent as
+Markdown that holds a quote opening with `Read out, not part of the text:` is
+refused before anything is sent, exit 1, wherever the quote stands: it can
+only have been copied in. Every other view of a text prints the marker alone:
+the versions of a document, descriptions, comments and the rest carry no rows.
 
 ## References to another record
 

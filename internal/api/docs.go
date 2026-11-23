@@ -120,9 +120,15 @@ type Document struct {
 	BodySource string             `json:"bodySource"` // the body as the editor opens it
 	// Attachments are the files hanging in the body, and in no comment.
 	Attachments []Attachment `json:"attachments"`
+	// DecisionBlocks are the decisions blocks of the body in its order, the
+	// copies of the lock while the document is locked.
+	DecisionBlocks []DecisionBlock `json:"decisionBlocks"`
 	// Archived says the document, or a folder above it, lies in the archive:
 	// readable, and closed to every write.
-	Archived     bool             `json:"archived"`
+	Archived bool `json:"archived"`
+	// Locked says the title and the body take no write until somebody of the
+	// team unlocks the document.
+	Locked       bool             `json:"locked"`
 	InNavigation *bool            `json:"inNavigation"` // as on DocumentListItem
 	Book         *FolderReference `json:"book"`         // the book it stands in at any depth, nil outside one
 	CommentCount int              `json:"commentCount"`

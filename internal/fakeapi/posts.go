@@ -340,7 +340,7 @@ func (s *Server) post(w http.ResponseWriter, r *http.Request, person *Person) {
 		notFound(w)
 		return
 	}
-	writeJSON(w, http.StatusOK, s.postResource(tool, post))
+	writeJSON(w, http.StatusOK, s.postResource(tool, post, person))
 }
 
 // addPost sends a post out, refusing in the order the controller refuses:
@@ -364,7 +364,7 @@ func (s *Server) addPost(w http.ResponseWriter, r *http.Request, person *Person)
 	if !ok {
 		return
 	}
-	stored, ok := storedPostBody(w, deref(body))
+	stored, ok := s.storedPostBody(w, tool.ProjectID, deref(body), "", person)
 	if !ok {
 		return
 	}
@@ -419,7 +419,7 @@ func (s *Server) addPost(w http.ResponseWriter, r *http.Request, person *Person)
 	}
 	post.SubscriberIDs = subscribers
 	tool.Posts = append(tool.Posts, post)
-	writeJSON(w, http.StatusCreated, s.postResource(tool, post))
+	writeJSON(w, http.StatusCreated, s.postResource(tool, post, person))
 }
 
 // peopleAPostTells is the list a new post tells about itself: the writer, and
@@ -486,7 +486,7 @@ func (s *Server) updatePost(w http.ResponseWriter, r *http.Request, person *Pers
 		if !ok {
 			return
 		}
-		if newBody, ok = storedPostBody(w, deref(body)); !ok {
+		if newBody, ok = s.storedPostBody(w, tool.ProjectID, deref(body), post.Body, person); !ok {
 			return
 		}
 	}
@@ -508,7 +508,7 @@ func (s *Server) updatePost(w http.ResponseWriter, r *http.Request, person *Pers
 		post.Title, post.Body, post.CategoryID = newTitle, newBody, newCategoryID
 		post.UpdatedAt = s.aMomentAfter(post.UpdatedAt)
 	}
-	writeJSON(w, http.StatusOK, s.postResource(tool, post))
+	writeJSON(w, http.StatusOK, s.postResource(tool, post, person))
 }
 
 // removePost puts a post into the trash, from the list or from the archive,
@@ -542,7 +542,7 @@ func (s *Server) pinPost(w http.ResponseWriter, r *http.Request, person *Person)
 		now := s.aMomentAfterEveryPin(tool)
 		post.PinnedAt = &now
 	}
-	writeJSON(w, http.StatusOK, s.postResource(tool, post))
+	writeJSON(w, http.StatusOK, s.postResource(tool, post, person))
 }
 
 func (s *Server) unpinPost(w http.ResponseWriter, r *http.Request, person *Person) {
@@ -555,7 +555,7 @@ func (s *Server) unpinPost(w http.ResponseWriter, r *http.Request, person *Perso
 		return
 	}
 	post.PinnedAt = nil
-	writeJSON(w, http.StatusOK, s.postResource(tool, post))
+	writeJSON(w, http.StatusOK, s.postResource(tool, post, person))
 }
 
 // archivePost takes a post into the archive of its tool. A post that is not
@@ -575,7 +575,7 @@ func (s *Server) archivePost(w http.ResponseWriter, r *http.Request, person *Per
 		return
 	}
 	post.Archived, post.ArchivedAt, post.ArchivedByID = true, s.now, person.ID
-	writeJSON(w, http.StatusOK, s.postResource(tool, post))
+	writeJSON(w, http.StatusOK, s.postResource(tool, post, person))
 }
 
 // unarchivePost brings a post back among the posts; a pinned one comes back
@@ -594,7 +594,7 @@ func (s *Server) unarchivePost(w http.ResponseWriter, r *http.Request, person *P
 		return
 	}
 	post.Archived, post.ArchivedAt, post.ArchivedByID = false, time.Time{}, ""
-	writeJSON(w, http.StatusOK, s.postResource(tool, post))
+	writeJSON(w, http.StatusOK, s.postResource(tool, post, person))
 }
 
 // refusedAsAClosedPost says why nothing was written on a post: the project is
@@ -611,10 +611,11 @@ func (s *Server) refusedAsAClosedPost(w http.ResponseWriter, tool *PostsTool, po
 }
 
 // storedPostBody is a body as the server keeps it, or the refusal it draws. A
-// post that goes out says something, in words or in a file.
-func storedPostBody(w http.ResponseWriter, value string) (string, bool) {
+// post that goes out says something, in words or in a file; its decisions
+// blocks are checked in between, against the body stored before.
+func (s *Server) storedPostBody(w http.ResponseWriter, projectID, value, before string, person *Person) (string, bool) {
 	stored, ok := storedRichText(w, "postBodyTooLong", "The body of a post is too long.", maxPostBodyLength, value)
-	if !ok {
+	if !ok || s.refusedDecisionBlocks(w, projectID, value, before, person) {
 		return "", false
 	}
 	if saysNothing(stored) {
@@ -747,13 +748,14 @@ func (s *Server) postListItemResource(tool *PostsTool, post *Post) map[string]an
 	}
 }
 
-func (s *Server) postResource(tool *PostsTool, post *Post) map[string]any {
+func (s *Server) postResource(tool *PostsTool, post *Post, person *Person) map[string]any {
 	return map[string]any{
 		"id": post.ID, "projectId": tool.ProjectID, "toolId": tool.ID,
 		"project": s.projectReference(tool.ProjectID), "tool": map[string]any{"id": tool.ID, "title": tool.Title},
 		"title": post.Title, "body": post.Body, "bodySource": post.Body,
-		"attachments": s.attachmentsIn(tool.ProjectID, post.Body),
-		"category":    s.categoryName(post.CategoryID), "categoryId": nullable(post.CategoryID),
+		"attachments":    s.attachmentsIn(tool.ProjectID, post.Body),
+		"decisionBlocks": s.decisionBlockResources(tool.ProjectID, post.Body, nil, person),
+		"category":       s.categoryName(post.CategoryID), "categoryId": nullable(post.CategoryID),
 		"archived": post.Archived, "pinned": post.PinnedAt != nil, "commentCount": len(post.Comments),
 		"createdAt": timestamp(post.CreatedAt), "editedAt": editedAt(post.CreatedAt, post.UpdatedAt),
 		"creator":  s.personReference(post.CreatorID),

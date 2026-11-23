@@ -104,6 +104,13 @@ type Result struct {
 	// belong to HTML blocks: a text written in HTML and sent as Markdown by
 	// mistake, which would arrive as its own source code.
 	MostlyHTML bool
+
+	// Refusal says why the text cannot be sent as it is: a decisions marker
+	// that is not one, or rows read out for a block. Empty for a text that
+	// can.
+	Refusal string
+	// RefusedReadOutRows says the refusal is the rows read out for a block.
+	RefusedReadOutRows bool
 }
 
 var markdownParser = goldmark.New(
@@ -144,6 +151,9 @@ func ToHTML(source string, options ...Option) Result {
 		HTML:       strings.TrimSpace(out.String()),
 		Warnings:   c.warnings,
 		MostlyHTML: 2*c.htmlLines > nonBlankLines(source),
+		Refusal:    c.refusal,
+
+		RefusedReadOutRows: c.refusal == RefusalReadOutRows,
 	}
 }
 
@@ -164,6 +174,7 @@ type converter struct {
 	warnings  []string
 	linkDepth int // greater than 0 inside a link, where no further link may start
 	htmlLines int // the lines that hold anything inside HTML blocks shown as text
+	refusal   string
 
 	keepLineBreaks bool
 }
@@ -177,6 +188,9 @@ func (c *converter) visit(node ast.Node, entering bool) (ast.WalkStatus, error) 
 	case *ast.Paragraph:
 		c.tag(entering, "p")
 	case *ast.Blockquote:
+		if entering && opensWithReadOutRows(n, c.source) {
+			c.refuse(RefusalReadOutRows)
+		}
 		c.containerTag(entering, "blockquote")
 	case *callout:
 		if entering {
@@ -225,7 +239,7 @@ func (c *converter) visit(node ast.Node, entering bool) (ast.WalkStatus, error) 
 		}
 		return ast.WalkSkipChildren, nil
 	case *ast.HTMLBlock:
-		if entering && !isMarkerOfTheNextBlock(n, c.source) {
+		if entering && !isMarkerOfTheNextBlock(n, c.source) && !c.decisionsBlock(n) {
 			c.warn(WarningRawHTML)
 			lines := n.Lines()
 			if n.HasClosure() {

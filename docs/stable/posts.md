@@ -79,7 +79,16 @@ body without an element Minka serves is kept as the characters it consists of
 ([C-068](../decisions.md#c-068)), so Markdown is converted here and
 `--body-format html` draws the notice. Unlike a document, **a post says
 something**: a body with no word and no file — an empty one, one of blanks —
-is `postBodyMissing`. A mention or a file alone is enough.
+is `postBodyMissing`. A mention or a file alone is enough; a decisions block
+alone is not.
+
+A body holds decisions blocks as a document's does (E-473): `posts show`
+prints each as its marker in the body and its rows in a section after it,
+read out and never sent back, `posts show --body` prints the body alone,
+`--json` carries the rows in `decisionBlocks`, and `posts create` and `edit`
+write the marker. A post is never locked, so its rows are always live. How, and
+what Minka refuses with `decisionBlockInvalid`, is in
+[Decisions blocks](rich-text.md#decisions-blocks).
 
 `categoryId` null or empty files it under no kind. One that is no identifier
 is `postCategoryUnknown`, which the CLI never sends ([C-013](../decisions.md#c-013)).
@@ -204,7 +213,7 @@ passed. A body that is no JSON object (400) comes first wherever one is read,
 and is unreachable from here.
 
 - **A new post:** the tool (404), the title, the body (`postBodyTooLong`,
-  `postBodyNotReadable`, `postBodyMissing`), a `categoryId` that is no
+  `postBodyNotReadable`, `decisionBlockInvalid`, `postBodyMissing`), a `categoryId` that is no
   identifier, the audience (`postAudienceMissing`, unreachable), a `notifyIds`
   entry that is no identifier (`personNotAProjectMember`, unreachable), then
   `notifyIdsMissing` / `notifyIdsWithoutChosenAudience`, then
@@ -242,6 +251,7 @@ edit, and before the text of a comment; it never comes before
 | 404 | every command, for a tool or post that is unknown, foreign, a draft, in the trash or hidden from a client; a comment that is not one's own | 2 |
 | 422 `postTitleMissing`, `postTitleTooLong`, `postTitleHasControlCharacters` | `posts create`, `posts edit` | 9 |
 | 422 `postBodyMissing`, `postBodyTooLong`, `postBodyNotReadable` | `posts create`, `posts edit` | 9 |
+| 422 `decisionBlockInvalid` | `posts create`, `posts edit` with a block naming what the project has not got, or more than 20 blocks; the hint says where the IDs come from | 9 |
 | 422 `postCategoryUnknown` | `--category` naming a kind the project does not offer | 9 |
 | 422 `notifyIdsMissing`, `notifyIdsWithoutChosenAudience` | `posts create --audience` and `--notify` that do not go together | 9 |
 | 422 `personNotAProjectMember` | `posts create --notify` naming somebody outside the project | 9 |

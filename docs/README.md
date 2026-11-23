@@ -22,8 +22,9 @@ the documentation says what holds; how it came about is in git.
   the cards of `work start` per account and the heartbeat over all of them —
   before any work on sign-in, `profiles`, the configuration file or the store.
 - [Rich text in both directions](stable/rich-text.md): Markdown to HTML and
-  back, the allowlist of the server, the shapes of a document, sources, files,
-  mentions and references to other records — before any
+  back, the allowlist of the server, the shapes of a document, decisions
+  blocks and their rows, sources, files, mentions and references to other
+  records — before any
   work on descriptions, comments, messages or documents.
 - [First steps](stable/first-steps.md): What `setup` asks and in which order,
   why it needs a terminal, what `doctor` checks and why it always exits 0 —
