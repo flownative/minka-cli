@@ -664,8 +664,8 @@ adds no version.
 
 It is the team's alone: a client of the project exits 2 (not_found). A document
 in the archive, itself or through a folder above it, exits 9 with
-documentArchived, a locked one with documentLocked: it is unlocked on its
-page in Minka on the web. The IDs come from "docs versions list".`,
+documentArchived, a locked one with documentLocked: "docs unlock" unlocks
+it. The IDs come from "docs versions list".`,
 		Args: requireArgs("documentId", "versionId"),
 		RunE: func(_ *cobra.Command, args []string) error {
 			s, err := a.session()
@@ -675,6 +675,9 @@ page in Minka on the web. The IDs come from "docs versions list".`,
 			document, err := s.client.RestoreDocumentVersion(a.ctx, args[0], args[1])
 			if err != nil {
 				e := entryOrderRefusal(s, err, documentKind, args[0], "version")
+				if e.APICode == apiCodeDocumentLocked {
+					e.Hint = documentLockedHint(args[0])
+				}
 				if e.Code == CodeNotFound {
 					e.Hint = "There is no such document or version, the document is a draft or in the trash, it belongs to a project you are not a member of, or you are a client of the project: only the team restores a version. The versions are listed with: minka docs versions list " + args[0]
 				}

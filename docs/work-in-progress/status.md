@@ -864,10 +864,17 @@ Dogfooding waits for the internal alpha. The smoke token `minka-cli-smoke`
   merge of its #1014 and the fake, not live-checked. **The fake does not
   mirror**: the order of the rows of a block of one meeting (Minka orders them
   by its agenda), the visibility of a decision beyond trash, clients and
-  drafts, a status from before the tool had any in the summary, and locking
-  and unlocking over the API, which the CLI has no command for; a test locks
-  a document with `Server.LockDocument`. `bodySource` is taken to hold the
-  element as `body` does.
+  drafts, and a status from before the tool had any in the summary.
+  `bodySource` is taken to hold the element as `body` does.
+
+- Locking and unlocking a document (MNK-VZ): `docs lock` and `docs unlock`,
+  the refusals in Minka's order (404 for a client first, `projectArchived`,
+  `documentArchived`, then `documentLocked` or `documentNotLocked`), a Minka
+  without the address told apart, and the hint of `documentLocked` on an
+  edit or a restore naming `docs unlock`. Built against Minka's code and
+  tests and the fake, not live-checked. **The fake does not mirror** the lock
+  of a document that has no version yet, which Minka's statement refuses as
+  404, nor the coediting log a lock clears.
 
 - Profiles (MNK-TP): `--profile`, `$MINKA_PROFILE`, `profiles list|rename|
   remove|default`, the file written with the hosts for older versions beside

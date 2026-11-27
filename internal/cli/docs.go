@@ -35,9 +35,11 @@ const (
 // attribute.
 const decisionBlockInvalidHint = "Nothing was written. " + decisionsMarkerHint
 
-// documentLockedHint says what a locked document takes. The CLI has no
-// command to unlock one.
-const documentLockedHint = "Nothing was written: a locked document takes no new title, no new body and no earlier version restored, and its decisions blocks keep the rows of the lock. Somebody of the team unlocks it on its page in Minka on the web; then its blocks are live again and it can be written."
+// documentLockedHint says what a locked document takes, and how it takes a
+// write again.
+func documentLockedHint(documentID string) string {
+	return "Nothing was written: a locked document takes no new title, no new body and no earlier version restored, and its decisions blocks keep the rows of the lock. Somebody of the team unlocks it with minka docs unlock " + documentID + "; then its blocks are live again and it can be written."
+}
 
 // theGuardIsKeptToTheSecond is what a guard on an entry cannot do. Minka keeps
 // the moment of a document and of an upload to the whole second, so a change
@@ -62,7 +64,7 @@ command says so in a notice, and nothing else ever will.
 ` + decisionBlocksHelp + `
 
 A locked document takes no new title and no new body: exit 9, meta.apiCode
-documentLocked. It is unlocked on its page in Minka on the web.`
+documentLocked. docs unlock unlocks it, and docs lock locks it again.`
 
 // decisionBlocksHelp says how a document or a post holds a decisions block.
 const decisionBlocksHelp = `A decisions block lists the decisions of a Decisions tool, read afresh on
@@ -98,6 +100,8 @@ func (a *app) newDocsCmd() *cobra.Command {
 		a.newDocsShowCmd(),
 		a.newDocsCreateCmd(),
 		a.newDocsEditCmd(),
+		a.newDocsLockCmd(),
+		a.newDocsUnlockCmd(),
 		a.newItemLabelCmd(a.documentLabelsTarget(), "documentId", true),
 		a.newItemLabelCmd(a.documentLabelsTarget(), "documentId", false),
 		a.newDocsVersionsCmd(),
@@ -462,6 +466,9 @@ navigation, as from a Minka that does not know books, is exit 7 (api_error).`,
 			document, err := s.client.UpdateDocument(a.ctx, args[0], input)
 			if err != nil {
 				e := documentRefusal(s, err)
+				if e.APICode == apiCodeDocumentLocked {
+					e.Hint = documentLockedHint(args[0])
+				}
 				if e.Code == CodeNotFound && input.InNavigation != nil {
 					e.Hint = documentNotFoundHint + " Only the team chooses the navigation of a book: a client of the project meets the same, whatever else the call changes."
 				}
@@ -1438,7 +1445,7 @@ func documentRefusal(s *session, err error) *Error {
 	case e.APICode == apiCodeDecisionBlockInvalid:
 		e.Hint = decisionBlockInvalidHint
 	case e.APICode == apiCodeDocumentLocked:
-		e.Hint = documentLockedHint
+		e.Hint = documentLockedHint("<documentId>")
 	case e.Code == CodeNotFound:
 		e.Hint = documentNotFoundHint
 	}

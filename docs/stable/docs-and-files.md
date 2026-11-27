@@ -5,7 +5,8 @@ page with a title and a body, an **upload** a file standing on its own with a
 description. Both take comments, and the comments take reactions.
 
 `docs tools`, `docs list`, `docs show` and `docs uploads show` read; `docs
-create` and `docs edit` write a document; `docs uploads create` puts a file into
+create` and `docs edit` write a document, `docs lock` and `docs unlock` set
+and take away its lock; `docs uploads create` puts a file into
 a tool and `docs uploads edit` changes an upload; `docs versions list` and
 `show` read the versions of a document, `docs uploads versions list` the files
 of an upload, and `docs uploads versions create` gives an upload another file;
@@ -82,8 +83,41 @@ write the marker. How, and
 which views print rows, is in [Decisions blocks](rich-text.md#decisions-blocks).
 A locked document (`locked`, E-413) takes no new title, no new body and no
 restored version (`docs versions restore`), and its blocks show the copies of
-the lock; `docs show` says `Locked: yes`. The CLI has
-no command to lock or unlock: that is done on the document's page in Minka.
+the lock; `docs show` says `Locked: yes`. `docs lock` and `docs unlock` set
+and take away the lock, see below.
+
+## Locking a document
+
+`docs lock <documentId>` locks a document at its newest version (`POST
+documents/{id}/lock`), `docs unlock <documentId>` unlocks it (`…/unlock`),
+E-413. Each answers with the document as `docs show --json` gives it; the text
+is a line of what was done, the document's ID, `Locked: yes` with the version,
+who locked it and when, or `Locked: no`, and its address. Nobody is told, and
+the lock leaves `updatedAt` as it is. The breadcrumbs of a locked document
+name `docs unlock`, those of an unlocked one `docs edit` and `docs lock`.
+
+While it is locked, the title, the body and restoring a version answer
+`documentLocked`, and its decisions blocks show the rows copied at the lock;
+unlocking makes them live again. Comments, labels, the navigation, moves, the
+archive and the trash stay open.
+
+Only the team locks and unlocks. Minka asks in this order, and the CLI holds
+none of it itself:
+
+1. The document: unknown, foreign, in the trash, a draft, or on lock one
+   that has no newest version — and a client of the project, who is asked
+   before anything else is: 404, exit 2. The hint names
+   the client beside what else it can mean.
+2. An archived project: `projectArchived`.
+3. The document or a folder above it in the archive: `documentArchived`, also
+   for one that is locked already or not locked.
+4. Locking a locked document: `documentLocked`, the hint naming `docs unlock`;
+   unlocking one that is not locked: `documentNotLocked`, the hint saying there
+   is nothing to unlock.
+
+A 404 that is no JSON of Minka is a Minka without the address: the message
+says the host cannot lock or unlock a document, as for `projects edit`, and
+not that the document is missing.
 
 ## A file goes into a tool in two requests
 
@@ -361,7 +395,9 @@ often they are named.
 | 422 `documentTitleMissing`, `documentTitleTooLong`, `documentTitleHasControlCharacters` | `docs create`, `docs edit` | 9 |
 | 422 `documentBodyTooLong`, `documentBodyNotReadable` | `docs create`, `docs edit` | 9 |
 | 422 `decisionBlockInvalid` | `docs create`, `docs edit` with a block naming what the project has not got, or more than 20 blocks; after the length of the body, before everything after it; never on a locked document. Minka's message names the attribute, the hint where the IDs come from | 9 |
-| 422 `documentLocked` | `docs edit` writing the title or the body of a locked document, from the edit after the length of the body and the archive (its blocks go unchecked), before `--expect`; `docs versions restore` of a locked document, after the archive; the hint says it is unlocked on the web | 9 |
+| 422 `documentLocked` | `docs edit` writing the title or the body of a locked document, from the edit after the length of the body and the archive (its blocks go unchecked), before `--expect`; `docs versions restore` of a locked document, after the archive; `docs lock` of a locked document, after the archive; the hint names `docs unlock` | 9 |
+| 422 `documentNotLocked` | `docs unlock` of a document that is not locked, after the archive | 9 |
+| 404 | `docs lock`, `docs unlock` for a client of the project, before every other refusal; `docs lock` of a document that has no newest version | 2 |
 | 422 `documentAudienceMissing` | unreachable: the audience is held here | — |
 | 422 `notifyIdsMissing`, `notifyIdsWithoutChosenAudience` | `docs create --audience` and `--notify` that do not go together | 9 |
 | 422 `personNotAProjectMember` | `docs create --notify` naming somebody outside the project | 9 |

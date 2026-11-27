@@ -356,7 +356,7 @@ they stand at its top. Read the one you need, not all of them.
 | Chats of a project and private conversations | [references/chats.md](references/chats.md) |
 | Putting a file into a text, fetching a file back | [references/files.md](references/files.md) |
 | Searching everything you may read with `minka search`: narrowing it, reading a hit, opening what it leads to | [references/search.md](references/search.md) |
-| Docs & Files: documents, uploads, folders, versions, books and the order set by hand, the trash and the archive of a tool, reading a whole book or folder as files with `minka docs export` | [references/docs-and-files.md](references/docs-and-files.md) |
+| Docs & Files: documents, uploads, folders, versions, locking a document, books and the order set by hand, the trash and the archive of a tool, reading a whole book or folder as files with `minka docs export` | [references/docs-and-files.md](references/docs-and-files.md) |
 | To-do lists, groups, to-dos, subtasks, repeating to-dos | [references/todos.md](references/todos.md) |
 | Check-ins: questions and answers | [references/checkins.md](references/checkins.md) |
 | Posts of the message board | [references/posts.md](references/posts.md) |

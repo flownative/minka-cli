@@ -17,6 +17,8 @@ minka search <term>... (--tool <toolId> | --folder <folderId> | both) [--sort be
 minka docs create --tool <toolId> --title "Title" --audience everybody|chosen|nobody [--notify <person>]... [--folder <folderId>] [--body - < body.md] --json
 minka docs edit <documentId> [--title "New"] [--body - < body.md] (--expect <updatedAt> | --force) --json
 minka docs edit <documentId> (--in-navigation | --not-in-navigation) --json
+minka docs lock <documentId> --json
+minka docs unlock <documentId> --json
 minka docs book <folderId> --json
 minka docs export <folderId> --out <dir> [--format markdown|html] [--read-all] [--tool <toolId>] [--force] --json
 minka docs order <toolId> automatic|manual [--folder <folderId>] --json
@@ -74,7 +76,7 @@ minka docs comments unreact (--document <documentId> | --upload <uploadId>) <com
   takes it back. A decisions block shows as its marker, its rows read out in
   a section after the body, which never go back as text; inserting one is in
   [texts.md](texts.md#decisions-blocks). `Locked: yes` (`locked` in JSON) is a
-  document that takes no edit until it is unlocked on the web. `docs uploads show <uploadId>` gives an upload the same way, with
+  document that takes no edit until it is unlocked, see below. `docs uploads show <uploadId>` gives an upload the same way, with
   its `description` and `descriptionSource`. A
   **draft is at no address**, its author included: exit 2.
 - The bytes of an upload are fetched with `uploads download <blobId>`, where
@@ -175,6 +177,25 @@ in the body of `docs show`, the section is the heading named in
   document's body is: a Markdown description that would drop them exits 1
   unless `--drop-attachments` is given. Send the `descriptionSource` back with
   `--description-format html` to keep them. People newly mentioned are told.
+
+## Locking a document
+
+- `docs lock <documentId>` locks a document at its newest version, as its page
+  in Minka does; `docs unlock <documentId>` unlocks it. Both answer with the
+  document, `locked` saying where it stands (text: a line and `Locked: yes` or
+  `Locked: no`), and tell nobody.
+- A locked document takes **no new title, no new body and no restored
+  version** (`documentLocked`, exit 9), and its decisions blocks show the
+  decisions as they stood at the lock. Comments, labels, the navigation,
+  moves, the archive and the trash stay open.
+- Locking one that is locked already is `documentLocked`, unlocking one that
+  is not `documentNotLocked`, both exit 9 and nothing written.
+- **The team's alone**: a client of the project gets exit 2, as for a document
+  that is not there or a draft. A document in the archive, itself or through a
+  folder above it, is `documentArchived`; an archived project
+  `projectArchived`, before every other code.
+- A Minka without the address exits 2 and the error says the host cannot lock
+  or unlock a document.
 
 ## Versions
 
@@ -459,6 +480,7 @@ removing anything for good. All of it is done in Minka on the web.
 `documentTitleMissing`, `documentTitleTooLong`,
 `documentTitleHasControlCharacters`, `documentBodyTooLong`,
 `documentBodyNotReadable`, `decisionBlockInvalid`, `documentLocked`,
+`documentNotLocked`,
 `documentAudienceMissing`, `personNotAProjectMember`,
 `personCannotSeeIt` (a person to replace, not input to fix), `notifyIdsMissing`,
 `notifyIdsWithoutChosenAudience`,
