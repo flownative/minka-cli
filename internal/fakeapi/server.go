@@ -1239,6 +1239,7 @@ func New(t testing.TB) (*Server, *Fixture) {
 	mux.HandleFunc("GET /api/v1/uploads/{blobId}", s.authenticated(s.file))
 	mux.HandleFunc("GET /api/v1/uploads/{blobId}/{variant}", s.answeringInBytes(s.fileBytes))
 	s.registerFilesRoutes(mux)
+	s.registerFilesLockRoutes(mux)
 	s.registerSearchRoutes(mux)
 	s.registerTodosRoutes(mux)
 	s.registerCheckinsRoutes(mux)

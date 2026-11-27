@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	xhtml "golang.org/x/net/html"
 	"golang.org/x/net/html/atom"
@@ -35,6 +36,12 @@ var (
 // its decisions blocks show the rows copied at the lock, by query.
 type DocumentLock struct {
 	Rows map[string][]FrozenDecision
+
+	At   time.Time
+	ByID string // empty where nothing kept who locked it
+	// The version that stands locked, the newest one at the lock.
+	VersionID     string
+	VersionNumber int
 }
 
 // FrozenDecision is a decision as a locked document copied it.
@@ -482,34 +489,43 @@ func (s *Server) decisionBlockSummary(projectID string, tool *DecisionsTool, que
 func (s *Server) LockDocument(documentID string) {
 	for _, tool := range s.FilesTools {
 		for _, document := range tool.Documents {
-			if document.ID != documentID {
-				continue
+			if document.ID == documentID {
+				s.lock(tool, document, "")
+				return
 			}
-			lock := &DocumentLock{Rows: map[string][]FrozenDecision{}}
-			for _, attributes := range decisionsElements(document.Body) {
-				query := queryOf(attributes)
-				if query == nil {
-					continue
-				}
-				for _, decisionsTool := range s.DecisionsTools {
-					if decisionsTool.ID != query.tool || decisionsTool.ProjectID != tool.ProjectID {
-						continue
-					}
-					var rows []FrozenDecision
-					for _, decision := range s.decisionsOfBlock(decisionsTool, *query, &Person{}) {
-						statusID := s.statusIDOf(decisionsTool, decision)
-						rows = append(rows, FrozenDecision{
-							DecisionID: decision.ID, ToolID: decisionsTool.ID, ShortID: decision.ShortID, Title: decision.Title,
-							StatusID: statusID, StatusRole: s.statusRole(decisionsTool, statusID),
-							VotesFor: decision.VotesFor, VotesAgainst: decision.VotesAgainst, Abstentions: decision.Abstentions,
-							VotesNote: decision.Votes,
-						})
-					}
-					lock.Rows[query.key()] = rows
-				}
-			}
-			document.Lock = lock
-			return
 		}
 	}
+}
+
+// lock holds the newest version of a document, and its blocks copy the
+// decisions they list now.
+func (s *Server) lock(tool *FilesTool, document *Document, personID string) {
+	versions := document.versions()
+	lock := &DocumentLock{
+		Rows: map[string][]FrozenDecision{}, At: s.aWholeSecond(), ByID: personID,
+		VersionID: versions[len(versions)-1].ID, VersionNumber: len(versions),
+	}
+	for _, attributes := range decisionsElements(document.Body) {
+		query := queryOf(attributes)
+		if query == nil {
+			continue
+		}
+		for _, decisionsTool := range s.DecisionsTools {
+			if decisionsTool.ID != query.tool || decisionsTool.ProjectID != tool.ProjectID {
+				continue
+			}
+			var rows []FrozenDecision
+			for _, decision := range s.decisionsOfBlock(decisionsTool, *query, &Person{}) {
+				statusID := s.statusIDOf(decisionsTool, decision)
+				rows = append(rows, FrozenDecision{
+					DecisionID: decision.ID, ToolID: decisionsTool.ID, ShortID: decision.ShortID, Title: decision.Title,
+					StatusID: statusID, StatusRole: s.statusRole(decisionsTool, statusID),
+					VotesFor: decision.VotesFor, VotesAgainst: decision.VotesAgainst, Abstentions: decision.Abstentions,
+					VotesNote: decision.Votes,
+				})
+			}
+			lock.Rows[query.key()] = rows
+		}
+	}
+	document.Lock = lock
 }

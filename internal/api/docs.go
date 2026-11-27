@@ -128,17 +128,26 @@ type Document struct {
 	Archived bool `json:"archived"`
 	// Locked says the title and the body take no write until somebody of the
 	// team unlocks the document.
-	Locked       bool             `json:"locked"`
-	InNavigation *bool            `json:"inNavigation"` // as on DocumentListItem
-	Book         *FolderReference `json:"book"`         // the book it stands in at any depth, nil outside one
-	CommentCount int              `json:"commentCount"`
-	CreatedAt    string           `json:"createdAt"`
-	EditedAt     *string          `json:"editedAt"` // nil while nobody has written over it
-	UpdatedAt    string           `json:"updatedAt"`
-	Creator      PersonReference  `json:"creator"`
-	Comments     []Comment        `json:"comments"` // oldest first
-	Labels       []Label          `json:"labels"`   // the tool's labels first, then the project's
-	AppURL       string           `json:"appUrl"`
+	Locked        bool                    `json:"locked"`
+	LockedAt      *string                 `json:"lockedAt"`      // nil while it is not locked
+	LockedBy      *PersonReference        `json:"lockedBy"`      // nil while it is not locked, or where that person is gone
+	LockedVersion *LockedVersionReference `json:"lockedVersion"` // nil while it is not locked
+	InNavigation  *bool                   `json:"inNavigation"`  // as on DocumentListItem
+	Book          *FolderReference        `json:"book"`          // the book it stands in at any depth, nil outside one
+	CommentCount  int                     `json:"commentCount"`
+	CreatedAt     string                  `json:"createdAt"`
+	EditedAt      *string                 `json:"editedAt"` // nil while nobody has written over it
+	UpdatedAt     string                  `json:"updatedAt"`
+	Creator       PersonReference         `json:"creator"`
+	Comments      []Comment               `json:"comments"` // oldest first
+	Labels        []Label                 `json:"labels"`   // the tool's labels first, then the project's
+	AppURL        string                  `json:"appUrl"`
+}
+
+// LockedVersionReference is the version of a document that stands locked.
+type LockedVersionReference struct {
+	ID     *string `json:"id"` // nil where the text of the version was removed
+	Number int     `json:"number"`
 }
 
 // FilesUpload is a file standing on its own in a Docs & Files tool: what was
@@ -506,6 +515,14 @@ func (c *Client) ArchiveDocument(ctx context.Context, documentID string) (Result
 
 func (c *Client) UnarchiveDocument(ctx context.Context, documentID string) (Result[Document], error) {
 	return request[Document](ctx, c, http.MethodPost, documentPath(documentID)+"/unarchive", nil)
+}
+
+func (c *Client) LockDocument(ctx context.Context, documentID string) (Result[Document], error) {
+	return request[Document](ctx, c, http.MethodPost, documentPath(documentID)+"/lock", nil)
+}
+
+func (c *Client) UnlockDocument(ctx context.Context, documentID string) (Result[Document], error) {
+	return request[Document](ctx, c, http.MethodPost, documentPath(documentID)+"/unlock", nil)
 }
 
 func (c *Client) MoveDocument(ctx context.Context, documentID string, input MoveFilesEntryInput) (Result[Document], error) {

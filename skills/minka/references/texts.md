@@ -168,9 +168,11 @@ no ID exits 1 before anything is sent. An ID the project has not got is
 `decisionBlockInvalid`, exit 9, the message naming the attribute; nothing is
 written. A block the text holds already is not checked again. At most 20 blocks
 per text. A locked document takes no edit of its title or body and no restored version
-(`documentLocked`, exit 9):
-somebody of the team unlocks it on its page in Minka on the web, and its blocks
-show the decisions as they stood at the lock until then. A post whose body is a
+(`documentLocked`, exit 9), and its blocks show the decisions as they stood at
+the lock. To edit it: `minka docs unlock <documentId> --json` (the team's
+alone), write as above, and `minka docs lock <documentId> --json` where it is
+to stay locked, which locks the new newest version and copies its rows
+afresh. A post whose body is a
 block alone says nothing (`postBodyMissing`). Other texts — descriptions,
 comments — show the marker alone, and Minka does not check a block there.
 

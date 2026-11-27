@@ -130,7 +130,7 @@ func TestARefusedBlockAndALockedDocumentSayWhatToDo(t *testing.T) {
 	} {
 		env, r := e.runJSON("", command...)
 		expectCode(t, r, ExitValidation)
-		if env.Meta["apiCode"] != apiCodeDocumentLocked || !strings.Contains(env.Hint, "unlocks it") {
+		if env.Meta["apiCode"] != apiCodeDocumentLocked || !strings.Contains(env.Hint, "minka docs unlock "+f.Document.ID+";") {
 			t.Errorf("%s: apiCode %v, hint %q", strings.Join(command[:2], " "), env.Meta["apiCode"], env.Hint)
 		}
 	}

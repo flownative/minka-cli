@@ -104,6 +104,8 @@ func everyWrite(e *testEnv) map[string][]string {
 		"docs archive":                 {"docs", "archive", document},
 		"docs unarchive":               {"docs", "unarchive", f.ArchivedDocument.ID},
 		"docs move":                    {"docs", "move", document, "--folder", f.Folder.ID},
+		"docs lock":                    {"docs", "lock", document},
+		"docs unlock":                  {"docs", "unlock", document},
 		"docs versions restore":        {"docs", "versions", "restore", document, version},
 		"docs uploads delete":          {"docs", "uploads", "delete", upload},
 		"docs uploads restore":         {"docs", "uploads", "restore", trashedUpload},
